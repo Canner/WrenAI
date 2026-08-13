@@ -11,13 +11,13 @@
   <a href="README.ru.md"><strong>Русский</strong></a>
 </p>
 
-### Open-source GenBI: generative BI для AI-агентов.
+### Open-source GenBI: generative BI для AI-агентов
 
-*Ваши агенты генерируют, деплоят и управляют дашбордами из любой БД — на context layer, которому можно доверять.*
+*Ваши агенты генерируют, деплоят и управляют дашбордами из любой базы данных — на context layer, которому можно доверять.*
 
 **Wren AI — open-source generative BI (GenBI) engine: governed text-to-SQL и semantic-layer платформа на open AI context layer, 22+ источников данных.**
 
-[Docs](https://docs.getwren.ai) · [Discord](https://discord.gg/5DvshJqG8Z) · [Vision](https://www.getwren.ai/post/the-missing-context-layer-for-ai-agents-over-business-data) · [Blog](https://www.getwren.ai/blog)
+[Документация](https://docs.getwren.ai) · [Discord](https://discord.gg/5DvshJqG8Z) · [Vision](https://www.getwren.ai/post/the-missing-context-layer-for-ai-agents-over-business-data) · [Blog](https://www.getwren.ai/blog)
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/Canner/WrenAI/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/wrenai?label=wrenai)](https://pypi.org/project/wrenai/)
@@ -32,105 +32,179 @@
 
 </div>
 
-> **2026-05-07**: Wren Engine вошёл в этот репо в [`core/`](./core). Старый `Canner/wren-engine` архивирован. Прежний GenBI app — ветка [`legacy/v1`](https://github.com/Canner/WrenAI/tree/legacy/v1) (**Wren GenBI Classic**). [Announcement →](https://github.com/Canner/WrenAI/discussions/2205)
+> **2026-05-07**: Wren Engine вошёл в этот репозиторий в [`core/`](./core). Старый `Canner/wren-engine` архивирован. Прежний GenBI app (Docker chat-first) — ветка [`legacy/v1`](https://github.com/Canner/WrenAI/tree/legacy/v1) (tag `v1-final`), теперь **Wren GenBI Classic**. [Announcement →](https://github.com/Canner/WrenAI/discussions/2205)
 
 ---
 
 ## Что такое WrenAI
 
-WrenAI — **open-source generative BI (GenBI) engine**: AI-агенты **generate, deploy, govern** BI — от governed **text-to-SQL** до shareable dashboard, 22+ data sources.
+WrenAI — **open-source generative BI (GenBI) engine**: AI-агенты **генерируют, деплоят и управляют** business intelligence — от governed **text-to-SQL** до shareable dashboard, на 22+ источниках данных.
 
-Доверие даёт open **AI context layer** + governed **semantic layer (MDL)** — business semantics, definitions, examples, memory, governance + knowledge из docs/wikis/chat.
+Доверие даёт слой снизу: open **AI context layer** плюс governed **semantic layer (MDL)** — business semantics, approved definitions, examples, memory, governance и company knowledge из docs, wikis и chat. Generative BI ровно настолько хорош, насколько хорош context; Wren — этот context, reviewable и reusable для любого агента.
 
 ![Wren AI generative BI architecture](./misc/wren-ai-architecture.png)
 
-## GenBI в трёх битах: Generate · Deploy · Know
+## GenBI в трёх тактах: Generate · Deploy · Know
 
-- **Generate.** Бизнес-вопрос → *governed* text-to-SQL и charts.
-- **Deploy.** Dashboard на [`wren-core-wasm`](https://docs.getwren.ai/oss/sdk/wasm); ship на Vercel / Cloudflare Pages.
-- **Know.** MDL, `instructions.md`, memory — reviewable, Git-friendly.
+- **Generate.** Агент превращает бизнес-вопрос в *governed* text-to-SQL и charts. Schema-aware retrieval, MDL planning, dry-plan validation и structured errors держат ответ корректным, а не «уверенно неверным».
+- **Deploy.** Любой ответ → shareable browser-side dashboard на [`wren-core-wasm`](https://docs.getwren.ai/oss/sdk/wasm); ship на ваш Vercel или Cloudflare Pages одной командой.
+- **Know.** Знание живёт в versionable, evidence-linked files: semantic models (MDL), company definitions (`instructions.md`), memory. Reviewable. Git-friendly. Не залочено в чужом UI.
 
 ## Почему agent builders выбирают WrenAI
 
-- GenBI end to end (answer → dashboard → URL)
-- Knowledge as semantic layer (MDL), не «всё в prompt»
-- Open by default (Apache-2.0)
-- Correctness primitives: retrieval, dry-plan, structured errors
-- Governed execution + context in Git
-- На вашем warehouse / pipelines / semantic stack
+- **Generative BI end to end.** Governed text-to-SQL и дальше: answer → dashboard → URL, через агентов, которые у вас уже есть.
+- **Knowledge management встроено.** Business meaning и approved definitions — reviewable **semantic layer (MDL)**, а не «всё в prompt».
+- **Open by default.** Core, SDK и skills — Apache-2.0.
+- **Correctness as primitives.** Rich schema retrieval, dry-plan, structured errors, value profiling, eval runner.
+- **Governed execution.** Dry-plan, row limits, structured errors; definitions и examples в Git — reviewable, versioned, diff-able.
+- **На вашем stack.** Warehouse, pipelines, existing semantic layer — не ещё один tool «вместо всего».
 
-## Сравнение
+## Как Wren сравнивается
 
-|  | Raw LLM | Traditional BI | Bare semantic | **WrenAI** |
+|  | «Сырой» LLM-агент | Классический BI | «Голый» semantic layer | **WrenAI** |
 |---|:---:|:---:|:---:|:---:|
-| Writes SQL | ✅ often wrong | ❌ | ❌ | ✅ governed |
-| Business definitions | ❌ | partial | schema only | ✅ + non-schema |
-| Dashboards | ❌ | ✅ manual | ❌ | ✅ agent-driven |
-| Your agents | ✅ | ❌ | ❌ | ✅ |
-| Open Git-friendly context | ❌ | ❌ | partial | ✅ |
-| Governed 22+ sources | ❌ | per-connector | definitions only | ✅ |
+| Пишет SQL за вас | ✅ (часто неверно) | ❌ | ❌ | ✅ governed |
+| Знает business definitions | ❌ | частично, в tool | ✅ (только schema) | ✅ + non-schema knowledge |
+| Генерирует и деплоит dashboards | ❌ | ✅ (вручную) | ❌ | ✅ agent-driven |
+| Работает через *ваших* агентов (Claude Code, Cursor, MCP…) | ✅ | ❌ | ❌ | ✅ |
+| Open, reviewable, Git-friendly context | ❌ | ❌ | partial | ✅ |
+| Governed execution на 22+ sources | ❌ | per-connector | ✅ (только definitions) | ✅ |
 
-## Quickstart
+## Wren для вас, если…
 
-### 1. Install CLI
+- Нужны **trustworthy BI**: answers *и* dashboards, не просто «правдоподобный SQL».
+- Business logic (definitions, enums, units, joins) живёт **вне БД**, и агенты ошибаются.
+- Нужен **AI context layer** и **semantic layer**, которые **open, reviewable, version-controlled**.
+
+**Пропустите Wren**, если нужен one-off chart из одного CSV или вас устраивает SQL без governance.
+
+## Быстрый старт
+
+WrenAI **agent-driven by design**: CLI + discovery stub, дальше ведёт AI-агент. Workflow guides внутри CLI, on demand.
+
+### 1. Установите CLI
 
 ```bash
-pip install wrenai
-pip install "wrenai[postgres,memory]"
+pip install wrenai                      # core (DuckDB included)
+pip install "wrenai[postgres,memory]"   # add per-datasource and memory extras as needed
 ```
 
-Mainland China tip: `pip install wrenai -i https://pypi.tuna.tsinghua.edu.cn/simple`  
-HF: `export HF_ENDPOINT=https://hf-mirror.com`
+> **Совет для пользователей в mainland China:** если `pip install` медленный или падает, используйте зеркало Tsinghua:
+> ```bash
+> pip install wrenai -i https://pypi.tuna.tsinghua.edu.cn/simple
+> ```
+> Если HuggingFace model downloads time out: `export HF_ENDPOINT=https://hf-mirror.com` перед CLI.
 
-### 2. Discovery stub
+### 2. Discovery stub для AI-клиента
 
 ```bash
-npx skills add Canner/WrenAI
+npx skills add Canner/WrenAI            # auto-detects Claude Code, Cursor, Cline, Codex, …
 ```
 
-### 3–6. Через агента
+Stub ~50 строк: учит агента `wren skills get <name>` и `wren ask "<question>" --guided|--direct`.
 
-1. Setup DB: *"Use Wren to set up my Postgres database."*
-2. Enrich: *"Enrich my Wren project with the business context in `raw/`."*
-3. Ask: *"Who are our top 10 customers by sales this quarter?"*
-4. Deploy: *"Turn that into an interactive dashboard ... deploy it to Vercel."*
+### 3. Попросите агента настроить
 
-Guides: [docs.getwren.ai](https://docs.getwren.ai) · sample `jaffle_shop`.
+> "Use Wren to set up my Postgres database."
+
+Агент: `wren skills get onboarding` → connection profile, project scaffold, first query.
+
+### 4. (Опционально) Enrich — такт *Know*
+
+> "Enrich my Wren project with the business context in `raw/`."
+
+`wren skills get enrich-context` — grill или auto-pilot; пишет MDL, instructions, queries, memory.
+
+### 5. Вопросы — такт *Generate*
+
+> "Who are our top 10 customers by sales this quarter?"
+
+### 6. Dashboard — такт *Deploy*
+
+> "Turn that into an interactive dashboard I can filter and share, and deploy it to Vercel."
+
+[Build & deploy a GenBI app](https://docs.getwren.ai/oss/guides/genbi). Без своей БД: sample `jaffle_shop`.
+
+## Два такта сначала, потом третий
 
 ```bash
-wren skills get onboarding
-wren skills get enrich-context
-wren skills get genbi
-wren query --sql '...'
+# Day 1 (agent-driven)
+wren skills get onboarding         # setup + first query  (Generate)
+wren skills get enrich-context     # business context       (Know)
+wren skills get genbi              # build & deploy dashboard (Deploy)
+
+# Day-to-day
+wren query --sql '...'             # query through MDL
 wren ask "<question>" --guided
 wren ask "<question>" --direct
 ```
 
 ## Semantic layer (MDL)
 
-Git-friendly definition of what data *means*: models, columns, relationships, views, cubes, metrics + `instructions.md` / `queries.yml`.
+Wren **и есть** governed semantic layer в **Modeling Definition Language (MDL)** — Git-friendly определение, что данные *значат*, а не только где лежат.
 
-## What's Included
+MDL покрывает:
 
-- MDL semantic layer
-- Apache DataFusion engine, 22+ sources
-- GenBI dashboards (`wren-core-wasm`)
-- Knowledge & memory (LanceDB hybrid retrieval)
-- SDKs: `wren-langchain`, `wren-pydantic`
-- Governed execution primitives
+- **Models, columns, relationships, views**
+- **Cubes and metrics** — approved reusable definitions
+- **Business context beyond schema** — enums, units, joins в `instructions.md` и `queries.yml`
 
-## FAQ (кратко)
+Плюс **AI context layer** — memory, examples, unstructured knowledge — и governed execution engine.
 
-- **GenBI** — BI от AI-агентов: governed SQL + dashboards + context.
-- **text-to-SQL** — да, governed; дальше dashboards.
-- **semantic layer** — да (MDL) + AI context layer.
-- **OSS vs Cloud** — OSS free (Apache-2.0); RLS/CLS, GenBI UI — commercial. [Open core](https://www.getwren.ai/en/open-core).
-- **Sources** — BigQuery, Snowflake, PostgreSQL, ClickHouse, Redshift, Databricks, DuckDB, … [Connect](https://docs.getwren.ai/oss/guides/connect).
+## Что входит
 
-## License
+- **MDL — semantic layer**
+- **Engine**: Apache DataFusion, 22+ sources (BigQuery, Snowflake, PostgreSQL, ClickHouse, Redshift, Databricks, DuckDB, …)
+- **GenBI dashboards**: [`wren-core-wasm`](https://docs.getwren.ai/oss/sdk/wasm), Vercel / Cloudflare Pages
+- **Knowledge & memory — AI context layer**: `instructions.md`, `queries.yml`, local LanceDB
+- **Agent SDK**: `wren-langchain`, `wren-pydantic`
+- **Governed execution primitives**: dry-plan, row limits, structured errors
 
-Apache-2.0 — see [LICENSE](./LICENSE).
+## Что дальше
+
+- End-to-end correctness primitives
+- Agent-native distribution / SDKs — [Discussions](https://github.com/Canner/WrenAI/discussions)
+
+Roadmap: [introduction](https://docs.getwren.ai/oss/introduction).
+
+## FAQ
+
+### Что такое generative BI (GenBI)?
+
+BI, который производят AI-агенты: governed SQL, dashboard, share — на AI context layer, чтобы output был trustworthy.
+
+### Делает ли Wren AI text-to-SQL?
+
+Да — **governed** text-to-SQL против MDL + dry-plan, и дальше dashboards.
+
+### Wren AI — это semantic layer?
+
+Да (MDL) + AI context layer (memory, examples, unstructured knowledge).
+
+### Что такое AI context layer?
+
+Reviewable, version-controlled knowledge, которого нет в schema: semantics, definitions, examples, memory, governance. [Vision](https://www.getwren.ai/post/the-missing-context-layer-for-ai-agents-over-business-data).
+
+### OSS vs Wren AI Cloud / self-hosted?
+
+OSS в этом репо — free forever, Apache-2.0, self-hostable. RLS/CLS, GenBI UI, GenBI Apps, agentic mode, support/SLA — commercial (Cloud / Enterprise Plus). [Open core boundary](https://www.getwren.ai/en/open-core).
+
+### Какие data sources?
+
+22+ через DataFusion: BigQuery, Snowflake, PostgreSQL, ClickHouse, Redshift, Databricks, DuckDB, … [Connect a database](https://docs.getwren.ai/oss/guides/connect).
+
+## Open core: OSS vs Cloud / self-hosted
+
+**Open core.** Context engine (MDL, governed text-to-SQL, MCP, CLI, 22+ connectors) — OSS. Commercial: RLS/CLS, GenBI UI, Scenario AI harnesses, advanced security, support/SLA. [Подробности →](https://www.getwren.ai/en/open-core).
+
+## Заметка про имя «GenBI»
+
+«GenBI» теперь — open-source generative-BI capability. Ранний **Wren AI GenBI** Docker app — **Wren GenBI Classic** на [`legacy/v1`](https://github.com/Canner/WrenAI/tree/legacy/v1).
+
+## Лицензия
+
+Apache-2.0 — см. [LICENSE](./LICENSE).
 
 ---
 
-<p align="center"><a href="#top">⬆ back to top</a></p>
+<p align="center"><a href="#top">⬆ наверх</a></p>
