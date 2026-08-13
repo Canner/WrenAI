@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     # generation/correction calls when present.
     pipeline_timeout_seconds: float | None = Field(default=None)
     relationship_recommendation_timeout_seconds: float = Field(default=180.0)
+    semantics_description_timeout_seconds: float | None = Field(default=None)
+    semantics_description_generation_timeout_seconds: float = Field(default=120.0)
+    semantics_description_max_models_per_batch: int = Field(default=1)
+    semantics_description_max_columns_per_batch: int = Field(default=20)
+    semantics_description_max_concurrent_tasks: int = Field(default=4)
 
     # engine config
     engine_timeout: float = Field(default=30.0)

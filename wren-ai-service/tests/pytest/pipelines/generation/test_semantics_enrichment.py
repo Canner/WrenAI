@@ -1,4 +1,6 @@
-from src.pipelines.generation.semantics_description import output
+import pytest
+
+from src.pipelines.generation.semantics_description import normalize, output
 
 
 def test_without_hallucination():
@@ -64,3 +66,8 @@ def test_with_hallucination_and_no_columns():
     assert "model1" in result
     assert result["model1"]["name"] == "model1"
     assert len(result["model1"]["columns"]) == 0
+
+
+def test_malformed_json_fails_instead_of_returning_empty_output():
+    with pytest.raises(ValueError, match="malformed JSON"):
+        normalize({"replies": ['{"models": [']})

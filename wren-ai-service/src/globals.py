@@ -90,6 +90,13 @@ def create_service_container(
                     **pipe_components["semantics_description"],
                 )
             },
+            generation_timeout_seconds=(
+                settings.semantics_description_timeout_seconds
+                or settings.semantics_description_generation_timeout_seconds
+            ),
+            max_models_per_batch=settings.semantics_description_max_models_per_batch,
+            max_columns_per_batch=settings.semantics_description_max_columns_per_batch,
+            max_concurrent_tasks=settings.semantics_description_max_concurrent_tasks,
             **query_cache,
         ),
         semantics_preparation_service=services.SemanticsPreparationService(

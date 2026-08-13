@@ -127,8 +127,11 @@ def normalize(generate: dict) -> dict:
             text_dict = orjson.loads(text.strip())
             return text_dict
         except orjson.JSONDecodeError as e:
-            logger.error(f"Error decoding JSON: {e}")
-            return {"models": []}  # Return an empty list if JSON decoding fails
+            raise ValueError(
+                "Semantics description LLM returned malformed JSON. "
+                "The response may have been truncated; reduce the selected "
+                "schema size or increase the configured output token limit."
+            ) from e
 
     replies = generate.get("replies") or []
     if not replies:
