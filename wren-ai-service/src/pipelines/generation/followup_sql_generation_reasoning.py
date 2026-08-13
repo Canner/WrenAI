@@ -14,6 +14,7 @@ from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     build_schema_grounding_manifest,
     construct_instructions,
+    sanitize_sql_generation_reasoning,
     sql_generation_reasoning_system_prompt,
 )
 from src.utils import trace_cost
@@ -123,8 +124,12 @@ async def generate_sql_reasoning(
 @observe()
 def post_process(
     generate_sql_reasoning: dict,
-) -> dict:
-    return generate_sql_reasoning.get("replies")[0]
+    validation_contexts: list[str] | None = None,
+) -> str:
+    return sanitize_sql_generation_reasoning(
+        generate_sql_reasoning.get("replies")[0],
+        contexts=validation_contexts,
+    )
 
 
 ## End of Pipeline

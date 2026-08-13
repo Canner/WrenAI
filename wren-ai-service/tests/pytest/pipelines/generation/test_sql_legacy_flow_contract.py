@@ -9,6 +9,9 @@ from src.pipelines.generation.followup_sql_generation import (
     prompt as build_followup_sql_generation_prompt,
 )
 from src.pipelines.generation.followup_sql_generation_reasoning import (
+    post_process as followup_sql_generation_reasoning_post_process,
+)
+from src.pipelines.generation.followup_sql_generation_reasoning import (
     prompt as build_followup_sql_generation_reasoning_prompt,
 )
 from src.pipelines.generation.followup_sql_generation_reasoning import (
@@ -29,6 +32,9 @@ from src.pipelines.generation.sql_generation import (
 )
 from src.pipelines.generation.sql_generation import (
     prompt as build_sql_generation_prompt,
+)
+from src.pipelines.generation.sql_generation_reasoning import (
+    post_process as sql_generation_reasoning_post_process,
 )
 from src.pipelines.generation.sql_generation_reasoning import (
     prompt as build_sql_generation_reasoning_prompt,
@@ -202,6 +208,63 @@ def test_followup_reasoning_prompt_uses_history_and_schema_documents():
     assert f"SQL:\n{_select_all_sql(SAMPLE_TABLE_NAME)}" in built_prompt
     assert "### VERIFIED SCHEMA OBJECTS ###" in built_prompt
     assert f"- {SCHEMA_TABLE_NAME}: {COUNTRY_COLUMN_NAME}" in built_prompt
+
+
+def test_sql_generation_reasoning_post_process_rejects_example_sql():
+    result = sql_generation_reasoning_post_process(
+        generate_sql_reasoning={
+            "replies": [
+                "1. **Plan**: Here is an example using SQL:\n"
+                "```sql\nSELECT attribute_1 FROM missing_table\n```"
+            ]
+        },
+        validation_contexts=[_table_ddl(MODEL_TABLE_NAME, MODEL_COLUMN_NAME)],
+    )
+
+    assert "SELECT" not in result.upper()
+    assert "missing_table" not in result
+    assert "Schema-grounded plan required" in result
+
+
+def test_sql_generation_reasoning_post_process_rejects_invalid_table_reference():
+    result = sql_generation_reasoning_post_process(
+        generate_sql_reasoning={
+            "replies": ["1. **Select data**: Use table: missing_model."]
+        },
+        validation_contexts=[_table_ddl(MODEL_TABLE_NAME, MODEL_COLUMN_NAME)],
+    )
+
+    assert "missing_model" not in result
+    assert "Schema-grounded plan required" in result
+
+
+def test_sql_generation_reasoning_post_process_rejects_invalid_column_reference():
+    result = sql_generation_reasoning_post_process(
+        generate_sql_reasoning={
+            "replies": [
+                f"1. **Select data**: Use table: {MODEL_TABLE_NAME} and "
+                f"column: {MODEL_TABLE_NAME}.missing_attribute."
+            ]
+        },
+        validation_contexts=[_table_ddl(MODEL_TABLE_NAME, MODEL_COLUMN_NAME)],
+    )
+
+    assert "missing_attribute" not in result
+    assert "Schema-grounded plan required" in result
+
+
+def test_followup_sql_generation_reasoning_post_process_keeps_valid_schema_references():
+    reasoning = (
+        f"1. **Select data**: Use table: {MODEL_TABLE_NAME} and "
+        f"column: {MODEL_TABLE_NAME}.{MODEL_COLUMN_NAME}."
+    )
+
+    result = followup_sql_generation_reasoning_post_process(
+        generate_sql_reasoning={"replies": [reasoning]},
+        validation_contexts=[_table_ddl(MODEL_TABLE_NAME, MODEL_COLUMN_NAME)],
+    )
+
+    assert result == reasoning
 
 
 def test_followup_sql_generation_prompt_uses_database_schema_documents():
