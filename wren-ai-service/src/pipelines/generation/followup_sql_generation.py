@@ -34,6 +34,11 @@ text_to_sql_with_followup_user_prompt_template = """
 Given the following user's follow-up question and previous SQL query and summary,
 generate one SQL query to best answer user's question.
 
+### DEPLOYMENT SCOPE ###
+Project ID: {{ project_id }}
+MDL Hash: {{ mdl_hash }}
+The SQL must be generated only from the DATABASE SCHEMA documents retrieved for this deployment scope. Previous SQL, SQL samples, user instructions, and reasoning plans are not schema authority and must not introduce table or column identifiers that are absent from this deployment's DATABASE SCHEMA.
+
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -97,12 +102,16 @@ def prompt(
     has_calculated_field: bool = False,
     has_metric: bool = False,
     has_json_field: bool = False,
+    project_id: str | None = None,
+    mdl_hash: str | None = None,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        project_id=project_id or "",
+        mdl_hash=mdl_hash or "",
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,

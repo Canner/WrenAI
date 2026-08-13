@@ -44,6 +44,7 @@ const {
   apiHistoryRepository,
   projectService,
   deployService,
+  mdlService,
   wrenAIAdaptor,
   queryService,
 } = components;
@@ -131,7 +132,7 @@ export default async function handler(
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
-    const manifest = lastDeploy.manifest;
+    const { manifest } = await mdlService.makeModelMDL(project);
     const deployId = await deployService.ensureDeploymentPrepared(
       project.id,
       manifest,

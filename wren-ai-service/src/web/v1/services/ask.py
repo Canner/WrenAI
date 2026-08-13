@@ -493,6 +493,8 @@ class AskService:
                             histories=histories,
                             sql_samples=sql_samples,
                             instructions=instructions,
+                            project_id=ask_request.project_id,
+                            mdl_hash=ask_request.mdl_hash,
                             configuration=ask_request.configurations,
                             query_id=query_id,
                         )
@@ -504,6 +506,8 @@ class AskService:
                             contexts=table_ddls,
                             sql_samples=sql_samples,
                             instructions=instructions,
+                            project_id=ask_request.project_id,
+                            mdl_hash=ask_request.mdl_hash,
                             configuration=ask_request.configurations,
                             query_id=query_id,
                         )
@@ -650,6 +654,8 @@ class AskService:
                                 invalid_sql=invalid_sql,
                                 error_message=error_message,
                                 language=ask_request.configurations.language,
+                                project_id=ask_request.project_id,
+                                mdl_hash=ask_request.mdl_hash,
                             )
                             sql_diagnosis_reasoning = sql_diagnosis_results[
                                 "post_process"

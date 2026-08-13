@@ -57,6 +57,11 @@ The final answer must be in JSON format:
 
 
 sql_correction_user_prompt_template = """
+### DEPLOYMENT SCOPE ###
+Project ID: {{ project_id }}
+MDL Hash: {{ mdl_hash }}
+Correct the SQL only against the DATABASE SCHEMA documents retrieved for this deployment scope. The invalid SQL and error message are not schema authority; replace identifiers that are not present in this deployment's DATABASE SCHEMA with valid deployed identifiers, or avoid them.
+
 {% if documents %}
 ### DATABASE SCHEMA ###
 {% for document in documents %}
@@ -107,10 +112,14 @@ def prompt(
     prompt_builder: PromptBuilder,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
+    project_id: str | None = None,
+    mdl_hash: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
         invalid_generation_result=invalid_generation_result,
+        project_id=project_id or "",
+        mdl_hash=mdl_hash or "",
         instructions=construct_instructions(
             instructions=instructions,
         ),

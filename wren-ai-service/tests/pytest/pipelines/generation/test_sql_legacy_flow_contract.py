@@ -52,6 +52,40 @@ from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 
 
+TEST_PROJECT_ID = "test-project-id"
+TEST_MDL_HASH = "test-mdl-hash"
+SCHEMA_TABLE_NAME = "dbo_xStageNewOrders"
+COUNTRY_COLUMN_NAME = "ShipCountry"
+DATE_COLUMN_NAME = "OrderDate"
+SAMPLE_TABLE_NAME = "orders"
+MODEL_TABLE_NAME = "model_1"
+MODEL_COLUMN_NAME = "attribute_1"
+
+
+def _deployment_scope_kwargs() -> dict[str, str]:
+    return {
+        "project_id": TEST_PROJECT_ID,
+        "mdl_hash": TEST_MDL_HASH,
+    }
+
+
+def _assert_deployment_scope(prompt: str) -> None:
+    assert f"Project ID: {TEST_PROJECT_ID}" in prompt
+    assert f"MDL Hash: {TEST_MDL_HASH}" in prompt
+
+
+def _table_ddl(table_name: str, column_name: str, column_type: str = "VARCHAR") -> str:
+    return f"CREATE TABLE {table_name} ({column_name} {column_type})"
+
+
+def _select_all_sql(table_name: str) -> str:
+    return f"SELECT * FROM {table_name}"
+
+
+def _country_filter_sql(table_name: str) -> str:
+    return f"{_select_all_sql(table_name)} WHERE country = 'Taiwan'"
+
+
 def test_sql_generation_system_prompt_uses_legacy_json_sql_contract():
     prompt = get_sql_generation_system_prompt()
 
@@ -73,28 +107,30 @@ def test_sql_generation_model_kwargs_require_sql_string():
 def test_sql_generation_prompt_uses_database_schema_documents():
     result = build_sql_generation_prompt(
         query="show orders from India",
-        documents=['CREATE TABLE dbo_xStageNewOrders (ShipCountry VARCHAR)'],
+        documents=[_table_ddl(SCHEMA_TABLE_NAME, COUNTRY_COLUMN_NAME)],
+        **_deployment_scope_kwargs(),
         prompt_builder=PromptBuilder(template=sql_generation_user_prompt_template),
         sql_samples=[
             {
                 "question": "show orders from Taiwan",
-                "sql": "SELECT * FROM orders WHERE country = 'Taiwan'",
+                "sql": _country_filter_sql(SAMPLE_TABLE_NAME),
             }
         ],
     )
 
     built_prompt = result["prompt"]
 
-    assert "CREATE TABLE dbo_xStageNewOrders" in built_prompt
-    assert "ShipCountry" in built_prompt
-    assert "SELECT * FROM orders" in built_prompt
+    assert f"CREATE TABLE {SCHEMA_TABLE_NAME}" in built_prompt
+    assert COUNTRY_COLUMN_NAME in built_prompt
+    _assert_deployment_scope(built_prompt)
+    assert _select_all_sql(SAMPLE_TABLE_NAME) in built_prompt
     assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
 
 
 def test_sql_generation_prompt_does_not_inject_datasource_dialect_section():
     result = build_sql_generation_prompt(
         query="show orders from last week",
-        documents=['CREATE TABLE dbo_xStageNewOrders (OrderDate TIMESTAMP)'],
+        documents=[_table_ddl(SCHEMA_TABLE_NAME, DATE_COLUMN_NAME, "TIMESTAMP")],
         prompt_builder=PromptBuilder(template=sql_generation_user_prompt_template),
         sql_functions=[
             SqlFunction(
@@ -120,11 +156,12 @@ def test_sql_generation_prompt_does_not_inject_datasource_dialect_section():
 def test_reasoning_prompt_uses_schema_documents_only():
     result = build_sql_generation_reasoning_prompt(
         query="show orders from India",
-        documents=['CREATE TABLE dbo_xStageNewOrders (ShipCountry VARCHAR)'],
+        documents=[_table_ddl(SCHEMA_TABLE_NAME, COUNTRY_COLUMN_NAME)],
+        **_deployment_scope_kwargs(),
         sql_samples=[
             {
                 "question": "show orders from Taiwan",
-                "sql": "SELECT * FROM orders WHERE country = 'Taiwan'",
+                "sql": _country_filter_sql(SAMPLE_TABLE_NAME),
             }
         ],
         instructions=[],
@@ -135,16 +172,22 @@ def test_reasoning_prompt_uses_schema_documents_only():
 
     built_prompt = result["prompt"]
 
-    assert "CREATE TABLE dbo_xStageNewOrders" in built_prompt
-    assert "SELECT * FROM orders" in built_prompt
+    assert f"CREATE TABLE {SCHEMA_TABLE_NAME}" in built_prompt
+    _assert_deployment_scope(built_prompt)
+    assert _select_all_sql(SAMPLE_TABLE_NAME) in built_prompt
     assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
 
 
 def test_followup_reasoning_prompt_uses_history_and_schema_documents():
     result = build_followup_sql_generation_reasoning_prompt(
         query="from India",
-        documents=['CREATE TABLE dbo_xStageNewOrders (ShipCountry VARCHAR)'],
-        histories=[{"question": "show orders", "sql": "SELECT * FROM orders"}],
+        documents=[_table_ddl(SCHEMA_TABLE_NAME, COUNTRY_COLUMN_NAME)],
+        histories=[
+            {
+                "question": "show orders",
+                "sql": _select_all_sql(SAMPLE_TABLE_NAME),
+            }
+        ],
         sql_samples=[],
         instructions=[],
         prompt_builder=PromptBuilder(template=followup_reasoning_prompt_template),
@@ -152,21 +195,21 @@ def test_followup_reasoning_prompt_uses_history_and_schema_documents():
 
     built_prompt = result["prompt"]
 
-    assert "CREATE TABLE dbo_xStageNewOrders" in built_prompt
+    assert f"CREATE TABLE {SCHEMA_TABLE_NAME}" in built_prompt
     assert "Question:\nshow orders" in built_prompt
-    assert "SQL:\nSELECT * FROM orders" in built_prompt
+    assert f"SQL:\n{_select_all_sql(SAMPLE_TABLE_NAME)}" in built_prompt
     assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
 
 
 def test_followup_sql_generation_prompt_uses_database_schema_documents():
     result = build_followup_sql_generation_prompt(
         query="show related orders",
-        documents=["CREATE TABLE dbo_xStageNewOrders (ShipCountry VARCHAR)"],
+        documents=[_table_ddl(SCHEMA_TABLE_NAME, COUNTRY_COLUMN_NAME)],
         sql_generation_reasoning="",
         sql_samples=[
             {
                 "summary": "show orders from Taiwan",
-                "sql": "SELECT * FROM orders WHERE country = 'Taiwan'",
+                "sql": _country_filter_sql(SAMPLE_TABLE_NAME),
             }
         ],
         prompt_builder=PromptBuilder(
@@ -176,21 +219,23 @@ def test_followup_sql_generation_prompt_uses_database_schema_documents():
 
     built_prompt = result["prompt"]
 
-    assert "CREATE TABLE dbo_xStageNewOrders" in built_prompt
-    assert "SELECT * FROM orders" in built_prompt
+    assert f"CREATE TABLE {SCHEMA_TABLE_NAME}" in built_prompt
+    assert _select_all_sql(SAMPLE_TABLE_NAME) in built_prompt
     assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
 
 
 def test_sql_correction_prompt_uses_failed_sql_and_error():
     result = build_sql_correction_prompt(
-        documents=["CREATE TABLE model_1 (attribute_1 VARCHAR)"],
+        documents=[_table_ddl(MODEL_TABLE_NAME, MODEL_COLUMN_NAME)],
         invalid_generation_result={"sql": "SELECT 1", "error": "dry run failed"},
+        **_deployment_scope_kwargs(),
         prompt_builder=PromptBuilder(template=sql_correction_user_prompt_template),
     )
 
     built_prompt = result["prompt"]
 
-    assert "CREATE TABLE model_1" in built_prompt
+    assert f"CREATE TABLE {MODEL_TABLE_NAME}" in built_prompt
+    _assert_deployment_scope(built_prompt)
     assert "SQL: SELECT 1" in built_prompt
     assert "Error Message: dry run failed" in built_prompt
     assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
@@ -235,7 +280,7 @@ def test_sql_correction_system_prompt_preserves_datasource_knowledge():
 
 def test_sql_regeneration_prompt_uses_legacy_inputs_without_datasource_dialect():
     result = build_sql_regeneration_prompt(
-        documents=["CREATE TABLE model_1 (attribute_1 VARCHAR)"],
+        documents=[_table_ddl(MODEL_TABLE_NAME, MODEL_COLUMN_NAME)],
         sql_generation_reasoning="reason about the schema",
         sql="SELECT 1",
         prompt_builder=PromptBuilder(template=sql_regeneration_user_prompt_template),
@@ -243,7 +288,7 @@ def test_sql_regeneration_prompt_uses_legacy_inputs_without_datasource_dialect()
 
     built_prompt = result["prompt"]
 
-    assert "CREATE TABLE model_1" in built_prompt
+    assert f"CREATE TABLE {MODEL_TABLE_NAME}" in built_prompt
     assert "SQL generation reasoning: reason about the schema" in built_prompt
     assert "Original SQL query: SELECT 1" in built_prompt
     assert "Configured data source: trino" not in built_prompt

@@ -624,8 +624,9 @@ class SQLGenPostProcessor:
                 else:
                     error_message = addition.get("error_message", "")
                     invalid_generation_result = {
-                        "sql": addition.get("error_sql", generation_result),
+                        "sql": generation_result,
                         "original_sql": generation_result,
+                        "engine_sql": addition.get("error_sql", ""),
                         "type": "TIME_OUT"
                         if error_message.startswith("Request timed out")
                         else "DRY_RUN",
@@ -656,8 +657,9 @@ class SQLGenPostProcessor:
                         else "PREVIEW_FAILED"
                     )
                     invalid_generation_result = {
-                        "sql": addition.get("error_sql", generation_result),
+                        "sql": generation_result,
                         "original_sql": generation_result,
+                        "engine_sql": addition.get("error_sql", ""),
                         "type": "TIME_OUT"
                         if error_message.startswith("Request timed out")
                         else preview_data_status,
@@ -673,6 +675,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
+- Table names are the exact identifiers that appear after CREATE TABLE or CREATE VIEW in the DATABASE SCHEMA section; use those names exactly.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - NEVER invent, infer, rename, or approximate table/column names from the user's wording.
@@ -958,7 +961,9 @@ otherwise, you will put the relative timeframe in the SQL query.
 11. Do not include ```markdown or ``` in the answer.
 12. A table name in the reasoning plan must be in this format: `table: <table_name>`.
 13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
-14. ONLY SHOWING the reasoning plan in bullet points.
+14. Table names and column names must exactly match the identifiers in the DATABASE SCHEMA `CREATE TABLE` or `CREATE VIEW` statements.
+15. Do not rename, normalize, or approximate table names from the user's wording, aliases, descriptions, or source-system naming conventions.
+16. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -977,9 +982,15 @@ def _extract_from_sql_knowledge(
 
 def get_text_to_sql_rules(sql_knowledge: SqlKnowledge | None = None) -> str:
     if sql_knowledge is not None:
-        return _extract_from_sql_knowledge(
-            sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
+        text_to_sql_rule = _extract_from_sql_knowledge(
+            sql_knowledge, "text_to_sql_rule", ""
         )
+        if text_to_sql_rule:
+            return (
+                f"{_DEFAULT_TEXT_TO_SQL_RULES}\n\n"
+                "### DATA SOURCE SQL KNOWLEDGE ###\n"
+                f"{text_to_sql_rule}"
+            )
 
     return _DEFAULT_TEXT_TO_SQL_RULES
 

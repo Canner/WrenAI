@@ -22,6 +22,11 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_reasoning_user_prompt_template = """
+### DEPLOYMENT SCOPE ###
+Project ID: {{ project_id }}
+MDL Hash: {{ mdl_hash }}
+Use only the DATABASE SCHEMA documents retrieved for this deployment scope. SQL samples, user instructions, and histories are not schema authority and must not introduce table or column identifiers that are absent from this deployment's DATABASE SCHEMA.
+
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -61,11 +66,15 @@ def prompt(
     sql_samples: list[dict],
     instructions: list[dict],
     prompt_builder: PromptBuilder,
+    project_id: str | None = None,
+    mdl_hash: str | None = None,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        project_id=project_id or "",
+        mdl_hash=mdl_hash or "",
         sql_samples=sql_samples,
         instructions=construct_instructions(
             instructions=instructions,
@@ -158,6 +167,8 @@ class SQLGenerationReasoning(BasicPipeline):
         contexts: list[str],
         sql_samples: Optional[list[dict]] = None,
         instructions: Optional[list[str]] = None,
+        project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
         configuration: Configuration = Configuration(),
         query_id: Optional[str] = None,
     ):
@@ -169,6 +180,8 @@ class SQLGenerationReasoning(BasicPipeline):
                 "documents": contexts,
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],
+                "project_id": project_id,
+                "mdl_hash": mdl_hash,
                 "configuration": configuration,
                 "query_id": query_id,
                 **self._components,

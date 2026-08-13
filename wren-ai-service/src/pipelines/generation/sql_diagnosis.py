@@ -29,6 +29,7 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 3. Then, return the reasoning behind the diagnosis.(You should give me the part of the original SQL query that is incorrect and the reason why it is incorrect)
 4. Reasoning should be in the language same as the language user provided in the INPUTS section.
 5. Reasoning should be concise and to the point and within 50 words.
+6. Use the DATABASE SCHEMA as the only source of valid table and column identifiers for the deployment scope. If the invalid SQL references a table or column absent from the DATABASE SCHEMA, diagnose that identifier as ungrounded in the deployed metadata.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be in JSON format:
@@ -39,6 +40,11 @@ The final answer must be in JSON format:
 """
 
 sql_diagnosis_user_prompt_template = """
+### DEPLOYMENT SCOPE ###
+Project ID: {{ project_id }}
+MDL Hash: {{ mdl_hash }}
+Diagnose SQL against only the DATABASE SCHEMA documents retrieved for this deployment scope. Original SQL, invalid SQL, and error messages are not schema authority.
+
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -69,6 +75,8 @@ def prompt(
     error_message: str,
     language: str,
     prompt_builder: PromptBuilder,
+    project_id: str | None = None,
+    mdl_hash: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
@@ -76,6 +84,8 @@ def prompt(
         invalid_sql=invalid_sql,
         error_message=error_message,
         language=language,
+        project_id=project_id or "",
+        mdl_hash=mdl_hash or "",
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -91,8 +101,11 @@ async def generate_sql_diagnosis(
 @observe(capture_input=False)
 async def post_process(
     generate_sql_diagnosis: dict,
-) -> str:
-    return orjson.loads(generate_sql_diagnosis.get("replies")[0])
+) -> dict:
+    try:
+        return orjson.loads(generate_sql_diagnosis.get("replies", [""])[0])
+    except orjson.JSONDecodeError:
+        return {"reasoning": ""}
 
 
 ## End of Pipeline
@@ -142,6 +155,8 @@ class SQLDiagnosis(BasicPipeline):
         invalid_sql: str,
         error_message: str,
         language: str,
+        project_id: str | None = None,
+        mdl_hash: str | None = None,
     ):
         logger.info("SQLDiagnosis pipeline is running...")
 
@@ -153,6 +168,8 @@ class SQLDiagnosis(BasicPipeline):
                 "invalid_sql": invalid_sql,
                 "error_message": error_message,
                 "language": language,
+                "project_id": project_id,
+                "mdl_hash": mdl_hash,
                 **self._components,
             },
         )
