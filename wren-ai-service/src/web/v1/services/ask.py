@@ -518,7 +518,7 @@ class AskService:
                     sql_generation_reasoning = (
                         await self._pipelines["followup_sql_generation_reasoning"].run(
                             query=user_query,
-                            contexts=schema_contexts,
+                            contexts=table_ddls,
                             validation_contexts=schema_contexts,
                             histories=histories,
                             sql_samples=sql_samples,
@@ -533,7 +533,7 @@ class AskService:
                     sql_generation_reasoning = (
                         await self._pipelines["sql_generation_reasoning"].run(
                             query=user_query,
-                            contexts=schema_contexts,
+                            contexts=table_ddls,
                             validation_contexts=schema_contexts,
                             sql_samples=sql_samples,
                             instructions=instructions,
@@ -596,7 +596,7 @@ class AskService:
                         "followup_sql_generation"
                     ].run(
                         query=user_query,
-                        contexts=schema_contexts,
+                        contexts=table_ddls,
                         validation_contexts=schema_contexts,
                         sql_generation_reasoning=sql_generation_reasoning,
                         histories=histories,
@@ -617,7 +617,7 @@ class AskService:
                         "sql_generation"
                     ].run(
                         query=user_query,
-                        contexts=schema_contexts,
+                        contexts=table_ddls,
                         validation_contexts=schema_contexts,
                         sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
@@ -698,7 +698,7 @@ class AskService:
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
                         ].run(
-                            contexts=schema_contexts,
+                            contexts=table_ddls,
                             instructions=instructions,
                             invalid_generation_result={
                                 "sql": original_sql,

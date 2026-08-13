@@ -167,6 +167,7 @@ class AskFeedbackService:
                 has_metric = _retrieval_result.get("has_metric", False)
                 has_json_field = _retrieval_result.get("has_json_field", False)
                 documents = _retrieval_result.get("retrieval_results", [])
+                table_ddls = [document.get("table_ddl") for document in documents]
                 schema_contexts = _schema_validation_contexts(documents)
                 sql_samples = sql_samples_task["formatted_output"].get("documents", [])
                 instructions = instructions_task["formatted_output"].get(
@@ -182,7 +183,7 @@ class AskFeedbackService:
                 text_to_sql_generation_results = await self._pipelines[
                     "sql_regeneration"
                 ].run(
-                    contexts=schema_contexts,
+                    contexts=table_ddls,
                     validation_contexts=schema_contexts,
                     sql_generation_reasoning=None,
                     sql=ask_feedback_request.sql,
@@ -241,7 +242,7 @@ class AskFeedbackService:
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
                         ].run(
-                            contexts=schema_contexts,
+                            contexts=table_ddls,
                             validation_contexts=schema_contexts,
                             instructions=instructions,
                             invalid_generation_result={

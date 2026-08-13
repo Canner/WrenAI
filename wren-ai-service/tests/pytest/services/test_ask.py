@@ -611,7 +611,7 @@ async def test_ask_correction_recovers_no_relevant_sql_with_schema_context():
 
 
 @pytest.mark.asyncio
-async def test_ask_uses_unpruned_retrieved_metadata_for_generation_context():
+async def test_ask_uses_exact_retrieved_metadata_for_generation_context():
     generation = _ValidSqlGenerationPipeline()
     ask_service = AskService(
         {
@@ -639,8 +639,7 @@ async def test_ask_uses_unpruned_retrieved_metadata_for_generation_context():
         AskResultRequest(query_id=query_id)
     )
     assert ask_result_response.status == "finished"
-    assert generation.calls[0]["contexts"] == [MODEL_ALPHA_UNPRUNED_DDL]
-    assert generation.calls[0]["validation_contexts"] == [MODEL_ALPHA_UNPRUNED_DDL]
+    assert generation.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
 
 
 @pytest.mark.asyncio
@@ -968,7 +967,7 @@ async def test_ask_corrects_no_relevant_sql_with_exact_retrieved_metadata():
     assert ask_result_response.status == "finished"
     assert regeneration.calls == []
     assert diagnosis.calls[0]["contexts"] == [MODEL_ALPHA_UNPRUNED_DDL]
-    assert correction.calls[0]["contexts"] == [MODEL_ALPHA_UNPRUNED_DDL]
+    assert correction.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
     assert correction.calls[0]["validation_contexts"] == [MODEL_ALPHA_UNPRUNED_DDL]
     invalid_generation_result = correction.calls[0]["invalid_generation_result"]
     assert invalid_generation_result | {
