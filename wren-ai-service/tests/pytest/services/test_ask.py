@@ -294,6 +294,29 @@ class _PrunedSchemaRetrievalPipeline:
         }
 
 
+class _PrunedSchemaWithIncompleteUnprunedDdlRetrievalPipeline:
+    async def run(self, **_):
+        return {
+            "construct_retrieval_results": {
+                "retrieval_results": [
+                    {
+                        "table_name": MODEL_ALPHA,
+                        "table_ddl": MODEL_ALPHA_PRUNED_DDL,
+                        "unpruned_table_ddl": MODEL_ALPHA_PRUNED_DDL,
+                        "column_names": [MODEL_ALPHA_SELECTED_MEASURE],
+                        "manifest_column_names": [
+                            MODEL_ALPHA_SELECTED_MEASURE,
+                            MODEL_ALPHA_RECOVERED_DIMENSION,
+                        ],
+                    }
+                ],
+                "has_calculated_field": False,
+                "has_metric": False,
+                "has_json_field": False,
+            }
+        }
+
+
 class _HistoricalQuestionPipeline:
     async def run(self, **_):
         return {
@@ -640,6 +663,41 @@ async def test_ask_uses_exact_retrieved_metadata_for_generation_context():
     )
     assert ask_result_response.status == "finished"
     assert generation.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
+
+
+@pytest.mark.asyncio
+async def test_ask_uses_manifest_columns_for_grounding_when_prompt_ddl_is_pruned():
+    generation = _ValidSqlGenerationPipeline()
+    ask_service = AskService(
+        {
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "db_schema_retrieval": _PrunedSchemaWithIncompleteUnprunedDdlRetrievalPipeline(),
+            "sql_generation": generation,
+            "sql_correction": _UnexpectedCorrectionPipeline(),
+            "sql_diagnosis": _FailingDiagnosisPipeline(),
+        },
+        allow_intent_classification=False,
+        allow_sql_generation_reasoning=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="count records by retrieved dimension", mdl_hash=None)
+    ask_request.query_id = query_id
+
+    await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert ask_result_response.status == "finished"
+    assert generation.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
+    validation_context = generation.calls[0]["validation_contexts"][0]
+    assert MODEL_ALPHA_SELECTED_MEASURE in validation_context
+    assert MODEL_ALPHA_RECOVERED_DIMENSION in validation_context
 
 
 @pytest.mark.asyncio

@@ -13,11 +13,47 @@ from src.web.v1.services import BaseRequest, SSEEvent
 logger = logging.getLogger("wren-ai-service")
 
 
+def _quote_validation_identifier(identifier: str) -> str:
+    escaped_identifier = identifier.replace('"', '""')
+    return f'"{escaped_identifier}"'
+
+
+def _build_manifest_validation_context(
+    table_name: str,
+    column_names: list[str],
+) -> str:
+    columns = ",\n".join(
+        f"  {_quote_validation_identifier(column_name)} VARCHAR"
+        for column_name in column_names
+    )
+    return f"CREATE TABLE {_quote_validation_identifier(table_name)} (\n{columns}\n)"
+
+
+def _schema_validation_context(document: dict) -> Optional[str]:
+    unpruned_ddl = document.get("unpruned_table_ddl")
+    table_ddl = document.get("table_ddl")
+    ddl = unpruned_ddl or table_ddl
+    table_name = document.get("table_name")
+    manifest_column_names = [
+        column_name
+        for column_name in document.get("manifest_column_names", [])
+        if isinstance(column_name, str) and column_name
+    ]
+
+    validation_context_is_pruned = not unpruned_ddl or (
+        table_ddl and unpruned_ddl.strip() == table_ddl.strip()
+    )
+    if table_name and manifest_column_names and validation_context_is_pruned:
+        return _build_manifest_validation_context(table_name, manifest_column_names)
+
+    return ddl
+
+
 def _schema_validation_contexts(documents: list[dict]) -> list[str]:
     return [
-        document.get("unpruned_table_ddl") or document.get("table_ddl")
+        context
         for document in documents
-        if document.get("unpruned_table_ddl") or document.get("table_ddl")
+        if (context := _schema_validation_context(document))
     ]
 
 
