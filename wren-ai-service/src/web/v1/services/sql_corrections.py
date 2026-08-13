@@ -8,6 +8,7 @@ from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, MetadataTraceable
+from src.web.v1.services.ask import _schema_validation_contexts
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -115,10 +116,11 @@ class SqlCorrectionService:
                 .get("construct_retrieval_results", {})
                 .get("retrieval_results", [])
             )
-            table_ddls = [document.get("table_ddl") for document in documents]
+            schema_contexts = _schema_validation_contexts(documents)
 
             res = await self._pipelines["sql_correction"].run(
-                contexts=table_ddls,
+                contexts=schema_contexts,
+                validation_contexts=schema_contexts,
                 invalid_generation_result=_invalid,
                 project_id=project_id,
                 mdl_hash=request.mdl_hash,
