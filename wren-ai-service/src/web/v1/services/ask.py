@@ -91,6 +91,13 @@ def _grounded_sql_generation_reasoning(
     return reasoning
 
 
+def _correction_sql_for_failure(original_sql: str, failure_type: str) -> str:
+    if failure_type == "SCHEMA_GROUNDING":
+        return ""
+
+    return original_sql
+
+
 class AskHistory(BaseModel):
     sql: str
     question: str
@@ -776,7 +783,10 @@ class AskService:
                             contexts=table_ddls,
                             instructions=instructions,
                             invalid_generation_result={
-                                "sql": original_sql,
+                                "sql": _correction_sql_for_failure(
+                                    original_sql,
+                                    failed_dry_run_result["type"],
+                                ),
                                 "error": sql_diagnosis_reasoning
                                 if allow_sql_diagnosis
                                 else error_message,

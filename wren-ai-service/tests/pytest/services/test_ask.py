@@ -363,6 +363,23 @@ class _MissingRetrievedTableSqlGenerationPipeline:
         }
 
 
+class _SchemaGroundingInvalidColumnSqlGenerationPipeline:
+    async def run(self, **_):
+        invalid_sql = f"SELECT guessed_column FROM {MODEL_ALPHA}"
+        return {
+            "post_process": {
+                "valid_generation_result": {},
+                "invalid_generation_result": {
+                    "sql": invalid_sql,
+                    "original_sql": invalid_sql,
+                    "type": "SCHEMA_GROUNDING",
+                    "error": "Schema grounding failed. The SQL references unqualified columns that are not present in the verified tables.",
+                    "correlation_id": "",
+                },
+            }
+        }
+
+
 class _NoRelevantSqlGenerationPipeline:
     def __init__(self):
         self.calls = []
@@ -589,6 +606,41 @@ async def test_ask_expands_correction_context_from_failed_sql_like_legacy():
         "error": f"Generated SQL references tables that were not retrieved from the current schema: {MODEL_BETA}.",
     } == invalid_generation_result
     assert invalid_generation_result["question"] == ask_request.query
+
+
+@pytest.mark.asyncio
+async def test_ask_does_not_anchor_correction_on_schema_grounding_sql():
+    correction = _CapturingCorrectionPipeline()
+    ask_service = AskService(
+        {
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "db_schema_retrieval": _SchemaRetrievalPipeline(),
+            "sql_generation": _SchemaGroundingInvalidColumnSqlGenerationPipeline(),
+            "sql_correction": correction,
+            "sql_diagnosis": _FailingDiagnosisPipeline(),
+        },
+        allow_intent_classification=False,
+        allow_sql_generation_reasoning=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=False,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="count records by model", mdl_hash=None)
+    ask_request.query_id = query_id
+
+    await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert ask_result_response.status == "finished"
+    invalid_generation_result = correction.calls[0]["invalid_generation_result"]
+    assert invalid_generation_result["sql"] == ""
+    assert invalid_generation_result["schema_grounding_failure"] is True
+    assert "Schema grounding failed" in invalid_generation_result["execution_error"]
 
 
 @pytest.mark.asyncio
