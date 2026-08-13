@@ -386,7 +386,10 @@ class AskService:
                             )
                             results["metadata"]["type"] = "MISLEADING_QUERY"
                             return results
-                        elif intent == "GENERAL":
+                        elif intent == "GENERAL" or (
+                            intent == "USER_GUIDE"
+                            and intent_classification_result.get("db_schemas")
+                        ):
                             should_try_text_to_sql_after_general = True
                             self._ask_results[query_id] = AskResultResponse(
                                 status="understanding",

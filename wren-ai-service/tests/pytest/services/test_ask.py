@@ -361,8 +361,9 @@ class _NoRelevantSqlGenerationPipeline:
 
 
 class _IntentClassificationPipeline:
-    def __init__(self, intent: str):
+    def __init__(self, intent: str, db_schemas: list[str] | None = None):
         self.intent = intent
+        self.db_schemas = db_schemas or []
         self.calls = []
 
     async def run(self, **kwargs):
@@ -372,7 +373,7 @@ class _IntentClassificationPipeline:
                 "intent": self.intent,
                 "rephrased_question": kwargs.get("query", ""),
                 "reasoning": f"classified as {self.intent}",
-                "db_schemas": [],
+                "db_schemas": self.db_schemas,
             }
         }
 
@@ -804,6 +805,90 @@ async def test_ask_general_intent_falls_back_to_data_assistance_without_schema()
     assert ask_result_response.type == "GENERAL"
     assert ask_result_response.general_type == "DATA_ASSISTANCE"
     assert data_assistance.calls
+    assert generation.calls == []
+
+
+@pytest.mark.asyncio
+async def test_ask_user_guide_intent_continues_to_text_to_sql_when_schema_was_identified():
+    intent_classification = _IntentClassificationPipeline(
+        "USER_GUIDE",
+        db_schemas=[MODEL_ALPHA_ENTITY_DDL],
+    )
+    user_guide_assistance = _CapturingAssistancePipeline()
+    generation = _ValidSqlGenerationPipeline()
+    ask_service = AskService(
+        {
+            "intent_classification": intent_classification,
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "user_guide_assistance": user_guide_assistance,
+            "db_schema_retrieval": _SchemaRetrievalPipeline(),
+            "sql_generation": generation,
+            "sql_correction": _UnexpectedCorrectionPipeline(),
+            "sql_diagnosis": _FailingDiagnosisPipeline(),
+        },
+        allow_intent_classification=True,
+        allow_sql_generation_reasoning=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="show all records", mdl_hash="deploy-hash")
+    ask_request.query_id = query_id
+
+    result = await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert result["metadata"]["type"] == "TEXT_TO_SQL"
+    assert ask_result_response.status == "finished"
+    assert ask_result_response.type == "TEXT_TO_SQL"
+    assert ask_result_response.response[0].sql == MODEL_ALPHA_COUNT_SQL
+    assert generation.calls
+    assert user_guide_assistance.calls == []
+
+
+@pytest.mark.asyncio
+async def test_ask_user_guide_intent_stops_without_schema_context():
+    intent_classification = _IntentClassificationPipeline("USER_GUIDE")
+    user_guide_assistance = _CapturingAssistancePipeline()
+    generation = _ValidSqlGenerationPipeline()
+    ask_service = AskService(
+        {
+            "intent_classification": intent_classification,
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "user_guide_assistance": user_guide_assistance,
+            "db_schema_retrieval": _SchemaRetrievalPipeline(),
+            "sql_generation": generation,
+            "sql_correction": _UnexpectedCorrectionPipeline(),
+            "sql_diagnosis": _FailingDiagnosisPipeline(),
+        },
+        allow_intent_classification=True,
+        allow_sql_generation_reasoning=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="how do I use the product", mdl_hash="deploy-hash")
+    ask_request.query_id = query_id
+
+    result = await ask_service.ask(ask_request)
+    await asyncio.sleep(0)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert result["metadata"]["type"] == "GENERAL"
+    assert ask_result_response.status == "finished"
+    assert ask_result_response.type == "GENERAL"
+    assert ask_result_response.general_type == "USER_GUIDE"
+    assert user_guide_assistance.calls
     assert generation.calls == []
 
 
