@@ -790,12 +790,28 @@ def create_project(
     )
 
 
+def default_key_name() -> str:
+    """Name a minted key with the date it was minted.
+
+    Every key this command mints lands in a list the user manages by hand,
+    and the server stamps them all with the same origin, so a bare constant
+    would render that list a row of identical entries. The date is the one
+    fact carried here: it is enough to correlate a row with something the
+    user remembers doing, and it sends nothing about the machine.
+
+    Deliberately *not* the host name: that would distinguish same-day mints
+    from different machines, but it would also put the machine's name into
+    the account's key list, and that trade was declined.
+    """
+    return f"wren-cli {time.strftime('%Y-%m-%d')}"
+
+
 def mint_project_key(
     api_host: str,
     project_id: str,
     org_key: str,
     *,
-    name: str = "wren-cli",
+    name: str | None = None,
     timeout: float = 15.0,
 ) -> str:
     """Mint a durable project API key (`sk-...`) for `project_id`.
@@ -812,7 +828,12 @@ def mint_project_key(
     )
     headers = {"Authorization": f"Bearer {org_key}"}
     try:
-        resp = requests.post(url, json={"name": name}, headers=headers, timeout=timeout)
+        resp = requests.post(
+            url,
+            json={"name": name or default_key_name()},
+            headers=headers,
+            timeout=timeout,
+        )
     except requests.RequestException as exc:
         raise CloudError(f"Could not reach {api_host}: {exc}") from exc
 

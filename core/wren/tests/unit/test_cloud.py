@@ -10,7 +10,9 @@ manually, not here — a mocked HTTP/git layer cannot stand in for them.
 from __future__ import annotations
 
 import io
+import socket
 import subprocess
+import time
 
 import pytest
 import requests
@@ -564,6 +566,41 @@ def test_mint_project_key_returns_the_secret(monkeypatch):
     assert captured["url"] == "https://cloud.getwren.ai/api/v1/projects/16/keys"
     assert captured["json"] == {"name": "wren-cli"}
     assert captured["headers"] == {"Authorization": "Bearer osk-org-key"}
+
+
+def test_mint_project_key_dates_the_key_by_default(monkeypatch):
+    """The name carries the mint date and nothing about the machine.
+
+    The server stamps every API-minted key with the same origin, so the name
+    is the only field carrying anything distinguishing, and a constant would
+    make the user's key list a row of identical entries. The host name was
+    considered for this and deliberately left out — see `default_key_name`.
+    """
+    captured = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.update(json=json)
+        return _FakeResponse(201, {"secret": "sk-fresh"})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    monkeypatch.setattr(time, "strftime", lambda fmt: "2026-08-14")
+
+    cloud.mint_project_key("https://cloud.getwren.ai", "16", "osk-org-key")
+
+    name = captured["json"]["name"]
+    assert name == "wren-cli 2026-08-14", name
+    assert len(name) <= 100, f"server rejects names over 100 chars: {name!r}"
+
+
+def test_default_key_name_carries_nothing_about_the_machine():
+    """Guards the privacy decision, not the format.
+
+    Written so that reintroducing the host name has to be a deliberate act
+    that breaks a test, rather than something that creeps back in.
+    """
+    name = cloud.default_key_name()
+    assert socket.gethostname().split(".")[0] not in name
+    assert name.startswith("wren-cli ")
 
 
 def test_mint_project_key_raises_on_missing_secret(monkeypatch):
