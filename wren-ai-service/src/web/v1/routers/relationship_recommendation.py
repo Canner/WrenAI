@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import uuid
 from dataclasses import asdict
 from typing import Literal, Optional
@@ -15,6 +16,23 @@ from src.globals import (
 from src.web.v1.services import BaseRequest, RelationshipRecommendation
 
 router = APIRouter()
+logger = logging.getLogger("wren-ai-service")
+
+
+async def _run_recommendation_task(
+    service: RelationshipRecommendation,
+    input: RelationshipRecommendation.Input,
+    service_metadata: dict,
+):
+    try:
+        await service.recommend(input, service_metadata=service_metadata)
+    except Exception as e:
+        logger.exception("Unexpected relationship recommendation task failure")
+        service._handle_exception(
+            input,
+            f"Unexpected relationship recommendation task failure: {str(e)}",
+            request_from=input.request_from,
+        )
 
 
 class PostRequest(BaseRequest):
@@ -46,7 +64,11 @@ async def recommend(
     )
 
     asyncio.create_task(
-        service.recommend(input, service_metadata=asdict(service_metadata))
+        _run_recommendation_task(
+            service,
+            input,
+            asdict(service_metadata),
+        )
     )
 
     return PostResponse(id=id)

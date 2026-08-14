@@ -5,6 +5,7 @@ import React, { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Button,
+  Collapse,
   Dropdown,
   Input,
   Menu,
@@ -12,6 +13,7 @@ import {
   Space,
   Spin,
   Table,
+  Tag,
   message,
 } from 'antd';
 import {
@@ -25,6 +27,7 @@ import { gql, useApolloClient, useMutation } from '@apollo/client';
 import styled from 'styled-components';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import { editCalculatedField } from '@/utils/modelingHelper';
+import SimpleLayout from '@/components/layouts/SimpleLayout';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
 import EditMetadataModal from '@/components/pages/modeling/EditMetadataModal';
@@ -207,6 +210,21 @@ type AssistantRelationship = {
   reason: string;
 };
 
+const SEMANTIC_EXAMPLE_PROMPTS = [
+  {
+    label: 'College',
+    text: 'The purpose of this dataset is to monitor academic performance by tracking student enrollments, grades, and GPA calculations, and to identify areas for student support.',
+  },
+  {
+    label: 'E-commerce',
+    text: 'This dataset includes historical pricing information, discount rates, and promotional activities. It supports dynamic pricing strategies, promotion effectiveness analysis, and competitive pricing assessments.',
+  },
+  {
+    label: 'Human Resources',
+    text: 'This dataset tracks job postings, applicant details, interview processes, and hiring outcomes. It supports recruitment strategy optimization, time-to-hire analysis, and candidate sourcing effectiveness.',
+  },
+];
+
 const RELATIONSHIP_TYPES = [
   { label: 'Many-to-one', value: 'MANY_TO_ONE' },
   { label: 'One-to-many', value: 'ONE_TO_MANY' },
@@ -291,9 +309,7 @@ export default function Modeling() {
   const [assistantError, setAssistantError] = useState<string | null>(null);
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [semanticPrompt, setSemanticPrompt] = useState('');
-  const [semanticStep, setSemanticStep] = useState<
-    'pick' | 'generate' | 'review'
-  >('pick');
+  const [semanticStep, setSemanticStep] = useState<'pick' | 'generate'>('pick');
   const [semanticSearch, setSemanticSearch] = useState('');
   const [semanticResult, setSemanticResult] = useState<any[]>([]);
   const [relationshipResult, setRelationshipResult] = useState<
@@ -804,7 +820,7 @@ export default function Modeling() {
           throw new Error('AI assistant returned no semantic descriptions.');
         }
         setSemanticResult(normalizedResult);
-        setSemanticStep('review');
+        setSemanticStep('generate');
       }
       if (assistantMode === 'relationships') {
         if (!diagramData?.models || diagramData.models.length < 2) {
@@ -969,6 +985,7 @@ export default function Modeling() {
               toModel: relationship.toModel,
               toColumn: relationship.toColumn,
               type: relationship.type,
+              description: relationship.reason,
             })),
           },
           refetchQueries,
@@ -1061,437 +1078,453 @@ export default function Modeling() {
 
   if (assistantMode === 'semantics') {
     return (
-      <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
-        <AssistantPage>
-          <AssistantBack onClick={closeAssistant}>
-            &larr; Back to modeling
-          </AssistantBack>
-          <AssistantCard>
-            {semanticStep === 'pick' && (
-              <>
-                <AssistantTitle>Pick models</AssistantTitle>
-                <AssistantDescription>
-                  <strong>
-                    Good semantics improve how AI understands and queries your
-                    data.
-                  </strong>{' '}
-                  Select models to generate semantics with AI. Modeling AI
-                  Assistant will help you create semantics that improve how AI
-                  understands and queries your data.
-                </AssistantDescription>
-                <div className="mb-3">
-                  {selectedModels.length}/{diagramData?.models?.length || 0}{' '}
-                  model(s)
-                </div>
-                <Input
-                  className="mb-3"
-                  placeholder="Search here"
-                  value={semanticSearch}
-                  onChange={(event) => setSemanticSearch(event.target.value)}
-                />
-                <Table
-                  size="small"
-                  rowKey="referenceName"
-                  pagination={false}
-                  dataSource={semanticModelOptions}
-                  rowSelection={{
-                    selectedRowKeys: selectedModels,
-                    preserveSelectedRowKeys: true,
-                    onChange: (keys) => setSelectedModels(keys as string[]),
-                  }}
-                  columns={[
-                    {
-                      title: 'Model name',
-                      render: (_value, model) =>
-                        model.displayName || model.referenceName,
-                    },
-                  ]}
-                />
-                <AssistantFooter>
-                  <span />
-                  <Button
-                    type="primary"
-                    disabled={!selectedModels.length}
-                    onClick={() => setSemanticStep('generate')}
-                  >
-                    Next
-                  </Button>
-                </AssistantFooter>
-              </>
-            )}
-
-            {semanticStep === 'generate' && (
-              <>
-                <AssistantTitle>Generate semantics</AssistantTitle>
-                <h3>User Prompt</h3>
-                <AssistantDescription>
-                  Help AI better understand your data by providing a brief
-                  description of your dataset&apos;s purpose. Modeling AI
-                  Assistant will use this context to generate more relevant
-                  semantics.
-                </AssistantDescription>
-                <div style={{ display: 'flex', gap: 16 }}>
-                  <Input.TextArea
-                    rows={2}
-                    value={semanticPrompt}
-                    onChange={(event) => setSemanticPrompt(event.target.value)}
-                    placeholder="Describe what this dataset represents and how it is used."
-                  />
-                  <Button
-                    type="primary"
-                    loading={assistantLoading}
-                    onClick={runAssistant}
-                  >
-                    Generate
-                  </Button>
-                </div>
-                <div
-                  style={{
-                    marginTop: 24,
-                    padding: 16,
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 4,
-                  }}
-                >
-                  <strong>Example prompt</strong>
-                  <div style={{ marginTop: 16, color: '#5f6368' }}>
-                    This dataset tracks operational records, users, events, and
-                    business entities. It is used to answer analytical questions
-                    about activity, performance, ownership, and trends.
+      <SimpleLayout loading={false}>
+        <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
+          <AssistantPage>
+            <AssistantBack onClick={closeAssistant}>
+              &larr; Back to modeling
+            </AssistantBack>
+            <AssistantCard>
+              {semanticStep === 'pick' && (
+                <>
+                  <AssistantTitle>Pick models</AssistantTitle>
+                  <AssistantDescription>
+                    <strong>
+                      Good semantics improve how AI understands and queries your
+                      data.
+                    </strong>{' '}
+                    Select models to generate semantics with AI. Modeling AI
+                    Assistant will help you create semantics that improve how AI
+                    understands and queries your data.
+                  </AssistantDescription>
+                  <div className="mb-3">
+                    {selectedModels.length}/{diagramData?.models?.length || 0}{' '}
+                    model(s)
                   </div>
-                </div>
-                <AssistantFooter>
-                  <Button onClick={() => setSemanticStep('pick')}>Back</Button>
-                  <Button
-                    disabled={!semanticResult.length}
-                    onClick={() => setSemanticStep('review')}
-                  >
-                    Review
-                  </Button>
-                </AssistantFooter>
-              </>
-            )}
-
-            {semanticStep === 'review' && (
-              <>
-                <AssistantTitle>Generate semantics</AssistantTitle>
-                <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-                  <Input.TextArea
-                    rows={2}
-                    value={semanticPrompt}
-                    onChange={(event) => setSemanticPrompt(event.target.value)}
+                  <Input
+                    className="mb-3"
+                    placeholder="Search here"
+                    value={semanticSearch}
+                    onChange={(event) => setSemanticSearch(event.target.value)}
                   />
-                  <Button loading={assistantLoading} onClick={runAssistant}>
-                    Regenerate
-                  </Button>
-                </div>
-                <div
-                  style={{
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 4,
-                  }}
-                >
-                  <div style={{ padding: 16 }}>
-                    <strong>Generated semantics</strong>
-                    <div style={{ marginTop: 12, color: '#5f6368' }}>
-                      Review the semantics generated by AI.
-                    </div>
+                  <Table
+                    size="small"
+                    rowKey="referenceName"
+                    pagination={false}
+                    dataSource={semanticModelOptions}
+                    rowSelection={{
+                      selectedRowKeys: selectedModels,
+                      preserveSelectedRowKeys: true,
+                      onChange: (keys) => setSelectedModels(keys as string[]),
+                    }}
+                    columns={[
+                      {
+                        title: 'Model name',
+                        render: (_value, model) =>
+                          model.displayName || model.referenceName,
+                      },
+                    ]}
+                  />
+                  <AssistantFooter>
+                    <span />
+                    <Button
+                      type="primary"
+                      disabled={!selectedModels.length}
+                      onClick={() => setSemanticStep('generate')}
+                    >
+                      Next
+                    </Button>
+                  </AssistantFooter>
+                </>
+              )}
+
+              {semanticStep === 'generate' && (
+                <>
+                  <AssistantTitle>Generate semantics</AssistantTitle>
+                  <h3>User Prompt</h3>
+                  <AssistantDescription>
+                    Help AI better understand your data by providing a brief
+                    description of your dataset&apos;s purpose. Modeling AI
+                    Assistant will use this context to generate more relevant
+                    semantics.
+                  </AssistantDescription>
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    <Input.TextArea
+                      rows={2}
+                      value={semanticPrompt}
+                      onChange={(event) =>
+                        setSemanticPrompt(event.target.value)
+                      }
+                      placeholder="Describe what this dataset represents and how it is used."
+                    />
+                    <Button
+                      type="primary"
+                      loading={assistantLoading}
+                      onClick={runAssistant}
+                    >
+                      {semanticResult.length ? 'Regenerate' : 'Generate'}
+                    </Button>
                   </div>
-                  {semanticResult.map((model) => (
-                    <SemanticReviewCard key={model.name}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          marginBottom: 16,
-                        }}
-                      >
-                        <strong>{model.name}</strong>
-                        <span style={{ color: '#9aa0a6' }}>
-                          {(model.columns || []).length} column(s)
-                        </span>
+                  {assistantError && (
+                    <Alert
+                      className="mt-4"
+                      showIcon
+                      type="error"
+                      message="Semantic generation failed"
+                      description={assistantError}
+                    />
+                  )}
+                  <Collapse
+                    key={
+                      semanticResult.length ? 'with-results' : 'without-results'
+                    }
+                    className="mt-4"
+                    defaultActiveKey={semanticResult.length ? [] : ['examples']}
+                  >
+                    <Collapse.Panel header="Example prompt" key="examples">
+                      <div style={{ marginBottom: 12, color: '#5f6368' }}>
+                        Following, we provide some example prompts based on some
+                        real world datasets.
                       </div>
-                      <div className="mb-2">Description</div>
-                      <Input
-                        className="mb-4"
-                        value={model.description}
-                        onChange={(event) =>
-                          updateSemanticModelDescription(
-                            model.name,
-                            event.target.value,
-                          )
-                        }
-                      />
-                      <Table
-                        size="small"
-                        rowKey="name"
-                        pagination={false}
-                        dataSource={model.columns || []}
-                        columns={[
-                          { title: 'Name', dataIndex: 'name', width: 180 },
-                          {
-                            title: 'Alias',
-                            dataIndex: 'name',
-                            width: 180,
-                          },
-                          { title: 'Type', dataIndex: 'type', width: 140 },
-                          {
-                            title: 'Description',
-                            render: (_value, column) => (
-                              <Input
-                                value={column.description}
-                                onChange={(event) =>
-                                  updateSemanticColumnDescription(
-                                    model.name,
-                                    column.name,
-                                    event.target.value,
-                                  )
-                                }
-                              />
-                            ),
-                          },
-                        ]}
-                      />
-                    </SemanticReviewCard>
-                  ))}
-                </div>
-                <AssistantFooter>
-                  <Button onClick={() => setSemanticStep('generate')}>
-                    Back
-                  </Button>
-                  <Button
-                    type="primary"
-                    loading={assistantLoading}
-                    disabled={!semanticResult.length}
-                    onClick={saveAssistantResult}
-                  >
-                    Save
-                  </Button>
-                </AssistantFooter>
-              </>
-            )}
-          </AssistantCard>
-        </AssistantPage>
-      </DeployStatusContext.Provider>
+                      <Space
+                        direction="vertical"
+                        size={12}
+                        style={{ width: '100%' }}
+                      >
+                        {SEMANTIC_EXAMPLE_PROMPTS.map((example) => (
+                          <div
+                            key={example.label}
+                            style={{
+                              padding: 12,
+                              background: '#eef4ff',
+                              borderRadius: 4,
+                            }}
+                          >
+                            <Tag color="blue">{example.label}</Tag>
+                            <div style={{ marginTop: 10, color: '#5f6368' }}>
+                              {example.text}
+                            </div>
+                          </div>
+                        ))}
+                      </Space>
+                    </Collapse.Panel>
+                  </Collapse>
+                  {semanticResult.length ? (
+                    <div
+                      style={{
+                        marginTop: 24,
+                        border: '1px solid #e5e7eb',
+                        borderRadius: 4,
+                      }}
+                    >
+                      <div style={{ padding: 16 }}>
+                        <strong>Generated semantics</strong>
+                        <div style={{ marginTop: 12, color: '#5f6368' }}>
+                          Review the semantics generated by AI.
+                        </div>
+                      </div>
+                      {semanticResult.map((model) => (
+                        <SemanticReviewCard key={model.name}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              marginBottom: 16,
+                            }}
+                          >
+                            <strong>{model.name}</strong>
+                            <span style={{ color: '#9aa0a6' }}>
+                              {(model.columns || []).length} column(s)
+                            </span>
+                          </div>
+                          <div className="mb-2">Description</div>
+                          <Input
+                            className="mb-4"
+                            value={model.description}
+                            onChange={(event) =>
+                              updateSemanticModelDescription(
+                                model.name,
+                                event.target.value,
+                              )
+                            }
+                          />
+                          <Table
+                            size="small"
+                            rowKey="name"
+                            pagination={false}
+                            dataSource={model.columns || []}
+                            columns={[
+                              { title: 'Name', dataIndex: 'name', width: 180 },
+                              {
+                                title: 'Alias',
+                                dataIndex: 'name',
+                                width: 180,
+                              },
+                              { title: 'Type', dataIndex: 'type', width: 140 },
+                              {
+                                title: 'Description',
+                                render: (_value, column) => (
+                                  <Input
+                                    value={column.description}
+                                    onChange={(event) =>
+                                      updateSemanticColumnDescription(
+                                        model.name,
+                                        column.name,
+                                        event.target.value,
+                                      )
+                                    }
+                                  />
+                                ),
+                              },
+                            ]}
+                          />
+                        </SemanticReviewCard>
+                      ))}
+                    </div>
+                  ) : null}
+                  <AssistantFooter>
+                    <Button onClick={() => setSemanticStep('pick')}>
+                      Back
+                    </Button>
+                    <Button
+                      type="primary"
+                      loading={assistantLoading}
+                      disabled={!semanticResult.length}
+                      onClick={saveAssistantResult}
+                    >
+                      Save
+                    </Button>
+                  </AssistantFooter>
+                </>
+              )}
+            </AssistantCard>
+          </AssistantPage>
+        </DeployStatusContext.Provider>
+      </SimpleLayout>
     );
   }
 
   if (assistantMode === 'relationships') {
     return (
-      <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
-        <AssistantPage>
-          <AssistantBack onClick={closeAssistant}>
-            &larr; Back to modeling
-          </AssistantBack>
-          <AssistantCard>
-            <AssistantTitle>Generate relationships</AssistantTitle>
-            <AssistantDescription>
-              Modeling AI Assistant will use AI to discover potential
-              connections between your models.
-              <br />
-              Review the suggested relationships and adjust them before saving
-              to your data models.
-              <br />
-              Learn more:{' '}
-              <a
-                href="https://docs.getwren.ai/oss/guide/modeling/ai-assistant#generate-relationships"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Modeling AI Assistant / Generate relationships
-              </a>
-            </AssistantDescription>
+      <SimpleLayout loading={false}>
+        <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
+          <AssistantPage>
+            <AssistantBack onClick={closeAssistant}>
+              &larr; Back to modeling
+            </AssistantBack>
+            <AssistantCard>
+              <AssistantTitle>Generate relationships</AssistantTitle>
+              <AssistantDescription>
+                Modeling AI Assistant will use AI to discover potential
+                connections between your models.
+                <br />
+                Review the suggested relationships and adjust them before saving
+                to your data models.
+                <br />
+                Learn more:{' '}
+                <a
+                  href="https://docs.getwren.ai/oss/guide/modeling/ai-assistant#generate-relationships"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Modeling AI Assistant / Generate relationships
+                </a>
+              </AssistantDescription>
 
-            {isRelationshipGenerating ? (
-              <AssistantCenter>
-                <Spin />
-                <div style={{ marginTop: 10 }}>Generating...</div>
-              </AssistantCenter>
-            ) : (
-              <>
-                {assistantError ? (
-                  <AssistantCenter>
-                    <Alert
-                      showIcon
-                      type="error"
-                      message="Relationship generation failed"
-                      description={assistantError}
-                    />
-                  </AssistantCenter>
-                ) : !relationshipResult.length ? (
-                  <AssistantCenter>
-                    <div style={{ color: '#5f6368' }}>
-                      No relationship suggestions were generated.
-                    </div>
-                  </AssistantCenter>
-                ) : null}
+              {isRelationshipGenerating ? (
+                <AssistantCenter>
+                  <Spin />
+                  <div style={{ marginTop: 10 }}>Generating...</div>
+                </AssistantCenter>
+              ) : (
+                <>
+                  {assistantError ? (
+                    <AssistantCenter>
+                      <Alert
+                        showIcon
+                        type="error"
+                        message="Relationship generation failed"
+                        description={assistantError}
+                      />
+                    </AssistantCenter>
+                  ) : !relationshipResult.length ? (
+                    <AssistantCenter>
+                      <div style={{ color: '#5f6368' }}>
+                        No relationship suggestions were generated.
+                      </div>
+                    </AssistantCenter>
+                  ) : null}
 
-                {Object.entries(relationshipGroups).map(
-                  ([modelName, relationships]) => (
-                    <RelationshipGroup key={modelName}>
-                      <RelationshipGroupTitle>
-                        {renderIcon(TableOutlined)}
-                        <span>{modelName}</span>
-                      </RelationshipGroupTitle>
-                      <Table
-                        size="small"
-                        rowKey="clientId"
-                        pagination={false}
-                        dataSource={relationships}
-                        columns={[
-                          {
-                            title: 'From',
-                            width: 210,
-                            render: (_value, record) =>
-                              editingRelationshipKey === record.clientId ? (
-                                <Select
-                                  showSearch
-                                  style={{ width: '100%' }}
-                                  value={getRelationshipFieldValue(
+                  {Object.entries(relationshipGroups).map(
+                    ([modelName, relationships]) => (
+                      <RelationshipGroup key={modelName}>
+                        <RelationshipGroupTitle>
+                          {renderIcon(TableOutlined)}
+                          <span>{modelName}</span>
+                        </RelationshipGroupTitle>
+                        <Table
+                          size="small"
+                          rowKey="clientId"
+                          pagination={false}
+                          dataSource={relationships}
+                          columns={[
+                            {
+                              title: 'From',
+                              width: 210,
+                              render: (_value, record) =>
+                                editingRelationshipKey === record.clientId ? (
+                                  <Select
+                                    showSearch
+                                    style={{ width: '100%' }}
+                                    value={getRelationshipFieldValue(
+                                      record.fromModel,
+                                      record.fromColumn,
+                                    )}
+                                    options={relationshipFieldOptions}
+                                    optionFilterProp="label"
+                                    onChange={(value) =>
+                                      updateRelationshipField(
+                                        record.clientId,
+                                        'from',
+                                        value,
+                                      )
+                                    }
+                                  />
+                                ) : (
+                                  getRelationshipFieldValue(
                                     record.fromModel,
                                     record.fromColumn,
-                                  )}
-                                  options={relationshipFieldOptions}
-                                  optionFilterProp="label"
-                                  onChange={(value) =>
-                                    updateRelationshipField(
-                                      record.clientId,
-                                      'from',
-                                      value,
-                                    )
-                                  }
-                                />
-                              ) : (
-                                getRelationshipFieldValue(
-                                  record.fromModel,
-                                  record.fromColumn,
-                                )
-                              ),
-                          },
-                          {
-                            title: 'To',
-                            width: 210,
-                            render: (_value, record) =>
-                              editingRelationshipKey === record.clientId ? (
-                                <Select
-                                  showSearch
-                                  style={{ width: '100%' }}
-                                  value={getRelationshipFieldValue(
+                                  )
+                                ),
+                            },
+                            {
+                              title: 'To',
+                              width: 210,
+                              render: (_value, record) =>
+                                editingRelationshipKey === record.clientId ? (
+                                  <Select
+                                    showSearch
+                                    style={{ width: '100%' }}
+                                    value={getRelationshipFieldValue(
+                                      record.toModel,
+                                      record.toColumn,
+                                    )}
+                                    options={relationshipFieldOptions}
+                                    optionFilterProp="label"
+                                    onChange={(value) =>
+                                      updateRelationshipField(
+                                        record.clientId,
+                                        'to',
+                                        value,
+                                      )
+                                    }
+                                  />
+                                ) : (
+                                  getRelationshipFieldValue(
                                     record.toModel,
                                     record.toColumn,
-                                  )}
-                                  options={relationshipFieldOptions}
-                                  optionFilterProp="label"
-                                  onChange={(value) =>
-                                    updateRelationshipField(
-                                      record.clientId,
-                                      'to',
-                                      value,
-                                    )
-                                  }
-                                />
-                              ) : (
-                                getRelationshipFieldValue(
-                                  record.toModel,
-                                  record.toColumn,
-                                )
-                              ),
-                          },
-                          {
-                            title: 'Type',
-                            width: 170,
-                            render: (_value, record) =>
-                              editingRelationshipKey === record.clientId ? (
-                                <Select
-                                  style={{ width: '100%' }}
-                                  value={record.type}
-                                  options={RELATIONSHIP_TYPES}
-                                  onChange={(type) =>
-                                    updateRelationship(record.clientId, {
-                                      type,
-                                    })
-                                  }
-                                />
-                              ) : (
-                                relationshipTypeLabel(record.type)
-                              ),
-                          },
-                          {
-                            title: 'Description',
-                            render: (_value, record) =>
-                              editingRelationshipKey === record.clientId ? (
-                                <Input.TextArea
-                                  autoSize={{ minRows: 2, maxRows: 4 }}
-                                  value={record.reason}
-                                  onChange={(event) =>
-                                    updateRelationship(record.clientId, {
-                                      reason: event.target.value,
-                                    })
-                                  }
-                                />
-                              ) : (
-                                record.reason
-                              ),
-                          },
-                          {
-                            title: '',
-                            width: 92,
-                            render: (_value, record) => (
-                              <Space>
-                                <Button
-                                  type="text"
-                                  icon={
-                                    editingRelationshipKey === record.clientId
-                                      ? renderIcon(SaveOutlined)
-                                      : renderIcon(EditOutlined)
-                                  }
-                                  onClick={() =>
-                                    setEditingRelationshipKey(
+                                  )
+                                ),
+                            },
+                            {
+                              title: 'Type',
+                              width: 170,
+                              render: (_value, record) =>
+                                editingRelationshipKey === record.clientId ? (
+                                  <Select
+                                    style={{ width: '100%' }}
+                                    value={record.type}
+                                    options={RELATIONSHIP_TYPES}
+                                    onChange={(type) =>
+                                      updateRelationship(record.clientId, {
+                                        type,
+                                      })
+                                    }
+                                  />
+                                ) : (
+                                  relationshipTypeLabel(record.type)
+                                ),
+                            },
+                            {
+                              title: 'Description',
+                              render: (_value, record) =>
+                                editingRelationshipKey === record.clientId ? (
+                                  <Input.TextArea
+                                    autoSize={{ minRows: 2, maxRows: 4 }}
+                                    value={record.reason}
+                                    onChange={(event) =>
+                                      updateRelationship(record.clientId, {
+                                        reason: event.target.value,
+                                      })
+                                    }
+                                  />
+                                ) : (
+                                  record.reason
+                                ),
+                            },
+                            {
+                              title: '',
+                              width: 92,
+                              render: (_value, record) => (
+                                <Space>
+                                  <Button
+                                    type="text"
+                                    icon={
                                       editingRelationshipKey === record.clientId
-                                        ? null
-                                        : record.clientId,
-                                    )
-                                  }
-                                />
-                                <Button
-                                  type="text"
-                                  icon={renderIcon(DeleteOutlined)}
-                                  onClick={() =>
-                                    deleteSuggestedRelationship(record.clientId)
-                                  }
-                                />
-                              </Space>
-                            ),
-                          },
-                        ]}
-                      />
-                    </RelationshipGroup>
-                  ),
-                )}
+                                        ? renderIcon(SaveOutlined)
+                                        : renderIcon(EditOutlined)
+                                    }
+                                    onClick={() =>
+                                      setEditingRelationshipKey(
+                                        editingRelationshipKey ===
+                                          record.clientId
+                                          ? null
+                                          : record.clientId,
+                                      )
+                                    }
+                                  />
+                                  <Button
+                                    type="text"
+                                    icon={renderIcon(DeleteOutlined)}
+                                    onClick={() =>
+                                      deleteSuggestedRelationship(
+                                        record.clientId,
+                                      )
+                                    }
+                                  />
+                                </Space>
+                              ),
+                            },
+                          ]}
+                        />
+                      </RelationshipGroup>
+                    ),
+                  )}
 
-                <AssistantFooter>
-                  <Button
-                    onClick={() => {
-                      setRelationshipResult(originalRelationshipResult);
-                      setEditingRelationshipKey(null);
-                    }}
-                  >
-                    Discard
-                  </Button>
-                  <Button
-                    type="primary"
-                    loading={assistantLoading}
-                    disabled={!relationshipResult.length}
-                    onClick={saveAssistantResult}
-                  >
-                    Save
-                  </Button>
-                </AssistantFooter>
-              </>
-            )}
-          </AssistantCard>
-        </AssistantPage>
-      </DeployStatusContext.Provider>
+                  <AssistantFooter>
+                    <Button
+                      onClick={() => {
+                        setRelationshipResult(originalRelationshipResult);
+                        setEditingRelationshipKey(null);
+                      }}
+                    >
+                      Discard
+                    </Button>
+                    <Button
+                      type="primary"
+                      loading={assistantLoading}
+                      disabled={!relationshipResult.length}
+                      onClick={saveAssistantResult}
+                    >
+                      Save
+                    </Button>
+                  </AssistantFooter>
+                </>
+              )}
+            </AssistantCard>
+          </AssistantPage>
+        </DeployStatusContext.Provider>
+      </SimpleLayout>
     );
   }
 

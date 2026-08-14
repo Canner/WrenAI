@@ -434,6 +434,9 @@ export class ModelService implements IModelService {
       fromColumnId: resolvedRelation.fromColumnId,
       toColumnId: resolvedRelation.toColumnId,
       joinType: resolvedRelation.type,
+      properties: resolvedRelation.description
+        ? JSON.stringify({ description: resolvedRelation.description })
+        : null,
     });
     return savedRelation;
   }

@@ -639,6 +639,7 @@ export class ModelResolver {
           toModelId: toModel.id,
           toColumnId: toColumn.id,
           type: relationship.type,
+          description: relationship.description,
         });
         this.markProjectDirty(savedRelation.projectId);
         createdCount += 1;

@@ -1,8 +1,10 @@
+import asyncio
+import logging
 import uuid
 from dataclasses import asdict
 from typing import Literal, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from src.globals import (
@@ -14,6 +16,26 @@ from src.globals import (
 from src.web.v1.services import BaseRequest, SemanticsDescription
 
 router = APIRouter()
+logger = logging.getLogger("wren-ai-service")
+
+
+async def _run_generate_task(
+    service: SemanticsDescription,
+    generate_request: SemanticsDescription.GenerateRequest,
+    service_metadata: dict,
+):
+    try:
+        await service.generate(
+            generate_request,
+            service_metadata=service_metadata,
+        )
+    except Exception as e:
+        logger.exception("Unexpected semantics description task failure")
+        service._handle_exception(
+            generate_request.id,
+            f"Unexpected semantics description task failure: {str(e)}",
+            request_from=generate_request.request_from,
+        )
 
 
 class PostRequest(BaseRequest):
@@ -32,7 +54,6 @@ class PostResponse(BaseModel):
 )
 async def generate(
     request: PostRequest,
-    background_tasks: BackgroundTasks,
     service_container: ServiceContainer = Depends(get_service_container),
     service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> PostResponse:
@@ -44,10 +65,12 @@ async def generate(
         id=id, **request.model_dump()
     )
 
-    background_tasks.add_task(
-        service.generate,
-        generate_request,
-        service_metadata=asdict(service_metadata),
+    asyncio.create_task(
+        _run_generate_task(
+            service,
+            generate_request,
+            asdict(service_metadata),
+        )
     )
     return PostResponse(id=id)
 

@@ -268,6 +268,7 @@ export const typeDefs = gql`
     toModel: String!
     toColumn: String!
     type: RelationType!
+    description: String
   }
 
   input SaveTablesInput {

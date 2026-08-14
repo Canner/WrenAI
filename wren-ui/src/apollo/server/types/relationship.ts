@@ -21,6 +21,7 @@ export interface ModelingRelationshipData {
   toModel: string;
   toColumn: string;
   type: RelationType;
+  description?: string;
 }
 
 export interface AnalysisRelationInfo {
