@@ -3,58 +3,14 @@ import logging
 from typing import Dict, List, Literal, Optional
 
 from cachetools import TTLCache
+from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
-from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
-
-
-def _quote_validation_identifier(identifier: str) -> str:
-    escaped_identifier = identifier.replace('"', '""')
-    return f'"{escaped_identifier}"'
-
-
-def _build_manifest_validation_context(
-    table_name: str,
-    column_names: list[str],
-) -> str:
-    columns = ",\n".join(
-        f"  {_quote_validation_identifier(column_name)} VARCHAR"
-        for column_name in column_names
-    )
-    return f"CREATE TABLE {_quote_validation_identifier(table_name)} (\n{columns}\n)"
-
-
-def _schema_validation_context(document: dict) -> Optional[str]:
-    unpruned_ddl = document.get("unpruned_table_ddl")
-    table_ddl = document.get("table_ddl")
-    ddl = unpruned_ddl or table_ddl
-    table_name = document.get("table_name")
-    manifest_column_names = [
-        column_name
-        for column_name in document.get("manifest_column_names", [])
-        if isinstance(column_name, str) and column_name
-    ]
-
-    validation_context_is_pruned = not unpruned_ddl or (
-        table_ddl and unpruned_ddl.strip() == table_ddl.strip()
-    )
-    if table_name and manifest_column_names and validation_context_is_pruned:
-        return _build_manifest_validation_context(table_name, manifest_column_names)
-
-    return ddl
-
-
-def _schema_validation_contexts(documents: list[dict]) -> list[str]:
-    return [
-        context
-        for document in documents
-        if (context := _schema_validation_context(document))
-    ]
 
 
 class AskHistory(BaseModel):
@@ -174,99 +130,6 @@ class AskService:
 
         return False
 
-    async def _extract_table_names_from_sql(self, sql: str) -> List[str]:
-        pipeline = self._pipelines.get("sql_tables_extraction")
-        if not pipeline or not sql:
-            return []
-
-        try:
-            extracted_tables = (await pipeline.run(sql=sql)).get("post_process", [])
-        except Exception as e:
-            logger.warning(
-                "ask pipeline - failed to extract tables from invalid SQL: %s", e
-            )
-            return []
-
-        table_names = []
-        seen = set()
-        for table_name in extracted_tables:
-            if not isinstance(table_name, str) or not table_name:
-                continue
-            if table_name in seen:
-                continue
-            seen.add(table_name)
-            table_names.append(table_name)
-
-        return table_names
-
-    async def _extend_schema_context_from_failed_sql(
-        self,
-        *,
-        original_sql: str,
-        invalid_sql: str,
-        table_names: List[str],
-        table_ddls: List[str],
-        schema_validation_contexts: List[str],
-        project_id: Optional[str],
-        mdl_hash: Optional[str],
-        enable_column_pruning: bool,
-        attempted_sqls: set,
-    ) -> None:
-        extracted_tables = []
-        for sql in [original_sql, invalid_sql]:
-            if not sql or sql in attempted_sqls:
-                continue
-            attempted_sqls.add(sql)
-            extracted_tables.extend(await self._extract_table_names_from_sql(sql))
-
-        if not extracted_tables:
-            return
-
-        existing_tables = set(table_names)
-        missing_tables = []
-        seen = set()
-        for table_name in extracted_tables:
-            if table_name in existing_tables or table_name in seen:
-                continue
-            seen.add(table_name)
-            missing_tables.append(table_name)
-
-        if not missing_tables:
-            return
-
-        try:
-            retrieval_result = await self._pipelines["db_schema_retrieval"].run(
-                project_id=project_id,
-                mdl_hash=mdl_hash,
-                tables=missing_tables,
-                enable_column_pruning=enable_column_pruning,
-            )
-        except Exception as e:
-            logger.warning(
-                "ask pipeline - failed to retrieve schema for extracted tables %s: %s",
-                missing_tables,
-                e,
-            )
-            return
-
-        documents = (
-            retrieval_result.get("construct_retrieval_results", {}).get(
-                "retrieval_results", []
-            )
-            or []
-        )
-        for document in documents:
-            table_name = document.get("table_name")
-            table_ddl = document.get("table_ddl")
-            if not table_name or not table_ddl or table_name in existing_tables:
-                continue
-            table_names.append(table_name)
-            table_ddls.append(table_ddl)
-            schema_validation_contexts.append(
-                document.get("unpruned_table_ddl") or table_ddl
-            )
-            existing_tables.add(table_name)
-
     @observe(name="Ask Question")
     @trace_metadata
     async def ask(
@@ -292,12 +155,10 @@ class AskService:
         rephrased_question = None
         intent_reasoning = None
         sql_generation_reasoning = None
-        intent_classification_result = {}
         sql_samples = []
         instructions = []
         api_results = []
         table_names = []
-        table_ddls = []
         error_message = None
         invalid_sql = None
         allow_sql_generation_reasoning = False
@@ -315,7 +176,6 @@ class AskService:
 
         try:
             user_query = ask_request.query
-            should_try_text_to_sql_after_general = False
 
             # ask status can be understanding, searching, generating, finished, failed, stopped
             # we will need to handle business logic for each status
@@ -326,30 +186,7 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-                historical_question = await self._pipelines["historical_question"].run(
-                    query=user_query,
-                    project_id=ask_request.project_id,
-                    mdl_hash=ask_request.mdl_hash,
-                )
-
-                # we only return top 1 result
-                historical_question_result = historical_question.get(
-                    "formatted_output", {}
-                ).get("documents", [])[:1]
-
-                if historical_question_result:
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": result.get("statement"),
-                                "type": "view" if result.get("viewId") else "llm",
-                                "viewId": result.get("viewId"),
-                            }
-                        )
-                        for result in historical_question_result
-                    ]
-                    sql_generation_reasoning = ""
-                else:
+                if not api_results:
                     # Run both pipeline operations concurrently
                     sql_samples_task, instructions_task = await asyncio.gather(
                         self._pipelines["sql_pairs_retrieval"].run(
@@ -365,7 +202,6 @@ class AskService:
                         ),
                     )
 
-                    # Extract results from completed tasks
                     sql_samples = sql_samples_task["formatted_output"].get(
                         "documents", []
                     )
@@ -419,19 +255,31 @@ class AskService:
                             )
                             results["metadata"]["type"] = "MISLEADING_QUERY"
                             return results
-                        elif intent == "GENERAL" or (
-                            intent == "USER_GUIDE"
-                            and intent_classification_result.get("db_schemas")
-                        ):
-                            should_try_text_to_sql_after_general = True
+                        elif intent == "GENERAL":
+                            asyncio.create_task(
+                                self._pipelines["data_assistance"].run(
+                                    query=user_query,
+                                    histories=histories,
+                                    db_schemas=intent_classification_result.get(
+                                        "db_schemas"
+                                    ),
+                                    language=ask_request.configurations.language,
+                                    query_id=ask_request.query_id,
+                                    custom_instruction=ask_request.custom_instruction,
+                                )
+                            )
+
                             self._ask_results[query_id] = AskResultResponse(
-                                status="understanding",
-                                type="TEXT_TO_SQL",
+                                status="finished",
+                                type="GENERAL",
                                 rephrased_question=rephrased_question,
                                 intent_reasoning=intent_reasoning,
                                 trace_id=trace_id,
                                 is_followup=True if histories else False,
+                                general_type="DATA_ASSISTANCE",
                             )
+                            results["metadata"]["type"] = "GENERAL"
+                            return results
                         elif intent == "USER_GUIDE":
                             asyncio.create_task(
                                 self._pipelines["user_guide_assistance"].run(
@@ -485,35 +333,8 @@ class AskService:
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_names = [document.get("table_name") for document in documents]
                 table_ddls = [document.get("table_ddl") for document in documents]
-                schema_contexts = _schema_validation_contexts(documents)
 
                 if not documents:
-                    if should_try_text_to_sql_after_general:
-                        asyncio.create_task(
-                            self._pipelines["data_assistance"].run(
-                                query=user_query,
-                                histories=histories,
-                                db_schemas=intent_classification_result.get(
-                                    "db_schemas"
-                                ),
-                                language=ask_request.configurations.language,
-                                query_id=ask_request.query_id,
-                                custom_instruction=ask_request.custom_instruction,
-                            )
-                        )
-
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            type="GENERAL",
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
-                            general_type="DATA_ASSISTANCE",
-                        )
-                        results["metadata"]["type"] = "GENERAL"
-                        return results
-
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
                     if not self._is_stopped(query_id, self._ask_results):
                         self._ask_results[query_id] = AskResultResponse(
@@ -552,7 +373,6 @@ class AskService:
                         await self._pipelines["followup_sql_generation_reasoning"].run(
                             query=user_query,
                             contexts=table_ddls,
-                            validation_contexts=schema_contexts,
                             histories=histories,
                             sql_samples=sql_samples,
                             instructions=instructions,
@@ -567,7 +387,6 @@ class AskService:
                         await self._pipelines["sql_generation_reasoning"].run(
                             query=user_query,
                             contexts=table_ddls,
-                            validation_contexts=schema_contexts,
                             sql_samples=sql_samples,
                             instructions=instructions,
                             project_id=ask_request.project_id,
@@ -630,7 +449,6 @@ class AskService:
                     ].run(
                         query=user_query,
                         contexts=table_ddls,
-                        validation_contexts=schema_contexts,
                         sql_generation_reasoning=sql_generation_reasoning,
                         histories=histories,
                         project_id=ask_request.project_id,
@@ -651,7 +469,6 @@ class AskService:
                     ].run(
                         query=user_query,
                         contexts=table_ddls,
-                        validation_contexts=schema_contexts,
                         sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
                         mdl_hash=ask_request.mdl_hash,
@@ -680,25 +497,18 @@ class AskService:
                 elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_result"]:
-                    schema_expansion_attempted_sqls = set()
                     while current_sql_correction_retries < max_sql_correction_retries:
-                        if failed_dry_run_result["type"] == "TIME_OUT":
+                        if failed_dry_run_result["type"] in (
+                            "TIME_OUT",
+                            "NO_RELEVANT_SQL",
+                        ):
+                            error_message = failed_dry_run_result["error"]
+                            invalid_sql = failed_dry_run_result["sql"]
                             break
 
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
-                        await self._extend_schema_context_from_failed_sql(
-                            original_sql=original_sql,
-                            invalid_sql=invalid_sql,
-                            table_names=table_names,
-                            table_ddls=table_ddls,
-                            schema_validation_contexts=schema_contexts,
-                            project_id=ask_request.project_id,
-                            mdl_hash=ask_request.mdl_hash,
-                            enable_column_pruning=enable_column_pruning,
-                            attempted_sqls=schema_expansion_attempted_sqls,
-                        )
                         current_sql_correction_retries += 1
 
                         self._ask_results[query_id] = AskResultResponse(
@@ -716,7 +526,7 @@ class AskService:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(
-                                contexts=schema_contexts,
+                                contexts=table_ddls,
                                 original_sql=original_sql,
                                 invalid_sql=invalid_sql,
                                 error_message=error_message,
@@ -732,17 +542,18 @@ class AskService:
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
+                            query=user_query,
+                            sql_generation_reasoning=sql_generation_reasoning,
                             instructions=instructions,
                             invalid_generation_result={
                                 "sql": original_sql,
-                                "error": sql_diagnosis_reasoning
-                                if allow_sql_diagnosis
-                                else error_message,
-                                "execution_error": error_message,
-                                "question": user_query,
-                                "reasoning_plan": sql_generation_reasoning,
+                                "error": (
+                                    f"{sql_diagnosis_reasoning}\nDry run error: {error_message}"
+                                    if allow_sql_diagnosis
+                                    and sql_diagnosis_reasoning
+                                    else error_message
+                                ),
                             },
-                            validation_contexts=schema_contexts,
                             project_id=ask_request.project_id,
                             mdl_hash=ask_request.mdl_hash,
                             use_dry_plan=use_dry_plan,
@@ -816,11 +627,6 @@ class AskService:
                     code="OTHERS",
                     message=str(e),
                 ),
-                rephrased_question=rephrased_question,
-                intent_reasoning=intent_reasoning,
-                retrieved_tables=table_names,
-                sql_generation_reasoning=sql_generation_reasoning,
-                invalid_sql=invalid_sql,
                 trace_id=trace_id,
                 is_followup=True if histories else False,
             )

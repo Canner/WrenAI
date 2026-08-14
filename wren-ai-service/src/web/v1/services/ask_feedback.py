@@ -9,7 +9,7 @@ from pydantic import AliasChoices, BaseModel, Field
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest
-from src.web.v1.services.ask import AskError, AskResult, _schema_validation_contexts
+from src.web.v1.services.ask import AskError, AskResult
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -158,6 +158,7 @@ class AskFeedbackService:
                         mdl_hash=ask_feedback_request.mdl_hash,
                     )
 
+                # Extract results from completed tasks
                 _retrieval_result = retrieval_task.get(
                     "construct_retrieval_results", {}
                 )
@@ -168,7 +169,6 @@ class AskFeedbackService:
                 has_json_field = _retrieval_result.get("has_json_field", False)
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_ddls = [document.get("table_ddl") for document in documents]
-                schema_contexts = _schema_validation_contexts(documents)
                 sql_samples = sql_samples_task["formatted_output"].get("documents", [])
                 instructions = instructions_task["formatted_output"].get(
                     "documents", []
@@ -184,8 +184,8 @@ class AskFeedbackService:
                     "sql_regeneration"
                 ].run(
                     contexts=table_ddls,
-                    validation_contexts=schema_contexts,
-                    sql_generation_reasoning=None,
+                    query=ask_feedback_request.question,
+                    sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                     sql=ask_feedback_request.sql,
                     project_id=ask_feedback_request.project_id,
                     mdl_hash=ask_feedback_request.mdl_hash,
@@ -229,28 +229,35 @@ class AskFeedbackService:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(
-                                contexts=schema_contexts,
+                                contexts=table_ddls,
                                 original_sql=original_sql,
                                 invalid_sql=invalid_sql,
                                 error_message=error_message,
                                 language=ask_feedback_request.configurations.language,
+                                project_id=ask_feedback_request.project_id,
+                                mdl_hash=ask_feedback_request.mdl_hash,
                             )
                             sql_diagnosis_reasoning = sql_diagnosis_results[
                                 "post_process"
                             ].get("reasoning")
 
+                        correction_error_message = error_message
+                        if sql_diagnosis_reasoning:
+                            correction_error_message = (
+                                f"{error_message}\nDiagnosis: {sql_diagnosis_reasoning}"
+                            )
+
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
-                            validation_contexts=schema_contexts,
+                            query=ask_feedback_request.question,
+                            sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                             instructions=instructions,
                             invalid_generation_result={
-                                "sql": original_sql,
-                                "error": sql_diagnosis_reasoning
-                                if allow_sql_diagnosis
-                                else error_message,
-                                "execution_error": error_message,
+                                "original_sql": original_sql,
+                                "sql": invalid_sql,
+                                "error": correction_error_message,
                             },
                             project_id=ask_feedback_request.project_id,
                             mdl_hash=ask_feedback_request.mdl_hash,
