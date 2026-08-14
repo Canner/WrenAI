@@ -107,6 +107,8 @@ def test_sql_generation_system_prompt_uses_legacy_json_sql_contract():
     assert "The final answer must be a ANSI SQL query in JSON format" in prompt
     assert "return null for sql" not in prompt
     assert "RETRIEVED SCHEMA CONTRACT" not in prompt
+    assert "SQL samples are not schema authority" in prompt
+    assert "non-executable planning context" in prompt
 
 
 def test_sql_generation_model_kwargs_require_sql_string():
@@ -137,9 +139,11 @@ def test_sql_generation_prompt_uses_database_schema_documents():
     assert f"CREATE TABLE {SCHEMA_TABLE_NAME}" in built_prompt
     assert COUNTRY_COLUMN_NAME in built_prompt
     _assert_deployment_scope(built_prompt)
-    assert _select_all_sql(SAMPLE_TABLE_NAME) in built_prompt
+    assert "Question:\nshow orders from Taiwan" in built_prompt
+    assert _select_all_sql(SAMPLE_TABLE_NAME) not in built_prompt
     assert "### VERIFIED SCHEMA OBJECTS ###" in built_prompt
     assert f"- {SCHEMA_TABLE_NAME}: {COUNTRY_COLUMN_NAME}" in built_prompt
+    assert "return an empty string for sql" in built_prompt
 
 
 def test_sql_generation_prompt_does_not_inject_datasource_dialect_section():
@@ -238,10 +242,12 @@ def test_followup_sql_generation_prompt_uses_database_schema_documents():
     built_prompt = result["prompt"]
 
     assert f"CREATE TABLE {SCHEMA_TABLE_NAME}" in built_prompt
-    assert _select_all_sql(SAMPLE_TABLE_NAME) in built_prompt
+    assert "Summary:\nshow orders from Taiwan" in built_prompt
+    assert _select_all_sql(SAMPLE_TABLE_NAME) not in built_prompt
     assert "### VERIFIED SCHEMA OBJECTS ###" in built_prompt
     assert f"- {SCHEMA_TABLE_NAME}: {COUNTRY_COLUMN_NAME}" in built_prompt
     _assert_schema_binding_contract(built_prompt)
+    assert "return an empty string for sql" in built_prompt
 
 
 def test_sql_correction_prompt_uses_failed_sql_and_error():

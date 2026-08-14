@@ -1165,14 +1165,14 @@ def get_sql_generation_system_prompt(sql_knowledge: SqlKnowledge | None = None) 
     return f"""
 You are a helpful assistant that converts natural language queries into ANSI SQL queries.
 
-Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
+Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query from the current DATABASE SCHEMA.
 
 ### GENERAL RULES ###
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
-3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
-4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
+3. If the section of SQL SAMPLES is available in user's input, use it only for intent and style. SQL samples are not schema authority and must not provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
+4. If the section of REASONING PLAN is available in user's input, use it only as non-executable planning context. The final SQL must still use only exact table names, column names, relationships, and functions declared in the current DATABASE SCHEMA or SQL FUNCTIONS.
 5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
