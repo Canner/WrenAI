@@ -31,8 +31,8 @@ logger = logging.getLogger("wren-ai-service")
 
 text_to_sql_with_followup_user_prompt_template = """
 ### TASK ###
-Given the user's current follow-up question and the current retrieved DATABASE SCHEMA,
-generate one SQL query to best answer the user's question.
+Given the following user's follow-up question and previous SQL query and summary,
+generate one SQL query to best answer user's question.
 
 ### DATABASE SCHEMA ###
 {% for document in documents %}
@@ -60,10 +60,11 @@ generate one SQL query to best answer the user's question.
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
 Summary:
 {{sample.summary}}
+SQL:
+{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -76,11 +77,11 @@ Summary:
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
-If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql. Never create a table or column from the user's wording, even when the wording looks like a business term or object name.
-Do not generate SQL from a reasoning plan. The reasoning plan is not executable context and cannot provide table names, column names, filters, functions, joins, or examples.
 
-Return only the final JSON SQL response.
+### REASONING PLAN ###
+{{ sql_generation_reasoning }}
+
+Let's think step by step.
 """
 
 
