@@ -275,6 +275,8 @@ def build_schema_grounding_manifest(contexts: list[str] | None) -> str:
         "If a source column is not listed under a selected table/view, it must not appear anywhere in the SQL.",
         "This applies to SELECT, CTEs, UNION branches, JOIN, WHERE, GROUP BY, HAVING, ORDER BY, and nested queries.",
         "Business terms from the question are intents, not physical table or column names.",
+        "For FROM and JOIN, first choose relation names from the bullet list below and copy them exactly.",
+        "Do not shorten, singularize, pluralize, lowercase, remove prefixes/suffixes, or replace a listed relation with a plain business noun from the user question.",
         "When a business term is not listed as a column, map it to a listed deployed column before using it in SQL.",
         "You may use the business term only as a SELECT output alias after selecting a verified deployed column.",
         "Do not create a table, view, source column, or join key unless it is listed here.",
@@ -801,9 +803,11 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - ONLY USE the tables and columns mentioned in the database schema.
 - Table names are the exact identifiers that appear after CREATE TABLE or CREATE VIEW in the DATABASE SCHEMA section; use those names exactly.
 - VERIFIED SCHEMA OBJECTS is the complete deployed column contract for SQL generation. A column that is not listed there for a table/view must not appear anywhere in SQL for that table/view.
+- Examples in these SQL rules are illustrative only and are never schema authority. Do not use any table or column name from an example unless that exact identifier also appears in the current DATABASE SCHEMA or VERIFIED SCHEMA OBJECTS.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - NEVER invent, infer, rename, or approximate table/column names from the user's wording.
+- Never shorten, singularize, pluralize, lowercase, remove prefixes/suffixes, or replace a deployed table/view name with a plain business noun from the user question.
 - User-facing business terms from the question are not physical column names unless those exact terms are listed in the DATABASE SCHEMA or VERIFIED SCHEMA OBJECTS.
 - If the user asks for a business term and the schema contains a different deployed column that represents it, select, filter, group, order, and join by the deployed column name, and use the business term only as a final SELECT alias when useful.
 - Never use a SELECT output alias, reasoning label, display label, or user wording as a source column in FROM, JOIN, WHERE, GROUP BY, HAVING, or inner SELECT clauses unless that exact identifier is present as a column in the verified schema.

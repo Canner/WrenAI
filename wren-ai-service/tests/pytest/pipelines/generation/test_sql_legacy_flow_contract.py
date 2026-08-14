@@ -146,6 +146,23 @@ def test_sql_generation_prompt_uses_database_schema_documents():
     assert "return an empty string for sql" in built_prompt
 
 
+def test_sql_generation_prompt_preserves_exact_deployed_relation_names():
+    result = build_sql_generation_prompt(
+        query="show all records",
+        documents=[_table_ddl(SCHEMA_TABLE_NAME, COUNTRY_COLUMN_NAME)],
+        prompt_builder=PromptBuilder(template=sql_generation_user_prompt_template),
+    )
+
+    built_prompt = result["prompt"]
+
+    assert f"- {SCHEMA_TABLE_NAME}: {COUNTRY_COLUMN_NAME}" in built_prompt
+    assert (
+        "Do not shorten, singularize, pluralize, lowercase, remove prefixes/suffixes"
+        in built_prompt
+    )
+    assert "plain business noun" in built_prompt
+
+
 def test_sql_generation_prompt_does_not_inject_datasource_dialect_section():
     result = build_sql_generation_prompt(
         query="show orders from last week",
