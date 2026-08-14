@@ -34,8 +34,8 @@ class SemanticsDescription:
         maxsize: int = 1_000_000,
         ttl: int = 120,
         generation_timeout_seconds: float = 120.0,
-        max_models_per_batch: int = 1,
-        max_columns_per_batch: int = 10,
+        max_models_per_batch: int = 4,
+        max_columns_per_batch: int = 50,
         max_concurrent_tasks: int = 4,
     ):
         self._pipelines = pipelines
@@ -86,23 +86,59 @@ class SemanticsDescription:
             if model.get("name") in request.selected_models
         ]
 
-        chunks = []
-        for i in range(0, len(selected_models), chunk_size):
-            for model in selected_models[i : i + chunk_size]:
-                columns = model.get("columns", [])
-                column_chunks = [
-                    columns[j : j + self._max_columns_per_batch]
-                    for j in range(0, len(columns), self._max_columns_per_batch)
-                ] or [[]]
+        model_slices: list[tuple[str, dict, int]] = []
+        for model in selected_models:
+            model_name = model["name"]
+            columns = model.get("columns", [])
+            column_chunks = [
+                columns[j : j + self._max_columns_per_batch]
+                for j in range(0, len(columns), self._max_columns_per_batch)
+            ] or [[]]
 
-                for column_chunk in column_chunks:
-                    chunks.append(
-                        {
-                            **template,
-                            "mdl": {"models": [{**model, "columns": column_chunk}]},
-                            "selected_models": [model["name"]],
-                        }
+            for column_chunk in column_chunks:
+                model_slices.append(
+                    (
+                        model_name,
+                        {**model, "columns": column_chunk},
+                        len(column_chunk),
                     )
+                )
+
+        chunks = []
+        batch_models: list[dict] = []
+        batch_model_names: set[str] = set()
+        batch_column_count = 0
+
+        def flush_batch():
+            nonlocal batch_models, batch_model_names, batch_column_count
+            if not batch_models:
+                return
+            chunks.append(
+                {
+                    **template,
+                    "mdl": {"models": batch_models},
+                    "selected_models": [model["name"] for model in batch_models],
+                }
+            )
+            batch_models = []
+            batch_model_names = set()
+            batch_column_count = 0
+
+        for model_name, model_slice, column_count in model_slices:
+            would_exceed_models = len(batch_models) >= chunk_size
+            would_exceed_columns = (
+                batch_column_count > 0
+                and batch_column_count + column_count > self._max_columns_per_batch
+            )
+            would_repeat_model = model_name in batch_model_names
+            if would_exceed_models or would_exceed_columns or would_repeat_model:
+                flush_batch()
+
+            batch_models.append(model_slice)
+            batch_model_names.add(model_name)
+            batch_column_count += column_count
+
+        flush_batch()
 
         return chunks
 

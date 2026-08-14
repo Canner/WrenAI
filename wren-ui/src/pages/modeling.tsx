@@ -306,6 +306,7 @@ export default function Modeling() {
     'semantics' | 'relationships' | null
   >(null);
   const [assistantLoading, setAssistantLoading] = useState(false);
+  const [assistantSaving, setAssistantSaving] = useState(false);
   const [assistantError, setAssistantError] = useState<string | null>(null);
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [semanticPrompt, setSemanticPrompt] = useState('');
@@ -776,6 +777,7 @@ export default function Modeling() {
     assistantRunIdRef.current += 1;
     setAssistantMode(mode);
     setAssistantError(null);
+    setAssistantSaving(false);
     setSemanticStep('pick');
     setSemanticSearch('');
     setSelectedModels(
@@ -928,6 +930,7 @@ export default function Modeling() {
     setAssistantMode(null);
     setAssistantError(null);
     setAssistantLoading(false);
+    setAssistantSaving(false);
     setSemanticStep('pick');
     setSemanticSearch('');
     setRelationshipAutoStarted(false);
@@ -939,7 +942,7 @@ export default function Modeling() {
     assistantSavingRef.current = true;
     try {
       if (!diagramData) return;
-      setAssistantLoading(true);
+      setAssistantSaving(true);
       if (assistantMode === 'semantics') {
         const data = semanticResult.flatMap((model) => {
           const diagramModel = diagramData.models.find(
@@ -1026,7 +1029,7 @@ export default function Modeling() {
       message.error(error.message || 'Failed to save assistant suggestions.');
     } finally {
       assistantSavingRef.current = false;
-      setAssistantLoading(false);
+      setAssistantSaving(false);
     }
   };
 
@@ -1160,11 +1163,20 @@ export default function Modeling() {
                     <Button
                       type="primary"
                       loading={assistantLoading}
+                      disabled={assistantLoading}
                       onClick={runAssistant}
                     >
                       {semanticResult.length ? 'Regenerate' : 'Generate'}
                     </Button>
                   </div>
+                  {assistantLoading && (
+                    <AssistantCenter>
+                      <Spin />
+                      <div style={{ marginTop: 10 }}>
+                        Generating semantic descriptions...
+                      </div>
+                    </AssistantCenter>
+                  )}
                   {assistantError && (
                     <Alert
                       className="mt-4"
@@ -1288,7 +1300,7 @@ export default function Modeling() {
                     </Button>
                     <Button
                       type="primary"
-                      loading={assistantLoading}
+                      loading={assistantSaving}
                       disabled={!semanticResult.length}
                       onClick={saveAssistantResult}
                     >
@@ -1512,7 +1524,7 @@ export default function Modeling() {
                     </Button>
                     <Button
                       type="primary"
-                      loading={assistantLoading}
+                      loading={assistantSaving}
                       disabled={!relationshipResult.length}
                       onClick={saveAssistantResult}
                     >
