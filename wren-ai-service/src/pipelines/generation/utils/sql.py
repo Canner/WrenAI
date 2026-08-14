@@ -663,22 +663,6 @@ class SQLGenPostProcessor:
                 cleaned_generation_result,
                 contexts=contexts,
             )
-            grounding_error = validate_sql_against_contexts(
-                cleaned_generation_result,
-                contexts=contexts,
-            )
-            if grounding_error:
-                return {
-                    "valid_generation_result": {},
-                    "invalid_generation_result": {
-                        "sql": cleaned_generation_result,
-                        "original_sql": cleaned_generation_result,
-                        "type": "SCHEMA_GROUNDING",
-                        "error": grounding_error,
-                        "correlation_id": "",
-                        "data_source": data_source,
-                    },
-                }
 
             (
                 valid_generation_result,

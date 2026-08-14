@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import re
 from typing import Dict, List, Literal, Optional
 
 from cachetools import TTLCache
@@ -58,46 +57,6 @@ def _schema_validation_contexts(documents: list[dict]) -> list[str]:
     ]
 
 
-def _sql_snippets_from_reasoning(reasoning: str | None) -> list[str]:
-    if not reasoning:
-        return []
-
-    snippets = []
-    fenced_sql = re.findall(r"```(?:sql)?\s*(.*?)```", reasoning, re.IGNORECASE | re.DOTALL)
-    snippets.extend(fenced_sql)
-
-    for match in re.finditer(
-        r"\b(?:WITH|SELECT)\b.*?(?:;|$)",
-        reasoning,
-        re.IGNORECASE | re.DOTALL,
-    ):
-        snippet = match.group(0).strip()
-        if snippet:
-            snippets.append(snippet)
-
-    return snippets
-
-
-def _grounded_sql_generation_reasoning(
-    reasoning: str | None,
-    schema_contexts: list[str],
-) -> str | None:
-    from src.pipelines.generation.utils.sql import validate_sql_against_contexts
-
-    for snippet in _sql_snippets_from_reasoning(reasoning):
-        if validate_sql_against_contexts(snippet, schema_contexts):
-            return None
-
-    return reasoning
-
-
-def _correction_sql_for_failure(original_sql: str, failure_type: str) -> str:
-    if failure_type == "SCHEMA_GROUNDING":
-        return ""
-
-    return original_sql
-
-
 class AskHistory(BaseModel):
     sql: str
     question: str
@@ -110,10 +69,10 @@ class AskRequest(BaseRequest):
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
-    ignore_sql_generation_reasoning: bool = False
+    ignore_sql_generation_reasoning: bool = True
     enable_column_pruning: bool = False
-    use_dry_plan: bool = False
-    allow_dry_plan_fallback: bool = True
+    use_dry_plan: bool = True
+    allow_dry_plan_fallback: bool = False
     custom_instruction: Optional[str] = None
 
 
@@ -184,12 +143,12 @@ class AskService:
         self,
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
-        allow_sql_generation_reasoning: bool = True,
+        allow_sql_generation_reasoning: bool = False,
         allow_sql_functions_retrieval: bool = True,
         allow_sql_diagnosis: bool = True,
         allow_sql_knowledge_retrieval: bool = True,
-        enable_column_pruning: bool = False,
-        max_sql_correction_retries: int = 3,
+        enable_column_pruning: bool = True,
+        max_sql_correction_retries: int = 0,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -341,17 +300,14 @@ class AskService:
         table_ddls = []
         error_message = None
         invalid_sql = None
-        allow_sql_generation_reasoning = (
-            self._allow_sql_generation_reasoning
-            and not ask_request.ignore_sql_generation_reasoning
-        )
+        allow_sql_generation_reasoning = False
         enable_column_pruning = (
             self._enable_column_pruning or ask_request.enable_column_pruning
         )
         allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
         allow_sql_diagnosis = self._allow_sql_diagnosis
         allow_sql_knowledge_retrieval = self._allow_sql_knowledge_retrieval
-        max_sql_correction_retries = self._max_sql_correction_retries
+        max_sql_correction_retries = 0
         current_sql_correction_retries = 0
         use_dry_plan = ask_request.use_dry_plan
         allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback
@@ -632,11 +588,6 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-            grounded_sql_generation_reasoning = _grounded_sql_generation_reasoning(
-                sql_generation_reasoning,
-                schema_contexts,
-            )
-
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
                     status="generating",
@@ -680,7 +631,7 @@ class AskService:
                         query=user_query,
                         contexts=table_ddls,
                         validation_contexts=schema_contexts,
-                        sql_generation_reasoning=grounded_sql_generation_reasoning,
+                        sql_generation_reasoning=sql_generation_reasoning,
                         histories=histories,
                         project_id=ask_request.project_id,
                         mdl_hash=ask_request.mdl_hash,
@@ -701,7 +652,7 @@ class AskService:
                         query=user_query,
                         contexts=table_ddls,
                         validation_contexts=schema_contexts,
-                        sql_generation_reasoning=grounded_sql_generation_reasoning,
+                        sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
                         mdl_hash=ask_request.mdl_hash,
                         sql_samples=sql_samples,
@@ -783,20 +734,13 @@ class AskService:
                             contexts=table_ddls,
                             instructions=instructions,
                             invalid_generation_result={
-                                "sql": _correction_sql_for_failure(
-                                    original_sql,
-                                    failed_dry_run_result["type"],
-                                ),
+                                "sql": original_sql,
                                 "error": sql_diagnosis_reasoning
                                 if allow_sql_diagnosis
                                 else error_message,
                                 "execution_error": error_message,
                                 "question": user_query,
-                                "reasoning_plan": grounded_sql_generation_reasoning,
-                                "schema_grounding_failure": failed_dry_run_result[
-                                    "type"
-                                ]
-                                == "SCHEMA_GROUNDING",
+                                "reasoning_plan": sql_generation_reasoning,
                             },
                             validation_contexts=schema_contexts,
                             project_id=ask_request.project_id,

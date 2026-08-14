@@ -187,26 +187,26 @@ def mdl_str():
 def test_ask_request_runs_sql_generation_reasoning_by_default():
     ask_request = AskRequest(query="question", mdl_hash="deploy")
 
-    assert ask_request.ignore_sql_generation_reasoning is False
+    assert ask_request.ignore_sql_generation_reasoning is True
 
 
 def test_ask_service_runs_sql_generation_reasoning_by_default():
     ask_service = AskService({})
 
-    assert ask_service._allow_sql_generation_reasoning is True
+    assert ask_service._allow_sql_generation_reasoning is False
 
 
 def test_ask_request_uses_legacy_validation_defaults():
     ask_request = AskRequest(query="question", mdl_hash="deploy")
 
-    assert ask_request.use_dry_plan is False
-    assert ask_request.allow_dry_plan_fallback is True
+    assert ask_request.use_dry_plan is True
+    assert ask_request.allow_dry_plan_fallback is False
 
 
 def test_ask_service_uses_legacy_sql_correction_retries_by_default():
     ask_service = AskService({})
 
-    assert ask_service._max_sql_correction_retries == 3
+    assert ask_service._max_sql_correction_retries == 0
 
 
 class _EmptyRetrievalPipeline:
@@ -521,7 +521,7 @@ class _InventedIdentifierReasoningPipeline:
 
 
 @pytest.mark.asyncio
-async def test_ask_runs_sql_correction_for_validation_error():
+async def test_ask_does_not_run_sql_correction_by_default_for_validation_error():
     correction = _CapturingCorrectionPipeline()
     diagnosis = _FailingDiagnosisPipeline()
     ask_service = AskService(
@@ -549,19 +549,14 @@ async def test_ask_runs_sql_correction_for_validation_error():
     ask_result_response = ask_service.get_ask_result(
         AskResultRequest(query_id=query_id)
     )
-    assert ask_result_response.status == "finished"
+    assert ask_result_response.status == "failed"
     assert diagnosis.calls == []
-    invalid_generation_result = correction.calls[0]["invalid_generation_result"]
-    assert invalid_generation_result | {
-        "sql": MODEL_ALPHA_ENTITY_SQL,
-        "error": "Generated SQL is a table preview.",
-    } == invalid_generation_result
-    assert invalid_generation_result["question"] == ask_request.query
-    assert invalid_generation_result["execution_error"] == "Generated SQL is a table preview."
+    assert correction.calls == []
+    assert ask_result_response.error.message == "No relevant SQL"
 
 
 @pytest.mark.asyncio
-async def test_ask_expands_correction_context_from_failed_sql_like_legacy():
+async def test_ask_does_not_expand_correction_context_when_retries_disabled():
     correction = _CapturingCorrectionPipeline()
     extraction = _ExtractBetaTablePipeline()
     retrieval = _ExpandableSchemaRetrievalPipeline()
@@ -591,21 +586,12 @@ async def test_ask_expands_correction_context_from_failed_sql_like_legacy():
     ask_result_response = ask_service.get_ask_result(
         AskResultRequest(query_id=query_id)
     )
-    assert ask_result_response.status == "finished"
-    assert ask_result_response.retrieved_tables == [MODEL_ALPHA, MODEL_BETA]
-    assert extraction.calls == [{"sql": MODEL_BETA_ENTITY_SQL}]
-    assert retrieval.calls[1]["tables"] == [MODEL_BETA]
-    assert retrieval.calls[1]["mdl_hash"] == "deploy-hash"
-    assert correction.calls[0]["contexts"] == [
-        MODEL_ALPHA_ENTITY_DDL,
-        MODEL_BETA_ENTITY_DDL,
-    ]
-    invalid_generation_result = correction.calls[0]["invalid_generation_result"]
-    assert invalid_generation_result | {
-        "sql": MODEL_BETA_ENTITY_SQL,
-        "error": f"Generated SQL references tables that were not retrieved from the current schema: {MODEL_BETA}.",
-    } == invalid_generation_result
-    assert invalid_generation_result["question"] == ask_request.query
+    assert ask_result_response.status == "failed"
+    assert ask_result_response.retrieved_tables == [MODEL_ALPHA]
+    assert extraction.calls == []
+    assert len(retrieval.calls) == 1
+    assert correction.calls == []
+    assert ask_result_response.error.message == "No relevant SQL"
 
 
 @pytest.mark.asyncio
@@ -636,11 +622,9 @@ async def test_ask_does_not_anchor_correction_on_schema_grounding_sql():
     ask_result_response = ask_service.get_ask_result(
         AskResultRequest(query_id=query_id)
     )
-    assert ask_result_response.status == "finished"
-    invalid_generation_result = correction.calls[0]["invalid_generation_result"]
-    assert invalid_generation_result["sql"] == ""
-    assert invalid_generation_result["schema_grounding_failure"] is True
-    assert "Schema grounding failed" in invalid_generation_result["execution_error"]
+    assert ask_result_response.status == "failed"
+    assert correction.calls == []
+    assert ask_result_response.error.message == "No relevant SQL"
 
 
 @pytest.mark.asyncio
@@ -673,16 +657,10 @@ async def test_ask_correction_recovers_no_relevant_sql_with_schema_context():
     ask_result_response = ask_service.get_ask_result(
         AskResultRequest(query_id=query_id)
     )
-    assert ask_result_response.status == "finished"
-    assert ask_result_response.response[0].sql == MODEL_ALPHA_COUNT_SQL
+    assert ask_result_response.status == "failed"
     assert diagnosis.calls == []
-    assert correction.calls[0]["contexts"] == [MODEL_ALPHA_ENTITY_DDL]
-    invalid_generation_result = correction.calls[0]["invalid_generation_result"]
-    assert invalid_generation_result | {
-        "sql": "",
-        "error": "No grounded SQL was generated from the current schema.",
-    } == invalid_generation_result
-    assert invalid_generation_result["question"] == ask_request.query
+    assert correction.calls == []
+    assert ask_result_response.error.message == "No relevant SQL"
 
 
 @pytest.mark.asyncio
@@ -782,7 +760,7 @@ async def test_ask_does_not_pass_ungrounded_reasoning_to_sql_generation():
         AskResultRequest(query_id=query_id)
     )
     assert ask_result_response.status == "finished"
-    assert NON_SCHEMA_REASONING_TABLE in ask_result_response.sql_generation_reasoning
+    assert ask_result_response.sql_generation_reasoning is None
     assert generation.calls[0]["contexts"] == [MODEL_ALPHA_ENTITY_DDL]
     assert generation.calls[0]["sql_generation_reasoning"] is None
 
@@ -826,7 +804,7 @@ async def test_followup_ask_does_not_pass_ungrounded_reasoning_to_sql_generation
         AskResultRequest(query_id=query_id)
     )
     assert ask_result_response.status == "finished"
-    assert NON_SCHEMA_REASONING_TABLE in ask_result_response.sql_generation_reasoning
+    assert ask_result_response.sql_generation_reasoning is None
     assert generation.calls[0]["contexts"] == [MODEL_ALPHA_ENTITY_DDL]
     assert generation.calls[0]["sql_generation_reasoning"] is None
 
@@ -1068,21 +1046,11 @@ async def test_ask_corrects_no_relevant_sql_with_exact_retrieved_metadata():
     ask_result_response = ask_service.get_ask_result(
         AskResultRequest(query_id=query_id)
     )
-    assert ask_result_response.status == "finished"
+    assert ask_result_response.status == "failed"
     assert regeneration.calls == []
-    assert diagnosis.calls[0]["contexts"] == [MODEL_ALPHA_UNPRUNED_DDL]
-    assert correction.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
-    assert correction.calls[0]["validation_contexts"] == [MODEL_ALPHA_UNPRUNED_DDL]
-    invalid_generation_result = correction.calls[0]["invalid_generation_result"]
-    assert invalid_generation_result | {
-        "sql": "",
-        "error": "Use the retrieved schema.",
-    } == invalid_generation_result
-    assert invalid_generation_result["execution_error"] == (
-        "No grounded SQL was generated from the current schema."
-    )
-    assert invalid_generation_result["schema_grounding_failure"] is False
-    assert invalid_generation_result["question"] == ask_request.query
+    assert diagnosis.calls == []
+    assert correction.calls == []
+    assert ask_result_response.error.message == "No relevant SQL"
 
 
 @pytest.mark.asyncio

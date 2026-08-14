@@ -83,11 +83,6 @@ Do not correct SQL from business meaning alone or from invalid identifiers in th
 Business wording may appear only as final SELECT output aliases, never as source columns.
 Every source column in the corrected SQL must be copied exactly from VERIFIED SCHEMA OBJECTS under the table/view that provides it.
 
-{% if invalid_generation_result.schema_grounding_failure %}
-### SCHEMA GROUNDING FAILURE ###
-The failed SQL used unsupported schema objects or columns. Do not reuse invalid table or column names from the failed SQL. Regenerate from the active user question using only DATABASE SCHEMA and VERIFIED SCHEMA OBJECTS.
-{% endif %}
-
 {% if invalid_generation_result.question %}
 ### USER QUESTION ###
 {{ invalid_generation_result.question }}

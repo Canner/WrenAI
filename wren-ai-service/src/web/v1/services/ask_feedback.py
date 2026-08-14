@@ -251,10 +251,6 @@ class AskFeedbackService:
                                 if allow_sql_diagnosis
                                 else error_message,
                                 "execution_error": error_message,
-                                "schema_grounding_failure": failed_dry_run_result[
-                                    "type"
-                                ]
-                                == "SCHEMA_GROUNDING",
                             },
                             project_id=ask_feedback_request.project_id,
                             mdl_hash=ask_feedback_request.mdl_hash,

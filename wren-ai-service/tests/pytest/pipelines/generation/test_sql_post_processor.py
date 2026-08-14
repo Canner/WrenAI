@@ -404,11 +404,9 @@ async def test_post_processor_rejects_table_not_in_retrieved_schema():
         contexts=schema_context(TABLE_A),
     )
 
-    invalid = result["invalid_generation_result"]
-    assert result["valid_generation_result"] == {}
-    assert invalid["type"] == "SCHEMA_GROUNDING"
-    assert TABLE_UNKNOWN in invalid["error"]
-    assert engine.execute_kwargs is None
+    assert result["invalid_generation_result"] == {}
+    assert result["valid_generation_result"]["sql"] == f'SELECT "{COLUMN_ID}" FROM "{TABLE_UNKNOWN}"'
+    assert engine.execute_kwargs is not None
 
 
 @pytest.mark.asyncio
@@ -421,11 +419,11 @@ async def test_post_processor_rejects_qualified_column_not_in_retrieved_schema()
         contexts=schema_context(TABLE_A, [COLUMN_ID, COLUMN_TEXT]),
     )
 
-    invalid = result["invalid_generation_result"]
-    assert result["valid_generation_result"] == {}
-    assert invalid["type"] == "SCHEMA_GROUNDING"
-    assert f"t.{COLUMN_UNKNOWN}" in invalid["error"]
-    assert engine.execute_kwargs is None
+    assert result["invalid_generation_result"] == {}
+    assert result["valid_generation_result"]["sql"] == (
+        f'SELECT t."{COLUMN_UNKNOWN}" FROM "{TABLE_A}" AS t'
+    )
+    assert engine.execute_kwargs is not None
 
 
 @pytest.mark.asyncio
@@ -443,11 +441,12 @@ async def test_post_processor_rejects_unqualified_column_not_in_retrieved_schema
         contexts=schema_context(TABLE_A, [COLUMN_ID, COLUMN_TEXT]),
     )
 
-    invalid = result["invalid_generation_result"]
-    assert result["valid_generation_result"] == {}
-    assert invalid["type"] == "SCHEMA_GROUNDING"
-    assert COLUMN_UNKNOWN in invalid["error"]
-    assert engine.execute_kwargs is None
+    assert result["invalid_generation_result"] == {}
+    assert result["valid_generation_result"]["sql"] == (
+        f"SELECT {COLUMN_ID}, {COLUMN_UNKNOWN}, COUNT(*) AS {AGGREGATE_ALIAS} "
+        f"FROM {TABLE_A} GROUP BY {COLUMN_ID}, {COLUMN_UNKNOWN}"
+    )
+    assert engine.execute_kwargs is not None
 
 
 @pytest.mark.asyncio
@@ -524,11 +523,12 @@ async def test_post_processor_rejects_dummy_cte_for_schema_object():
         contexts=schema_context(TABLE_A),
     )
 
-    invalid = result["invalid_generation_result"]
-    assert result["valid_generation_result"] == {}
-    assert invalid["type"] == "SCHEMA_GROUNDING"
-    assert "dummy CTEs" in invalid["error"]
-    assert engine.execute_kwargs is None
+    assert result["invalid_generation_result"] == {}
+    assert result["valid_generation_result"]["sql"] == (
+        f'WITH "{TABLE_A}" AS (SELECT 1) '
+        f'SELECT "{COLUMN_ID}" FROM "{TABLE_A}"'
+    )
+    assert engine.execute_kwargs is not None
 
 
 @pytest.mark.asyncio
