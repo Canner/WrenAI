@@ -413,6 +413,30 @@ def test_cube_describe_malformed_cubes_fails_loud(tmp_path):
     assert "malformed cubes" in result.output
 
 
+def test_cube_list_non_string_member_names_fail_loud(tmp_path):
+    """Numeric member names must fail loud (not TypeError in join)."""
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    for key in ("measures", "dimensions", "timeDimensions"):
+        cube = {
+            "name": "orders",
+            "baseObject": "orders",
+            "measures": [],
+            "dimensions": [],
+            "timeDimensions": [],
+        }
+        cube[key] = [{"name": 1, "type": "VARCHAR"}]
+        mdl_file.write_text(
+            json.dumps({"catalog": "c", "schema": "s", "cubes": [cube]})
+        )
+        result = runner.invoke(app, ["cube", "list", "--mdl", str(mdl_file)])
+        assert result.exit_code == 1, key
+        assert "malformed cubes" in result.output, key
+        assert "name is not a string" in result.output, key
+        assert "wren context build" in result.output, key
+
+
 def test_cube_query_missing_required(tmp_path):
     mdl = _make_mdl(tmp_path)
     result = runner.invoke(

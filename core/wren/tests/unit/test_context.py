@@ -1269,6 +1269,18 @@ def test_validate_project_reports_v1_non_mapping_cube_file(tmp_path):
     assert load_cubes(tmp_path) == []
 
 
+def test_validate_project_reports_invalid_cube_yaml(tmp_path):
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 1\nname: test\ndata_source: postgres\n"
+    )
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "broken.yml").write_text("name: [unterminated\n")
+    errors = validate_project(tmp_path)
+    assert any("invalid YAML" in e.message for e in errors)
+    assert load_cubes(tmp_path) == []
+
+
 def test_validate_cube_ok(tmp_path):
     _make_v2_cube_project(tmp_path)
     _write_cube(

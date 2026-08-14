@@ -200,6 +200,14 @@ def _require_cubes_list(manifest: dict) -> list:
                         err=True,
                     )
                     raise typer.Exit(1)
+                if not isinstance(item.get("name"), str):
+                    name = cube.get("name", f"entry {i}")
+                    typer.echo(
+                        f"Error: malformed cubes in mdl.json ({name!r} {key}[{j}].name is not a string).\n"
+                        "  Hint: re-run `wren context build`.",
+                        err=True,
+                    )
+                    raise typer.Exit(1)
     return cubes
 
 

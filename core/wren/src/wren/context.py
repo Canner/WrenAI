@@ -714,7 +714,10 @@ def _load_cubes_v1(project_path: Path) -> list[dict]:
         return []
     cubes = []
     for f in sorted(cubes_dir.glob("*.yml")):
-        data = yaml.safe_load(f.read_text(encoding="utf-8"))
+        try:
+            data = yaml.safe_load(f.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
+            continue
         if isinstance(data, dict):
             data["_source_file"] = f.name
             cubes.append(_normalise_cube_member_lists(data))
@@ -736,7 +739,10 @@ def _load_cubes_v2(project_path: Path) -> list[dict]:
         meta_file = d / "metadata.yml"
         if not meta_file.exists():
             continue
-        data = yaml.safe_load(meta_file.read_text())
+        try:
+            data = yaml.safe_load(meta_file.read_text())
+        except yaml.YAMLError:
+            continue
         if isinstance(data, dict):
             data["_source_file"] = str(meta_file.relative_to(cubes_dir))
             cubes.append(_normalise_cube_member_lists(data))
@@ -1322,8 +1328,18 @@ def validate_project(project_path: Path) -> list[ValidationError]:
     if cubes_dir.is_dir():
         if sv == 1:
             for f in sorted(cubes_dir.glob("*.yml")):
-                raw = yaml.safe_load(f.read_text(encoding="utf-8"))
                 src_path = f"cubes/{f.name}"
+                try:
+                    raw = yaml.safe_load(f.read_text(encoding="utf-8"))
+                except yaml.YAMLError as e:
+                    errors.append(
+                        ValidationError(
+                            "error",
+                            src_path,
+                            f"invalid YAML: {e}",
+                        )
+                    )
+                    continue
                 if not isinstance(raw, dict):
                     errors.append(
                         ValidationError(
@@ -1341,8 +1357,18 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                 meta_file = d / "metadata.yml"
                 if not meta_file.exists():
                     continue
-                raw = yaml.safe_load(meta_file.read_text(encoding="utf-8"))
                 src_path = f"cubes/{d.name}/metadata.yml"
+                try:
+                    raw = yaml.safe_load(meta_file.read_text(encoding="utf-8"))
+                except yaml.YAMLError as e:
+                    errors.append(
+                        ValidationError(
+                            "error",
+                            src_path,
+                            f"invalid YAML: {e}",
+                        )
+                    )
+                    continue
                 if not isinstance(raw, dict):
                     errors.append(
                         ValidationError(
