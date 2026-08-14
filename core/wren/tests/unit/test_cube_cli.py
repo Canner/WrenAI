@@ -358,6 +358,61 @@ def test_cube_list_bad_mdl_json(tmp_path):
     assert "invalid MDL JSON" in result.output
 
 
+def test_cube_list_malformed_cubes_scalar_fails_loud(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    mdl_file.write_text(json.dumps({"catalog": "c", "schema": "s", "cubes": "abc"}))
+    result = runner.invoke(app, ["cube", "list", "--mdl", str(mdl_file)])
+    assert result.exit_code == 1
+    assert "malformed cubes" in result.output
+    assert "wren context build" in result.output
+    assert result.output.strip() != ""
+
+
+def test_cube_list_malformed_cubes_object_fails_loud(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    mdl_file.write_text(
+        json.dumps({"catalog": "c", "schema": "s", "cubes": {"name": "orders"}})
+    )
+    result = runner.invoke(app, ["cube", "list", "--mdl", str(mdl_file)])
+    assert result.exit_code == 1
+    assert "malformed cubes" in result.output
+
+
+def test_cube_list_non_object_entry_fails_loud(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    mdl_file.write_text(
+        json.dumps(
+            {
+                "catalog": "c",
+                "schema": "s",
+                "cubes": ["bad", {"name": "orders", "measures": []}],
+            }
+        )
+    )
+    result = runner.invoke(app, ["cube", "list", "--mdl", str(mdl_file)])
+    assert result.exit_code == 1
+    assert "entry 0 is not an object" in result.output
+    assert "wren context build" in result.output
+
+
+def test_cube_describe_malformed_cubes_fails_loud(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    mdl_file.write_text(json.dumps({"catalog": "c", "schema": "s", "cubes": "abc"}))
+    result = runner.invoke(
+        app, ["cube", "describe", "orders", "--mdl", str(mdl_file)]
+    )
+    assert result.exit_code == 1
+    assert "malformed cubes" in result.output
+
+
 def test_cube_query_missing_required(tmp_path):
     mdl = _make_mdl(tmp_path)
     result = runner.invoke(

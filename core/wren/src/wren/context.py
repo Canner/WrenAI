@@ -660,6 +660,53 @@ def load_cubes(project_path: Path) -> list[dict]:
     return _load_cubes_v2(project_path)
 
 
+def _report_malformed_cube_members(
+    errors: list[ValidationError], src_path: str, raw: dict
+) -> None:
+    """Report non-list containers and non-mapping member entries."""
+    cube_label = raw.get("name") if isinstance(raw.get("name"), str) else src_path
+    for key in ("measures", "dimensions", "time_dimensions"):
+        val = raw.get(key)
+        if val is None:
+            continue
+        if not isinstance(val, list):
+            errors.append(
+                ValidationError(
+                    "error",
+                    f"{src_path} > {cube_label} > {key}",
+                    f"'{key}' must be a list, got {type(val).__name__}",
+                )
+            )
+            continue
+        for i, item in enumerate(val):
+            if not isinstance(item, dict):
+                errors.append(
+                    ValidationError(
+                        "error",
+                        f"{src_path} > {cube_label} > {key}[{i}]",
+                        f"{key[:-1]} entry must be a mapping, got {type(item).__name__}",
+                    )
+                )
+
+
+def _normalise_cube_member_lists(cube: dict) -> dict:
+    """Drop non-mapping measure/dimension/time_dimension entries.
+
+    ``validate_project`` re-reads the raw YAML so hand-edited mistakes are
+    still reported rather than vanishing quietly (same pattern as views /
+    relationships in #2604 / #2613).
+    """
+    for key in ("measures", "dimensions", "time_dimensions"):
+        raw = cube.get(key)
+        if raw is None:
+            continue
+        if not isinstance(raw, list):
+            cube[key] = []
+            continue
+        cube[key] = [item for item in raw if isinstance(item, dict)]
+    return cube
+
+
 def _load_cubes_v1(project_path: Path) -> list[dict]:
     """Legacy: load cube YAML files from project_path/cubes/*.yml."""
     cubes_dir = project_path / "cubes"
@@ -670,7 +717,7 @@ def _load_cubes_v1(project_path: Path) -> list[dict]:
         data = yaml.safe_load(f.read_text(encoding="utf-8"))
         if isinstance(data, dict):
             data["_source_file"] = f.name
-            cubes.append(data)
+            cubes.append(_normalise_cube_member_lists(data))
     return cubes
 
 
@@ -692,7 +739,7 @@ def _load_cubes_v2(project_path: Path) -> list[dict]:
         data = yaml.safe_load(meta_file.read_text())
         if isinstance(data, dict):
             data["_source_file"] = str(meta_file.relative_to(cubes_dir))
-            cubes.append(data)
+            cubes.append(_normalise_cube_member_lists(data))
     return cubes
 
 
@@ -1267,6 +1314,45 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                     "warning", f"relationships > {rel_name}", "missing join_type"
                 )
             )
+
+    # Cube YAML may contain non-mapping files / member-array junk.
+    # load_cubes() drops those (matching views / relationships). Re-read the
+    # raw files here so hand-edits are reported rather than vanishing quietly.
+    cubes_dir = project_path / "cubes"
+    if cubes_dir.is_dir():
+        if sv == 1:
+            for f in sorted(cubes_dir.glob("*.yml")):
+                raw = yaml.safe_load(f.read_text(encoding="utf-8"))
+                src_path = f"cubes/{f.name}"
+                if not isinstance(raw, dict):
+                    errors.append(
+                        ValidationError(
+                            "error",
+                            src_path,
+                            f"cube file must be a mapping, got {type(raw).__name__}",
+                        )
+                    )
+                    continue
+                _report_malformed_cube_members(errors, src_path, raw)
+        else:
+            for d in sorted(cubes_dir.iterdir()):
+                if not d.is_dir():
+                    continue
+                meta_file = d / "metadata.yml"
+                if not meta_file.exists():
+                    continue
+                raw = yaml.safe_load(meta_file.read_text(encoding="utf-8"))
+                src_path = f"cubes/{d.name}/metadata.yml"
+                if not isinstance(raw, dict):
+                    errors.append(
+                        ValidationError(
+                            "error",
+                            src_path,
+                            f"cube metadata must be a mapping, got {type(raw).__name__}",
+                        )
+                    )
+                    continue
+                _report_malformed_cube_members(errors, src_path, raw)
 
     # Check cubes — only structural / reference checks here. Deep validation
     # (measure cycles, hierarchy levels) runs Rust-side in

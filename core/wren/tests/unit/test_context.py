@@ -1214,6 +1214,61 @@ def test_validate_cube_bad_hierarchy(tmp_path):
     assert any("nonexistent_dim" in e.message for e in errors)
 
 
+def test_load_cubes_drops_non_dict_member_entries(tmp_path):
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "om",
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: c\n    expression: 'COUNT(*)'\n    type: BIGINT\n"
+        "  - nope\n"
+        "dimensions: not-a-list\n",
+    )
+    cubes = load_cubes(tmp_path)
+    assert len(cubes) == 1
+    assert [m["name"] for m in cubes[0]["measures"]] == ["c"]
+    assert cubes[0]["dimensions"] == []
+
+
+def test_validate_project_reports_malformed_cube_members(tmp_path):
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "om",
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures: nope\n",
+    )
+    errors = validate_project(tmp_path)
+    msgs = [e.message for e in errors]
+    assert any("'measures' must be a list, got str" in m for m in msgs)
+
+
+def test_validate_project_reports_non_mapping_cube_metadata(tmp_path):
+    _make_v2_cube_project(tmp_path)
+    cube_dir = tmp_path / "cubes" / "bad"
+    cube_dir.mkdir(parents=True)
+    (cube_dir / "metadata.yml").write_text("- just a list\n")
+    errors = validate_project(tmp_path)
+    msgs = [e.message for e in errors]
+    assert any("cube metadata must be a mapping, got list" in m for m in msgs)
+
+
+def test_validate_project_reports_v1_non_mapping_cube_file(tmp_path):
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 1\nname: test\ndata_source: postgres\n"
+    )
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "bad.yml").write_text("- not-a-mapping\n")
+    errors = validate_project(tmp_path)
+    msgs = [e.message for e in errors]
+    assert any("cube file must be a mapping" in m for m in msgs)
+    assert load_cubes(tmp_path) == []
+
+
 def test_validate_cube_ok(tmp_path):
     _make_v2_cube_project(tmp_path)
     _write_cube(
