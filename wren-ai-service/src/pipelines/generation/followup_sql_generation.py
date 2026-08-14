@@ -5,8 +5,8 @@ from typing import Any
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
-
 from langfuse.decorators import observe
+
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
@@ -14,7 +14,6 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
-    build_schema_grounding_manifest,
     construct_ask_history_messages,
     construct_instructions,
     get_calculated_field_instructions,
@@ -32,29 +31,13 @@ logger = logging.getLogger("wren-ai-service")
 
 text_to_sql_with_followup_user_prompt_template = """
 ### TASK ###
-Given the following user's follow-up question and previous SQL query and summary,
-generate one SQL query to best answer user's question.
-
-### DEPLOYMENT SCOPE ###
-Project ID: {{ project_id }}
-MDL Hash: {{ mdl_hash }}
-The SQL must be generated only from the DATABASE SCHEMA documents retrieved for this deployment scope. Previous SQL, SQL samples, user instructions, and reasoning plans are not schema authority and must not introduce table or column identifiers that are absent from this deployment's DATABASE SCHEMA.
+Given the user's current follow-up question and the current retrieved DATABASE SCHEMA,
+generate one SQL query to best answer the user's question.
 
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
 {% endfor %}
-
-{% if schema_grounding_manifest %}
-{{ schema_grounding_manifest }}
-{% endif %}
-
-### REQUIRED SCHEMA BINDING BEFORE SQL ###
-Before writing SQL, bind every requested business concept to exact identifiers from VERIFIED SCHEMA OBJECTS.
-Use only the bound table.column identifiers in SELECT, CTEs, UNION branches, JOIN, WHERE, GROUP BY, HAVING, ORDER BY, aggregates, and nested queries.
-Do not write SQL from business meaning alone. If a concept cannot be bound to a verified table.column, omit that unsupported concept or return no SQL.
-Business wording may appear only as final SELECT output aliases, never as source columns.
-Every source column in the final SQL must be copied exactly from VERIFIED SCHEMA OBJECTS under the table/view that provides it.
 
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
@@ -93,12 +76,9 @@ Summary:
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return an empty string for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return an empty string for sql instead of querying an unrelated object.
-If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or VERIFIED SCHEMA OBJECTS, stop and return an empty string for sql. Never create a table or column from the user's wording, even when the wording looks like a business term or object name.
+Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
+If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql. Never create a table or column from the user's wording, even when the wording looks like a business term or object name.
 Do not generate SQL from a reasoning plan. The reasoning plan is not executable context and cannot provide table names, column names, filters, functions, joins, or examples.
-
-### REASONING PLAN ###
-{{ sql_generation_reasoning }}
 
 Return only the final JSON SQL response.
 """
@@ -116,20 +96,12 @@ def prompt(
     has_calculated_field: bool = False,
     has_metric: bool = False,
     has_json_field: bool = False,
-    project_id: str | None = None,
-    mdl_hash: str | None = None,
-    validation_contexts: list[str] | None = None,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        project_id=project_id or "",
-        mdl_hash=mdl_hash or "",
-        schema_grounding_manifest=build_schema_grounding_manifest(
-            validation_contexts or documents
-        ),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -174,8 +146,6 @@ async def post_process(
     generate_sql_in_followup: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
-    documents: list[str] | None = None,
-    validation_contexts: list[str] | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
     use_dry_plan: bool = False,
@@ -185,7 +155,6 @@ async def post_process(
         generate_sql_in_followup.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
-        contexts=validation_contexts or documents,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
@@ -234,11 +203,11 @@ class FollowUpSQLGeneration(BasicPipeline):
         instructions: list[dict] | None = None,
         project_id: str | None = None,
         mdl_hash: str | None = None,
+        validation_contexts: list[str] | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
         has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
-        validation_contexts: list[str] | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
@@ -247,9 +216,7 @@ class FollowUpSQLGeneration(BasicPipeline):
 
         if use_dry_plan:
             metadata = await retrieve_metadata(
-                project_id or "",
-                self._retriever,
-                mdl_hash=mdl_hash,
+                project_id or "", self._retriever, mdl_hash
             )
         else:
             metadata = {}
@@ -259,11 +226,11 @@ class FollowUpSQLGeneration(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
-                "validation_contexts": validation_contexts,
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "histories": histories,
                 "project_id": project_id,
                 "mdl_hash": mdl_hash,
+                "validation_contexts": validation_contexts,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "has_calculated_field": has_calculated_field,

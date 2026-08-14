@@ -12,7 +12,6 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
-    build_schema_grounding_manifest,
     construct_instructions,
     sql_generation_reasoning_system_prompt,
 )
@@ -23,35 +22,17 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_reasoning_user_prompt_template = """
-### DEPLOYMENT SCOPE ###
-Project ID: {{ project_id }}
-MDL Hash: {{ mdl_hash }}
-Use only the DATABASE SCHEMA documents retrieved for this deployment scope. SQL samples, user instructions, and histories are not schema authority and must not introduce table or column identifiers that are absent from this deployment's DATABASE SCHEMA.
-If the DATABASE SCHEMA does not explicitly contain the required identifiers, return the insufficient-metadata bullet described in the system instructions. Do not write assumptions, placeholder identifiers, or example SQL.
-
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
 {% endfor %}
 
-{% if schema_grounding_manifest %}
-{{ schema_grounding_manifest }}
-{% endif %}
-
-### REQUIRED SCHEMA BINDING BEFORE SQL ###
-Before planning, bind every requested business concept to exact identifiers from VERIFIED SCHEMA OBJECTS.
-Use only the bound table.column identifiers in the reasoning plan.
-Do not reason from business meaning alone. If a concept cannot be bound to a verified table.column, return the insufficient-metadata bullet from the system instructions.
-Business wording may appear only as display/output labels, never as source columns.
-Every source column in the reasoning plan must be copied exactly from VERIFIED SCHEMA OBJECTS under the table/view that provides it.
-
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
-SQL:
-{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -67,7 +48,7 @@ User's Question: {{ query }}
 Language: {{ language }}
 Current Time: {{ current_time }}
 
-Create a schema-grounded reasoning plan only.
+Return only the reasoning plan described by the system instructions. When relevant, ground the plan by using the literal prefix `table:` followed by an exact declared table name from DATABASE SCHEMA, or the literal prefix `column:` followed by an exact declared table name, a dot, and an exact declared column name. Do not include SQL, SQL-like expressions, aliases, source names, physical names, lineage names, schema names, database names, literal values, placeholders, template markers, functions, or identifier-like labels.
 """
 
 
@@ -79,19 +60,11 @@ def prompt(
     sql_samples: list[dict],
     instructions: list[dict],
     prompt_builder: PromptBuilder,
-    project_id: str | None = None,
-    mdl_hash: str | None = None,
-    validation_contexts: list[str] | None = None,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        project_id=project_id or "",
-        mdl_hash=mdl_hash or "",
-        schema_grounding_manifest=build_schema_grounding_manifest(
-            validation_contexts or documents
-        ),
         sql_samples=sql_samples,
         instructions=construct_instructions(
             instructions=instructions,
@@ -196,11 +169,11 @@ class SQLGenerationReasoning(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
-                "validation_contexts": validation_contexts,
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],
                 "project_id": project_id,
                 "mdl_hash": mdl_hash,
+                "validation_contexts": validation_contexts,
                 "configuration": configuration,
                 "query_id": query_id,
                 **self._components,

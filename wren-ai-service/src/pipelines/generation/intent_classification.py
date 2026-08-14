@@ -9,7 +9,7 @@ from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
@@ -26,6 +26,17 @@ from src.web.v1.services.ask import AskHistory
 logger = logging.getLogger("wren-ai-service")
 
 
+def _project_filter_conditions(
+    project_id: str | None,
+    mdl_hash: str | None = None,
+) -> list[dict[str, Any]]:
+    project_deploy_filter = build_project_deploy_filter(
+        project_id=project_id,
+        mdl_hash=mdl_hash,
+    )
+    return project_deploy_filter["conditions"] if project_deploy_filter else []
+
+
 intent_classification_system_prompt = """
 ### Task ###
 You are an expert detective specializing in intent classification. Combine the user's current question and previous questions to determine their true intent based on the provided database schema. Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_SQL`, `GENERAL`, or `USER_GUIDE`. Additionally, provide a concise reasoning (maximum 20 words) for your classification.
@@ -34,9 +45,7 @@ You are an expert detective specializing in intent classification. Combine the u
 - **Follow the user's previous questions:** If there are previous questions, try to understand the user's current question as following the previous questions.
 - **Follow the user's instructions:** If there are instructions, strictly follow the instructions.
 - **Consider Context of Inputs:** Combine the user's current question, their previous questions, and the user's instructions together to identify the user's true intent.
-- **Deployment Scope:** Treat the DATABASE SCHEMA as the schema authority for the provided project and deployment hash. SQL samples and history are context, not schema authority.
-- **Rephrase Question:** Always return a non-empty `rephrased_question`. Rewrite follow-up questions into full standalone questions using prior conversation context. If there is no follow-up context, keep the user's current question as a clear standalone question.
-- **Intent Reasoning:** Always return a non-empty `reasoning` that explains the user's intent and cites the relevant schema concept when available. Do not reveal hidden chain-of-thought.
+- **Rephrase Question:** Rewrite follow-up questions into full standalone questions using prior conversation context.
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
 - **Language Consistency:** Use the same language as specified in the user's output language for the rephrased question and reasoning.
 - **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
@@ -122,10 +131,6 @@ Return your response as a JSON object with the following structure:
 """
 
 intent_classification_user_prompt_template = """
-### DEPLOYMENT SCOPE ###
-Project ID: {{ project_id }}
-MDL Hash: {{ mdl_hash }}
-
 ### DATABASE SCHEMA ###
 {% for db_schema in db_schemas %}
     {{ db_schema }}
@@ -133,11 +138,10 @@ MDL Hash: {{ mdl_hash }}
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are intent examples only. SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
-SQL:
-{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -148,12 +152,10 @@ SQL:
 {% endfor %}
 {% endif %}
 
-{% if docs %}
 ### USER GUIDE ###
 {% for doc in docs %}
 - {{doc.path}}: {{doc.content}}
 {% endfor %}
-{% endif %}
 
 ### INPUT ###
 {% if histories %}
@@ -161,15 +163,13 @@ User's previous questions:
 {% for history in histories %}
 Question:
 {{ history.question }}
-SQL:
-{{ history.sql }}
 {% endfor %}
 {% endif %}
 
 User's current question: {{query}}
 Output Language: {{ language }}
 
-Return the structured intent classification response.
+Let's think step by step
 """
 
 
@@ -187,7 +187,7 @@ async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> d
 
 @observe(capture_input=False)
 async def table_retrieval(
-    embedding: dict, project_id: str, table_retriever: Any, mdl_hash: str = ""
+    embedding: dict, project_id: str, table_retriever: Any, mdl_hash: str | None = None
 ) -> dict:
     filters = {
         "operator": "AND",
@@ -196,11 +196,7 @@ async def table_retrieval(
         ],
     }
 
-    if project_deploy_filter := build_project_deploy_filter(
-        project_id=project_id,
-        mdl_hash=mdl_hash,
-    ):
-        filters["conditions"] += project_deploy_filter["conditions"]
+    filters["conditions"].extend(_project_filter_conditions(project_id, mdl_hash))
 
     return await table_retriever.run(
         query_embedding=embedding.get("embedding"),
@@ -211,10 +207,10 @@ async def table_retrieval(
 @observe(capture_input=False)
 async def dbschema_retrieval(
     table_retrieval: dict,
-    embedding: dict,
     project_id: str,
     dbschema_retriever: Any,
-    mdl_hash: str = "",
+    embedding: dict | None = None,
+    mdl_hash: str | None = None,
 ) -> list[Document]:
     tables = table_retrieval.get("documents", [])
     table_names = []
@@ -237,11 +233,7 @@ async def dbschema_retrieval(
         ],
     }
 
-    if project_deploy_filter := build_project_deploy_filter(
-        project_id=project_id,
-        mdl_hash=mdl_hash,
-    ):
-        filters["conditions"] += project_deploy_filter["conditions"]
+    filters["conditions"].extend(_project_filter_conditions(project_id, mdl_hash))
 
     results = await dbschema_retriever.run(
         query_embedding=embedding.get("embedding"), filters=filters
@@ -292,14 +284,10 @@ def prompt(
     prompt_builder: PromptBuilder,
     sql_samples: Optional[list[dict]] = None,
     instructions: Optional[list[dict]] = None,
-    project_id: str | None = None,
-    mdl_hash: str | None = None,
     configuration: Configuration | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
-        project_id=project_id or "",
-        mdl_hash=mdl_hash or "",
         language=configuration.language,
         db_schemas=construct_db_schemas,
         histories=histories,
@@ -307,7 +295,7 @@ def prompt(
         instructions=construct_instructions(
             instructions=instructions,
         ),
-        docs=[] if construct_db_schemas else wren_ai_docs,
+        docs=wren_ai_docs,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -341,20 +329,16 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
 
 
 class IntentClassificationResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     rephrased_question: str
     results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL", "USER_GUIDE"]
     reasoning: str
 
 
 INTENT_CLASSIFICAION_MODEL_KWARGS = {
-    "preserve_json_schema": True,
     "response_format": {
         "type": "json_schema",
         "json_schema": {
             "name": "intent_classification",
-            "strict": True,
             "schema": IntentClassificationResult.model_json_schema(),
         },
     }
@@ -417,12 +401,10 @@ class IntentClassification(BasicPipeline):
             inputs={
                 "query": query,
                 "project_id": project_id or "",
-                "mdl_hash": mdl_hash or "",
+                "mdl_hash": mdl_hash,
                 "histories": histories or [],
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],
-                "project_id": project_id,
-                "mdl_hash": mdl_hash,
                 "configuration": configuration,
                 **self._components,
                 **self._configs,
