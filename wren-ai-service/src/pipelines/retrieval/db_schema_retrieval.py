@@ -255,7 +255,8 @@ def _format_executable_identifier_catalog(context: dict) -> str:
         lines.extend(f"- {constraint}" for constraint in relationship_constraints)
     lines.extend(
         [
-            "If a needed table, column, or relationship is not listed here or declared in the following DDL, return null for sql.",
+            "If a needed business concept is described here, use the corresponding exact table or column identifier listed here or declared in the following DDL.",
+            "If a word appears only in the user question and is not represented by this catalog, semantic context, or DDL, do not create an identifier from that word.",
             "### END EXECUTABLE WREN IDENTIFIER CATALOG ###",
             "",
         ]
