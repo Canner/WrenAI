@@ -41,9 +41,9 @@ class SQLGenPostProcessor:
 
             # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
             if cleaned_generation_result.startswith("{"):
-                cleaned_generation_result = orjson.loads(cleaned_generation_result).get(
+                cleaned_generation_result = orjson.loads(cleaned_generation_result)[
                     "sql"
-                )
+                ]
 
             (
                 valid_generation_result,
@@ -72,7 +72,7 @@ class SQLGenPostProcessor:
 
     async def _classify_generation_result(
         self,
-        generation_result: str | None,
+        generation_result: str,
         project_id: str | None = None,
         mdl_hash: str | None = None,
         use_dry_plan: bool = False,
@@ -83,15 +83,6 @@ class SQLGenPostProcessor:
         valid_generation_result = {}
         invalid_generation_result = {}
         use_dry_run = not allow_data_preview
-
-        if not generation_result:
-            return valid_generation_result, {
-                "sql": "",
-                "original_sql": "",
-                "type": "NO_RELEVANT_SQL",
-                "error": "No relevant SQL",
-                "correlation_id": "",
-            }
 
         async with aiohttp.ClientSession() as session:
             if use_dry_plan:
@@ -422,4 +413,18 @@ def construct_instructions(
 def construct_ask_history_messages(
     histories: list[AskHistory] | list[dict],
 ) -> list[ChatMessage]:
-    return []
+    messages = []
+    for history in histories:
+        messages.append(
+            ChatMessage.from_user(
+                history.question
+                if hasattr(history, "question")
+                else history["question"]
+            )
+        )
+        messages.append(
+            ChatMessage.from_assistant(
+                history.sql if hasattr(history, "sql") else history["sql"]
+            )
+        )
+    return messages

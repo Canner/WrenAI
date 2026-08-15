@@ -125,87 +125,23 @@ def _project_filter_conditions(
 
 
 def _build_metric_ddl(content: dict) -> str:
-    columns = [
-        column
-        for column in content["columns"]
-        if column["data_type"].lower() != "unknown"
-    ]
-    context = _format_semantic_context(
-        {
-            "object_type": "metric",
-            "sql_identifier_contract": {
-                "sql_table_name_use_exactly": content["name"],
-                "sql_column_names_use_exactly": [
-                    column["name"] for column in columns
-                ],
-            },
-            "semantic_context_not_sql_identifiers": {
-                "role": "stable analytical aggregation interface",
-                "description": content["comment"],
-            },
-            "columns": [
-                {
-                    "sql_column_name_use_exactly": column["name"],
-                    "data_type": get_engine_supported_data_type(column["data_type"]),
-                    "semantic_context_not_sql_identifier": column["comment"],
-                }
-                for column in columns
-            ],
-        }
-    )
     columns_ddl = [
-        f"{column['name']} {get_engine_supported_data_type(column['data_type'])}"
-        for column in columns
+        f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
+        for column in content["columns"]
+        if column["data_type"].lower()
+        != "unknown"  # quick fix: filtering out UNKNOWN column type
     ]
 
     return (
-        f"{context}CREATE TABLE {content['name']} (\n  "
+        f"{content['comment']}CREATE TABLE {content['name']} (\n  "
         + ",\n  ".join(columns_ddl)
         + "\n);"
     )
 
 
 def _build_view_ddl(content: dict) -> str:
-    columns = [
-        column
-        for column in content.get("columns", [])
-        if column.get("name") and column.get("data_type", "").lower() != "unknown"
-    ]
-    context = _format_semantic_context(
-        {
-            "object_type": "view",
-            "sql_identifier_contract": {
-                "sql_table_name_use_exactly": content["name"],
-                "sql_column_names_use_exactly": [
-                    column["name"] for column in columns
-                ],
-            },
-            "semantic_context_not_sql_identifiers": {
-                "role": "stable virtual table interface",
-                "description": content["comment"],
-                "definition_omitted_from_executable_schema": True,
-            },
-            "columns": [
-                {
-                    "sql_column_name_use_exactly": column["name"],
-                    "data_type": get_engine_supported_data_type(
-                        column.get("data_type")
-                    ),
-                    "semantic_context_not_sql_identifier": column.get("comment", ""),
-                }
-                for column in columns
-            ],
-        }
-    )
-    columns_ddl = [
-        f"{column['name']} {get_engine_supported_data_type(column.get('data_type'))}"
-        for column in columns
-    ]
-
     return (
-        f"{context}CREATE TABLE {content['name']} (\n  "
-        + ",\n  ".join(columns_ddl)
-        + "\n);"
+        f"{content['comment']}CREATE VIEW {content['name']}\nAS {content['statement']}"
     )
 
 
@@ -238,6 +174,13 @@ def _build_table_retrieval_context(
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     if query:
+        if histories:
+            previous_query_summaries = [history.question for history in histories]
+        else:
+            previous_query_summaries = []
+
+        query = "\n".join(previous_query_summaries) + "\n" + query
+
         return await embedder.run(query)
     else:
         return {}
@@ -561,6 +504,12 @@ def prompt(
             for construct_db_schema in construct_db_schemas
         ]
 
+        previous_query_summaries = (
+            [history.question for history in histories] if histories else []
+        )
+
+        query = "\n".join(previous_query_summaries) + "\n" + query
+
         _prompt = prompt_builder.run(question=query, db_schemas=db_schemas)
         return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
     else:
@@ -706,7 +655,7 @@ class DbSchemaRetrieval(BasicPipeline):
         llm_provider: LLMProvider,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        table_retrieval_size: int = 50,
+        table_retrieval_size: int = 10,
         table_column_retrieval_size: int = 100,
         **kwargs,
     ):

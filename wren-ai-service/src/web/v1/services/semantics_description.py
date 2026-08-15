@@ -253,16 +253,8 @@ class SemanticsDescription:
                 continue
 
             generated_model = generated_by_model.get(model_name, {})
-            if not generated_model:
-                raise ValueError(
-                    f"Semantics description output omitted selected model: {model_name}"
-                )
 
             model_description = description(generated_model)
-            if not model_description:
-                raise ValueError(
-                    f"Semantics description output omitted description for model: {model_name}"
-                )
 
             generated_columns = {
                 column.get("name"): column
@@ -277,18 +269,19 @@ class SemanticsDescription:
 
                 column_name = column.get("name", "")
                 generated_column = generated_columns.get(column_name)
-                if not generated_column:
-                    raise ValueError(
-                        "Semantics description output omitted selected column: "
-                        f"{model_name}.{column_name}"
-                    )
-
-                column_description = description(generated_column)
+                original_description = description(column)
+                column_description = (
+                    description(generated_column)
+                    if generated_column
+                    else original_description
+                )
                 if not column_description:
-                    raise ValueError(
-                        "Semantics description output omitted description for column: "
-                        f"{model_name}.{column_name}"
+                    logger.warning(
+                        "Semantics description output omitted description for column: %s.%s",
+                        model_name,
+                        column_name,
                     )
+                    continue
 
                 columns.append(
                     {
@@ -301,11 +294,14 @@ class SemanticsDescription:
                 )
                 column_descriptions.append(column_description)
 
-            if len(set(column_descriptions)) != len(column_descriptions):
-                raise ValueError(
-                    "Semantics description output contains repeated column "
-                    f"descriptions for model: {model_name}"
+            if not model_description:
+                model_description = description(model)
+            if not model_description and not columns:
+                logger.warning(
+                    "Semantics description output omitted selected model: %s",
+                    model_name,
                 )
+                continue
 
             response[model_name] = {
                 "name": model_name,
