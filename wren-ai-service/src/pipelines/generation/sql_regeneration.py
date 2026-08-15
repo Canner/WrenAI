@@ -5,8 +5,8 @@ from typing import Any
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
-from langfuse.decorators import observe
 
+from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
@@ -159,6 +159,7 @@ async def regenerate_sql(
 async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
+    documents: list[str] | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
 ) -> dict:
@@ -166,6 +167,7 @@ async def post_process(
         regenerate_sql.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
+        contexts=documents,
     )
 
 
