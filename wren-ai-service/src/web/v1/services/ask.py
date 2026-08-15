@@ -25,7 +25,7 @@ class AskRequest(BaseRequest):
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
-    ignore_sql_generation_reasoning: bool = True
+    ignore_sql_generation_reasoning: bool = False
     enable_column_pruning: bool = False
     use_dry_plan: bool = True
     allow_dry_plan_fallback: bool = False
@@ -99,12 +99,12 @@ class AskService:
         self,
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
-        allow_sql_generation_reasoning: bool = False,
+        allow_sql_generation_reasoning: bool = True,
         allow_sql_functions_retrieval: bool = True,
         allow_sql_diagnosis: bool = True,
         allow_sql_knowledge_retrieval: bool = True,
-        enable_column_pruning: bool = True,
-        max_sql_correction_retries: int = 0,
+        enable_column_pruning: bool = False,
+        max_sql_correction_retries: int = 3,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -161,14 +161,17 @@ class AskService:
         table_names = []
         error_message = None
         invalid_sql = None
-        allow_sql_generation_reasoning = False
+        allow_sql_generation_reasoning = (
+            self._allow_sql_generation_reasoning
+            and not ask_request.ignore_sql_generation_reasoning
+        )
         enable_column_pruning = (
             self._enable_column_pruning or ask_request.enable_column_pruning
         )
         allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
         allow_sql_diagnosis = self._allow_sql_diagnosis
         allow_sql_knowledge_retrieval = self._allow_sql_knowledge_retrieval
-        max_sql_correction_retries = 0
+        max_sql_correction_retries = self._max_sql_correction_retries
         current_sql_correction_retries = 0
         use_dry_plan = ask_request.use_dry_plan
         allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback

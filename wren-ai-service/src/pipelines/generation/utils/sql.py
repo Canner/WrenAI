@@ -5,7 +5,7 @@ import aiohttp
 import orjson
 from haystack import component
 from haystack.dataclasses import ChatMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.core.engine import (
     Engine,
@@ -474,14 +474,18 @@ The final answer must be a ANSI SQL query in JSON format:
 
 
 class SqlGenerationResult(BaseModel):
-    sql: str | None
+    model_config = ConfigDict(extra="forbid")
+
+    sql: str
 
 
 SQL_GENERATION_MODEL_KWARGS = {
+    "preserve_json_schema": True,
     "response_format": {
         "type": "json_schema",
         "json_schema": {
             "name": "sql_generation_result",
+            "strict": True,
             "schema": SqlGenerationResult.model_json_schema(),
         },
     }
