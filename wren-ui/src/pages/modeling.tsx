@@ -949,8 +949,13 @@ export default function Modeling() {
       if (!diagramData) return;
       setAssistantSaving(true);
       if (assistantMode === 'semantics') {
+        const latestDiagram = await apolloClient.query({
+          query: DIAGRAM,
+          fetchPolicy: 'network-only',
+        });
+        const currentModels = latestDiagram.data?.diagram?.models || [];
         const data = semanticResult.flatMap((model) => {
-          const diagramModel = diagramData.models.find(
+          const diagramModel = currentModels.find(
             (item) => item.referenceName === model.name,
           );
           if (!diagramModel) return [];
