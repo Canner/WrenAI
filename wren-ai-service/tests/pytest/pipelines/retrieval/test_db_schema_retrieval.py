@@ -70,11 +70,11 @@ def test_column_pruning_prompt_uses_current_query_without_history_text():
     assert "previous request" not in result["prompt"]
 
 
-def test_table_selection_prompt_keeps_multiple_relevant_datasets():
+def test_table_selection_prompt_prefers_best_schema_supported_dataset_set():
     assert "same business concept is represented by multiple modeled datasets" in (
         table_columns_selection_system_prompt
     )
-    assert "compatible fields for the same requested result shape" in (
+    assert "best support the current question" in (
         table_columns_selection_system_prompt
     )
 

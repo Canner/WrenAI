@@ -72,7 +72,7 @@ Question:
 User's Question: {{ query }}
 {% if sql_generation_reasoning %}
 ### SQL GENERATION REASONING ###
-The following reasoning is non-executable semantic context only. Do not copy identifiers, SQL fragments, aliases, functions, literals, or placeholder names from it. Generate SQL only from DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, EXECUTABLE WREN IDENTIFIER CATALOG, and SQL FUNCTIONS.
+The following reasoning is a candidate plan for the current question. Use it to understand intent, selected datasets, selected fields, joins, grouping, ordering, and limits. Before using any table, column, relationship, or function mentioned in the plan, verify the exact identifier against DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, EXECUTABLE WREN IDENTIFIER CATALOG, or SQL FUNCTIONS. Ignore any unsupported SQL fragment, alias, literal, placeholder, or identifier-like text.
 {{ sql_generation_reasoning }}
 {% endif %}
 
