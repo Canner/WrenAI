@@ -215,6 +215,8 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier explain meaning only. Do not combine words, labels, ordinals, prefixes, suffixes, abbreviations, comments, or descriptions from those values into a table or column identifier.
 - A user's business term is grounded when a retrieved table, column, metric field, alias, display label, description, or relationship describes that concept. When that happens, use the corresponding exact SQL identifier from the same retrieved schema object, not the user's wording.
 - Do not require the user's business words to exactly match deployed column names. Use retrieved semantics to map business meaning to exact executable identifiers.
+- If a retrieved schema object semantically represents the user's requested subject, measure, grouping, filter, or output field, generate SQL with that object's exact table and column identifiers. Do not return empty SQL only because the user's words differ from the physical identifier names.
+- Return empty or null SQL only when no retrieved table, view, metric, column, description, alias, display label, relationship, instruction, or current SQL sample provides a schema-grounded way to answer any data-retrieval part of the active question.
 - Never create an identifier from user question wording by changing spaces, casing, punctuation, singular/plural form, abbreviations, prefixes, or suffixes.
 - Never generate SQL from assumptions such as "assuming the table contains", "assuming this column exists", or "a possible table/column". Use only schema-confirmed identifiers.
 - If a requested concept, output column, filter, sort, join, grouping, measure, or time field is not represented by any retrieved schema identifier or semantic description, do not invent a field for it. Use the best grounded SQL supported by the retrieved schema.
@@ -347,11 +349,13 @@ You are a helpful data analyst who explains the user's analytical intent and pro
 9. Mention column names only by writing the literal prefix `column:` followed by an exact declared table name, a dot, and an exact column name declared for that table in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT.
 10. Do not mention aliases, source names, physical names, lineage names, schema names, database names, literal values, placeholders, or identifier-like labels from comments, SQL samples, failed SQL, or user wording as executable identifiers.
 11. Do not write SQL, possible SQL, sample SQL, assumed SQL, SQL clauses, SQL functions, code blocks, or executable expressions in the reasoning plan.
-12. Never use phrases such as "assuming the table contains", "assuming this column exists", or "the SQL could look like this". If the available metadata does not clearly support part of the request, state that the available metadata does not support that part without naming missing objects.
-13. If multiple schema objects are required, identify the exact declared relationship path from DATABASE SCHEMA. If no relationship path is declared, say that the retrieved metadata does not provide a join path.
-14. The reasoning plan is a candidate plan only. SQL generation must re-read DATABASE SCHEMA and WREN SQL IDENTIFIER CONTRACT before using any identifier from the plan.
-15. Do not include ```markdown or ``` in the answer.
-16. ONLY SHOWING the reasoning plan in bullet points.
+12. Never use phrases such as "assuming the table contains", "assuming this column exists", or "the SQL could look like this".
+13. If a user's business term is represented by a retrieved table, column, metric, alias, display label, description, calculated field, or relationship, ground that term to the exact declared table and column identifiers. Do not mark it unsupported only because the physical identifier uses different wording.
+14. If the available metadata supports only part of the request, plan the grounded part first and mention unsupported details only after listing the grounded identifiers.
+15. If multiple schema objects are required, identify the exact declared relationship path from DATABASE SCHEMA. If no relationship path is declared, say that the retrieved metadata does not provide a join path.
+16. The reasoning plan is a candidate plan only. SQL generation must re-read DATABASE SCHEMA and WREN SQL IDENTIFIER CONTRACT before using any identifier from the plan.
+17. Do not include ```markdown or ``` in the answer.
+18. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -430,7 +434,9 @@ Given the user's question and database schema, generate one grounded Wren SQL qu
 11. YOU MUST treat source database/schema/table names, physical datasource names, lineage names, comments, aliases, and display labels as semantic context only. Never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
 12. If an identifier, literal value, placeholder, template marker, or function appears only in SQL samples, failed SQL, descriptions, lineage, reasoning text, or error messages, it is not executable for this request; ignore those parts when generating executable SQL.
 13. If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA, EXECUTABLE WREN IDENTIFIER CATALOG, or WREN SQL IDENTIFIER CONTRACT, do not use that identifier. Never create a table or column from the user's wording.
-14. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+14. If DATABASE SCHEMA contains at least one grounded table, view, metric, or column that answers the question or a meaningful data-retrieval subset of it, return SQL for that grounded result. Do not return empty SQL solely because the user's wording does not exactly match identifier names.
+15. Return empty or null SQL only when the retrieved DATABASE SCHEMA cannot support any data-retrieval part of the user's active question.
+16. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 
