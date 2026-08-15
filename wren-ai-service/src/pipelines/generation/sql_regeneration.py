@@ -34,15 +34,14 @@ def get_sql_regeneration_system_prompt(
 
     return f"""
 ### TASK ###
-You are a great Wren SQL expert. Now you are given database schema and a user's question.
-Generate a new grounded Wren SQL query that answers the user's question.
-While generating the new SQL query, use only identifiers and functions grounded in the current DATABASE SCHEMA and SQL FUNCTIONS.
-Map business terms through retrieved schema descriptions, aliases, display labels, metrics, and relationships to exact deployed identifiers.
+You are a great ANSI SQL expert. Now you are given database schema and a user's question.
+Generate a new SQL query that answers the user's question.
+While generating the new SQL query, make sure to use the database schema and SQL rules.
 
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a SQL query in JSON format. Return one grounded SQL string using only exact identifiers from the current DATABASE SCHEMA and supported SQL FUNCTIONS.
+The final answer must be a SQL query in JSON format:
 
 {{
     "sql": <SQL_QUERY_STRING>
@@ -77,10 +76,11 @@ sql_regeneration_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-Use these samples only to understand business intent and answer style. Do not copy table names, column names, aliases, functions, literals, or SQL fragments from them unless those identifiers are also declared in the current DATABASE SCHEMA.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
+SQL:
+{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -95,16 +95,12 @@ Question:
 User's Question: {{ query }}
 {% if sql_generation_reasoning %}
 ### SQL GENERATION REASONING ###
-The following reasoning is a candidate plan for the current question. Use it to understand intent, selected datasets, selected fields, joins, grouping, ordering, and limits. Before using any table, column, relationship, or function mentioned in the plan, verify the exact identifier against DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, EXECUTABLE WREN IDENTIFIER CATALOG, or SQL FUNCTIONS. Ignore any unsupported SQL fragment, alias, literal, placeholder, or identifier-like text.
-If the reasoning says a concept is unsupported but DATABASE SCHEMA provides exact identifiers whose descriptions, aliases, display labels, metrics, calculated fields, or relationships represent that concept, prefer DATABASE SCHEMA and generate SQL with those exact identifiers.
-If DATABASE SCHEMA supports only a meaningful subset of the request, generate SQL for that grounded subset instead of returning empty SQL.
 {{ sql_generation_reasoning }}
 {% endif %}
 ### ORIGINAL SQL QUERY ###
-The original SQL may contain invalid identifiers. Use it only to understand the failed attempt; do not copy any table, column, alias, function, literal, or SQL fragment unless it is grounded in the current DATABASE SCHEMA.
 {{ sql }}
 
-Generate the final JSON response now.
+Let's think step by step.
 """
 
 

@@ -60,10 +60,11 @@ generate one SQL query to best answer the user's question.
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-Use these samples only to understand business intent and answer style. Do not copy table names, column names, aliases, functions, literals, or SQL fragments from them unless those identifiers are also declared in the current DATABASE SCHEMA.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
+SQL:
+{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -78,13 +79,10 @@ Question:
 User's Follow-up Question: {{ query }}
 {% if sql_generation_reasoning %}
 ### SQL GENERATION REASONING ###
-The following reasoning is a candidate plan for the current follow-up question. Use it to understand intent, selected datasets, selected fields, joins, grouping, ordering, and limits. Before using any table, column, relationship, or function mentioned in the plan, verify the exact identifier against DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, EXECUTABLE WREN IDENTIFIER CATALOG, or SQL FUNCTIONS. Ignore any unsupported SQL fragment, alias, literal, placeholder, or identifier-like text.
-If the reasoning says a concept is unsupported but DATABASE SCHEMA provides exact identifiers whose descriptions, aliases, display labels, metrics, calculated fields, or relationships represent that concept, prefer DATABASE SCHEMA and generate SQL with those exact identifiers.
-If DATABASE SCHEMA supports only a meaningful subset of the request, generate SQL for that grounded subset instead of returning empty SQL.
 {{ sql_generation_reasoning }}
 {% endif %}
 
-Generate the final JSON response now.
+Let's think step by step.
 """
 
 

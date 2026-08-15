@@ -30,16 +30,13 @@ def get_sql_correction_system_prompt(sql_knowledge: SqlKnowledge | None = None) 
 
     return f"""
 ### TASK ###
-You are a great Wren SQL expert with exceptional logical thinking skills and debugging skills.
+You are a great ANSI SQL expert with exceptional logical thinking skills and debugging skills.
 
 ### SQL CORRECTION INSTRUCTIONS ###
 
-Now you are given a database schema, a user's question, a sql generation reasoning, an original SQL query, and an execution error.
-The original SQL query may contain invalid or invented identifiers.
-Please read the SQL rules carefully and generate a new Wren SQL query that fixes the original SQL query while using only identifiers and functions grounded in the current DATABASE SCHEMA and SQL FUNCTIONS.
-Map business terms through retrieved schema descriptions, aliases, display labels, metrics, and relationships to exact deployed identifiers.
-Treat invalid object name, dataset not found, table not found, column not found, unknown relation, and invalid identifier errors as schema-grounding failures.
-Do not create dummy CTEs, placeholder tables, metadata checks, or similar-looking replacement identifiers to make the query executable.
+Now you are given a database schema, a user's question, a sql generation reasoning, and an original SQL query.
+The original SQL query has a syntax error or does not follow the SQL rules.
+Please read the SQL rules carefully and generate a new SQL query that fixes the original SQL query.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -47,7 +44,7 @@ Make sure you follow the SQL Rules strictly.
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a SQL query in JSON format. Return one grounded SQL string using only exact identifiers from the current DATABASE SCHEMA and supported SQL FUNCTIONS.
+The final answer must be a SQL query in JSON format:
 
 {{
     "sql": <SQL_QUERY_STRING>
@@ -83,19 +80,15 @@ User's Question: {{ query }}
 {% endif %}
 {% if sql_generation_reasoning %}
 ### SQL GENERATION REASONING ###
-The following reasoning is a candidate plan for the current question. Use it to understand intent, selected datasets, selected fields, joins, grouping, ordering, and limits. Before using any table, column, relationship, or function mentioned in the plan, verify the exact identifier against DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, EXECUTABLE WREN IDENTIFIER CATALOG, or SQL FUNCTIONS. Ignore any unsupported SQL fragment, alias, literal, placeholder, or identifier-like text.
-If the reasoning says a concept is unsupported but DATABASE SCHEMA provides exact identifiers whose descriptions, aliases, display labels, metrics, calculated fields, or relationships represent that concept, prefer DATABASE SCHEMA and generate SQL with those exact identifiers.
-If DATABASE SCHEMA supports only a meaningful subset of the request, generate SQL for that grounded subset instead of returning empty SQL.
 {{ sql_generation_reasoning }}
 {% endif %}
 ### ORIGINAL SQL QUERY ###
-The original SQL may contain invalid identifiers. Use it only to understand the failed attempt; do not copy any table, column, alias, function, literal, or SQL fragment unless it is grounded in the current DATABASE SCHEMA.
 {{ invalid_generation_result.sql }}
 
 ### ERROR MESSAGE ###
 {{ invalid_generation_result.error }}
 
-Generate the final JSON response now.
+Let's think step by step.
 """
 
 
