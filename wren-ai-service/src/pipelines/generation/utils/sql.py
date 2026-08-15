@@ -392,9 +392,6 @@ You are a helpful data analyst who explains the user's analytical intent and pro
 25. If exact deployed table and column identifiers are not available for a requested part, say only that the retrieved metadata does not support that part. Do not propose a replacement name.
 26. Do not write table names or column names from the user's wording unless the same identifier appears exactly in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT.
 27. Do not include code blocks, inline SQL fragments, SELECT statements, WHERE clauses, join clauses, or any query-shaped text in the reasoning plan.
-28. If the user says a generic phrase such as "sales table", "orders table", "invoice table", or any other business-domain wording, treat it as intent wording, not as an executable table name. Ground it to exact declared schema objects only when their names, descriptions, columns, metrics, views, or relationships support that business intent.
-29. Do not create a plan that checks whether a user-worded table exists. The retrieved DATABASE SCHEMA has already defined the available objects. Either cite exact declared schema objects that support the intent, or state that the retrieved metadata does not support the requested object.
-
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
 """
@@ -411,12 +408,13 @@ def _extract_from_sql_knowledge(
 
 
 def get_text_to_sql_rules(sql_knowledge: SqlKnowledge | None = None) -> str:
+    rules = _DEFAULT_TEXT_TO_SQL_RULES
     if sql_knowledge is not None:
-        return _extract_from_sql_knowledge(
+        rules = _extract_from_sql_knowledge(
             sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
         )
 
-    return _DEFAULT_TEXT_TO_SQL_RULES
+    return f"{rules}\n\n{_MANDATORY_SQL_GROUNDING_RULES}"
 
 
 def get_calculated_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
@@ -452,26 +450,34 @@ def get_sql_generation_system_prompt(sql_knowledge: SqlKnowledge | None = None) 
     text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
 
     return f"""
-You are a helpful assistant that converts natural language queries into ANSI SQL queries.
+You are a helpful assistant that converts natural language queries into Wren SQL queries.
 
-Given user's question, database schema, reasoning plan, SQL samples, and instructions, generate a Wren SQL query grounded in the current DATABASE SCHEMA.
+Given the user's question and database schema, generate one grounded Wren SQL query. The DATABASE SCHEMA is the only source of executable identifiers.
 
 ### GENERAL RULES ###
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
-2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
-3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
-4. YOU MUST use the reasoning plan as intent guidance only. If the reasoning plan mentions a table, column, function, literal, placeholder, or SQL fragment that is not present in DATABASE SCHEMA or SQL FUNCTIONS, ignore that unsupported part and choose identifiers from DATABASE SCHEMA.
-5. YOU MUST answer the user's business intent, not blindly copy user wording. If the user uses a generic phrase like "sales table", "orders table", or "invoice table", use exact declared schema objects whose names, descriptions, columns, metrics, views, or relationships support that intent. Never turn user wording directly into a table or column name.
-6. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input. Use the exact supported syntax shown there; otherwise omit the function-dependent part of the request.
+3. YOU MUST REFER to the sql samples only as examples of intent and style if the section of SQL SAMPLES is available in user's input. Do not copy identifiers, literals, placeholders, SQL patterns, or functions from samples.
+4. YOU MUST treat the reasoning plan as semantic context for intent only. Do not copy identifiers, functions, literal values, SQL fragments, template markers, or placeholders from the reasoning plan. Choose every executable identifier only from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, and every function only from SQL FUNCTIONS.
+5. YOU MUST answer the user's intent, not just exact wording. Use schema aliases, descriptions, calculated fields, metrics, and relationships to understand intent, then generate SQL with exact DATABASE SCHEMA identifiers only.
+6. YOU MUST first read any WREN SQL IDENTIFIER CONTRACT and WREN RETRIEVED SEMANTIC CONTEXT block attached to each schema object. Use sql_table_name_use_exactly, sql_column_name_use_exactly, sql_column_names_use_exactly, relationship_constraints_use_exactly, and the following DDL declarations as executable grounding. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand business meaning.
+7. When DATABASE SCHEMA contains EXECUTABLE WREN IDENTIFIER CATALOG sections, treat those sections as the first and clearest list of allowed executable identifiers.
+8. If the user asks for fields that exist across multiple related schema objects, include those objects only when DATABASE SCHEMA shows the exact columns and relationship path needed to join them.
+9. If the user asks for a result that is represented in multiple schema objects with compatible fields, include all relevant objects using independently valid SELECT branches combined with UNION ALL. Use joins only for relationship-backed row-level combinations.
+10. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. If a planned element is not grounded, omit that element. If the element is needed to answer the user's requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
+11. YOU MUST treat source database/schema/table names, physical datasource names, lineage names, comments, aliases, and display labels as semantic context only. Never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
+12. If an identifier, literal value, placeholder, template marker, or function appears only in SQL samples, failed SQL, descriptions, lineage, reasoning text, or error messages, it is not executable for this request; ignore those parts when generating executable SQL.
+13. If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA, EXECUTABLE WREN IDENTIFIER CATALOG, or WREN SQL IDENTIFIER CONTRACT, return null for sql. Never create a table or column from the user's wording.
+14. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be an ANSI SQL query in JSON format. Return null only when the retrieved DATABASE SCHEMA does not contain enough grounded tables, columns, metrics, views, or relationships to answer the user's requested intent.
+The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS and it answers the user's requested intent. Do not create table or column identifiers from the user's wording. If the retrieved schema does not ground the requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
 
 {{
-    "sql": <SQL_QUERY_STRING_OR_NULL>
+    "sql": "SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
 }}
 """
 

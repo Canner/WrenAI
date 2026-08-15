@@ -25,7 +25,7 @@ class AskRequest(BaseRequest):
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
-    ignore_sql_generation_reasoning: bool = False
+    ignore_sql_generation_reasoning: bool = True
     enable_column_pruning: bool = False
     use_dry_plan: bool = True
     allow_dry_plan_fallback: bool = False
@@ -99,12 +99,12 @@ class AskService:
         self,
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
-        allow_sql_generation_reasoning: bool = True,
+        allow_sql_generation_reasoning: bool = False,
         allow_sql_functions_retrieval: bool = True,
         allow_sql_diagnosis: bool = True,
         allow_sql_knowledge_retrieval: bool = True,
-        enable_column_pruning: bool = False,
-        max_sql_correction_retries: int = 3,
+        enable_column_pruning: bool = True,
+        max_sql_correction_retries: int = 0,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
