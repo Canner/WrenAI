@@ -30,20 +30,13 @@ def get_sql_correction_system_prompt(sql_knowledge: SqlKnowledge | None = None) 
 
     return f"""
 ### TASK ###
-You are a Wren SQL expert with exceptional logical thinking skills and debugging skills. Regenerate a grounded Wren SQL query from the user's question and the current DATABASE SCHEMA after a previous SQL attempt failed.
+You are a great ANSI SQL expert with exceptional logical thinking skills and debugging skills.
 
 ### SQL CORRECTION INSTRUCTIONS ###
 
-1. First, use the error message only to identify which part of the failed SQL was unsupported by DATABASE SCHEMA, SQL FUNCTIONS, or USER INSTRUCTIONS.
-2. Then, generate a syntactically correct Wren SQL query from the user's intent and the current DATABASE SCHEMA.
-3. If the invalid SQL contains a table, column, function, literal value, or metadata-table query that is not supported by the current DATABASE SCHEMA or SQL FUNCTIONS, do not preserve it.
-4. Never correct an invalid SQL query by checking INFORMATION_SCHEMA or system catalogs.
-5. If a user question is provided, treat it as the source of intent and regenerate the SQL from that intent using DATABASE SCHEMA instead of repairing guessed identifiers.
-6. Treat SQL diagnosis and the invalid SQL as error context only. Do not copy placeholders, assumed table names, assumed column names, or unsupported functions from them.
-7. Do not preserve a table, column, join, filter, grouping, ordering, or function from the failed SQL unless it appears exactly in DATABASE SCHEMA or SQL FUNCTIONS.
-8. Treat physical/source/lineage names from the failed SQL, error message, reasoning, comments, aliases, descriptions, or samples as semantic context only; never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
-9. If the error is an invalid object, invalid column, unsupported function, or date/type failure, do not try a similar replacement from source metadata. Regenerate from the user's intent and current DATABASE SCHEMA. If the unsupported part is needed to answer the requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql instead of substituting non-schema identifiers.
-10. If the failed SQL used connector-specific syntax such as TOP, square-bracket identifiers, backticks, or non-Wren identifier quoting, discard that syntax and regenerate using Wren SQL syntax only.
+Now you are given a database schema, a user's question, a sql generation reasoning, and an original SQL query.
+The original SQL query has a syntax error or does not follow the SQL rules.
+Please read the SQL rules carefully and generate a new SQL query that fixes the original SQL query.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -51,10 +44,10 @@ Make sure you follow the SQL Rules strictly.
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS and answers the user's requested intent. Do not create table or column identifiers from the user's wording. If no fully grounded SQL can be generated, return null for sql.
+The final answer must be a SQL query in JSON format:
 
 {{
-    "sql": "corrected SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
+    "sql": <SQL_QUERY_STRING>
 }}
 """
 
@@ -84,18 +77,18 @@ sql_correction_user_prompt_template = """
 ### QUESTION ###
 {% if query %}
 User's Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, diagnostic text, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
-If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql. Never create a table or column from the user's wording, failed SQL, dry-run diagnostic, or reasoning plan.
 {% endif %}
-### FAILED SQL ###
-The failed SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, SQL patterns, or unsupported object names.
+{% if sql_generation_reasoning %}
+### SQL GENERATION REASONING ###
+{{ sql_generation_reasoning }}
+{% endif %}
+### ORIGINAL SQL QUERY ###
+{{ invalid_generation_result.sql }}
 
-### DRY-RUN DIAGNOSTIC ###
-The dry-run diagnostic text is intentionally omitted because it may contain failed SQL, guessed identifiers, connector-specific syntax, source names, physical names, or invalid replacement candidates.
+### ERROR MESSAGE ###
+{{ invalid_generation_result.error }}
 
-Regenerate from the user question and current DATABASE SCHEMA only. Do not repair, preserve, or copy anything from the failed SQL or dry-run diagnostic.
-
-Return only the final JSON SQL response.
+Let's think step by step.
 """
 
 

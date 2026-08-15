@@ -35,19 +35,16 @@ def get_sql_regeneration_system_prompt(
     return f"""
 ### TASK ###
 You are a great ANSI SQL expert. Now you are given database schema and a user's question.
-Carefully review the user's question and current DATABASE SCHEMA, then generate a new SQL query that answers the user's intent.
-The original SQL query and UI planning text are intentionally omitted from the prompt and must not be used as executable context.
-While generating the new SQL query, make sure to use the database schema as the only source of executable table and column identifiers.
-If the original SQL query or reasoning contains unsupported identifiers, placeholders, or assumptions, ignore those parts and regenerate from the user's question and DATABASE SCHEMA.
-Treat physical/source/lineage names from the original SQL, reasoning, samples, comments, or descriptions as semantic context only; never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
+Generate a new SQL query that answers the user's question.
+While generating the new SQL query, make sure to use the database schema and SQL rules.
 
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS and answers the user's requested intent. Do not create table or column identifiers from the user's wording. If no fully grounded SQL can be generated, return null for sql.
+The final answer must be a SQL query in JSON format:
 
 {{
-    "sql": "SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
+    "sql": <SQL_QUERY_STRING>
 }}
 """
 
@@ -79,10 +76,11 @@ sql_regeneration_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
+SQL:
+{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -95,12 +93,14 @@ Question:
 
 ### QUESTION ###
 User's Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
-Regenerate with executable identifiers from the current DATABASE SCHEMA only.
+{% if sql_generation_reasoning %}
+### SQL GENERATION REASONING ###
+{{ sql_generation_reasoning }}
+{% endif %}
 ### ORIGINAL SQL QUERY ###
-The original SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
+{{ sql }}
 
-Return only the final JSON SQL response.
+Let's think step by step.
 """
 
 

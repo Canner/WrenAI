@@ -16,7 +16,6 @@ from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
-DEFAULT_MAX_EMBED_INPUT_CHARS = None
 MIN_EMBED_INPUT_CHARS = 128
 
 
@@ -214,7 +213,7 @@ class AsyncTextEmbedder:
         api_key: Optional[str] = None,
         api_base_url: Optional[str] = None,
         timeout: Optional[float] = None,
-        max_input_chars: Optional[int] = DEFAULT_MAX_EMBED_INPUT_CHARS,
+        max_input_chars: Optional[int] = None,
         query_prefix: str = "",
         **kwargs,
     ):
@@ -300,7 +299,7 @@ class AsyncDocumentEmbedder:
         api_key: Optional[str] = None,
         api_base_url: Optional[str] = None,
         timeout: Optional[float] = None,
-        max_input_chars: Optional[int] = DEFAULT_MAX_EMBED_INPUT_CHARS,
+        max_input_chars: Optional[int] = None,
         document_prefix: str = "",
         **kwargs,
     ):
@@ -448,17 +447,8 @@ class LitellmEmbedderProvider(EmbedderProvider):
         self._api_base = remove_trailing_slash(api_base) if api_base else None
         self._embedding_model = model
         self._timeout = timeout
-        is_nomic_embed_text = "nomic-embed-text" in model.lower()
-        self._query_prefix = (
-            "search_query: "
-            if query_prefix is None and is_nomic_embed_text
-            else query_prefix or ""
-        )
-        self._document_prefix = (
-            "search_document: "
-            if document_prefix is None and is_nomic_embed_text
-            else document_prefix or ""
-        )
+        self._query_prefix = query_prefix or ""
+        self._document_prefix = document_prefix or ""
         if "provider" in kwargs:
             del kwargs["provider"]
         self._kwargs = kwargs
