@@ -34,7 +34,7 @@ class SemanticsDescription:
         maxsize: int = 1_000_000,
         ttl: int = 120,
         generation_timeout_seconds: float = 120.0,
-        max_models_per_batch: int = 4,
+        max_models_per_batch: int = 1,
         max_columns_per_batch: int = 50,
         max_concurrent_tasks: int = 4,
     ):
@@ -224,6 +224,9 @@ class SemanticsDescription:
             )
             return "" if value is None else str(value).strip()
 
+        def normalized_description(value: str) -> str:
+            return " ".join(value.casefold().split())
+
         generated_by_model: dict[str, dict] = {}
         for output in outputs:
             for model_name, model_data in output.items():
@@ -256,13 +259,27 @@ class SemanticsDescription:
 
             model_description = description(generated_model)
 
-            generated_columns = {
-                column.get("name"): column
-                for column in generated_model.get("columns", [])
-                if isinstance(column, dict) and column.get("name")
-            }
+            generated_columns: dict[str, dict] = {}
+            for column in generated_model.get("columns", []):
+                if not isinstance(column, dict):
+                    continue
+
+                column_name = column.get("name")
+                if not column_name:
+                    continue
+
+                if column_name in generated_columns:
+                    logger.warning(
+                        "Semantics description output duplicated column: %s.%s",
+                        model_name,
+                        column_name,
+                    )
+                    continue
+
+                generated_columns[column_name] = column
+
             columns = []
-            column_descriptions = []
+            used_generated_descriptions: dict[str, str] = {}
             for column in model.get("columns", []):
                 if not isinstance(column, dict):
                     continue
@@ -270,11 +287,34 @@ class SemanticsDescription:
                 column_name = column.get("name", "")
                 generated_column = generated_columns.get(column_name)
                 original_description = description(column)
-                column_description = (
-                    description(generated_column)
-                    if generated_column
-                    else original_description
+                generated_description = (
+                    description(generated_column) if generated_column else ""
                 )
+                normalized_generated_description = normalized_description(
+                    generated_description
+                )
+                is_repeated_generated_description = (
+                    generated_description
+                    and normalized_generated_description in used_generated_descriptions
+                    and used_generated_descriptions[normalized_generated_description]
+                    != column_name
+                )
+                if is_repeated_generated_description and original_description:
+                    logger.warning(
+                        "Semantics description output reused description for columns: %s.%s and %s.%s",
+                        model_name,
+                        used_generated_descriptions[normalized_generated_description],
+                        model_name,
+                        column_name,
+                    )
+                    column_description = original_description
+                else:
+                    column_description = generated_description or original_description
+                    if generated_description:
+                        used_generated_descriptions.setdefault(
+                            normalized_generated_description, column_name
+                        )
+
                 if not column_description:
                     logger.warning(
                         "Semantics description output omitted description for column: %s.%s",
@@ -292,7 +332,6 @@ class SemanticsDescription:
                         },
                     }
                 )
-                column_descriptions.append(column_description)
 
             if not model_description:
                 model_description = description(model)

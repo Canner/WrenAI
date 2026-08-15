@@ -138,10 +138,11 @@ intent_classification_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are intent examples only. SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
+SQL:
+{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -163,6 +164,8 @@ User's previous questions:
 {% for history in histories %}
 Question:
 {{ history.question }}
+SQL:
+{{ history.sql }}
 {% endfor %}
 {% endif %}
 
@@ -307,18 +310,20 @@ async def classify_intent(prompt: dict, generator: Any, generator_name: str) -> 
 
 
 @observe(capture_input=False)
-def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict:
+def post_process(
+    classify_intent: dict, construct_db_schemas: list[str], query: str
+) -> dict:
     try:
         results = orjson.loads(classify_intent.get("replies")[0])
         return {
-            "rephrased_question": results["rephrased_question"],
+            "rephrased_question": results.get("rephrased_question") or query,
             "intent": results["results"],
             "reasoning": results["reasoning"],
             "db_schemas": construct_db_schemas,
         }
     except Exception:
         return {
-            "rephrased_question": "",
+            "rephrased_question": query,
             "intent": "TEXT_TO_SQL",
             "reasoning": "",
             "db_schemas": construct_db_schemas,

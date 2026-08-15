@@ -28,9 +28,10 @@ Requirements:
 4. Put each generated description in `properties.description`.
 5. Make descriptions business-friendly, concise, factual, and useful for text-to-SQL retrieval.
 6. Ground descriptions only in the user prompt, model and column names, aliases, data types, existing descriptions, and provided schema context.
-7. Make each column description specific to that column. Do not reuse the same wording across columns in the same model.
-8. Do not invent unsupported tables, columns, relationships, metrics, or business concepts.
-9. Do not use generic boilerplate or copy the technical name as the whole description.
+7. Make each model and column description specific to that model or column. Never reuse identical descriptions across models or columns in the same response.
+8. If two columns have similar names or business meaning, explain the distinction using the exact column name, alias, type, or surrounding model context.
+9. Do not invent unsupported tables, columns, relationships, metrics, or business concepts.
+10. Do not use generic boilerplate or copy the technical name as the whole description.
 """
 
 user_prompt_template = """

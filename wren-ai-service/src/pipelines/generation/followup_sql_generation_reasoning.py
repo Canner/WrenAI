@@ -30,10 +30,11 @@ sql_generation_reasoning_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-Use these samples only to understand business intent and answer style. Do not copy table names, column names, aliases, functions, literals, or SQL fragments from them unless those identifiers are also declared in the current DATABASE SCHEMA.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
+SQL:
+{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -45,10 +46,11 @@ Question:
 {% endif %}
 
 ### User's QUERY HISTORY ###
-Use query history only to understand conversation context. Do not copy table names, column names, aliases, functions, literals, or SQL fragments from previous answers unless those identifiers are also declared in the current DATABASE SCHEMA.
 {% for history in histories %}
 Question:
 {{ history.question }}
+SQL:
+{{ history.sql }}
 {% endfor %}
 
 ### QUESTION ###
@@ -56,7 +58,7 @@ User's Question: {{ query }}
 Language: {{ language }}
 Current Time: {{ current_time }}
 
-Return only the reasoning plan described by the system instructions. If you mention a table, use `table:` plus an exact retrieved table name. If you mention a column, use `column:` plus an exact retrieved table and column name. Do not write SQL or possible SQL.
+Let's think step by step.
 """
 
 

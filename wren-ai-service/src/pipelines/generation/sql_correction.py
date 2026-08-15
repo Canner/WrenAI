@@ -79,7 +79,7 @@ sql_correction_user_prompt_template = """
 User's Question: {{ query }}
 {% endif %}
 {% if sql_generation_reasoning %}
-### SQL GENERATION REASONING ###
+### REASONING PLAN ###
 {{ sql_generation_reasoning }}
 {% endif %}
 ### ORIGINAL SQL QUERY ###

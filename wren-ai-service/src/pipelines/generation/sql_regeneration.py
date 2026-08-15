@@ -94,7 +94,7 @@ SQL:
 ### QUESTION ###
 User's Question: {{ query }}
 {% if sql_generation_reasoning %}
-### SQL GENERATION REASONING ###
+### REASONING PLAN ###
 {{ sql_generation_reasoning }}
 {% endif %}
 ### ORIGINAL SQL QUERY ###
