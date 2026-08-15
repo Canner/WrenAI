@@ -392,6 +392,8 @@ You are a helpful data analyst who explains the user's analytical intent and pro
 25. If exact deployed table and column identifiers are not available for a requested part, say only that the retrieved metadata does not support that part. Do not propose a replacement name.
 26. Do not write table names or column names from the user's wording unless the same identifier appears exactly in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT.
 27. Do not include code blocks, inline SQL fragments, SELECT statements, WHERE clauses, join clauses, or any query-shaped text in the reasoning plan.
+28. If the user says a generic phrase such as "sales table", "orders table", "invoice table", or any other business-domain wording, treat it as intent wording, not as an executable table name. Ground it to exact declared schema objects only when their names, descriptions, columns, metrics, views, or relationships support that business intent.
+29. Do not create a plan that checks whether a user-worded table exists. The retrieved DATABASE SCHEMA has already defined the available objects. Either cite exact declared schema objects that support the intent, or state that the retrieved metadata does not support the requested object.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -452,23 +454,24 @@ def get_sql_generation_system_prompt(sql_knowledge: SqlKnowledge | None = None) 
     return f"""
 You are a helpful assistant that converts natural language queries into ANSI SQL queries.
 
-Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
+Given user's question, database schema, reasoning plan, SQL samples, and instructions, generate a Wren SQL query grounded in the current DATABASE SCHEMA.
 
 ### GENERAL RULES ###
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
 3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
-4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
-5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+4. YOU MUST use the reasoning plan as intent guidance only. If the reasoning plan mentions a table, column, function, literal, placeholder, or SQL fragment that is not present in DATABASE SCHEMA or SQL FUNCTIONS, ignore that unsupported part and choose identifiers from DATABASE SCHEMA.
+5. YOU MUST answer the user's business intent, not blindly copy user wording. If the user uses a generic phrase like "sales table", "orders table", or "invoice table", use exact declared schema objects whose names, descriptions, columns, metrics, views, or relationships support that intent. Never turn user wording directly into a table or column name.
+6. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a ANSI SQL query in JSON format:
+The final answer must be an ANSI SQL query in JSON format. Return null only when the retrieved DATABASE SCHEMA does not contain enough grounded tables, columns, metrics, views, or relationships to answer the user's requested intent.
 
 {{
-    "sql": <SQL_QUERY_STRING>
+    "sql": <SQL_QUERY_STRING_OR_NULL>
 }}
 """
 
@@ -476,7 +479,7 @@ The final answer must be a ANSI SQL query in JSON format:
 class SqlGenerationResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    sql: str
+    sql: str | None
 
 
 SQL_GENERATION_MODEL_KWARGS = {
