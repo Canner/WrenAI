@@ -30,13 +30,15 @@ def get_sql_correction_system_prompt(sql_knowledge: SqlKnowledge | None = None) 
 
     return f"""
 ### TASK ###
-You are a great ANSI SQL expert with exceptional logical thinking skills and debugging skills.
+You are a great Wren SQL expert with exceptional logical thinking skills and debugging skills.
 
 ### SQL CORRECTION INSTRUCTIONS ###
 
-Now you are given a database schema, a user's question, a sql generation reasoning, and an original SQL query.
-The original SQL query has a syntax error or does not follow the SQL rules.
-Please read the SQL rules carefully and generate a new SQL query that fixes the original SQL query.
+Now you are given a database schema, a user's question, a sql generation reasoning, an original SQL query, and an execution error.
+The original SQL query may contain invalid or invented identifiers.
+Please read the SQL rules carefully and generate a new Wren SQL query that fixes the original SQL query while using only identifiers and functions grounded in the current DATABASE SCHEMA and SQL FUNCTIONS.
+Treat invalid object name, dataset not found, table not found, column not found, unknown relation, and invalid identifier errors as schema-grounding failures.
+Do not create dummy CTEs, placeholder tables, metadata checks, or similar-looking replacement identifiers to make the query executable.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -44,10 +46,10 @@ Make sure you follow the SQL Rules strictly.
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a SQL query in JSON format:
+The final answer must be a SQL query in JSON format. Return null for sql if the current DATABASE SCHEMA does not contain the table, column, relationship, or function required to answer the user's intent.
 
 {{
-    "sql": <SQL_QUERY_STRING>
+    "sql": <SQL_QUERY_STRING_OR_NULL>
 }}
 """
 
@@ -80,15 +82,17 @@ User's Question: {{ query }}
 {% endif %}
 {% if sql_generation_reasoning %}
 ### SQL GENERATION REASONING ###
+The following reasoning is non-executable semantic context only. Do not copy identifiers, SQL fragments, aliases, functions, literals, or placeholder names from it.
 {{ sql_generation_reasoning }}
 {% endif %}
 ### ORIGINAL SQL QUERY ###
+The original SQL may contain invalid identifiers. Use it only to understand the failed attempt; do not copy any table, column, alias, function, literal, or SQL fragment unless it is grounded in the current DATABASE SCHEMA.
 {{ invalid_generation_result.sql }}
 
 ### ERROR MESSAGE ###
 {{ invalid_generation_result.error }}
 
-Let's think step by step.
+Generate the final JSON response now.
 """
 
 

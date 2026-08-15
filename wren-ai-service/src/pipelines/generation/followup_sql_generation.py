@@ -60,11 +60,10 @@ generate one SQL query to best answer the user's question.
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+Use these samples only to understand business intent and answer style. Do not copy table names, column names, aliases, functions, literals, or SQL fragments from them unless those identifiers are also declared in the current DATABASE SCHEMA.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
-SQL:
-{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -79,10 +78,11 @@ SQL:
 User's Follow-up Question: {{ query }}
 {% if sql_generation_reasoning %}
 ### SQL GENERATION REASONING ###
+The following reasoning is non-executable semantic context only. Do not copy identifiers, SQL fragments, aliases, functions, literals, or placeholder names from it. Generate SQL only from DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, EXECUTABLE WREN IDENTIFIER CATALOG, and SQL FUNCTIONS.
 {{ sql_generation_reasoning }}
 {% endif %}
 
-Let's think step by step.
+Generate the final JSON response now.
 """
 
 

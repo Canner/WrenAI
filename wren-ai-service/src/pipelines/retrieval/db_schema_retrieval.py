@@ -51,6 +51,11 @@ The database schema includes structural, semantic, and business modeling metadat
 10. If the answer needs fields, filters, time dimensions, ordering, aggregations, or relationship keys from multiple related datasets, include every required related dataset and the columns needed from each one.
 11. Reuse calculated fields and metric measures or dimensions when they already represent the requested business concept.
 12. Follow only the relationships shown in the provided schema when selecting columns across datasets.
+13. Do not stop at a single top candidate when the question requires multiple related datasets.
+14. If the same business concept is represented by multiple modeled datasets, select each relevant dataset and the exact fields needed from each one.
+15. If multiple modeled datasets expose compatible fields for the same requested result shape, keep each relevant dataset so SQL generation can combine them with independently valid SELECT branches.
+16. If WREN RETRIEVED SEMANTIC CONTEXT is present, use sql_table_name_use_exactly and sql_column_name_use_exactly/sql_column_names_use_exactly as the exact names to return.
+17. Use semantic_context_not_sql_identifiers only to understand meaning; do not return labels, source metadata, aliases, lineage names, or rewritten variants as table or column names.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -208,7 +213,129 @@ def _build_view_ddl(content: dict) -> str:
 
 
 def _format_semantic_context(context: dict) -> str:
-    return f"/*\n{orjson.dumps(context).decode('utf-8')}\n*/\n"
+    return (
+        "/*\n"
+        "WREN RETRIEVED SEMANTIC CONTEXT\n"
+        f"{orjson.dumps(context).decode('utf-8')}\n"
+        f"{_format_identifier_contract(context)}"
+        "Only values in sql_identifier_contract, sql_column_name_use_exactly, and identifiers declared in the following DDL are executable in Wren SQL.\n"
+        "Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier explain meaning only and must not be copied, combined, or rewritten as executable SQL identifiers.\n"
+        "*/\n"
+        f"{_format_executable_identifier_catalog(context)}"
+    )
+
+
+def _format_executable_identifier_catalog(context: dict) -> str:
+    contract = context.get("sql_identifier_contract", {})
+    table_name = contract.get("sql_table_name_use_exactly")
+    column_names = contract.get("sql_column_names_use_exactly") or [
+        column["sql_column_name_use_exactly"]
+        for column in context.get("columns", [])
+        if column.get("sql_column_name_use_exactly")
+    ]
+    relationship_constraints = contract.get("relationship_constraints_use_exactly") or [
+        relationship["sql_relationship_constraint_use_exactly"]
+        for relationship in context.get("relationships", [])
+        if relationship.get("sql_relationship_constraint_use_exactly")
+    ]
+
+    lines = [
+        "### EXECUTABLE WREN IDENTIFIER CATALOG ###",
+        "Copy SQL identifiers only from this catalog or the following DDL.",
+        "Do not create identifiers from user wording, semantic descriptions, display labels, source names, physical names, failed SQL, or reasoning text.",
+        f"object_type: {context.get('object_type', '')}",
+    ]
+    if table_name:
+        lines.append(f"table: {table_name}")
+    if column_names:
+        lines.append("columns:")
+        lines.extend(f"- {column_name}" for column_name in column_names)
+    if relationship_constraints:
+        lines.append("relationships:")
+        lines.extend(f"- {constraint}" for constraint in relationship_constraints)
+    lines.extend(
+        [
+            "If a needed table, column, or relationship is not listed here or declared in the following DDL, return null for sql.",
+            "### END EXECUTABLE WREN IDENTIFIER CATALOG ###",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _format_identifier_contract(context: dict) -> str:
+    contract = context.get("sql_identifier_contract", {})
+    table_name = contract.get("sql_table_name_use_exactly")
+    column_names = contract.get("sql_column_names_use_exactly") or [
+        column["sql_column_name_use_exactly"]
+        for column in context.get("columns", [])
+        if column.get("sql_column_name_use_exactly")
+    ]
+    relationship_constraints = contract.get("relationship_constraints_use_exactly") or [
+        relationship["sql_relationship_constraint_use_exactly"]
+        for relationship in context.get("relationships", [])
+        if relationship.get("sql_relationship_constraint_use_exactly")
+    ]
+
+    lines = [
+        "WREN SQL IDENTIFIER CONTRACT",
+        f"object_type: {context.get('object_type', '')}",
+    ]
+    if table_name:
+        lines.append(f"sql_table_name_use_exactly: {table_name}")
+    if column_names:
+        lines.append("sql_column_names_use_exactly:")
+        lines.extend(f"- {column_name}" for column_name in column_names)
+    if relationship_constraints:
+        lines.append("relationship_constraints_use_exactly:")
+        lines.extend(f"- {constraint}" for constraint in relationship_constraints)
+    lines.extend(
+        [
+            "Only the identifiers listed in this contract and the identifiers declared in the following DDL are executable.",
+            "Semantic descriptions, source names, aliases, examples, and user wording are not executable identifiers.",
+            "END WREN SQL IDENTIFIER CONTRACT",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _included_relationship_columns(content: dict, tables: Optional[set[str]]) -> set:
+    relationship_columns = {
+        column.get("column")
+        for column in content["columns"]
+        if column["type"] == "FOREIGN_KEY"
+        and (not tables or set(column.get("tables", [])).issubset(tables))
+    }
+    relationship_columns.discard(None)
+    return relationship_columns
+
+
+def _included_columns(
+    content: dict, columns: Optional[set[str]], tables: Optional[set[str]]
+) -> list[dict]:
+    relationship_columns = _included_relationship_columns(content, tables)
+    return [
+        column
+        for column in content["columns"]
+        if column["type"] == "COLUMN"
+        and (
+            not columns
+            or column["name"] in columns
+            or column["name"] in relationship_columns
+            or column["is_primary_key"]
+        )
+        and column["data_type"].lower() != "unknown"
+    ]
+
+
+def _included_relationships(content: dict, tables: Optional[set[str]]) -> list[dict]:
+    return [
+        column
+        for column in content["columns"]
+        if column["type"] == "FOREIGN_KEY"
+        and (not tables or set(column.get("tables", [])).issubset(tables))
+    ]
 
 
 def _selected_columns_are_executable(content: dict, columns: set[str]) -> bool:
@@ -227,9 +354,50 @@ def _build_table_retrieval_context(
         content,
         columns=columns,
         tables=tables,
-        include_semantic_comments=True,
+        include_semantic_comments=False,
     )
-    return ddl, has_calculated_field, has_json_field
+    included_columns = _included_columns(content, columns, tables)
+    included_relationships = _included_relationships(content, tables)
+    context = _format_semantic_context(
+        {
+            "object_type": "model",
+            "sql_identifier_contract": {
+                "sql_table_name_use_exactly": content["name"],
+                "sql_column_names_use_exactly": [
+                    column["name"] for column in included_columns
+                ],
+                "relationship_constraints_use_exactly": [
+                    relationship["constraint"]
+                    for relationship in included_relationships
+                    if relationship.get("constraint")
+                ],
+            },
+            "semantic_context_not_sql_identifiers": {
+                "description": content["comment"],
+            },
+            "columns": [
+                {
+                    "sql_column_name_use_exactly": column["name"],
+                    "data_type": get_engine_supported_data_type(column["data_type"]),
+                    "is_primary_key": column["is_primary_key"],
+                    "semantic_context_not_sql_identifier": column["comment"],
+                }
+                for column in included_columns
+            ],
+            "relationships": [
+                {
+                    "semantic_context_not_sql_identifier": relationship["comment"],
+                    "sql_relationship_constraint_use_exactly": relationship[
+                        "constraint"
+                    ],
+                    "related_models_use_exactly": relationship.get("tables", []),
+                }
+                for relationship in included_relationships
+                if relationship.get("constraint")
+            ],
+        }
+    )
+    return f"{context}{ddl}", has_calculated_field, has_json_field
 
 
 ## Start of Pipeline

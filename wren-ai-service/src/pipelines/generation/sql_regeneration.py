@@ -34,17 +34,17 @@ def get_sql_regeneration_system_prompt(
 
     return f"""
 ### TASK ###
-You are a great ANSI SQL expert. Now you are given database schema and a user's question.
-Generate a new SQL query that answers the user's question.
-While generating the new SQL query, make sure to use the database schema and SQL rules.
+You are a great Wren SQL expert. Now you are given database schema and a user's question.
+Generate a new grounded Wren SQL query that answers the user's question.
+While generating the new SQL query, use only identifiers and functions grounded in the current DATABASE SCHEMA and SQL FUNCTIONS.
 
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a SQL query in JSON format:
+The final answer must be a SQL query in JSON format. Return null for sql if the current DATABASE SCHEMA does not contain the table, column, relationship, or function required to answer the user's intent.
 
 {{
-    "sql": <SQL_QUERY_STRING>
+    "sql": <SQL_QUERY_STRING_OR_NULL>
 }}
 """
 
@@ -76,11 +76,10 @@ sql_regeneration_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+Use these samples only to understand business intent and answer style. Do not copy table names, column names, aliases, functions, literals, or SQL fragments from them unless those identifiers are also declared in the current DATABASE SCHEMA.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
-SQL:
-{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -95,12 +94,14 @@ SQL:
 User's Question: {{ query }}
 {% if sql_generation_reasoning %}
 ### SQL GENERATION REASONING ###
+The following reasoning is non-executable semantic context only. Do not copy identifiers, SQL fragments, aliases, functions, literals, or placeholder names from it. Regenerate SQL only from DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, EXECUTABLE WREN IDENTIFIER CATALOG, and SQL FUNCTIONS.
 {{ sql_generation_reasoning }}
 {% endif %}
 ### ORIGINAL SQL QUERY ###
+The original SQL may contain invalid identifiers. Use it only to understand the failed attempt; do not copy any table, column, alias, function, literal, or SQL fragment unless it is grounded in the current DATABASE SCHEMA.
 {{ sql }}
 
-Let's think step by step.
+Generate the final JSON response now.
 """
 
 
