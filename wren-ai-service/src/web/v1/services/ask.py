@@ -161,17 +161,14 @@ class AskService:
         table_names = []
         error_message = None
         invalid_sql = None
-        allow_sql_generation_reasoning = (
-            self._allow_sql_generation_reasoning
-            and not ask_request.ignore_sql_generation_reasoning
-        )
+        allow_sql_generation_reasoning = False
         enable_column_pruning = (
             self._enable_column_pruning or ask_request.enable_column_pruning
         )
         allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
         allow_sql_diagnosis = self._allow_sql_diagnosis
         allow_sql_knowledge_retrieval = self._allow_sql_knowledge_retrieval
-        max_sql_correction_retries = self._max_sql_correction_retries
+        max_sql_correction_retries = 0
         current_sql_correction_retries = 0
         use_dry_plan = ask_request.use_dry_plan
         allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback

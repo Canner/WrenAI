@@ -166,7 +166,7 @@ def check_finish_reason(message: ChatMessage) -> None:
     if message.meta["finish_reason"] == "length":
         logger.warning(
             "The completion for index %s has been truncated before reaching a natural stopping point. "
-            "Finish reason: %s. Increase the configured output token limit to allow for longer completions.",
+            "Finish reason: %s. Increase the max_tokens parameter to allow for longer completions.",
             message.meta["index"],
             message.meta["finish_reason"],
         )

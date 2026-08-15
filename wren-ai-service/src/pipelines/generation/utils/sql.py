@@ -5,7 +5,7 @@ import aiohttp
 import orjson
 from haystack import component
 from haystack.dataclasses import ChatMessage
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from src.core.engine import (
     Engine,
@@ -392,6 +392,7 @@ You are a helpful data analyst who explains the user's analytical intent and pro
 25. If exact deployed table and column identifiers are not available for a requested part, say only that the retrieved metadata does not support that part. Do not propose a replacement name.
 26. Do not write table names or column names from the user's wording unless the same identifier appears exactly in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT.
 27. Do not include code blocks, inline SQL fragments, SELECT statements, WHERE clauses, join clauses, or any query-shaped text in the reasoning plan.
+
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
 """
@@ -483,18 +484,14 @@ The final answer must be JSON. Return a SQL string only when it is fully grounde
 
 
 class SqlGenerationResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     sql: str | None
 
 
 SQL_GENERATION_MODEL_KWARGS = {
-    "preserve_json_schema": True,
     "response_format": {
         "type": "json_schema",
         "json_schema": {
             "name": "sql_generation_result",
-            "strict": True,
             "schema": SqlGenerationResult.model_json_schema(),
         },
     }

@@ -150,7 +150,7 @@ class WrenUI(Engine):
         project_id: str | None = None,
         mdl_hash: str | None = None,
         timeout: float = settings.engine_timeout,
-        allow_fallback: bool = False,
+        allow_fallback: bool = True,
         **kwargs,
     ) -> Tuple[bool, str]:
         data = {
@@ -257,7 +257,7 @@ class WrenIbis(Engine):
         sql: str,
         data_source: str,
         timeout: float = settings.engine_timeout,
-        allow_fallback: bool = False,
+        allow_fallback: bool = True,
         **kwargs,
     ) -> Tuple[bool, str]:
         api_endpoint = f"{self._endpoint}/v3/connector/{data_source}/dry-plan"

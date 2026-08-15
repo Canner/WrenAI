@@ -27,9 +27,9 @@ class Settings(BaseSettings):
 
     # indexing and retrieval config
     column_indexing_batch_size: int = Field(default=50)
-    table_retrieval_size: int = Field(default=10)
+    table_retrieval_size: int = Field(default=50)
     table_column_retrieval_size: int = Field(default=100)
-    enable_column_pruning: bool = Field(default=False)
+    enable_column_pruning: bool = Field(default=True)
     historical_question_retrieval_similarity_threshold: float = Field(default=0.9)
     sql_pairs_similarity_threshold: float = Field(default=0.7)
     sql_pairs_retrieval_max_size: int = Field(default=10)
@@ -38,12 +38,12 @@ class Settings(BaseSettings):
 
     # generation config
     allow_intent_classification: bool = Field(default=True)
-    allow_sql_generation_reasoning: bool = Field(default=True)
+    allow_sql_generation_reasoning: bool = Field(default=False)
     allow_sql_functions_retrieval: bool = Field(default=True)
     allow_sql_diagnosis: bool = Field(default=True)
     allow_sql_knowledge_retrieval: bool = Field(default=False)
     max_histories: int = Field(default=5)
-    max_sql_correction_retries: int = Field(default=3)
+    max_sql_correction_retries: int = Field(default=0)
     sql_generation_timeout_seconds: float = Field(default=45.0)
     # Kept for compatibility with deployed configs. This controls the bounded
     # generation/correction calls when present.
