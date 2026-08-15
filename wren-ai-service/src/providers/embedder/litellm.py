@@ -1,14 +1,12 @@
 import asyncio
-import json
 import logging
 import os
-from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 
-import aiohttp
 import backoff
 import openai
 from haystack import Document, component
+from litellm import aembedding
 
 from src.core.provider import EmbedderProvider
 from src.providers.loader import provider
@@ -16,173 +14,8 @@ from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
-DEFAULT_MAX_EMBED_INPUT_CHARS = None
-MIN_EMBED_INPUT_CHARS = 128
 
-
-class EmbeddingRequestError(Exception):
-    pass
-
-
-def _normalize_model_name(model: str, api_base_url: Optional[str]) -> str:
-    # OpenAI-compatible local servers often expect the raw model name and will
-    # reject litellm-style "openai/<model>" prefixes.
-    model = str(model or "")
-    if api_base_url and model.startswith("openai/"):
-        return model.split("/", 1)[1]
-    return model
-
-
-def _should_use_minimal_http_client(api_base_url: Optional[str]) -> bool:
-    if not api_base_url:
-        return False
-
-    return "api.openai.com" not in str(api_base_url).lower()
-
-
-def _build_embedding_meta(response: Any) -> Dict[str, Any]:
-    usage = getattr(response, "usage", {}) or {}
-    usage_dict = dict(usage) if isinstance(usage, dict) or hasattr(usage, "__iter__") else {}
-
-    return {
-        "model": getattr(response, "model", ""),
-        "usage": usage_dict,
-    }
-
-
-def _get_usage_value(usage: Any, key: str) -> int:
-    if isinstance(usage, dict):
-        return usage.get(key, 0) or 0
-
-    return getattr(usage, key, 0) or 0
-
-
-def _coerce_embedding_response(payload: Dict[str, Any]) -> Any:
-    data = payload.get("data")
-    if not data and payload.get("embedding") is not None:
-        data = [{"embedding": payload["embedding"]}]
-
-    if not isinstance(data, list) or not data:
-        raise EmbeddingRequestError(
-            "Embedding provider returned an invalid response payload."
-        )
-
-    normalized_data = []
-    for item in data:
-        embedding = item.get("embedding") if isinstance(item, dict) else None
-        if embedding is None:
-            raise EmbeddingRequestError(
-                "Embedding provider response did not include an embedding."
-            )
-        normalized_data.append(SimpleNamespace(embedding=embedding))
-
-    return SimpleNamespace(
-        model=payload.get("model", ""),
-        data=normalized_data,
-        usage=payload.get("usage", {}) or {},
-    )
-
-
-async def _create_embedding_via_http(
-    *,
-    model: str,
-    input_text: str,
-    api_key: Optional[str],
-    api_base_url: str,
-    timeout: Optional[float],
-    **kwargs,
-):
-    endpoint = f"{remove_trailing_slash(api_base_url)}/embeddings"
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    payload = {
-        "model": _normalize_model_name(model, api_base_url),
-        "input": input_text,
-    }
-    payload.update({key: value for key, value in kwargs.items() if value is not None})
-
-    client_timeout = aiohttp.ClientTimeout(total=timeout) if timeout else None
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            endpoint,
-            json=payload,
-            headers=headers,
-            timeout=client_timeout,
-        ) as response:
-            body = await response.text()
-            if response.status >= 400:
-                raise EmbeddingRequestError(
-                    f"Embedding request failed with status {response.status}: {body}"
-                )
-
-            try:
-                payload = json.loads(body)
-            except json.JSONDecodeError as error:
-                raise EmbeddingRequestError(
-                    "Embedding provider returned a non-JSON response."
-                ) from error
-
-    return _coerce_embedding_response(payload)
-
-
-async def _create_embedding(
-    *,
-    model: str,
-    input_text: str,
-    api_key: Optional[str],
-    api_base_url: Optional[str],
-    timeout: Optional[float],
-    **kwargs,
-):
-    if _should_use_minimal_http_client(api_base_url):
-        return await _create_embedding_via_http(
-            model=model,
-            input_text=input_text,
-            api_key=api_key,
-            api_base_url=api_base_url,
-            timeout=timeout,
-            **kwargs,
-        )
-
-    client = openai.AsyncOpenAI(
-        api_key=api_key,
-        base_url=api_base_url,
-        timeout=timeout,
-    )
-    return await client.embeddings.create(
-        model=_normalize_model_name(model, api_base_url),
-        input=input_text,
-        **kwargs,
-    )
-
-
-def _truncate_text_for_embedding(
-    text: str, max_input_chars: Optional[int]
-) -> str:
-    if max_input_chars is None or len(text) <= max_input_chars:
-        return text
-
-    return text[:max_input_chars].rstrip() + "..."
-
-
-def _is_input_too_large_error(error: Exception) -> bool:
-    error_message = str(error).lower()
-    return any(
-        phrase in error_message
-        for phrase in [
-            "too large to process",
-            "context size has been exceeded",
-            "physical batch size",
-            "input (",
-        ]
-    )
-
-
-def _prepare_texts_to_embed(
-    documents: List[Document], max_input_chars: Optional[int]
-) -> List[str]:
+def _prepare_texts_to_embed(documents: List[Document]) -> List[str]:
     """
     Prepare the texts to embed by concatenating the Document text with the metadata fields to embed.
     """
@@ -193,17 +26,8 @@ def _prepare_texts_to_embed(
         # copied from OpenAI embedding_utils (https://github.com/openai/openai-python/blob/main/openai/embeddings_utils.py)
         # replace newlines, which can negatively affect performance.
         text_to_embed = text_to_embed.replace("\n", " ")
-        text_to_embed = _truncate_text_for_embedding(text_to_embed, max_input_chars)
         texts_to_embed.append(text_to_embed)
     return texts_to_embed
-
-
-def _iter_batches(items: List[str], batch_size: int) -> List[List[str]]:
-    effective_batch_size = max(batch_size, 1)
-    return [
-        items[index : index + effective_batch_size]
-        for index in range(0, len(items), effective_batch_size)
-    ]
 
 
 @component
@@ -214,27 +38,16 @@ class AsyncTextEmbedder:
         api_key: Optional[str] = None,
         api_base_url: Optional[str] = None,
         timeout: Optional[float] = None,
-        max_input_chars: Optional[int] = DEFAULT_MAX_EMBED_INPUT_CHARS,
-        query_prefix: str = "",
         **kwargs,
     ):
         self._api_key = api_key
         self._model = model
         self._api_base_url = api_base_url
         self._timeout = timeout
-        self._max_input_chars = (
-            max(max_input_chars, 1) if max_input_chars is not None else None
-        )
-        self._query_prefix = query_prefix
         self._kwargs = kwargs
 
     @component.output_types(embedding=List[float], meta=Dict[str, Any])
-    @backoff.on_exception(
-        backoff.expo,
-        (aiohttp.ClientError, asyncio.TimeoutError, EmbeddingRequestError, openai.APIError),
-        max_time=60.0,
-        max_tries=3,
-    )
+    @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
     async def run(self, text: str):
         if not isinstance(text, str):
             raise TypeError(
@@ -245,50 +58,22 @@ class AsyncTextEmbedder:
         # copied from OpenAI embedding_utils (https://github.com/openai/openai-python/blob/main/openai/embeddings_utils.py)
         # replace newlines, which can negatively affect performance.
         text_to_embed = text.replace("\n", " ")
-        if self._query_prefix and not text_to_embed.startswith(self._query_prefix):
-            text_to_embed = f"{self._query_prefix}{text_to_embed}"
-        text_to_embed = _truncate_text_for_embedding(
-            text_to_embed,
-            self._max_input_chars,
+
+        response = await aembedding(
+            model=self._model,
+            input=[text_to_embed],
+            api_key=self._api_key,
+            api_base=self._api_base_url,
+            timeout=self._timeout,
+            **self._kwargs,
         )
 
-        candidate_text = text_to_embed
-        while True:
-            try:
-                response = await _create_embedding(
-                    model=self._model,
-                    input_text=candidate_text,
-                    api_key=self._api_key,
-                    api_base_url=self._api_base_url,
-                    timeout=self._timeout,
-                    **self._kwargs,
-                )
-                break
-            except (
-                aiohttp.ClientError,
-                asyncio.TimeoutError,
-                EmbeddingRequestError,
-                openai.APIError,
-            ) as error:
-                if (
-                    not _is_input_too_large_error(error)
-                    or len(candidate_text) <= MIN_EMBED_INPUT_CHARS
-                ):
-                    raise
+        meta = {
+            "model": response.model,
+            "usage": dict(response.usage) if hasattr(response, "usage") else {},
+        }
 
-                next_max_chars = max(len(candidate_text) // 2, MIN_EMBED_INPUT_CHARS)
-                logger.warning(
-                    "Embedding input exceeded provider limits; retrying with %s characters",
-                    next_max_chars,
-                )
-                candidate_text = _truncate_text_for_embedding(
-                    candidate_text,
-                    next_max_chars,
-                )
-
-        meta = _build_embedding_meta(response)
-
-        return {"embedding": response.data[0].embedding, "meta": meta}
+        return {"embedding": response.data[0]["embedding"], "meta": meta}
 
 
 @component
@@ -300,8 +85,6 @@ class AsyncDocumentEmbedder:
         api_key: Optional[str] = None,
         api_base_url: Optional[str] = None,
         timeout: Optional[float] = None,
-        max_input_chars: Optional[int] = DEFAULT_MAX_EMBED_INPUT_CHARS,
-        document_prefix: str = "",
         **kwargs,
     ):
         self._api_key = api_key
@@ -309,90 +92,51 @@ class AsyncDocumentEmbedder:
         self._batch_size = batch_size
         self._api_base_url = api_base_url
         self._timeout = timeout
-        self._max_input_chars = (
-            max(max_input_chars, 1) if max_input_chars is not None else None
-        )
-        self._document_prefix = document_prefix
         self._kwargs = kwargs
 
     async def _embed_batch(
         self, texts_to_embed: List[str], batch_size: int
     ) -> Tuple[List[List[float]], Dict[str, Any]]:
-        # Some OpenAI-compatible local embedding servers accept scalar string input
-        # but fail on array input. Embed documents individually to avoid that path.
-        async def embed_single_text(text: str) -> Any:
-            candidate_text = text
-            while True:
-                try:
-                    return await _create_embedding(
-                        model=self._model,
-                        input_text=candidate_text,
-                        api_key=self._api_key,
-                        api_base_url=self._api_base_url,
-                        timeout=self._timeout,
-                        **self._kwargs,
-                    )
-                except (
-                    aiohttp.ClientError,
-                    asyncio.TimeoutError,
-                    EmbeddingRequestError,
-                    openai.APIError,
-                ) as error:
-                    if (
-                        not _is_input_too_large_error(error)
-                        or len(candidate_text) <= MIN_EMBED_INPUT_CHARS
-                    ):
-                        raise
+        async def embed_single_batch(batch: List[str]) -> Any:
+            return await aembedding(
+                model=self._model,
+                input=batch,
+                api_key=self._api_key,
+                api_base=self._api_base_url,
+                timeout=self._timeout,
+                **self._kwargs,
+            )
 
-                    next_max_chars = max(len(candidate_text) // 2, MIN_EMBED_INPUT_CHARS)
-                    logger.warning(
-                        "Embedding input exceeded provider limits; retrying with %s characters",
-                        next_max_chars,
-                    )
-                    candidate_text = _truncate_text_for_embedding(
-                        candidate_text,
-                        next_max_chars,
-                    )
+        batches = [
+            texts_to_embed[i : i + batch_size]
+            for i in range(0, len(texts_to_embed), batch_size)
+        ]
+        responses = await asyncio.gather(
+            *[embed_single_batch(batch) for batch in batches]
+        )
 
         all_embeddings = []
         meta: Dict[str, Any] = {}
 
-        for batch in _iter_batches(texts_to_embed, batch_size):
-            responses = await asyncio.gather(
-                *[embed_single_text(text) for text in batch]
-            )
+        for response in responses:
+            embeddings = [el["embedding"] for el in response.data]
+            all_embeddings.extend(embeddings)
 
-            for response in responses:
-                embeddings = [
-                    el.embedding if hasattr(el, "embedding") else el["embedding"]
-                    for el in response.data
-                ]
-                all_embeddings.extend(embeddings)
-
-                if "model" not in meta:
-                    meta["model"] = getattr(response, "model", "")
-                if "usage" not in meta:
-                    meta["usage"] = _build_embedding_meta(response)["usage"]
-                else:
-                    if hasattr(response, "usage"):
-                        meta["usage"]["prompt_tokens"] += _get_usage_value(
-                            response.usage,
-                            "prompt_tokens",
-                        )
-                        meta["usage"]["total_tokens"] += _get_usage_value(
-                            response.usage,
-                            "total_tokens",
-                        )
+            if "model" not in meta:
+                meta["model"] = response.model
+            if "usage" not in meta:
+                meta["usage"] = (
+                    dict(response.usage) if hasattr(response, "usage") else {}
+                )
+            else:
+                if hasattr(response, "usage"):
+                    meta["usage"]["prompt_tokens"] += response.usage.prompt_tokens
+                    meta["usage"]["total_tokens"] += response.usage.total_tokens
 
         return all_embeddings, meta
 
     @component.output_types(documents=List[Document], meta=Dict[str, Any])
-    @backoff.on_exception(
-        backoff.expo,
-        (aiohttp.ClientError, asyncio.TimeoutError, EmbeddingRequestError, openai.APIError),
-        max_time=60.0,
-        max_tries=3,
-    )
+    @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
     async def run(self, documents: List[Document]):
         if (
             not isinstance(documents, list)
@@ -404,20 +148,7 @@ class AsyncDocumentEmbedder:
                 "In case you want to embed a string, please use the AsyncTextEmbedder."
             )
 
-        if not documents:
-            return {"documents": documents, "meta": {}}
-
-        texts_to_embed = _prepare_texts_to_embed(
-            documents=documents,
-            max_input_chars=self._max_input_chars,
-        )
-        if self._document_prefix:
-            texts_to_embed = [
-                text
-                if text.startswith(self._document_prefix)
-                else f"{self._document_prefix}{text}"
-                for text in texts_to_embed
-            ]
+        texts_to_embed = _prepare_texts_to_embed(documents=documents)
 
         embeddings, meta = await self._embed_batch(
             texts_to_embed=texts_to_embed,
@@ -440,25 +171,12 @@ class LitellmEmbedderProvider(EmbedderProvider):
         ] = None,  # e.g. EMBEDDER_OPENAI_API_KEY, EMBEDDER_ANTHROPIC_API_KEY, etc.
         api_base: Optional[str] = None,
         timeout: float = 120.0,
-        query_prefix: Optional[str] = None,
-        document_prefix: Optional[str] = None,
         **kwargs,
     ):
         self._api_key = os.getenv(api_key_name) if api_key_name else None
         self._api_base = remove_trailing_slash(api_base) if api_base else None
         self._embedding_model = model
         self._timeout = timeout
-        is_nomic_embed_text = "nomic-embed-text" in model.lower()
-        self._query_prefix = (
-            "search_query: "
-            if query_prefix is None and is_nomic_embed_text
-            else query_prefix or ""
-        )
-        self._document_prefix = (
-            "search_document: "
-            if document_prefix is None and is_nomic_embed_text
-            else document_prefix or ""
-        )
         if "provider" in kwargs:
             del kwargs["provider"]
         self._kwargs = kwargs
@@ -469,7 +187,6 @@ class LitellmEmbedderProvider(EmbedderProvider):
             api_base_url=self._api_base,
             model=self._embedding_model,
             timeout=self._timeout,
-            query_prefix=self._query_prefix,
             **self._kwargs,
         )
 
@@ -479,6 +196,5 @@ class LitellmEmbedderProvider(EmbedderProvider):
             api_base_url=self._api_base,
             model=self._embedding_model,
             timeout=self._timeout,
-            document_prefix=self._document_prefix,
             **self._kwargs,
         )
