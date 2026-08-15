@@ -122,7 +122,7 @@ async def get(
     return GetResponse(
         id=resource.id,
         status=resource.status,
-        response=resource.response and _formatter(resource.response),
+        response=_formatter(resource.response),
         error=resource.error and resource.error.model_dump(),
         trace_id=resource.trace_id,
     )

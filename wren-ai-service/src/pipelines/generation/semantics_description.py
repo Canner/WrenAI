@@ -32,6 +32,7 @@ Requirements:
 8. If two columns have similar names or business meaning, explain the distinction using the exact column name, alias, type, or surrounding model context.
 9. Do not invent unsupported tables, columns, relationships, metrics, or business concepts.
 10. Do not use generic boilerplate or copy the technical name as the whole description.
+11. Return complete JSON only. Do not include markdown, comments, examples, or explanatory text outside the JSON object.
 """
 
 user_prompt_template = """
@@ -43,6 +44,7 @@ Localization Language: {{ language }}
 Write semantic descriptions for every picked model and every column.
 For each model, describe the real-world records represented and the analytical questions it can support.
 For each column, describe the business meaning and analytical use of that exact field.
+If an existing description is already meaningful, preserve its business meaning while making it clearer and more useful for retrieval.
 Keep every description grounded in the picked model metadata and user prompt.
 """
 

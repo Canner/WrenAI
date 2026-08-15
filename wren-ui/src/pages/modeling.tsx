@@ -292,7 +292,8 @@ const resolveRelationshipFieldParts = (
 const renderIcon = (IconComponent) => React.createElement(IconComponent as any);
 const ASSISTANT_CANCELLED = 'ASSISTANT_CANCELLED';
 const ASSISTANT_SAVE_MESSAGE_KEY = 'modeling-ai-assistant-save';
-const ASSISTANT_POLL_INTERVAL_MS = 1000;
+const ASSISTANT_INITIAL_POLL_INTERVAL_MS = 1000;
+const ASSISTANT_MAX_POLL_INTERVAL_MS = 5000;
 const ASSISTANT_MAX_POLL_ATTEMPTS = 1800;
 
 export default function Modeling() {
@@ -678,8 +679,12 @@ export default function Modeling() {
       if (status === 'failed') {
         throw new Error(payload.error?.message || 'AI assistant failed.');
       }
+      const pollInterval = Math.min(
+        ASSISTANT_INITIAL_POLL_INTERVAL_MS * Math.max(1, attempt + 1),
+        ASSISTANT_MAX_POLL_INTERVAL_MS,
+      );
       await new Promise((resolve) =>
-        setTimeout(resolve, ASSISTANT_POLL_INTERVAL_MS),
+        setTimeout(resolve, pollInterval),
       );
     }
     throw new Error('AI assistant timed out.');
