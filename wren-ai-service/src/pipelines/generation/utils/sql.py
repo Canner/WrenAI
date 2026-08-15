@@ -89,7 +89,7 @@ class SQLGenPostProcessor:
                 "sql": "",
                 "original_sql": "",
                 "type": "NO_RELEVANT_SQL",
-                "error": "No grounded SQL was generated from the current schema.",
+                "error": "No relevant SQL",
                 "correlation_id": "",
             }
 
@@ -290,57 +290,27 @@ _DEFAULT_JSON_FIELD_INSTRUCTIONS = """
 sql_samples_instructions = """
 #### Instructions for SQL Samples ####
 
-Finally, you will learn from the sample questions provided in the input. These samples demonstrate intent and response style for this specific database.
+Finally, you will learn from sample questions and SQL queries provided in the input.
 
-For each sample, you should:
-1. Study the question that explains what the query aims to accomplish
-2. Use these samples as intent and style context only, but treat the DATABASE SCHEMA as the only valid source of executable table and column names
-3. Adapt the intent patterns to match new query requirements while maintaining consistent style and approach
-4. Never copy table names, column names, aliases, literal values, placeholders, or functions from samples
-
-The samples will help you understand:
-- Common analytical intents
-- Common aggregation requests
-- Preferred answer style
-
-When generating new queries, follow similar intent patterns when applicable, while adapting them to the specific requirements of each new query.
-
-Learn about the user's intent from the samples and generate SQL from the current DATABASE SCHEMA and SQL FUNCTIONS only.
+For each sample, you should understand the user's intent and learn how to use the schema structures in SQL.
+When generating new queries, refer to the samples and adapt their patterns to the current question.
 """
 
 
 sql_generation_reasoning_system_prompt = """
 ### TASK ###
-You are a helpful data analyst who explains the user's analytical intent and provides a concise, non-executable reasoning plan for answering the user's question.
+You are a helpful data analyst who explains the user's analytical intent and provides a concise reasoning plan for answering the user's question.
 
 ### INSTRUCTIONS ###
 1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
-2. Explicitly state requested timeframes in natural language only. Mention exact date/time columns only when they are declared in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT.
-3. For top, bottom, first, last, highest, or lowest requests, describe the requested ordering and limit in natural language. Mention exact ordering columns or measures only when they are declared in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT.
-4. Do not mention SQL functions, operators, or expression syntax in the reasoning plan.
-5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
-6. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
-7. Give a step by step reasoning plan in order to answer user's question.
-8. The reasoning plan should be in the language same as the language user provided in the input.
-9. Don't include SQL in the reasoning plan.
-10. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
-11. Do not include ```markdown or ``` in the answer.
-12. Mention table names only by writing the literal prefix `table:` followed by an exact table name declared in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT.
-13. Mention column names only by writing the literal prefix `column:` followed by an exact declared table name, a dot, and an exact column name declared for that table in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT.
-14. Do not mention aliases, source names, physical names, lineage names, schema names, database names, literal values, placeholders, or identifier-like labels from comments, SQL samples, failed SQL, or user wording as executable identifiers.
-15. Do not write SQL, possible SQL, sample SQL, assumed SQL, SQL clauses, SQL functions, code blocks, or executable expressions in the reasoning plan. Do not write date/time expressions in the reasoning plan.
-16. Never use phrases such as "assuming the table contains", "assuming this column exists", or "the SQL could look like this". If the available metadata does not clearly support part of the request, state that the available metadata does not support that part without naming missing objects.
-17. If the question asks for a concept, filter, sort, or timeframe, describe the requested operation in business language and cite exact declared tables or columns only when they are grounded by DATABASE SCHEMA.
-18. Interpret the user's intent from wording, aliases, display labels, descriptions, calculated fields, metrics, and relationships, then ground the plan in exact declared schema identifiers.
-19. If multiple schema objects are required, identify the exact declared relationship path from DATABASE SCHEMA. If no relationship path is declared, say that the retrieved metadata does not provide a join path.
-20. Treat SQL samples and query history as examples only. Do not copy table names, column names, aliases, values, placeholders, functions, or SQL patterns from them into the reasoning plan unless they also appear exactly in DATABASE SCHEMA.
-21. Do not mention placeholder SQL, metadata-table checks, INFORMATION_SCHEMA, or replacement instructions to the user.
-22. The reasoning plan is semantic context for intent only, not a source of executable identifiers. SQL generation must re-read DATABASE SCHEMA and WREN SQL IDENTIFIER CONTRACT before using any identifier.
-23. ONLY SHOWING the reasoning plan in bullet points.
-24. Do not use the words "assume", "assuming", "likely", "possible", "might", or "example" when describing tables, columns, filters, or SQL.
-25. If exact deployed table and column identifiers are not available for a requested part, say only that the retrieved metadata does not support that part. Do not propose a replacement name.
-26. Do not write table names or column names from the user's wording unless the same identifier appears exactly in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT.
-27. Do not include code blocks, inline SQL fragments, SELECT statements, WHERE clauses, join clauses, or any query-shaped text in the reasoning plan.
+2. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
+3. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
+4. Give a step by step reasoning plan in order to answer user's question.
+5. The reasoning plan should be in the language same as the language user provided in the input.
+6. Don't include SQL in the reasoning plan.
+7. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
+8. Do not include ```markdown or ``` in the answer.
+9. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -424,7 +394,7 @@ The final answer must be a ANSI SQL query in JSON format:
 
 
 class SqlGenerationResult(BaseModel):
-    sql: str | None
+    sql: str
 
 
 SQL_GENERATION_MODEL_KWARGS = {
