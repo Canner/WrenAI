@@ -19,33 +19,38 @@ logger = logging.getLogger("wren-ai-service")
 
 
 system_prompt = """
-Generate high-quality semantic descriptions for selected data models and their columns.
+Generate high-quality semantic metadata for selected data models and their columns.
 
 Requirements:
 1. Return valid JSON that matches the provided schema.
 2. Return every input model exactly once and every input column exactly once.
 3. Preserve every model and column `name` exactly as provided.
 4. Put each generated description in `properties.description`.
-5. Make descriptions business-friendly, concise, factual, and useful for text-to-SQL retrieval.
-6. Ground descriptions only in the user prompt, model and column names, aliases, data types, existing descriptions, and provided schema context.
-7. Make each model and column description specific to that model or column. Never reuse identical descriptions across models or columns in the same response.
-8. If two columns have similar names or business meaning, explain the distinction using the exact column name, alias, type, or surrounding model context.
-9. Do not invent unsupported tables, columns, relationships, metrics, or business concepts.
-10. Do not use generic boilerplate or copy the technical name as the whole description.
-11. Return complete JSON only. Do not include markdown, comments, examples, or explanatory text outside the JSON object.
+5. Put natural-language aliases and synonyms in `properties.displayName` as a short comma-separated phrase. Do not put SQL identifiers there.
+6. Make descriptions business-friendly, factual, and useful for text-to-SQL retrieval.
+7. Include business context, common analytical use, and the field role when it is supported by the name, type, or relationships: ID/key, date/time, measure, dimension, status, currency, quantity, cost, revenue, rate, percentage, or code.
+8. Ground descriptions and aliases only in the user prompt, model and column names, aliases, data types, existing descriptions, and provided schema/relationship context.
+9. Use relationship context to distinguish foreign keys, join keys, facts, and dimensions, but do not invent unsupported joins.
+10. Make each model and column description specific to that model or column. Never reuse identical descriptions across models or columns in the same response.
+11. If two columns have similar names or business meaning, explain the distinction using the exact column name, alias, type, or surrounding model context.
+12. Do not invent unsupported tables, columns, relationships, metrics, or business concepts.
+13. Do not use generic boilerplate or copy the technical name as the whole description.
+14. Return complete JSON only. Do not include markdown, comments, examples, or explanatory text outside the JSON object.
 """
 
 user_prompt_template = """
 ### Input:
 User's prompt: {{ user_prompt }}
 Picked models: {{ picked_models }}
+Relationship context: {{ relationship_context }}
 Localization Language: {{ language }}
 
 Write semantic descriptions for every picked model and every column.
 For each model, describe the real-world records represented and the analytical questions it can support.
 For each column, describe the business meaning and analytical use of that exact field.
+For each model and column, generate aliases/synonyms that users may naturally type in questions and place them in properties.displayName.
 If an existing description is already meaningful, preserve its business meaning while making it clearer and more useful for retrieval.
-Keep every description grounded in the picked model metadata and user prompt.
+Keep every description and alias grounded in the picked model metadata, user prompt, data types, and relationship context.
 """
 
 
@@ -71,7 +76,7 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
                     "description": _text(
                         _properties(column).get("description", "")
                     ),
-                    "alias": clean_display_name(
+                    "displayName": clean_display_name(
                         _text(_properties(column).get("displayName", ""))
                     ),
                 },
@@ -86,7 +91,7 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
             "columns": column_formatter(model.get("columns", [])),
             "properties": {
                 "description": _text(_properties(model).get("description", "")),
-                "alias": clean_display_name(
+                "displayName": clean_display_name(
                     _text(_properties(model).get("displayName", ""))
                 ),
             },
@@ -100,14 +105,45 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
 
 
 @observe(capture_input=False)
+def relationship_context(mdl: dict, selected_models: list[str]) -> list[dict]:
+    selected = set(selected_models)
+    relationships = []
+
+    for relationship in mdl.get("relationships", []) or []:
+        if not isinstance(relationship, dict):
+            continue
+
+        models = relationship.get("models", []) or []
+        if not any(model in selected for model in models):
+            continue
+
+        properties = relationship.get("properties")
+        properties = properties if isinstance(properties, dict) else {}
+        relationships.append(
+            {
+                "name": relationship.get("name", ""),
+                "models": models,
+                "joinType": relationship.get("joinType", ""),
+                "condition": relationship.get("condition", ""),
+                "description": relationship.get("description")
+                or properties.get("description", ""),
+            }
+        )
+
+    return relationships
+
+
+@observe(capture_input=False)
 def prompt(
     picked_models: list[dict],
+    relationship_context: list[dict],
     user_prompt: str,
     prompt_builder: PromptBuilder,
     language: str,
 ) -> dict:
     _prompt = prompt_builder.run(
         picked_models=picked_models,
+        relationship_context=relationship_context,
         user_prompt=user_prompt,
         language=language,
     )
@@ -172,6 +208,7 @@ def output(normalize: dict, picked_models: list[dict]) -> dict:
 ## End of Pipeline
 class ModelProperties(BaseModel):
     description: str
+    displayName: str = ""
 
 
 class ModelColumns(BaseModel):

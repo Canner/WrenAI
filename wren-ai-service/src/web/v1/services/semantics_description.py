@@ -83,6 +83,7 @@ class SemanticsDescription:
             "user_prompt": request.user_prompt,
             "language": request.configurations.language,
         }
+        relationships = mdl_dict.get("relationships", []) or []
 
         selected_models = [
             model
@@ -113,6 +114,17 @@ class SemanticsDescription:
         batch_model_names: set[str] = set()
         batch_column_count = 0
 
+        def relationships_for(model_names: set[str]) -> list[dict]:
+            return [
+                relationship
+                for relationship in relationships
+                if isinstance(relationship, dict)
+                and any(
+                    model_name in model_names
+                    for model_name in relationship.get("models", []) or []
+                )
+            ]
+
         def flush_batch():
             nonlocal batch_models, batch_model_names, batch_column_count
             if not batch_models:
@@ -120,7 +132,10 @@ class SemanticsDescription:
             chunks.append(
                 {
                     **template,
-                    "mdl": {"models": batch_models},
+                    "mdl": {
+                        "models": batch_models,
+                        "relationships": relationships_for(batch_model_names),
+                    },
                     "selected_models": [model["name"] for model in batch_models],
                 }
             )
@@ -225,18 +240,14 @@ class SemanticsDescription:
                     {
                         "name": column_name,
                         "type": column.get("type", ""),
-                        "properties": {
-                            "description": self._description(column),
-                        },
+                        "properties": self._metadata_properties(column),
                     }
                 )
 
             output[model_name] = {
                 "name": model_name,
                 "columns": columns,
-                "properties": {
-                    "description": self._description(model),
-                },
+                "properties": self._metadata_properties(model),
             }
 
         return output
@@ -302,6 +313,17 @@ class SemanticsDescription:
             )
             return "" if value is None else str(value).strip()
 
+        def display_name(payload: dict) -> str:
+            payload_properties = properties(payload)
+            value = (
+                payload.get("displayName")
+                or payload.get("alias")
+                or payload_properties.get("displayName")
+                or payload_properties.get("alias")
+                or ""
+            )
+            return "" if value is None else str(value).strip()
+
         def normalized_description(value: str) -> str:
             return " ".join(value.casefold().split())
 
@@ -324,6 +346,11 @@ class SemanticsDescription:
                         **properties(generated),
                         "description": description(model_data),
                     }
+                if not display_name(generated) and display_name(model_data):
+                    generated["properties"] = {
+                        **properties(generated),
+                        "displayName": display_name(model_data),
+                    }
                 generated.setdefault("columns", [])
                 generated["columns"].extend(model_data.get("columns", []))
 
@@ -336,6 +363,7 @@ class SemanticsDescription:
             generated_model = generated_by_model.get(model_name, {})
 
             model_description = description(generated_model)
+            model_display_name = display_name(generated_model)
 
             generated_columns: dict[str, dict] = {}
             for column in generated_model.get("columns", []):
@@ -365,8 +393,12 @@ class SemanticsDescription:
                 column_name = column.get("name", "")
                 generated_column = generated_columns.get(column_name)
                 original_description = description(column)
+                original_display_name = display_name(column)
                 generated_description = (
                     description(generated_column) if generated_column else ""
+                )
+                generated_display_name = (
+                    display_name(generated_column) if generated_column else ""
                 )
                 normalized_generated_description = normalized_description(
                     generated_description
@@ -406,12 +438,22 @@ class SemanticsDescription:
                         "type": column.get("type", ""),
                         "properties": {
                             "description": column_description,
+                            **(
+                                {
+                                    "displayName": generated_display_name
+                                    or original_display_name
+                                }
+                                if generated_display_name or original_display_name
+                                else {}
+                            ),
                         },
                     }
                 )
 
             if not model_description:
                 model_description = description(model)
+            if not model_display_name:
+                model_display_name = display_name(model)
             if not model_description and not model.get("columns", []):
                 logger.warning(
                     "Semantics description output omitted selected model: %s",
@@ -424,10 +466,26 @@ class SemanticsDescription:
                 "columns": columns,
                 "properties": {
                     "description": model_description,
+                    **({"displayName": model_display_name} if model_display_name else {}),
                 },
             }
 
         return response
+
+    def _metadata_properties(self, payload: dict) -> dict:
+        properties = {
+            "description": self._description(payload),
+        }
+        display_name = (
+            payload.get("displayName")
+            or payload.get("alias")
+            or self._properties(payload).get("displayName")
+            or self._properties(payload).get("alias")
+            or ""
+        )
+        if display_name:
+            properties["displayName"] = str(display_name).strip()
+        return properties
 
     @observe(name="Generate Semantics Description")
     @trace_metadata

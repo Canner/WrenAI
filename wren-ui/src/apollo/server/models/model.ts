@@ -47,6 +47,7 @@ export interface UpdateModelMetadataInput {
 
 export interface SaveModelingSemanticInput {
   modelId: number;
+  displayName?: string;
   description?: string;
   columns: Array<ColumnMetadataInput>;
 }

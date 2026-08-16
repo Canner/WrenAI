@@ -386,6 +386,7 @@ export const typeDefs = gql`
 
   input SaveModelingSemanticInput {
     modelId: Int!
+    displayName: String
     description: String
     columns: [UpdateColumnMetadataInput!]!
   }

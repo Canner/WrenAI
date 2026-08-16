@@ -692,10 +692,22 @@ export default function Modeling() {
 
   const normalizeSemanticModel = (name: string, value: any): any => ({
     name: value?.name || name,
+    displayName:
+      value?.displayName ||
+      value?.alias ||
+      value?.properties?.displayName ||
+      value?.properties?.alias ||
+      '',
     description: value?.description || value?.properties?.description || '',
     columns: (value?.columns || []).map((column) => ({
       name: column?.name,
       type: column?.type,
+      displayName:
+        column?.displayName ||
+        column?.alias ||
+        column?.properties?.displayName ||
+        column?.properties?.alias ||
+        '',
       description: column?.description || column?.properties?.description || '',
     })),
   });
@@ -871,6 +883,38 @@ export default function Modeling() {
     );
   };
 
+  const updateSemanticModelDisplayName = (
+    modelName: string,
+    displayName: string,
+  ) => {
+    setSemanticResult((models) =>
+      models.map((model) =>
+        model.name === modelName ? { ...model, displayName } : model,
+      ),
+    );
+  };
+
+  const updateSemanticColumnDisplayName = (
+    modelName: string,
+    columnName: string,
+    displayName: string,
+  ) => {
+    setSemanticResult((models) =>
+      models.map((model) =>
+        model.name === modelName
+          ? {
+              ...model,
+              columns: (model.columns || []).map((column) =>
+                column.name === columnName
+                  ? { ...column, displayName }
+                  : column,
+              ),
+            }
+          : model,
+      ),
+    );
+  };
+
   const updateSemanticColumnDescription = (
     modelName: string,
     columnName: string,
@@ -961,6 +1005,7 @@ export default function Modeling() {
           if (!diagramModel) return [];
           return {
             modelId: diagramModel.modelId,
+            displayName: model.displayName,
             description: model.description,
             columns: (model.columns || [])
               .map((column) => {
@@ -970,7 +1015,7 @@ export default function Modeling() {
                 return field
                   ? {
                       id: field.columnId,
-                      displayName: field.displayName,
+                      displayName: column.displayName || field.displayName,
                       description: column.description,
                     }
                   : null;
@@ -1270,6 +1315,17 @@ export default function Modeling() {
                               )
                             }
                           />
+                          <div className="mb-2">Alias / synonyms</div>
+                          <Input
+                            className="mb-4"
+                            value={model.displayName}
+                            onChange={(event) =>
+                              updateSemanticModelDisplayName(
+                                model.name,
+                                event.target.value,
+                              )
+                            }
+                          />
                           <Table
                             size="small"
                             rowKey="name"
@@ -1279,8 +1335,19 @@ export default function Modeling() {
                               { title: 'Name', dataIndex: 'name', width: 180 },
                               {
                                 title: 'Alias',
-                                dataIndex: 'name',
                                 width: 180,
+                                render: (_value, column) => (
+                                  <Input
+                                    value={column.displayName}
+                                    onChange={(event) =>
+                                      updateSemanticColumnDisplayName(
+                                        model.name,
+                                        column.name,
+                                        event.target.value,
+                                      )
+                                    }
+                                  />
+                                ),
                               },
                               { title: 'Type', dataIndex: 'type', width: 140 },
                               {

@@ -503,15 +503,30 @@ export class ModelResolver {
 
     await Promise.all(
       requestedItems.map(async (item) => {
-        if (isNil(item.description)) return;
+        if (isNil(item.description) && isNil(item.displayName)) return;
 
         const model = modelById.get(item.modelId);
-        const properties = model?.properties ? JSON.parse(model.properties) : {};
-        properties.description = this.determineMetadataValue(item.description);
+        const modelMetadata: Partial<Model> = {};
 
-        await ctx.modelRepository.updateOne(item.modelId, {
-          properties: JSON.stringify(properties),
-        });
+        if (!isNil(item.displayName)) {
+          modelMetadata.displayName = this.determineMetadataValue(
+            item.displayName,
+          );
+        }
+
+        if (!isNil(item.description)) {
+          const properties = model?.properties
+            ? JSON.parse(model.properties)
+            : {};
+          properties.description = this.determineMetadataValue(
+            item.description,
+          );
+          modelMetadata.properties = JSON.stringify(properties);
+        }
+
+        if (!isEmpty(modelMetadata)) {
+          await ctx.modelRepository.updateOne(item.modelId, modelMetadata);
+        }
       }),
     );
 

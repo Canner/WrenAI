@@ -303,6 +303,60 @@ def test_batch_processing_groups_small_models_by_prompt(
     ]
 
 
+def test_batch_processing_keeps_relationship_context(
+    service: SemanticsDescription,
+):
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Describe the models",
+        selected_models=["orders", "customers"],
+        mdl=orjson.dumps(
+            {
+                "models": [
+                    {
+                        "name": "orders",
+                        "columns": [{"name": "customer_id", "type": "varchar"}],
+                    },
+                    {
+                        "name": "customers",
+                        "columns": [{"name": "customer_id", "type": "varchar"}],
+                    },
+                    {
+                        "name": "products",
+                        "columns": [{"name": "product_id", "type": "varchar"}],
+                    },
+                ],
+                "relationships": [
+                    {
+                        "name": "OrdersCustomers",
+                        "models": ["orders", "customers"],
+                        "joinType": "MANY_TO_ONE",
+                        "condition": "orders.customer_id = customers.customer_id",
+                    },
+                    {
+                        "name": "ProductsOnly",
+                        "models": ["products"],
+                        "joinType": "ONE_TO_ONE",
+                        "condition": "",
+                    },
+                ],
+            }
+        ).decode(),
+    )
+
+    chunks = service._chunking(orjson.loads(request.mdl), request, chunk_size=2)
+
+    assert len(chunks) == 1
+    assert chunks[0]["mdl"]["relationships"] == [
+        {
+            "name": "OrdersCustomers",
+            "models": ["orders", "customers"],
+            "joinType": "MANY_TO_ONE",
+            "condition": "orders.customer_id = customers.customer_id",
+        }
+    ]
+
+
 def test_default_batch_splits_large_column_groups_by_model(
     service: SemanticsDescription,
 ):
@@ -397,6 +451,70 @@ async def test_column_chunk_outputs_merge_into_single_model(
     )
     assert len(response.response["orders"]["columns"]) == 41
     assert service._pipelines["semantics_description"].run.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_generated_aliases_are_preserved():
+    mock_pipeline = AsyncMock()
+    service = SemanticsDescription(pipelines={"semantics_description": mock_pipeline})
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Sales reporting dataset",
+        selected_models=["orders"],
+        mdl=orjson.dumps(
+            {
+                "models": [
+                    {
+                        "name": "orders",
+                        "columns": [
+                            {"name": "order_id", "type": "varchar"},
+                            {"name": "net_revenue", "type": "float"},
+                        ],
+                    }
+                ]
+            }
+        ).decode(),
+    )
+    mock_pipeline.run.return_value = {
+        "output": {
+            "orders": {
+                "name": "orders",
+                "properties": {
+                    "description": "Customer order transaction records.",
+                    "displayName": "orders, sales orders, transactions",
+                },
+                "columns": [
+                    {
+                        "name": "order_id",
+                        "properties": {
+                            "description": "Unique identifier for an order.",
+                            "displayName": "order id, order number",
+                        },
+                    },
+                    {
+                        "name": "net_revenue",
+                        "properties": {
+                            "description": "Net revenue measure for the order.",
+                            "displayName": "net revenue, sales amount",
+                        },
+                    },
+                ],
+            }
+        }
+    }
+
+    await service.generate(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    assert response.response["orders"]["properties"]["displayName"] == (
+        "orders, sales orders, transactions"
+    )
+    assert [
+        column["properties"]["displayName"]
+        for column in response.response["orders"]["columns"]
+    ] == ["order id, order number", "net revenue, sales amount"]
 
 
 @pytest.mark.asyncio
