@@ -216,7 +216,7 @@ class FollowUpSQLGeneration(BasicPipeline):
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
 
-        if use_dry_plan:
+        if project_id or use_dry_plan:
             metadata = await retrieve_metadata(
                 project_id or "", self._retriever, mdl_hash
             )

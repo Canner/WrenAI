@@ -214,6 +214,7 @@ class AskFeedbackService:
                 ]["invalid_generation_result"]:
                     if failed_dry_run_result["type"] not in (
                         "TIME_OUT",
+                        "NO_RELEVANT_SQL",
                         "SQL_GENERATION",
                     ):
                         original_sql = failed_dry_run_result["original_sql"]

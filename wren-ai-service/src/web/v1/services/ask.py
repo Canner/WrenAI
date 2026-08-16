@@ -527,6 +527,7 @@ class AskService:
                     while current_sql_correction_retries < max_sql_correction_retries:
                         if failed_dry_run_result["type"] in (
                             "TIME_OUT",
+                            "NO_RELEVANT_SQL",
                             "SQL_GENERATION",
                         ):
                             error_message = failed_dry_run_result["error"]

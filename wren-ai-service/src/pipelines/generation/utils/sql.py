@@ -22,6 +22,68 @@ class SQLGenPostProcessor:
     def __init__(self, engine: Engine):
         self._engine = engine
 
+    def _looks_like_sql(self, value: str) -> bool:
+        normalized = value.strip().casefold()
+        return normalized.startswith("select ") or normalized.startswith("with ")
+
+    def _json_object(self, value: str) -> dict[str, Any]:
+        parsed = orjson.loads(value)
+        return parsed if isinstance(parsed, dict) else {}
+
+    def _extract_sql_from_object(self, generation_result: dict[str, Any]) -> str:
+        sql = generation_result.get("sql")
+        if isinstance(sql, str) and sql.strip():
+            return clean_generation_result(sql)
+
+        arguments = generation_result.get("arguments")
+        if isinstance(arguments, str) and arguments.strip():
+            try:
+                arguments = self._json_object(arguments)
+            except orjson.JSONDecodeError:
+                arguments = {}
+
+        if isinstance(arguments, dict):
+            for key in ("sql", "query"):
+                value = arguments.get(key)
+                if isinstance(value, str) and self._looks_like_sql(value):
+                    return clean_generation_result(value)
+
+        query = generation_result.get("query")
+        if isinstance(query, str) and self._looks_like_sql(query):
+            return clean_generation_result(query)
+
+        return ""
+
+    def _extract_sql(self, replies: List[str] | List[List[str]]) -> tuple[str, str]:
+        if not replies:
+            return "", "SQL generation response was empty."
+
+        reply = replies[0]
+        if isinstance(reply, list):
+            reply = reply[0] if reply else ""
+
+        cleaned_generation_result = clean_generation_result(reply)
+        if not cleaned_generation_result:
+            return "", "SQL generation response was empty."
+
+        if cleaned_generation_result.startswith("{"):
+            try:
+                generation_result = self._json_object(cleaned_generation_result)
+            except orjson.JSONDecodeError as e:
+                return "", f"SQL generation response was not valid JSON: {e}"
+
+            sql = self._extract_sql_from_object(generation_result)
+            if sql:
+                return sql, ""
+
+            return (
+                "",
+                "SQL generation response did not include a supported SQL field: "
+                f"{generation_result}",
+            )
+
+        return cleaned_generation_result, ""
+
     @component.output_types(
         valid_generation_result=Dict[str, Any],
         invalid_generation_result=Dict[str, Any],
@@ -37,32 +99,25 @@ class SQLGenPostProcessor:
         allow_data_preview: bool = False,
     ) -> dict:
         try:
-            cleaned_generation_result = clean_generation_result(replies[0])
-
-            # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
-            if cleaned_generation_result.startswith("{"):
-                generation_result = orjson.loads(cleaned_generation_result)
-                cleaned_generation_result = generation_result.get("sql")
-                if not cleaned_generation_result:
-                    return {
-                        "valid_generation_result": {},
-                        "invalid_generation_result": {
-                            "sql": "",
-                            "original_sql": "",
-                            "type": "SQL_GENERATION",
-                            "error": (
-                                "SQL generation response did not include the required "
-                                f"'sql' field: {generation_result}"
-                            ),
-                            "correlation_id": "",
-                        },
+            generation_result, extraction_error = self._extract_sql(replies)
+            if not generation_result:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": "",
+                        "original_sql": "",
+                        "type": "NO_RELEVANT_SQL",
+                        "error": extraction_error
+                        or "No grounded SQL was generated from the current schema.",
+                        "correlation_id": "",
                     }
+                }
 
             (
                 valid_generation_result,
                 invalid_generation_result,
             ) = await self._classify_generation_result(
-                cleaned_generation_result,
+                generation_result,
                 project_id=project_id,
                 mdl_hash=mdl_hash,
                 use_dry_plan=use_dry_plan,
@@ -98,7 +153,8 @@ class SQLGenPostProcessor:
         use_dry_run = not allow_data_preview
 
         async with aiohttp.ClientSession() as session:
-            if use_dry_plan:
+            should_dry_plan = use_dry_plan or bool(project_id and data_source)
+            if should_dry_plan:
                 dry_plan_result, error_message = await self._engine.dry_plan(
                     session,
                     generation_result,
