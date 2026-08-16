@@ -9,7 +9,9 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_ask_history_messages,
+    get_text_to_sql_rules,
 )
+from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 
 
 class FakeEngine(Engine):
@@ -74,6 +76,23 @@ def test_construct_ask_history_messages_matches_legacy_context():
         (ChatRole.USER, "q"),
         (ChatRole.ASSISTANT, "SELECT 1"),
     ]
+
+
+def test_connector_sql_knowledge_supplements_wren_sql_rules():
+    sql_knowledge = SqlKnowledge(
+        {
+            "text_to_sql_rule": "Connector-only syntax guidance.",
+            "instructions": {},
+        }
+    )
+
+    rules = get_text_to_sql_rules(sql_knowledge)
+
+    assert "Generate Wren SQL only" in rules
+    assert "Connector-only syntax guidance." in rules
+    assert rules.index("### SQL RULES ###") < rules.index(
+        "Connector-only syntax guidance."
+    )
 
 
 @pytest.mark.asyncio

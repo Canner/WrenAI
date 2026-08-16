@@ -541,6 +541,14 @@ def test_construct_retrieval_results_preserves_retrieved_metric_when_pruning():
                                 "chain_of_thought_reasoning": ["Needed field."],
                                 "columns": ["stored_attribute"]
                             }
+                        },
+                        {
+                            "table_name": "semantic_metric",
+                            "table_selection_reason": "Selected metric for the current request.",
+                            "table_contents": {
+                                "chain_of_thought_reasoning": ["Needed metric."],
+                                "columns": ["metric_value"]
+                            }
                         }
                     ]
                 }
@@ -592,6 +600,73 @@ def test_construct_retrieval_results_preserves_retrieved_metric_when_pruning():
         "semantic_metric",
     ]
     assert result["has_metric"] is True
+
+
+def test_construct_retrieval_results_excludes_unselected_metric_when_pruning():
+    result = construct_retrieval_results(
+        check_using_db_schemas_without_pruning={},
+        filter_columns_in_tables={
+            "replies": [
+                """
+                {
+                    "results": [
+                        {
+                            "table_name": "modeled_dataset",
+                            "table_selection_reason": "Selected for the current request.",
+                            "table_contents": {
+                                "chain_of_thought_reasoning": ["Needed field."],
+                                "columns": ["stored_attribute"]
+                            }
+                        }
+                    ]
+                }
+                """
+            ]
+        },
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "modeled_dataset",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "stored_attribute",
+                        "data_type": "VARCHAR",
+                        "comment": "",
+                        "is_primary_key": False,
+                    }
+                ],
+                "properties": {},
+                "primaryKey": "",
+            }
+        ],
+        dbschema_retrieval=[
+            Document(
+                content=str(
+                    {
+                        "type": "METRIC",
+                        "comment": "",
+                        "name": "semantic_metric",
+                        "columns": [
+                            {
+                                "type": "COLUMN",
+                                "name": "metric_value",
+                                "data_type": "DOUBLE",
+                                "comment": "",
+                            }
+                        ],
+                    }
+                ),
+                meta={"type": "TABLE_SCHEMA", "name": "semantic_metric"},
+            )
+        ],
+    )
+
+    assert [item["table_name"] for item in result["retrieval_results"]] == [
+        "modeled_dataset"
+    ]
+    assert result["has_metric"] is False
 
 
 def test_construct_retrieval_results_keeps_schema_when_pruner_returns_unknown_columns():

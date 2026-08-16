@@ -922,6 +922,9 @@ def construct_retrieval_results(
         for document in dbschema_retrieval:
             content = ast.literal_eval(document.content)
 
+            if content["name"] not in tables:
+                continue
+
             if content["type"] == "METRIC":
                 retrieval_results.append(
                     {

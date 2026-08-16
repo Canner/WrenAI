@@ -589,9 +589,15 @@ def _extract_from_sql_knowledge(
 def get_text_to_sql_rules(sql_knowledge: SqlKnowledge | None = None) -> str:
     rules = _DEFAULT_TEXT_TO_SQL_RULES
     if sql_knowledge is not None:
-        rules = _extract_from_sql_knowledge(
-            sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
+        connector_rules = _extract_from_sql_knowledge(
+            sql_knowledge, "text_to_sql_rule", ""
         )
+        if connector_rules:
+            rules = f"""{rules}
+
+### CONNECTOR SQL KNOWLEDGE ###
+Use the following connector-specific knowledge only when it does not conflict with Wren SQL syntax, DATABASE SCHEMA identifiers, SQL FUNCTIONS, or WREN SQL IDENTIFIER CONTRACT.
+{connector_rules}"""
 
     return f"{rules}\n\n{_MANDATORY_SQL_GROUNDING_RULES}"
 
