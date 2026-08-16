@@ -7,7 +7,7 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
@@ -35,7 +35,8 @@ Requirements:
 11. If two columns have similar names or business meaning, explain the distinction using the exact column name, alias, type, or surrounding model context.
 12. Do not invent unsupported tables, columns, relationships, metrics, or business concepts.
 13. Do not use generic boilerplate or copy the technical name as the whole description.
-14. Return complete JSON only. Do not include markdown, comments, examples, or explanatory text outside the JSON object.
+14. For each input column, return a matching column object with the exact same `name`, a non-empty `properties.description`, and a non-empty `properties.displayName`.
+15. Return complete JSON only. Do not include markdown, comments, examples, or explanatory text outside the JSON object.
 """
 
 user_prompt_template = """
@@ -51,6 +52,7 @@ For each column, describe the business meaning and analytical use of that exact 
 For each model and column, generate non-empty aliases/synonyms that users may naturally type in questions and place them in properties.displayName.
 If an existing description is already meaningful, preserve its business meaning while making it clearer and more useful for retrieval.
 Keep every description and alias grounded in the picked model metadata, user prompt, data types, and relationship context.
+The number of output columns for each model must exactly match the number of input columns for that model.
 """
 
 
@@ -207,22 +209,30 @@ def output(normalize: dict, picked_models: list[dict]) -> dict:
 
 ## End of Pipeline
 class ModelProperties(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     description: str
     displayName: str
 
 
 class ModelColumns(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     properties: ModelProperties
 
 
 class SemanticModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     columns: list[ModelColumns]
     properties: ModelProperties
 
 
 class SemanticResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     models: list[SemanticModel]
 
 
@@ -231,6 +241,7 @@ SEMANTICS_DESCRIPTION_MODEL_KWARGS = {
         "type": "json_schema",
         "json_schema": {
             "name": "semantic_description",
+            "strict": True,
             "schema": SemanticResult.model_json_schema(),
         },
     }

@@ -17,6 +17,7 @@ export interface NestedColumnMetadataInput {
 
 export interface ColumnMetadataInput {
   id: number;
+  referenceName?: string;
   displayName?: string;
   description?: string;
 }
@@ -47,6 +48,7 @@ export interface UpdateModelMetadataInput {
 
 export interface SaveModelingSemanticInput {
   modelId: number;
+  referenceName?: string;
   displayName?: string;
   description?: string;
   columns: Array<ColumnMetadataInput>;

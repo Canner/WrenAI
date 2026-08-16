@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import math
-import re
 from typing import Dict, Literal, Optional
 
 import orjson
@@ -172,11 +171,68 @@ class SemanticsDescription:
         )
         return "" if value is None else str(value).strip()
 
+    def _display_name(self, payload: dict) -> str:
+        payload_properties = self._properties(payload)
+        value = (
+            payload.get("displayName")
+            or payload.get("alias")
+            or payload_properties.get("displayName")
+            or payload_properties.get("alias")
+            or ""
+        )
+        return "" if value is None else str(value).strip()
+
+    def _validate_generated_output(self, chunk: dict, output: dict) -> None:
+        missing: list[str] = []
+
+        for model in chunk.get("mdl", {}).get("models", []) or []:
+            if not isinstance(model, dict):
+                continue
+
+            model_name = model.get("name", "")
+            generated_model = output.get(model_name)
+            if not isinstance(generated_model, dict):
+                missing.append(f"{model_name} model")
+                continue
+
+            if not self._description(generated_model):
+                missing.append(f"{model_name} description")
+            if not self._display_name(generated_model):
+                missing.append(f"{model_name} alias")
+
+            generated_columns = {
+                column.get("name"): column
+                for column in generated_model.get("columns", []) or []
+                if isinstance(column, dict) and column.get("name")
+            }
+            for column in model.get("columns", []) or []:
+                if not isinstance(column, dict):
+                    continue
+
+                column_name = column.get("name", "")
+                generated_column = generated_columns.get(column_name)
+                if not isinstance(generated_column, dict):
+                    missing.append(f"{model_name}.{column_name} column")
+                    continue
+                if not self._description(generated_column):
+                    missing.append(f"{model_name}.{column_name} description")
+                if not self._display_name(generated_column):
+                    missing.append(f"{model_name}.{column_name} alias")
+
+        if missing:
+            preview = ", ".join(missing[:10])
+            suffix = "..." if len(missing) > 10 else ""
+            raise RetryableSemanticsDescriptionError(
+                "Semantics description output omitted required metadata: "
+                f"{preview}{suffix}"
+            )
+
     async def _generate_task(self, chunk: dict) -> dict:
         resp = await self._pipelines["semantics_description"].run(**chunk)
         output = resp.get("output") or {}
         if not isinstance(output, dict):
             raise ValueError("Semantics description pipeline returned invalid output")
+        self._validate_generated_output(chunk, output)
         return output
 
     def _chunk_columns(self, chunk: dict) -> list[dict]:
@@ -226,41 +282,6 @@ class SemanticsDescription:
             )
         )
 
-    def _fallback_output_for_chunk(self, chunk: dict) -> dict:
-        output = {}
-        for model in chunk.get("mdl", {}).get("models", []):
-            if not isinstance(model, dict):
-                continue
-
-            model_name = model.get("name")
-            if not model_name:
-                continue
-
-            columns = []
-            for column in model.get("columns", []):
-                if not isinstance(column, dict):
-                    continue
-
-                column_name = column.get("name")
-                if not column_name:
-                    continue
-
-                columns.append(
-                    {
-                        "name": column_name,
-                        "type": column.get("type", ""),
-                        "properties": self._metadata_properties(column),
-                    }
-                )
-
-            output[model_name] = {
-                "name": model_name,
-                "columns": columns,
-                "properties": self._metadata_properties(model),
-            }
-
-        return output
-
     async def _generate_task_with_retry_splitting(self, chunk: dict) -> list[dict]:
         try:
             return [
@@ -276,14 +297,7 @@ class SemanticsDescription:
             split_chunks = self._split_chunk(chunk)
             model_name = (chunk.get("selected_models") or [""])[0]
             if not split_chunks:
-                logger.warning(
-                    "Preserving selected semantics schema for model %s after "
-                    "LLM description generation failed on the smallest retry "
-                    "chunk: %s",
-                    model_name,
-                    str(e),
-                )
-                return [self._fallback_output_for_chunk(chunk)]
+                raise
 
             logger.warning(
                 "Retrying semantics description for model %s with smaller "
@@ -328,15 +342,7 @@ class SemanticsDescription:
             return "" if value is None else str(value).strip()
 
         def display_name(payload: dict) -> str:
-            payload_properties = properties(payload)
-            value = (
-                payload.get("displayName")
-                or payload.get("alias")
-                or payload_properties.get("displayName")
-                or payload_properties.get("alias")
-                or ""
-            )
-            return "" if value is None else str(value).strip()
+            return self._display_name(payload)
 
         def normalized_description(value: str) -> str:
             return " ".join(value.casefold().split())
@@ -368,11 +374,6 @@ class SemanticsDescription:
                 generated.setdefault("columns", [])
                 generated["columns"].extend(model_data.get("columns", []))
 
-        relationships = [
-            relationship
-            for relationship in mdl_dict.get("relationships", []) or []
-            if isinstance(relationship, dict)
-        ]
         response: dict = {}
         for model in mdl_dict.get("models", []):
             model_name = model.get("name")
@@ -444,20 +445,8 @@ class SemanticsDescription:
                             normalized_generated_description, column_name
                         )
 
-                if not column_description:
-                    logger.warning(
-                        "Semantics description output omitted description for column: %s.%s",
-                        model_name,
-                        column_name,
-                    )
-                    column_description = self._fallback_column_description(
-                        model, column, relationships
-                    )
-
                 column_display_name = (
-                    generated_display_name
-                    or original_display_name
-                    or self._fallback_display_name(column_name)
+                    generated_display_name or original_display_name
                 )
 
                 columns.append(
@@ -473,14 +462,8 @@ class SemanticsDescription:
 
             if not model_description:
                 model_description = description(model)
-            if not model_description:
-                model_description = self._fallback_model_description(
-                    model, relationships
-                )
             if not model_display_name:
                 model_display_name = display_name(model)
-            if not model_display_name:
-                model_display_name = self._fallback_display_name(model_name)
 
             response[model_name] = {
                 "name": model_name,
@@ -492,175 +475,6 @@ class SemanticsDescription:
             }
 
         return response
-
-    def _metadata_properties(self, payload: dict) -> dict:
-        properties = {
-            "description": self._description(payload),
-        }
-        display_name = (
-            payload.get("displayName")
-            or payload.get("alias")
-            or self._properties(payload).get("displayName")
-            or self._properties(payload).get("alias")
-            or ""
-        )
-        if display_name:
-            properties["displayName"] = str(display_name).strip()
-        return properties
-
-    def _fallback_display_name(self, name: str) -> str:
-        words = self._identifier_words(name)
-        label = " ".join(words)
-        return label.title() if label else str(name)
-
-    def _fallback_model_description(
-        self, model: dict, relationships: list[dict]
-    ) -> str:
-        model_name = str(model.get("name", ""))
-        model_label = self._fallback_display_name(model_name)
-        column_count = len(model.get("columns", []) or [])
-        related_models = self._related_model_names(model_name, relationships)
-        relationship_context = (
-            f" It can be joined to {', '.join(related_models)} through the configured relationships."
-            if related_models
-            else ""
-        )
-        return (
-            f"Table {model_name} represents {model_label} records in the selected datasource. "
-            f"Use it for reporting and analysis across its {column_count} modeled columns."
-            f"{relationship_context}"
-        )
-
-    def _fallback_column_description(
-        self, model: dict, column: dict, relationships: list[dict]
-    ) -> str:
-        model_name = str(model.get("name", ""))
-        column_name = str(column.get("name", ""))
-        column_type = str(column.get("type", "") or "unknown")
-        column_label = self._fallback_display_name(column_name)
-        role = self._semantic_role(column_name, column_type)
-        related_models = self._related_model_names(
-            model_name, relationships, column_name
-        )
-        relationship_context = (
-            f" It is used as a join key with {', '.join(related_models)}."
-            if related_models
-            else ""
-        )
-        return (
-            f"{column_name} is the {column_label} field on table {model_name}. "
-            f"It is classified as the {role} role with data type {column_type} and is used to filter, group, join, or analyze {model_name} records."
-            f"{relationship_context}"
-        )
-
-    def _semantic_role(self, name: str, column_type: str) -> str:
-        normalized = " ".join(self._identifier_words(name)).casefold()
-        column_type = column_type.casefold()
-
-        role_markers = [
-            (("id", "identifier", "key", "no", "number"), "identifier or key"),
-            (
-                ("date", "time", "timestamp", "year", "month", "period"),
-                "date or time dimension",
-            ),
-            (("status", "state", "stage"), "status dimension"),
-            (("currency", "curr", "cur", "code"), "code or currency dimension"),
-            (("qty", "quantity", "count", "volume", "units"), "quantity measure"),
-            (("cost", "expense"), "cost measure"),
-            (
-                ("sales", "revenue", "value", "amount", "price", "gm", "margin"),
-                "financial measure",
-            ),
-            (
-                ("rate", "ratio", "percent", "percentage", "pct"),
-                "rate or percentage measure",
-            ),
-            (
-                (
-                    "type",
-                    "category",
-                    "segment",
-                    "market",
-                    "division",
-                    "company",
-                    "country",
-                ),
-                "business dimension",
-            ),
-            (("name", "description", "desc"), "descriptive attribute"),
-        ]
-        for markers, role in role_markers:
-            if any(marker in normalized.split() for marker in markers):
-                return role
-
-        if any(
-            token in column_type
-            for token in ("int", "float", "double", "decimal", "numeric", "number")
-        ):
-            return "numeric measure"
-        if any(token in column_type for token in ("date", "time")):
-            return "date or time dimension"
-        return "business attribute"
-
-    def _identifier_words(self, value: str) -> list[str]:
-        text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(value or ""))
-        text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", text)
-        raw_words = re.split(r"[^A-Za-z0-9]+", text)
-        expansions = {
-            "bu": "business unit",
-            "cust": "customer",
-            "curr": "currency",
-            "cur": "currency",
-            "desc": "description",
-            "fx": "foreign exchange",
-            "gm": "gross margin",
-            "inv": "invoice",
-            "no": "number",
-            "ord": "order",
-            "po": "purchase order",
-            "prod": "product",
-            "qty": "quantity",
-            "std": "standard",
-        }
-        words: list[str] = []
-        for raw_word in raw_words:
-            if not raw_word:
-                continue
-            word = raw_word.casefold()
-            words.extend(expansions.get(word, word).split())
-        return words
-
-    def _related_model_names(
-        self,
-        model_name: str,
-        relationships: list[dict],
-        column_name: Optional[str] = None,
-    ) -> list[str]:
-        related = []
-        target_model = str(model_name)
-        target_column = str(column_name) if column_name else None
-
-        for relationship in relationships:
-            models = [str(model) for model in relationship.get("models", []) or []]
-            condition = str(relationship.get("condition", ""))
-            if target_model not in models:
-                continue
-            if target_column and not self._relationship_mentions_column(
-                condition, target_model, target_column
-            ):
-                continue
-            related.extend(model for model in models if model != target_model)
-
-        return sorted(set(related))
-
-    def _relationship_mentions_column(
-        self, condition: str, model_name: str, column_name: str
-    ) -> bool:
-        pattern = (
-            rf'["`]?{re.escape(model_name)}["`]?\s*\.\s*'
-            rf'["`]?{re.escape(column_name)}["`]?'
-        )
-        return bool(re.search(pattern, condition))
 
     @observe(name="Generate Semantics Description")
     @trace_metadata

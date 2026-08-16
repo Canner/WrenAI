@@ -18,11 +18,15 @@ def service():
                     {
                         "name": "column1",
                         "properties": {
-                            "description": "Customer segment for reporting."
+                            "description": "Customer segment for reporting.",
+                            "displayName": "customer segment, segment",
                         },
                     }
                 ],
-                "properties": {"description": "Test description"},
+                "properties": {
+                    "description": "Test description",
+                    "displayName": "test model, model one",
+                },
             }
         }
     }
@@ -57,11 +61,14 @@ async def test_generate_semantics_description(
                     "type": "varchar",
                     "properties": {
                         "description": "Customer segment for reporting.",
-                        "displayName": "Column1",
+                        "displayName": "customer segment, segment",
                     },
                 }
             ],
-            "properties": {"description": "Test description", "displayName": "Model1"},
+            "properties": {
+                "description": "Test description",
+                "displayName": "test model, model one",
+            },
         }
     }
     assert response.error is None
@@ -119,7 +126,7 @@ async def test_generate_semantics_description_with_exception(
 
 
 @pytest.mark.asyncio
-async def test_generate_semantics_description_with_llm_timeout_preserves_schema():
+async def test_generate_semantics_description_with_llm_timeout_fails_without_fallback():
     mock_pipeline = AsyncMock()
 
     async def never_returns(**_):
@@ -141,19 +148,10 @@ async def test_generate_semantics_description_with_llm_timeout_preserves_schema(
     await service.generate(request)
     response = service[request.id]
 
-    assert response.status == "finished"
-    assert response.error is None
-    model = response.response["model1"]
-    column = model["columns"][0]
-    assert model["name"] == "model1"
-    assert model["properties"]["description"]
-    assert model["properties"]["displayName"]
-    assert column["name"] == "column1"
-    assert column["type"] == "varchar"
-    assert column["properties"]["description"]
-    assert column["properties"]["displayName"]
-    assert "model1" in model["properties"]["description"]
-    assert "column1" in column["properties"]["description"]
+    assert response.status == "failed"
+    assert response.response is None
+    assert response.error.code == "OTHERS"
+    assert "timed out" in response.error.message
 
 
 def test_get_semantics_description_result(
@@ -243,28 +241,40 @@ async def test_batch_processing_with_multiple_models(
         "output": {
             "model1": {
                 "description": "Description 1",
+                "displayName": "model one, first model",
                 "columns": [
                     {
                         "name": "column1",
-                        "properties": {"description": "Column description 1"},
+                        "properties": {
+                            "description": "Column description 1",
+                            "displayName": "column one, first column",
+                        },
                     }
                 ],
             },
             "model2": {
                 "description": "Description 2",
+                "displayName": "model two, second model",
                 "columns": [
                     {
                         "name": "column1",
-                        "properties": {"description": "Column description 2"},
+                        "properties": {
+                            "description": "Column description 2",
+                            "displayName": "column one, first column",
+                        },
                     }
                 ],
             },
             "model3": {
                 "description": "Description 3",
+                "displayName": "model three, third model",
                 "columns": [
                     {
                         "name": "column1",
-                        "properties": {"description": "Column description 3"},
+                        "properties": {
+                            "description": "Column description 3",
+                            "displayName": "column one, first column",
+                        },
                     }
                 ],
             },
@@ -438,11 +448,13 @@ async def test_column_chunk_outputs_merge_into_single_model(
             "output": {
                 "orders": {
                     "description": "Customer order transactions.",
+                    "displayName": "orders, customer orders",
                     "columns": [
                         {
                             "name": column["name"],
                             "properties": {
                                 "description": f"Description for {column['name']}",
+                                "displayName": f"Alias for {column['name']}",
                             },
                         }
                         for column in model["columns"]
@@ -562,11 +574,13 @@ async def test_malformed_chunk_retries_with_smaller_column_groups(
             "output": {
                 "orders": {
                     "description": "Customer order transactions.",
+                    "displayName": "orders, customer orders",
                     "columns": [
                         {
                             "name": column["name"],
                             "properties": {
                                 "description": f"Description for {column['name']}",
+                                "displayName": f"Alias for {column['name']}",
                             },
                         }
                     ],
@@ -631,11 +645,13 @@ async def test_timed_out_chunk_retries_with_smaller_column_groups_and_relationsh
             "output": {
                 "orders": {
                     "description": "Customer order transactions.",
+                    "displayName": "orders, customer orders",
                     "columns": [
                         {
                             "name": column["name"],
                             "properties": {
                                 "description": f"Description for {column['name']}",
+                                "displayName": f"Alias for {column['name']}",
                             },
                         }
                     ],
@@ -667,7 +683,7 @@ async def test_timed_out_chunk_retries_with_smaller_column_groups_and_relationsh
 
 
 @pytest.mark.asyncio
-async def test_truncated_smallest_chunk_preserves_selected_schema(
+async def test_truncated_smallest_chunk_fails_without_fallback(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
@@ -705,30 +721,15 @@ async def test_truncated_smallest_chunk_preserves_selected_schema(
     await service.generate(request)
     response = service[request.id]
 
-    assert response.status == "finished"
-    assert response.error is None
-    assert response.response["orders"] == {
-        "name": "orders",
-        "columns": [
-                {
-                    "name": "order_id",
-                    "type": "varchar",
-                    "properties": {
-                        "description": "Existing order id.",
-                        "displayName": "Order Id",
-                    },
-                }
-            ],
-            "properties": {
-                "description": "Existing order model.",
-                "displayName": "Orders",
-            },
-        }
+    assert response.status == "failed"
+    assert response.response is None
+    assert response.error.code == "OTHERS"
+    assert "truncated" in response.error.message
     assert service._pipelines["semantics_description"].run.call_count == 1
 
 
 @pytest.mark.asyncio
-async def test_incomplete_llm_output_uses_available_descriptions(
+async def test_incomplete_llm_output_fails_without_fallback(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
@@ -774,31 +775,10 @@ async def test_incomplete_llm_output_uses_available_descriptions(
     await service.generate(request)
     response = service[request.id]
 
-    assert response.status == "finished"
-    assert response.error is None
-    assert list(response.response.keys()) == ["orders", "customers"]
-    assert response.response["orders"]["properties"]["description"] == (
-        "Customer purchase transactions."
-    )
-    order_columns = response.response["orders"]["columns"]
-    assert order_columns[0]["name"] == "order_id"
-    assert order_columns[0]["properties"]["description"] == (
-        "Unique order identifier."
-    )
-    assert order_columns[0]["properties"]["displayName"]
-    assert order_columns[1]["name"] == "order_date"
-    assert order_columns[1]["properties"]["description"]
-    assert order_columns[1]["properties"]["displayName"]
-    assert "order_date" in order_columns[1]["properties"]["description"]
-
-    customers = response.response["customers"]
-    assert customers["name"] == "customers"
-    assert customers["properties"]["description"]
-    assert customers["properties"]["displayName"]
-    assert customers["columns"][0]["name"] == "customer_id"
-    assert customers["columns"][0]["properties"]["description"]
-    assert customers["columns"][0]["properties"]["displayName"]
-    assert "customer_id" in customers["columns"][0]["properties"]["description"]
+    assert response.status == "failed"
+    assert response.response is None
+    assert response.error.code == "OTHERS"
+    assert "omitted required metadata" in response.error.message
 
 
 @pytest.mark.asyncio
@@ -833,22 +813,28 @@ async def test_llm_descriptions_are_not_rewritten_by_service(
                     {
                         "name": "Division",
                         "properties": {
-                            "description": "Stores the Division value used to describe or analyze xStage records."
+                            "description": "Stores the Division value used to describe or analyze xStage records.",
+                            "displayName": "division, business division",
                         },
                     },
                     {
                         "name": "SalesPerson",
-                        "properties": {"description": "SalesPerson"},
+                        "properties": {
+                            "description": "SalesPerson",
+                            "displayName": "sales person, account owner",
+                        },
                     },
                     {
                         "name": "SalesAmount",
                         "properties": {
-                            "description": "Stores the SalesAmount value."
+                            "description": "Stores the SalesAmount value.",
+                            "displayName": "sales amount, revenue amount",
                         },
                     },
                 ],
                 "properties": {
-                    "description": "Contains business records for xStageLoad2."
+                    "description": "Contains business records for xStageLoad2.",
+                    "displayName": "stage load, staging records",
                 },
             }
         }
@@ -914,10 +900,14 @@ async def test_concurrent_updates_no_race_condition(
         "output": {
             f"model{i}": {
                 "description": f"Description {i}",
+                "displayName": f"model {i}, model {i} alias",
                 "columns": [
                     {
                         "name": "column1",
-                        "properties": {"description": f"Column description {i}"},
+                        "properties": {
+                            "description": f"Column description {i}",
+                            "displayName": f"column one, column {i}",
+                        },
                     }
                 ],
             }
@@ -966,14 +956,21 @@ async def test_repeated_llm_column_descriptions_are_tolerated(
         "output": {
             "orders": {
                 "description": "Customer order transactions.",
+                "displayName": "orders, customer orders",
                 "columns": [
                     {
                         "name": "order_id",
-                        "properties": {"description": "Identifier for reporting."},
+                        "properties": {
+                            "description": "Identifier for reporting.",
+                            "displayName": "order id, order identifier",
+                        },
                     },
                     {
                         "name": "customer_id",
-                        "properties": {"description": "Identifier for reporting."},
+                        "properties": {
+                            "description": "Identifier for reporting.",
+                            "displayName": "customer id, customer identifier",
+                        },
                     },
                 ],
             }

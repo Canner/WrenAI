@@ -493,11 +493,24 @@ export class ModelResolver {
       projectId: project.id,
     });
     const modelById = new Map(models.map((model) => [model.id, model]));
+    const modelByReferenceName = new Map(
+      models.map((model) => [model.referenceName, model]),
+    );
     const requestedItems = args.data || [];
 
+    const resolveModel = (item: SaveModelingSemanticInput) => {
+      const model = modelById.get(item.modelId);
+      if (model) return model;
+      return item.referenceName
+        ? modelByReferenceName.get(item.referenceName)
+        : undefined;
+    };
+
     for (const item of requestedItems) {
-      if (!modelById.has(item.modelId)) {
-        throw new Error(`Model not found: ${item.modelId}`);
+      if (!resolveModel(item)) {
+        throw new Error(
+          `Model not found: ${item.referenceName || item.modelId}`,
+        );
       }
     }
 
@@ -505,7 +518,7 @@ export class ModelResolver {
       requestedItems.map(async (item) => {
         if (isNil(item.description) && isNil(item.displayName)) return;
 
-        const model = modelById.get(item.modelId);
+        const model = resolveModel(item);
         const modelMetadata: Partial<Model> = {};
 
         if (!isNil(item.displayName)) {
@@ -525,24 +538,47 @@ export class ModelResolver {
         }
 
         if (!isEmpty(modelMetadata)) {
-          await ctx.modelRepository.updateOne(item.modelId, modelMetadata);
+          await ctx.modelRepository.updateOne(model.id, modelMetadata);
         }
       }),
     );
 
-    const requestedColumns = requestedItems.flatMap(
-      (item) => item.columns || [],
-    );
+    const requestedColumns = requestedItems.flatMap((item) => {
+      const model = resolveModel(item);
+      return (item.columns || []).map((column) => ({
+        ...column,
+        modelId: model?.id,
+      }));
+    });
     if (!isEmpty(requestedColumns)) {
       const columnIds = requestedColumns.map((column) => column.id);
-      const columns = await ctx.modelColumnRepository.findColumnsByIds(columnIds);
+      const modelIds = models.map((model) => model.id);
+      const [columnsByIdSource, columnsByModelSource] = await Promise.all([
+        ctx.modelColumnRepository.findColumnsByIds(columnIds),
+        ctx.modelColumnRepository.findColumnsByModelIds(modelIds),
+      ]);
+      const columns = [...columnsByIdSource, ...columnsByModelSource];
       const columnById = new Map(
         columns.map((column) => [String(column.id), column]),
+      );
+      const columnByModelAndReferenceName = new Map(
+        columns.map((column) => [
+          `${column.modelId}:${column.referenceName}`,
+          column,
+        ]),
       );
 
       await Promise.all(
         requestedColumns.map(async (requestedColumn) => {
-          const column = columnById.get(String(requestedColumn.id));
+          const columnByRequestedId = columnById.get(
+            String(requestedColumn.id),
+          );
+          const column =
+            columnByRequestedId?.modelId === requestedColumn.modelId
+              ? columnByRequestedId
+              : columnByModelAndReferenceName.get(
+                  `${requestedColumn.modelId}:${requestedColumn.referenceName}`,
+                );
           if (!column) return;
 
           const columnMetadata: Partial<ModelColumn> = {};

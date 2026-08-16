@@ -120,15 +120,6 @@ const semanticText = (value: any): string => {
 const firstSemanticText = (...values: any[]): string =>
   values.map(semanticText).find(Boolean) || '';
 
-const semanticFallbackDisplayName = (name: string): string => {
-  return String(name || '')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
-    .replace(/[_\-.]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-};
-
 const DiagramWrapper = styled.div`
   position: relative;
   height: 100%;
@@ -711,13 +702,12 @@ export default function Modeling() {
     const modelName = semanticText(value?.name) || semanticText(name);
     return {
       name: modelName,
-      displayName:
-        firstSemanticText(
-          value?.displayName,
-          value?.alias,
-          value?.properties?.displayName,
-          value?.properties?.alias,
-        ) || semanticFallbackDisplayName(modelName),
+      displayName: firstSemanticText(
+        value?.displayName,
+        value?.alias,
+        value?.properties?.displayName,
+        value?.properties?.alias,
+      ),
       description: firstSemanticText(
         value?.description,
         value?.properties?.description,
@@ -727,13 +717,12 @@ export default function Modeling() {
         return {
           name: columnName,
           type: column?.type,
-          displayName:
-            firstSemanticText(
-              column?.displayName,
-              column?.alias,
-              column?.properties?.displayName,
-              column?.properties?.alias,
-            ) || semanticFallbackDisplayName(columnName),
+          displayName: firstSemanticText(
+            column?.displayName,
+            column?.alias,
+            column?.properties?.displayName,
+            column?.properties?.alias,
+          ),
           description: firstSemanticText(
             column?.description,
             column?.properties?.description,
@@ -1036,9 +1025,8 @@ export default function Modeling() {
           if (!diagramModel) return [];
           return {
             modelId: diagramModel.modelId,
-            displayName:
-              firstSemanticText(model.displayName) ||
-              semanticFallbackDisplayName(model.name),
+            referenceName: diagramModel.referenceName,
+            displayName: firstSemanticText(model.displayName),
             description: model.description,
             columns: (model.columns || [])
               .map((column) => {
@@ -1048,11 +1036,8 @@ export default function Modeling() {
                 return field
                   ? {
                       id: field.columnId,
-                      displayName:
-                        firstSemanticText(
-                          column.displayName,
-                          field.displayName,
-                        ) || semanticFallbackDisplayName(column.name),
+                      referenceName: field.referenceName,
+                      displayName: firstSemanticText(column.displayName),
                       description: column.description,
                     }
                   : null;
