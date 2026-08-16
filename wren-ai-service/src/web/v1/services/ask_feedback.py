@@ -212,7 +212,10 @@ class AskFeedbackService:
                 elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_result"]:
-                    if failed_dry_run_result["type"] != "TIME_OUT":
+                    if failed_dry_run_result["type"] not in (
+                        "TIME_OUT",
+                        "SQL_GENERATION",
+                    ):
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]

@@ -41,9 +41,22 @@ class SQLGenPostProcessor:
 
             # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
             if cleaned_generation_result.startswith("{"):
-                cleaned_generation_result = orjson.loads(cleaned_generation_result)[
-                    "sql"
-                ]
+                generation_result = orjson.loads(cleaned_generation_result)
+                cleaned_generation_result = generation_result.get("sql")
+                if not cleaned_generation_result:
+                    return {
+                        "valid_generation_result": {},
+                        "invalid_generation_result": {
+                            "sql": "",
+                            "original_sql": "",
+                            "type": "SQL_GENERATION",
+                            "error": (
+                                "SQL generation response did not include the required "
+                                f"'sql' field: {generation_result}"
+                            ),
+                            "correlation_id": "",
+                        },
+                    }
 
             (
                 valid_generation_result,

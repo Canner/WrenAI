@@ -525,7 +525,10 @@ class AskService:
                     "post_process"
                 ]["invalid_generation_result"]:
                     while current_sql_correction_retries < max_sql_correction_retries:
-                        if failed_dry_run_result["type"] == "TIME_OUT":
+                        if failed_dry_run_result["type"] in (
+                            "TIME_OUT",
+                            "SQL_GENERATION",
+                        ):
                             error_message = failed_dry_run_result["error"]
                             invalid_sql = failed_dry_run_result["sql"]
                             break
