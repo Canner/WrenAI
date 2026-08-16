@@ -56,11 +56,12 @@ async def test_generate_semantics_description(
                     "name": "column1",
                     "type": "varchar",
                     "properties": {
-                        "description": "Customer segment for reporting."
+                        "description": "Customer segment for reporting.",
+                        "displayName": "Column1",
                     },
                 }
             ],
-            "properties": {"description": "Test description"},
+            "properties": {"description": "Test description", "displayName": "Model1"},
         }
     }
     assert response.error is None
@@ -142,19 +143,17 @@ async def test_generate_semantics_description_with_llm_timeout_preserves_schema(
 
     assert response.status == "finished"
     assert response.error is None
-    assert response.response == {
-        "model1": {
-            "name": "model1",
-            "columns": [
-                {
-                    "name": "column1",
-                    "type": "varchar",
-                    "properties": {"description": ""},
-                }
-            ],
-            "properties": {"description": ""},
-        }
-    }
+    model = response.response["model1"]
+    column = model["columns"][0]
+    assert model["name"] == "model1"
+    assert model["properties"]["description"]
+    assert model["properties"]["displayName"]
+    assert column["name"] == "column1"
+    assert column["type"] == "varchar"
+    assert column["properties"]["description"]
+    assert column["properties"]["displayName"]
+    assert "model1" in model["properties"]["description"]
+    assert "column1" in column["properties"]["description"]
 
 
 def test_get_semantics_description_result(
@@ -711,14 +710,20 @@ async def test_truncated_smallest_chunk_preserves_selected_schema(
     assert response.response["orders"] == {
         "name": "orders",
         "columns": [
-            {
-                "name": "order_id",
-                "type": "varchar",
-                "properties": {"description": "Existing order id."},
-            }
-        ],
-        "properties": {"description": "Existing order model."},
-    }
+                {
+                    "name": "order_id",
+                    "type": "varchar",
+                    "properties": {
+                        "description": "Existing order id.",
+                        "displayName": "Order Id",
+                    },
+                }
+            ],
+            "properties": {
+                "description": "Existing order model.",
+                "displayName": "Orders",
+            },
+        }
     assert service._pipelines["semantics_description"].run.call_count == 1
 
 
@@ -775,29 +780,25 @@ async def test_incomplete_llm_output_uses_available_descriptions(
     assert response.response["orders"]["properties"]["description"] == (
         "Customer purchase transactions."
     )
-    assert response.response["orders"]["columns"] == [
-        {
-            "name": "order_id",
-            "type": "varchar",
-            "properties": {"description": "Unique order identifier."},
-        },
-        {
-            "name": "order_date",
-            "type": "date",
-            "properties": {"description": ""},
-        },
-    ]
-    assert response.response["customers"] == {
-        "name": "customers",
-        "columns": [
-            {
-                "name": "customer_id",
-                "type": "varchar",
-                "properties": {"description": ""},
-            }
-        ],
-        "properties": {"description": ""},
-    }
+    order_columns = response.response["orders"]["columns"]
+    assert order_columns[0]["name"] == "order_id"
+    assert order_columns[0]["properties"]["description"] == (
+        "Unique order identifier."
+    )
+    assert order_columns[0]["properties"]["displayName"]
+    assert order_columns[1]["name"] == "order_date"
+    assert order_columns[1]["properties"]["description"]
+    assert order_columns[1]["properties"]["displayName"]
+    assert "order_date" in order_columns[1]["properties"]["description"]
+
+    customers = response.response["customers"]
+    assert customers["name"] == "customers"
+    assert customers["properties"]["description"]
+    assert customers["properties"]["displayName"]
+    assert customers["columns"][0]["name"] == "customer_id"
+    assert customers["columns"][0]["properties"]["description"]
+    assert customers["columns"][0]["properties"]["displayName"]
+    assert "customer_id" in customers["columns"][0]["properties"]["description"]
 
 
 @pytest.mark.asyncio
@@ -987,15 +988,9 @@ async def test_repeated_llm_column_descriptions_are_tolerated(
     assert response.response["orders"]["properties"]["description"] == (
         "Customer order transactions."
     )
-    assert response.response["orders"]["columns"] == [
-        {
-            "name": "order_id",
-            "type": "varchar",
-            "properties": {"description": "Identifier for reporting."},
-        },
-        {
-            "name": "customer_id",
-            "type": "varchar",
-            "properties": {"description": "Identifier for reporting."},
-        },
-    ]
+    columns = response.response["orders"]["columns"]
+    assert [column["name"] for column in columns] == ["order_id", "customer_id"]
+    assert [
+        column["properties"]["description"] for column in columns
+    ] == ["Identifier for reporting.", "Identifier for reporting."]
+    assert all(column["properties"]["displayName"] for column in columns)

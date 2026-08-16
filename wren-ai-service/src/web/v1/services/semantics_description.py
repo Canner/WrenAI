@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import math
+import re
 from typing import Dict, Literal, Optional
 
 import orjson
@@ -367,6 +368,11 @@ class SemanticsDescription:
                 generated.setdefault("columns", [])
                 generated["columns"].extend(model_data.get("columns", []))
 
+        relationships = [
+            relationship
+            for relationship in mdl_dict.get("relationships", []) or []
+            if isinstance(relationship, dict)
+        ]
         response: dict = {}
         for model in mdl_dict.get("models", []):
             model_name = model.get("name")
@@ -444,6 +450,15 @@ class SemanticsDescription:
                         model_name,
                         column_name,
                     )
+                    column_description = self._fallback_column_description(
+                        model, column, relationships
+                    )
+
+                column_display_name = (
+                    generated_display_name
+                    or original_display_name
+                    or self._fallback_display_name(column_name)
+                )
 
                 columns.append(
                     {
@@ -451,35 +466,28 @@ class SemanticsDescription:
                         "type": column.get("type", ""),
                         "properties": {
                             "description": column_description,
-                            **(
-                                {
-                                    "displayName": generated_display_name
-                                    or original_display_name
-                                }
-                                if generated_display_name or original_display_name
-                                else {}
-                            ),
+                            "displayName": column_display_name,
                         },
                     }
                 )
 
             if not model_description:
                 model_description = description(model)
+            if not model_description:
+                model_description = self._fallback_model_description(
+                    model, relationships
+                )
             if not model_display_name:
                 model_display_name = display_name(model)
-            if not model_description and not model.get("columns", []):
-                logger.warning(
-                    "Semantics description output omitted selected model: %s",
-                    model_name,
-                )
-                continue
+            if not model_display_name:
+                model_display_name = self._fallback_display_name(model_name)
 
             response[model_name] = {
                 "name": model_name,
                 "columns": columns,
                 "properties": {
                     "description": model_description,
-                    **({"displayName": model_display_name} if model_display_name else {}),
+                    "displayName": model_display_name,
                 },
             }
 
@@ -499,6 +507,160 @@ class SemanticsDescription:
         if display_name:
             properties["displayName"] = str(display_name).strip()
         return properties
+
+    def _fallback_display_name(self, name: str) -> str:
+        words = self._identifier_words(name)
+        label = " ".join(words)
+        return label.title() if label else str(name)
+
+    def _fallback_model_description(
+        self, model: dict, relationships: list[dict]
+    ) -> str:
+        model_name = str(model.get("name", ""))
+        model_label = self._fallback_display_name(model_name)
+        column_count = len(model.get("columns", []) or [])
+        related_models = self._related_model_names(model_name, relationships)
+        relationship_context = (
+            f" It can be joined to {', '.join(related_models)} through the configured relationships."
+            if related_models
+            else ""
+        )
+        return (
+            f"Table {model_name} represents {model_label} records in the selected datasource. "
+            f"Use it for reporting and analysis across its {column_count} modeled columns."
+            f"{relationship_context}"
+        )
+
+    def _fallback_column_description(
+        self, model: dict, column: dict, relationships: list[dict]
+    ) -> str:
+        model_name = str(model.get("name", ""))
+        column_name = str(column.get("name", ""))
+        column_type = str(column.get("type", "") or "unknown")
+        column_label = self._fallback_display_name(column_name)
+        role = self._semantic_role(column_name, column_type)
+        related_models = self._related_model_names(
+            model_name, relationships, column_name
+        )
+        relationship_context = (
+            f" It is used as a join key with {', '.join(related_models)}."
+            if related_models
+            else ""
+        )
+        return (
+            f"{column_name} is the {column_label} field on table {model_name}. "
+            f"It is classified as the {role} role with data type {column_type} and is used to filter, group, join, or analyze {model_name} records."
+            f"{relationship_context}"
+        )
+
+    def _semantic_role(self, name: str, column_type: str) -> str:
+        normalized = " ".join(self._identifier_words(name)).casefold()
+        column_type = column_type.casefold()
+
+        role_markers = [
+            (("id", "identifier", "key", "no", "number"), "identifier or key"),
+            (
+                ("date", "time", "timestamp", "year", "month", "period"),
+                "date or time dimension",
+            ),
+            (("status", "state", "stage"), "status dimension"),
+            (("currency", "curr", "cur", "code"), "code or currency dimension"),
+            (("qty", "quantity", "count", "volume", "units"), "quantity measure"),
+            (("cost", "expense"), "cost measure"),
+            (
+                ("sales", "revenue", "value", "amount", "price", "gm", "margin"),
+                "financial measure",
+            ),
+            (
+                ("rate", "ratio", "percent", "percentage", "pct"),
+                "rate or percentage measure",
+            ),
+            (
+                (
+                    "type",
+                    "category",
+                    "segment",
+                    "market",
+                    "division",
+                    "company",
+                    "country",
+                ),
+                "business dimension",
+            ),
+            (("name", "description", "desc"), "descriptive attribute"),
+        ]
+        for markers, role in role_markers:
+            if any(marker in normalized.split() for marker in markers):
+                return role
+
+        if any(
+            token in column_type
+            for token in ("int", "float", "double", "decimal", "numeric", "number")
+        ):
+            return "numeric measure"
+        if any(token in column_type for token in ("date", "time")):
+            return "date or time dimension"
+        return "business attribute"
+
+    def _identifier_words(self, value: str) -> list[str]:
+        text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(value or ""))
+        text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", text)
+        raw_words = re.split(r"[^A-Za-z0-9]+", text)
+        expansions = {
+            "bu": "business unit",
+            "cust": "customer",
+            "curr": "currency",
+            "cur": "currency",
+            "desc": "description",
+            "fx": "foreign exchange",
+            "gm": "gross margin",
+            "inv": "invoice",
+            "no": "number",
+            "ord": "order",
+            "po": "purchase order",
+            "prod": "product",
+            "qty": "quantity",
+            "std": "standard",
+        }
+        words: list[str] = []
+        for raw_word in raw_words:
+            if not raw_word:
+                continue
+            word = raw_word.casefold()
+            words.extend(expansions.get(word, word).split())
+        return words
+
+    def _related_model_names(
+        self,
+        model_name: str,
+        relationships: list[dict],
+        column_name: Optional[str] = None,
+    ) -> list[str]:
+        related = []
+        target_model = str(model_name)
+        target_column = str(column_name) if column_name else None
+
+        for relationship in relationships:
+            models = [str(model) for model in relationship.get("models", []) or []]
+            condition = str(relationship.get("condition", ""))
+            if target_model not in models:
+                continue
+            if target_column and not self._relationship_mentions_column(
+                condition, target_model, target_column
+            ):
+                continue
+            related.extend(model for model in models if model != target_model)
+
+        return sorted(set(related))
+
+    def _relationship_mentions_column(
+        self, condition: str, model_name: str, column_name: str
+    ) -> bool:
+        pattern = (
+            rf'["`]?{re.escape(model_name)}["`]?\s*\.\s*'
+            rf'["`]?{re.escape(column_name)}["`]?'
+        )
+        return bool(re.search(pattern, condition))
 
     @observe(name="Generate Semantics Description")
     @trace_metadata
