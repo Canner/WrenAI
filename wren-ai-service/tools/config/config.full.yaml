@@ -194,9 +194,9 @@ settings:
   sql_generation_timeout_seconds: 30
   query_cache_ttl: 3600
   semantics_description_max_models_per_batch: 4
-  semantics_description_max_columns_per_batch: 12
-  semantics_description_max_concurrent_tasks: 2
-  semantics_description_generation_timeout_seconds: 300
+  semantics_description_max_columns_per_batch: 50
+  semantics_description_max_concurrent_tasks: 4
+  semantics_description_generation_timeout_seconds: 120
   langfuse_host: https://cloud.langfuse.com
   langfuse_enable: true
   logging_level: INFO

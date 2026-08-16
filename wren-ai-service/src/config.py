@@ -50,10 +50,10 @@ class Settings(BaseSettings):
     pipeline_timeout_seconds: float | None = Field(default=None)
     relationship_recommendation_timeout_seconds: float = Field(default=180.0)
     semantics_description_timeout_seconds: float | None = Field(default=None)
-    semantics_description_generation_timeout_seconds: float = Field(default=300.0)
+    semantics_description_generation_timeout_seconds: float = Field(default=120.0)
     semantics_description_max_models_per_batch: int = Field(default=4)
-    semantics_description_max_columns_per_batch: int = Field(default=12)
-    semantics_description_max_concurrent_tasks: int = Field(default=2)
+    semantics_description_max_columns_per_batch: int = Field(default=50)
+    semantics_description_max_concurrent_tasks: int = Field(default=4)
 
     # engine config
     engine_timeout: float = Field(default=30.0)

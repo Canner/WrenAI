@@ -37,7 +37,7 @@ class SemanticsDescription:
         pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
-        generation_timeout_seconds: float = 300.0,
+        generation_timeout_seconds: float = 120.0,
         max_models_per_batch: int = 1,
         max_columns_per_batch: int = 50,
         max_concurrent_tasks: int = 4,
