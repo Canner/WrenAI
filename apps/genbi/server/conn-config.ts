@@ -123,6 +123,26 @@ function resolveTemplate(value: string, lookup: (name: string) => string | undef
  * when there's no `conn.yml` to read (unbound project, or a project laid out
  * without one) rather than throwing — callers fall back to an honest "—".
  */
+/**
+ * Resolves `${VAR}` references against a real environment variable, else the
+ * project's own `.env`. Shared by both connection sources: a stored profile
+ * holds the same `${VAR}` references `conn.yml` does — that is how wren keeps
+ * credentials out of `~/.wren/profiles.yml` — so a display that skipped this
+ * step showed the reference instead of the value.
+ */
+function envLookup(projectDir: string): (name: string) => string | undefined {
+  const dotenvPath = path.join(projectDir, ".env");
+  let dotenv: Record<string, string> = {};
+  if (existsSync(dotenvPath)) {
+    try {
+      dotenv = parseDotEnv(readFileSync(dotenvPath, "utf-8"));
+    } catch {
+      dotenv = {};
+    }
+  }
+  return (name: string): string | undefined => process.env[name] ?? dotenv[name];
+}
+
 export function loadConnConfig(projectDir: string): ConnConfig | undefined {
   const connPath = path.join(projectDir, "conn.yml");
   if (!existsSync(connPath)) return undefined;
@@ -134,16 +154,7 @@ export function loadConnConfig(projectDir: string): ConnConfig | undefined {
     return undefined;
   }
 
-  const dotenvPath = path.join(projectDir, ".env");
-  let dotenv: Record<string, string> = {};
-  if (existsSync(dotenvPath)) {
-    try {
-      dotenv = parseDotEnv(readFileSync(dotenvPath, "utf-8"));
-    } catch {
-      dotenv = {};
-    }
-  }
-  const lookup = (name: string): string | undefined => process.env[name] ?? dotenv[name];
+  const lookup = envLookup(projectDir);
 
   const fields: Record<string, string> = {};
   for (const [key, value] of Object.entries(raw)) {
@@ -211,10 +222,19 @@ export function resolveConnectionSource(projectDir: string): ConnConfig {
   const profileFields = loadProfileStore().profiles.get(manifest.profile);
   if (!profileFields) return { datasource: manifest.dataSource, fields: {} };
 
+  // A stored profile's values are `${VAR}` references into the project's
+  // `.env` — that is how wren keeps credentials out of `~/.wren/profiles.yml`.
+  // They need the same resolution `conn.yml` already gets; without it the
+  // connection panel rendered the literal `${BIGQUERY_PROJECT_ID}`.
+  const lookup = envLookup(projectDir);
   const fields: Record<string, string> = {};
   for (const [key, value] of profileFields) {
     if (key === "datasource") continue; // the manifest's data_source is authoritative for `type`; profiles.yml's own field is redundant and excluded from `fields`.
-    fields[key] = value;
+    const resolved = resolveTemplate(value, lookup);
+    // An unresolved reference is dropped rather than shown: the panel's job is
+    // to say where this project connects, and `${SOMETHING}` answers that no
+    // better than showing nothing.
+    if (resolved !== undefined) fields[key] = resolved;
   }
   return { datasource: manifest.dataSource, fields };
 }

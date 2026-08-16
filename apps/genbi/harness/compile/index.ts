@@ -6,7 +6,7 @@ export {
   WarbleCommandFailedError,
 } from "./errors.js";
 export { hashDirectory, hashFiles } from "./fingerprint.js";
-export { compileProfile } from "./pipeline.js";
+export { compileProfile, compileRawProfile, runWarble } from "./pipeline.js";
 export { resolveWarbleBinary } from "./resolve-binary.js";
 export type {
   CompileCache,
@@ -15,5 +15,6 @@ export type {
   CompileMode,
   CompileProfileOptions,
   CompileProfileResult,
+  CompileRawProfileOptions,
 } from "./types.js";
 export { getWarbleIdentity } from "./warble-identity.js";

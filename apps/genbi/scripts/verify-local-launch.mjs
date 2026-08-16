@@ -1,0 +1,502 @@
+#!/usr/bin/env node
+/**
+ * Deterministic pre-launch gate for a local GenBI UI/BFF pair.  It is deliberately
+ * a standalone Node program so an operator can run it before either long-lived
+ * process is started.  It never contacts a model, starts a server, or reads
+ * credentials: all Warble calls compile/dispatch local files only.
+ */
+import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import {
+  accessSync,
+  constants,
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const nativePurposes = ["analysis", "setup", "context_enrichment"];
+const livePurposeContracts = {
+  analysis: { scopeKind: "bound_project", profile: "genbi-default" },
+  setup: { scopeKind: "bootstrap", profile: "genbi-setup" },
+  context_enrichment: { scopeKind: "bound_project", profile: "genbi-enrich-context" },
+};
+const nativeRuntimeBindingRequiredReason = "native sessions require a saved Runtime & authentication binding";
+const liveRequiredPurposes = {
+  bootstrap: [],
+  bound: ["analysis", "context_enrichment"],
+};
+const nativeVendors = ["claude", "codex"];
+
+function usage(message) {
+  const text = [
+    message ? `error: ${message}` : undefined,
+    "Usage: pnpm run verify:launch -- --mode bootstrap|bound --runtime subscription:claude --warble-root <checkout> --warble-bin <binary> --agent-sdk-bin <binary> [mode input]",
+    "  bootstrap: --workspace-root <directory> (and no --project)",
+    "  bound:     --project <canonical wren project> (and no --workspace-root)",
+    "Optional: --profile <dir> --setup-ir <file> --enrich-ir <file> --analysis-ir <file>",
+    "Live gate: --live --bff-url <url> --ui-url <url> (after both processes are running)",
+  ].filter(Boolean).join("\n");
+  throw new GateError("usage", text);
+}
+
+class GateError extends Error {
+  constructor(code, message) { super(message); this.code = code; }
+}
+
+function parseArgs(argv) {
+  // pnpm forwards the separator itself to a bare `node` script: accept the
+  // conventional `pnpm run verify:launch -- --mode ...` spelling as well as a
+  // direct `node scripts/verify-local-launch.mjs --mode ...` invocation.
+  if (argv[0] === "--") argv = argv.slice(1);
+  const options = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === "--help" || argument === "-h") usage();
+    if (argument === "--skip-build") { options.skipBuild = true; continue; }
+    if (argument === "--live") { options.live = true; continue; }
+    if (!argument.startsWith("--")) usage(`unexpected argument ${JSON.stringify(argument)}`);
+    const key = argument.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+    const value = argv[index + 1];
+    if (!value || value.startsWith("--")) usage(`${argument} requires a value`);
+    if (Object.hasOwn(options, key)) usage(`${argument} was supplied more than once`);
+    options[key] = value;
+    index += 1;
+  }
+  if (options.mode !== "bootstrap" && options.mode !== "bound") usage("--mode must be bootstrap or bound");
+  for (const required of ["runtime", "warbleRoot", "warbleBin", "agentSdkBin"]) if (!options[required]) usage(`--${required.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required`);
+  if (options.runtime !== "subscription:claude") usage("--runtime must be subscription:claude");
+  if (options.skipBuild && process.env.NODE_ENV !== "test") usage("--skip-build is reserved for the deterministic fixture suite");
+  if (options.mode === "bootstrap") {
+    if (!options.workspaceRoot || options.project) usage("bootstrap mode requires --workspace-root and forbids --project");
+  } else if (!options.project || options.workspaceRoot) {
+    usage("bound mode requires --project and forbids --workspace-root");
+  }
+  if (options.live && (!options.bffUrl || !options.uiUrl)) usage("--live requires --bff-url and --ui-url");
+  if (!options.live && (options.bffUrl || options.uiUrl)) usage("--bff-url and --ui-url require --live");
+  return options;
+}
+
+function contained(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function regularFile(value, label) {
+  try {
+    const canonical = realpathSync(value);
+    if (!statSync(canonical).isFile()) throw new Error("not a file");
+    return canonical;
+  } catch {
+    throw new GateError("missing_input", `${label} must be a readable regular file: ${value}`);
+  }
+}
+
+function directory(value, label) {
+  try {
+    const canonical = realpathSync(value);
+    if (!statSync(canonical).isDirectory()) throw new Error("not a directory");
+    return canonical;
+  } catch {
+    throw new GateError("missing_input", `${label} must be a readable directory: ${value}`);
+  }
+}
+
+function git(directoryToProbe, label) {
+  const result = run("git", ["-C", directoryToProbe, "rev-parse", "--show-toplevel"], { capture: true });
+  if (result.code !== 0) throw new GateError("provenance", `${label} is not inside a git worktree`);
+  const root = realpathSync(result.stdout.trim());
+  const commit = run("git", ["-C", root, "rev-parse", "HEAD"], { capture: true });
+  const branch = run("git", ["-C", root, "branch", "--show-current"], { capture: true });
+  if (commit.code !== 0 || branch.code !== 0) throw new GateError("provenance", `could not resolve ${label} git commit`);
+  const status = run("git", ["-C", root, "status", "--porcelain=v1", "--untracked-files=all"], { capture: true });
+  if (status.code !== 0) throw new GateError("provenance", `could not inspect ${label} source state`);
+  if (status.stdout.trim()) throw new GateError("dirty_source", `${label} worktree has tracked or untracked source changes`);
+  const rootDigest = createHash("sha256").update(root).digest("hex");
+  const resolvedCommit = commit.stdout.trim();
+  return { root, commit: resolvedCommit, branch: branch.stdout.trim() || "(detached)", rootDigest, treeIdentity: createHash("sha256").update(`${rootDigest}\0${resolvedCommit}`).digest("hex") };
+}
+
+function run(command, args, { cwd = packageRoot, capture = false } = {}) {
+  const result = execFileSyncResult(command, args, cwd);
+  if (!capture && result.code !== 0) throw new GateError("command_failed", `${command} ${args.join(" ")} exited ${result.code}`);
+  return result;
+}
+
+function execFileSyncResult(command, args, cwd) {
+  // `spawnSync` gives this CLI a simple fail-closed boundary and avoids a shell.
+  const result = spawnSync(command, args, { cwd, encoding: "utf8", maxBuffer: 32 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  return { code: result.status ?? (result.error ? 1 : 0), stdout: result.stdout ?? "", stderr: result.stderr ?? "", error: result.error };
+}
+
+function assertInside(root, value, label) {
+  if (!contained(root, value)) throw new GateError("provenance", `${label} must be inside the selected Warble checkout`);
+}
+
+function hash(file) { return createHash("sha256").update(readFileSync(file)).digest("hex"); }
+function hashTree(root) {
+  const digest = createHash("sha256");
+  const visit = (directory) => forEachSorted(readdirSync(directory, { withFileTypes: true }), (entry) => {
+    const candidate = path.join(directory, entry.name); const relative = path.relative(root, candidate);
+    if (relative === "local-launch-attestation.json") return;
+    if (entry.isSymbolicLink()) throw new GateError("provenance", `runtime input must not contain a symlink: ${candidate}`);
+    if (entry.isDirectory()) visit(candidate); else if (entry.isFile()) { digest.update(relative); digest.update("\0"); digest.update(readFileSync(candidate)); }
+  });
+  visit(root); return digest.digest("hex");
+}
+function forEachSorted(entries, callback) { for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) callback(entry); }
+
+function bootstrapRoot(value) {
+  const raw = path.resolve(value);
+  let existing = raw;
+  const missing = [];
+  while (!existsSync(existing)) {
+    const parent = path.dirname(existing);
+    if (parent === existing) throw new GateError("boot_mode", `bootstrap workspace has no writable parent: ${value}`);
+    missing.unshift(path.basename(existing));
+    existing = parent;
+  }
+  // Do not let a lexical symlink in the supplied path turn an apparently fresh
+  // root into a different directory between preflight and BFF startup.
+  if (lstatSync(existing).isSymbolicLink()) throw new GateError("boot_mode", "bootstrap workspace root or parent must not be a symlink");
+  const parent = directory(existing, "bootstrap workspace parent");
+  const canonical = path.join(parent, ...missing);
+  if (!contained(parent, canonical) || missing.some((part) => part === "." || part === ".." || path.basename(part) !== part)) {
+    throw new GateError("boot_mode", "bootstrap workspace root escapes its canonical parent");
+  }
+  if (existsSync(canonical)) {
+    if (lstatSync(canonical).isSymbolicLink()) throw new GateError("boot_mode", "bootstrap workspace root must not be a symlink");
+    const resolved = directory(canonical, "bootstrap workspace root");
+    if (existsSync(path.join(resolved, "wren_project.yml"))) throw new GateError("boot_mode", "bootstrap workspace root must not already be a Wren project");
+    for (let ancestor = path.dirname(resolved); ; ancestor = path.dirname(ancestor)) {
+      if (existsSync(path.join(ancestor, "wren_project.yml"))) throw new GateError("boot_mode", "bootstrap workspace root must not be inside a Wren project");
+      if (ancestor === path.dirname(ancestor)) break;
+    }
+    return { root: resolved, parent: resolved };
+  }
+  for (let ancestor = parent; ; ancestor = path.dirname(ancestor)) {
+    if (existsSync(path.join(ancestor, "wren_project.yml"))) throw new GateError("boot_mode", "bootstrap workspace root must not be inside a Wren project");
+    if (ancestor === path.dirname(ancestor)) break;
+  }
+  try { accessSync(parent, constants.W_OK | constants.X_OK); } catch { throw new GateError("boot_mode", `bootstrap workspace parent is not writable: ${parent}`); }
+  return { root: canonical, parent };
+}
+
+function validateMode(options) {
+  if (options.mode === "bootstrap") {
+    const workspace = bootstrapRoot(options.workspaceRoot);
+    return { workspaceRoot: workspace.root, workspaceParent: workspace.parent };
+  }
+  const project = directory(options.project, "bound project");
+  regularFile(path.join(project, "wren_project.yml"), "bound project wren_project.yml");
+  return { project };
+}
+
+function assertIr(pathToIr, label, warbleRoot) {
+  const canonical = regularFile(pathToIr, label);
+  assertInside(warbleRoot, canonical, label);
+  try { JSON.parse(readFileSync(canonical, "utf8")); } catch { throw new GateError("contract", `${label} is not valid JSON: ${canonical}`); }
+  return canonical;
+}
+
+async function loadHarnessBundleLoader() {
+  const module = regularFile(path.join(packageRoot, "dist-server", "harness", "index.js"), "fresh dist-server harness bundle loader");
+  try {
+    return await import(`${pathToFileURL(module).href}?launch-gate=${Date.now()}`);
+  } catch {
+    throw new GateError("build", "could not load the freshly built harness bundle loader");
+  }
+}
+
+async function probeNativeSessionProducer({ bin, irPaths }) {
+  const module = regularFile(path.join(packageRoot, "dist-server", "server", "native-sessions.js"), "fresh dist-server native-session producer");
+  let producer;
+  try {
+    ({ probeNativeSessionProducer: producer } = await import(`${pathToFileURL(module).href}?launch-gate=${Date.now()}`));
+  } catch {
+    throw new GateError("build", "could not load the freshly built BFF native-session producer");
+  }
+  if (typeof producer !== "function") throw new GateError("build", "fresh dist-server does not export the BFF native-session producer");
+  const result = await producer({
+    warbleBin: bin,
+    irPaths,
+    ...(process.env.WREN_HARNESS_WREN_SHIM !== undefined ? { wrenShim: process.env.WREN_HARNESS_WREN_SHIM } : {}),
+  });
+  if (!result?.available) throw new GateError("contract", `Warble native producer preflight failed for the selected runtime closure (${result?.diagnostic ?? "incompatible"})`);
+  return { available: true, evidence: nativePurposes.flatMap((purpose) => nativeVendors.map((vendor) => `dispatch:native(${purpose}/${vendor})`)) };
+}
+
+async function runWarbleContractProbe({ bin, profile, setupIr, enrichIr, analysisIr }) {
+  const probeRoot = mkdtempSync(path.join(tmpdir(), "genbi-launch-gate-"));
+  try {
+    const compiledIr = path.join(probeRoot, "profile.ir.json");
+    let result = run(bin, ["compile", profile, "-o", compiledIr], { capture: true });
+    if (result.code !== 0) throw new GateError("contract", "Warble compile profile probe failed");
+    let compiled;
+    try { compiled = JSON.parse(readFileSync(compiledIr, "utf8")); } catch { throw new GateError("contract", "Warble compile profile probe did not create valid JSON"); }
+    const tiers = new Set();
+    if (!Array.isArray(compiled?.components)) throw new GateError("runtime_binding", "compiled profile IR has no components array");
+    for (const component of compiled.components) for (const call of component?.llm_calls ?? []) if (typeof call?.tier === "string" && call.tier.trim()) tiers.add(call.tier.trim());
+    if (tiers.size === 0) throw new GateError("runtime_binding", "compiled profile IR declares no runtime tiers");
+
+    // This is also the launch gate's one live exercise of the Mode A/agnostic
+    // describe path: not just checking the dispatcher produced a file, but
+    // actually loading it through the same `loadBundle`/`assertCompat` check
+    // the BFF's `GET /api/harness` route runs, against a bundle this probe
+    // just dispatched from the selected Warble checkout — not a committed
+    // fixture. A stale harness-declared IR version against a newer Warble
+    // pin fails here, not silently at the first live describe request.
+    const { loadBundle } = await loadHarnessBundleLoader();
+    for (const [label, ir, provider] of [
+      ["profile", compiledIr, path.join(packageRoot, "providers", "wren.provider.yaml")],
+      ["setup", setupIr, path.join(packageRoot, "providers", "setup.provider.yaml")],
+    ]) {
+      const out = path.join(probeRoot, `${label}-vercel`);
+      result = run(bin, ["dispatch", "--target", "vercel", "--provider", provider, ir, "--out", out], { capture: true });
+      const bundlePath = path.join(out, "bundle.json");
+      if (result.code !== 0 || !existsSync(bundlePath)) throw new GateError("contract", `Warble Vercel dispatch probe failed for ${label}`);
+      let bundleJson;
+      try { bundleJson = JSON.parse(readFileSync(bundlePath, "utf8")); } catch { throw new GateError("contract", `Warble Vercel dispatch probe for ${label} did not produce valid JSON`); }
+      try { loadBundle(bundleJson); } catch (error) { throw new GateError("describe", `Warble Vercel bundle for ${label} failed the harness describe/compat check: ${error instanceof Error ? error.message : String(error)}`); }
+    }
+
+    const native = await probeNativeSessionProducer({ bin, irPaths: { analysis: analysisIr, setup: setupIr, context_enrichment: enrichIr } });
+    return { tiers: [...tiers].sort(), native };
+  } finally { rmSync(probeRoot, { recursive: true, force: true }); }
+}
+
+function runAgentSdkContractProbe({ bin, analysisIr, setupIr, enrichIr }) {
+  const help = run(bin, ["--help"], { capture: true });
+  if (help.code !== 0 || !help.stdout.includes("manifest")) throw new GateError("contract", "agent-sdk dispatcher does not expose the generic manifest command");
+  const evidence = [];
+  for (const [label, ir, profile] of [["analysis", analysisIr, "genbi-default"], ["setup", setupIr, "genbi-setup"], ["context_enrichment", enrichIr, "genbi-enrich-context"]]) {
+    const result = run(bin, ["manifest", ir, "--include-unavailable"], { capture: true });
+    let manifest;
+    try { manifest = JSON.parse(result.stdout); } catch { throw new GateError("contract", `agent-sdk manifest probe did not return valid JSON for ${label}`); }
+    if (result.code !== 0 || !manifest || typeof manifest !== "object" || Array.isArray(manifest) || manifest.manifest_version !== "0.1" || manifest.target !== "claude-agent-sdk:local" || manifest.profile !== profile || !Array.isArray(manifest.agents)) {
+      throw new GateError("contract", `agent-sdk manifest probe is incompatible for ${label}`);
+    }
+    const agents = new Map(manifest.agents.map((agent) => [agent?.id, agent]));
+    if (label !== "context_enrichment") {
+      if (manifest.agents.some((agent) => !agent || typeof agent !== "object" || Array.isArray(agent) || Object.hasOwn(agent, "availability"))) {
+        throw new GateError("contract", `agent-sdk display manifest unexpectedly marks ${label} unavailable`);
+      }
+    } else {
+      for (const id of ["inspect_context", "draft_enrichment"]) {
+        const agent = agents.get(id);
+        if (!agent || typeof agent !== "object" || Array.isArray(agent) || Object.hasOwn(agent, "availability")) {
+          throw new GateError("contract", `agent-sdk display manifest does not keep ${id} available`);
+        }
+      }
+      const unavailable = agents.get("apply_enrichment");
+      if (!unavailable || typeof unavailable !== "object" || Array.isArray(unavailable)
+        || unavailable.availability?.status !== "unavailable"
+        || unavailable.availability?.reason !== "component is unavailable on the configured runtime"
+        || !["steps", "tools", "capabilities"].every((key) => Array.isArray(unavailable[key]) && unavailable[key].length === 0)
+        || !["guardrails", "output_schema"].every((key) => unavailable[key] && typeof unavailable[key] === "object" && !Array.isArray(unavailable[key]) && Object.keys(unavailable[key]).length === 0)) {
+        throw new GateError("contract", "agent-sdk display manifest does not redact unavailable apply_enrichment surfaces");
+      }
+      const defaultManifest = run(bin, ["manifest", ir], { capture: true });
+      if (defaultManifest.code === 0 || !defaultManifest.stderr.includes("context_write_authz")) {
+        throw new GateError("contract", "agent-sdk default enrichment manifest no longer preserves the context_write_authz wall");
+      }
+      const unavailableChat = run(bin, ["chat", ir, "--component", "apply_enrichment"], { capture: true });
+      if (unavailableChat.code === 0 || !unavailableChat.stderr.includes("context_write_authz")) {
+        throw new GateError("contract", "agent-sdk apply_enrichment chat no longer preserves the context_write_authz wall");
+      }
+    }
+    evidence.push(`agent-sdk:manifest(${label})`);
+  }
+  return evidence;
+}
+
+function build() {
+  const startedAt = Date.now();
+  run("pnpm", ["run", "build"]);
+  const entry = regularFile(path.join(packageRoot, "dist-server", "server", "bin.js"), "current dist-server entrypoint");
+  // A build was run in this invocation, rather than accepting a previously-existing dist tree.
+  return { entry, builtAt: new Date(startedAt).toISOString(), entrySha256: hash(entry), closureSha256: hashTree(path.join(packageRoot, "dist-server")) };
+}
+
+function writeAttestation(result) {
+  const publicAttestation = {
+    version: "genbi-launch-attestation/v1",
+    mode: result.mode,
+    genbi: { rootDigest: result.ui.git.rootDigest, commit: result.ui.git.commit, treeIdentity: result.ui.git.treeIdentity },
+    warble: {
+      rootDigest: result.warble.git.rootDigest,
+      commit: result.warble.git.commit,
+      treeIdentity: result.warble.git.treeIdentity,
+      binarySha256: result.warble.binarySha256,
+      runtimeInputs: result.warble.runtimeInputs,
+    },
+    runtime: result.runtimeBinding.runtime,
+    bff: { entrySha256: result.bff.build.entrySha256, closureSha256: result.bff.build.closureSha256 },
+    ui: { rootDigest: result.ui.git.rootDigest, commit: result.ui.git.commit, treeIdentity: result.ui.git.treeIdentity },
+  };
+  const file = path.join(packageRoot, "dist-server", "local-launch-attestation.json");
+  const full = { ...publicAttestation, local: { genbiRoot: result.ui.git.root, warbleRoot: result.warble.root, warbleBin: result.warble.binary, agentSdkBin: result.agentSdk.binary, profile: result.warble.profile, setupIr: result.warble.setupIr, enrichIr: result.warble.enrichIr, analysisIr: result.warble.analysisIr, modeInput: result.mode === "bootstrap" ? result.boot.workspaceRoot : result.boot.project } };
+  writeFileSync(file, `${JSON.stringify(full)}\n`, { mode: 0o600 });
+  return { file, public: publicAttestation };
+}
+
+export async function verifyLocalLaunch(options) {
+  const mode = validateMode(options);
+  const genbi = git(packageRoot, "GenBI package");
+  const warbleRoot = directory(options.warbleRoot, "Warble checkout");
+  const warble = git(warbleRoot, "Warble checkout");
+  if (warble.root !== warbleRoot) throw new GateError("provenance", "--warble-root must be the selected Warble git worktree root");
+  const warbleBin = regularFile(options.warbleBin, "Warble binary");
+  assertInside(warbleRoot, warbleBin, "Warble binary");
+  try { accessSync(warbleBin, constants.X_OK); } catch { throw new GateError("provenance", "Warble binary is not executable"); }
+  const agentSdkBin = regularFile(options.agentSdkBin, "agent-sdk dispatcher binary");
+  assertInside(warbleRoot, agentSdkBin, "agent-sdk dispatcher binary");
+  try { accessSync(agentSdkBin, constants.X_OK); } catch { throw new GateError("provenance", "agent-sdk dispatcher binary is not executable"); }
+
+  const profile = directory(options.profile ?? path.join(warbleRoot, "genbi-default"), "Warble profile");
+  assertInside(warbleRoot, profile, "Warble profile");
+  const setupIr = assertIr(options.setupIr ?? path.join(warbleRoot, "genbi-setup", "ir.golden.json"), "Setup IR", warbleRoot);
+  const enrichIr = assertIr(options.enrichIr ?? path.join(warbleRoot, "genbi-enrich-context", "ir.golden.json"), "enrichment IR", warbleRoot);
+  const analysisIr = assertIr(options.analysisIr ?? path.join(profile, "ir.golden.json"), "analysis IR", warbleRoot);
+  const dist = options.skipBuild ? { entry: "(fixture skipped build)", builtAt: "(fixture skipped build)", entrySha256: "(fixture skipped build)" } : build();
+  const contracts = await runWarbleContractProbe({ bin: warbleBin, profile, setupIr, enrichIr, analysisIr });
+  const agentSdkProbes = runAgentSdkContractProbe({ bin: agentSdkBin, analysisIr, setupIr, enrichIr });
+  const runtimeInputs = {
+    profileTreeSha256: hashTree(profile),
+    setupIrSha256: hash(setupIr),
+    enrichIrSha256: hash(enrichIr),
+    analysisIrSha256: hash(analysisIr),
+  };
+  const result = {
+    result: "passed",
+    mode: options.mode,
+    ui: { packageRoot, git: genbi, launchCommand: "pnpm dev" },
+    bff: { packageRoot, git: genbi, entry: dist.entry, build: dist, launchCommand: "pnpm run start:bff" },
+    warble: { root: warbleRoot, git: warble, binary: warbleBin, binarySha256: hash(warbleBin), runtimeInputs, profile, setupIr, enrichIr, analysisIr },
+    agentSdk: { binary: agentSdkBin, binarySha256: hash(agentSdkBin) },
+    runtimeBinding: { runtime: { mode: "subscription", provider: "claude", dispatcher: "claude-agent-sdk", agentSdkSha256: hash(agentSdkBin) }, tiers: contracts.tiers },
+    boot: mode,
+    probes: ["compile", "dispatch:vercel(profile)", "dispatch:vercel(setup)", ...contracts.native.evidence, ...agentSdkProbes],
+  };
+  result.attestation = writeAttestation(result);
+  return result;
+}
+
+async function fetchRequired(url, label) {
+  let response;
+  try {
+    response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+  } catch {
+    throw new GateError("readiness", `${label} is not reachable at ${url}`);
+  }
+  if (!response.ok) throw new GateError("smoke", `${label} returned HTTP ${response.status} at ${url}`);
+  return response;
+}
+
+function assertExactPublicAttestation(value, expected, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.hasOwn(value, "local") || JSON.stringify(value) !== JSON.stringify(expected)) {
+    throw new GateError("provenance", `${label} does not match the selected public tuple`);
+  }
+  const visit = (candidate) => {
+    if (typeof candidate === "string" && path.isAbsolute(candidate)) throw new GateError("provenance", `${label} exposed a local filesystem path`);
+    if (candidate && typeof candidate === "object") for (const child of Object.values(candidate)) visit(child);
+  };
+  visit(value);
+}
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isPlainEmptyObject(value) {
+  return isRecord(value) && Object.getPrototypeOf(value) === Object.prototype && Object.keys(value).length === 0;
+}
+
+function assertReadiness(condition, message) {
+  if (!condition) throw new GateError("readiness", message);
+}
+
+/**
+ * Readiness is a second live attestation boundary: prove that the selected BFF
+ * is in the expected boot state, rather than only accepting a reachable API.
+ */
+function assertLiveReadiness(readiness, mode, attestation) {
+  assertReadiness(isRecord(readiness), "BFF native-session readiness API returned an invalid shape");
+  const runtime = readiness.runtime;
+  assertReadiness(isRecord(runtime) && typeof runtime.configured === "boolean" && Number.isSafeInteger(runtime.generation) && runtime.generation >= 0, "BFF native-session readiness runtime binding is malformed");
+  const expectedProvider = attestation.runtime.provider;
+  const expectedTarget = expectedProvider === "claude" ? "claude-code:interactive" : "codex:interactive";
+  const expectedTargetLabel = expectedProvider === "claude" ? "Claude CLI" : "Codex CLI";
+  if (mode === "bootstrap") {
+    assertReadiness(runtime.configured === false, "bootstrap BFF must report an unconfigured Runtime binding");
+    assertReadiness(!Object.hasOwn(runtime, "provider") && !Object.hasOwn(runtime, "target") && !Object.hasOwn(runtime, "targetLabel"), "bootstrap BFF Runtime binding unexpectedly selects a native target");
+  } else {
+    assertReadiness(runtime.configured === true && runtime.provider === expectedProvider && runtime.target === expectedTarget && runtime.targetLabel === expectedTargetLabel, "bound BFF Runtime binding does not match the selected native target");
+  }
+
+  const purposes = readiness.purposes;
+  assertReadiness(isRecord(purposes), "BFF native-session readiness purposes are malformed");
+  for (const purpose of nativePurposes) {
+    const expected = livePurposeContracts[purpose];
+    const value = purposes[purpose];
+    assertReadiness(isRecord(value) && value.scopeKind === expected.scopeKind && value.profile === expected.profile && typeof value.available === "boolean", `BFF native purpose ${purpose} readiness is malformed`);
+    assertReadiness(isPlainEmptyObject(value.vendors), `BFF native purpose ${purpose} vendors projection is malformed`);
+    assertReadiness(isRecord(value.producer) && value.producer.available === true && !Object.hasOwn(value.producer, "category"), `BFF native purpose ${purpose} producer is incompatible`);
+    assertReadiness(value.reason === undefined || typeof value.reason === "string", `BFF native purpose ${purpose} reason is malformed`);
+    if (mode === "bootstrap") {
+      assertReadiness(!Object.hasOwn(value, "target") && !Object.hasOwn(value, "targetLabel"), `bootstrap BFF native purpose ${purpose} unexpectedly selects a target`);
+      assertReadiness(value.available === false && value.reason === nativeRuntimeBindingRequiredReason, `bootstrap BFF native purpose ${purpose} must be unavailable until Runtime authentication is saved`);
+    } else {
+      assertReadiness(value.target === expectedTarget && value.targetLabel === expectedTargetLabel, `bound BFF native purpose ${purpose} target does not match the selected Runtime`);
+    }
+  }
+  const mcp = readiness.mcp;
+  assertReadiness(isRecord(mcp) && mcp.server === "GenBI MCP" && mcp.tool === "save_dashboard" && mcp.destination === "GenBI Artifacts" && typeof mcp.available === "boolean" && (mcp.reason === undefined || typeof mcp.reason === "string"), "BFF native-session MCP readiness is malformed");
+  for (const purpose of liveRequiredPurposes[mode]) {
+    const value = purposes[purpose];
+    assertReadiness(value.available === true && value.reason === undefined, `BFF reports native purpose ${purpose} unavailable`);
+  }
+  return liveRequiredPurposes[mode];
+}
+
+export async function verifyLive(options, result) {
+  const bffUrl = new URL(options.bffUrl);
+  const uiUrl = new URL(options.uiUrl);
+  const bffAttestation = await fetchRequired(new URL("/api/local-launch-attestation", bffUrl), "BFF launch attestation");
+  assertExactPublicAttestation(await bffAttestation.json(), result.attestation.public, "BFF launch attestation");
+  const readinessResponse = await fetchRequired(new URL("/api/native-sessions/readiness", bffUrl), "BFF native-session readiness API");
+  let readiness;
+  try { readiness = await readinessResponse.json(); } catch { throw new GateError("readiness", "BFF native-session readiness API did not return JSON"); }
+  const requiredPurposes = assertLiveReadiness(readiness, options.mode, result.attestation.public);
+  const uiAttestation = await fetchRequired(new URL("/_genbi/local-launch-attestation", uiUrl), "UI launch attestation");
+  assertExactPublicAttestation(await uiAttestation.json(), result.attestation.public, "UI launch attestation");
+  const ui = await fetchRequired(uiUrl, "UI");
+  if (!(await ui.text()).includes('id="root"')) throw new GateError("smoke", "UI response is not the GenBI Vite entrypoint");
+  return { bffUrl: bffUrl.toString(), uiUrl: uiUrl.toString(), requiredPurposes };
+}
+
+async function main() {
+  try {
+    const options = parseArgs(process.argv.slice(2));
+    const result = await verifyLocalLaunch(options);
+    if (options.live) result.live = await verifyLive(options, result);
+    process.stdout.write(`launch gate PASSED\n${JSON.stringify(result, null, 2)}\n`);
+  } catch (error) {
+    if (error instanceof GateError) process.stderr.write(`launch gate BLOCKED [${error.code}]: ${error.message}\n`);
+    else process.stderr.write(`launch gate BLOCKED [internal]: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  }
+}
+
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) void main();

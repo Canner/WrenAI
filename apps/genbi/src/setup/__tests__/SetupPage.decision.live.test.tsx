@@ -10,10 +10,16 @@ vi.mock('@/bff/env', () => ({
 }));
 
 const getAdapterEnvStatus = vi.fn();
+const getSubscriptionLoginStatus = vi.fn();
+const getSubscriptionModelCatalog = vi.fn();
 const getContextOverview = vi.fn();
 const getRuntimeSettings = vi.fn();
+const getRuntimeSettingsReadiness = vi.fn();
+const getRuntimeTierNames = vi.fn();
 const getSetupEnvFields = vi.fn();
+const getSetupSourceCatalog = vi.fn();
 const getSetupMode = vi.fn();
+const getSetupRecovery = vi.fn();
 const getSetupSteps = vi.fn();
 const postSetupCompileBind = vi.fn();
 const postSetupConnectTurn = vi.fn();
@@ -31,10 +37,16 @@ vi.mock('@/bff/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/bff/client')>();
   return {
     getAdapterEnvStatus: (...args: unknown[]) => getAdapterEnvStatus(...args),
+    getSubscriptionLoginStatus: (...args: unknown[]) => getSubscriptionLoginStatus(...args),
+    getSubscriptionModelCatalog: (...args: unknown[]) => getSubscriptionModelCatalog(...args),
     getContextOverview: (...args: unknown[]) => getContextOverview(...args),
     getRuntimeSettings: (...args: unknown[]) => getRuntimeSettings(...args),
+    getRuntimeSettingsReadiness: (...args: unknown[]) => getRuntimeSettingsReadiness(...args),
+    getRuntimeTierNames: (...args: unknown[]) => getRuntimeTierNames(...args),
     getSetupEnvFields: (...args: unknown[]) => getSetupEnvFields(...args),
+    getSetupSourceCatalog: (...args: unknown[]) => getSetupSourceCatalog(...args),
     getSetupMode: (...args: unknown[]) => getSetupMode(...args),
+    getSetupRecovery: (...args: unknown[]) => getSetupRecovery(...args),
     getSetupSteps: (...args: unknown[]) => getSetupSteps(...args),
     postSetupCompileBind: (...args: unknown[]) => postSetupCompileBind(...args),
     postSetupConnectTurn: (...args: unknown[]) => postSetupConnectTurn(...args),
@@ -44,6 +56,8 @@ vi.mock('@/bff/client', async (importOriginal) => {
     postSetupReset: (...args: unknown[]) => postSetupReset(...args),
     postSetupResume: (...args: unknown[]) => postSetupResume(...args),
     putRuntimeSettings: (...args: unknown[]) => putRuntimeSettings(...args),
+    getNativeSessionReadiness: vi.fn().mockResolvedValue({ setup: { scopeKind: 'bootstrap', available: false, reason: 'native sessions are unavailable in this test', vendors: { claude: { available: false }, codex: { available: false } } } }),
+    createNativeSession: vi.fn(),
     SetupDecisionRequiredError: actual.SetupDecisionRequiredError,
   };
 });
@@ -88,13 +102,27 @@ function lastHandlers(): SetupStreamHandlers {
 beforeEach(() => {
   getAdapterEnvStatus.mockReset();
   getAdapterEnvStatus.mockResolvedValue({ anthropic: false, openaiCompatible: false });
+  getSubscriptionLoginStatus.mockReset();
+  getSubscriptionLoginStatus.mockResolvedValue({ claude: true, codex: false });
+  getSubscriptionModelCatalog.mockReset();
+  getSubscriptionModelCatalog.mockResolvedValue({ version: 1, status: 'ready', provider: 'claude', models: [] });
   getContextOverview.mockReset();
-  getContextOverview.mockResolvedValue({ models: [], measures: [], knowledge: { verifiedPairCount: 0 } });
+  getContextOverview.mockResolvedValue({ models: [], relationships: [], measures: [], knowledge: { verifiedPairCount: 0 } });
   getRuntimeSettings.mockReset();
   getRuntimeSettings.mockResolvedValue(fixtureRuntimeSettings);
+  getRuntimeSettingsReadiness.mockReset();
+  getRuntimeSettingsReadiness.mockResolvedValue({ valid: true });
+  getRuntimeTierNames.mockReset();
+  getRuntimeTierNames.mockResolvedValue(['cheap', 'strong']);
   getSetupEnvFields.mockReset();
+  getSetupSourceCatalog.mockReset();
+  // The connect card loads the catalog on mount; these cases are about the
+  // decision/adopt flows, so a bare live-shaped response is enough.
+  getSetupSourceCatalog.mockResolvedValue({ sources: [{ key: 'postgres', label: 'PostgreSQL', variants: [] }], fromCli: true });
   getSetupMode.mockReset();
   getSetupMode.mockResolvedValue({ mode: 'create' });
+  getSetupRecovery.mockReset();
+  getSetupRecovery.mockResolvedValue({});
   getSetupSteps.mockReset();
   // hydrate() always fires this GET on mount; the `pristine()` guard inside
   // it means it only applies once the store is still first-run, so a stale
@@ -169,7 +197,7 @@ describe('Setup page — decision checkpoint (live mode)', () => {
     lastHandlers().onEvent?.({ id: 'e1', kind: 'setup_status', status: 'ok', message: 'Connected.' });
 
     await vi.waitFor(() => expect(useSetupStore.getState().connectedSourceKey).toBe('postgres'));
-    expect(screen.getByText('Discover models, cubes, and knowledge from the connected source.')).toBeInTheDocument();
+    expect(screen.getByText('Discover the connected schema and build its semantic model foundation.')).toBeInTheDocument();
   });
 
   it('connect: "Rename" clears the decision and re-opens the (now-empty) project name field for a new attempt', async () => {
@@ -216,7 +244,7 @@ describe('Setup page — decision checkpoint (live mode)', () => {
 
     renderWithProviders(<AppRoutes />, { route: '/setup' });
 
-    await user.click(screen.getByRole('button', { name: 'Build context' }));
+    await user.click(screen.getByRole('button', { name: 'Build data model' }));
     await vi.waitFor(() => expect(setupStream).toHaveBeenCalled());
 
     lastHandlers().onEvent?.({
@@ -270,7 +298,7 @@ describe('Setup page — decision checkpoint (live mode)', () => {
 
     renderWithProviders(<AppRoutes />, { route: '/setup' });
 
-    await user.click(screen.getByRole('button', { name: 'Build context' }));
+    await user.click(screen.getByRole('button', { name: 'Build data model' }));
     await vi.waitFor(() => expect(setupStream).toHaveBeenCalled());
 
     // Terminal event arrives before this step's own closing `worklog` frame

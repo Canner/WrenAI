@@ -1,0 +1,43 @@
+.sessions-workbench { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--ant-color-bg-container); }
+.sessions-toolbar { min-height: 42px; display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--ant-color-border-secondary); background: var(--ant-color-bg-container); }
+.sessions-toolbar-title { min-width: 0; display: flex; align-items: baseline; gap: 8px; flex: 1; }
+.sessions-toolbar-title strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sessions-toolbar-title span { color: var(--ant-color-text-tertiary); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sessions-toolbar-actions { display: flex; gap: 4px; }
+.sessions-toolbar-error { color: var(--ant-color-error); font-size: 12px; }
+.sessions-terminal-wrap { position: relative; flex: 1; min-height: 0; overflow: hidden; box-sizing: border-box; padding: 12px; }
+.sessions-terminal { height: 100%; outline: none; }
+.sessions-terminal .xterm { height: 100%; }
+.sessions-terminal .xterm-viewport { scrollbar-color: var(--ant-color-border) transparent; scrollbar-width: thin; }
+.sessions-terminal .xterm:focus-within { outline: 2px solid var(--ant-color-primary); outline-offset: -2px; }
+.sessions-terminal-message { position: absolute; z-index: 1; right: 12px; top: 12px; max-width: 340px; padding: 6px 8px; border: 1px solid var(--ant-color-border-secondary); border-radius: 4px; background: var(--ant-color-bg-elevated); color: var(--ant-color-text-secondary); font-size: 12px; }
+.sessions-terminal-state, .sessions-empty { flex: 1; min-height: 0; display: grid; place-items: center; padding: 24px; }
+.sessions-empty { align-content: center; text-align: center; color: var(--ant-color-text-secondary); }
+.sessions-empty h1 { margin: 0; color: var(--ant-color-text); }
+.sessions-sidebar { height: 100%; min-width: 0; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
+.sessions-sidebar-new { min-width: 0; padding: 12px 8px 4px; }
+.sessions-sidebar-group { min-width: 0; padding: 12px 8px 0; }
+.sessions-sidebar-heading { display: block; padding: 0 8px 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.sessions-sidebar-item { box-sizing: border-box; width: 100%; min-width: 0; border: 0; border-radius: 6px; padding: 7px 8px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.sessions-sidebar-item:hover, .sessions-sidebar-item.is-selected { background: var(--ant-color-fill-secondary); }
+.sessions-sidebar-item:focus-visible { outline: 2px solid var(--ant-color-primary); outline-offset: -2px; }
+.sessions-sidebar-title { display: -webkit-box; min-width: 0; overflow: hidden; overflow-wrap: anywhere; font-size: 13px; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.sessions-sidebar-title-row { display: flex; align-items: start; gap: 6px; }
+.sessions-sidebar-purpose { display: -webkit-box; min-width: 0; flex: 1 1 auto; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.sessions-sidebar-id { flex: none; color: var(--ant-color-text-tertiary); font-family: var(--ant-font-family-code); font-size: 11px; line-height: 1.6; white-space: nowrap; }
+.sessions-sidebar-meta { display: flex; flex-wrap: wrap; gap: 0 5px; min-width: 0; color: var(--ant-color-text-tertiary); font-size: 11px; line-height: 1.4; }
+.sessions-sidebar-meta > span + span::before { content: '·'; margin-right: 5px; }
+.sessions-sidebar-state { color: var(--ant-color-text-tertiary); font-size: 11px; }
+.sessions-sidebar-state { padding: 12px 16px; line-height: 1.45; }
+.sessions-new-popover { max-width: calc(100vw - 16px); }
+.sessions-new-popover .ant-popover-content { box-sizing: border-box; width: min(220px, calc(100vw - 16px)); max-width: 100%; }
+.sessions-new-menu { width: 100%; min-width: 0; display: flex; flex-direction: column; gap: 10px; overflow-x: hidden; }
+.sessions-new-menu section, .sessions-new-menu .ant-space { min-width: 0; }
+.sessions-new-menu section { display: flex; flex-direction: column; gap: 6px; }
+.sessions-new-menu .ant-typography { overflow-wrap: anywhere; }
+.sessions-new-menu .ant-btn { width: 100%; min-height: 32px; height: auto; justify-content: flex-start; white-space: normal; text-align: left; line-height: 1.35; }
+.sessions-new-menu .ant-btn > span { min-width: 0; overflow-wrap: anywhere; }
+.sessions-workbench.is-compact .sessions-toolbar { gap: 6px; padding-inline: 8px; }
+.sessions-workbench.is-compact .sessions-toolbar-title span { display: none; }
+.sessions-workbench.is-compact .sessions-terminal-wrap { padding: 8px; }
+.sessions-workbench.is-compact .sessions-toolbar-actions .ant-btn { padding-inline: 6px; }

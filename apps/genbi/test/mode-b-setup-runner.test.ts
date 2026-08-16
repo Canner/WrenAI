@@ -1,4 +1,7 @@
 import { EventEmitter } from "node:events";
+import { mkdir, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -32,9 +35,19 @@ function fakeChatProcess(answerText: string): FakeChild {
   return child;
 }
 
-afterEach(() => {
+const tempDirs: string[] = [];
+
+async function createProjectWorkspace(): Promise<string> {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "wren-harness-mode-b-setup-runner-"));
+  tempDirs.push(workspaceRoot);
+  await mkdir(path.join(workspaceRoot, "acme"));
+  return workspaceRoot;
+}
+
+afterEach(async () => {
   compileProfileMock.mockReset();
   spawnMock.mockReset();
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 describe("ModeBSetupRunner (the real production setup runner, not a stub)", () => {
@@ -64,11 +77,13 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
     spawnMock.mockImplementation(() => fakeChatProcess("connected to postgres"));
 
     const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
+    const getModelsConfig = vi.fn(() => "/tmp/runtime-models.yaml");
     const runner = new ModeBSetupRunner({
       irPath: "/fixture/genbi-setup/ir.golden.json",
       warbleBin: "/fixture/warble",
       agentSdkBin: "/fixture/warble-agent-sdk",
       outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
+      getModelsConfig,
     });
 
     const result = await runner.run({
@@ -80,6 +95,7 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
     expect(result.finalText).toBe("connected to postgres");
     expect(compileProfileMock).not.toHaveBeenCalled();
     expect(spawnMock).toHaveBeenCalledTimes(1);
+    expect(getModelsConfig).toHaveBeenCalledTimes(1);
 
     const [command, args] = spawnMock.mock.calls[0] as [string, string[]];
     expect(command).toBe("/fixture/warble-agent-sdk");
@@ -94,11 +110,93 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
       "/tmp/wren-harness-mode-b-setup-runner-out",
       "--warble-bin",
       "/fixture/warble",
+      "--models-config",
+      "/tmp/runtime-models.yaml",
       // No --max-turns for connect_source: only build_context gets the raised
       // budget, so a connect turn stays on the dispatcher's default and fails
       // fast rather than burning extra runway on e.g. bad-credential retries.
       "--stream-json",
     ]);
+  });
+
+  it.each([
+    { stepKey: "connect_resume" as const, agentId: "connect_source" },
+    { stepKey: "context" as const, agentId: "build_context" },
+  ])("binds $stepKey to the contained project directory instead of duplicating its prefix", async ({ stepKey, agentId }) => {
+    spawnMock.mockImplementation(() => fakeChatProcess("continued from the project root"));
+    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
+    const runner = new ModeBSetupRunner({
+      irPath: "/fixture/genbi-setup/ir.golden.json",
+      warbleBin: "/fixture/warble",
+      agentSdkBin: "/fixture/warble-agent-sdk",
+      outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
+    });
+    const workspaceRoot = await createProjectWorkspace();
+
+    await runner.run({
+      prompt: "continue setup",
+      workspaceRoot,
+      projectName: "acme",
+      stepKey,
+      authChoice: { mode: "subscription", provider: "claude" },
+      agentId,
+      ...(stepKey === "connect_resume" ? { resumeSessionId: "sdk-session-123" } : {}),
+    });
+
+    const [, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const projectIndex = args.indexOf("--project");
+    expect(args[projectIndex + 1]).toBe(await realpath(path.join(workspaceRoot, "acme")));
+    expect(args[projectIndex + 1]).not.toBe(path.join(workspaceRoot, "acme", "acme"));
+    if (stepKey === "connect_resume") {
+      const resumeIndex = args.indexOf("--resume");
+      expect(args[resumeIndex + 1]).toBe("sdk-session-123");
+    }
+  });
+
+  it.each([undefined, "../outside", "/outside", "nested/project", ".", "acme/.."])("fails closed before the Mode B dispatch for an unsafe project name %j", async (projectName) => {
+    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
+    const runner = new ModeBSetupRunner({
+      irPath: "/fixture/genbi-setup/ir.golden.json",
+      warbleBin: "/fixture/warble",
+      agentSdkBin: "/fixture/warble-agent-sdk",
+    });
+
+    await expect(
+      runner.run({
+        prompt: "continue setup",
+        workspaceRoot: await createProjectWorkspace(),
+        ...(projectName !== undefined ? { projectName } : {}),
+        stepKey: "connect_resume",
+        authChoice: { mode: "subscription", provider: "claude" },
+      }),
+    ).rejects.toThrow(/validated single-segment projectName/i);
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it("fails closed before the Mode B dispatch when the workspace root or project directory is missing", async () => {
+    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
+    const runner = new ModeBSetupRunner({ irPath: "/fixture/genbi-setup/ir.golden.json", warbleBin: "/fixture/warble", agentSdkBin: "/fixture/warble-agent-sdk" });
+    const missingWorkspace = path.join(os.tmpdir(), `wren-harness-missing-${Date.now()}`);
+
+    await expect(runner.run({ prompt: "resume", workspaceRoot: missingWorkspace, projectName: "acme", stepKey: "connect_resume", authChoice: { mode: "subscription", provider: "claude" } })).rejects.toThrow(/workspace root must exist/i);
+    const workspaceRoot = await createProjectWorkspace();
+    await expect(runner.run({ prompt: "resume", workspaceRoot, projectName: "missing", stepKey: "connect_resume", authChoice: { mode: "subscription", provider: "claude" } })).rejects.toThrow(/project directory must exist/i);
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a safe-name project symlink that resolves to a sibling-prefix directory outside the canonical workspace", async () => {
+    const parent = await mkdtemp(path.join(os.tmpdir(), "wren-harness-mode-b-symlink-parent-"));
+    tempDirs.push(parent);
+    const workspaceRoot = path.join(parent, "workspace");
+    const sibling = path.join(parent, "workspace-escape");
+    await mkdir(workspaceRoot);
+    await mkdir(sibling);
+    await symlink(sibling, path.join(workspaceRoot, "acme"));
+    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
+    const runner = new ModeBSetupRunner({ irPath: "/fixture/genbi-setup/ir.golden.json", warbleBin: "/fixture/warble", agentSdkBin: "/fixture/warble-agent-sdk" });
+
+    await expect(runner.run({ prompt: "resume", workspaceRoot, projectName: "acme", stepKey: "connect_resume", authChoice: { mode: "subscription", provider: "claude" } })).rejects.toThrow(/strict descendant/i);
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it("gives build_context the DEFAULT_SETUP_MAX_TURNS budget (120) but leaves connect_source on the dispatcher default", async () => {
@@ -112,10 +210,12 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
       agentSdkBin: "/fixture/warble-agent-sdk",
       outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
     });
+    const workspaceRoot = await createProjectWorkspace();
 
     await runner.run({
       prompt: "generate the MDL for project acme",
-      workspaceRoot: "/tmp/wren-harness-mode-b-setup-runner-test",
+      workspaceRoot,
+      projectName: "acme",
       authChoice: { mode: "subscription", provider: "claude" },
       agentId: "build_context",
     });
@@ -138,10 +238,12 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
       outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
       maxTurns: 250,
     });
+    const workspaceRoot = await createProjectWorkspace();
 
     await runner.run({
       prompt: "generate the MDL for project acme",
-      workspaceRoot: "/tmp/wren-harness-mode-b-setup-runner-test",
+      workspaceRoot,
+      projectName: "acme",
       authChoice: { mode: "subscription", provider: "claude" },
       agentId: "build_context",
     });
@@ -163,10 +265,12 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
       agentSdkBin: "/fixture/warble-agent-sdk",
       outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
     });
+    const workspaceRoot = await createProjectWorkspace();
 
     const result = await runner.run({
       prompt: "generate the MDL for project acme",
-      workspaceRoot: "/tmp/wren-harness-mode-b-setup-runner-test",
+      workspaceRoot,
+      projectName: "acme",
       authChoice: { mode: "subscription", provider: "claude" },
       agentId: "build_context",
     });
@@ -200,6 +304,7 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
       outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
       maxTurns: 25,
     });
+    const workspaceRoot = await createProjectWorkspace();
     expect(overriddenRunner.effectiveMaxTurns("build_context")).toBe(25);
 
     // Cross-check: run() must actually dispatch the exact value effectiveMaxTurns() reports.
@@ -207,7 +312,8 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
     spawnMock.mockImplementation(() => fakeChatProcess("built MDL"));
     await overriddenRunner.run({
       prompt: "generate the MDL for project acme",
-      workspaceRoot: "/tmp/wren-harness-mode-b-setup-runner-test",
+      workspaceRoot,
+      projectName: "acme",
       authChoice: { mode: "subscription", provider: "claude" },
       agentId: "build_context",
     });

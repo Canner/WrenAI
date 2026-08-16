@@ -12,6 +12,7 @@ const getContextImpact = vi.fn();
 
 vi.mock('@/bff/client', () => ({
   getContextImpact: (...args: unknown[]) => getContextImpact(...args),
+  getRuntimeSettingsReadiness: () => Promise.resolve({ valid: true as const }),
 }));
 
 import { ImpactView } from '../ImpactView';

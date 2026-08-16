@@ -14,13 +14,16 @@ export interface AgentSdkManifestCommand {
 
 export interface BuildAgentSdkManifestArgsOptions {
   readonly irPath: string;
-  readonly userProject: string;
+  /** Omitted for a raw bootstrap profile, which has no bound project yet. */
+  readonly userProject?: string;
 }
 
 /**
  * Builds the argv for a `warble-agent-sdk manifest` invocation without
  * spawning anything: `<agent-sdk-cli> manifest <ir.json> --project
- * <userProject>`. Omitting `--out` is deliberate — the dispatcher's
+ * <userProject> --include-unavailable`. The display-only flag keeps an
+ * unsupported declared component visible without making it executable.
+ * Omitting `--out` is deliberate — the dispatcher's
  * `manifest` subcommand writes the manifest JSON to stdout only when no
  * `--out` is given (resolution summaries always go to stderr), so stdout
  * stays pure JSON for `runAgentSdkManifest` to parse.
@@ -31,7 +34,13 @@ export function buildAgentSdkManifestArgs(
 ): AgentSdkManifestCommand {
   return {
     command: cli.command,
-    args: [...cli.prefixArgs, "manifest", options.irPath, "--project", options.userProject],
+    args: [
+      ...cli.prefixArgs,
+      "manifest",
+      options.irPath,
+      "--include-unavailable",
+      ...(options.userProject !== undefined ? ["--project", options.userProject] : []),
+    ],
   };
 }
 

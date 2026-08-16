@@ -19,6 +19,7 @@ vi.mock('@/bff/client', () => ({
   getArtifact: (...args: unknown[]) => getArtifact(...args),
   postArtifactPublish: (...args: unknown[]) => postArtifactPublish(...args),
   postArtifactUnsave: (...args: unknown[]) => postArtifactUnsave(...args),
+  getRuntimeSettingsReadiness: () => Promise.resolve({ valid: true as const }),
 }));
 
 // ECharts needs a real canvas; stub it so dashboard/chart tiles render in jsdom.

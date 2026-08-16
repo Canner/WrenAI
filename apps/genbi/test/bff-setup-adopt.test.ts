@@ -24,6 +24,7 @@ vi.mock("../server/adopt.js", async (importOriginal) => {
 
 const { createApp } = await import("../server/app.js");
 const { Store } = await import("../server/db.js");
+const { resolveProjectIdentity } = await import("../server/enrichment.js");
 const { BUILD_CONTEXT_AGENT_ID } = await import("../harness/index.js");
 const { parseSse } = await import("./bff-sse-helpers.js");
 
@@ -60,6 +61,7 @@ describe("POST /api/setup/adopt + GET/POST /api/setup/mode + the build_context d
       baseRouteOptions: BASE_ROUTE_OPTIONS,
       setupRunner,
       workspaceRoot,
+      describeBundle: async () => ({ agents: [] } as never),
       ...(opts?.bindProject ? { bindProject: opts.bindProject } : {}),
       ...(opts?.getUserProject ? { getUserProject: opts.getUserProject } : {}),
     };
@@ -150,6 +152,49 @@ describe("POST /api/setup/adopt + GET/POST /api/setup/mode + the build_context d
     expect(body.status).toBe("ok");
     expect(bindProject).toHaveBeenCalledTimes(1);
     expect(bindProject).toHaveBeenCalledWith(path.resolve(projectPath));
+  });
+
+  it("verify-ok on a pre-existing unbuilt project directory: the real bindProject implementation binds without a 500", async () => {
+    // Regression for the bug where bindProject required the enrichment
+    // revision (target/mdl.json) as a precondition of binding. adopt's
+    // route calls deps.bindProject?.(resolved) with no try/catch around it
+    // (unlike compile-bind's), so an unbuilt directory here previously
+    // risked a 500. This test uses a bindProject stub that mirrors
+    // server/bin.ts's real implementation -- resolveProjectIdentity plus
+    // store.activateEnrichmentBinding -- against a directory that actually
+    // exists on disk with no target/mdl.json, rather than the trivial
+    // vi.fn() stub the other adopt tests use.
+    verifyAdoptProjectMock.mockResolvedValue({ status: "ok", hasMdl: true, sourceType: "postgres" });
+    const projectPath = path.join(workspaceRoot, "existing-unbuilt-project");
+    mkdirSync(projectPath, { recursive: true });
+    writeFileSync(path.join(projectPath, "wren_project.yml"), "name: acme\n");
+    // Deliberately no target/mdl.json: adopting a connected-but-unbuilt project.
+    let bindCallCount = 0;
+    let boundProject: string | undefined;
+    // Mirrors server/bin.ts's real bindProject/getUserProject pairing: both
+    // read/write the same closure variable, so enrichment status below
+    // resolves against the project this test actually bound, not the fixed
+    // BASE_ROUTE_OPTIONS.userProject fixture path.
+    const { app, store } = buildApp({
+      bindProject: (dir: string) => {
+        const identity = resolveProjectIdentity(dir);
+        boundProject = identity.path;
+        store.activateEnrichmentBinding(identity);
+        bindCallCount += 1;
+      },
+      getUserProject: () => boundProject,
+    });
+
+    const res = await app.request("/api/setup/adopt", { method: "POST", body: JSON.stringify({ projectPath }) });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { status: string };
+    expect(body.status).toBe("ok");
+    expect(bindCallCount).toBe(1);
+
+    // Foundation-bound but unbuilt: enrichment correctly refuses without a 500.
+    const enrichmentStatus = await app.request("/api/context/enrichment");
+    expect(enrichmentStatus.status).toBe(200);
+    expect((await enrichmentStatus.json() as { foundationReady: boolean }).foundationReady).toBe(false);
   });
 
   it("verify-ok + MDL present (direct bind) marks adopt + context done, not just bind — so the sidebar never shows bind done above two un-started earlier steps", async () => {
@@ -266,6 +311,10 @@ describe("POST /api/setup/adopt + GET/POST /api/setup/mode + the build_context d
           status: "success",
           summary: '{"exitCode":0,"stdout":"[\\"customers\\"]","stderr":""}',
         });
+        opts.onEvent?.({ runId: "test-run", seq: 3, kind: "tool.call", stepId: "build", callId: "validate-context", tool: "setup_execution", input: { command: "wren context validate" }, depth: 0, status: "running" });
+        opts.onEvent?.({ runId: "test-run", seq: 4, kind: "tool.result", stepId: "build", callId: "validate-context", tool: "setup_execution", status: "success", summary: '{"exitCode":0,"stdout":"validated","stderr":""}' });
+        opts.onEvent?.({ runId: "test-run", seq: 5, kind: "tool.call", stepId: "build", callId: "build-context", tool: "setup_execution", input: { command: "wren context build" }, depth: 0, status: "running" });
+        opts.onEvent?.({ runId: "test-run", seq: 6, kind: "tool.result", stepId: "build", callId: "build-context", tool: "setup_execution", status: "success", summary: '{"exitCode":0,"stdout":"built","stderr":""}' });
         // Actually write the MDL the real build_context agent would produce — parseSetupTerminal
         // (server/setup/runner.ts) verifies target/mdl.json on disk, not just the reported text.
         mkdirSync(path.join(adoptedProjectDir, "target"), { recursive: true });

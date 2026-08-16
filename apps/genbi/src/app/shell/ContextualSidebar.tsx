@@ -14,6 +14,7 @@ export function ContextualSidebar() {
 
   return (
     <Layout.Sider
+      data-testid="contextual-sidebar"
       collapsible
       collapsed={collapsed}
       collapsedWidth={0}

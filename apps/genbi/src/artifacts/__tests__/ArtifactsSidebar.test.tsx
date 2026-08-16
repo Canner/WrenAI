@@ -47,6 +47,30 @@ describe('ArtifactsSidebar', () => {
     expect(within(sidebar).getAllByText('Not shared')).toHaveLength(2);
   });
 
+  it('keeps long English and CJK names primary while moving lifecycle tags to a secondary row', () => {
+    const longEnglish = 'Quarterly revenue retention analysis for enterprise expansion opportunities across every regional sales team';
+    const longCjk = '跨區域客戶留存與產品採用趨勢分析報告，協助辨識下一季的成長機會';
+    useArtifactsStore.setState({
+      selectedKey: 'a1',
+      summaries: [
+        { ...fixtureArtifacts[0], name: longEnglish },
+        { ...fixtureArtifacts[1], name: longCjk },
+      ],
+    }, false);
+    renderWithProviders(<ArtifactsSidebar />);
+    const sidebar = screen.getByRole('navigation', { name: 'Artifacts' });
+    const selected = within(sidebar).getByRole('button', { name: new RegExp(longEnglish) });
+    const cjkName = within(sidebar).getByText(longCjk);
+
+    expect(selected).toHaveAttribute('aria-current', 'true');
+    expect(selected).toHaveClass('genbi-arow');
+    expect(cjkName).toHaveClass('genbi-aname');
+    expect(cjkName).toHaveAttribute('title', longCjk);
+    expect(selected.querySelector('.genbi-abadges')).not.toBeNull();
+    selected.focus();
+    expect(selected).toHaveFocus();
+  });
+
   it('selecting an artifact drives useArtifactsStore.select and marks the row current', async () => {
     const user = userEvent.setup();
     renderWithProviders(<ArtifactsSidebar />);

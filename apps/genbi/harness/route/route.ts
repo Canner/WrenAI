@@ -1,11 +1,13 @@
 import { enforceCompliance } from "../compliance/index.js";
 import { runModeADefault } from "./mode-a.js";
 import { runModeBDefault } from "./mode-b.js";
+import { runCodexAskDefault } from "./codex-ask.js";
 import type { RouteOptions, RouteResult } from "./types.js";
 
 /**
  * The single seam mapping a resolved `AuthChoice` to a back-end:
- * `subscription` -> Mode B (shell the warble-agent-sdk CLI), everything else
+ * Claude subscription -> Mode B (warble-agent-sdk), Codex subscription ->
+ * codex:local, everything else
  * (`api-key`/`local`/`gateway`) -> Mode A (compile to a vercel bundle and run
  * in-process via `runAgent`). `modeA`/`modeB` are injectable so callers and
  * tests can stub either back-end without touching the other or invoking any
@@ -36,6 +38,7 @@ import type { RouteOptions, RouteResult } from "./types.js";
 export async function route(options: RouteOptions): Promise<RouteResult> {
   const runModeA = options.modeA ?? runModeADefault;
   const runModeB = options.modeB ?? runModeBDefault;
+  const runCodexAsk = options.codexAsk ?? runCodexAskDefault;
   const { authChoice } = options;
   const deployment = options.deployment ?? "personal";
 
@@ -48,6 +51,31 @@ export async function route(options: RouteOptions): Promise<RouteResult> {
           "authChoice — Mode B has no adapter/tier binding of its own; use modelsConfig instead " +
           "(warble-agent-sdk's own --models-config per-step routing)",
       );
+    }
+    if (authChoice.provider === "codex") {
+      if (options.modelsConfig !== undefined) {
+        throw new Error("modelsConfig applies only to the Claude subscription dispatcher, not codex:local Ask");
+      }
+      const result = await runCodexAsk({
+        authChoice: { ...authChoice, provider: "codex" },
+        profileSource: options.profileSource,
+        userProject: options.userProject,
+        question: options.question,
+        deployment,
+        ...(options.warbleBin !== undefined ? { warbleBin: options.warbleBin } : {}),
+        ...(options.workDir !== undefined ? { workDir: options.workDir } : {}),
+        ...(options.onEvent !== undefined ? { onEvent: options.onEvent } : {}),
+        ...(options.agentId !== undefined ? { agentId: options.agentId } : {}),
+        ...(options.codexModels !== undefined ? { codexModels: options.codexModels } : {}),
+        ...(options.codexHome !== undefined ? { codexHome: options.codexHome } : {}),
+        ...(options.codexLocalBin !== undefined ? { codexLocalBin: options.codexLocalBin } : {}),
+        ...(options.codexLocalCli !== undefined ? { codexLocalCli: options.codexLocalCli } : {}),
+        ...(options.codexBin !== undefined ? { codexBin: options.codexBin } : {}),
+        ...(options.codexMcpServer !== undefined ? { mcpServer: options.codexMcpServer } : {}),
+        ...(options.chatTimeoutMs !== undefined ? { timeoutMs: options.chatTimeoutMs } : {}),
+        ...(options.signal !== undefined ? { signal: options.signal } : {}),
+      });
+      return { backend: "codex-local", warnings, ...result };
     }
     const result = await runModeB({
       authChoice,
@@ -63,6 +91,7 @@ export async function route(options: RouteOptions): Promise<RouteResult> {
       ...(options.onEvent !== undefined ? { onEvent: options.onEvent } : {}),
       ...(options.agentId !== undefined ? { agentId: options.agentId } : {}),
       ...(options.chatTimeoutMs !== undefined ? { chatTimeoutMs: options.chatTimeoutMs } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
     return { backend: "agent-sdk", warnings, ...result };
   }

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>xterm FitAddon viewport regression</title>
+  </head>
+  <body>
+    <main class="sessions-workbench">
+      <div class="sessions-terminal-wrap" style="flex: none; width: 800px; height: 420px">
+        <div class="sessions-terminal" aria-label="Native agent terminal"></div>
+      </div>
+    </main>
+    <script type="module">
+      import { FitAddon } from '@xterm/addon-fit';
+      import { Terminal } from '@xterm/xterm';
+      import '@xterm/xterm/css/xterm.css';
+      import '../src/sessions/sessions.css';
+      import { nativeTerminalTypography } from '../src/sessions/terminalTypography';
+
+      const mount = document.querySelector('.sessions-terminal');
+      const terminal = new Terminal({ ...nativeTerminalTypography, scrollback: 0 });
+      const fit = new FitAddon();
+      terminal.loadAddon(fit);
+      terminal.open(mount);
+      const refit = () => fit.fit();
+      const observer = new ResizeObserver(refit);
+      observer.observe(mount);
+      await document.fonts.ready;
+      refit();
+      let rendered = 0;
+      const render = () => {
+        terminal.reset();
+        terminal.write([
+          '',
+          '中文測試 CJK glyph bounds with Latin text',
+          ...Array.from({ length: terminal.rows - 4 }, (_, index) => `output ${index + 1}`),
+          'Claude status: working',
+          'Input: ',
+        ].join('\r\n'), () => { rendered += 1; });
+      };
+      window.xtermFitRegression = { terminal, refit, render, get rendered() { return rendered; } };
+      render();
+    </script>
+  </body>
+</html>

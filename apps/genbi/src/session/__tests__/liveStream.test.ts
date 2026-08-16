@@ -11,6 +11,7 @@ const turnStreamUrl = vi.fn((sessionId: string, turnId: string) => `http://bff.t
 vi.mock('@/bff/client', () => ({
   postTurn: (...args: unknown[]) => postTurn(...args),
   turnStreamUrl: (...args: [string, string]) => turnStreamUrl(...args),
+  getRuntimeSettingsReadiness: () => Promise.resolve({ valid: true as const }),
 }));
 
 import { sessionStream } from '../stream';

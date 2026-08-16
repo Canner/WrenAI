@@ -1,8 +1,8 @@
 import { Tag } from 'antd';
-import { DataTable } from '@/ui';
+import { DataTable, KVRow } from '@/ui';
 import { t } from '@/i18n/strings';
 import { StepDataflow } from './StepDataflow';
-import type { Component, TierModelBinding } from './types';
+import type { Component } from './types';
 
 interface ComponentsTableProps {
   components: Component[];
@@ -11,9 +11,8 @@ interface ComponentsTableProps {
 /**
  * Components table: the bundle's declared agents (never "sub-agents" — see
  * `types.ts`). Each row expands to the agent's tools, output blocks, and
- * step→artifact dataflow. Capability tags here are plain (id text only) —
- * the outcome-colored resolution view lives in `CapabilityResolutionTable`,
- * not repeated here.
+ * step→artifact dataflow. Availability is intentionally a primary column;
+ * lower-level capability resolution lives in Technical diagnostics.
  */
 export function ComponentsTable({ components }: ComponentsTableProps) {
   return (
@@ -21,6 +20,7 @@ export function ComponentsTable({ components }: ComponentsTableProps) {
       rowKey="id"
       dataSource={components}
       expandable={{
+        rowExpandable: (component) => component.status !== 'unavailable',
         expandedRowRender: (component) => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
@@ -53,34 +53,35 @@ export function ComponentsTable({ components }: ComponentsTableProps) {
                 <Tag bordered>{component.outcome}</Tag>
               </div>
             )}
+            {component.nativeAvailability && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ opacity: 0.65, fontSize: 12 }}>{t('harness.programmaticallyUnavailable')}:</span>
+                <KVRow label={t('harness.compiledDispatchTarget')} value={component.nativeAvailability.compiledDispatchTarget} />
+                <KVRow label={t('harness.reason')} value={component.nativeAvailability.compiledUnavailableReason} />
+              </div>
+            )}
             <StepDataflow steps={component.steps} />
           </div>
         ),
       }}
       columns={[
         { title: t('harness.component'), dataIndex: 'name', key: 'name' },
+        {
+          title: t('harness.availability'),
+          key: 'availability',
+          render: (_: unknown, component: Component) => {
+            if (component.status === 'unavailable') {
+              return <Tag color="warning">{t('harness.unavailable')}: {component.unavailableReason ?? t('harness.reasonUnavailable')}</Tag>;
+            }
+            if (component.nativeAvailability) {
+              return <Tag color="success">{t('harness.availableVia')} {component.nativeAvailability.viaLabel}</Tag>;
+            }
+            return <Tag color="success">{t('harness.available')}</Tag>;
+          },
+        },
+        { title: t('harness.callableAs'), dataIndex: 'callableAs', key: 'callableAs' },
         { title: t('harness.componentType'), dataIndex: 'componentType', key: 'componentType' },
         { title: t('harness.realization'), dataIndex: 'realizationLabel', key: 'realizationLabel' },
-        {
-          title: t('harness.tiers'),
-          dataIndex: 'tiers',
-          key: 'tiers',
-          render: (tiers: TierModelBinding[]) => tiers.map((tm) => tm.tier).join(', '),
-        },
-        {
-          title: t('harness.capabilitiesColumn'),
-          dataIndex: 'capabilities',
-          key: 'capabilities',
-          render: (capabilities: Component['capabilities']) => (
-            <>
-              {capabilities.map((cap) => (
-                <Tag key={cap.capability} bordered style={{ marginBottom: 4 }}>
-                  {cap.capability}
-                </Tag>
-              ))}
-            </>
-          ),
-        },
       ]}
     />
   );

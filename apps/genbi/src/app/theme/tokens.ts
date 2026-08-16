@@ -82,6 +82,59 @@ const fontFamily = `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helv
 
 export type ThemeMode = 'light' | 'dark';
 
+/**
+ * Resolved xterm colors for the canvas renderer. Do not use CSS variables
+ * here: canvas fill styles cannot resolve them. Each mode uses the GenBI
+ * semantic surfaces/ink/brand scale and keeps all ANSI foregrounds readable
+ * against its corresponding terminal background.
+ */
+export const nativeTerminalThemes = {
+  light: {
+    background: modeColors.light.surface,
+    foreground: modeColors.light.ink,
+    cursor: modeColors.light.accent,
+    selectionBackground: '#d6e4ff',
+    black: modeColors.light.ink2,
+    red: '#a8071a',
+    green: '#135200',
+    yellow: '#613400',
+    blue: modeColors.light.accentInk,
+    magenta: '#391085',
+    cyan: '#003a8c',
+    white: '#595959',
+    brightBlack: modeColors.light.ink,
+    brightRed: '#cf1322',
+    brightGreen: '#237804',
+    brightYellow: '#874d00',
+    brightBlue: modeColors.light.accent,
+    brightMagenta: '#531dab',
+    brightCyan: '#0050b3',
+    brightWhite: modeColors.light.ink2,
+  },
+  dark: {
+    background: modeColors.dark.surface,
+    foreground: modeColors.dark.ink,
+    cursor: modeColors.dark.accent,
+    selectionBackground: '#111d2c',
+    black: modeColors.dark.muted,
+    red: '#ff7875',
+    green: '#95de64',
+    yellow: '#ffd666',
+    blue: modeColors.dark.accentInk,
+    magenta: '#d3adf7',
+    cyan: '#5cdbd3',
+    white: modeColors.dark.ink,
+    brightBlack: '#bfbfbf',
+    brightRed: '#ffa39e',
+    brightGreen: '#b7eb8f',
+    brightYellow: '#ffe58f',
+    brightBlue: '#adc6ff',
+    brightMagenta: '#efdbff',
+    brightCyan: '#87e8de',
+    brightWhite: '#ffffff',
+  },
+} as const;
+
 function modeToken(mode: ThemeMode): ThemeConfig['token'] {
   const c = modeColors[mode];
   return {

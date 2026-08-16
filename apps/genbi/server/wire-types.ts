@@ -24,13 +24,26 @@ export type { ArtifactContentDto, ArtifactContentUnavailableReason };
 
 export type SessionEventKind = "user" | "clarify" | "answer" | "refusal" | "artifact" | "published" | "saved" | "setup_status";
 
+/**
+ * A BFF-owned, bounded inspection record for a Setup work-log row. Unlike
+ * `input` and `detail`, this is safe to persist and return from Setup
+ * recovery: it contains only an allowlisted command/action summary, output
+ * or an actionable error, and an optional elapsed duration.
+ */
+export interface ToolStepInspection {
+  readonly action?: string;
+  readonly output?: string;
+  readonly error?: string;
+  readonly durationMs?: number;
+}
+
 export interface ToolStep {
   readonly id: string;
   readonly label: string;
   readonly state: "running" | "done" | "error";
   /**
    * `"tool"` — a tool call. `"subagent"` — a nested sub-agent/Task turn
-   * (Mode B only; Mode A has no such mechanism). `"step"` — one of
+   * (subscription dispatchers only; the in-process path has no such mechanism). `"step"` — one of
    * Mode A's own bundle-declared LLM steps (`step.start`/`step.finish`), i.e.
    * the agent's own reasoning/output for that step, distinct from any tool
    * calls it happened to make along the way. `"decision"` — a
@@ -45,6 +58,8 @@ export interface ToolStep {
   readonly input?: unknown;
   /** A compact, bounded summary — success result summary, or the error message on a failed step. Never full result rows. */
   readonly detail?: string;
+  /** Server-owned safe projection used by Setup work logs; never raw tool input or detail. */
+  readonly inspection?: ToolStepInspection;
 }
 
 export interface UserEvent {
@@ -439,6 +454,34 @@ export interface SetupStep {
   readonly state: StepState;
 }
 
+/** A safe, read-only snapshot of the most recent retryable setup failure. */
+export interface SetupFailureRecovery {
+  readonly attempt: "connect" | "connect_resume" | "context";
+  readonly projectName: string;
+  readonly sourceType: string;
+  readonly error: string;
+  readonly workLog: readonly ToolStep[];
+}
+
+/** Safe reload snapshot for a completed setup turn paused on user input. */
+export interface SetupNeedsInputRecovery {
+  readonly attempt: "connect" | "connect_resume" | "context";
+  readonly projectName: string;
+  readonly sourceType: string;
+  readonly message: string;
+  readonly workLog: readonly ToolStep[];
+}
+
+/** `GET /api/setup/recovery` intentionally exposes no SDK session anchor. */
+export interface SetupRecoveryResponse {
+  readonly failure?: SetupFailureRecovery;
+  /** Latest public paused terminal; its `sessionId` is the BFF setup session, never an SDK id. */
+  readonly needsInput?: SetupNeedsInputRecovery;
+  /** Reload-safe public context decision; never includes a provider anchor. */
+  readonly sessionId?: string;
+  readonly decision?: SetupDecision;
+}
+
 /**
  * The setup wizard's two entry paths, chosen once at wizard start (`POST
  * /api/setup/mode`): `"create"` scaffolds a brand-new project (the
@@ -464,18 +507,58 @@ export interface SetupEnvField {
 
 export type AuthMode = "subscription" | "byo" | "local";
 export type Deployment = "personal" | "hosted";
+export type SubscriptionProvider = "claude" | "codex";
 
-/** The api-key adapter a `"byo"` `RuntimeSettings.authMode` dispatches through. */
+/** One non-sensitive model suggestion reported by the signed-in subscription provider. */
+export interface SubscriptionModelCatalogEntry {
+  readonly model: string;
+  readonly displayName: string;
+  readonly description?: string;
+  readonly isDefault?: boolean;
+  readonly reasoningEfforts?: readonly {
+    readonly value: string;
+    readonly displayName: string;
+    readonly description?: string;
+  }[];
+}
+
+/** Sanitized result of provider-owned model discovery. */
+export type SubscriptionModelCatalog =
+  | {
+      readonly version: 1;
+      readonly status: "ready";
+      readonly provider: SubscriptionProvider;
+      readonly models: readonly SubscriptionModelCatalogEntry[];
+    }
+  | {
+      readonly version: 1;
+      readonly status: "unavailable";
+      readonly provider: SubscriptionProvider;
+      readonly code: "not_authenticated" | "runtime_unavailable" | "timeout" | "protocol_error";
+      readonly retryable: boolean;
+    };
+
+/** A concrete adapter selectable for an individual compiled-bundle tier. */
+export type RuntimeTierAdapter = "anthropic" | "openai-compatible" | "local";
+
+/** Kept as the legacy/default-runtime spelling used by the BYO auth control. */
 export type ApiKeyAdapter = "anthropic" | "openai-compatible";
 
 /** NOTE: unrelated to the harness's own `AdapterSpec`/`tierBinding` — this is UI-facing config only. */
 export interface TierModelBinding {
   readonly tier: string;
-  readonly model: string;
+  /** Explicit override; when omitted, `RuntimeSettings.apiKeyModel` is the default. */
+  readonly model?: string;
+  /** Explicit override; when omitted, the runtime's selected/default adapter applies. */
+  readonly adapter?: RuntimeTierAdapter;
+  /** Required for openai-compatible/local overrides; never contains credentials. */
+  readonly baseURL?: string;
 }
 
 export interface RuntimeSettings {
   readonly authMode: AuthMode;
+  /** Which personal subscription CLI is used when `authMode` is `"subscription"`. */
+  readonly subscriptionProvider?: SubscriptionProvider;
   readonly tierModels: readonly TierModelBinding[];
   readonly hybrid: boolean;
   readonly deployment: Deployment;
@@ -485,10 +568,33 @@ export interface RuntimeSettings {
   readonly apiKeyModel?: string;
   /** Base URL override, `openai-compatible` only. Non-secret. */
   readonly apiKeyBaseURL?: string;
+  /**
+   * Model for the subscription dispatcher itself. This is deliberately NOT a
+   * profile tier: compiled bundles own their step tiers, while subscription
+   * dispatchers need a separate driver model.
+   */
+  readonly subscriptionDriverModel?: string;
+}
+
+/** Login availability only. No credential contents or metadata cross this boundary. */
+export interface SubscriptionLoginStatus {
+  readonly claude: boolean;
+  readonly codex: boolean;
 }
 
 /** `PUT /api/config/runtime`'s response — the persisted settings plus any compliance warnings (e.g. the subscription ToS notice) surfaced for this save. `GET /api/config/runtime` stays a plain `RuntimeSettings` — warnings are a save-time concern only. */
-export type RuntimeSettingsPutResponse = RuntimeSettings & { readonly warnings: readonly string[] };
+export interface NativeRuntimeBindingDto {
+  readonly configured: boolean;
+  readonly generation: number;
+  readonly provider?: SubscriptionProvider;
+  readonly target?: "claude-code:interactive" | "codex:interactive";
+  readonly targetLabel?: "Claude CLI" | "Codex CLI";
+}
+
+export type RuntimeSettingsPutResponse = RuntimeSettings & { readonly warnings: readonly string[]; readonly nativeSessionBinding: NativeRuntimeBindingDto };
+
+/** Read-only health of the saved Runtime, for correcting legacy settings before dispatch. */
+export type RuntimeSettingsReadiness = { readonly valid: true } | { readonly valid: false; readonly correction: string };
 
 /**
  * Whether each api-key adapter's required credential env var is present on the BFF process —
@@ -521,6 +627,8 @@ export interface ArtifactDto {
   readonly published?: PublishedInfo;
   /** Present only once the artifact has been saved to the Artifacts page. */
   readonly savedAt?: string;
+  /** Native provenance is safe routing metadata; credentials and binding identity never cross this DTO. */
+  readonly nativeSessionId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -570,17 +678,12 @@ export interface HarnessProfile {
 export type HarnessRuntimeBackend = "subscription" | "api-key" | "local" | "gateway";
 
 /**
- * Which back-end actually executes a turn for this project — the
- * real `route()` decision (`harness/route/route.ts`), not the auth-strategy
- * bucket `backend` already reports. `route()` sends a `subscription`
- * `authChoice` to Mode B, which shells the warble `claude-agent-sdk`
- * dispatcher CLI (`warble-agent-sdk chat`); every other `authChoice.mode`
- * (`api-key`/`local`/`gateway`) goes to Mode A, which compiles to a vercel
- * bundle and runs it in-process via `runAgent` — no subprocess dispatcher at
- * all. See `runtimeDispatcher` in `server/harness.ts`, which mirrors that
- * exact predicate.
+ * Which provider-specific back-end owns this configuration. Claude and
+ * Codex subscriptions use their respective local dispatchers; api-key,
+ * local, and gateway modes run in-process. Codex Ask can still be disabled
+ * independently, which is surfaced on component status.
  */
-export type HarnessRuntimeDispatcher = "claude-agent-sdk" | "in-process";
+export type HarnessRuntimeDispatcher = "claude-agent-sdk" | "codex-local" | "in-process";
 
 export interface HarnessRuntime {
   readonly backend: HarnessRuntimeBackend;
@@ -673,9 +776,9 @@ export interface HarnessStep {
 /**
  * A bundle-declared agent ("component" in the DTO/bundle vocabulary), shown
  * on the frontend as a **Component** — not a "sub-agent": that framing is
- * reserved for the profile level. This harness's runtime only ever executes
- * ONE agent per turn (`answer_query`), so every other component listed here
- * is a read-only declared part of the compiled bundle, not a
+ * reserved for the profile level. This harness's runtime routes exactly ONE
+ * component per turn from the user's intent, so every other component listed
+ * here is a read-only declared part of the compiled bundle, not a
  * concurrently-running sub-agent. `model`/`tiers` are the REAL tier binding
  * resolved as if this component were the one running (see `buildComponent`
  * in `server/harness.ts`), not the Setup page's seeded settings.
@@ -707,14 +810,63 @@ export interface HarnessComponent {
   /** The component's declared step→artifact dataflow (`agent.steps[]`). */
   readonly steps: readonly HarnessStep[];
   readonly status: string;
+  /** Stable display-only explanation; never exposes a target capability or execution plan. */
+  readonly unavailableReason?: string;
+  /**
+   * Present only when this component is unavailable on the compiled dispatch
+   * target (`agent.availability`) but the currently-selected purpose's native
+   * session IS available — i.e. it actually runs, just not via the
+   * programmatic path. `status` is `"ready"` in this case; the programmatic
+   * limitation moves here instead of being promoted into `unavailableReason`.
+   * Keyed off which `buildComponent` branch produced the status, never off
+   * matching Warble's reason string.
+   */
+  readonly nativeAvailability?: {
+    /** The native session's target label, e.g. `"Claude CLI"` — why this actually runs. */
+    readonly viaLabel: "Claude CLI" | "Codex CLI";
+    /** The compiled dispatch target that cannot run it, e.g. `"claude-agent-sdk:local"`. */
+    readonly compiledDispatchTarget: string;
+    /** `agent.availability.reason` — the original bundle-level explanation, preserved for the expanded row. */
+    readonly compiledUnavailableReason: string;
+  };
 }
 
 export interface HarnessDto {
+  /** The single server-owned native purpose whose bundle is described below. */
+  readonly purpose: HarnessPurpose;
   readonly profile: HarnessProfile;
   readonly runtime: HarnessRuntime;
   readonly connection: HarnessConnection;
   /** See `HarnessComponent`'s doc comment — bundle agents are shown as Components, not sub-agents. */
   readonly components: readonly HarnessComponent[];
+  /** Closed native dispatch registry projected from the same runtime binding as launch. */
+  readonly nativeSessions: {
+    readonly binding: NativeRuntimeBindingDto;
+    readonly dispatches: readonly {
+      readonly purpose: "analysis" | "setup" | "context_enrichment";
+      readonly profile: string;
+      readonly scopeKind: "bootstrap" | "bound_project";
+      readonly target?: "claude-code:interactive" | "codex:interactive";
+      readonly targetLabel?: "Claude CLI" | "Codex CLI";
+      readonly available: boolean;
+      readonly reason?: string;
+    }[];
+  };
+}
+
+/**
+ * A read-only projection of the selected purpose. Profile, scope, Runtime
+ * target and readiness all come from the server's native dispatch registry;
+ * no browser-provided launch/profile/target input is represented here.
+ */
+export interface HarnessPurpose {
+  readonly purpose: "setup" | "analysis" | "context_enrichment";
+  readonly profile: "genbi-setup" | "genbi-default" | "genbi-enrich-context";
+  readonly scopeKind: "bootstrap" | "bound_project";
+  readonly target?: "claude-code:interactive" | "codex:interactive";
+  readonly targetLabel?: "Claude CLI" | "Codex CLI";
+  readonly available: boolean;
+  readonly reason?: string;
 }
 
 // ---------------------------------------------------------------------------

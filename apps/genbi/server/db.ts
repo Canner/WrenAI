@@ -13,7 +13,7 @@
  * column (`artifacts.verified`, `eval_runs.gate_pass`) is stored as `0`/`1`
  * and converted back on read (`intToBool`/`boolToInt`).
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import type {
   ArtifactKind,
@@ -30,7 +30,12 @@ import type {
   SessionEvent,
   SetupMode,
   SetupStep,
+  SetupStatusEvent,
 } from "./wire-types.js";
+import { hashEnrichmentOperation, normalizeEnrichmentConfidence } from "./enrichment.js";
+import type { EnrichmentApprovalAttestation, EnrichmentBinding, EnrichmentMode, EnrichmentOperation, EnrichmentOperationState, EnrichmentRisk, EnrichmentRunStatus, ProjectIdentity, UnversionedEnrichmentBinding } from "./enrichment.js";
+import { resolveNativeRuntimeBinding } from "./native-dispatch-registry.js";
+import type { NativeRuntimeBinding } from "./native-dispatch-registry.js";
 
 export function newId(prefix: string): string {
   return `${prefix}-${randomUUID()}`;
@@ -38,6 +43,104 @@ export function newId(prefix: string): string {
 
 export type SessionStatus = "active" | "awaiting_clarify" | "streaming" | "awaiting_decision";
 export type TurnResultKind = "clarify" | "answer" | "refusal" | "error";
+export type SetupContextLifecyclePrefix = "none" | "discovery" | "validate" | "build";
+
+/**
+ * Opaque, non-secret evidence retained only while a context step is being
+ * corrected. `identityFingerprint` binds it to the canonical project and its
+ * selected/profile source declaration; no project path or credentials are
+ * persisted here.
+ */
+export interface SetupContextLifecycleEvidence {
+  readonly sessionId: string;
+  readonly identityFingerprint: string;
+  readonly completed: SetupContextLifecyclePrefix;
+}
+
+/** Deliberately separate from Ask's `sessions` table and wire contract. */
+export type NativeSessionStatus = "creating" | "running" | "detached" | "exited" | "stopped" | "interrupted" | "failed" | "stale";
+export type NativeSessionPurpose = "analysis" | "setup" | "context_enrichment";
+export type NativeSessionVendor = "claude" | "codex";
+export type NativeSessionScopeKind = "bootstrap" | "bound_project";
+export type NativeSetupRecoveryPhase = "connect" | "context";
+export type NativeSetupRecoveryState = "working" | "needs_input" | "needs_decision" | "retryable_failure" | "reported_complete";
+export type NativeSetupRecoveryCode = "in_progress" | "user_action_required" | "continue_or_stop" | "retryable" | "completion_reported";
+
+export interface NativeSessionRow {
+  readonly id: string;
+  readonly purpose: NativeSessionPurpose;
+  readonly vendor: NativeSessionVendor;
+  readonly agent: string;
+  readonly scopeKind: NativeSessionScopeKind;
+  readonly scopeId: string;
+  readonly projectIdentity: string | null;
+  readonly bindingGeneration: number | null;
+  readonly projectRevision: string | null;
+  readonly dispatchProfile: string | null;
+  readonly dispatchTarget: string | null;
+  readonly runtimeGeneration: number | null;
+  readonly status: NativeSessionStatus;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly startedAt: string | null;
+  readonly endedAt: string | null;
+  readonly exitCode: number | null;
+  readonly failure: string | null;
+}
+
+/**
+ * Opaque, sealed provider continuation material. The handle is never joined
+ * into a browser-facing native-session row.
+ */
+export interface NativeSessionResumeHandle {
+  readonly sessionId: string;
+  readonly provider: NativeSessionVendor;
+  readonly sealedHandle: string;
+  readonly consumedAt: string | null;
+}
+
+/** Durable idempotency fence for a provider continuation attempt. */
+export interface NativeSessionResumeAction {
+  readonly sourceSessionId: string;
+  readonly idempotencyKey: string;
+  readonly scopeFingerprint: string;
+  readonly resumedSessionId: string;
+}
+
+/**
+ * Session-scoped, typed answer material retained for native follow-up tools.
+ * `envelopeJson` is limited by the native-artifact contract to table and
+ * definition blocks; it deliberately never contains terminal bytes or a
+ * driver/subagent transcript.
+ */
+export interface NativeStructuredAnswerRow {
+  readonly id: string;
+  readonly nativeSessionId: string;
+  /** Caller retry authority only; canonical answer provenance is host-minted. */
+  readonly idempotencyKey: string;
+  readonly envelopeJson: string;
+  readonly digest: string;
+  readonly createdAt: string;
+}
+
+/** Retained answers are intentionally bounded without a global cleanup job. */
+export const MAX_NATIVE_STRUCTURED_ANSWERS_PER_SESSION = 32;
+
+/** Durable, redacted projection of the producer-owned Setup recovery report. */
+export interface NativeSetupRecoveryRow {
+  readonly sessionId: string;
+  readonly phase: NativeSetupRecoveryPhase;
+  readonly state: NativeSetupRecoveryState;
+  readonly code: NativeSetupRecoveryCode;
+  readonly sequence: number;
+  readonly decision: "continue_or_stop" | null;
+  /** Host-owned completion result; never inferred from a report or PTY exit. */
+  readonly completionValidated: boolean;
+  /** Monotonic compare-and-swap token for browser recovery actions. */
+  readonly version: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
 
 export interface SessionRow {
   readonly id: string;
@@ -71,6 +174,11 @@ export type PendingDecisionPayload =
        * produced no session id to resume.
        */
       readonly sessionId?: string | null;
+      /** Server-only origin identity; both fields are required to resume. */
+      readonly sessionProvider?: string;
+      readonly sessionRunner?: string;
+      /** Preserves an adopted context turn's cwd across the decision. */
+      readonly workspaceRoot?: string;
     }
   | {
       /** One explicit recovery from a terminal context turn with no successful schema discovery. */
@@ -78,10 +186,19 @@ export type PendingDecisionPayload =
       readonly stepKey: "context";
       /** Captured from the completed Mode-B turn when available, so retry can continue the same conversation. */
       readonly sessionId?: string | null;
+      /** Server-only origin identity; both fields are required to resume. */
+      readonly sessionProvider?: string;
+      readonly sessionRunner?: string;
       /** Carries an adopted project's dirname across the decision, when this was not the bootstrap workspace root. */
       readonly workspaceRoot?: string;
     }
-  | { readonly kind: "name_conflict"; readonly projectName: string; readonly sourceType: string }
+  | {
+      readonly kind: "name_conflict";
+      readonly projectName: string;
+      readonly sourceType: string;
+      /** The chosen connection shape, so "clean" rebuilds the same one the user picked. */
+      readonly variant?: string;
+    }
   | {
       readonly kind: "build_context";
       /** Absolute path to the adopted project (see `SetupAdoptRequest.projectPath`) — reconstructed into `{workspaceRoot: dirname, projectName: basename}` for `composeSetupPrompt`/the resumed turn's `TurnRow.workspaceRoot`. */
@@ -128,10 +245,15 @@ export interface TurnRow {
    * other turn, and for turns created before this column existed.
    */
   readonly resumeSessionId: string | null;
+  /** Subscription provider that created `resumeSessionId`; required before an explicit retry may reuse it. */
+  readonly resumeSessionProvider: string | null;
+  /** Canonical selected setup-runner identity that created `resumeSessionId` (for example `subscription:claude`). */
+  readonly resumeRunner: string | null;
   /**
    * A bounded setup workflow recovery already consumed by this turn. NULL for
-   * ordinary setup/Ask turns; "schema_discovery" prevents a recovery turn
-   * from offering the same retry or a chained max-turn continuation again.
+   * ordinary setup/Ask turns. "lifecycle" marks a retained-proof corrective
+   * turn; "schema_discovery" additionally prevents that bounded retry from
+   * offering the same retry or a chained max-turn continuation again.
    */
   readonly contextRecovery: string | null;
   /**
@@ -163,6 +285,18 @@ export interface ArtifactRow {
    * and the save endpoint itself can still reach an unsaved row.
    */
   readonly savedAt: string | null;
+  /** Native-session provenance is additive; legacy Ask artifacts leave these null. */
+  readonly nativeSessionId: string | null;
+  readonly projectIdentity: string | null;
+  readonly bindingGeneration: number | null;
+  readonly projectRevision: string | null;
+  readonly nativeVendor: NativeSessionVendor | null;
+  readonly nativeAgent: string | null;
+  readonly contentDigest: string | null;
+  /** Opaque retry key, never returned on an artifact DTO. */
+  readonly idempotencyKey: string | null;
+  /** Source provenance for a reference-backed native save; legacy/payload saves leave these null. */
+  readonly sourceAnswerId: string | null;
 }
 
 export interface PublicationRow {
@@ -222,7 +356,10 @@ CREATE TABLE IF NOT EXISTS artifacts (
   -- thread; listArtifacts() filters on it so auto-created artifacts don't
   -- appear on the Artifacts page until saved. Also added via migrateSchema()
   -- below for an existing on-disk DB file predating this column.
-  saved_at TEXT
+  saved_at TEXT,
+  native_session_id TEXT, project_identity TEXT, binding_generation INTEGER, project_revision TEXT,
+  native_vendor TEXT, native_agent TEXT, content_digest TEXT, idempotency_key TEXT,
+  source_answer_id TEXT
 );
 CREATE TABLE IF NOT EXISTS publications (
   artifact_id TEXT PRIMARY KEY, link TEXT NOT NULL, scope TEXT NOT NULL, created_at TEXT NOT NULL
@@ -235,7 +372,174 @@ CREATE TABLE IF NOT EXISTS eval_runs (
 CREATE TABLE IF NOT EXISTS config (
   key TEXT PRIMARY KEY, value_json TEXT NOT NULL
 );
+-- Operational enrichment state is deliberately host-owned and outside the
+-- project tree.  These rows contain only safe ids, hashes, summaries and
+-- digests; raw source material and runner/session anchors are never stored.
+CREATE TABLE IF NOT EXISTS enrichment_runs (
+  id TEXT PRIMARY KEY, mode TEXT NOT NULL, project_path TEXT NOT NULL,
+  project_identity TEXT NOT NULL DEFAULT '', project_revision TEXT NOT NULL, proposal_id TEXT NOT NULL, proposal_hash TEXT NOT NULL,
+  status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  validation_digest TEXT, build_digest TEXT, error_message TEXT, binding_generation INTEGER NOT NULL DEFAULT 0,
+  version INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS enrichment_operations (
+  run_id TEXT NOT NULL, operation_id TEXT NOT NULL, sink TEXT NOT NULL, risk TEXT NOT NULL,
+  summary TEXT NOT NULL, draft TEXT NOT NULL DEFAULT '', change_kind TEXT NOT NULL DEFAULT 'knowledge_append', confidence TEXT NOT NULL, decision TEXT, completed INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'awaiting_decision', attempt INTEGER NOT NULL DEFAULT 0, lease_token TEXT, lease_expires_at TEXT, idempotency_key TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (run_id, operation_id)
+);
+CREATE TABLE IF NOT EXISTS enrichment_approvals (
+  run_id TEXT NOT NULL, operation_id TEXT NOT NULL, project_revision TEXT NOT NULL,
+  proposal_hash TEXT NOT NULL, risk TEXT NOT NULL, attested_at TEXT NOT NULL,
+  project_path TEXT NOT NULL DEFAULT '', project_identity TEXT NOT NULL DEFAULT '', binding_generation INTEGER NOT NULL DEFAULT 0,
+  operation_hash TEXT NOT NULL DEFAULT '', sink TEXT NOT NULL DEFAULT '', change_kind TEXT NOT NULL DEFAULT '',
+  evidence_ref TEXT NOT NULL DEFAULT '', nonce TEXT NOT NULL DEFAULT '', expires_at TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (run_id, operation_id)
+);
+CREATE TABLE IF NOT EXISTS enrichment_events (
+  id TEXT PRIMARY KEY, run_id TEXT NOT NULL, kind TEXT NOT NULL, message TEXT NOT NULL, created_at TEXT NOT NULL
+);
+-- Native Sessions are a control-plane namespace. They intentionally do not
+-- share Ask session identity and never store terminal bytes or input.
+CREATE TABLE IF NOT EXISTS native_sessions (
+  id TEXT PRIMARY KEY, purpose TEXT NOT NULL, vendor TEXT NOT NULL, agent TEXT NOT NULL,
+  scope_kind TEXT NOT NULL, scope_id TEXT NOT NULL,
+  project_identity TEXT, binding_generation INTEGER, project_revision TEXT,
+  dispatch_profile TEXT, dispatch_target TEXT, runtime_generation INTEGER,
+  status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  started_at TEXT, ended_at TEXT, exit_code INTEGER, failure TEXT
+);
+CREATE INDEX IF NOT EXISTS native_sessions_updated_at ON native_sessions(updated_at DESC);
+-- Provider conversation identity is an opaque, sealed server-side value. It
+-- deliberately has no foreign-key cascade: historical session rows remain a
+-- truthful record even after their one-shot resume authority is consumed.
+CREATE TABLE IF NOT EXISTS native_session_resume_handles (
+  session_id TEXT PRIMARY KEY, provider TEXT NOT NULL, sealed_handle TEXT NOT NULL,
+  consumed_at TEXT
+);
+CREATE TABLE IF NOT EXISTS native_session_resume_actions (
+  session_id TEXT NOT NULL, idempotency_key TEXT NOT NULL, scope_fingerprint TEXT NOT NULL,
+  resumed_session_id TEXT NOT NULL, created_at TEXT NOT NULL,
+  PRIMARY KEY (session_id, idempotency_key)
+);
+-- Setup recovery stores an intentionally closed, redacted projection. It has
+-- no terminal bytes, prompt, credential, capability, path, or tool payload.
+CREATE TABLE IF NOT EXISTS native_setup_recoveries (
+  session_id TEXT PRIMARY KEY,
+  phase TEXT NOT NULL, state TEXT NOT NULL, code TEXT NOT NULL,
+  sequence INTEGER NOT NULL, decision TEXT,
+  completion_validated INTEGER NOT NULL DEFAULT 0,
+  version INTEGER NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+-- A browser-only recovery action secret is never stored raw. A per-row salt
+-- and verifier survive BFF restart so an interrupted session can be retried.
+CREATE TABLE IF NOT EXISTS native_setup_recovery_actions (
+  session_id TEXT PRIMARY KEY,
+  salt TEXT NOT NULL, verifier TEXT NOT NULL, claimed_at TEXT
+);
+-- A native answer is retained only as its typed render envelope. Native
+-- sessions still never store terminal bytes, prompts, or transcripts.
+CREATE TABLE IF NOT EXISTS native_structured_answers (
+  id TEXT PRIMARY KEY,
+  native_session_id TEXT NOT NULL REFERENCES native_sessions(id) ON DELETE CASCADE,
+  idempotency_key TEXT NOT NULL,
+  envelope_json TEXT NOT NULL,
+  digest TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(native_session_id, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS native_structured_answers_session_created_at
+  ON native_structured_answers(native_session_id, created_at DESC);
 `;
+
+export interface EnrichmentRunRow {
+  readonly id: string;
+  readonly mode: EnrichmentMode;
+  readonly projectPath: string;
+  readonly projectIdentity: string;
+  readonly projectRevision: string;
+  readonly proposalId: string;
+  readonly proposalHash: string;
+  readonly status: EnrichmentRunStatus;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly validationDigest: string | null;
+  readonly buildDigest: string | null;
+  readonly errorMessage: string | null;
+  readonly bindingGeneration: number;
+  /** Monotonic optimistic-concurrency token; never use `updatedAt` as authority. */
+  readonly version: number;
+}
+
+export interface EnrichmentOperationRow extends EnrichmentOperation {
+  readonly decision: "accept" | "edit" | "skip" | null;
+  readonly completed: boolean;
+  readonly state: import("./enrichment.js").EnrichmentOperationState;
+  readonly attempt: number;
+  readonly leaseToken: string | null;
+  readonly leaseExpiresAt: string | null;
+  readonly idempotencyKey: string;
+}
+
+export interface EnrichmentEventRow { readonly id: string; readonly runId: string; readonly kind: string; readonly message: string; readonly createdAt: string; }
+
+/** A single optimistic, binding-fenced metadata mutation for a run. */
+export interface EnrichmentMetadataTransition {
+  readonly runId: string;
+  readonly expectedVersion: number;
+  readonly binding: EnrichmentBinding;
+  readonly operation?: {
+    readonly id: string;
+    readonly expectedState: EnrichmentOperationState;
+    readonly expectedDecision?: "accept" | "edit" | "skip" | null;
+    readonly decision?: "accept" | "edit" | "skip";
+    readonly nextState: EnrichmentOperationState;
+  };
+  readonly status?: EnrichmentRunStatus;
+  readonly errorMessage?: string | null;
+  /** A callback-minted record; browser input can never supply this object. */
+  readonly attestation?: EnrichmentApprovalAttestation;
+  readonly event?: { readonly kind: string; readonly message: string };
+  /** Additional events share this exact operation/run/version transaction. */
+  readonly additionalEvents?: readonly { readonly kind: string; readonly message: string }[];
+}
+
+/** The authoritative transaction for every apply/reconcile/lease mutation. */
+export interface EnrichmentExecutionTransition {
+  readonly runId: string;
+  readonly expectedVersion: number;
+  readonly binding: EnrichmentBinding;
+  readonly operationId: string;
+  readonly expectedStates: readonly EnrichmentOperationState[];
+  readonly expectedAttempt?: number;
+  readonly expectedLeaseToken?: string | null;
+  readonly nextState: EnrichmentOperationState;
+  readonly nextAttempt?: number;
+  readonly leaseToken?: string | null;
+  readonly leaseExpiresAt?: string | null;
+  readonly completed?: boolean;
+  readonly status: EnrichmentRunStatus;
+  readonly validationDigest?: string | null;
+  readonly buildDigest?: string | null;
+  readonly errorMessage?: string | null;
+  readonly event: { readonly kind: string; readonly message: string };
+}
+
+/**
+ * Replaces a browser-edited draft only after the host has canonicalized it.
+ * This keeps the operation, proposal hash, run version, and audit event in
+ * one binding-fenced transaction.
+ */
+export interface EnrichmentEditTransition {
+  readonly runId: string;
+  readonly expectedVersion: number;
+  readonly binding: EnrichmentBinding;
+  readonly operationId: string;
+  readonly operation: EnrichmentOperation;
+  readonly proposalId: string;
+  readonly proposalHash: string;
+  readonly event: { readonly kind: string; readonly message: string };
+}
 
 function boolToInt(value: boolean): number {
   return value ? 1 : 0;
@@ -266,15 +570,29 @@ function num(row: Record<string, unknown>, key: string): number {
   return Number(value);
 }
 
+function recoveryCapabilityVerifier(salt: string, capability: string): string {
+  return createHash("sha256").update(`${salt}:${capability}`, "utf8").digest("hex");
+}
+
+function sameRecoveryCapability(expected: string, actual: string): boolean {
+  const expectedBytes = Buffer.from(expected, "hex");
+  const actualBytes = Buffer.from(actual, "hex");
+  return expectedBytes.length === actualBytes.length && timingSafeEqual(expectedBytes, actualBytes);
+}
+
 /**
  * The setup wizard's initial config, seeded on first init and restored by
  * `resetSetup()`. Kept as module consts so "seed" and "reset" can never drift.
  */
 const SEED_RUNTIME_SETTINGS: RuntimeSettings = {
   authMode: "subscription",
+  subscriptionProvider: "claude",
   tierModels: [
-    { tier: "cheap", model: "claude-haiku" },
-    { tier: "strong", model: "claude-sonnet" },
+    // Tier identities come from the compiled runtime contract. Models are
+    // deliberately blank: a provider catalog is a suggestion, never a
+    // product-owned selection on the user's behalf.
+    { tier: "cheap", model: "" },
+    { tier: "strong", model: "" },
   ],
   hybrid: false,
   deployment: "personal",
@@ -316,14 +634,126 @@ function coerceOrphanedTodoSteps(steps: SetupStep[]): SetupStep[] {
   return result;
 }
 
+export interface StoreOptions {
+  /**
+   * Test-only fault seam for the atomic context-success transaction. It runs
+   * after the named write while the SQLite transaction is still open, so a
+   * thrown error verifies that every preceding write is rolled back too.
+   */
+  readonly onContextSuccessWrite?: (phase: "after_steps" | "after_event" | "after_turn") => void;
+  /** Test-only fault seam for enrichment's run/op/event CAS transaction. */
+  readonly onEnrichmentTransitionWrite?: (phase: "after_operation" | "after_run" | "after_event") => void;
+  /** Test-only fault seam for atomic enrichment-run creation. */
+  readonly onEnrichmentCreationWrite?: (phase: "after_run" | "after_operations" | "after_event") => void;
+  /** Test-only clock so lease-expiry behavior is deterministic. */
+  readonly now?: () => Date;
+}
+
+export interface ContextSetupSuccessPersistence {
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly steps: SetupStep[];
+  readonly statusEvent: SetupStatusEvent;
+  readonly backend: string | null;
+  readonly answerSummary: string | null;
+  readonly traceJson: string | null;
+  readonly errorMessage: string | null;
+}
+
 export class Store {
   private readonly db: DatabaseSync;
+  private readonly onContextSuccessWrite: StoreOptions["onContextSuccessWrite"];
+  private readonly onEnrichmentTransitionWrite: StoreOptions["onEnrichmentTransitionWrite"];
+  private readonly onEnrichmentCreationWrite: StoreOptions["onEnrichmentCreationWrite"];
+  private readonly now: () => Date;
 
-  constructor(path: string) {
+  constructor(path: string, options: StoreOptions = {}) {
     this.db = new DatabaseSync(path);
+    this.onContextSuccessWrite = options.onContextSuccessWrite;
+    this.onEnrichmentTransitionWrite = options.onEnrichmentTransitionWrite;
+    this.onEnrichmentCreationWrite = options.onEnrichmentCreationWrite;
+    this.now = options.now ?? (() => new Date());
+    this.db.exec("PRAGMA foreign_keys = ON");
     this.db.exec(SCHEMA_SQL);
     this.migrateSchema();
     this.seedIfEmpty();
+    this.reconcileOrphanedSetupTurns();
+    this.reconcileOrphanedEnrichmentRuns();
+    this.reconcileOrphanedNativeSessions();
+  }
+
+  /**
+   * A setup turn is executed only by the owning BFF process. If that process
+   * exits, a NULL result cannot still represent running work after restart.
+   * Convert only setup turns (never ordinary Ask turns) to a bounded, public
+   * recovery error. The old trace is deliberately discarded: it may predate
+  * the setup-boundary redaction rules and must not be replayed to the UI.
+  */
+  private reconcileOrphanedSetupTurns(): void {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const orphanSessions = this.db
+        .prepare(`SELECT DISTINCT session_id FROM turns WHERE result_kind IS NULL AND setup_step_key IS NOT NULL`)
+        .all()
+        .map((row) => str(row as Record<string, unknown>, "session_id"));
+      if (orphanSessions.length === 0) {
+        this.db.exec("COMMIT");
+        return;
+      }
+      const message = "a previous setup execution was interrupted by a BFF restart; Continue & repair to inspect the preserved project and resume safely";
+      this.db
+        .prepare(`UPDATE turns SET backend = NULL, result_kind = 'error', answer_summary = NULL, trace_json = '[]', error_message = ? WHERE result_kind IS NULL AND setup_step_key IS NOT NULL`)
+        .run(message);
+      // A stale streaming status otherwise leaves reload hydration presenting
+      // an indefinitely-running turn even though the row is now recoverable.
+      const clearStreaming = this.db.prepare(`UPDATE sessions SET status = 'active', pending_question = NULL, updated_at = ? WHERE id = ? AND status = 'streaming'`);
+      for (const sessionId of orphanSessions) clearStreaming.run(this.now().toISOString(), sessionId);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  /**
+   * An enrichment draft is executed only by the owning BFF process. If that
+   * process exits mid-draft, a 'drafting' row cannot still represent running
+   * work after restart -- convert it to a terminal, classifiable state
+   * (mirrors `reconcileOrphanedSetupTurns` above) so the UI never shows a
+   * run stuck at "in progress" forever after a crash or redeploy.
+   */
+  private reconcileOrphanedEnrichmentRuns(): void {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const orphanRunIds = this.db
+        .prepare(`SELECT id FROM enrichment_runs WHERE status = 'drafting'`)
+        .all()
+        .map((row) => str(row as Record<string, unknown>, "id"));
+      if (orphanRunIds.length === 0) {
+        this.db.exec("COMMIT");
+        return;
+      }
+      const now = this.now().toISOString();
+      const message = "a previous enrichment draft was interrupted by a BFF restart; start a new enrichment run";
+      this.db
+        .prepare(`UPDATE enrichment_runs SET error_message = ?, updated_at = ?, version = version + 1, status = 'failed' WHERE status = 'drafting'`)
+        .run(message, now);
+      const insertEvent = this.db.prepare(`INSERT INTO enrichment_events (id, run_id, kind, message, created_at) VALUES (?, ?, 'failed', ?, ?)`);
+      for (const runId of orphanRunIds) insertEvent.run(newId("enrichment-event"), runId, "Enrichment draft failed.", now);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  /** A PTY belongs to this BFF process, so it cannot survive a restart. */
+  private reconcileOrphanedNativeSessions(): void {
+    const now = this.now().toISOString();
+    this.db.prepare(
+      `UPDATE native_sessions SET status = 'interrupted', failure = ?, ended_at = ?, updated_at = ?
+       WHERE status IN ('creating', 'running', 'detached')`,
+    ).run("native session interrupted by BFF restart", now, now);
   }
 
   /**
@@ -338,10 +768,46 @@ export class Store {
     this.addColumnIfMissing("turns", "agent_id", "TEXT");
     this.addColumnIfMissing("turns", "setup_step_key", "TEXT");
     this.addColumnIfMissing("turns", "resume_session_id", "TEXT");
+    this.addColumnIfMissing("turns", "resume_session_provider", "TEXT");
+    this.addColumnIfMissing("turns", "resume_runner", "TEXT");
     this.addColumnIfMissing("turns", "workspace_root", "TEXT");
     this.addColumnIfMissing("turns", "context_recovery", "TEXT");
     this.addColumnIfMissing("sessions", "pending_decision", "TEXT");
     this.addColumnIfMissing("artifacts", "saved_at", "TEXT");
+    this.addColumnIfMissing("artifacts", "native_session_id", "TEXT");
+    this.addColumnIfMissing("artifacts", "project_identity", "TEXT");
+    this.addColumnIfMissing("artifacts", "binding_generation", "INTEGER");
+    this.addColumnIfMissing("artifacts", "project_revision", "TEXT");
+    this.addColumnIfMissing("artifacts", "native_vendor", "TEXT");
+    this.addColumnIfMissing("artifacts", "native_agent", "TEXT");
+    this.addColumnIfMissing("artifacts", "content_digest", "TEXT");
+    this.addColumnIfMissing("artifacts", "idempotency_key", "TEXT");
+    this.db.exec("CREATE UNIQUE INDEX IF NOT EXISTS artifacts_native_idempotency_unique ON artifacts(native_session_id, idempotency_key) WHERE native_session_id IS NOT NULL AND idempotency_key IS NOT NULL");
+    this.addColumnIfMissing("enrichment_operations", "draft", "TEXT NOT NULL DEFAULT ''");
+    this.addColumnIfMissing("enrichment_operations", "change_kind", "TEXT NOT NULL DEFAULT 'knowledge_append'");
+    this.addColumnIfMissing("enrichment_operations", "state", "TEXT NOT NULL DEFAULT 'awaiting_decision'");
+    this.addColumnIfMissing("enrichment_operations", "attempt", "INTEGER NOT NULL DEFAULT 0");
+    this.addColumnIfMissing("enrichment_operations", "lease_token", "TEXT");
+    this.addColumnIfMissing("enrichment_operations", "lease_expires_at", "TEXT");
+    this.addColumnIfMissing("enrichment_operations", "idempotency_key", "TEXT NOT NULL DEFAULT ''");
+    this.db.prepare(`UPDATE enrichment_operations SET idempotency_key = run_id || ':' || operation_id WHERE idempotency_key = ''`).run();
+    this.addColumnIfMissing("enrichment_runs", "binding_generation", "INTEGER NOT NULL DEFAULT 0");
+    this.addColumnIfMissing("enrichment_runs", "project_identity", "TEXT NOT NULL DEFAULT ''");
+    this.addColumnIfMissing("enrichment_runs", "version", "INTEGER NOT NULL DEFAULT 1");
+    this.addColumnIfMissing("enrichment_approvals", "project_path", "TEXT NOT NULL DEFAULT ''");
+    this.addColumnIfMissing("enrichment_approvals", "project_identity", "TEXT NOT NULL DEFAULT ''");
+    this.addColumnIfMissing("enrichment_approvals", "binding_generation", "INTEGER NOT NULL DEFAULT 0");
+    this.addColumnIfMissing("enrichment_approvals", "operation_hash", "TEXT NOT NULL DEFAULT ''");
+    this.addColumnIfMissing("enrichment_approvals", "sink", "TEXT NOT NULL DEFAULT ''");
+    this.addColumnIfMissing("enrichment_approvals", "change_kind", "TEXT NOT NULL DEFAULT ''");
+    this.addColumnIfMissing("enrichment_approvals", "evidence_ref", "TEXT NOT NULL DEFAULT ''");
+    this.addColumnIfMissing("enrichment_approvals", "nonce", "TEXT NOT NULL DEFAULT ''");
+    this.addColumnIfMissing("enrichment_approvals", "expires_at", "TEXT NOT NULL DEFAULT ''");
+    this.addColumnIfMissing("native_sessions", "dispatch_profile", "TEXT");
+    this.addColumnIfMissing("native_sessions", "dispatch_target", "TEXT");
+    this.addColumnIfMissing("native_sessions", "runtime_generation", "INTEGER");
+    this.addColumnIfMissing("artifacts", "source_answer_id", "TEXT");
+    this.db.exec("CREATE UNIQUE INDEX IF NOT EXISTS enrichment_approvals_nonce_unique ON enrichment_approvals(nonce) WHERE nonce <> ''");
   }
 
   private addColumnIfMissing(table: string, column: string, type: string): void {
@@ -361,7 +827,7 @@ export class Store {
   // ---------------------------------------------------------------------
 
   createSession(title: string): SessionRow {
-    const now = new Date().toISOString();
+    const now = this.now().toISOString();
     const row: SessionRow = { id: newId("session"), title, createdAt: now, updatedAt: now, status: "active", pendingQuestion: null, pendingDecision: null };
     this.db
       .prepare(
@@ -369,6 +835,305 @@ export class Store {
       )
       .run(row.id, row.title, row.createdAt, row.updatedAt, row.status, row.pendingQuestion, row.pendingDecision);
     return row;
+  }
+
+  // ---------------------------------------------------------------------
+  // native Sessions control plane (never Ask sessions / never transcript)
+  // ---------------------------------------------------------------------
+
+  createNativeSession(params: {
+    id: string; purpose: NativeSessionPurpose; vendor: NativeSessionVendor; agent: string;
+    scopeKind: NativeSessionScopeKind; scopeId: string; projectIdentity?: string;
+    bindingGeneration?: number; projectRevision?: string;
+    dispatchProfile?: string; dispatchTarget?: string; runtimeGeneration?: number;
+  }): NativeSessionRow {
+    const now = this.now().toISOString();
+    this.db.prepare(
+      `INSERT INTO native_sessions (id, purpose, vendor, agent, scope_kind, scope_id, project_identity, binding_generation, project_revision, dispatch_profile, dispatch_target, runtime_generation, status, created_at, updated_at, started_at, ended_at, exit_code, failure)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'creating', ?, ?, NULL, NULL, NULL, NULL)`,
+    ).run(params.id, params.purpose, params.vendor, params.agent, params.scopeKind, params.scopeId,
+      params.projectIdentity ?? null, params.bindingGeneration ?? null, params.projectRevision ?? null, params.dispatchProfile ?? null, params.dispatchTarget ?? null, params.runtimeGeneration ?? null, now, now);
+    return this.getNativeSession(params.id)!;
+  }
+
+  /** Stores a sealed provider handle only; callers must never pass plaintext. */
+  saveNativeSessionResumeHandle(sessionId: string, provider: NativeSessionVendor, sealedHandle: string): void {
+    this.db.prepare(
+      `INSERT INTO native_session_resume_handles (session_id, provider, sealed_handle, consumed_at)
+       VALUES (?, ?, ?, NULL)
+       ON CONFLICT(session_id) DO UPDATE SET provider = excluded.provider, sealed_handle = excluded.sealed_handle, consumed_at = NULL`,
+    ).run(sessionId, provider, sealedHandle);
+  }
+
+  getNativeSessionResumeHandle(sessionId: string): NativeSessionResumeHandle | undefined {
+    const row = this.db.prepare(`SELECT * FROM native_session_resume_handles WHERE session_id = ?`).get(sessionId) as Record<string, unknown> | undefined;
+    return row ? {
+      sessionId: str(row, "session_id"), provider: str(row, "provider") as NativeSessionVendor,
+      sealedHandle: str(row, "sealed_handle"), consumedAt: strOrNull(row, "consumed_at"),
+    } : undefined;
+  }
+
+  /** Browser-safe availability bit; the opaque sealed value never leaves Store. */
+  hasAvailableNativeSessionResume(sessionId: string, provider: NativeSessionVendor): boolean {
+    return this.db.prepare(
+      `SELECT 1 FROM native_session_resume_handles WHERE session_id = ? AND provider = ? AND consumed_at IS NULL`,
+    ).get(sessionId, provider) !== undefined;
+  }
+
+  getNativeSessionResumeAction(sourceSessionId: string, idempotencyKey: string): NativeSessionResumeAction | undefined {
+    const row = this.db.prepare(
+      `SELECT session_id, idempotency_key, scope_fingerprint, resumed_session_id
+       FROM native_session_resume_actions WHERE session_id = ? AND idempotency_key = ?`,
+    ).get(sourceSessionId, idempotencyKey) as Record<string, unknown> | undefined;
+    return row ? {
+      sourceSessionId: str(row, "session_id"),
+      idempotencyKey: str(row, "idempotency_key"),
+      scopeFingerprint: str(row, "scope_fingerprint"),
+      resumedSessionId: str(row, "resumed_session_id"),
+    } : undefined;
+  }
+
+  invalidateNativeSessionResume(sessionId: string): void {
+    const now = this.now().toISOString();
+    this.db.prepare(`UPDATE native_session_resume_handles SET consumed_at = COALESCE(consumed_at, ?) WHERE session_id = ?`).run(now, sessionId);
+  }
+
+  /**
+   * Atomically consumes a source conversation authority and creates its child
+   * process row. A duplicate action returns its original child, while another
+   * click can never fork the same provider conversation.
+   */
+  reserveNativeSessionResume(params: {
+    readonly sourceSessionId: string;
+    readonly idempotencyKey: string;
+    readonly scopeFingerprint: string;
+    readonly child: {
+      readonly id: string; readonly purpose: NativeSessionPurpose; readonly vendor: NativeSessionVendor; readonly agent: string;
+      readonly scopeKind: NativeSessionScopeKind; readonly scopeId: string; readonly projectIdentity?: string;
+      readonly bindingGeneration?: number; readonly projectRevision?: string;
+      readonly dispatchProfile?: string; readonly dispatchTarget?: string; readonly runtimeGeneration?: number;
+    };
+    readonly sealedHandle: string;
+  }): { readonly row: NativeSessionRow; readonly created: boolean } | undefined {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const existing = this.db.prepare(
+        `SELECT scope_fingerprint, resumed_session_id FROM native_session_resume_actions WHERE session_id = ? AND idempotency_key = ?`,
+      ).get(params.sourceSessionId, params.idempotencyKey) as Record<string, unknown> | undefined;
+      if (existing) {
+        if (str(existing, "scope_fingerprint") !== params.scopeFingerprint) throw new Error("native session resume action is stale");
+        const row = this.getNativeSession(str(existing, "resumed_session_id"));
+        this.db.exec("COMMIT");
+        return row ? { row, created: false } : undefined;
+      }
+      const handle = this.getNativeSessionResumeHandle(params.sourceSessionId);
+      if (!handle || handle.provider !== params.child.vendor || handle.consumedAt !== null) {
+        this.db.exec("ROLLBACK");
+        return undefined;
+      }
+      const source = this.getNativeSession(params.sourceSessionId);
+      if (!source || source.vendor !== params.child.vendor) {
+        this.db.exec("ROLLBACK");
+        return undefined;
+      }
+      const now = this.now().toISOString();
+      const child = params.child;
+      this.db.prepare(
+        `INSERT INTO native_sessions (id, purpose, vendor, agent, scope_kind, scope_id, project_identity, binding_generation, project_revision, dispatch_profile, dispatch_target, runtime_generation, status, created_at, updated_at, started_at, ended_at, exit_code, failure)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'creating', ?, ?, NULL, NULL, NULL, NULL)`,
+      ).run(child.id, child.purpose, child.vendor, child.agent, child.scopeKind, child.scopeId,
+        child.projectIdentity ?? null, child.bindingGeneration ?? null, child.projectRevision ?? null, child.dispatchProfile ?? null, child.dispatchTarget ?? null, child.runtimeGeneration ?? null, now, now);
+      this.db.prepare(`INSERT INTO native_session_resume_actions (session_id, idempotency_key, scope_fingerprint, resumed_session_id, created_at) VALUES (?, ?, ?, ?, ?)`).run(
+        params.sourceSessionId, params.idempotencyKey, params.scopeFingerprint, child.id, now,
+      );
+      this.db.prepare(`UPDATE native_session_resume_handles SET consumed_at = ? WHERE session_id = ? AND consumed_at IS NULL`).run(now, params.sourceSessionId);
+      this.saveNativeSessionResumeHandle(child.id, child.vendor, params.sealedHandle);
+      const row = this.getNativeSession(child.id)!;
+      this.db.exec("COMMIT");
+      return { row, created: true };
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  getNativeSession(id: string): NativeSessionRow | undefined {
+    const row = this.db.prepare(`SELECT * FROM native_sessions WHERE id = ?`).get(id);
+    return row ? rowToNativeSession(row) : undefined;
+  }
+
+  createNativeStructuredAnswer(params: {
+    readonly id: string;
+    readonly nativeSessionId: string;
+    readonly idempotencyKey: string;
+    readonly envelopeJson: string;
+    readonly digest: string;
+  }): { readonly row: NativeStructuredAnswerRow; readonly created: boolean } {
+    const existing = this.getNativeStructuredAnswerByIdempotency(params.nativeSessionId, params.idempotencyKey);
+    if (existing) return { row: existing, created: false };
+    const createdAt = this.now().toISOString();
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.prepare(
+        `INSERT INTO native_structured_answers (id, native_session_id, idempotency_key, envelope_json, digest, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(params.id, params.nativeSessionId, params.idempotencyKey, params.envelopeJson, params.digest, createdAt);
+      this.db.prepare(
+        `DELETE FROM native_structured_answers
+         WHERE id IN (
+           SELECT id FROM native_structured_answers
+           WHERE native_session_id = ?
+           ORDER BY created_at DESC, rowid DESC
+           LIMIT -1 OFFSET ?
+         )`,
+      ).run(params.nativeSessionId, MAX_NATIVE_STRUCTURED_ANSWERS_PER_SESSION);
+      const row = this.getNativeStructuredAnswer(params.id)!;
+      this.db.exec("COMMIT");
+      return { row, created: true };
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      const winner = this.getNativeStructuredAnswerByIdempotency(params.nativeSessionId, params.idempotencyKey);
+      if (winner) return { row: winner, created: false };
+      throw error;
+    }
+  }
+
+  getNativeStructuredAnswer(id: string): NativeStructuredAnswerRow | undefined {
+    const row = this.db.prepare(`SELECT * FROM native_structured_answers WHERE id = ?`).get(id);
+    return row ? rowToNativeStructuredAnswer(row) : undefined;
+  }
+
+  getNativeStructuredAnswerByIdempotency(nativeSessionId: string, idempotencyKey: string): NativeStructuredAnswerRow | undefined {
+    const row = this.db.prepare(
+      `SELECT * FROM native_structured_answers WHERE native_session_id = ? AND idempotency_key = ?`,
+    ).get(nativeSessionId, idempotencyKey);
+    return row ? rowToNativeStructuredAnswer(row) : undefined;
+  }
+
+  listNativeSessions(): NativeSessionRow[] {
+    return this.db.prepare(`SELECT * FROM native_sessions ORDER BY updated_at DESC, rowid DESC`).all().map(rowToNativeSession);
+  }
+
+  transitionNativeSession(id: string, status: NativeSessionStatus, patch: { exitCode?: number | null; failure?: string | null; started?: boolean; ended?: boolean } = {}): NativeSessionRow | undefined {
+    const existing = this.getNativeSession(id);
+    if (!existing) return undefined;
+    const now = this.now().toISOString();
+    this.db.prepare(
+      `UPDATE native_sessions SET status = ?, updated_at = ?, started_at = COALESCE(started_at, ?), ended_at = ?, exit_code = ?, failure = ? WHERE id = ?`,
+    ).run(status, now, patch.started ? now : null, patch.ended ? now : existing.endedAt,
+      patch.exitCode === undefined ? existing.exitCode : patch.exitCode,
+      patch.failure === undefined ? existing.failure : patch.failure, id);
+    return this.getNativeSession(id);
+  }
+
+  getNativeSetupRecovery(sessionId: string): NativeSetupRecoveryRow | undefined {
+    const row = this.db.prepare(`SELECT * FROM native_setup_recoveries WHERE session_id = ?`).get(sessionId);
+    return row ? rowToNativeSetupRecovery(row) : undefined;
+  }
+
+  /**
+   * Accepts one already-validated closed v1 report when its producer sequence
+   * moves forward. An identical producer replay at the current sequence is an
+   * idempotent acknowledgement; any other replay or stale report fails closed.
+   */
+  recordNativeSetupRecovery(input: {
+    readonly sessionId: string;
+    readonly phase: NativeSetupRecoveryPhase;
+    readonly state: NativeSetupRecoveryState;
+    readonly code: NativeSetupRecoveryCode;
+    readonly sequence: number;
+    readonly decision: "continue_or_stop" | null;
+    readonly completionValidated: boolean;
+  }): NativeSetupRecoveryRow | undefined {
+    const now = this.now().toISOString();
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const existing = this.getNativeSetupRecovery(input.sessionId);
+      if (existing && input.sequence <= existing.sequence) {
+        const sameProducerReport = input.sequence === existing.sequence
+          && input.phase === existing.phase
+          && input.state === existing.state
+          && input.code === existing.code
+          && input.decision === existing.decision;
+        this.db.exec("ROLLBACK");
+        return sameProducerReport ? existing : undefined;
+      }
+      if (existing) {
+        this.db.prepare(
+          `UPDATE native_setup_recoveries
+           SET phase = ?, state = ?, code = ?, sequence = ?, decision = ?, completion_validated = ?, version = version + 1, updated_at = ?
+           WHERE session_id = ? AND version = ?`,
+        ).run(input.phase, input.state, input.code, input.sequence, input.decision, boolToInt(input.completionValidated), now, input.sessionId, existing.version);
+      } else {
+        this.db.prepare(
+          `INSERT INTO native_setup_recoveries (session_id, phase, state, code, sequence, decision, completion_validated, version, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        ).run(input.sessionId, input.phase, input.state, input.code, input.sequence, input.decision, boolToInt(input.completionValidated), now, now);
+      }
+      const result = this.getNativeSetupRecovery(input.sessionId);
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  /** Creates a restart-safe, browser-held action secret without persisting it raw. */
+  issueNativeSetupRecoveryAction(sessionId: string, capability: string): void {
+    const salt = randomBytes(32).toString("hex");
+    const verifier = recoveryCapabilityVerifier(salt, capability);
+    this.db.prepare(
+      `INSERT INTO native_setup_recovery_actions (session_id, salt, verifier, claimed_at) VALUES (?, ?, ?, NULL)
+       ON CONFLICT(session_id) DO UPDATE SET salt = excluded.salt, verifier = excluded.verifier, claimed_at = NULL`,
+    ).run(sessionId, salt, verifier);
+  }
+
+  /**
+   * Claims one recovery action atomically after checking its salted verifier
+   * and the browser's exact recovery version. A missing report has version 0
+   * so a BFF-restart interruption can still be retried honestly.
+   */
+  claimNativeSetupRecoveryAction(sessionId: string, capability: string, expectedVersion: number): boolean {
+    const action = this.db.prepare(`SELECT salt, verifier FROM native_setup_recovery_actions WHERE session_id = ? AND claimed_at IS NULL`).get(sessionId) as Record<string, unknown> | undefined;
+    if (!action) return false;
+    const salt = str(action, "salt");
+    const verifier = str(action, "verifier");
+    if (!sameRecoveryCapability(verifier, recoveryCapabilityVerifier(salt, capability))) return false;
+    const changed = this.db.prepare(
+      `UPDATE native_setup_recovery_actions SET claimed_at = ?
+       WHERE session_id = ? AND verifier = ? AND claimed_at IS NULL
+         AND COALESCE((SELECT version FROM native_setup_recoveries WHERE session_id = native_setup_recovery_actions.session_id), 0) = ?`,
+    ).run(this.now().toISOString(), sessionId, verifier, expectedVersion).changes;
+    return changed === 1;
+  }
+
+  /** Releases a failed launch claim so the same browser-held secret can retry. */
+  releaseNativeSetupRecoveryAction(sessionId: string): void {
+    this.db.prepare(`UPDATE native_setup_recovery_actions SET claimed_at = NULL WHERE session_id = ?`).run(sessionId);
+  }
+
+  /** Atomically make a native row stopped and consume any durable recovery verifier. */
+  stopNativeSessionAndRevokeRecoveryAction(id: string, patch: { failure?: string | null } = {}): NativeSessionRow | undefined {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const existing = this.getNativeSession(id);
+      if (!existing) {
+        this.db.exec("ROLLBACK");
+        return undefined;
+      }
+      const now = this.now().toISOString();
+      this.db.prepare(
+        `UPDATE native_sessions SET status = 'stopped', updated_at = ?, ended_at = ?, failure = ? WHERE id = ?`,
+      ).run(now, existing.endedAt ?? now, patch.failure === undefined ? existing.failure : patch.failure, id);
+      this.db.prepare(`DELETE FROM native_setup_recovery_actions WHERE session_id = ?`).run(id);
+      const result = this.getNativeSession(id);
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   listSessions(): SessionRow[] {
@@ -468,8 +1233,11 @@ export class Store {
     setupStepKey?: string | null;
     /** Plan A session resume anchor for this turn (see `TurnRow.resumeSessionId`). Undefined/null when the turn should dispatch fresh. */
     resumeSessionId?: string | null;
-    /** Bounded context workflow recovery marker; only schema_discovery is currently valid. */
-    contextRecovery?: "schema_discovery" | null;
+    /** Provider/runner identity that created `resumeSessionId`; retained only for an explicit same-backend retry. */
+    resumeSessionProvider?: string | null;
+    resumeRunner?: string | null;
+    /** Bounded context workflow recovery marker. */
+    contextRecovery?: "lifecycle" | "schema_discovery" | null;
     /** Per-turn workspace root override for the adopt flow (see `TurnRow.workspaceRoot`). Undefined/null for every non-adopt turn — falls back to `TurnDeps.workspaceRoot`. */
     workspaceRoot?: string | null;
   }): TurnRow {
@@ -487,13 +1255,15 @@ export class Store {
       agentId: params.agentId ?? null,
       setupStepKey: params.setupStepKey ?? null,
       resumeSessionId: params.resumeSessionId ?? null,
+      resumeSessionProvider: params.resumeSessionProvider ?? null,
+      resumeRunner: params.resumeRunner ?? null,
       contextRecovery: params.contextRecovery ?? null,
       workspaceRoot: params.workspaceRoot ?? null,
     };
     this.db
       .prepare(
-        `INSERT INTO turns (id, session_id, question, composed_input, backend, result_kind, answer_summary, trace_json, created_at, error_message, agent_id, setup_step_key, resume_session_id, context_recovery, workspace_root)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO turns (id, session_id, question, composed_input, backend, result_kind, answer_summary, trace_json, created_at, error_message, agent_id, setup_step_key, resume_session_id, resume_session_provider, resume_runner, context_recovery, workspace_root)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         row.id,
@@ -509,10 +1279,51 @@ export class Store {
         row.agentId,
         row.setupStepKey,
         row.resumeSessionId,
+        row.resumeSessionProvider,
+        row.resumeRunner,
         row.contextRecovery,
         row.workspaceRoot,
       );
     return row;
+  }
+
+  /**
+   * Atomically coalesces duplicate setup dispatches for one session/step.
+   * A second tab can attach to the same pending turn, but cannot create a
+   * competing mutation of the project.
+   */
+  createOrGetActiveSetupTurn(params: {
+    id: string;
+    sessionId: string;
+    question: string;
+    composedInput: string | null;
+    agentId?: string | null;
+    traceJson?: string | null;
+    setupStepKey: string;
+    resumeSessionId?: string | null;
+    resumeSessionProvider?: string | null;
+    resumeRunner?: string | null;
+    contextRecovery?: "lifecycle" | "schema_discovery" | null;
+    workspaceRoot?: string | null;
+  }): { readonly turn: TurnRow; readonly created: boolean } {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const active = this.db
+        .prepare(
+          `SELECT * FROM turns
+           WHERE session_id = ? AND setup_step_key = ? AND result_kind IS NULL
+             AND rowid = (SELECT rowid FROM turns WHERE session_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1)`,
+        )
+        .get(params.sessionId, params.setupStepKey, params.sessionId);
+      const result = active
+        ? { turn: rowToTurn(active), created: false }
+        : { turn: this.createTurn(params), created: true };
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   getTurn(id: string): TurnRow | undefined {
@@ -535,14 +1346,33 @@ export class Store {
       .run(patch.backend, patch.resultKind, patch.answerSummary, patch.traceJson, patch.errorMessage, id);
   }
 
+  /**
+   * Retains the dispatcher session anchor after a completed setup turn's
+   * host-contract recovery ultimately fails. A later explicit retry can use
+   * this durable anchor; it is never sent over the REST/SSE wire.
+   */
+  setTurnResumeAnchor(id: string, anchor: { readonly sessionId: string; readonly provider: string; readonly runner: string }): void {
+    this.db
+      .prepare(`UPDATE turns SET resume_session_id = ?, resume_session_provider = ?, resume_runner = ? WHERE id = ?`)
+      .run(anchor.sessionId, anchor.provider, anchor.runner, id);
+  }
+
   markTurnClarify(id: string): void {
     this.db.prepare(`UPDATE turns SET result_kind = 'clarify' WHERE id = ?`).run(id);
   }
 
   /** Most recent turn (any result kind) for a session — drives the Ask page's current work log. */
   getLatestTurn(sessionId: string): TurnRow | undefined {
-    const row = this.db.prepare(`SELECT * FROM turns WHERE session_id = ? ORDER BY created_at DESC LIMIT 1`).get(sessionId);
+    const row = this.db.prepare(`SELECT * FROM turns WHERE session_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1`).get(sessionId);
     return row ? rowToTurn(row) : undefined;
+  }
+
+  /** Resolved turns newest-first, used to recover an earlier safe setup pause after a later retry fails. */
+  listTurnsForSession(sessionId: string): TurnRow[] {
+    return this.db
+      .prepare(`SELECT * FROM turns WHERE session_id = ? ORDER BY created_at DESC, rowid DESC`)
+      .all(sessionId)
+      .map(rowToTurn);
   }
 
   /** D3 context composition source: last `limit` resolved (answer/refusal) turns, chronological ascending. */
@@ -576,11 +1406,65 @@ export class Store {
       verified: params.verified,
       createdAt: new Date().toISOString(),
       savedAt: null,
+      nativeSessionId: null,
+      projectIdentity: null,
+      bindingGeneration: null,
+      projectRevision: null,
+      nativeVendor: null,
+      nativeAgent: null,
+      contentDigest: null,
+      idempotencyKey: null,
+      sourceAnswerId: null,
     };
     this.db
       .prepare(`INSERT INTO artifacts (id, session_id, name, kind, location, verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
       .run(row.id, row.sessionId, row.name, row.kind, row.location, boolToInt(row.verified), row.createdAt);
     return row;
+  }
+
+  /**
+   * Inserts a host-persisted native artifact as already Saved. The unique
+   * native-session/idempotency pair is the retry authority; callers receive
+   * the original row when another request won the race.
+   */
+  createNativeArtifact(params: {
+    id: string; sessionId: string; nativeSessionId: string; name: string; location: string;
+    projectIdentity: string; bindingGeneration: number; projectRevision: string;
+    vendor: NativeSessionVendor; agent: string; digest: string; idempotencyKey: string;
+    sourceAnswerId?: string;
+  }): { readonly row: ArtifactRow; readonly created: boolean } {
+    const existing = this.getNativeArtifactByIdempotency(params.nativeSessionId, params.idempotencyKey);
+    if (existing) return { row: existing, created: false };
+    const createdAt = new Date().toISOString();
+    const row: ArtifactRow = {
+      id: params.id, sessionId: params.sessionId, name: params.name, kind: "dashboard", location: params.location,
+      verified: true, createdAt, savedAt: createdAt, nativeSessionId: params.nativeSessionId,
+      projectIdentity: params.projectIdentity, bindingGeneration: params.bindingGeneration,
+      projectRevision: params.projectRevision, nativeVendor: params.vendor, nativeAgent: params.agent,
+      contentDigest: params.digest, idempotencyKey: params.idempotencyKey,
+      sourceAnswerId: params.sourceAnswerId ?? null,
+    };
+    try {
+      this.db.prepare(`INSERT INTO artifacts (
+        id, session_id, name, kind, location, verified, created_at, saved_at,
+        native_session_id, project_identity, binding_generation, project_revision,
+        native_vendor, native_agent, content_digest, idempotency_key, source_answer_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(row.id, row.sessionId, row.name, row.kind, row.location, 1, row.createdAt, row.savedAt,
+          row.nativeSessionId, row.projectIdentity, row.bindingGeneration, row.projectRevision,
+          row.nativeVendor, row.nativeAgent, row.contentDigest, row.idempotencyKey,
+          row.sourceAnswerId);
+      return { row, created: true };
+    } catch (error) {
+      const winner = this.getNativeArtifactByIdempotency(params.nativeSessionId, params.idempotencyKey);
+      if (winner) return { row: winner, created: false };
+      throw error;
+    }
+  }
+
+  getNativeArtifactByIdempotency(nativeSessionId: string, idempotencyKey: string): ArtifactRow | undefined {
+    const row = this.db.prepare(`SELECT * FROM artifacts WHERE native_session_id = ? AND idempotency_key = ?`).get(nativeSessionId, idempotencyKey);
+    return row ? rowToArtifact(row) : undefined;
   }
 
   getArtifact(id: string): ArtifactRow | undefined {
@@ -686,11 +1570,78 @@ export class Store {
   getRuntimeSettings(): RuntimeSettings {
     const settings = this.getConfigJson<RuntimeSettings>("runtime.settings");
     if (!settings) throw new Error("runtime.settings missing — seedIfEmpty should have populated it");
-    return settings;
+    // Backward-compatible read for databases created before the provider was
+    // persisted explicitly. Claude was the only subscription backend then.
+    const legacyDriver = settings.tierModels.find((binding) => binding.tier === "orchestrator")?.model;
+    return {
+      ...settings,
+      subscriptionProvider: settings.subscriptionProvider ?? "claude",
+      // Databases written before tier rows became bundle-owned may contain an
+      // `orchestrator` pseudo-tier. Read it as the dispatcher driver while
+      // ensuring it never reappears as a user-facing compiled-bundle row.
+      tierModels: settings.tierModels.filter((binding) => binding.tier !== "orchestrator"),
+      ...(settings.subscriptionDriverModel !== undefined || legacyDriver === undefined
+        ? {}
+        : { subscriptionDriverModel: legacyDriver }),
+    };
   }
 
-  setRuntimeSettings(settings: RuntimeSettings): void {
+  /**
+   * Persists a user-validated runtime choice. The separate marker matters:
+   * seeded display defaults are not authority to replace environment/CLI boot
+   * routing. Only a successful PUT (or an explicit programmatic equivalent)
+   * may supersede those boot flags.
+   */
+  setRuntimeSettings(settings: RuntimeSettings, explicit = true): void {
     this.setConfigJson("runtime.settings", settings);
+    if (explicit) this.setConfigJson("runtime.settings.explicit", true);
+    else this.deleteConfig("runtime.settings.explicit");
+    this.setConfigJson("runtime.settings.generation", this.getRuntimeGeneration() + 1);
+  }
+
+  getRuntimeGeneration(): number {
+    return this.getConfigJson<number>("runtime.settings.generation") ?? 0;
+  }
+
+  getNativeRuntimeBinding(): NativeRuntimeBinding {
+    return resolveNativeRuntimeBinding(this.getRuntimeSettings(), this.hasExplicitRuntimeSettings(), this.getRuntimeGeneration());
+  }
+
+  /** Atomically persist a new runtime fence and stop every incompatible live row. */
+  setRuntimeSettingsAndRevokeIncompatibleNativeSessions(settings: RuntimeSettings, explicit = true): readonly string[] {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const generation = this.getRuntimeGeneration() + 1;
+      const target = resolveNativeRuntimeBinding(settings, explicit, generation).target ?? null;
+      const ids = this.db.prepare(
+        `SELECT id FROM native_sessions WHERE status IN ('creating', 'running', 'detached')
+         AND (? IS NULL OR dispatch_target IS NULL OR dispatch_target <> ?)`,
+      ).all(target, target).map((row) => str(row as Record<string, unknown>, "id"));
+      const now = this.now().toISOString();
+      if (ids.length) {
+        const placeholders = ids.map(() => "?").join(",");
+        this.db.prepare(`UPDATE native_sessions SET status = 'stopped', updated_at = ?, ended_at = ?, failure = 'native runtime binding changed' WHERE id IN (${placeholders})`).run(now, now, ...ids);
+        this.db.prepare(`DELETE FROM native_setup_recovery_actions WHERE session_id IN (${placeholders})`).run(...ids);
+      }
+      this.setConfigJson("runtime.settings", settings);
+      if (explicit) this.setConfigJson("runtime.settings.explicit", true);
+      else this.deleteConfig("runtime.settings.explicit");
+      this.setConfigJson("runtime.settings.generation", generation);
+      this.db.exec("COMMIT");
+      return ids;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  /** Whether runtime.settings came from an explicit validated save, not seed data. */
+  hasExplicitRuntimeSettings(): boolean {
+    const marker = this.getConfigJson<boolean>("runtime.settings.explicit");
+    if (marker !== undefined) return marker;
+    // Backward-compatible inference for databases written before the marker:
+    // saving runtime settings also completed the wizard's runtime step.
+    return this.getSetupSteps().find((step) => step.key === "runtime")?.state === "done";
   }
 
   getSetupSteps(): SetupStep[] {
@@ -701,6 +1652,35 @@ export class Store {
 
   setSetupSteps(steps: SetupStep[]): void {
     this.setConfigJson("setup.steps", coerceOrphanedTodoSteps(steps));
+  }
+
+  /**
+   * Commits the context foundation's accepted lifecycle as one SQLite unit.
+   * The caller has already completed parser/artifact/compile gates; this
+   * method makes its visible success state reload-safe by never exposing a
+   * partial step/event/turn/session transition.
+   */
+  completeContextSetupSuccess(params: ContextSetupSuccessPersistence): void {
+    this.db.exec("BEGIN");
+    try {
+      this.setSetupSteps(params.steps);
+      this.onContextSuccessWrite?.("after_steps");
+      this.insertEvent({ sessionId: params.sessionId, kind: "setup_status", payload: params.statusEvent, turnId: params.turnId });
+      this.onContextSuccessWrite?.("after_event");
+      this.resolveTurn(params.turnId, {
+        backend: params.backend,
+        resultKind: "answer",
+        answerSummary: params.answerSummary,
+        traceJson: params.traceJson,
+        errorMessage: params.errorMessage,
+      });
+      this.onContextSuccessWrite?.("after_turn");
+      this.updateSessionStatus(params.sessionId, "active", null);
+      this.db.exec("COMMIT");
+    } catch (err) {
+      this.db.exec("ROLLBACK");
+      throw err;
+    }
   }
 
   /**
@@ -751,12 +1731,46 @@ export class Store {
    * (`server/turn.ts`) has the `{root, name}` context `parseSetupTerminal`
    * needs without having to parse it back out of `composedInput` prose.
    */
-  getSetupConnectForm(): { projectName: string; sourceType: string } | undefined {
-    return this.getConfigJson<{ projectName: string; sourceType: string }>("setup.connectForm");
+  getSetupConnectForm(): { projectName: string; sourceType: string; variant?: string } | undefined {
+    return this.getConfigJson<{ projectName: string; sourceType: string; variant?: string }>("setup.connectForm");
   }
 
-  setSetupConnectForm(form: { projectName: string; sourceType: string }): void {
+  setSetupConnectForm(form: { projectName: string; sourceType: string; variant?: string }): void {
     this.setConfigJson("setup.connectForm", form);
+  }
+
+  getSetupContextLifecycleEvidence(sessionId: string, identityFingerprint: string): SetupContextLifecycleEvidence | undefined {
+    const value = this.getConfigJson<unknown>("setup.contextLifecycleEvidence");
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      Array.isArray(value) ||
+      (value as Record<string, unknown>).sessionId !== sessionId ||
+      (value as Record<string, unknown>).identityFingerprint !== identityFingerprint ||
+      !["none", "discovery", "validate", "build"].includes((value as Record<string, unknown>).completed as string)
+    ) {
+      // A malformed, stale-session, or stale-identity checkpoint must never
+      // influence a new project. Remove it rather than guessing how to merge.
+      if (value !== undefined) this.deleteConfig("setup.contextLifecycleEvidence");
+      return undefined;
+    }
+    return value as SetupContextLifecycleEvidence;
+  }
+
+  mergeSetupContextLifecycleEvidence(input: SetupContextLifecycleEvidence): SetupContextLifecycleEvidence {
+    const current = this.getSetupContextLifecycleEvidence(input.sessionId, input.identityFingerprint);
+    const rank = (value: SetupContextLifecyclePrefix): number => ["none", "discovery", "validate", "build"].indexOf(value);
+    const merged: SetupContextLifecycleEvidence = {
+      sessionId: input.sessionId,
+      identityFingerprint: input.identityFingerprint,
+      completed: current && rank(current.completed) > rank(input.completed) ? current.completed : input.completed,
+    };
+    this.setConfigJson("setup.contextLifecycleEvidence", merged);
+    return merged;
+  }
+
+  clearSetupContextLifecycleEvidence(): void {
+    this.deleteConfig("setup.contextLifecycleEvidence");
   }
 
   getContextModels(): SemanticModel[] {
@@ -789,6 +1803,305 @@ export class Store {
   }
 
   // ---------------------------------------------------------------------
+  // Optional post-bind enrichment. The durable operation ledger lives here,
+  // never in a project artifact or a provider session.
+  // ---------------------------------------------------------------------
+
+  /**
+   * Persists a run BEFORE any model turn is dispatched, in a running
+   * ('drafting') state, with the bound revision and generation locked for
+   * the lifetime of the draft. This is the enrichment analogue of
+   * `postTurn` creating a turn row (`resultKind: null`) ahead of `route()`:
+   * the row -- and therefore `GET /api/context/enrichment`'s visibility of
+   * it -- exists for the entire ~minutes-long dispatch, not only after it
+   * resolves. Every exit path from that dispatch must resolve this row to a
+   * terminal status via `finalizeEnrichmentDraft` or `failEnrichmentRun`
+   * (or, after a process restart, `reconcileOrphanedEnrichmentRuns`).
+   */
+  createDraftingEnrichmentRun(params: { readonly id: string; readonly mode: EnrichmentMode; readonly binding: EnrichmentBinding }): EnrichmentRunRow {
+    const now = this.now().toISOString();
+    this.db.exec("BEGIN");
+    try {
+      this.db.prepare(`INSERT INTO enrichment_runs (id, mode, project_path, project_identity, project_revision, proposal_id, proposal_hash, status, created_at, updated_at, validation_digest, build_digest, error_message, binding_generation, version) VALUES (?, ?, ?, ?, ?, '', '', 'drafting', ?, ?, NULL, NULL, NULL, ?, 1)`).run(params.id, params.mode, params.binding.path, params.binding.identity, params.binding.revision, now, now, params.binding.generation);
+      this.onEnrichmentCreationWrite?.("after_run");
+      this.db.prepare(`INSERT INTO enrichment_events (id, run_id, kind, message, created_at) VALUES (?, ?, 'started', ?, ?)`).run(newId("enrichment-event"), params.id, "Enrichment draft started.", now);
+      this.onEnrichmentCreationWrite?.("after_event");
+      this.db.exec("COMMIT");
+      return this.getEnrichmentRun(params.id)!;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  /**
+   * Transitions a 'drafting' run to 'awaiting_decision' once the draft
+   * callback has resolved AND been independently canonicalized by the host.
+   * Fenced on `status = 'drafting'` plus the CAS version, so a run that a
+   * restart already reconciled to 'failed' (or that was somehow already
+   * finalized) cannot be resurrected by a late completion.
+   */
+  finalizeEnrichmentDraft(params: { readonly runId: string; readonly expectedVersion: number; readonly proposalId: string; readonly proposalHash: string; readonly operations: readonly EnrichmentOperation[]; readonly validationDigest?: string; readonly buildDigest?: string }): boolean {
+    this.db.exec("BEGIN");
+    try {
+      const now = this.now().toISOString();
+      const changedRun = this.db.prepare(`UPDATE enrichment_runs SET status = 'awaiting_decision', proposal_id = ?, proposal_hash = ?, validation_digest = ?, build_digest = ?, updated_at = ?, version = version + 1 WHERE id = ? AND version = ? AND status = 'drafting'`).run(params.proposalId, params.proposalHash, params.validationDigest ?? null, params.buildDigest ?? null, now, params.runId, params.expectedVersion).changes;
+      if (Number(changedRun) !== 1) {
+        this.db.exec("ROLLBACK");
+        return false;
+      }
+      this.onEnrichmentCreationWrite?.("after_run");
+      for (const operation of params.operations) this.db.prepare(`INSERT INTO enrichment_operations (run_id, operation_id, sink, risk, summary, draft, change_kind, confidence, decision, completed, state, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 'awaiting_decision', ?)`).run(params.runId, operation.id, operation.sink, operation.risk, operation.summary, operation.draft, operation.changeKind, operation.confidence, `${params.runId}:${operation.id}`);
+      this.onEnrichmentCreationWrite?.("after_operations");
+      this.db.prepare(`INSERT INTO enrichment_events (id, run_id, kind, message, created_at) VALUES (?, ?, 'drafted', ?, ?)`).run(newId("enrichment-event"), params.runId, "A typed enrichment proposal is ready for review.", now);
+      this.onEnrichmentCreationWrite?.("after_event");
+      this.db.exec("COMMIT");
+      return true;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  /**
+   * Resolves a 'drafting' run to the terminal 'failed' status -- the
+   * enrichment analogue of `resolveTurn(..., { resultKind: "error" })` in
+   * every catch clause of `executeTurn`. Called on a thrown draft/contract
+   * error, a stale post-draft binding, or (via
+   * `reconcileOrphanedEnrichmentRuns`) a BFF restart. Fenced on
+   * `status = 'drafting'` so it can never clobber a run that already
+   * finalized.
+   */
+  failEnrichmentRun(params: { readonly runId: string; readonly expectedVersion: number; readonly message: string }): boolean {
+    this.db.exec("BEGIN");
+    try {
+      const now = this.now().toISOString();
+      const changedRun = this.db.prepare(`UPDATE enrichment_runs SET status = 'failed', error_message = ?, updated_at = ?, version = version + 1 WHERE id = ? AND version = ? AND status = 'drafting'`).run(params.message, now, params.runId, params.expectedVersion).changes;
+      if (Number(changedRun) !== 1) {
+        this.db.exec("ROLLBACK");
+        return false;
+      }
+      this.onEnrichmentTransitionWrite?.("after_run");
+      this.db.prepare(`INSERT INTO enrichment_events (id, run_id, kind, message, created_at) VALUES (?, ?, 'failed', ?, ?)`).run(newId("enrichment-event"), params.runId, "Enrichment draft failed.", now);
+      this.onEnrichmentTransitionWrite?.("after_event");
+      this.db.exec("COMMIT");
+      return true;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  createEnrichmentRun(params: { readonly id: string; readonly mode: EnrichmentMode; readonly binding: EnrichmentBinding; readonly proposalId: string; readonly proposalHash: string; readonly operations: readonly EnrichmentOperation[]; readonly validationDigest?: string; readonly buildDigest?: string }): EnrichmentRunRow {
+    const now = new Date().toISOString();
+    this.db.exec("BEGIN");
+    try {
+      this.db.prepare(`INSERT INTO enrichment_runs (id, mode, project_path, project_identity, project_revision, proposal_id, proposal_hash, status, created_at, updated_at, validation_digest, build_digest, error_message, binding_generation, version) VALUES (?, ?, ?, ?, ?, ?, ?, 'awaiting_decision', ?, ?, ?, ?, NULL, ?, 1)`).run(params.id, params.mode, params.binding.path, params.binding.identity, params.binding.revision, params.proposalId, params.proposalHash, now, now, params.validationDigest ?? null, params.buildDigest ?? null, params.binding.generation);
+      this.onEnrichmentCreationWrite?.("after_run");
+      for (const operation of params.operations) this.db.prepare(`INSERT INTO enrichment_operations (run_id, operation_id, sink, risk, summary, draft, change_kind, confidence, decision, completed, state, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 'awaiting_decision', ?)`).run(params.id, operation.id, operation.sink, operation.risk, operation.summary, operation.draft, operation.changeKind, operation.confidence, `${params.id}:${operation.id}`);
+      this.onEnrichmentCreationWrite?.("after_operations");
+      this.db.prepare(`INSERT INTO enrichment_events (id, run_id, kind, message, created_at) VALUES (?, ?, 'drafted', ?, ?)`).run(newId("enrichment-event"), params.id, "A typed enrichment proposal is ready for review.", now);
+      this.onEnrichmentCreationWrite?.("after_event");
+      this.db.exec("COMMIT");
+      return this.getEnrichmentRun(params.id)!;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  /**
+   * Every bind, including the same canonical directory, creates a new
+   * generation. `bindProject` (the foundation path) never has a built
+   * project's revision to offer — binding must succeed for an unbuilt
+   * project — so it activates identity alone; the stored placeholder
+   * revision is never read as a trusted value. Every consumer re-resolves
+   * the revision fresh from disk before treating a binding as current (see
+   * `currentEnrichmentBinding` in app.ts), so a placeholder here cannot
+   * leak into a fencing decision.
+   */
+  activateEnrichmentBinding(binding: UnversionedEnrichmentBinding | ProjectIdentity): EnrichmentBinding {
+    const current = this.getEnrichmentBinding();
+    const revision = "revision" in binding ? binding.revision : "";
+    const next: EnrichmentBinding = { ...binding, revision, generation: (current?.generation ?? 0) + 1 };
+    this.setConfigJson("enrichment.binding", next);
+    return next;
+  }
+
+  /**
+   * Advances the project binding and stops every live project-scoped native
+   * session in one transaction. The caller must immediately discard the
+   * corresponding in-memory PTY and MCP capabilities using the returned ids.
+   * Bootstrap Setup sessions deliberately remain outside this project fence.
+   */
+  activateEnrichmentBindingAndRevokeBoundNativeSessions(binding: UnversionedEnrichmentBinding | ProjectIdentity): { readonly binding: EnrichmentBinding; readonly revokedNativeSessionIds: readonly string[] } {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const current = this.getEnrichmentBinding();
+      const revision = "revision" in binding ? binding.revision : "";
+      const next: EnrichmentBinding = { ...binding, revision, generation: (current?.generation ?? 0) + 1 };
+      const ids = this.db.prepare(
+        `SELECT id FROM native_sessions
+         WHERE status IN ('creating', 'running', 'detached') AND project_identity IS NOT NULL`,
+      ).all().map((row) => str(row as Record<string, unknown>, "id"));
+      const now = this.now().toISOString();
+      if (ids.length) {
+        const placeholders = ids.map(() => "?").join(",");
+        this.db.prepare(`UPDATE native_sessions SET status = 'stopped', updated_at = ?, ended_at = ?, failure = 'native project binding changed' WHERE id IN (${placeholders})`).run(now, now, ...ids);
+        this.db.prepare(`DELETE FROM native_setup_recovery_actions WHERE session_id IN (${placeholders})`).run(...ids);
+      }
+      this.setConfigJson("enrichment.binding", next);
+      this.db.exec("COMMIT");
+      return { binding: next, revokedNativeSessionIds: ids };
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+  getEnrichmentBinding(): EnrichmentBinding | undefined { return this.getConfigJson<EnrichmentBinding>("enrichment.binding"); }
+
+  getEnrichmentRun(id: string): EnrichmentRunRow | undefined { const row = this.db.prepare(`SELECT * FROM enrichment_runs WHERE id = ?`).get(id); return row ? rowToEnrichmentRun(row) : undefined; }
+  getLatestEnrichmentRun(): EnrichmentRunRow | undefined { const row = this.db.prepare(`SELECT * FROM enrichment_runs ORDER BY created_at DESC, rowid DESC LIMIT 1`).get(); return row ? rowToEnrichmentRun(row) : undefined; }
+  listEnrichmentOperations(runId: string): EnrichmentOperationRow[] { return this.db.prepare(`SELECT * FROM enrichment_operations WHERE run_id = ? ORDER BY rowid ASC`).all(runId).map(rowToEnrichmentOperation); }
+  getEnrichmentOperation(runId: string, operationId: string): EnrichmentOperationRow | undefined { const row = this.db.prepare(`SELECT * FROM enrichment_operations WHERE run_id = ? AND operation_id = ?`).get(runId, operationId); return row ? rowToEnrichmentOperation(row) : undefined; }
+  appendEnrichmentEvent(runId: string, kind: string, message: string): void { this.db.prepare(`INSERT INTO enrichment_events (id, run_id, kind, message, created_at) VALUES (?, ?, ?, ?, ?)`).run(newId("enrichment-event"), runId, kind, message, new Date().toISOString()); }
+  listEnrichmentEvents(runId: string): EnrichmentEventRow[] { return this.db.prepare(`SELECT * FROM enrichment_events WHERE run_id = ? ORDER BY created_at ASC, rowid ASC`).all(runId).map(rowToEnrichmentEvent); }
+  /**
+   * The authority for non-lease enrichment mutations. It checks both the
+   * caller's snapshot and the DB version before making *any* write; operation,
+   * attestation, run metadata and event then commit or roll back together.
+   */
+  transitionEnrichmentMetadata(params: EnrichmentMetadataTransition): boolean {
+    this.db.exec("BEGIN");
+    try {
+      const run = this.getEnrichmentRun(params.runId);
+      if (!run
+        || run.version !== params.expectedVersion
+        || run.projectPath !== params.binding.path
+        || run.projectIdentity !== params.binding.identity
+        || run.projectRevision !== params.binding.revision
+        || run.bindingGeneration !== params.binding.generation) {
+        this.db.exec("ROLLBACK");
+        return false;
+      }
+      if (params.operation) {
+        const operation = params.operation;
+        const decisionClause = operation.expectedDecision === undefined
+          ? ""
+          : operation.expectedDecision === null ? " AND decision IS NULL" : " AND decision = ?";
+        const values: (string | null)[] = [operation.decision ?? null, operation.nextState, params.runId, operation.id, operation.expectedState];
+        if (operation.expectedDecision !== undefined && operation.expectedDecision !== null) values.push(operation.expectedDecision);
+        const changed = this.db.prepare(`UPDATE enrichment_operations SET decision = COALESCE(?, decision), state = ? WHERE run_id = ? AND operation_id = ? AND state = ?${decisionClause}`).run(...values).changes;
+        if (Number(changed) !== 1) { this.db.exec("ROLLBACK"); return false; }
+        this.onEnrichmentTransitionWrite?.("after_operation");
+      }
+      if (params.attestation !== undefined) {
+        const operation = params.operation ? this.getEnrichmentOperation(params.runId, params.operation.id) : undefined;
+        const attestation = params.attestation;
+        if (!operation
+          || attestation.binding.path !== run.projectPath
+          || attestation.binding.identity !== run.projectIdentity
+          || attestation.binding.generation !== run.bindingGeneration
+          || attestation.binding.revision !== run.projectRevision
+          || attestation.proposalHash !== run.proposalHash
+          || attestation.operationHash !== hashEnrichmentOperation(operation)
+          || !Number.isFinite(Date.parse(attestation.expiresAt))
+          || Date.parse(attestation.expiresAt) <= this.now().getTime()) {
+          this.db.exec("ROLLBACK");
+          return false;
+        }
+        try {
+          this.db.prepare(`INSERT INTO enrichment_approvals (run_id, operation_id, project_revision, proposal_hash, risk, attested_at, project_path, project_identity, binding_generation, operation_hash, sink, change_kind, evidence_ref, nonce, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(params.runId, operation.id, run.projectRevision, run.proposalHash, operation.risk, this.now().toISOString(), run.projectPath, run.projectIdentity, run.bindingGeneration, attestation.operationHash, operation.sink, operation.changeKind, attestation.evidenceRef, attestation.nonce, attestation.expiresAt);
+        } catch {
+          this.db.exec("ROLLBACK");
+          return false;
+        }
+      }
+      const now = this.now().toISOString();
+      const changedRun = this.db.prepare(`UPDATE enrichment_runs SET status = COALESCE(?, status), error_message = ?, updated_at = ?, version = version + 1 WHERE id = ? AND version = ?`).run(params.status ?? null, params.errorMessage === undefined ? run.errorMessage : params.errorMessage, now, params.runId, params.expectedVersion).changes;
+      if (Number(changedRun) !== 1) { this.db.exec("ROLLBACK"); return false; }
+      this.onEnrichmentTransitionWrite?.("after_run");
+      for (const event of [params.event, ...(params.additionalEvents ?? [])].filter((value): value is { readonly kind: string; readonly message: string } => value !== undefined)) {
+        this.db.prepare(`INSERT INTO enrichment_events (id, run_id, kind, message, created_at) VALUES (?, ?, ?, ?, ?)`).run(newId("enrichment-event"), params.runId, event.kind, event.message, now);
+        this.onEnrichmentTransitionWrite?.("after_event");
+      }
+      this.db.exec("COMMIT");
+      return true;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+  transitionEnrichmentEdit(params: EnrichmentEditTransition): boolean {
+    this.db.exec("BEGIN");
+    try {
+      const run = this.getEnrichmentRun(params.runId);
+      const current = this.getEnrichmentOperation(params.runId, params.operationId);
+      if (!run || !current || run.version !== params.expectedVersion
+        || run.projectPath !== params.binding.path || run.projectIdentity !== params.binding.identity
+        || run.projectRevision !== params.binding.revision || run.bindingGeneration !== params.binding.generation
+        || current.state !== "awaiting_decision" || current.decision !== "edit") {
+        this.db.exec("ROLLBACK");
+        return false;
+      }
+      const changedOperation = this.db.prepare(`UPDATE enrichment_operations SET operation_id = ?, sink = ?, risk = ?, summary = ?, draft = ?, change_kind = ?, confidence = ?, decision = NULL, state = 'awaiting_decision', attempt = 0, lease_token = NULL, lease_expires_at = NULL, idempotency_key = ? WHERE run_id = ? AND operation_id = ? AND state = 'awaiting_decision' AND decision = 'edit'`)
+        .run(params.operation.id, params.operation.sink, params.operation.risk, params.operation.summary, params.operation.draft, params.operation.changeKind, params.operation.confidence, `${params.runId}:${params.operation.id}`, params.runId, params.operationId).changes;
+      if (Number(changedOperation) !== 1) { this.db.exec("ROLLBACK"); return false; }
+      this.onEnrichmentTransitionWrite?.("after_operation");
+      const now = this.now().toISOString();
+      const changedRun = this.db.prepare(`UPDATE enrichment_runs SET proposal_id = ?, proposal_hash = ?, status = 'awaiting_decision', error_message = NULL, updated_at = ?, version = version + 1 WHERE id = ? AND version = ?`)
+        .run(params.proposalId, params.proposalHash, now, params.runId, params.expectedVersion).changes;
+      if (Number(changedRun) !== 1) { this.db.exec("ROLLBACK"); return false; }
+      this.onEnrichmentTransitionWrite?.("after_run");
+      this.db.prepare(`INSERT INTO enrichment_events (id, run_id, kind, message, created_at) VALUES (?, ?, ?, ?, ?)`).run(newId("enrichment-event"), params.runId, params.event.kind, params.event.message, now);
+      this.onEnrichmentTransitionWrite?.("after_event");
+      this.db.exec("COMMIT");
+      return true;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+  transitionEnrichmentExecution(params: EnrichmentExecutionTransition): boolean {
+    this.db.exec("BEGIN");
+    try {
+      const run = this.getEnrichmentRun(params.runId);
+      const operation = this.getEnrichmentOperation(params.runId, params.operationId);
+      if (!run || !operation || run.version !== params.expectedVersion
+        || run.projectPath !== params.binding.path || run.projectIdentity !== params.binding.identity
+        || run.projectRevision !== params.binding.revision || run.bindingGeneration !== params.binding.generation
+        || !params.expectedStates.includes(operation.state)
+        || (params.expectedAttempt !== undefined && operation.attempt !== params.expectedAttempt)
+        || (params.expectedLeaseToken !== undefined && operation.leaseToken !== params.expectedLeaseToken)) {
+        this.db.exec("ROLLBACK");
+        return false;
+      }
+      const changedOperation = this.db.prepare(`UPDATE enrichment_operations SET state = ?, attempt = ?, lease_token = ?, lease_expires_at = ?, completed = ? WHERE run_id = ? AND operation_id = ? AND state = ? AND attempt = ? AND (lease_token IS ? OR lease_token = ?)`)
+        .run(params.nextState, params.nextAttempt ?? operation.attempt, params.leaseToken === undefined ? operation.leaseToken : params.leaseToken, params.leaseExpiresAt === undefined ? operation.leaseExpiresAt : params.leaseExpiresAt, boolToInt(params.completed ?? operation.completed), params.runId, params.operationId, operation.state, operation.attempt, operation.leaseToken, operation.leaseToken).changes;
+      if (Number(changedOperation) !== 1) { this.db.exec("ROLLBACK"); return false; }
+      this.onEnrichmentTransitionWrite?.("after_operation");
+      const now = this.now().toISOString();
+      const changedRun = this.db.prepare(`UPDATE enrichment_runs SET status = ?, validation_digest = ?, build_digest = ?, error_message = ?, updated_at = ?, version = version + 1 WHERE id = ? AND version = ?`)
+        .run(params.status, params.validationDigest === undefined ? run.validationDigest : params.validationDigest, params.buildDigest === undefined ? run.buildDigest : params.buildDigest, params.errorMessage === undefined ? run.errorMessage : params.errorMessage, now, params.runId, params.expectedVersion).changes;
+      if (Number(changedRun) !== 1) { this.db.exec("ROLLBACK"); return false; }
+      this.onEnrichmentTransitionWrite?.("after_run");
+      this.db.prepare(`INSERT INTO enrichment_events (id, run_id, kind, message, created_at) VALUES (?, ?, ?, ?, ?)`).run(newId("enrichment-event"), params.runId, params.event.kind, params.event.message, now);
+      this.onEnrichmentTransitionWrite?.("after_event");
+      this.db.exec("COMMIT");
+      return true;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+  hasExactEnrichmentAttestation(runId: string, operationId: string): boolean {
+    const run = this.getEnrichmentRun(runId);
+    const operation = this.getEnrichmentOperation(runId, operationId);
+    if (!run || !operation) return false;
+    return this.db.prepare(`SELECT 1 FROM enrichment_approvals WHERE run_id = ? AND operation_id = ? AND project_path = ? AND project_identity = ? AND binding_generation = ? AND project_revision = ? AND proposal_hash = ? AND operation_hash = ? AND risk = ? AND sink = ? AND change_kind = ? AND expires_at > ? AND evidence_ref <> '' AND nonce <> ''`).get(runId, operationId, run.projectPath, run.projectIdentity, run.bindingGeneration, run.projectRevision, run.proposalHash, hashEnrichmentOperation(operation), operation.risk, operation.sink, operation.changeKind, this.now().toISOString()) !== undefined;
+  }
+
+  // ---------------------------------------------------------------------
   // seed data (first init only — a fresh :memory: or file DB has no sessions row)
   // ---------------------------------------------------------------------
 
@@ -797,7 +2110,7 @@ export class Store {
     if (row && num(row, "n") > 0) return; // already seeded
 
     this.seedEvalRuns();
-    this.setRuntimeSettings(SEED_RUNTIME_SETTINGS);
+    this.setRuntimeSettings(SEED_RUNTIME_SETTINGS, false);
     this.setSetupSteps(SEED_SETUP_STEPS);
     this.setVerifyGatePassed(false);
     this.seedContext();
@@ -818,16 +2131,18 @@ export class Store {
    * "Setup: <name>" session. Delete the row (and its turns/events/artifacts)
    * BEFORE forgetting the id, so no orphan is ever left behind.
    */
-  resetSetup(): void {
+  resetSetup(): readonly string[] {
     const staleSetupSessionId = this.getSetupSessionId();
     if (staleSetupSessionId !== undefined) this.deleteSession(staleSetupSessionId);
 
     this.setSetupSteps(SEED_SETUP_STEPS);
-    this.setRuntimeSettings(SEED_RUNTIME_SETTINGS);
+    const revokedNativeSessionIds = this.setRuntimeSettingsAndRevokeIncompatibleNativeSessions(SEED_RUNTIME_SETTINGS, false);
     this.setVerifyGatePassed(false);
     this.deleteConfig("setup.connectForm");
     this.deleteConfig("setup.sessionId");
     this.deleteConfig("setup.mode");
+    this.clearSetupContextLifecycleEvidence();
+    return revokedNativeSessionIds;
   }
 
   private seedEvalRuns(): void {
@@ -1018,6 +2333,50 @@ function rowToSession(row: Record<string, unknown>): SessionRow {
   };
 }
 
+function rowToNativeSession(row: Record<string, unknown>): NativeSessionRow {
+  return {
+    id: str(row, "id"), purpose: str(row, "purpose") as NativeSessionPurpose,
+    vendor: str(row, "vendor") as NativeSessionVendor, agent: str(row, "agent"),
+    scopeKind: str(row, "scope_kind") as NativeSessionScopeKind, scopeId: str(row, "scope_id"),
+    projectIdentity: strOrNull(row, "project_identity"),
+    bindingGeneration: row["binding_generation"] === null ? null : num(row, "binding_generation"),
+    projectRevision: strOrNull(row, "project_revision"),
+    dispatchProfile: strOrNull(row, "dispatch_profile"),
+    dispatchTarget: strOrNull(row, "dispatch_target"),
+    runtimeGeneration: row["runtime_generation"] === null ? null : num(row, "runtime_generation"),
+    status: str(row, "status") as NativeSessionStatus,
+    createdAt: str(row, "created_at"), updatedAt: str(row, "updated_at"),
+    startedAt: strOrNull(row, "started_at"), endedAt: strOrNull(row, "ended_at"),
+    exitCode: row["exit_code"] === null ? null : num(row, "exit_code"), failure: strOrNull(row, "failure"),
+  };
+}
+
+function rowToNativeSetupRecovery(row: Record<string, unknown>): NativeSetupRecoveryRow {
+  return {
+    sessionId: str(row, "session_id"),
+    phase: str(row, "phase") as NativeSetupRecoveryPhase,
+    state: str(row, "state") as NativeSetupRecoveryState,
+    code: str(row, "code") as NativeSetupRecoveryCode,
+    sequence: num(row, "sequence"),
+    decision: strOrNull(row, "decision") as NativeSetupRecoveryRow["decision"],
+    completionValidated: intToBool(row["completion_validated"]),
+    version: num(row, "version"),
+    createdAt: str(row, "created_at"),
+    updatedAt: str(row, "updated_at"),
+  };
+}
+
+function rowToNativeStructuredAnswer(row: Record<string, unknown>): NativeStructuredAnswerRow {
+  return {
+    id: str(row, "id"),
+    nativeSessionId: str(row, "native_session_id"),
+    idempotencyKey: str(row, "idempotency_key"),
+    envelopeJson: str(row, "envelope_json"),
+    digest: str(row, "digest"),
+    createdAt: str(row, "created_at"),
+  };
+}
+
 function rowToEvent(row: Record<string, unknown>): StoredEvent {
   return {
     id: str(row, "id"),
@@ -1045,6 +2404,8 @@ function rowToTurn(row: Record<string, unknown>): TurnRow {
     agentId: strOrNull(row, "agent_id"),
     setupStepKey: strOrNull(row, "setup_step_key"),
     resumeSessionId: strOrNull(row, "resume_session_id"),
+    resumeSessionProvider: strOrNull(row, "resume_session_provider"),
+    resumeRunner: strOrNull(row, "resume_runner"),
     contextRecovery: strOrNull(row, "context_recovery"),
     workspaceRoot: strOrNull(row, "workspace_root"),
   };
@@ -1060,6 +2421,15 @@ function rowToArtifact(row: Record<string, unknown>): ArtifactRow {
     verified: intToBool(row["verified"]),
     createdAt: str(row, "created_at"),
     savedAt: strOrNull(row, "saved_at"),
+    nativeSessionId: strOrNull(row, "native_session_id"),
+    projectIdentity: strOrNull(row, "project_identity"),
+    bindingGeneration: row["binding_generation"] === null || row["binding_generation"] === undefined ? null : num(row, "binding_generation"),
+    projectRevision: strOrNull(row, "project_revision"),
+    nativeVendor: strOrNull(row, "native_vendor") as NativeSessionVendor | null,
+    nativeAgent: strOrNull(row, "native_agent"),
+    contentDigest: strOrNull(row, "content_digest"),
+    idempotencyKey: strOrNull(row, "idempotency_key"),
+    sourceAnswerId: strOrNull(row, "source_answer_id"),
   };
 }
 
@@ -1074,4 +2444,16 @@ function rowToEvalRun(row: Record<string, unknown>): EvalRun {
     cost: str(row, "cost"),
     p50: str(row, "p50"),
   };
+}
+
+function rowToEnrichmentRun(row: Record<string, unknown>): EnrichmentRunRow {
+  return { id: str(row, "id"), mode: str(row, "mode") as EnrichmentMode, projectPath: str(row, "project_path"), projectIdentity: str(row, "project_identity"), projectRevision: str(row, "project_revision"), proposalId: str(row, "proposal_id"), proposalHash: str(row, "proposal_hash"), status: str(row, "status") as EnrichmentRunStatus, createdAt: str(row, "created_at"), updatedAt: str(row, "updated_at"), validationDigest: strOrNull(row, "validation_digest"), buildDigest: strOrNull(row, "build_digest"), errorMessage: strOrNull(row, "error_message"), bindingGeneration: num(row, "binding_generation"), version: num(row, "version") };
+}
+
+function rowToEnrichmentOperation(row: Record<string, unknown>): EnrichmentOperationRow {
+  return { id: str(row, "operation_id"), sink: str(row, "sink"), risk: str(row, "risk") as EnrichmentRisk, summary: str(row, "summary"), draft: str(row, "draft"), changeKind: str(row, "change_kind") as import("./enrichment.js").EnrichmentChangeKind, confidence: normalizeEnrichmentConfidence(row["confidence"]), decision: strOrNull(row, "decision") as EnrichmentOperationRow["decision"], completed: str(row, "state") === "applied", state: str(row, "state") as EnrichmentOperationRow["state"], attempt: num(row, "attempt"), leaseToken: strOrNull(row, "lease_token"), leaseExpiresAt: strOrNull(row, "lease_expires_at"), idempotencyKey: str(row, "idempotency_key") };
+}
+
+function rowToEnrichmentEvent(row: Record<string, unknown>): EnrichmentEventRow {
+  return { id: str(row, "id"), runId: str(row, "run_id"), kind: str(row, "kind"), message: str(row, "message"), createdAt: str(row, "created_at") };
 }

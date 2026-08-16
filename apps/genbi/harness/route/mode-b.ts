@@ -184,18 +184,20 @@ export async function runModeBDefault(options: ModeBOptions): Promise<ModeBResul
   enforceCompliance(options.authChoice, { deployment: options.deployment ?? "personal" });
 
   // `SubscriptionAuthChoice.provider` is "claude" | "codex", but the
-  // only Mode B back-end this function drives is the Claude Agent SDK
-  // dispatcher (`warble-agent-sdk chat`) — there is no codex dispatcher.
+  // only Ask back-end this function drives is the Claude Agent SDK
+  // dispatcher (`warble-agent-sdk chat`). Codex is selected by route() and
+  // runs through the separate codex:local adapter.
   // Without this check, a `provider: "codex"` choice would silently run the
   // Claude dispatcher anyway (misrouting the request to the wrong model
   // family) instead of failing loudly. Fail before compiling or spawning
   // anything.
   if (options.authChoice.provider !== "claude") {
     throw new Error(
-      `Mode B (subscription) only supports provider "claude" via the Agent SDK; ` +
-        `"${options.authChoice.provider}" has no back-end — use --mode api-key or gateway`,
+      `runModeBDefault only supports the Claude subscription provider. ` +
+        `Codex Ask must be dispatched through the codex:local route and will not fall back.`,
     );
   }
+  if (options.signal?.aborted) throw new Error("warble-agent-sdk chat was cancelled before start");
 
   // Which warble component `chat` dispatches; defaults to
   // MODE_B_AGENT_ID ("answer_query") — the original default from before this
@@ -218,10 +220,14 @@ export async function runModeBDefault(options: ModeBOptions): Promise<ModeBResul
       ...(options.warbleBin !== undefined ? { warbleBin: options.warbleBin } : {}),
       ...(options.workDir !== undefined ? { workDir: options.workDir } : {}),
     })).irPath;
+    if (options.signal?.aborted) throw new Error("warble-agent-sdk chat was cancelled during preparation");
 
     const warbleBin = options.warbleBin ?? (await resolveWarbleBinary());
+    if (options.signal?.aborted) throw new Error("warble-agent-sdk chat was cancelled during preparation");
     const cli = await resolveAgentSdkCli(options.agentSdkBin);
+    if (options.signal?.aborted) throw new Error("warble-agent-sdk chat was cancelled during preparation");
     const outDir = options.outDir ?? (await mkdtemp(path.join(os.tmpdir(), "wren-harness-agent-sdk-")));
+    if (options.signal?.aborted) throw new Error("warble-agent-sdk chat was cancelled during preparation");
 
     const command = buildAgentSdkChatArgs(cli, {
       irPath,
@@ -239,6 +245,7 @@ export async function runModeBDefault(options: ModeBOptions): Promise<ModeBResul
       command,
       (event) => emitter.emit(event),
       options.chatTimeoutMs ?? CHAT_TIMEOUT_MS,
+      options.signal,
     );
     // `spawnChat` resolves with whatever trimmed final-answer text
     // the process produced, even if that's empty — e.g. the CLI exits 0 but
@@ -323,26 +330,49 @@ function spawnChat(
   command: AgentSdkChatCommand,
   onEvent: (event: AgentEventInput) => void,
   timeoutMs: number = CHAT_TIMEOUT_MS,
+  signal?: AbortSignal,
 ): Promise<SpawnChatResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command.command, [...command.args]);
+    if (signal?.aborted) { reject(new ModeBSessionError("warble-agent-sdk chat was cancelled before spawn", null)); return; }
+    const child = spawn(command.command, [...command.args], {
+      detached: process.platform !== "win32",
+    });
 
     let settled = false;
-    let timedOut = false;
+    let stopReason: "timeout" | "cancelled" | undefined;
+    let killTimer: ReturnType<typeof setTimeout> | undefined;
     let answerText: string | undefined;
     let sessionId: string | null | undefined;
     let stderrText = "";
     const mapperState = createChatEventMapperState();
 
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill();
-    }, timeoutMs);
+    const terminate = (childSignal: NodeJS.Signals): void => {
+      if (child.pid !== undefined && process.platform !== "win32") {
+        try {
+          process.kill(-child.pid, childSignal);
+          return;
+        } catch {
+          // Fall through to the direct child when it did not form a group.
+        }
+      }
+      child.kill(childSignal);
+    };
+    const stop = (reason: "timeout" | "cancelled") => {
+      if (settled || stopReason !== undefined) return;
+      stopReason = reason;
+      terminate("SIGTERM");
+      killTimer = setTimeout(() => terminate("SIGKILL"), 1_000);
+    };
+    const timer = setTimeout(() => stop("timeout"), timeoutMs);
+    const cancel = () => stop("cancelled");
+    signal?.addEventListener("abort", cancel, { once: true });
 
     const settle = (fn: () => void): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (killTimer) clearTimeout(killTimer);
+      signal?.removeEventListener("abort", cancel);
       fn();
     };
 
@@ -374,13 +404,17 @@ function spawnChat(
 
     child.on("close", (code, signal) => {
       settle(() => {
-        if (timedOut) {
+        if (stopReason === "timeout") {
           reject(
             new ModeBSessionError(
               `warble-agent-sdk chat failed (timed out after ${timeoutMs}ms): ${stderrText}`,
               sessionId ?? null,
             ),
           );
+          return;
+        }
+        if (stopReason === "cancelled") {
+          reject(new ModeBSessionError("warble-agent-sdk chat was cancelled", sessionId ?? null));
           return;
         }
         if (code !== 0) {

@@ -1,12 +1,14 @@
 import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Button } from 'antd';
+import { LoadingOutlined } from '@ant-design/icons';
 import { PageContainer, PageState } from '@/ui';
 import { t } from '@/i18n/strings';
 import { Composer } from './Composer';
 import { EventList } from './EventList';
 import { WorkLog } from './WorkLog';
 import { DRAFT_SESSION_ID, useSessionStore } from './useSessionStore';
+import { structuredAskPath } from '@/sessions/structuredAsk';
 
 interface Props {
   sessionId: string;
@@ -55,7 +57,7 @@ export function AskSession({ sessionId }: Props) {
   // navigate: the real session's state already lives under `draftResolvedTo`.
   useEffect(() => {
     if (draftResolvedTo) {
-      navigate(`/ask/${draftResolvedTo}`, { replace: true });
+      navigate(structuredAskPath(draftResolvedTo), { replace: true });
       clearDraft();
     }
   }, [draftResolvedTo, navigate, clearDraft]);
@@ -92,6 +94,22 @@ export function AskSession({ sessionId }: Props) {
               terminal AnswerEvent and rendered there instead (see
               `EventList`), so this raw view is hidden to avoid showing it
               twice. */}
+          {streaming && workLog.length === 0 && (
+            <div
+              role="status"
+              aria-live="polite"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '10px 12px',
+                color: 'var(--ant-color-text-secondary)',
+              }}
+            >
+              <LoadingOutlined spin aria-hidden="true" />
+              <span>{t('ask.turnPending')}</span>
+            </div>
+          )}
           {streaming && workLog.length > 0 && <WorkLog steps={workLog} />}
 
           {error && (

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseSetupTerminal } from "../harness/setup/runner.js";
+import { parseSetupTerminal, recordedContextLifecyclePrefix } from "../harness/setup/runner.js";
 import type { SetupTerminalContext } from "../harness/setup/runner.js";
 
 function makeContext(name: string): SetupTerminalContext {
@@ -155,8 +155,11 @@ describe("parseSetupTerminal", () => {
 
     const result = parseSetupTerminal("I scaffolded the project but forgot to report a status.", context);
 
-    expect(result.status).toBe("error");
-    expect(result.message).toBe("the setup agent's final message did not contain a SETUP_STATUS line");
+    expect(result).toEqual({
+      status: "error",
+      message: "the setup agent's final message did not contain a SETUP_STATUS line",
+      failureKind: "missing_terminal_status",
+    });
   });
 
   it("a SETUP_STATUS line with no reason text falls back to defaultMessageFor(status)", () => {
@@ -200,6 +203,7 @@ describe("parseSetupTerminal", () => {
       const result = parseSetupTerminal("SETUP_STATUS: ok - validated the connection", context);
 
       expect(result.status).toBe("error");
+      expect(result.diagnostic).toMatchObject({ kind: "host_contract", code: "connection_marker_missing" });
       expect(result.message).toContain(path.join(context.root, context.name, ".wren-validated"));
       expect(result.message).not.toContain("wren_project.yml");
     });
@@ -263,6 +267,7 @@ describe("parseSetupTerminal", () => {
       const result = parseSetupTerminal("SETUP_STATUS: ok - connected to postgres", context);
 
       expect(result.status).toBe("error");
+      expect(result.diagnostic).toMatchObject({ kind: "host_contract", code: "connection_source_mismatch" });
       expect(result.message).toContain("data_source: postgres");
       expect(result.message).toContain("duckdb");
       expect(result.message).toContain(path.join(context.root, context.name, "wren_project.yml"));
@@ -279,6 +284,7 @@ describe("parseSetupTerminal", () => {
       const result = parseSetupTerminal("SETUP_STATUS: ok - connected", context);
 
       expect(result.status).toBe("error");
+      expect(result.diagnostic).toMatchObject({ kind: "host_contract", code: "connection_profile_missing" });
       expect(result.message).toContain('no "profile:" pin');
       expect(result.message).toMatch(/check the profile, not \.env/i);
     });
@@ -307,15 +313,14 @@ describe("parseSetupTerminal", () => {
       expect(result.message).toContain("0 models");
     });
 
-    it("ok + a model but no measure -> downgraded to error", () => {
+    it("ok + a model but no measure -> accepted (measures are optional enrichment)", () => {
       const context = { ...makeContext("acme"), stepKey: "context" };
       scaffold(context);
       writeMdl(context, ["customers"]);
 
       const result = parseSetupTerminal("SETUP_STATUS: ok - built the MDL", context);
 
-      expect(result.status).toBe("error");
-      expect(result.message).toContain("0 measures");
+      expect(result).toEqual({ status: "ok", message: "built the MDL" });
     });
 
     it("a claimed success with a model and measure but no successful discovery is rejected as an agent-workflow failure", () => {
@@ -332,11 +337,12 @@ describe("parseSetupTerminal", () => {
 
       const result = parseSetupTerminal("SETUP_STATUS: ok - built MDL with 1 model and 1 measure", context);
 
-      expect(result).toMatchObject({ status: "error", failureKind: "no_successful_schema_discovery" });
-      expect(result.message).toMatch(/never completed recognized schema discovery/i);
+      expect(result).toMatchObject({ status: "error" });
+      expect(result.diagnostic).toMatchObject({ kind: "host_contract", code: "context_lifecycle_out_of_order" });
+      expect(result.message).toMatch(/lifecycle ran out of order/i);
     });
 
-    it("a claimed success with a model and measure after successful discovery is accepted", () => {
+    it("a claimed success with a model and no measure after successful discovery is accepted", () => {
       const context = {
         ...makeContext("acme"),
         stepKey: "context",
@@ -346,36 +352,205 @@ describe("parseSetupTerminal", () => {
             input: { command: 'wren --sql "SELECT table_name FROM information_schema.tables" -o json' },
             detail: '{"exitCode":0,"stdout":"[\\"customers\\"]","stderr":""}',
           },
+          { label: "setup_execution", input: { command: "wren context validate" }, detail: '{"exitCode":0,"stdout":"validated","stderr":""}' },
+          { label: "setup_execution", input: { command: "wren context build" }, detail: '{"exitCode":0,"stdout":"built","stderr":""}' },
         ],
       };
       scaffold(context);
-      writeMdl(context, ["customers"], 1);
+      writeMdl(context, ["customers"]);
 
-      expect(parseSetupTerminal("SETUP_STATUS: ok - built MDL with 1 model and 1 measure", context)).toEqual({
+      expect(parseSetupTerminal("SETUP_STATUS: ok - built MDL with 1 model", context)).toEqual({
         status: "ok",
-        message: "built MDL with 1 model and 1 measure",
+        message: "built MDL with 1 model",
       });
     });
 
-    it("accepts subscription-mode Bash worklog evidence under the same discovery contract", () => {
-      const context = {
+    it("accepts the project-local --path . lifecycle spelling but not an arbitrary path", () => {
+      const base = {
         ...makeContext("acme"),
-        stepKey: "context",
+        stepKey: "context" as const,
         worklog: [
           {
-            label: "Bash",
+            label: "setup_execution",
             input: { command: 'wren --sql "SELECT table_name FROM information_schema.tables" -o json' },
-            detail: 'Exit code: 0\nFinal output:\n[{"table_name":"customers"}]',
+            detail: '{"exitCode":0,"stdout":"[\\"customers\\"]","stderr":""}',
           },
+          { label: "setup_execution", input: { command: "wren context validate --path ." }, detail: '{"exitCode":0}' },
+          { label: "setup_execution", input: { command: "wren context build --path '.'" }, detail: '{"exitCode":0}' },
+        ],
+      };
+      scaffold(base);
+      writeMdl(base, ["customers"]);
+
+      expect(parseSetupTerminal("SETUP_STATUS: ok - built project-local MDL", base)).toEqual({
+        status: "ok",
+        message: "built project-local MDL",
+      });
+
+      const arbitraryPath = {
+        ...base,
+        worklog: base.worklog.map((entry) =>
+          entry.input.command === "wren context validate --path ."
+            ? { ...entry, input: { command: "wren context validate --path ../other" } }
+            : entry,
+        ),
+      };
+      expect(parseSetupTerminal("SETUP_STATUS: ok - built elsewhere", arbitraryPath)).toMatchObject({
+        status: "error",
+        diagnostic: { kind: "host_contract", code: "context_lifecycle_out_of_order" },
+      });
+    });
+
+    it("accepts discovery then validate then build split across matching host-recorded attempts", () => {
+      const context = { ...makeContext("acme"), stepKey: "context" as const };
+      scaffold(context);
+      writeMdl(context, ["customers"]);
+      const discoveryOnly = [
+        { label: "setup_execution", input: { command: 'wren --sql "SELECT table_name FROM information_schema.tables" -o json' }, detail: '{"exitCode":0}' },
+      ];
+      const prior = recordedContextLifecyclePrefix(discoveryOnly);
+      expect(prior).toBe("discovery");
+
+      const result = parseSetupTerminal("SETUP_STATUS: ok - built MDL with 1 model", {
+        ...context,
+        priorContextLifecycle: prior,
+        worklog: [
+          { label: "setup_execution", input: { command: "wren context validate" }, detail: '{"exitCode":0}' },
+          { label: "setup_execution", input: { command: "wren context build" }, detail: '{"exitCode":0}' },
+        ],
+      });
+
+      expect(result).toEqual({ status: "ok", message: "built MDL with 1 model" });
+    });
+
+    it.each([
+      [
+        "validate is missing after discovery",
+        [{ label: "setup_execution", input: { command: 'wren --sql "SELECT table_name FROM information_schema.tables" -o json' }, detail: '{"exitCode":0}' }],
+        "context_validate_missing",
+      ],
+      [
+        "build is missing after validation",
+        [
+          { label: "setup_execution", input: { command: 'wren --sql "SELECT table_name FROM information_schema.tables" -o json' }, detail: '{"exitCode":0}' },
+          { label: "setup_execution", input: { command: "wren context validate" }, detail: '{"exitCode":0}' },
+        ],
+        "context_build_missing",
+      ],
+    ] as const)("rejects a claimed success when %s", (_description, worklog, code) => {
+      const context = { ...makeContext("acme"), stepKey: "context" as const, worklog };
+      scaffold(context);
+      writeMdl(context, ["customers"]);
+
+      const result = parseSetupTerminal("SETUP_STATUS: ok - built MDL with 1 model", context);
+
+      expect(result).toMatchObject({ status: "error", diagnostic: { kind: "host_contract", code } });
+    });
+
+    // A test formerly stood here asserting that subscription-mode Bash worklog evidence shaped
+    // like `detail: "Exit code: 0\nFinal output:\n..."` satisfies this same discovery contract.
+    // That shape is fabricated: nothing in `server/fold.ts` or the real Mode B dispatcher
+    // (warble's claude-agent-sdk mapper) ever produces it — a Bash tool_result's real
+    // `summary`/`error` is the raw (truncated) command output, with no "Exit code" wrapping at
+    // all. The fixture was a belief about the neighbouring layer's output, not a sample of it, so
+    // it is removed rather than kept for coverage count. The real cross-layer
+    // contract — real `AgentEvent`s through real `fold.ts` into this same gate — is covered
+    // instead by `test/fold-to-setup-terminal.integration.test.ts`, which documents what the
+    // unmodified gate actually does with genuinely-shaped Bash evidence (a pre-existing rejection,
+    // out of scope for this ticket to fix).
+
+    it("accepts direct lifecycle invocations with the structured cwd and environment prefixes the execution policy supports", () => {
+      const context = {
+        ...makeContext("acme"),
+        stepKey: "context" as const,
+        worklog: [
+          { label: "setup_execution", input: { command: 'wren --sql "SELECT table_name FROM information_schema.tables" -o json', cwd: "/workspace/acme" }, detail: '{"exitCode":0}' },
+          { label: "setup_execution", input: { command: "WREN_HOME=/workspace/.wren wren context validate", cwd: "/workspace/acme" }, detail: '{"exitCode":0}' },
+          { label: "setup_execution", input: { command: "env WREN_HOME=/workspace/.wren wren context build", cwd: "/workspace/acme" }, detail: '{"exitCode":0}' },
         ],
       };
       scaffold(context);
-      writeMdl(context, ["customers"], 1);
+      writeMdl(context, ["customers"]);
 
-      expect(parseSetupTerminal("SETUP_STATUS: ok - built MDL with 1 model and 1 measure", context)).toEqual({
-        status: "ok",
-        message: "built MDL with 1 model and 1 measure",
+      expect(parseSetupTerminal("SETUP_STATUS: ok - built MDL with 1 model", context).status).toBe("ok");
+    });
+
+    it.each([
+      "wren context validate --help",
+      "wren context validate -h",
+      "wren context validate --help=true",
+      "echo wren context validate",
+      '"wren context validate"',
+      "sh -c 'wren context validate'",
+      "true && wren context validate",
+    ])("does not count a validate mention or help/no-op wrapper as lifecycle evidence: %s", (invalidValidate) => {
+      const context = {
+        ...makeContext("acme"),
+        stepKey: "context" as const,
+        worklog: [
+          { label: "setup_execution", input: { command: 'wren --sql "SELECT table_name FROM information_schema.tables" -o json' }, detail: '{"exitCode":0}' },
+          { label: "setup_execution", input: { command: invalidValidate }, detail: '{"exitCode":0}' },
+          { label: "setup_execution", input: { command: "wren context build" }, detail: '{"exitCode":0}' },
+        ],
+      };
+      scaffold(context);
+      writeMdl(context, ["customers"]);
+
+      expect(parseSetupTerminal("SETUP_STATUS: ok - built MDL with 1 model", context)).toMatchObject({
+        status: "error",
+        diagnostic: { kind: "host_contract", code: "context_lifecycle_out_of_order" },
       });
+    });
+
+    it.each([
+      "wren context build --help",
+      "wren context build -h",
+      "wren context build --version",
+      "echo wren context build",
+      '"wren context build"',
+      "sh -c 'wren context build'",
+      "true && wren context build",
+    ])("does not count a build mention or help/no-op wrapper as lifecycle evidence: %s", (invalidBuild) => {
+      const context = {
+        ...makeContext("acme"),
+        stepKey: "context" as const,
+        worklog: [
+          { label: "setup_execution", input: { command: 'wren --sql "SELECT table_name FROM information_schema.tables" -o json' }, detail: '{"exitCode":0}' },
+          { label: "setup_execution", input: { command: "wren context validate" }, detail: '{"exitCode":0}' },
+          { label: "setup_execution", input: { command: invalidBuild }, detail: '{"exitCode":0}' },
+        ],
+      };
+      scaffold(context);
+      writeMdl(context, ["customers"]);
+
+      expect(parseSetupTerminal("SETUP_STATUS: ok - built MDL with 1 model", context)).toMatchObject({
+        status: "error",
+        diagnostic: { kind: "host_contract", code: "context_build_missing" },
+      });
+    });
+
+    it("rejects a build that ran before validation, but accepts a later complete valid sequence from the retained worklog", () => {
+      const earlyBuildContext = {
+        ...makeContext("acme"),
+        stepKey: "context" as const,
+        worklog: [
+          { label: "setup_execution", input: { command: 'wren --sql "SELECT table_name FROM information_schema.tables" -o json' }, detail: '{"exitCode":0}' },
+          { label: "setup_execution", input: { command: "wren context build" }, detail: '{"exitCode":0}' },
+          { label: "setup_execution", input: { command: "wren context validate" }, detail: '{"exitCode":0}' },
+        ],
+      };
+      scaffold(earlyBuildContext);
+      writeMdl(earlyBuildContext, ["customers"]);
+      expect(parseSetupTerminal("SETUP_STATUS: ok - built MDL with 1 model", earlyBuildContext)).toMatchObject({
+        status: "error",
+        diagnostic: { kind: "host_contract", code: "context_lifecycle_out_of_order" },
+      });
+
+      const correctedContext = {
+        ...earlyBuildContext,
+        worklog: [...earlyBuildContext.worklog, { label: "setup_execution", input: { command: "wren context build" }, detail: '{"exitCode":0}' }],
+      };
+      expect(parseSetupTerminal("SETUP_STATUS: ok - built MDL with 1 model", correctedContext).status).toBe("ok");
     });
 
     it("ok + target/mdl.json MISSING entirely -> downgraded to error", () => {
@@ -476,6 +651,52 @@ describe("parseSetupTerminal", () => {
         status: "error",
         message: "schema introspection found no tables; nothing to model or build. Check connection validity and source data presence.",
       });
+    });
+
+    // The two tests above (and every other worklog entry in this describe block) use
+    // `label: "setup_execution"` — Mode A / Codex local's shape, with a structured `exitCode`
+    // folded into `detail` and NO `state` field at all (that field simply doesn't exist on a
+    // hand-authored Mode A fixture the way it does on a real `ToolStep`). Both diagnostics this
+    // block is about — the no-introspection reframing above, and `firstFailedExec`'s
+    // exit-code reframing below it in this file — are also reachable through a Mode B
+    // (`label: "Bash"`) entry, whose only success/failure signal is the folded `state` field
+    // (`execSucceeded`'s doc comment in `harness/setup/runner.ts`), never a structured exit code.
+    // Every existing case in this file is Mode-A-shaped; these two close that gap.
+    it("(Mode B) a zero-table claim with no recorded schema-introspection attempt is reframed as an agent-workflow failure, using state instead of a structured exitCode", () => {
+      const context = {
+        ...makeContext("acme"),
+        stepKey: "context",
+        worklog: [
+          { label: "Bash", input: { command: "wren skills get generate-mdl" }, state: "done" as const },
+          { label: "Bash", input: { command: "wren context validate" }, state: "done" as const },
+          { label: "Bash", input: { command: "wren context build" }, state: "done" as const },
+        ],
+      };
+
+      const result = parseSetupTerminal(finalText, context);
+
+      expect(result.status).toBe("error");
+      expect(result.message).toMatch(/^the agent never attempted schema introspection/i);
+      expect(result.message).toContain("not evidence that the connection or data source lacks tables");
+    });
+
+    it("(Mode B) a failed Bash entry (state: \"error\", no exit code available) reframes the message as a command/tool failure, not a data-source claim", () => {
+      const context = {
+        ...makeContext("acme"),
+        stepKey: "context",
+        worklog: [{ label: "Bash", input: { command: "wren generate-mdl" }, state: "error" as const }],
+      };
+
+      const result = parseSetupTerminal(finalText, context);
+
+      expect(result.status).toBe("error");
+      expect(result.message).toContain("wren generate-mdl");
+      // No exit code anywhere in the message: Mode B carries no structured exit code
+      // (`firstFailedExec`'s doc comment), so the `exitCodeSuffix` this diagnostic builds is empty
+      // for a Mode B entry — unlike the Mode A case above, which asserts `toContain("exit code 2")`.
+      expect(result.message).not.toMatch(/exit code/i);
+      expect(result.message).toMatch(/^`wren generate-mdl` failed during this step/);
+      expect(result.message).toContain("not by itself evidence that the connection or data source lacks tables");
     });
 
     it.each([

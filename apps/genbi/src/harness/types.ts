@@ -81,6 +81,19 @@ export interface Component {
   outputBlocks: string[];
   steps: Step[];
   status: string;
+  unavailableReason?: string;
+  /**
+   * Present only when this component is unavailable on the compiled dispatch
+   * target but the currently-selected purpose's native session can still run
+   * it — `status` is `"ready"` in this case, qualified by `viaLabel`. The
+   * programmatic limitation lives here (for the expanded row) instead of
+   * being promoted into `unavailableReason`.
+   */
+  nativeAvailability?: {
+    viaLabel: 'Claude CLI' | 'Codex CLI';
+    compiledDispatchTarget: string;
+    compiledUnavailableReason: string;
+  };
 }
 
 export interface ProfileInfo {
@@ -120,7 +133,7 @@ export type RuntimeBackendKind = 'subscription' | 'api-key' | 'local' | 'gateway
  * BFF that hasn't shipped this field yet degrades gracefully — the UI simply
  * omits the line rather than crashing.
  */
-export type RuntimeDispatcherKind = 'claude-agent-sdk' | 'in-process';
+export type RuntimeDispatcherKind = 'claude-agent-sdk' | 'codex-local' | 'in-process';
 
 export interface RuntimeInfo {
   backend: RuntimeBackendKind;
@@ -167,11 +180,29 @@ export interface AgentProfileRow {
   status: string;
 }
 
-/** Everything the Harness overview page renders, for one bound profile. */
+export type HarnessPurpose = 'setup' | 'analysis' | 'context_enrichment';
+
+/** Server-derived native-purpose metadata for the profile currently rendered. */
+export interface HarnessPurposeInfo {
+  purpose: HarnessPurpose;
+  profile: 'genbi-setup' | 'genbi-default' | 'genbi-enrich-context';
+  scopeKind: 'bootstrap' | 'bound_project';
+  target?: 'claude-code:interactive' | 'codex:interactive';
+  targetLabel?: 'Claude CLI' | 'Codex CLI';
+  available: boolean;
+  reason?: string;
+}
+
+/** Everything the Harness overview page renders, for one server-owned purpose profile. */
 export interface HarnessView {
+  purpose: HarnessPurposeInfo;
   profile: ProfileInfo;
   runtime: RuntimeInfo;
   connection: ConnectionStatus;
   components: Component[];
   agentProfiles: AgentProfileRow[];
+  nativeSessions: {
+    binding: { configured: boolean; generation: number; targetLabel?: string };
+    dispatches: Array<{ purpose: string; profile: string; scopeKind: string; targetLabel?: string; available: boolean; reason?: string }>;
+  };
 }

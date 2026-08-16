@@ -211,6 +211,19 @@ export interface ToolStep {
    * or — for `kind: 'step'` — that reasoning step's output text.
    */
   detail?: string;
+  /**
+   * Server-owned Setup inspection projection. It is intentionally separate
+   * from the generic Ask trace's raw `input`/`detail` fields: Setup only
+   * receives this bounded, sanitized record.
+   */
+  inspection?: ToolStepInspection;
+}
+
+export interface ToolStepInspection {
+  action?: string;
+  output?: string;
+  error?: string;
+  durationMs?: number;
 }
 
 /**

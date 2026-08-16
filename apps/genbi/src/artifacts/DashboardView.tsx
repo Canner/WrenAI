@@ -32,7 +32,7 @@ export function DashboardView({ artifact, onPublish, onUnpin }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <ArtifactMeta artifact={artifact} onUnpin={onUnpin} />
-      {PUBLISH_UI_ENABLED && <PublishStatus publish={artifact.publish} onPublish={onPublish} />}
+      {!artifact.nativeSessionId && PUBLISH_UI_ENABLED && <PublishStatus publish={artifact.publish} onPublish={onPublish} />}
       {artifact.tiles && artifact.tiles.length > 0 ? (
         <div
           style={{
@@ -48,7 +48,7 @@ export function DashboardView({ artifact, onPublish, onUnpin }: Props) {
           ))}
         </div>
       ) : artifact.envelope ? (
-        <Panel>
+        <Panel note={artifact.source && <SourceLine source={artifact.source} />}>
           <EnvelopeView envelope={artifact.envelope} />
         </Panel>
       ) : (

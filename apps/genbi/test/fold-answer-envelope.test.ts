@@ -18,6 +18,10 @@ function agentSdkResult(finalText: string): RouteResult {
   return { backend: "agent-sdk", warnings: [], finalText };
 }
 
+function codexResult(finalText: string): RouteResult {
+  return { backend: "codex-local", warnings: [], finalText };
+}
+
 describe("toAnswerOrRefusalEvent (Mode B / agent-sdk backend): recovers a render envelope from finalText", () => {
   it("extracts a fenced ```json {blocks} envelope into form: 'rich', with verified from the envelope itself", () => {
     const envelope = {
@@ -56,6 +60,76 @@ describe("toAnswerOrRefusalEvent (Mode B / agent-sdk backend): recovers a render
     if (event.answer.form !== "rich") throw new Error("expected rich form");
     expect(event.answer.envelope.blocks).toEqual([{ type: "table", columns: flat.columns, rows: flat.rows }]);
     expect(event.answer.envelope.verified).toBe(true);
+  });
+
+  it("normalizes the same verified flat answer from codex:local", () => {
+    const flat = { columns: ["orders"], rows: [[42]], verified: true };
+    const event = toAnswerOrRefusalEvent("evt-codex", codexResult(JSON.stringify(flat))) as AnswerEvent;
+    if (event.answer.form !== "rich") throw new Error("expected rich form");
+    expect(event.answer.envelope.blocks).toEqual([{ type: "table", columns: flat.columns, rows: flat.rows }]);
+    expect(event.answer.envelope.verified).toBe(true);
+  });
+
+  it("normalizes codex:local's validated query-result evidence into a verified table and definition", () => {
+    const queryResult = {
+      result_set: {
+        columns: ["status", "order_count"],
+        rows: [
+          { status: "completed", order_count: 67 },
+          { status: "placed", order_count: 13 },
+        ],
+      },
+      sql: "SELECT status, COUNT(*) AS order_count FROM orders GROUP BY status",
+      source_tables: ["orders"],
+      filters: [],
+      execution_passed: true,
+      validation_passed: true,
+      validation_error: null,
+    };
+
+    const event = toAnswerOrRefusalEvent("evt-codex-query-result", codexResult(JSON.stringify(queryResult))) as AnswerEvent;
+    if (event.answer.form !== "rich") throw new Error("expected rich form");
+    expect(event.answer.envelope).toEqual({
+      blocks: [
+        {
+          type: "table",
+          columns: queryResult.result_set.columns,
+          rows: [
+            ["completed", 67],
+            ["placed", 13],
+          ],
+        },
+        {
+          type: "definition",
+          sql: queryResult.sql,
+          source_tables: queryResult.source_tables,
+          filters: queryResult.filters,
+        },
+      ],
+      verified: true,
+    });
+  });
+
+  it("keeps a codex query-result table unverified when deterministic validation did not pass", () => {
+    const queryResult = {
+      result_set: { columns: ["orders"], rows: [{ orders: 42 }] },
+      sql: "SELECT COUNT(*) AS orders FROM orders",
+      source_tables: ["orders"],
+      filters: [],
+      execution_passed: true,
+      validation_passed: false,
+      validation_error: "result validation failed",
+    };
+
+    const event = toAnswerOrRefusalEvent("evt-codex-unverified", codexResult(JSON.stringify(queryResult))) as AnswerEvent;
+    if (event.answer.form !== "rich") throw new Error("expected rich form");
+    expect(event.answer.envelope.verified).toBe(false);
+  });
+
+  it("marks a codex:local text fallback as a data answer after wren.run_sql", () => {
+    const worklog: ToolStep[] = [{ id: "sql", label: "wren.run_sql", state: "done", kind: "tool" }];
+    const event = toAnswerOrRefusalEvent("evt-codex-text", codexResult("42 orders"), worklog) as AnswerEvent;
+    expect(event.answer).toEqual({ form: "text", text: "42 orders", verified: false, dataAnswer: true });
   });
 
   it("carries a flat shape's definition into a trailing definition block", () => {

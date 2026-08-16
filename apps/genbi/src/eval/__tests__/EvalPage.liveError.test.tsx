@@ -22,6 +22,7 @@ const getEvalRun = vi.fn();
 vi.mock('@/bff/client', () => ({
   listEvalRuns: (...args: unknown[]) => listEvalRuns(...args),
   getEvalRun: (...args: unknown[]) => getEvalRun(...args),
+  getRuntimeSettingsReadiness: () => Promise.resolve({ valid: true as const }),
 }));
 
 // ECharts needs a real canvas; stub it so the trend chart renders in jsdom.

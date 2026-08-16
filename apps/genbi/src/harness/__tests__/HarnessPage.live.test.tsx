@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { renderWithProviders } from '@/test/utils';
 import { AppRoutes } from '@/app/App';
 import type { HarnessView } from '../types';
@@ -13,11 +13,13 @@ const getHarness = vi.fn();
 
 vi.mock('@/bff/client', () => ({
   getHarness: (...args: unknown[]) => getHarness(...args),
+  getRuntimeSettingsReadiness: () => Promise.resolve({ valid: true as const }),
 }));
 
-import { useHarnessStore, BOUND_PROFILE_KEY } from '../useHarnessStore';
+import { useHarnessStore } from '../useHarnessStore';
 
 const liveHarness: HarnessView = {
+  purpose: { purpose: 'analysis', profile: 'genbi-default', scopeKind: 'bound_project', target: 'claude-code:interactive', targetLabel: 'Claude CLI', available: true },
   profile: {
     id: 'genbi-default',
     name: 'Genbi Default',
@@ -84,12 +86,20 @@ const liveHarness: HarnessView = {
       status: 'Bound',
     },
   ],
+  nativeSessions: {
+    binding: { configured: true, generation: 2, targetLabel: 'Claude CLI' },
+    dispatches: [
+      { purpose: 'setup', profile: 'genbi-setup', scopeKind: 'bootstrap', targetLabel: 'Claude CLI', available: true },
+      { purpose: 'analysis', profile: 'genbi-default', scopeKind: 'bound_project', targetLabel: 'Claude CLI', available: true },
+      { purpose: 'context_enrichment', profile: 'genbi-enrich-context', scopeKind: 'bound_project', targetLabel: 'Claude CLI', available: true },
+    ],
+  },
 };
 
 beforeEach(() => {
   getHarness.mockReset();
   useHarnessStore.setState(
-    { selectedProfileKey: BOUND_PROFILE_KEY, harness: undefined, loading: false, error: undefined },
+    { selectedPurpose: 'analysis', harness: undefined, loading: false, error: undefined },
     false,
   );
 });
@@ -100,15 +110,17 @@ describe('Harness page (live mode)', () => {
 
     renderWithProviders(<AppRoutes />, { route: '/harness' });
 
-    expect(await screen.findByText('acme-wren')).toBeInTheDocument();
+    expect(await screen.findByText('Answer Query')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Profile and compiled bundle/ }));
+    expect(screen.getByText('acme-wren')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Runtime and model binding/ }));
     expect(screen.getByText(/API key \(anthropic\)/)).toBeInTheDocument();
-    // `claude-sonnet` is also echoed on the orchestrator's row in the agent
-    // profiles table — scope this assertion to the tier→model table itself.
-    const runtimePanel = screen.getByText('Runtime · back-end').closest('.ant-card') as HTMLElement;
-    expect(within(runtimePanel).getByText('claude-sonnet')).toBeInTheDocument();
+    expect(screen.getByText('claude-sonnet')).toBeInTheDocument();
 
     const sidebar = screen.getByRole('navigation', { name: 'Profiles' });
-    expect(within(sidebar).getByText('Genbi Default')).toBeInTheDocument();
+    expect(within(sidebar).getByText('Setup')).toBeInTheDocument();
+    expect(within(sidebar).getByText('Analyze data')).toBeInTheDocument();
+    expect(within(sidebar).getByText('Context enrichment')).toBeInTheDocument();
   });
 
   it('renders the fetched component in the components table', async () => {
@@ -118,11 +130,69 @@ describe('Harness page (live mode)', () => {
 
     expect(await screen.findByText('Answer Query')).toBeInTheDocument();
 
-    // The capability id is also echoed on the agent profiles table and the
-    // capability resolution table — scope to the component's own row.
+    // Callable-as remains an executable component detail in the primary table.
     const rows = screen.getAllByRole('row');
     const answerQueryRow = rows.find((row) => within(row).queryByText('Answer Query'));
     expect(answerQueryRow).toBeDefined();
-    expect(within(answerQueryRow!).getByText('sql_execution:read_only')).toBeInTheDocument();
+    expect(within(answerQueryRow!).getByText('answer_query')).toBeInTheDocument();
+  });
+
+  it('separately labels the compiled dispatch and native interactive-session targets', async () => {
+    getHarness.mockResolvedValueOnce(liveHarness);
+
+    renderWithProviders(<AppRoutes />, { route: '/harness' });
+
+    const panel = (await screen.findByText('Execution path')).closest('.ant-card') as HTMLElement;
+    expect(panel).toHaveTextContent('analysis');
+    expect(panel).toHaveTextContent('genbi-default');
+    expect(panel).toHaveTextContent('Compiled dispatch target');
+    expect(panel).toHaveTextContent('vercel:headless');
+    expect(panel).toHaveTextContent('Native session target');
+    expect(panel).toHaveTextContent('Claude CLI');
+  });
+
+  it('switches profiles without retaining analysis detail and fences a late analysis response', async () => {
+    let resolveAnalysis!: (value: HarnessView) => void;
+    const analysis = new Promise<HarnessView>((resolve) => {
+      resolveAnalysis = resolve;
+    });
+    const setup: HarnessView = {
+      ...liveHarness,
+      purpose: { purpose: 'setup', profile: 'genbi-setup', scopeKind: 'bootstrap', target: 'claude-code:interactive', targetLabel: 'Claude CLI', available: true },
+      profile: { ...liveHarness.profile, id: 'genbi-setup', name: 'Genbi Setup', bundleId: 'genbi-setup@vercel:headless' },
+      components: [{ ...liveHarness.components[0], id: 'connect_source', name: 'Connect Source', callableAs: 'connect_source' }],
+      agentProfiles: [{ ...liveHarness.agentProfiles[0], name: 'Genbi Setup' }],
+    };
+    getHarness.mockImplementation((purpose: string) => (purpose === 'analysis' ? analysis : Promise.resolve(setup)));
+
+    renderWithProviders(<AppRoutes />, { route: '/harness' });
+    fireEvent.click(screen.getByRole('button', { name: /Setup/ }));
+
+    expect(await screen.findByText('Connect Source')).toBeInTheDocument();
+    expect(screen.getAllByText('genbi-setup')).not.toHaveLength(0);
+    expect(screen.queryByText('Answer Query')).not.toBeInTheDocument();
+    resolveAnalysis(liveHarness);
+    await Promise.resolve();
+    expect(screen.getByText('Connect Source')).toBeInTheDocument();
+    expect(screen.queryByText('Answer Query')).not.toBeInTheDocument();
+  });
+
+  it('loads the context-enrichment purpose as its own profile', async () => {
+    const context: HarnessView = {
+      ...liveHarness,
+      purpose: { purpose: 'context_enrichment', profile: 'genbi-enrich-context', scopeKind: 'bound_project', target: 'claude-code:interactive', targetLabel: 'Claude CLI', available: true },
+      profile: { ...liveHarness.profile, id: 'genbi-enrich-context', name: 'Genbi Enrich Context', bundleId: 'genbi-enrich-context@vercel:headless' },
+      components: [{ ...liveHarness.components[0], id: 'draft_enrichment', name: 'Draft Enrichment', callableAs: 'draft_enrichment' }],
+      agentProfiles: [{ ...liveHarness.agentProfiles[0], name: 'Genbi Enrich Context' }],
+    };
+    getHarness.mockImplementation((purpose: string) => Promise.resolve(purpose === 'context_enrichment' ? context : liveHarness));
+
+    renderWithProviders(<AppRoutes />, { route: '/harness' });
+    expect(await screen.findByText('Answer Query')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Context enrichment/ }));
+
+    expect(await screen.findByText('Draft Enrichment')).toBeInTheDocument();
+    expect(screen.getAllByText('genbi-enrich-context')).not.toHaveLength(0);
+    expect(screen.queryByText('Answer Query')).not.toBeInTheDocument();
   });
 });

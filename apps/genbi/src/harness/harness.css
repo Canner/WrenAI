@@ -1,0 +1,31 @@
+.harness-execution-path {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.harness-execution-path > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.harness-execution-path strong {
+  overflow-wrap: anywhere;
+}
+
+.harness-diagnostic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+@media (max-width: 640px) {
+  .harness-execution-path,
+  .harness-diagnostic-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}

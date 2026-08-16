@@ -16,9 +16,12 @@ export type { ArtifactContentDto, ArtifactContentUnavailableReason } from "./art
 export { buildAgentSdkChatArgs, ModeBSessionError, runModeBDefault } from "./mode-b.js";
 export type { AgentSdkChatCommand, BuildAgentSdkChatArgsOptions } from "./mode-b.js";
 
+export { buildCodexAskArgs, runCodexAskDefault } from "./codex-ask.js";
+export { CodexAskEventMapper } from "./codex-ask-events.js";
+
 export { resolveArtifactsDir, runModeADefault } from "./mode-a.js";
 
-export { resolveDefaultProfileSource, resolveDefaultSetupIrPath } from "./profile-source.js";
+export { resolveDefaultEnrichIrPath, resolveDefaultProfileSource, resolveDefaultSetupIrPath } from "./profile-source.js";
 
 export { route } from "./route.js";
 
@@ -27,6 +30,9 @@ export { buildHybridTierBinding, buildUniformTierBinding } from "./tier-binding.
 export type {
   ModeAExecutor,
   ModeAOptions,
+  CodexAskExecutor,
+  CodexAskOptions,
+  CodexAskResult,
   ModeBExecutor,
   ModeBOptions,
   ModeBResult,

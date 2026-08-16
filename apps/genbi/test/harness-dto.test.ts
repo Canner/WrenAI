@@ -31,7 +31,7 @@ describe("buildHarnessDto — real genbi-default bundle", () => {
       verifyGate: true,
       bundleId: "genbi-default@vercel:headless",
       bundleVersion: "0.1",
-      irVersion: "0.3",
+      irVersion: "0.5",
       dispatchTarget: "vercel:headless",
       bundleHash: expect.stringMatching(/^[0-9a-f]{7}$/),
       status: "Not bound yet",
@@ -55,12 +55,10 @@ describe("buildHarnessDto — real genbi-default bundle", () => {
     expect(dto.profile.status).toBe("Bound");
   });
 
-  it("derives runtime.tierModels from the store's runtime settings — the SAME source GET /api/config/runtime reports — regardless of authChoice's real binding", () => {
+  it("derives runtime.tierModels from the effective boot binding while Setup defaults remain unsaved", () => {
     const store = new Store(":memory:");
-    // Store is seeded with claude-haiku/claude-sonnet; authChoice is api-key/mock with no
-    // config.model (the mock adapter has no concrete model of its own). runtime.tierModels
-    // must match the store's seeded values byte-for-byte, same as GET /api/config/runtime would
-    // return — NOT the mock adapter's real (non-)binding (that's what dto.components reports).
+    // Seeded Setup rows are display defaults, not dispatch authority. The
+    // boot api-key/mock binding has no concrete model, so say that honestly.
     const dto = buildHarnessDto(bundle, store, BASE_ROUTE_OPTIONS);
 
     expect(dto.runtime).toEqual({
@@ -68,8 +66,8 @@ describe("buildHarnessDto — real genbi-default bundle", () => {
       label: "API key (mock)",
       dispatcher: "in-process",
       tierModels: [
-        { tier: "cheap", model: "claude-haiku" },
-        { tier: "strong", model: "claude-sonnet" },
+        { tier: "cheap", model: "mock (no fixed model)" },
+        { tier: "strong", model: "mock (no fixed model)" },
       ],
     });
   });
@@ -233,7 +231,8 @@ describe("buildHarnessDto — real genbi-default bundle", () => {
         { tier: "cheap", model: "mock (no fixed model)" },
         { tier: "strong", model: "mock (no fixed model)" },
       ],
-      status: "ready",
+      status: "unavailable",
+      unavailableReason: "The selected native session is unavailable.",
     });
     expect(answerQuery?.capabilities).toContainEqual({
       capability: "sql_execution:read_only",
@@ -316,7 +315,7 @@ describe("buildHarnessDto — real genbi-default bundle", () => {
     expect(explainChange.steps.map((s) => s.name)).toEqual(["plan_decomposition", "synthesize_drivers"]);
   });
 
-  it("resolves every component tier to a single model override uniformly (e.g. WREN_HARNESS_MODEL/gateway override), while runtime.tierModels keeps reporting the store's settings", () => {
+  it("resolves runtime and component tiers to a uniform boot model override", () => {
     const store = new Store(":memory:"); // seeded with claude-haiku/claude-sonnet
     const overrideRouteOptions: Omit<RouteOptions, "question" | "onEvent"> = {
       ...BASE_ROUTE_OPTIONS,
@@ -325,11 +324,9 @@ describe("buildHarnessDto — real genbi-default bundle", () => {
 
     const dto = buildHarnessDto(bundle, store, overrideRouteOptions);
 
-    // runtime.tierModels always mirrors the store's settings (matching GET /api/config/runtime),
-    // independent of authChoice's real override.
     expect(dto.runtime.tierModels).toEqual([
-      { tier: "cheap", model: "claude-haiku" },
-      { tier: "strong", model: "claude-sonnet" },
+      { tier: "cheap", model: "gpt-4o" },
+      { tier: "strong", model: "gpt-4o" },
     ]);
     // Each component's own tiers/model still reflect the REAL binding as if it ran.
     const answerQuery = dto.components.find((c) => c.id === "answer_query");
@@ -340,7 +337,7 @@ describe("buildHarnessDto — real genbi-default bundle", () => {
     ]);
   });
 
-  it("resolves each component tier to its own model when a per-tier tierBinding override is set (hybrid), while runtime.tierModels keeps reporting the store's settings", () => {
+  it("resolves runtime and component tiers from a per-tier boot binding", () => {
     const store = new Store(":memory:");
     const hybridRouteOptions: Omit<RouteOptions, "question" | "onEvent"> = {
       ...BASE_ROUTE_OPTIONS,
@@ -353,8 +350,8 @@ describe("buildHarnessDto — real genbi-default bundle", () => {
     const dto = buildHarnessDto(bundle, store, hybridRouteOptions);
 
     expect(dto.runtime.tierModels).toEqual([
-      { tier: "cheap", model: "claude-haiku" },
-      { tier: "strong", model: "claude-sonnet" },
+      { tier: "cheap", model: "claude-haiku-hybrid" },
+      { tier: "strong", model: "claude-opus-hybrid" },
     ]);
     const answerQuery = dto.components.find((c) => c.id === "answer_query");
     expect(answerQuery?.model).toBe("claude-opus-hybrid"); // last step (repair_sql) runs on tier "strong"
@@ -362,6 +359,176 @@ describe("buildHarnessDto — real genbi-default bundle", () => {
 });
 
 describe("buildHarnessDto — synthetic bundles (mapping edge cases)", () => {
+  it("preserves the closed unavailable variant as a redacted, non-executable component", () => {
+    const raw = buildSyntheticBundle() as { agents: Record<string, unknown>[] } & Record<string, unknown>;
+    const [available] = raw.agents;
+    const bundle = loadBundle({
+      ...raw,
+      agents: [{
+        ...available,
+        steps: [],
+        guardrails: {},
+        tools: [],
+        output_schema: {},
+        capabilities: [],
+        availability: {
+          status: "unavailable",
+          reason: "component is unavailable on the configured runtime",
+        },
+      }],
+    });
+
+    const dto = buildHarnessDto(bundle, new Store(":memory:"), BASE_ROUTE_OPTIONS, "analysis", {
+      purposes: { analysis: { available: false, reason: "native host is unavailable" } },
+    } as never);
+
+    expect(dto.components[0]).toMatchObject({
+      id: "synthetic_agent",
+      status: "unavailable",
+      unavailableReason: "component is unavailable on the configured runtime",
+      model: "—",
+      tiers: [],
+      capabilities: [],
+      guardrails: [],
+      tools: [],
+      outputBlocks: [],
+      steps: [],
+    });
+  });
+
+  it("marks otherwise available components unavailable when the selected native purpose is unavailable", () => {
+    const bundle = loadBundle(buildSyntheticBundle({ guardrails: {} }));
+    const dto = buildHarnessDto(bundle, new Store(":memory:"), BASE_ROUTE_OPTIONS, "analysis", {
+      purposes: { analysis: { available: false, reason: "native host is unavailable" } },
+    } as never);
+
+    expect(dto.purpose).toMatchObject({ purpose: "analysis", available: false, reason: "native host is unavailable" });
+    expect(dto.components[0]).toMatchObject({
+      status: "unavailable",
+      unavailableReason: "native host is unavailable",
+    });
+  });
+
+  it("promotes a component unavailable on the compiled dispatch target to ready when the selected purpose's native session is available (rule-table row: compiled unavailable / native available)", () => {
+    const raw = buildSyntheticBundle() as { agents: Record<string, unknown>[]; target: string } & Record<string, unknown>;
+    const [available] = raw.agents;
+    const bundle = loadBundle({
+      ...raw,
+      agents: [{
+        ...available,
+        steps: [],
+        guardrails: {},
+        tools: [],
+        output_schema: {},
+        capabilities: [],
+        availability: {
+          status: "unavailable",
+          reason: "component is unavailable on the configured runtime",
+        },
+      }],
+    });
+
+    const dto = buildHarnessDto(bundle, new Store(":memory:"), BASE_ROUTE_OPTIONS, "context_enrichment", {
+      purposes: { context_enrichment: { available: true, target: "claude-code:interactive", targetLabel: "Claude CLI" } },
+    } as never);
+
+    expect(dto.components[0]).toMatchObject({
+      status: "ready",
+      model: "—",
+      tiers: [],
+      capabilities: [],
+      guardrails: [],
+      tools: [],
+      outputBlocks: [],
+      steps: [],
+      nativeAvailability: {
+        viaLabel: "Claude CLI",
+        compiledDispatchTarget: raw.target,
+        compiledUnavailableReason: "component is unavailable on the configured runtime",
+      },
+    });
+    // Promotion must never leak into `unavailableReason` — the row is `"ready"`, not a differently-worded unavailable.
+    expect(dto.components[0]?.unavailableReason).toBeUndefined();
+  });
+
+  it("does not promote a compiled-unavailable component just because the native purpose has a target — availability must also be true (regression guard for the promotion condition)", () => {
+    const raw = buildSyntheticBundle() as { agents: Record<string, unknown>[] } & Record<string, unknown>;
+    const [available] = raw.agents;
+    const bundle = loadBundle({
+      ...raw,
+      agents: [{
+        ...available,
+        steps: [],
+        guardrails: {},
+        tools: [],
+        output_schema: {},
+        capabilities: [],
+        availability: {
+          status: "unavailable",
+          reason: "component is unavailable on the configured runtime",
+        },
+      }],
+    });
+
+    // `target`/`targetLabel` are present (so a naive `targetLabel !== undefined` check
+    // alone would wrongly promote), but `available` is explicitly false — the native
+    // session itself cannot run right now, so promotion must not happen.
+    const dto = buildHarnessDto(bundle, new Store(":memory:"), BASE_ROUTE_OPTIONS, "context_enrichment", {
+      purposes: { context_enrichment: { available: false, target: "claude-code:interactive", targetLabel: "Claude CLI", reason: "native host is unavailable" } },
+    } as never);
+
+    expect(dto.components[0]).toMatchObject({
+      status: "unavailable",
+      unavailableReason: "component is unavailable on the configured runtime",
+    });
+    expect(dto.components[0]?.nativeAvailability).toBeUndefined();
+  });
+
+  it("leaves an ordinary bundle-available component as ready when the selected purpose's native session is available (rule-table row: compiled available / native available, unchanged)", () => {
+    const bundle = loadBundle(buildSyntheticBundle({ guardrails: {} }));
+    const dto = buildHarnessDto(bundle, new Store(":memory:"), BASE_ROUTE_OPTIONS, "analysis", {
+      purposes: { analysis: { available: true, target: "claude-code:interactive", targetLabel: "Claude CLI" } },
+    } as never);
+
+    expect(dto.components[0]).toMatchObject({ status: "ready" });
+    expect(dto.components[0]?.nativeAvailability).toBeUndefined();
+    expect(dto.components[0]?.unavailableReason).toBeUndefined();
+  });
+
+  it("keys promotion off which buildComponent branch produced the status, never off matching Warble's reason string (typed discriminator, not string equality)", () => {
+    // An ORDINARY bundle-available component (no `availability` field at all) whose
+    // purpose-level unavailable reason happens to be byte-identical to Warble's fixed
+    // compiled-unavailable reason string. A string-matching implementation could mistake
+    // this for the bundle-unavailable case; the correct implementation never takes that
+    // branch here, so it must stay a plain purpose-level unavailable with no `nativeAvailability`.
+    const bundle = loadBundle(buildSyntheticBundle({ guardrails: {} }));
+    const dto = buildHarnessDto(bundle, new Store(":memory:"), BASE_ROUTE_OPTIONS, "analysis", {
+      purposes: { analysis: { available: false, reason: "component is unavailable on the configured runtime" } },
+    } as never);
+
+    expect(dto.components[0]).toMatchObject({
+      status: "unavailable",
+      unavailableReason: "component is unavailable on the configured runtime",
+    });
+    expect(dto.components[0]?.nativeAvailability).toBeUndefined();
+  });
+
+  it("rejects an unknown availability discriminator instead of stripping it through the available variant", () => {
+    const raw = buildSyntheticBundle() as { agents: Record<string, unknown>[] } & Record<string, unknown>;
+    const [available] = raw.agents;
+
+    expect(() => loadBundle({
+      ...raw,
+      agents: [{
+        ...available,
+        availability: {
+          status: "ready",
+          reason: "component is unavailable on the configured runtime",
+        },
+      }],
+    })).toThrow("invalid bundle structure");
+  });
+
   it("yields an empty outputBlocks when output_schema has no blocks.items.anyOf/const (defensive, not a throw)", () => {
     const bundle = loadBundle(buildSyntheticBundle({ guardrails: {} })); // output_schema: { type: "object", properties: {}, required: [] }
     const store = new Store(":memory:");
@@ -385,7 +552,8 @@ describe("buildHarnessDto — synthetic bundles (mapping edge cases)", () => {
 
   it("falls back to the store's configured setting, visibly labeled, when a hybrid tierBinding doesn't cover the tier", () => {
     const bundle = loadBundle(buildSyntheticBundle({ guardrails: {} })); // single step, tier "cheap"
-    const store = new Store(":memory:"); // seeded: cheap -> claude-haiku
+    const store = new Store(":memory:");
+    store.setRuntimeSettings({ ...store.getRuntimeSettings(), tierModels: [{ tier: "cheap", model: "claude-haiku" }] });
     const routeOptions: Omit<RouteOptions, "question" | "onEvent"> = {
       ...BASE_ROUTE_OPTIONS,
       tierBinding: { strong: { adapter: "anthropic", config: { model: "claude-opus" } } }, // doesn't cover "cheap"
@@ -397,19 +565,17 @@ describe("buildHarnessDto — synthetic bundles (mapping edge cases)", () => {
     expect(component?.model).toBe("claude-haiku (configured)");
   });
 
-  it("falls back to the store's configured setting when the real component binding itself can't be derived (e.g. gateway mode missing config), while runtime.tierModels reports the store's setting plainly", () => {
+  it("visibly falls back to configured settings when the effective binding cannot be derived", () => {
     const bundle = loadBundle(buildSyntheticBundle({ guardrails: {} })); // single step, tier "cheap"
-    const store = new Store(":memory:"); // seeded: cheap -> claude-haiku
+    const store = new Store(":memory:");
+    store.setRuntimeSettings({ ...store.getRuntimeSettings(), tierModels: [{ tier: "cheap", model: "claude-haiku" }] });
     const routeOptions: Omit<RouteOptions, "question" | "onEvent"> = {
       ...BASE_ROUTE_OPTIONS,
       authChoice: { mode: "gateway" }, // no config.baseURL/model -> deriveAdapterSpec throws
     };
 
     const dto = buildHarnessDto(bundle, store, routeOptions);
-    // runtime.tierModels is the store's setting verbatim — no "(configured)" qualifier, since
-    // for this field the store IS the primary source, not a fallback from something else.
-    expect(dto.runtime.tierModels).toEqual([{ tier: "cheap", model: "claude-haiku" }]);
-    // The component's own binding genuinely couldn't be derived, so it falls back, visibly labeled.
+    expect(dto.runtime.tierModels).toEqual([{ tier: "cheap", model: "claude-haiku (configured)" }]);
     expect(dto.components[0]?.model).toBe("claude-haiku (configured)");
   });
 
@@ -426,9 +592,10 @@ describe("buildHarnessDto — synthetic bundles (mapping edge cases)", () => {
     expect(dto.components[0]?.tiers).toEqual([{ tier: "cheap", model: "cheap (unbound)" }]);
   });
 
-  it("reports runtime.tierModels from the store's real per-tier model even under a subscription auth choice (previously was the auth label for every tier; now matches GET /api/config/runtime)", () => {
+  it("reports explicit persisted per-tier models under subscription auth", () => {
     const bundle = loadBundle(buildSyntheticBundle({ guardrails: {} }));
-    const store = new Store(":memory:"); // seeded: cheap -> claude-haiku
+    const store = new Store(":memory:");
+    store.setRuntimeSettings({ ...store.getRuntimeSettings(), tierModels: [{ tier: "cheap", model: "claude-haiku" }] });
     const routeOptions: Omit<RouteOptions, "question" | "onEvent"> = {
       ...BASE_ROUTE_OPTIONS,
       authChoice: { mode: "subscription", provider: "claude" },
@@ -455,6 +622,7 @@ describe("buildHarnessDto — synthetic bundles (mapping edge cases)", () => {
 
   it.each([
     [{ mode: "subscription", provider: "claude" } as const, "subscription", "Subscription (claude)", "claude-agent-sdk"],
+    [{ mode: "subscription", provider: "codex" } as const, "subscription", "Subscription (codex)", "codex-local"],
     [{ mode: "api-key", adapter: "mock" } as const, "api-key", "API key (mock)", "in-process"],
     [{ mode: "local" } as const, "local", "Local", "in-process"],
     [{ mode: "local", endpoint: "http://localhost:11434/v1" } as const, "local", "Local (http://localhost:11434/v1)", "in-process"],
@@ -472,7 +640,7 @@ describe("buildHarnessDto — synthetic bundles (mapping edge cases)", () => {
     },
   );
 
-  it("derives runtime.dispatcher from the REAL route() back-end predicate (authChoice.mode === \"subscription\" -> Mode B's claude-agent-sdk dispatcher; every other mode -> Mode A, in-process)", () => {
+  it("derives runtime.dispatcher from the provider-specific product target", () => {
     const bundle = loadBundle(buildSyntheticBundle());
     const store = new Store(":memory:");
 
@@ -481,6 +649,13 @@ describe("buildHarnessDto — synthetic bundles (mapping edge cases)", () => {
       authChoice: { mode: "subscription", provider: "claude" },
     });
     expect(subscriptionDto.runtime.dispatcher).toBe("claude-agent-sdk");
+
+    const codexDto = buildHarnessDto(bundle, store, {
+      ...BASE_ROUTE_OPTIONS,
+      authChoice: { mode: "subscription", provider: "codex" },
+    });
+    expect(codexDto.runtime.dispatcher).toBe("codex-local");
+    expect(codexDto.components.every((component) => component.status === "unavailable")).toBe(true);
 
     const apiKeyDto = buildHarnessDto(bundle, store, {
       ...BASE_ROUTE_OPTIONS,

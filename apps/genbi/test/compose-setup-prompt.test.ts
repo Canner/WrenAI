@@ -49,22 +49,51 @@ describe("composeSetupPrompt", () => {
     expect(prompt).toMatch(/exec action's cwd defaults to the workspace root/i);
   });
 
-  it("connect: tells the agent the wren CLI is already installed with nothing to install, and to skip Preflight/pip install — without claiming a virtualenv is active", () => {
+  it("connect: keeps the agent out of the Python environment without asserting anything about it", () => {
     const prompt = composeSetupPrompt("connect", form);
     expect(prompt).toMatch(/wren CLI is already installed and on PATH/i);
-    expect(prompt).toMatch(/nothing to install/i);
     expect(prompt).toMatch(/skip the skill's Preflight section/i);
     expect(prompt).toMatch(/skip Step 2's "pip install" sub-step/i);
     expect(prompt).toMatch(/do not run pip install/i);
     expect(prompt).not.toMatch(/virtualenv/i);
     expect(prompt).not.toMatch(/virtual environment/i);
+    // This test used to require the prompt to say there was "nothing to
+    // install". That was false for all but a couple of wren's connectors — the
+    // driver behind each one is an optional extra, and the agent can disprove
+    // the claim in a single import. The host now provisions the driver and
+    // passes what it actually did; with no such note, the prompt says nothing
+    // about availability at all rather than guessing.
+    expect(prompt).not.toMatch(/nothing to install/i);
+    expect(prompt).not.toMatch(/already available/i);
+  });
+
+  it("connect: repeats the host's driver-provisioning outcome verbatim, including a failure", () => {
+    const installed = composeSetupPrompt("connect", form, { driverNote: 'The "postgres" driver (wren\'s "postgres" extra) was just installed into the wren environment.' });
+    expect(installed).toMatch(/was just installed into the wren environment/);
+
+    const failed = composeSetupPrompt("connect", form, {
+      driverNote: 'The "oracle" driver (wren\'s "oracle" extra) could NOT be provisioned: uv is not on PATH.',
+    });
+    expect(failed).toMatch(/could NOT be provisioned: uv is not on PATH/);
+    expect(failed).not.toMatch(/already available|nothing to install/i);
   });
 
   it("connect_resume: references the scaffolded project path (workspaceRoot/projectName), not the bare workspaceRoot", () => {
     const prompt = composeSetupPrompt("connect_resume", form);
     expect(prompt).toContain("/workspace/root/acme");
-    expect(prompt).toMatch(/user has filled in the \.env file/i);
+    expect(prompt).toMatch(/host has already accepted and persisted the user's credential form/i);
     expect(prompt).toMatch(/validated/i);
+  });
+
+  it("connect_resume: treats credential submission as host-owned evidence and forbids every form of .env inspection", () => {
+    const prompt = composeSetupPrompt("connect_resume", form);
+    expect(prompt).toMatch(/verified host fact/i);
+    expect(prompt).toMatch(/do not inspect \.env in any form/i);
+    for (const command of ["cat", "sed", "cut", "grep", "head", "tail", "awk"]) {
+      expect(prompt).toContain(command);
+    }
+    expect(prompt).toMatch(/do not .*list its keys/i);
+    expect(prompt).toMatch(/let "wren profile add" perform connection validation/i);
   });
 
   it("connect_resume: states no connection profile exists yet and instructs creating it FIRST, before validating", () => {
@@ -76,21 +105,22 @@ describe("composeSetupPrompt", () => {
     expect(prompt).not.toMatch(/^Validate the connection/i);
   });
 
-  it("connect_resume: forbids re-running 'wren context init' and instructs the cwd field for 'wren profile add' (which has no path flag)", () => {
+  it("connect_resume: forbids re-running 'wren context init' and runs 'wren profile add' from the already-bound project directory", () => {
     const prompt = composeSetupPrompt("connect_resume", form);
     expect(prompt).toMatch(/do NOT run "wren context init" again/i);
     expect(prompt).toMatch(/no project-path flag of its own/i);
-    expect(prompt).toContain('cwd field set to "/workspace/root/acme"');
+    expect(prompt).toMatch(/project step is rooted at "\/workspace\/root\/acme"/i);
+    expect(prompt).toMatch(/where the backend supports it, set the exec action's cwd field/i);
     // The anti-pattern ("cd <dir> && ...") is only ever mentioned as what NOT to do.
     expect(prompt).toMatch(/never "cd .* && \.\.\." chaining/i);
   });
 
-  it("connect_resume: gives write and exec the same project cwd with a short conn.profile.yml path", () => {
+  it("connect_resume: keeps conn.profile.yml and .wren-validated project-relative without assuming every backend has a per-action cwd", () => {
     const prompt = composeSetupPrompt("connect_resume", form);
-    expect(prompt).toContain('write action with cwd set to "/workspace/root/acme" and path set exactly to "conn.profile.yml"');
-    expect(prompt).toContain('exec action\'s cwd field set to "/workspace/root/acme"');
-    expect(prompt).toMatch(/do not prepend the workspace path or project name to that write path/i);
-    expect(prompt).toContain('path set exactly to ".wren-validated"');
+    expect(prompt).toMatch(/project-relative path exactly "conn\.profile\.yml"/i);
+    expect(prompt).toMatch(/do not prepend the workspace path or project name/i);
+    expect(prompt).toMatch(/project-relative path exactly "\.wren-validated"/i);
+    expect(prompt).toMatch(/per-action cwd.*only where supported/i);
   });
 
   it("connect_resume: interpolates the selected sourceType (not hardcoded postgres) and tells the agent the profile MUST use it", () => {
@@ -115,25 +145,26 @@ describe("composeSetupPrompt", () => {
     expect(prompt).toMatch(/for any other data source, do not follow that worked example verbatim/i);
   });
 
-  it("context: instructs generate-mdl (+ optional enrich-context), validate+build, and reporting the model count", () => {
+  it("context: instructs generate-mdl, validate+build, and reporting the model count without requiring enrichment", () => {
     const prompt = composeSetupPrompt("context", form);
     expect(prompt).toContain("/workspace/root/acme");
     expect(prompt).toMatch(/generate-mdl skill/i);
-    expect(prompt).toMatch(/enrich-context skill/i);
+    expect(prompt).toMatch(/Cubes and measures are optional enrichment/i);
+    expect(prompt).toMatch(/Do not fetch enrich-context/i);
     expect(prompt).toContain('"wren context validate"');
     expect(prompt).toContain('"wren context build"');
-    // build must run before validate, and the agent reports model + measure counts
-    expect(prompt).toMatch(/"wren context build" BEFORE "wren context validate"/i);
-    expect(prompt).toMatch(/at least ONE measure/i);
-    expect(prompt).toMatch(/report the model and measure counts/i);
+    // The native lifecycle is discovery, validate, then build.
+    expect(prompt).toMatch(/"wren context validate" successfully, THEN run "wren context build" successfully/i);
+    expect(prompt).toMatch(/report the model count/i);
+    expect(prompt).not.toMatch(/at least ONE measure/i);
   });
 
-  it("context: fetches the generate-mdl skill (not onboarding) and carries the same no-redirection/cwd-field rule as connect", () => {
+  it("context: fetches the generate-mdl skill (not onboarding) and carries the same backend-neutral project-relative rule as connect", () => {
     const prompt = composeSetupPrompt("context", form);
     expect(prompt).toContain("wren skills get generate-mdl");
     expect(prompt).not.toContain("wren skills get onboarding");
     expect(prompt).toMatch(/no shell redirection/i);
-    expect(prompt).toMatch(/optional cwd field/i);
+    expect(prompt).toMatch(/turn-level binding or, where the backend exposes it, a per-action cwd field/i);
     // The old wording falsely claimed pipes/chaining were sandbox-blocked; must not recur.
     expect(prompt).not.toMatch(/no pipes/i);
   });
@@ -143,14 +174,57 @@ describe("composeSetupPrompt", () => {
     expect(prompt).not.toMatch(/never ask for or print credential values/i);
   });
 
-  it("context: mandates the exec action's cwd field (set to projectDir) for every wren command, and explains why (.env discovery ignores --path)", () => {
+  it("context: mandates the already-bound project directory for every wren command, and explains why (.env discovery ignores --path)", () => {
     const prompt = composeSetupPrompt("context", form);
-    expect(prompt).toMatch(/cwd field set to "\/workspace\/root\/acme"/i);
-    expect(prompt).toMatch(/never the workspace root/i);
+    expect(prompt).toMatch(/project step is rooted at "\/workspace\/root\/acme"/i);
+    expect(prompt).toMatch(/relative to that project directory/i);
     expect(prompt).toMatch(/\.env auto-discovery only checks the process's current working directory/i);
     expect(prompt).toMatch(/completely ignores --path/i);
-    expect(prompt).toMatch(/DUCKDB_URL/i);
+    // Was `DUCKDB_URL`: a DuckDB variable used to illustrate the point for
+    // every project, including ones that have no such variable.
+    expect(prompt).toMatch(/this project's connection variables as unset/i);
     expect(prompt).toMatch(/that is NOT a real connection failure/i);
+  });
+
+  it("context: gives a safe project-bound zero-MDL discovery recipe and DuckDB directory semantics", () => {
+    const prompt = composeSetupPrompt("context", form);
+    expect(prompt).toMatch(/do NOT run "wren --sql" for schema discovery/i);
+    expect(prompt).toContain("resolve_profile_for_project(Path.cwd(), strict=True)");
+    expect(prompt).toContain("p.pop('datasource')");
+    expect(prompt).not.toContain("\\'");
+    expect(prompt).toContain('c.query(\\"SELECT');
+    expect(prompt).toContain('ordinal_position\\").to_pylist()');
+    expect(prompt).toContain("expand_profile_secrets");
+    expect(prompt).toContain("from wren.connector import get_connector");
+    expect(prompt).toContain(`WREN_PYTHON="$(sed -n '1s/^#!//p' "$(command -v wren)")"`);
+    expect(prompt).toContain('"$WREN_PYTHON" -c');
+    expect(prompt).not.toMatch(/(?:^|[; ])python -c/i);
+    expect(prompt).toContain("information_schema.columns");
+    expect(prompt).toMatch(/without reading or printing \.env or the expanded profile/i);
+    expect(prompt).not.toContain("\n");
+  });
+
+  it("context: sends the DuckDB directory semantics only to a file-backed source", () => {
+    // This paragraph used to go to every project. Setup now offers wren's whole
+    // connector set, so an agent connecting to Postgres was being told about
+    // DUCKDB_URL — advice that cannot apply and names a variable its project
+    // does not have.
+    const duckdb = composeSetupPrompt("context", { ...form, sourceType: "duckdb" });
+    expect(duckdb).toMatch(/DUCKDB_URL is a DIRECTORY containing one or more \.duckdb files/i);
+    expect(duckdb).toMatch(/never pass that directory to duckdb\.connect/i);
+
+    const postgres = composeSetupPrompt("context", { ...form, sourceType: "postgres" });
+    expect(postgres).not.toMatch(/DUCKDB_URL/i);
+    expect(postgres).not.toMatch(/duckdb\.connect/i);
+  });
+
+  it("context: presents the metadata query as a shape to adapt, not as the one true SQL", () => {
+    // `information_schema` is not universal — BigQuery exposes it only as
+    // `<dataset>.INFORMATION_SCHEMA.COLUMNS` and Oracle has none — so the recipe
+    // must not order the agent to run "exactly this" against all 21 connectors.
+    const prompt = composeSetupPrompt("context", { ...form, sourceType: "bigquery" });
+    expect(prompt).not.toMatch(/run exactly this safe metadata query/i);
+    expect(prompt).toMatch(/substitute that source's own metadata catalog/i);
   });
 
   it("context: forbids fabricating placeholder/seed MDL to satisfy the build, and requires ending the turn with error/needs_input instead", () => {
@@ -162,11 +236,11 @@ describe("composeSetupPrompt", () => {
     expect(prompt).toContain("SETUP_STATUS: needs_input");
   });
 
-  it("context: the cwd mandate and no-fabrication instruction are present regardless of which opening branch composed the prompt (resumeFromDisk / resumeSession)", () => {
+  it("context: the project-directory mandate and no-fabrication instruction are present regardless of which opening branch composed the prompt (resumeFromDisk / resumeSession)", () => {
     const disk = composeSetupPrompt("context", form, { resumeFromDisk: true });
     const session = composeSetupPrompt("context", form, { resumeSession: true });
     for (const prompt of [disk, session]) {
-      expect(prompt).toMatch(/cwd field set to "\/workspace\/root\/acme"/i);
+      expect(prompt).toMatch(/project step is rooted at "\/workspace\/root\/acme"/i);
       expect(prompt).toMatch(/never hand-write a placeholder, seed, sample, or otherwise invented model, cube, or metadata file/i);
     }
   });
@@ -182,6 +256,19 @@ describe("composeSetupPrompt", () => {
     expect(prompt).not.toContain("\n");
   });
 
+  it("context: matching retained lifecycle evidence asks only for the remaining ordered suffix", () => {
+    const afterDiscovery = composeSetupPrompt("context", form, { contextLifecycleRecovery: "discovery" });
+    expect(afterDiscovery).toMatch(/do NOT repeat discovery/i);
+    expect(afterDiscovery).toMatch(/run "wren context validate" successfully, THEN run "wren context build" successfully/i);
+    expect(afterDiscovery).not.toContain("resolve_profile_for_project");
+
+    const afterValidate = composeSetupPrompt("context", form, { contextLifecycleRecovery: "validate" });
+    expect(afterValidate).toMatch(/do NOT repeat either/i);
+    expect(afterValidate).toMatch(/remaining operation.*"wren context build"/i);
+    expect(afterValidate).not.toContain("wren skills get generate-mdl");
+    expect(afterValidate).not.toContain("\n");
+  });
+
   it("all three step keys append the SETUP_STATUS terminal-contract instruction", () => {
     for (const stepKey of ["connect", "connect_resume", "context"] as const) {
       const prompt = composeSetupPrompt(stepKey, form);
@@ -194,13 +281,14 @@ describe("composeSetupPrompt", () => {
   it("connect and connect_resume append the credential boundary and never carry a secret placeholder", () => {
     for (const stepKey of ["connect", "connect_resume"] as const) {
       const prompt = composeSetupPrompt(stepKey, form);
-      expect(prompt).toMatch(/never ask for or print credential values/i);
-      expect(prompt).toMatch(/you must never read its values back/i);
+      expect(prompt).toMatch(/never ask for, print, or read credential values/i);
       // The prompt must never mention a credential VALUE, only that none should be printed.
       expect(prompt).not.toMatch(/password\s*[:=]/i);
       expect(prompt).not.toMatch(/api[_-]?key\s*[:=]/i);
       expect(prompt).not.toContain(form.projectName + form.projectName); // sanity: no accidental secret templating
     }
+    expect(composeSetupPrompt("connect", form)).toMatch(/write only an empty \.env template/i);
+    expect(composeSetupPrompt("connect_resume", form)).not.toMatch(/write only an empty \.env template/i);
   });
 
   it("the composed prompt never contains a newline (Mode B's chat is a line-per-turn stdin protocol)", () => {
@@ -310,9 +398,9 @@ describe("composeSetupPrompt: context step's resumeFromDisk inventory", () => {
     const prompt = composeSetupPrompt("context", resumeForm, { resumeFromDisk: true });
     expect(prompt).toMatch(/already fetched the generate-mdl skill/i);
     expect(prompt).not.toContain("wren skills get generate-mdl");
-    // The underlying sandbox rule (no redirection, cwd field) must still be present.
+    // The underlying sandbox rule (no redirection, project-relative execution) must still be present.
     expect(prompt).toMatch(/no shell redirection/i);
-    expect(prompt).toMatch(/optional cwd field/i);
+    expect(prompt).toMatch(/turn-level binding or, where the backend exposes it, a per-action cwd field/i);
   });
 
   it("resumeFromDisk: points the agent at finishing (build/validate), not at starting from discovery", () => {
@@ -321,9 +409,10 @@ describe("composeSetupPrompt: context step's resumeFromDisk inventory", () => {
     expect(prompt).toMatch(/skip re-orientation entirely/i);
     expect(prompt).toMatch(/go straight to finishing/i);
     expect(prompt).not.toMatch(/follow the wren generate-mdl skill \(and, optionally/i);
-    // Shared downstream instructions (build before validate, define a measure, stop) still apply.
-    expect(prompt).toContain('"wren context build" BEFORE "wren context validate"');
-    expect(prompt).toMatch(/at least ONE measure/i);
+    // Shared downstream instructions (validate before build, model-only completion, stop) still apply.
+    expect(prompt).toMatch(/"wren context validate" successfully, THEN run "wren context build" successfully/i);
+    expect(prompt).toMatch(/Cubes and measures are optional enrichment/i);
+    expect(prompt).not.toMatch(/at least ONE measure/i);
   });
 
   it("resumeFromDisk: still never contains a newline (single-line stdin protocol)", () => {

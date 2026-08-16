@@ -65,6 +65,8 @@ interface SessionStoreState {
   publishArtifact: (id: string, artifactEventId: string) => void;
   /** Live-only: refresh the sidebar's session list from the BFF. No-op in fixture mode; keeps the previous list on failure. */
   loadSessions: () => void;
+  /** Create a structured session before entering the Sessions-owned workbench. */
+  startStructuredSession: () => Promise<string>;
   /**
    * Resets the draft slot (`sessionsById`/`backendSessionId`/`streaming`/
    * `streamError` under `DRAFT_SESSION_ID`) after it has converted to a real
@@ -311,6 +313,27 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => ({
       .catch(() => {
         // Best-effort — keep whatever list is already shown on failure.
       });
+  },
+
+  async startStructuredSession() {
+    if (!isBffEnabled()) {
+      const id = nextId('structured-session');
+      const session = emptySession(id);
+      set((s) => ({ sessionsById: { ...s.sessionsById, [id]: session } }));
+      return id;
+    }
+
+    const created = await createSession('New Structured Ask');
+    const session = { ...emptySession(created.id), title: created.title, updatedAt: created.updatedAt };
+    set((s) => ({
+      sessionsById: { ...s.sessionsById, [created.id]: session },
+      backendSessionId: { ...s.backendSessionId, [created.id]: created.id },
+      sessionList: [
+        { id: created.id, title: created.title, updatedAt: created.updatedAt },
+        ...s.sessionList.filter((item) => item.id !== created.id),
+      ],
+    }));
+    return created.id;
   },
 
   clearDraft: () => {

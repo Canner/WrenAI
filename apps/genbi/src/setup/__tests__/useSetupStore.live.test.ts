@@ -6,10 +6,15 @@ vi.mock('@/bff/env', () => ({
 }));
 
 const getAdapterEnvStatus = vi.fn();
+const getSubscriptionLoginStatus = vi.fn();
+const getSubscriptionModelCatalog = vi.fn();
 const getContextOverview = vi.fn();
 const getRuntimeSettings = vi.fn();
+const getRuntimeSettingsReadiness = vi.fn();
+const getRuntimeTierNames = vi.fn();
 const getSetupEnvFields = vi.fn();
 const getSetupMode = vi.fn();
+const getSetupRecovery = vi.fn();
 const getSetupSteps = vi.fn();
 const postSetupCompileBind = vi.fn();
 const postSetupConnectTurn = vi.fn();
@@ -27,10 +32,15 @@ vi.mock('@/bff/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/bff/client')>();
   return {
     getAdapterEnvStatus: (...args: unknown[]) => getAdapterEnvStatus(...args),
+    getSubscriptionLoginStatus: (...args: unknown[]) => getSubscriptionLoginStatus(...args),
+    getSubscriptionModelCatalog: (...args: unknown[]) => getSubscriptionModelCatalog(...args),
     getContextOverview: (...args: unknown[]) => getContextOverview(...args),
     getRuntimeSettings: (...args: unknown[]) => getRuntimeSettings(...args),
+    getRuntimeSettingsReadiness: (...args: unknown[]) => getRuntimeSettingsReadiness(...args),
+    getRuntimeTierNames: (...args: unknown[]) => getRuntimeTierNames(...args),
     getSetupEnvFields: (...args: unknown[]) => getSetupEnvFields(...args),
     getSetupMode: (...args: unknown[]) => getSetupMode(...args),
+    getSetupRecovery: (...args: unknown[]) => getSetupRecovery(...args),
     getSetupSteps: (...args: unknown[]) => getSetupSteps(...args),
     postSetupCompileBind: (...args: unknown[]) => postSetupCompileBind(...args),
     postSetupConnectTurn: (...args: unknown[]) => postSetupConnectTurn(...args),
@@ -87,6 +97,13 @@ function resetStore() {
       steps: connectStepSteps,
       selectedStepKey: 'connect',
       runtimeSettings: fixtureRuntimeSettings,
+      runtimeSettingsGeneration: 0,
+      runtimeSettingsDirty: false,
+      runtimeTierNames: ['cheap', 'strong'],
+      runtimeTierNamesError: undefined,
+      subscriptionModelCatalogs: {},
+      subscriptionModelCatalogLoading: {},
+      subscriptionModelCatalogErrors: {},
       verifyGate: false,
       connectedSourceKey: undefined,
       messages: [fixtureInitialMessage],
@@ -104,6 +121,13 @@ function resetStoreAtContext() {
       steps: contextStepSteps,
       selectedStepKey: 'context',
       runtimeSettings: fixtureRuntimeSettings,
+      runtimeSettingsGeneration: 0,
+      runtimeSettingsDirty: false,
+      runtimeTierNames: ['cheap', 'strong'],
+      runtimeTierNamesError: undefined,
+      subscriptionModelCatalogs: {},
+      subscriptionModelCatalogLoading: {},
+      subscriptionModelCatalogErrors: {},
       verifyGate: false,
       connectedSourceKey: 'postgres',
       messages: [fixtureInitialMessage],
@@ -123,13 +147,23 @@ function lastHandlers(): SetupStreamHandlers {
 beforeEach(() => {
   getAdapterEnvStatus.mockReset();
   getAdapterEnvStatus.mockResolvedValue({ anthropic: false, openaiCompatible: false });
+  getSubscriptionLoginStatus.mockReset();
+  getSubscriptionLoginStatus.mockResolvedValue({ claude: true, codex: false });
+  getSubscriptionModelCatalog.mockReset();
+  getSubscriptionModelCatalog.mockResolvedValue({ version: 1, status: 'ready', provider: 'claude', models: [] });
   getContextOverview.mockReset();
   // Default: an empty project — refreshContextSummary reads only these fields.
-  getContextOverview.mockResolvedValue({ models: [], measures: [], knowledge: { verifiedPairCount: 0 } });
+  getContextOverview.mockResolvedValue({ models: [], relationships: [], measures: [], knowledge: { verifiedPairCount: 0 } });
   getRuntimeSettings.mockReset();
+  getRuntimeSettingsReadiness.mockReset();
+  getRuntimeSettingsReadiness.mockResolvedValue({ valid: true });
+  getRuntimeTierNames.mockReset();
+  getRuntimeTierNames.mockResolvedValue(['cheap', 'strong']);
   getSetupEnvFields.mockReset();
   getSetupMode.mockReset();
   getSetupMode.mockResolvedValue({ mode: 'create' });
+  getSetupRecovery.mockReset();
+  getSetupRecovery.mockResolvedValue({});
   getSetupSteps.mockReset();
   postSetupCompileBind.mockReset();
   postSetupConnectTurn.mockReset();
@@ -154,6 +188,36 @@ const adoptModeRuntimeSteps = fixtureSetupSteps.map((step) =>
 );
 
 describe('useSetupStore (live mode) — saveRuntimeSettings step advance is mode-aware', () => {
+  it('submits subscription-only model rows, dropping stale tiers and hybrid adapter fields', async () => {
+    putRuntimeSettings.mockResolvedValueOnce({ ...fixtureRuntimeSettings, warnings: [] });
+    useSetupStore.setState({
+      steps: fixtureSetupSteps,
+      selectedStepKey: 'runtime',
+      runtimeTierNames: ['cheap', 'strong'],
+      runtimeSettings: {
+        ...fixtureRuntimeSettings,
+        tierModels: [
+          { tier: 'cheap', adapter: 'local', model: 'cheap-model', baseURL: 'http://localhost:11434/v1' },
+          { tier: 'strong', adapter: 'openai-compatible', model: 'strong-model', baseURL: 'https://api.example.com/v1' },
+          { tier: 'stale', model: 'cannot-edit-this-row' },
+        ],
+      },
+    }, false);
+
+    useSetupStore.getState().saveRuntimeSettings();
+
+    await vi.waitFor(() => expect(putRuntimeSettings).toHaveBeenCalledTimes(1));
+    expect(putRuntimeSettings).toHaveBeenCalledWith(expect.objectContaining({
+      authMode: 'subscription',
+      hybrid: false,
+      apiKeyAdapter: 'anthropic',
+      tierModels: [
+        { tier: 'cheap', model: 'cheap-model' },
+        { tier: 'strong', model: 'strong-model' },
+      ],
+    }));
+  });
+
   it('create mode: advances runtime → connect (steps + selectedStepKey)', async () => {
     putRuntimeSettings.mockResolvedValueOnce({ ...fixtureRuntimeSettings, warnings: [] });
     useSetupStore.setState({ steps: fixtureSetupSteps, selectedStepKey: 'runtime' }, false);
@@ -425,18 +489,18 @@ describe('useSetupStore (live mode) — buildContext terminal gating', () => {
     postSetupContextTurn.mockResolvedValueOnce({ sessionId: 's1', turnId: 't1' });
     getContextOverview.mockResolvedValueOnce({
       models: [{}, {}, {}],
-      measures: [{}, {}],
+      relationships: [{}, {}],
       knowledge: { verifiedPairCount: 1 },
     });
     // Before build: nothing discovered.
-    expect(useSetupStore.getState().contextSummary).toEqual({ models: 0, measures: 0, knowledgeNotes: 0 });
+    expect(useSetupStore.getState().contextSummary).toEqual({ models: 0, relationships: 0 });
 
     useSetupStore.getState().buildContext();
     await vi.waitFor(() => expect(setupStream).toHaveBeenCalled());
     lastHandlers().onEvent?.({ id: 'e1', kind: 'setup_status', status: 'ok', message: 'Context built.' });
 
     await vi.waitFor(() => {
-      expect(useSetupStore.getState().contextSummary).toEqual({ models: 3, measures: 2, knowledgeNotes: 1 });
+      expect(useSetupStore.getState().contextSummary).toEqual({ models: 3, relationships: 2 });
     });
   });
 
@@ -511,6 +575,240 @@ describe('useSetupStore (live mode) — buildContext terminal gating', () => {
 });
 
 describe('useSetupStore (live mode) — hydrate resumes the in-progress step', () => {
+  it('hydrates a persisted Runtime correction and clears it when Reset restores first-run settings', async () => {
+    useSetupStore.setState({
+      steps: fixtureSetupSteps,
+      selectedStepKey: 'runtime',
+      runtimeSettingsDirty: false,
+      runtimeSettingsGeneration: 0,
+    }, false);
+    getRuntimeSettings.mockResolvedValueOnce({
+      ...fixtureRuntimeSettings,
+      subscriptionDriverModel: 'default',
+      tierModels: [{ tier: 'cheap', model: 'haiku' }, { tier: 'strong', model: 'default' }],
+    });
+    getRuntimeSettingsReadiness.mockResolvedValueOnce({ valid: false, correction: 'Runtime needs correction in Setup: Claude per-step tier "strong" must use sonnet.' });
+    getSetupSteps.mockResolvedValueOnce(fixtureSetupSteps);
+    postSetupReset.mockResolvedValueOnce({ ok: true, steps: fixtureSetupSteps, runtimeSettings: fixtureRuntimeSettings });
+
+    useSetupStore.getState().hydrate();
+    await vi.waitFor(() => expect(useSetupStore.getState().runtimeSettingsError).toContain('Runtime needs correction in Setup'));
+
+    useSetupStore.getState().resetSetup();
+    await vi.waitFor(() => expect(useSetupStore.getState().runtimeSettingsError).toBeUndefined());
+    expect(useSetupStore.getState().runtimeSettings.tierModels).toEqual(fixtureRuntimeSettings.tierModels);
+  });
+
+  it('hydrates a failed connect recovery without an SDK session anchor and retries its exact route', async () => {
+    const failure = {
+      attempt: 'connect' as const,
+      projectName: 'acme',
+      sourceType: 'postgres',
+      error: 'PASSWORD=[REDACTED]',
+      workLog: [{ id: 'failed-call', label: 'setup_execution', state: 'error' as const, kind: 'tool' as const, inspection: { error: 'PASSWORD=[REDACTED]' } }],
+    };
+    getSetupRecovery.mockResolvedValueOnce({ failure });
+    getSetupSteps.mockResolvedValueOnce(fixtureSetupSteps);
+    getRuntimeSettings.mockResolvedValueOnce(fixtureRuntimeSettings);
+    postSetupConnectTurn.mockResolvedValueOnce({ sessionId: 's1', turnId: 't1' });
+
+    useSetupStore.getState().hydrate();
+    await vi.waitFor(() => expect(useSetupStore.getState().connectStream.failure).toEqual(failure));
+    expect(useSetupStore.getState().selectedStepKey).toBe('connect');
+
+    useSetupStore.getState().retryConnectFailure();
+    // A retry carries no variant: the BFF reuses the shape already on record for
+    // this project and source, so the retry cannot be rejected for a choice the
+    // user already made.
+    await vi.waitFor(() => expect(postSetupConnectTurn).toHaveBeenCalledWith('acme', 'postgres', undefined));
+    expect(useSetupStore.getState().connectStream.failure).toBeUndefined();
+    expect(useSetupStore.getState().steps.find((step) => step.key === 'connect')?.state).not.toBe('done');
+  });
+
+  it('hydrates a failed connect_resume recovery and dispatches /connect/resume instead of a fresh connect', async () => {
+    getSetupRecovery.mockResolvedValueOnce({
+      failure: { attempt: 'connect_resume', projectName: 'acme', sourceType: 'postgres', error: 'safe failure', workLog: [] },
+    });
+    getSetupSteps.mockResolvedValueOnce(fixtureSetupSteps);
+    getRuntimeSettings.mockResolvedValueOnce(fixtureRuntimeSettings);
+    postSetupResume.mockResolvedValueOnce({ sessionId: 's1', turnId: 't1' });
+
+    useSetupStore.getState().hydrate();
+    await vi.waitFor(() => expect(useSetupStore.getState().connectStream.failure?.attempt).toBe('connect_resume'));
+    useSetupStore.getState().retryConnectFailure();
+    await vi.waitFor(() => expect(postSetupResume).toHaveBeenCalledTimes(1));
+    expect(postSetupConnectTurn).not.toHaveBeenCalled();
+  });
+
+  it('hydrates a failed context recovery and retries context without advancing progress', async () => {
+    getSetupRecovery.mockResolvedValueOnce({
+      failure: { attempt: 'context', projectName: 'acme', sourceType: 'postgres', error: 'safe failure', workLog: [] },
+    });
+    getSetupSteps.mockResolvedValueOnce(contextStepSteps);
+    getRuntimeSettings.mockResolvedValueOnce(fixtureRuntimeSettings);
+    postSetupContextTurn.mockResolvedValueOnce({ sessionId: 's1', turnId: 't1' });
+
+    useSetupStore.getState().hydrate();
+    await vi.waitFor(() => expect(useSetupStore.getState().contextStream.failure?.attempt).toBe('context'));
+    useSetupStore.getState().retryContextFailure();
+    await vi.waitFor(() => expect(postSetupContextTurn).toHaveBeenCalledTimes(1));
+    expect(useSetupStore.getState().steps.find((step) => step.key === 'context')?.state).not.toBe('done');
+  });
+
+  it('hydrates a paused connect needs_input recovery with its public session, terminal, form, and worklog', async () => {
+    const workLog = [{ id: 'terminal-contract', label: 'Terminal contract', state: 'error' as const, kind: 'decision' as const }];
+    getSetupRecovery.mockResolvedValueOnce({
+      sessionId: 'bff-setup-session',
+      needsInput: { attempt: 'connect_resume', projectName: 'acme', sourceType: 'postgres', message: 'credentials are required', workLog },
+    });
+    getSetupSteps.mockResolvedValueOnce(fixtureSetupSteps);
+    getRuntimeSettings.mockResolvedValueOnce(fixtureRuntimeSettings);
+
+    useSetupStore.getState().hydrate();
+    await vi.waitFor(() => expect(useSetupStore.getState().connectStream.needsInput).toBe(true));
+    const stream = useSetupStore.getState().connectStream;
+    expect(useSetupStore.getState().selectedStepKey).toBe('connect');
+    expect(stream).toMatchObject({
+      sessionId: 'bff-setup-session',
+      sourceType: 'postgres',
+      projectName: 'acme',
+      workLog,
+      terminal: { kind: 'setup_status', status: 'needs_input', message: 'credentials are required' },
+    });
+  });
+
+  it('hydrates the host credential card together with a later connect_resume failure', async () => {
+    const failure = { attempt: 'connect_resume' as const, projectName: 'acme', sourceType: 'duckdb', error: 'guarded tool failed', workLog: [] };
+    const pausedWorkLog = [{ id: 'scaffold', label: 'setup.setup_execution', state: 'done' as const, kind: 'tool' as const }];
+    getSetupRecovery.mockResolvedValueOnce({
+      sessionId: 'bff-setup-session',
+      failure,
+      needsInput: { attempt: 'connect', projectName: 'acme', sourceType: 'duckdb', message: 'user action required', workLog: pausedWorkLog },
+    });
+    getSetupSteps.mockResolvedValueOnce(fixtureSetupSteps);
+    getRuntimeSettings.mockResolvedValueOnce(fixtureRuntimeSettings);
+
+    useSetupStore.getState().hydrate();
+    await vi.waitFor(() => expect(useSetupStore.getState().connectStream.needsInput).toBe(true));
+    expect(useSetupStore.getState().connectStream).toMatchObject({
+      sessionId: 'bff-setup-session',
+      projectName: 'acme',
+      sourceType: 'duckdb',
+      failure,
+      needsInput: true,
+      workLog: pausedWorkLog,
+      terminal: { status: 'needs_input', message: 'user action required' },
+    });
+  });
+
+  it('hydrates a paused context needs_input recovery on the context step', async () => {
+    const workLog = [{ id: 'context-pause', label: 'setup_execution', state: 'error' as const, kind: 'tool' as const }];
+    getSetupRecovery.mockResolvedValueOnce({
+      sessionId: 'bff-context-session',
+      needsInput: { attempt: 'context', projectName: 'acme', sourceType: 'postgres', message: 'context needs user input', workLog },
+    });
+    getSetupSteps.mockResolvedValueOnce(contextStepSteps);
+    getRuntimeSettings.mockResolvedValueOnce(fixtureRuntimeSettings);
+
+    useSetupStore.getState().hydrate();
+    await vi.waitFor(() => expect(useSetupStore.getState().contextStream.needsInput).toBe(true));
+    expect(useSetupStore.getState().selectedStepKey).toBe('context');
+    expect(useSetupStore.getState().contextStream).toMatchObject({
+      sessionId: 'bff-context-session',
+      workLog,
+      terminal: { kind: 'setup_status', status: 'needs_input', message: 'context needs user input' },
+    });
+  });
+
+  it('hydrates a persisted max-turn decision so reload keeps its continue/stop route', async () => {
+    getSetupRecovery.mockResolvedValueOnce({
+      sessionId: 'setup-session',
+      decision: { kind: 'max_turns_continue', options: [{ id: 'continue', label: 'Continue (+120 turns)' }, { id: 'stop', label: 'Stop' }] },
+    });
+    getSetupSteps.mockResolvedValueOnce(contextStepSteps);
+    getRuntimeSettings.mockResolvedValueOnce(fixtureRuntimeSettings);
+
+    useSetupStore.getState().hydrate();
+    await vi.waitFor(() => expect(useSetupStore.getState().contextStream.decision?.kind).toBe('max_turns_continue'));
+    expect(useSetupStore.getState().selectedStepKey).toBe('context');
+    expect(useSetupStore.getState().contextStream.sessionId).toBe('setup-session');
+  });
+
+  it('hydrates a persisted schema-discovery retry so reload keeps its retry route', async () => {
+    getSetupRecovery.mockResolvedValueOnce({
+      sessionId: 'setup-session',
+      decision: { kind: 'schema_discovery_retry', options: [{ id: 'retry', label: 'Retry schema discovery' }, { id: 'stop', label: 'Stop' }] },
+    });
+    getSetupSteps.mockResolvedValueOnce(contextStepSteps);
+    getRuntimeSettings.mockResolvedValueOnce(fixtureRuntimeSettings);
+    postSetupDecision.mockResolvedValueOnce({ sessionId: 'setup-session', turnId: 'retry-turn' });
+
+    useSetupStore.getState().hydrate();
+    await vi.waitFor(() => expect(useSetupStore.getState().contextStream.decision?.kind).toBe('schema_discovery_retry'));
+    useSetupStore.getState().resolveContextDecision('retry');
+
+    await vi.waitFor(() => expect(postSetupDecision).toHaveBeenCalledWith('setup-session', 'retry'));
+    expect(setupStream).toHaveBeenCalledWith('setup-session', 'retry-turn', expect.anything());
+    expect(useSetupStore.getState().contextStream.decision).toBeUndefined();
+  });
+
+  it('retains hydrated needs-input project metadata when the resumed connect turn fails', async () => {
+    getSetupRecovery.mockResolvedValueOnce({
+      sessionId: 'setup-session',
+      needsInput: { attempt: 'connect_resume', projectName: 'acme', sourceType: 'postgres', message: 'credentials are required', workLog: [] },
+    });
+    getSetupSteps.mockResolvedValueOnce(fixtureSetupSteps);
+    getRuntimeSettings.mockResolvedValueOnce(fixtureRuntimeSettings);
+    postSetupResume.mockResolvedValueOnce({ sessionId: 'setup-session', turnId: 'resume-turn' });
+
+    useSetupStore.getState().hydrate();
+    await vi.waitFor(() => expect(useSetupStore.getState().connectStream.needsInput).toBe(true));
+    useSetupStore.getState().resumeConnect();
+    await vi.waitFor(() => expect(setupStream).toHaveBeenCalledWith('setup-session', 'resume-turn', expect.anything()));
+    lastHandlers().onError?.('repair still failed');
+
+    expect(useSetupStore.getState().connectStream.failure).toMatchObject({
+      attempt: 'connect_resume', projectName: 'acme', sourceType: 'postgres', error: 'repair still failed',
+    });
+  });
+
+  it('does not let delayed runtime hydration overwrite a provider switch or fetch the old catalog', async () => {
+    let resolveRuntimeSettings: ((value: typeof fixtureRuntimeSettings) => void) | undefined;
+    getRuntimeSettings.mockImplementationOnce(() => new Promise((resolve) => { resolveRuntimeSettings = resolve; }));
+    getSetupSteps.mockResolvedValueOnce(fixtureSetupSteps);
+    getSubscriptionModelCatalog.mockResolvedValueOnce({ version: 1, status: 'ready', provider: 'codex', models: [{ model: 'gpt-5.6-sol', displayName: 'GPT-5.6 Sol' }] });
+
+    useSetupStore.setState({ steps: fixtureSetupSteps, selectedStepKey: 'runtime', runtimeSettingsDirty: false, runtimeSettingsGeneration: 0 }, false);
+    useSetupStore.getState().hydrate();
+    useSetupStore.getState().selectSubscriptionProvider('codex');
+    await vi.waitFor(() => expect(useSetupStore.getState().subscriptionModelCatalogs.codex).toMatchObject({ status: 'ready' }));
+
+    resolveRuntimeSettings?.({ ...fixtureRuntimeSettings, subscriptionProvider: 'claude', subscriptionDriverModel: 'claude-opus' });
+    await Promise.resolve();
+
+    expect(useSetupStore.getState().runtimeSettings.subscriptionProvider).toBe('codex');
+    expect(useSetupStore.getState().runtimeSettings.subscriptionDriverModel).toBe('');
+    expect(getSubscriptionModelCatalog).toHaveBeenCalledTimes(1);
+    expect(getSubscriptionModelCatalog).toHaveBeenCalledWith('codex', false);
+  });
+
+  it('fails tier hydration closed instead of retaining fixture-derived rows', async () => {
+    useSetupStore.setState({
+      steps: fixtureSetupSteps,
+      selectedStepKey: 'runtime',
+      runtimeTierNames: ['fixture-tier'],
+      runtimeTierNamesError: undefined,
+    }, false);
+    getSetupSteps.mockResolvedValueOnce(fixtureSetupSteps);
+    getRuntimeSettings.mockResolvedValueOnce(fixtureRuntimeSettings);
+    getRuntimeTierNames.mockRejectedValueOnce(new Error('compile unavailable'));
+
+    useSetupStore.getState().hydrate();
+
+    await vi.waitFor(() => expect(useSetupStore.getState().runtimeTierNamesError).toBe('compile unavailable'));
+    expect(useSetupStore.getState().runtimeTierNames).toEqual([]);
+  });
+
   it('restores selectedStepKey from the server steps so a reload does not snap back to runtime', async () => {
     // Pristine store, as after a full page reload mid-flow: runtime current,
     // the rest todo, showing the runtime card.
@@ -544,6 +842,34 @@ describe('useSetupStore (live mode) — hydrate resumes the in-progress step', (
     await vi.waitFor(() => {
       expect(useSetupStore.getState().selectedStepKey).toBe('context');
     });
+  });
+
+  it('populates runtimeTierNames from the BFF even when mounting mid-flow (a step already done)', async () => {
+    // resetStore() already leaves connect step 'done' — confirm that precondition,
+    // since it is exactly the case the pristine gate used to discard.
+    expect(useSetupStore.getState().steps.some((st) => st.state === 'done')).toBe(true);
+    useSetupStore.setState({ runtimeTierNames: [], runtimeTierNamesError: undefined }, false);
+    getSetupSteps.mockResolvedValueOnce(connectStepSteps);
+    getRuntimeSettings.mockResolvedValueOnce(fixtureRuntimeSettings);
+    getRuntimeTierNames.mockResolvedValueOnce(['cheap', 'strong']);
+
+    useSetupStore.getState().hydrate();
+
+    await vi.waitFor(() => expect(useSetupStore.getState().runtimeTierNames).toEqual(['cheap', 'strong']));
+    expect(useSetupStore.getState().runtimeTierNamesError).toBeUndefined();
+  });
+
+  it('surfaces a failing tier fetch as runtimeTierNamesError even when mounting mid-flow, instead of a silent empty list', async () => {
+    expect(useSetupStore.getState().steps.some((st) => st.state === 'done')).toBe(true);
+    useSetupStore.setState({ runtimeTierNames: ['stale-tier'], runtimeTierNamesError: undefined }, false);
+    getSetupSteps.mockResolvedValueOnce(connectStepSteps);
+    getRuntimeSettings.mockResolvedValueOnce(fixtureRuntimeSettings);
+    getRuntimeTierNames.mockRejectedValueOnce(new Error('compile unavailable'));
+
+    useSetupStore.getState().hydrate();
+
+    await vi.waitFor(() => expect(useSetupStore.getState().runtimeTierNamesError).toBe('compile unavailable'));
+    expect(useSetupStore.getState().runtimeTierNames).toEqual([]);
   });
 });
 
@@ -864,5 +1190,183 @@ describe('useSetupStore (live mode) — resetSetup', () => {
     expect(s.connectedSourceKey).toBeUndefined();
     expect(s.steps.some((st) => st.state === 'done')).toBe(false);
     expect(postSetupReset).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-detects BFF subscription login after reset instead of retaining its safe optimistic false state', async () => {
+    postSetupReset.mockResolvedValueOnce({
+      ok: true,
+      steps: fixtureSetupSteps,
+      runtimeSettings: fixtureRuntimeSettings,
+    });
+    getSubscriptionLoginStatus.mockResolvedValueOnce({ claude: true, codex: true });
+    useSetupStore.setState({ subscriptionLoginStatus: { claude: false, codex: false } });
+
+    useSetupStore.getState().resetSetup();
+
+    // Before the reset response, the form safely reports no login rather than
+    // trusting the prior state; completion must replace that stale false view.
+    expect(useSetupStore.getState().subscriptionLoginStatus).toEqual({ claude: false, codex: false });
+    await vi.waitFor(() => expect(getSubscriptionLoginStatus).toHaveBeenCalledTimes(1));
+    expect(useSetupStore.getState().subscriptionLoginStatus).toEqual({ claude: true, codex: true });
+    expect(useSetupStore.getState().runtimeSettings.subscriptionDriverModel).toBeUndefined();
+    expect(useSetupStore.getState().runtimeSettings.apiKeyModel).toBeUndefined();
+    expect(useSetupStore.getState().runtimeSettings.tierModels.every((row) => row.model === '')).toBe(true);
+  });
+
+  it('keeps the safe logged-out reset state when BFF login re-detection fails', async () => {
+    postSetupReset.mockResolvedValueOnce({
+      ok: true,
+      steps: fixtureSetupSteps,
+      runtimeSettings: fixtureRuntimeSettings,
+    });
+    getSubscriptionLoginStatus.mockRejectedValueOnce(new Error('BFF temporarily unavailable'));
+    useSetupStore.setState({
+      subscriptionLoginStatus: { claude: true, codex: true },
+      runtimeSettings: {
+        ...fixtureRuntimeSettings,
+        subscriptionDriverModel: 'previous-driver',
+        apiKeyModel: 'previous-default',
+        tierModels: [
+          { tier: 'cheap', model: 'previous-cheap' },
+          { tier: 'strong', model: 'previous-strong' },
+        ],
+      },
+    });
+
+    useSetupStore.getState().resetSetup();
+
+    await vi.waitFor(() => expect(getSubscriptionLoginStatus).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    expect(useSetupStore.getState().subscriptionLoginStatus).toEqual({ claude: false, codex: false });
+    expect(useSetupStore.getState().runtimeSettings.subscriptionDriverModel).toBeUndefined();
+    expect(useSetupStore.getState().runtimeSettings.apiKeyModel).toBeUndefined();
+    expect(useSetupStore.getState().runtimeSettings.tierModels.every((row) => row.model === '')).toBe(true);
+    // A rejection escaping the store would fail this Vitest test as an
+    // unhandled async error; reaching here proves the store consumed it.
+  });
+
+  it('re-fetches compiled tier names after the server reset succeeds, instead of leaving a stale/empty list', async () => {
+    postSetupReset.mockResolvedValueOnce({
+      ok: true,
+      steps: fixtureSetupSteps,
+      runtimeSettings: fixtureRuntimeSettings,
+    });
+    getRuntimeTierNames.mockResolvedValueOnce(['cheap', 'strong']);
+    useSetupStore.setState({ runtimeTierNames: [], runtimeTierNamesError: 'stale error' });
+
+    useSetupStore.getState().resetSetup();
+
+    await vi.waitFor(() => expect(useSetupStore.getState().runtimeTierNames).toEqual(['cheap', 'strong']));
+    expect(useSetupStore.getState().runtimeTierNamesError).toBeUndefined();
+  });
+
+  it('surfaces a failing tier re-fetch during reset as runtimeTierNamesError, instead of a silent empty list', async () => {
+    postSetupReset.mockResolvedValueOnce({
+      ok: true,
+      steps: fixtureSetupSteps,
+      runtimeSettings: fixtureRuntimeSettings,
+    });
+    getRuntimeTierNames.mockRejectedValueOnce(new Error('compile unavailable'));
+    useSetupStore.setState({ runtimeTierNames: ['cheap', 'strong'], runtimeTierNamesError: undefined });
+
+    useSetupStore.getState().resetSetup();
+
+    await vi.waitFor(() => expect(useSetupStore.getState().runtimeTierNamesError).toBe('compile unavailable'));
+    expect(useSetupStore.getState().runtimeTierNames).toEqual([]);
+  });
+});
+
+describe('useSetupStore (live mode) — subscription model catalogs', () => {
+  it('loads the selected provider catalog, refreshes it, and preserves explicit free-text models without persisting catalog metadata', async () => {
+    getSubscriptionModelCatalog
+      .mockResolvedValueOnce({ version: 1, status: 'ready', provider: 'claude', models: [{ model: 'claude-sonnet', displayName: 'Claude Sonnet' }] })
+      .mockResolvedValueOnce({ version: 1, status: 'ready', provider: 'claude', models: [{ model: 'claude-opus', displayName: 'Claude Opus' }] });
+
+    useSetupStore.getState().loadSubscriptionModelCatalog('claude');
+    await vi.waitFor(() => expect(useSetupStore.getState().subscriptionModelCatalogs.claude).toMatchObject({ status: 'ready' }));
+    useSetupStore.getState().loadSubscriptionModelCatalog('claude', true);
+    await vi.waitFor(() => expect(getSubscriptionModelCatalog).toHaveBeenCalledWith('claude', true));
+    expect(useSetupStore.getState().subscriptionModelCatalogs.claude).toMatchObject({ models: [{ model: 'claude-opus' }] });
+
+    useSetupStore.getState().updateRuntimeSettings({
+      subscriptionDriverModel: 'custom-driver',
+      apiKeyModel: 'custom-default',
+      tierModels: [
+        { tier: 'cheap', model: 'custom-cheap' },
+        { tier: 'strong', model: 'custom-strong' },
+      ],
+    });
+    putRuntimeSettings.mockResolvedValueOnce({ ...fixtureRuntimeSettings, warnings: [] });
+    useSetupStore.getState().saveRuntimeSettings();
+    await vi.waitFor(() => expect(putRuntimeSettings).toHaveBeenCalledTimes(1));
+    expect(putRuntimeSettings.mock.calls[0]?.[0]).toMatchObject({
+      subscriptionDriverModel: 'custom-driver',
+      apiKeyModel: '',
+      tierModels: [
+        { tier: 'cheap', model: 'custom-cheap' },
+        { tier: 'strong', model: 'custom-strong' },
+      ],
+    });
+    expect(putRuntimeSettings.mock.calls[0]?.[0]).not.toHaveProperty('subscriptionModelCatalogs');
+  });
+
+  it.each(['byo', 'local'] as const)('normalizes hydrated %s settings to the Setup subscription payload without changing the hidden default contract elsewhere', async (authMode) => {
+    useSetupStore.setState({
+      runtimeSettings: {
+        ...fixtureRuntimeSettings,
+        authMode,
+        subscriptionProvider: 'claude',
+        subscriptionDriverModel: 'claude-opus',
+        apiKeyModel: 'legacy-default',
+        tierModels: [
+          { tier: 'cheap', model: 'claude-haiku' },
+          { tier: 'strong', model: 'claude-sonnet' },
+        ],
+      },
+    });
+    putRuntimeSettings.mockResolvedValueOnce({ ...fixtureRuntimeSettings, warnings: [] });
+
+    useSetupStore.getState().saveRuntimeSettings();
+
+    await vi.waitFor(() => expect(putRuntimeSettings).toHaveBeenCalledTimes(1));
+    expect(putRuntimeSettings.mock.calls[0]?.[0]).toMatchObject({
+      authMode: 'subscription',
+      hybrid: false,
+      apiKeyModel: '',
+      subscriptionDriverModel: 'claude-opus',
+      tierModels: [
+        { tier: 'cheap', model: 'claude-haiku' },
+        { tier: 'strong', model: 'claude-sonnet' },
+      ],
+    });
+  });
+
+  it('clears prior provider values and discards a stale old-provider response after switching', async () => {
+    let resolveClaude: ((value: unknown) => void) | undefined;
+    getSubscriptionModelCatalog.mockImplementationOnce(() => new Promise((resolve) => { resolveClaude = resolve; }));
+    useSetupStore.getState().loadSubscriptionModelCatalog('claude');
+
+    getSubscriptionModelCatalog.mockResolvedValueOnce({ version: 1, status: 'ready', provider: 'codex', models: [{ model: 'gpt-5.6-sol', displayName: 'GPT-5.6 Sol' }] });
+    useSetupStore.getState().selectSubscriptionProvider('codex');
+    await vi.waitFor(() => expect(useSetupStore.getState().subscriptionModelCatalogs.codex).toMatchObject({ status: 'ready' }));
+    resolveClaude?.({ version: 1, status: 'ready', provider: 'claude', models: [{ model: 'claude-opus', displayName: 'Claude Opus' }] });
+    await Promise.resolve();
+
+    const state = useSetupStore.getState();
+    expect(state.runtimeSettings.subscriptionProvider).toBe('codex');
+    expect(state.runtimeSettings.subscriptionDriverModel).toBe('');
+    expect(state.runtimeSettings.apiKeyModel).toBe('');
+    expect(state.runtimeSettings.tierModels.every((row) => row.model === undefined)).toBe(true);
+    expect(state.subscriptionModelCatalogs.claude).toBeUndefined();
+  });
+
+  it('keeps catalog failure visible and retryable without blocking manually configured save', async () => {
+    getSubscriptionModelCatalog
+      .mockResolvedValueOnce({ version: 1, status: 'unavailable', provider: 'claude', code: 'runtime_unavailable', retryable: true })
+      .mockResolvedValueOnce({ version: 1, status: 'ready', provider: 'claude', models: [] });
+    useSetupStore.getState().loadSubscriptionModelCatalog('claude');
+    await vi.waitFor(() => expect(useSetupStore.getState().subscriptionModelCatalogErrors.claude).toBe('runtime_unavailable'));
+    useSetupStore.getState().loadSubscriptionModelCatalog('claude', true);
+    await vi.waitFor(() => expect(useSetupStore.getState().subscriptionModelCatalogErrors.claude).toBeUndefined());
   });
 });

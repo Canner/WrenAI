@@ -5,6 +5,8 @@ import type { AgentEvent } from "../events/index.js";
 import type { AdapterSpec } from "../providers/index.js";
 import type { RunAgentResult } from "../session/index.js";
 import type { McpServerConfigMap } from "../tools/index.js";
+import type { ResolvedCli } from "./agent-sdk-cli.js";
+import type { CodexManifestModels } from "./codex-local-manifest.js";
 
 /**
  * Mode A ("api-key" | "local" | "gateway"): compile the profile to a vercel
@@ -160,6 +162,8 @@ export interface ModeBOptions {
    * flag) when unset, which is the pre-existing behavior.
    */
   readonly resumeSessionId?: string;
+  /** Cancels the owned dispatcher process without falling back to another vendor. */
+  readonly signal?: AbortSignal;
 }
 
 export interface ModeBResult {
@@ -176,6 +180,37 @@ export interface ModeBResult {
 }
 
 export type ModeBExecutor = (options: ModeBOptions) => Promise<ModeBResult>;
+
+/** Codex subscription Ask runs through warble-codex-local, never the Claude Mode B dispatcher. */
+export interface CodexAskOptions {
+  readonly authChoice: Extract<AuthChoice, { mode: "subscription" }> & { readonly provider: "codex" };
+  readonly profileSource: string;
+  readonly userProject: string;
+  readonly question: string;
+  readonly deployment?: Deployment;
+  readonly warbleBin?: string;
+  readonly workDir?: string;
+  /** Test/integration override for an already-compiled native IR. */
+  readonly irPath?: string;
+  readonly agentId?: string;
+  readonly onEvent?: (event: AgentEvent) => void;
+  readonly codexModels?: CodexManifestModels | (() => CodexManifestModels);
+  readonly codexHome?: string;
+  readonly codexLocalBin?: string;
+  readonly codexLocalCli?: ResolvedCli;
+  readonly codexBin?: string;
+  readonly mcpServer?: ResolvedCli;
+  readonly timeoutMs?: number;
+  /** Test-only outer subprocess watchdog override; production is dispatcher timeout plus cleanup grace. */
+  readonly processTimeoutMs?: number;
+  readonly signal?: AbortSignal;
+}
+
+export interface CodexAskResult {
+  readonly finalText: string;
+}
+
+export type CodexAskExecutor = (options: CodexAskOptions) => Promise<CodexAskResult>;
 
 /**
  * Options for the `route()` seam. `modeA`/`modeB` are injectable executors —
@@ -198,6 +233,7 @@ export interface RouteOptions {
   readonly deployment?: Deployment;
   readonly modeA?: ModeAExecutor;
   readonly modeB?: ModeBExecutor;
+  readonly codexAsk?: CodexAskExecutor;
   /** Passed through to the default Mode A executor; see `ModeAOptions.model`. */
   readonly model?: string;
   readonly warbleBin?: string;
@@ -220,8 +256,16 @@ export interface RouteOptions {
    * `"answer_query"` in both modes when unset.
    */
   readonly agentId?: string;
-  /** Mode B only; see `ModeBOptions.chatTimeoutMs`. Ignored by Mode A. */
+  /** Subscription subprocess timeout: Claude chat or Codex Ask. Ignored by Mode A. */
   readonly chatTimeoutMs?: number;
+  /** Codex subscription Ask-only configuration. */
+  readonly codexModels?: CodexManifestModels | (() => CodexManifestModels);
+  readonly codexHome?: string;
+  readonly codexLocalBin?: string;
+  readonly codexLocalCli?: ResolvedCli;
+  readonly codexBin?: string;
+  readonly codexMcpServer?: ResolvedCli;
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -234,4 +278,5 @@ export interface RouteOptions {
  */
 export type RouteResult =
   | ({ readonly backend: "agent"; readonly warnings: readonly string[] } & RunAgentResult)
-  | ({ readonly backend: "agent-sdk"; readonly warnings: readonly string[] } & ModeBResult);
+  | ({ readonly backend: "agent-sdk"; readonly warnings: readonly string[] } & ModeBResult)
+  | ({ readonly backend: "codex-local"; readonly warnings: readonly string[] } & CodexAskResult);

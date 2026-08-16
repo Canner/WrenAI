@@ -10,16 +10,28 @@
  */
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { AgentEvent, AuthChoice, Bundle, RouteOptions, RouteResult, SetupStepRunner } from "../harness/index.js";
+import type { AgentEvent, AuthChoice, Bundle, LoginProbe, RouteOptions, RouteResult, SetupStepRunner, SetupTerminalResult } from "../harness/index.js";
+import type { SubscriptionModelCatalog, SubscriptionProvider } from "./wire-types.js";
 import {
   BUILD_CONTEXT_AGENT_ID,
+  contextLifecycleIdentityFingerprint,
   DEFAULT_SETUP_MAX_TURNS,
   ModeBSessionError,
   parseSetupTerminal,
+  recordedContextLifecyclePrefix,
   resolveArtifactsDir,
   WarbleCommandFailedError,
 } from "../harness/index.js";
 import { newId, type ArtifactRow, type PendingDecisionPayload, type SessionRow, type Store, type TurnRow } from "./db.js";
+import type { EnrichmentApprovalProvider, EnrichmentApplyRunner, EnrichmentRunner } from "./enrichment.js";
+import type { verifyProposal } from "./enrichment-verify.js";
+import type { EnrichmentBinding } from "./enrichment.js";
+import type { InteractiveTarget, InteractiveTargetReadiness, InteractiveTerminalSession, PreparedInteractiveHandoff } from "./interactive-terminal.js";
+import type { NativeSessionService } from "./native-sessions.js";
+import type { NativeArtifactService } from "./native-artifacts.js";
+import type { NativePurpose } from "./native-dispatch-registry.js";
+import type { LaunchAttestationPublic } from "./launch-attestation.js";
+import { assertRuntimeSettingsDispatchable, materializeRuntimeRouteOptions } from "./runtime-binding.js";
 import { classifyClarify } from "./clarify.js";
 import { classifyIntent } from "./route-intent.js";
 import { composeClarifyFollowUp, composeInput } from "./compose.js";
@@ -29,7 +41,11 @@ import {
   foldTrace,
   gateDecisionStep,
   gateFailureStep,
+  hostContractRecoveryStep,
   LiveWorkLog,
+  redactPublicSetupText,
+  sanitizeLiveSetupWorklog,
+  sanitizePublicSetupWorklog,
   routeDecisionStep,
   summarizeResult,
   toAnswerOrRefusalEvent,
@@ -76,17 +92,50 @@ export class ArtifactNotFoundError extends Error {
 
 export interface TurnDeps {
   readonly store: Store;
+  /** Local-only identity supplied by the gated startup wrapper. */
+  readonly launchAttestation?: LaunchAttestationPublic;
   readonly route: (options: RouteOptions) => Promise<RouteResult>;
+  /** A native vendor TUI host, deliberately independent from Ask/SSE. */
+  readonly startInteractiveTerminal?: (input: { readonly target: InteractiveTarget; readonly binding: EnrichmentBinding }) => Promise<InteractiveTerminalSession>;
+  readonly getInteractiveTerminal?: (id: string) => InteractiveTerminalSession | undefined;
+  /** Revokes compatibility terminals outside the durable NativeSessionService. */
+  readonly revokeInteractiveTerminals?: () => void;
+  readonly interactiveTerminalReadiness?: () => Promise<Record<InteractiveTarget, InteractiveTargetReadiness>>;
+  readonly prepareInteractiveTerminal?: (input: { readonly target: InteractiveTarget; readonly binding: EnrichmentBinding }) => Promise<PreparedInteractiveHandoff>;
+  /** Durable native Sessions control plane; intentionally distinct from Ask. */
+  /**
+   * Refutes a drafted enrichment proposal before it is offered for approval.
+   * Injected rather than imported so a test can exercise the surrounding flow
+   * without a real project on disk — and, more importantly, so the production
+   * default is the real ladder rather than something a caller can weaken.
+   */
+  readonly verifyEnrichmentProposal?: typeof verifyProposal;
+  readonly nativeSessions?: NativeSessionService;
+  /** Session-scoped MCP persistence service; never used by Ask publish routes. */
+  readonly nativeArtifacts?: NativeArtifactService;
   readonly baseRouteOptions: Omit<RouteOptions, "question" | "onEvent">;
   /**
-   * GET /api/harness only: compiles+loads the currently-bound profile's
-   * bundle for read-only introspection (`server/harness.ts`). Optional so
+   * Ask/compile-bind only: compiles+loads the analysis profile's bundle.
+   * Harness purpose introspection uses `describeHarnessBundle` below. Optional so
    * every other route and every existing test's `TurnDeps` literal is
    * unaffected — `server/bin.ts` wires the real `describeBundle` (from
    * `../harness/index.js`); a `TurnDeps` without it simply can't serve
    * `/api/harness` (that route reports a 500 instead of throwing).
    */
   readonly describeBundle?: (options: Omit<RouteOptions, "question" | "onEvent">) => Promise<Bundle>;
+  /**
+   * Harness-only bundle description for one closed native purpose. The
+   * purpose is parsed by the BFF from its read-only query vocabulary; this
+   * dependency resolves the corresponding server-owned profile source. It is
+   * intentionally distinct from native-session IR/launch wiring.
+   */
+  readonly describeHarnessBundle?: (purpose: NativePurpose, options: Omit<RouteOptions, "question" | "onEvent">) => Promise<Bundle>;
+  /**
+   * Compiles the canonical post-bind profile without rebinding its context and
+   * returns its declared tier names. Unlike `describeBundle`, this seam is
+   * intentionally auth-independent and works before a user project is bound.
+   */
+  readonly getRuntimeTierNames?: () => Promise<readonly string[]>;
   /**
    * Dispatches a setup-wizard turn (`connect` / `connect_resume` — see
    * `TurnRow.setupStepKey`) via `harness/setup/runner.ts`'s `SetupStepRunner`
@@ -98,9 +147,9 @@ export interface TurnDeps {
   readonly setupRunner?: SetupStepRunner;
   /**
    * Resolves which `SetupStepRunner` a setup turn should dispatch through,
-   * given the auth choice actually in effect (Mode B for `subscription`, Mode
-   * A otherwise — the same branch `server/bin.ts` uses to construct both
-   * runners at boot). Optional so every existing test's `TurnDeps` literal is
+   * given the auth choice actually in effect (Claude subscription, Codex
+   * subscription, or non-subscription — the same selection `server/bin.ts`
+   * uses at boot). Optional so every existing test's `TurnDeps` literal is
    * unaffected: when absent, `resolveSetupRunner` falls back to the fixed
    * `setupRunner` above (the pre-live-auth-choice behavior). Wired by
    * `server/bin.ts` so a setup turn dispatches through the runner matching
@@ -153,6 +202,14 @@ export interface TurnDeps {
    * boot-fixed `baseRouteOptions.authChoice`.
    */
   setAuthChoice?(choice: AuthChoice): void;
+  /** Injectable, boolean-only subscription login probe used by config UI/API. */
+  readonly loginProbe?: LoginProbe;
+  /** Provider-owned, already-sanitized model discovery for the Setup form. */
+  readonly listSubscriptionModels?: (provider: SubscriptionProvider, refresh: boolean) => Promise<SubscriptionModelCatalog>;
+  /** Optional post-bind enrichment seams; absence is an intentional fail-closed runtime wall. */
+  readonly enrichmentRunner?: EnrichmentRunner;
+  readonly enrichmentApplyRunner?: EnrichmentApplyRunner;
+  readonly enrichmentApprovalProvider?: EnrichmentApprovalProvider;
   /**
    * Points every subsequent `wren` CLI subprocess (via `harness/exec/local.ts`'s
    * `execFile` and `server/adopt.ts`'s own `execWren`, both of which inherit
@@ -214,11 +271,43 @@ export function resolveSetupRunner(deps: TurnDeps): SetupStepRunner | undefined 
   return deps.setupRunnerFor ? deps.setupRunnerFor(resolveAuthChoice(deps)) : deps.setupRunner;
 }
 
-/** `deps.baseRouteOptions` with `userProject`/`authChoice` re-resolved through their mutable bindings at call time (not captured once at boot). Throws `ProjectNotBoundError` if unbound — callers that can run unbound (setup routes) must not call this. */
-export function effectiveRouteOptions(deps: TurnDeps): Omit<RouteOptions, "question" | "onEvent"> {
+/**
+ * `deps.baseRouteOptions` with `userProject`/`authChoice` re-resolved through
+ * their mutable bindings at call time. By default this throws while unbound;
+ * the read-only bootstrap Harness descriptor is the one deliberate exception
+ * and receives an empty project value that its raw-profile path never reads.
+ */
+export function effectiveRouteOptions(
+  deps: TurnDeps,
+  options?: { readonly allowUnbound?: boolean },
+): Omit<RouteOptions, "question" | "onEvent"> {
   const userProject = resolveUserProject(deps);
-  if (userProject === undefined) throw new ProjectNotBoundError();
-  return { ...deps.baseRouteOptions, userProject, authChoice: resolveAuthChoice(deps) };
+  if (userProject === undefined && !options?.allowUnbound) throw new ProjectNotBoundError();
+  const authChoice = resolveAuthChoice(deps);
+  // Seeded settings only populate the Setup form; they are not an operator
+  // decision and must not shadow WREN_HARNESS_MODE/MODEL/API_KEY/ENDPOINT (or
+  // their CLI equivalents). Preserve the complete boot route until a
+  // validated PUT marks the persisted runtime settings explicit.
+  if (!deps.store.hasExplicitRuntimeSettings()) {
+    return { ...deps.baseRouteOptions, userProject: userProject ?? "", authChoice };
+  }
+  // These three fields are mutually exclusive runtime materializations. Drop
+  // any boot-time value before applying the live persisted choice so an auth
+  // switch cannot carry a stale Mode A/Claude/Codex binding into another mode.
+  const {
+    tierBinding: _bootTierBinding,
+    modelsConfig: _bootModelsConfig,
+    codexModels: _bootCodexModels,
+    ...stableBaseRouteOptions
+  } = deps.baseRouteOptions;
+  const settings = deps.store.getRuntimeSettings();
+  assertRuntimeSettingsDispatchable(settings);
+  return {
+    ...stableBaseRouteOptions,
+    userProject: userProject ?? "",
+    authChoice,
+    ...materializeRuntimeRouteOptions(settings, authChoice),
+  };
 }
 
 /** Evicts `deps`'s memoized compiled-bundle-agent-ids entry (see `bundleAgentInfoCache` below) — called by `bindProject` so a turn after a (re)bind recompiles against the newly-bound project instead of replaying a stale/empty cache entry. */
@@ -370,7 +459,13 @@ export async function postTurn(deps: TurnDeps, sessionId: string, question: stri
 }
 
 /** GET (SSE) /api/sessions/:id/stream?turn=:turnId — replays a resolved turn, or executes+streams a pending one. */
-export async function streamTurn(deps: TurnDeps, sessionId: string, turnId: string, emit: (frame: SseFrame) => Promise<void>): Promise<void> {
+export async function streamTurn(
+  deps: TurnDeps,
+  sessionId: string,
+  turnId: string,
+  emit: (frame: SseFrame) => Promise<void>,
+  signal?: AbortSignal,
+): Promise<void> {
   const session = deps.store.getSession(sessionId);
   if (!session) throw new SessionNotFoundError(sessionId);
   const turn = deps.store.getTurn(turnId);
@@ -388,7 +483,7 @@ export async function streamTurn(deps: TurnDeps, sessionId: string, turnId: stri
     return;
   }
 
-  await executeTurn(deps, session, turn, emit);
+  await executeTurn(deps, session, turn, emit, signal);
 }
 
 async function replayResolvedTurn(store: Store, turn: TurnRow, emit: (frame: SseFrame) => Promise<void>): Promise<void> {
@@ -405,7 +500,13 @@ async function replayResolvedTurn(store: Store, turn: TurnRow, emit: (frame: Sse
   await emit({ event: "done", data: {} });
 }
 
-async function executeTurn(deps: TurnDeps, session: SessionRow, turn: TurnRow, emit: (frame: SseFrame) => Promise<void>): Promise<void> {
+async function executeTurn(
+  deps: TurnDeps,
+  session: SessionRow,
+  turn: TurnRow,
+  emit: (frame: SseFrame) => Promise<void>,
+  signal?: AbortSignal,
+): Promise<void> {
   if (turn.setupStepKey !== null) {
     await executeSetupTurn(deps, session, turn, emit);
     return;
@@ -447,6 +548,7 @@ async function executeTurn(deps: TurnDeps, session: SessionRow, turn: TurnRow, e
       ...effectiveRouteOptions(deps),
       question: turn.composedInput ?? turn.question,
       onEvent,
+      ...(signal !== undefined ? { signal } : {}),
       // the turn's own persisted agent id (classified once at postTurn time), so a turn
       // always resolves to the same agent whether executed live or (via a future replay path) re-run.
       ...(turn.agentId !== null ? { agentId: turn.agentId } : {}),
@@ -487,9 +589,9 @@ async function executeTurn(deps: TurnDeps, session: SessionRow, turn: TurnRow, e
   const worklog = [...preDecisions, ...agentWorklog, ...(gate ? [gate] : [])];
   const terminalEvent = toAnswerOrRefusalEvent(newId("evt"), result, agentWorklog);
 
-  // Mode B (`backend: "agent-sdk"`) never emits a native `artifact`
-  // AgentEvent the way Mode A's `write_artifact` tool does above (via
-  // `onEvent`) — its dispatched agent's structured output only reaches the
+  // Subscription dispatchers (`agent-sdk` and `codex-local`) do not emit a
+  // native `artifact` AgentEvent the way the in-process `write_artifact` tool
+  // does above (via `onEvent`) — their structured output only reaches the
   // BFF as a recovered rich envelope inside `terminalEvent` (see
   // `toAnswerOrRefusalEvent`'s doc comment). When that answer came from an
   // artifact-producing component (`generate_dashboard`/`explain_change` —
@@ -518,12 +620,14 @@ async function executeTurn(deps: TurnDeps, session: SessionRow, turn: TurnRow, e
 }
 
 /**
- * Mode B analog of the `onEvent` handler's Mode A `artifact` case
- * in `executeTurn` above: Mode B has no native `artifact` AgentEvent, so this
- * derives one from the turn's own already-resolved rich answer instead.
+ * Subscription-dispatch analog of the `onEvent` handler's in-process
+ * `artifact` case in `executeTurn` above: subscription dispatchers have no
+ * native `artifact` AgentEvent, so this derives one from the turn's own
+ * already-resolved rich answer instead.
  * Returns `undefined` (no artifact created/persisted, no frame emitted)
  * unless ALL of:
- *  - Mode B ran this turn (`result.backend === "agent-sdk"`);
+ *  - a subscription dispatcher ran this turn (`result.backend` is
+ *    `"agent-sdk"` or `"codex-local"`);
  *  - the terminal event is a rich answer (a recovered `RenderEnvelope`, not
  *    the `form: "text"` fallback);
  *  - the turn's routed agent (`turn.agentId`, classified once at `postTurn`
@@ -538,7 +642,7 @@ async function executeTurn(deps: TurnDeps, session: SessionRow, turn: TurnRow, e
  *
  * Persisted representation: the envelope IS the artifact's content, written
  * verbatim as JSON to a session-scoped file under the same artifacts root
- * Mode A's `write_artifact` tool uses (`resolveArtifactsDir`) — self-
+ * the in-process `write_artifact` tool uses (`resolveArtifactsDir`) — self-
  * contained from the envelope, no dependency on the dispatcher's `htmlPath`
  * (never present in the NDJSON stream today). `verified` comes straight from
  * the envelope's own `verified` field, never hardcoded.
@@ -550,7 +654,7 @@ async function maybeCreateModeBArtifact(
   result: RouteResult,
   terminalEvent: AnswerEvent | RefusalEvent,
 ): Promise<ArtifactEvent | undefined> {
-  if (result.backend !== "agent-sdk") return undefined;
+  if (result.backend !== "agent-sdk" && result.backend !== "codex-local") return undefined;
   if (terminalEvent.kind !== "answer" || terminalEvent.answer.form !== "rich") return undefined;
   if (turn.agentId === null) return undefined;
   if (!(await isArtifactProducerAgent(deps, turn.agentId))) return undefined;
@@ -610,6 +714,64 @@ function summarizeCompileHealthcheckFailure(err: unknown): string {
   return message.split("\n")[0] ?? message;
 }
 
+function nonEmptySessionId(value: string | null | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+/** The only thrown setup error that can carry a safe, resumable dispatcher anchor. */
+function sessionIdFromSetupError(error: unknown): string | undefined {
+  return error instanceof ModeBSessionError && nonEmptySessionId(error.sessionId) ? error.sessionId : undefined;
+}
+
+/**
+ * The second dispatch is not a new task: it continues the completed agent
+ * conversation with host-owned, secret-free evidence. `HostContractDiagnostic`
+ * values are intentionally static artifact/workflow facts, never tool stdout,
+ * stderr, or credential-bearing project content.
+ */
+function composeHostContractCorrection(diagnostic: NonNullable<SetupTerminalResult["diagnostic"]>): string {
+  return (
+    "Host-side validation rejected your claimed SETUP_STATUS: ok. Correct the existing project rather than merely restating success. " +
+    `Observed host-contract failure: ${diagnostic.observed}. ` +
+    `Required artifact contract before another SETUP_STATUS: ok: ${diagnostic.expectedArtifactContract.join("; ")}. ` +
+    "Use the work already completed in this conversation, make the real correction, and then re-check the contract. " +
+    "Do not read, print, or ask for credential values. If the correction cannot be completed, report SETUP_STATUS: error or SETUP_STATUS: needs_input honestly."
+  );
+}
+
+/** One bounded same-session repair for a structurally incomplete final response. */
+function composeTerminalContractCorrection(): string {
+  return (
+    "Your previous completed response omitted the required SETUP_STATUS terminal line. Continue the existing setup attempt; do not replay, rebuild, clean, or overwrite completed work. " +
+    "Inspect the existing project state only as needed to determine the honest outcome. End this response with exactly one line in the form SETUP_STATUS: ok|needs_input|error - short reason. " +
+    "Do not read, print, or ask for credential values."
+  );
+}
+
+function safeHostContractSummary(diagnostic: NonNullable<SetupTerminalResult["diagnostic"]>): string {
+  return `host contract ${diagnostic.code}: ${diagnostic.observed}; required: ${diagnostic.expectedArtifactContract.join("; ")}`;
+}
+
+function recoveryAnchor(sessionId: string | null | undefined, authChoice: AuthChoice): { readonly sessionId: string; readonly provider: string; readonly runner: string } | undefined {
+  if (!nonEmptySessionId(sessionId) || authChoice.mode !== "subscription") return undefined;
+  return { sessionId, provider: authChoice.provider, runner: `subscription:${authChoice.provider}` };
+}
+
+/** Preserve a compatible input anchor when a resumed dispatcher omits a new id. */
+function turnRecoveryAnchor(turn: TurnRow, sessionId: string | null | undefined, authChoice: AuthChoice): { readonly sessionId: string; readonly provider: string; readonly runner: string } | undefined {
+  const completed = recoveryAnchor(sessionId, authChoice);
+  if (completed !== undefined) return completed;
+  if (
+    authChoice.mode === "subscription" &&
+    nonEmptySessionId(turn.resumeSessionId) &&
+    turn.resumeSessionProvider === authChoice.provider &&
+    turn.resumeRunner === `subscription:${authChoice.provider}`
+  ) {
+    return { sessionId: turn.resumeSessionId, provider: authChoice.provider, runner: turn.resumeRunner };
+  }
+  return undefined;
+}
+
 /**
  * Dispatches a setup-wizard turn (`turn.setupStepKey !== null`) via
  * `deps.setupRunner` instead of `deps.route(...)`, reusing the exact same SSE
@@ -633,10 +795,35 @@ function summarizeCompileHealthcheckFailure(err: unknown): string {
  * final report). Only a parsed `error` persists as `resultKind: "error"`.
  */
 async function executeSetupTurn(deps: TurnDeps, session: SessionRow, turn: TurnRow, emit: (frame: SseFrame) => Promise<void>): Promise<void> {
-  const failWithError = async (message: string, worklog: readonly ToolStep[]): Promise<void> => {
-    deps.store.resolveTurn(turn.id, { backend: null, resultKind: "error", answerSummary: null, traceJson: JSON.stringify(worklog), errorMessage: message });
+  // Provider session anchors are server-only. Keep every anchor that becomes
+  // known during this turn so a host-contract continuation that rotates its
+  // anchor still redacts both the original and replacement from the combined
+  // worklog.
+  const knownInternalValues = [turn.resumeSessionId, turn.resumeSessionProvider, turn.resumeRunner]
+    .filter((value): value is string => typeof value === "string");
+  const rememberAnchor = (anchor: { readonly sessionId: string; readonly provider: string; readonly runner: string } | undefined): void => {
+    if (anchor === undefined) return;
+    for (const value of [anchor.sessionId, anchor.provider, anchor.runner]) {
+      if (!knownInternalValues.includes(value)) knownInternalValues.push(value);
+    }
+  };
+  const failWithError = async (
+    message: string,
+    worklog: readonly ToolStep[],
+    resumableAnchor?: { readonly sessionId: string; readonly provider: string; readonly runner: string },
+  ): Promise<void> => {
+    const internalValues = [
+      ...knownInternalValues,
+      resumableAnchor?.sessionId,
+      resumableAnchor?.provider,
+      resumableAnchor?.runner,
+    ].filter((value): value is string => typeof value === "string");
+    const publicMessage = redactPublicSetupText(message, internalValues);
+    const publicWorklog = sanitizePublicSetupWorklog(worklog, internalValues);
+    if (resumableAnchor !== undefined) deps.store.setTurnResumeAnchor(turn.id, resumableAnchor);
+    deps.store.resolveTurn(turn.id, { backend: null, resultKind: "error", answerSummary: null, traceJson: JSON.stringify(publicWorklog), errorMessage: publicMessage });
     deps.store.updateSessionStatus(session.id, "active", null);
-    await emit({ event: "error", data: { message } });
+    await emit({ event: "error", data: { message: publicMessage } });
   };
 
   // Adopt-flow turns (context-build against an already-existing project outside the
@@ -660,32 +847,117 @@ async function executeSetupTurn(deps: TurnDeps, session: SessionRow, turn: TurnR
     return;
   }
 
-  const liveLog = new LiveWorkLog();
-  let chain: Promise<void> = Promise.resolve();
-  const onEvent = (event: AgentEvent): void => {
-    const snapshot = liveLog.ingest(event);
-    if (snapshot) chain = chain.then(() => emit({ event: "worklog", data: snapshot }));
+  const useRetainedContextLifecycle =
+    turn.setupStepKey === "context" &&
+    (turn.contextRecovery === "lifecycle" || turn.contextRecovery === "schema_discovery");
+  // A normal context rebuild is a fresh lifecycle even when a caller bypasses
+  // the route that normally clears prior proof. Only explicit corrective turns
+  // may read or merge against retained evidence.
+  if (turn.setupStepKey === "context" && !useRetainedContextLifecycle) deps.store.clearSetupContextLifecycleEvidence();
+
+  /**
+   * Terminal verification receives only identity-matching host evidence from
+   * earlier attempts. The current worklog can extend it monotonically, but an
+   * agent's final message can neither manufacture nor reset the prefix.
+   */
+  const retainContextLifecycle = (worklog: readonly ToolStep[], allowBuild = false): void => {
+    const identityFingerprint =
+      turn.setupStepKey === "context"
+        ? contextLifecycleIdentityFingerprint(workspaceRoot, form.projectName, form.sourceType)
+        : undefined;
+    const prior = !useRetainedContextLifecycle || identityFingerprint === undefined
+      ? undefined
+      : deps.store.getSetupContextLifecycleEvidence(session.id, identityFingerprint)?.completed;
+    if (identityFingerprint !== undefined) {
+      const recorded = recordedContextLifecyclePrefix(worklog, prior ?? "none");
+      // A build command is not retained by itself: only a successful terminal
+      // parse has independently checked target/mdl.json. Discovery/validate
+      // remain useful across an interrupted turn, but build includes artifact
+      // proof only after that host check passes.
+      const completed = recorded === "build" && !allowBuild ? "validate" : recorded;
+      if (completed !== "none") {
+        deps.store.mergeSetupContextLifecycleEvidence({ sessionId: session.id, identityFingerprint, completed });
+      }
+    }
+  };
+  const parseTerminalWithRetainedLifecycle = (finalText: string, worklog: readonly ToolStep[]): SetupTerminalResult => {
+    const identityFingerprint =
+      turn.setupStepKey === "context"
+        ? contextLifecycleIdentityFingerprint(workspaceRoot, form.projectName, form.sourceType)
+        : undefined;
+    const prior = !useRetainedContextLifecycle || identityFingerprint === undefined
+      ? undefined
+      : deps.store.getSetupContextLifecycleEvidence(session.id, identityFingerprint)?.completed;
+    const terminal = parseSetupTerminal(finalText, {
+      root: workspaceRoot,
+      name: form.projectName,
+      ...(turn.setupStepKey !== null ? { stepKey: turn.setupStepKey } : {}),
+      expectedSourceType: form.sourceType,
+      worklog,
+      ...(prior !== undefined ? { priorContextLifecycle: prior } : {}),
+    });
+    retainContextLifecycle(worklog, terminal.status === "ok");
+    return terminal;
   };
 
-  let finalText: string;
-  let completedSessionId: string | null | undefined;
-  try {
-    const result = await setupRunner.run({
-      prompt: turn.composedInput ?? turn.question,
+  const liveLog = new LiveWorkLog();
+  let chain: Promise<void> = Promise.resolve();
+  let recoveryEvidence: ToolStep | undefined;
+  let worklogBeforeRecovery: readonly ToolStep[] | undefined;
+  const publicWorklog = (snapshot: readonly ToolStep[]): ToolStep[] => {
+    const ordered =
+      recoveryEvidence === undefined || worklogBeforeRecovery === undefined
+        ? snapshot
+        : [...worklogBeforeRecovery, recoveryEvidence, ...snapshot.slice(worklogBeforeRecovery.length)];
+    return sanitizePublicSetupWorklog(ordered, knownInternalValues);
+  };
+  const initialAuthChoice = resolveAuthChoice(deps);
+  const initialResumableAnchor = turnRecoveryAnchor(turn, undefined, initialAuthChoice);
+  rememberAnchor(initialResumableAnchor);
+  // A subscription attempt can rotate to a replacement server-owned session
+  // anchor even when it was supplied a compatible resume anchor, so
+  // `publicWorklog`'s by-KNOWN-VALUE redaction above can't be used on a live
+  // frame: the anchor it would need to scrub isn't known until the attempt
+  // resolves or throws. Withholding every frame until then was the previous
+  // behavior — a subscription setup turn showed no progress for minutes,
+  // then every worklog entry at once. Stream subscription live
+  // frames through `sanitizeLiveSetupWorklog` instead: by-shape redaction
+  // plus dropping `input`/`detail` outright, a real accepted weakening
+  // versus withholding everything (see that function's doc comment).
+  // Non-subscription attempts are unaffected and keep using `publicWorklog`
+  // exactly as before.
+  const onEvent = (event: AgentEvent): void => {
+    const snapshot = liveLog.ingest(event);
+    if (!snapshot) return;
+    const data = initialAuthChoice.mode === "subscription" ? sanitizeLiveSetupWorklog(snapshot) : publicWorklog(snapshot);
+    chain = chain.then(() => emit({ event: "worklog", data }));
+  };
+
+  const runAttempt = (prompt: string, authChoice: AuthChoice, resumeSessionId?: string) =>
+    setupRunner.run({
+      prompt,
       workspaceRoot,
-      authChoice: resolveAuthChoice(deps),
+      // The form was validated before persistence. Thread it to Mode B so
+      // resumed connect/context turns bind the SDK cwd and mutation scope to
+      // the project itself rather than the outer scaffold workspace.
+      projectName: form.projectName,
+      stepKey: turn.setupStepKey === "connect_resume" || turn.setupStepKey === "context" ? turn.setupStepKey : "connect",
+      authChoice,
       // The turn's own persisted agentId (CONNECT_SOURCE_AGENT_ID for connect/connect_resume,
       // BUILD_CONTEXT_AGENT_ID for context — see server/app.ts's setup routes) so the setup
       // runner dispatches the RIGHT warble component instead of always connect_source.
       ...(turn.agentId !== null ? { agentId: turn.agentId } : {}),
-      // Plan A session resume: when this turn was created (by `POST /api/setup/decision`'s
-      // "continue" branch) with a resumable SDK session id attached, forward it so the
-      // dispatcher resumes that SAME agent-sdk conversation instead of starting fresh.
-      ...(turn.resumeSessionId !== null ? { resumeSessionId: turn.resumeSessionId } : {}),
+      ...(resumeSessionId !== undefined ? { resumeSessionId } : {}),
       onEvent,
     });
+
+  let finalText: string;
+  let completedSessionId: string | null | undefined;
+  try {
+    const result = await runAttempt(turn.composedInput ?? turn.question, initialAuthChoice, initialResumableAnchor?.sessionId);
     finalText = result.finalText;
     completedSessionId = result.sessionId;
+    rememberAnchor(turnRecoveryAnchor(turn, completedSessionId, initialAuthChoice));
   } catch (err) {
     // Hang-bug fix: a rejected queued worklog `emit` must never prevent the
     // terminal frame below from being sent — swallow it here (best-effort
@@ -698,7 +970,10 @@ async function executeSetupTurn(deps: TurnDeps, session: SessionRow, turn: TurnR
     // SDK session id — `ModeBSessionError` mirrors warble's own `DispatchSessionError` for exactly
     // this reason. `undefined` (not a `ModeBSessionError` at all, e.g. a stub runner in tests) is
     // treated the same as "no session id available" below.
-    const failedSessionId = err instanceof ModeBSessionError ? err.sessionId : undefined;
+    const failedSessionId = sessionIdFromSetupError(err);
+    const failedRecoveryAnchor = recoveryAnchor(failedSessionId, initialAuthChoice);
+    rememberAnchor(failedRecoveryAnchor);
+    retainContextLifecycle(liveLog.snapshot());
 
     // An `error_max_turns` exit while building context (the only
     // step long/open-ended enough to plausibly exhaust its turn budget
@@ -711,6 +986,7 @@ async function executeSetupTurn(deps: TurnDeps, session: SessionRow, turn: TurnR
         await failWithError(
           `the one permitted schema-discovery retry ran out of turns before finishing — no further automatic or chained retry was started; inspect the recorded tool history and resolve the discovery issue before trying context again`,
           worklog,
+          turnRecoveryAnchor(turn, failedSessionId, initialAuthChoice),
         );
         return;
       }
@@ -735,48 +1011,130 @@ async function executeSetupTurn(deps: TurnDeps, session: SessionRow, turn: TurnR
         decision,
       };
       deps.store.insertEvent({ sessionId: session.id, kind: "setup_status", payload: statusEvent, turnId: turn.id });
+      const publicFailureWorklog = publicWorklog(worklog);
       deps.store.resolveTurn(turn.id, {
         backend: "agent-sdk",
         resultKind: "answer",
         answerSummary: statusEvent.message,
-        traceJson: JSON.stringify(worklog),
+        traceJson: JSON.stringify(publicFailureWorklog),
         errorMessage: null,
       });
       const pendingDecision: PendingDecisionPayload = {
         kind: "max_turns_continue",
         stepKey: "context",
         ...(failedSessionId !== undefined ? { sessionId: failedSessionId } : {}),
+        ...(failedRecoveryAnchor !== undefined
+          ? { sessionProvider: failedRecoveryAnchor.provider, sessionRunner: failedRecoveryAnchor.runner }
+          : {}),
+        ...(turn.workspaceRoot !== null ? { workspaceRoot } : {}),
       };
       deps.store.updateSessionDecision(session.id, "awaiting_decision", JSON.stringify(pendingDecision));
 
-      await emit({ event: "worklog", data: worklog });
+      await emit({ event: "worklog", data: publicFailureWorklog });
       await emit({ event: "event", data: statusEvent });
       await emit({ event: "done", data: {} });
       return;
     }
 
-    await failWithError(message, [...liveLog.snapshot(), gateFailureStep(message)]);
+    await failWithError(
+      message,
+      sanitizePublicSetupWorklog([...liveLog.snapshot(), gateFailureStep(message)]),
+      turnRecoveryAnchor(turn, failedSessionId, initialAuthChoice),
+    );
     return;
   }
   await chain.catch(() => {});
 
   const worklog = liveLog.snapshot();
-  const terminal = parseSetupTerminal(finalText, {
-    root: workspaceRoot,
-    name: form.projectName,
-    ...(turn.setupStepKey !== null ? { stepKey: turn.setupStepKey } : {}),
-    // Only consumed when stepKey is "connect_resume"; harmless to pass
-    // unconditionally otherwise. Ground truth from the BFF's own setup form,
-    // never from anything an agent turn wrote.
-    expectedSourceType: form.sourceType,
-    // Only consumed when stepKey is "context" and the agent reported "error" —
-    // lets parseSetupTerminal check this turn's own tool-call worklog for a
-    // setup_execution call that failed, before trusting an "error" message that
-    // blames the connection/data source (see runner.ts's firstFailedExec).
-    worklog,
-  });
+  let terminal = parseTerminalWithRetainedLifecycle(finalText, worklog);
+  terminal = { ...terminal, message: redactPublicSetupText(terminal.message) };
 
-  if (terminal.failureKind === "no_successful_schema_discovery" && turn.contextRecovery !== "schema_discovery") {
+  // A host-contract diagnostic can only be emitted after a completed runner
+  // result claimed success. Keep the original turn/SSE open and make exactly
+  // one same-session continuation when the backend supplied a real anchor.
+  // Mode A returns `null` and Codex currently returns no session id, so both
+  // intentionally keep their existing single-dispatch behavior.
+  let retainedRecoveryAnchor =
+    turn.contextRecovery === "schema_discovery" ? undefined : turnRecoveryAnchor(turn, completedSessionId, initialAuthChoice);
+  rememberAnchor(retainedRecoveryAnchor);
+  let automaticCorrectionAttempted = false;
+  if (terminal.failureKind === "missing_terminal_status" && retainedRecoveryAnchor !== undefined) {
+    automaticCorrectionAttempted = true;
+    worklogBeforeRecovery = worklog;
+    recoveryEvidence = {
+      id: "decision-terminal-contract-recovery",
+      kind: "decision",
+      label: "Terminal contract",
+      state: "error",
+      detail: "the completed response omitted the required SETUP_STATUS line",
+    };
+    await emit({ event: "worklog", data: publicWorklog(worklog) });
+    // The correction attempt's own live frames still go through `onEvent`
+    // above, so they keep getting the shape-based `sanitizeLiveSetupWorklog`
+    // treatment for subscription mode — no separate gate needed here, since
+    // it may also rotate to a new server-only anchor.
+    try {
+      const recovered = await runAttempt(composeTerminalContractCorrection(), initialAuthChoice, retainedRecoveryAnchor.sessionId);
+      finalText = recovered.finalText;
+      retainedRecoveryAnchor = turnRecoveryAnchor(turn, recovered.sessionId, initialAuthChoice) ?? retainedRecoveryAnchor;
+      rememberAnchor(retainedRecoveryAnchor);
+      await chain.catch(() => {});
+      const recoveredWorklog = liveLog.snapshot();
+      terminal = parseTerminalWithRetainedLifecycle(finalText, recoveredWorklog);
+      terminal = { ...terminal, message: redactPublicSetupText(terminal.message) };
+    } catch (err) {
+      await chain.catch(() => {});
+      const errorAnchor = turnRecoveryAnchor(turn, sessionIdFromSetupError(err), initialAuthChoice) ?? retainedRecoveryAnchor;
+      await failWithError(
+        "the automatic terminal-contract correction did not complete; retry this setup step explicitly",
+        publicWorklog([...liveLog.snapshot()]),
+        errorAnchor,
+      );
+      return;
+    }
+  }
+  if (
+    !automaticCorrectionAttempted &&
+    terminal.diagnostic?.kind === "host_contract" &&
+    turn.contextRecovery !== "schema_discovery" &&
+    retainedRecoveryAnchor !== undefined
+  ) {
+    worklogBeforeRecovery = worklog;
+    recoveryEvidence = hostContractRecoveryStep(safeHostContractSummary(terminal.diagnostic));
+    await emit({ event: "worklog", data: publicWorklog(worklog) });
+    // A correction can rotate to a replacement provider anchor even though it
+    // resumes a known compatible one; its own live frames still go through
+    // `onEvent`'s shape-based `sanitizeLiveSetupWorklog` treatment for
+    // subscription mode, same as the initial attempt.
+    try {
+      const recovered = await runAttempt(composeHostContractCorrection(terminal.diagnostic), initialAuthChoice, retainedRecoveryAnchor.sessionId);
+      finalText = recovered.finalText;
+      retainedRecoveryAnchor = turnRecoveryAnchor(turn, recovered.sessionId, initialAuthChoice) ?? retainedRecoveryAnchor;
+      rememberAnchor(retainedRecoveryAnchor);
+      await chain.catch(() => {});
+      const recoveredWorklog = liveLog.snapshot();
+      terminal = parseTerminalWithRetainedLifecycle(finalText, recoveredWorklog);
+      terminal = { ...terminal, message: redactPublicSetupText(terminal.message) };
+    } catch (err) {
+      await chain.catch(() => {});
+      const errorAnchor = turnRecoveryAnchor(turn, sessionIdFromSetupError(err), initialAuthChoice) ?? retainedRecoveryAnchor;
+      const message = "the automatic host-contract correction did not complete; retry this setup step explicitly after resolving the host contract";
+      await failWithError(
+        message,
+        publicWorklog([...liveLog.snapshot()]),
+        errorAnchor,
+      );
+      return;
+    }
+  }
+
+  // A completed runner result can introduce a new server-owned anchor after
+  // the live frames have begun. Re-sanitize every normal terminal boundary
+  // with that now-known identity before it reaches SSE or SQLite.
+  terminal = { ...terminal, message: redactPublicSetupText(terminal.message, knownInternalValues) };
+  const finalWorklog = publicWorklog(liveLog.snapshot());
+
+  if (terminal.failureKind === "no_successful_schema_discovery" && recoveryEvidence === undefined && turn.contextRecovery !== "schema_discovery") {
     const continueMaxTurns = setupRunner.effectiveMaxTurns?.(BUILD_CONTEXT_AGENT_ID) ?? DEFAULT_SETUP_MAX_TURNS;
     const decision: SetupDecision = {
       kind: "schema_discovery_retry",
@@ -798,91 +1156,107 @@ async function executeSetupTurn(deps: TurnDeps, session: SessionRow, turn: TurnR
       backend: "agent-sdk",
       resultKind: "answer",
       answerSummary: terminal.message,
-      traceJson: JSON.stringify(worklog),
+      traceJson: JSON.stringify(finalWorklog),
       errorMessage: null,
     });
     const pendingDecision: PendingDecisionPayload = {
       kind: "schema_discovery_retry",
       stepKey: "context",
       ...(completedSessionId !== undefined ? { sessionId: completedSessionId } : {}),
+      ...(retainedRecoveryAnchor !== undefined
+        ? { sessionProvider: retainedRecoveryAnchor.provider, sessionRunner: retainedRecoveryAnchor.runner }
+        : {}),
       ...(turn.workspaceRoot !== null ? { workspaceRoot } : {}),
     };
     deps.store.updateSessionDecision(session.id, "awaiting_decision", JSON.stringify(pendingDecision));
 
-    await emit({ event: "worklog", data: worklog });
+    await emit({ event: "worklog", data: finalWorklog });
     await emit({ event: "event", data: statusEvent });
     await emit({ event: "done", data: {} });
     return;
   }
 
   if (terminal.status === "error") {
-    await failWithError(terminal.message, worklog);
+    const message =
+      recoveryEvidence === undefined
+        ? terminal.message
+        : terminal.diagnostic?.kind === "host_contract"
+          ? `the corrective setup attempt still failed ${safeHostContractSummary(terminal.diagnostic)}`
+          : "the corrective setup attempt ended without a host-accepted success; retry this setup step explicitly";
+    await failWithError(message, finalWorklog, retainedRecoveryAnchor);
     return;
   }
 
-  // When the "context" step reports "ok", `parseSetupTerminal` has already verified
-  // target/mdl.json exists with >=1 model — but that's silent on whether the bound genbi-default
-  // profile actually COMPILES against this project. An incomplete/malformed MDL can clear that
-  // check yet still fail `warble compile` (missing calc-column refs, bad relationships, etc.), and
-  // until now that failure only surfaced LATER as raw compile stderr on the Harness page, or as a
-  // lost Ask turn — with the setup wizard giving no indication anything was wrong. Set below (in
-  // the `turn.setupStepKey === "context"` branch) if that healthcheck fails; overrides the
-  // `setup_status` emitted at the end of this function with a friendly summary instead of the
-  // default "ok" message, WITHOUT touching the step-state/turn-resolution machinery below (context
-  // did genuinely finish building the MDL; only the compile-readiness signal changes).
-  let compileHealthcheckFailure: string | undefined;
-
   if (terminal.status === "ok") {
     if (turn.setupStepKey === "context") {
-      // The MDL now genuinely exists with >=1 model (parseSetupTerminal already verified
-      // target/mdl.json) — advance context -> done, bind -> current. Do NOT call bindProject
-      // again here: connect already bound this exact project path, and this step only adds
-      // MDL content to it, it doesn't change which project is bound.
+      // The parser already accepted the native discovery -> validate -> build
+      // sequence and a nonempty MDL. The profile compile is the final
+      // foundation gate: do it before persisting either the step transition or
+      // a successful turn. Adopt can require a temporary binding solely so the
+      // canonical describeBundle seam resolves this project; roll that back on
+      // a failed healthcheck so retry/reload remains at context -> bind todo.
+      const temporarilyBoundForHealthcheck = Boolean(deps.bindProject && !isProjectBound(deps));
+      if (temporarilyBoundForHealthcheck) {
+        deps.bindProject!(path.join(workspaceRoot, form.projectName));
+      }
+      let compileHealthcheckFailure: string | undefined;
+      if (!deps.describeBundle) {
+        compileHealthcheckFailure = "the profile compile healthcheck is not configured";
+      } else {
+        try {
+          await deps.describeBundle(effectiveRouteOptions(deps));
+        } catch (err) {
+          compileHealthcheckFailure = summarizeCompileHealthcheckFailure(err);
+        }
+      }
+      if (compileHealthcheckFailure !== undefined) {
+        if (temporarilyBoundForHealthcheck) deps.unbindProject?.();
+        await failWithError(
+          `${terminal.message} — but the genbi profile failed to compile against this project: ${compileHealthcheckFailure}`,
+          finalWorklog,
+          retainedRecoveryAnchor,
+        );
+        return;
+      }
+
       const steps = deps.store.getSetupSteps().map((step) => {
-        // Also cover the adopt flow's build_context branch (this same setupStepKey
-        // "context" turn — see POST /api/setup/decision's `build_context` handling in
-        // server/app.ts) reaching this point means adopt's own verification already succeeded
-        // (POST /api/setup/adopt's `needs_decision` path never got here otherwise), so "adopt"
-        // is done too, not still "todo". A no-op for the create flow: its steps array only ever
-        // carries a "connect" key (already marked done above, on the connect turn), never
-        // "adopt" — see `applySetupMode`.
         if (step.key === "adopt") return { ...step, state: "done" as const };
         if (step.key === "context") return { ...step, state: "done" as const };
         if (step.key === "bind") return { ...step, state: "current" as const };
         return step;
       });
-      deps.store.setSetupSteps(steps);
-
-      // Adopt flow only: when MDL was missing at adopt time, binding is deferred until
-      // context-build actually writes it (see POST /api/setup/adopt's `needs_decision` +
-      // the `build_context` branch of POST /api/setup/decision) — this project was never
-      // bound by a "connect" turn the way the create flow's is. `isProjectBound` makes this
-      // a no-op for the create flow (already bound by the else-branch above, on a PRIOR
-      // turn), so no separate mode flag needs threading through this function. Must run
-      // BEFORE the describeBundle healthcheck below: `effectiveRouteOptions(deps)` throws
-      // `ProjectNotBoundError` if nothing is bound yet.
-      if (deps.bindProject && !isProjectBound(deps)) {
-        deps.bindProject(path.join(workspaceRoot, form.projectName));
+      const statusEvent: SetupStatusEvent = {
+        id: newId("evt"),
+        kind: "setup_status",
+        status: terminal.status,
+        message: terminal.message,
+      };
+      try {
+        deps.store.completeContextSetupSuccess({
+          sessionId: session.id,
+          turnId: turn.id,
+          steps,
+          statusEvent,
+          backend: "agent-sdk",
+          answerSummary: terminal.message,
+          traceJson: JSON.stringify(finalWorklog),
+          errorMessage: null,
+        });
+      } catch {
+        if (temporarilyBoundForHealthcheck) deps.unbindProject?.();
+        await failWithError(
+          "the completed context foundation could not be persisted atomically; retry this setup step",
+          finalWorklog,
+          retainedRecoveryAnchor,
+        );
+        return;
       }
+      invalidateBundleAgentIdsCache(deps);
 
-      // Reuses the exact same compile seam GET /api/harness and POST /api/setup/compile-bind
-      // use (`deps.describeBundle`, itself backed by `compileProfile`'s filesystem cache) — no
-      // healthcheck-specific compile path invented. Skipped (fail-open) when `describeBundle`
-      // isn't wired at all, matching every other optional use of it in this file (e.g.
-      // `getBundleAgentIds`) — a TurnDeps built without it simply can't run this check, exactly
-      // like it can't serve GET /api/harness.
-      if (deps.describeBundle) {
-        try {
-          await deps.describeBundle(effectiveRouteOptions(deps));
-          // A fresh, successful compile against the just-written MDL — evict the memoized
-          // agent-ids entry so the very next Ask turn recompiles instead of replaying a
-          // stale/empty list from before this step added models (mirrors POST
-          // /api/setup/compile-bind's identical invalidation after its own recompile).
-          invalidateBundleAgentIdsCache(deps);
-        } catch (err) {
-          compileHealthcheckFailure = summarizeCompileHealthcheckFailure(err);
-        }
-      }
+      await emit({ event: "worklog", data: finalWorklog });
+      await emit({ event: "event", data: statusEvent });
+      await emit({ event: "done", data: {} });
+      return;
     } else {
       const steps = deps.store.getSetupSteps().map((step) => {
         // Belt: runtime should already be "done" (PUT /api/config/runtime
@@ -902,20 +1276,11 @@ async function executeSetupTurn(deps: TurnDeps, session: SessionRow, turn: TurnR
     }
   }
 
-  // A failed compile healthcheck overrides the message/status the wizard sees — the
-  // step-state advance above already ran (context genuinely finished building the MDL), but the
-  // terminal `setup_status` reports the REAL, actionable problem instead of a plain "ok" that
-  // would otherwise let the user walk away from an uncompilable project none the wiser. `status:
-  // "error"` (not a new decision kind) — there's no extra choice to present here beyond "go fix
-  // the project", so this reuses the existing `SetupStatusEvent.status` union as-is rather than
-  // inventing a new checkpoint/decision surface.
-  const message = compileHealthcheckFailure
-    ? `${terminal.message} — but the genbi profile failed to compile against this project: ${compileHealthcheckFailure}`
-    : terminal.message;
+  const message = terminal.message;
   const statusEvent: SetupStatusEvent = {
     id: newId("evt"),
     kind: "setup_status",
-    status: compileHealthcheckFailure ? "error" : terminal.status,
+    status: terminal.status,
     message,
   };
   deps.store.insertEvent({ sessionId: session.id, kind: "setup_status", payload: statusEvent, turnId: turn.id });
@@ -923,12 +1288,12 @@ async function executeSetupTurn(deps: TurnDeps, session: SessionRow, turn: TurnR
     backend: "agent-sdk",
     resultKind: "answer",
     answerSummary: message,
-    traceJson: JSON.stringify(worklog),
+    traceJson: JSON.stringify(finalWorklog),
     errorMessage: null,
   });
   deps.store.updateSessionStatus(session.id, "active", null);
 
-  await emit({ event: "worklog", data: worklog });
+  await emit({ event: "worklog", data: finalWorklog });
   await emit({ event: "event", data: statusEvent });
   await emit({ event: "done", data: {} });
 }

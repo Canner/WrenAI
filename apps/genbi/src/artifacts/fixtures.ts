@@ -9,7 +9,7 @@ import type { Artifact, DashboardTile } from './types';
  * fixture convention this follows.
  */
 
-const DASHBOARD_SOURCE = { label: 'Ask · Turn this into a dashboard', href: '/ask/s1' };
+const DASHBOARD_SOURCE = { label: 'Structured Ask · Turn this into a dashboard', href: '/sessions/ask/s1' };
 
 function isKpiCard(block: AnyBlock): block is KpiCardBlock {
   return block.type === 'kpi_card';
@@ -78,7 +78,7 @@ export const fixtureArtifacts: Artifact[] = [
     verified: true,
     createdAt: '2026-07-16 11:40',
     location: 'artifacts/monthly-signups-trend.json',
-    source: { label: 'Ask · Monthly signups trend', href: '/ask/s2' },
+    source: { label: 'Structured Ask · Monthly signups trend', href: '/sessions/ask/s2' },
     envelope: {
       verified: true,
       summary: 'New signups by month, last 6 months.',

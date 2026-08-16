@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>xterm ANSI palette regression</title>
+  </head>
+  <body>
+    <main class="sessions-workbench">
+      <section aria-label="Light native terminal" style="width: 800px; height: 220px">
+        <div class="sessions-terminal-wrap"><div class="sessions-terminal" data-testid="ansi-terminal-light" aria-label="Light native agent terminal"></div></div>
+      </section>
+      <section aria-label="Dark native terminal" style="width: 800px; height: 220px; margin-top: 16px">
+        <div class="sessions-terminal-wrap"><div class="sessions-terminal" data-testid="ansi-terminal-dark" aria-label="Dark native agent terminal"></div></div>
+      </section>
+    </main>
+    <script type="module">
+      import { Terminal } from '@xterm/xterm';
+      import '@xterm/xterm/css/xterm.css';
+      import { nativeTerminalThemes } from '../src/app/theme/tokens';
+      import '../src/sessions/sessions.css';
+
+      const sgr = '\x1b[30m0\x1b[31m1\x1b[32m2\x1b[33m3\x1b[34m4\x1b[35m5\x1b[36m6\x1b[37m7\x1b[90m8\x1b[91m9\x1b[92ma\x1b[93mb\x1b[94mc\x1b[95md\x1b[96me\x1b[97mf\x1b[0m';
+      const terminals = {};
+      let rendered = 0;
+      for (const mode of ['light', 'dark']) {
+        const mount = document.querySelector(`[data-testid="ansi-terminal-${mode}"]`);
+        const terminal = new Terminal({ fontSize: 13, lineHeight: 1, scrollback: 0, theme: nativeTerminalThemes[mode] });
+        terminal.open(mount);
+        terminal.write(sgr, () => { rendered += 1; });
+        terminals[mode] = terminal;
+      }
+      window.xtermAnsiRegression = { terminals, themes: nativeTerminalThemes, rendered: () => rendered, sgr };
+    </script>
+  </body>
+</html>

@@ -126,6 +126,33 @@ describe("ModeASetupRunner (the real production Mode A setup runner, not a stub)
     }
   });
 
+  it("uses the live persisted strong-tier AdapterSpec instead of the boot-time auth/model defaults", async () => {
+    const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "wren-harness-mode-a-setup-runner-ws-"));
+    try {
+      respondWithBundle(buildSyntheticBundle({ tools: [{ name: "setup_execution", source: "native" }] }));
+      const doGenerate = async () => textResult("used persisted strong tier");
+      const getStrongAdapterSpec = vi.fn(() => ({ adapter: MOCK_ADAPTER_ID, config: { doGenerate } }));
+      const { ModeASetupRunner } = await import("../harness/setup/runner.js");
+      const runner = new ModeASetupRunner({
+        irPath: "/fixture/genbi-setup/ir.golden.json",
+        warbleBin: EXISTING_FILE,
+        getStrongAdapterSpec,
+      });
+
+      const result = await runner.run({
+        prompt: "scaffold",
+        workspaceRoot,
+        authChoice: { mode: "local" },
+        agentId: "synthetic_agent",
+      });
+
+      expect(result.finalText).toBe("used persisted strong tier");
+      expect(getStrongAdapterSpec).toHaveBeenCalledWith({ mode: "local" });
+    } finally {
+      await rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   it("actually reaches the real setup_execution native tool: a scripted tool call executes a real shell command scoped to workspaceRoot, and writes a real file within scope", async () => {
     const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "wren-harness-mode-a-setup-runner-ws-"));
     try {

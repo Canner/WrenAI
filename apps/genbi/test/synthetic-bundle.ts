@@ -1,6 +1,8 @@
 import type { Capability, Guardrail } from "../harness/bundle/schema.js";
 
 interface BuildBundleOptions {
+  /** Defaults to a generic test-only profile; Harness identity tests opt into a canonical profile. */
+  readonly profile?: string;
   readonly minIrVersion?: string;
   readonly maxIrVersion?: string;
   readonly capabilities?: readonly Capability[];
@@ -17,8 +19,9 @@ interface BuildBundleOptions {
 
 export function buildSyntheticBundle(options: BuildBundleOptions = {}): unknown {
   const {
-    minIrVersion = "0.3",
-    maxIrVersion = "0.3",
+    profile = "synthetic-profile",
+    minIrVersion = "0.5",
+    maxIrVersion = "0.5",
     capabilities = [
       { capability: "llm:cheap", outcome: "native", provided_by: "runtime", criticality: "required" },
     ],
@@ -34,7 +37,7 @@ export function buildSyntheticBundle(options: BuildBundleOptions = {}): unknown 
   return {
     [versionField]: "0.1",
     compat: { min_ir_version: minIrVersion, max_ir_version: maxIrVersion },
-    profile: "synthetic-profile",
+    profile,
     target,
     agents: [
       {

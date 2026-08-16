@@ -8,6 +8,7 @@ import type { SidebarItem } from '@/fixtures';
 import { isBffEnabled } from '@/bff/env';
 import { t } from '@/i18n/strings';
 import { useSessionStore } from './useSessionStore';
+import { structuredAskPath } from '@/sessions/structuredAsk';
 import type { SessionSummary } from '@/bff/client';
 
 function toSidebarItem(session: SessionSummary): SidebarItem {
@@ -16,7 +17,8 @@ function toSidebarItem(session: SessionSummary): SidebarItem {
 
 /**
  * Ask's contextual sidebar: a "New session" action, then the generic
- * `SidebarList`, wired so clicking a session navigates to `/ask/:sessionId`
+ * `SidebarList`, wired so clicking a session navigates to the Sessions-owned
+ * Structured Ask route
  * and the current route drives which item is highlighted (instead of
  * `SidebarList`'s local-only selection).
  *
@@ -42,7 +44,7 @@ export function AskSidebar() {
   return (
     <div>
       <div style={{ padding: '12px 8px 4px' }}>
-        <Button block icon={<PlusOutlined />} onClick={() => navigate('/ask')}>
+        <Button block icon={<PlusOutlined />} onClick={() => navigate(structuredAskPath())}>
           {t('ask.newSession')}
         </Button>
       </div>
@@ -51,7 +53,7 @@ export function AskSidebar() {
         items={items}
         emptyHint={live ? t('ask.noSessions') : undefined}
         selectedKey={selectedKey}
-        onSelect={(key) => navigate(`/ask/${key}`)}
+        onSelect={(key) => navigate(structuredAskPath(key))}
       />
     </div>
   );

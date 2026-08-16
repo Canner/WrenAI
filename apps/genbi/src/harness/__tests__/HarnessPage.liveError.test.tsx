@@ -12,14 +12,15 @@ const getHarness = vi.fn();
 
 vi.mock('@/bff/client', () => ({
   getHarness: (...args: unknown[]) => getHarness(...args),
+  getRuntimeSettingsReadiness: () => Promise.resolve({ valid: true as const }),
 }));
 
-import { useHarnessStore, BOUND_PROFILE_KEY } from '../useHarnessStore';
+import { useHarnessStore } from '../useHarnessStore';
 
 beforeEach(() => {
   getHarness.mockReset();
   useHarnessStore.setState(
-    { selectedProfileKey: BOUND_PROFILE_KEY, harness: undefined, loading: false, error: undefined },
+    { selectedPurpose: 'analysis', harness: undefined, loading: false, error: undefined },
     false,
   );
 });

@@ -30,7 +30,7 @@ function minimalAgent(id: string): Bundle["agents"][number] {
 
 const THREE_AGENT_BUNDLE: Bundle = {
   vercel_bundle_version: "0.1",
-  compat: { min_ir_version: "0.3", max_ir_version: "0.3" },
+  compat: { min_ir_version: "0.4", max_ir_version: "0.4" },
   profile: "genbi-default",
   target: "vercel:headless",
   agents: [minimalAgent("answer_query"), minimalAgent("explain_change"), minimalAgent("generate_dashboard")],

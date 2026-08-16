@@ -17,7 +17,7 @@ import type { RuntimeSettings } from "./wire-types.js";
 export function toAuthChoiceFromRuntimeSettings(settings: RuntimeSettings): AuthChoice {
   switch (settings.authMode) {
     case "subscription":
-      return { mode: "subscription", provider: "claude" };
+      return { mode: "subscription", provider: settings.subscriptionProvider ?? "claude" };
     case "local":
       return { mode: "local" };
     case "byo": {

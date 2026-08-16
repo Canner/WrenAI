@@ -24,7 +24,7 @@ export function TopBar() {
         background: 'var(--ant-color-bg-container)',
       }}
     >
-      <Tooltip title={sidebarCollapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}>
+      <Tooltip placement="bottom" title={sidebarCollapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}>
         <Button
           type="text"
           aria-label={sidebarCollapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}

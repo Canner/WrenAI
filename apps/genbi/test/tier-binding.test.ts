@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { loadBundle } from "../harness/bundle/loader.js";
 import { MOCK_ADAPTER_ID } from "../harness/providers/index.js";
 import { buildHybridTierBinding } from "../harness/route/index.js";
+import { filterTierBindingForAgent } from "../harness/route/mode-a.js";
 import { route } from "../harness/route/index.js";
 import type { AuthChoice } from "../harness/auth/index.js";
 import { mockWrenServerConfig } from "./mock-mcp-server.js";
@@ -83,6 +84,17 @@ describe("buildHybridTierBinding", () => {
     };
 
     expect(() => buildHybridTierBinding(answerQuery, tiers)).toThrow(/unknown tier\(s\).*nonexistent/);
+  });
+
+  it("projects a bundle-wide binding onto the selected agent before strict validation", () => {
+    const selected = { id: "cheap-only", steps: [{ tier: "cheap" }] };
+    const fullBundleBinding = {
+      cheap: { adapter: MOCK_ADAPTER_ID, config: {} },
+      strong: { adapter: MOCK_ADAPTER_ID, config: {} }, // used by another component
+    };
+    const projected = filterTierBindingForAgent(selected, fullBundleBinding);
+    expect(projected).toEqual({ cheap: fullBundleBinding.cheap });
+    expect(buildHybridTierBinding(selected as typeof answerQuery, projected)).toEqual({ tiers: projected });
   });
 });
 

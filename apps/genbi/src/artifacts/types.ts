@@ -53,6 +53,8 @@ interface BaseArtifact {
    * route (`POST /api/sessions/:sessionId/artifacts/:id/publish`). Absent
    * for fixtures, which publish via a local optimistic update instead. */
   sessionId?: string;
+  /** Native retained output keeps its source in the Sessions namespace. */
+  nativeSessionId?: string;
   /** Present once shared; absent means "not yet published". */
   publish?: ArtifactPublish;
 }
@@ -82,6 +84,7 @@ export interface DashboardArtifact extends BaseArtifact {
    * saved envelope is one flat `blocks` array) — rendered as a single
    * envelope, never split into fabricated tiles. `tiles` stays fixture-only. */
   envelope?: RenderEnvelope;
+  source?: ArtifactSource;
 }
 
 export interface ReportArtifact extends BaseArtifact {

@@ -1,8 +1,26 @@
 import { create } from 'zustand';
 import { isBffEnabled } from '@/bff/env';
-import { getContextFiles, getContextImpact, getContextOverview } from '@/bff/client';
+import { getContextEnrichment, getContextFiles, getContextImpact, getContextOverview } from '@/bff/client';
+import type { EnrichmentStatus } from '@/bff/client';
 import type { ContextFileNode, ContextOverviewData, ImpactData } from './types';
 import { t } from '@/i18n/strings';
+
+let enrichmentRequestSequence = 0;
+
+/** A polling response may arrive after a newer snapshot; timestamps are display data, never the ordering authority. */
+function acceptsEnrichmentSnapshot(current: EnrichmentStatus | undefined, incoming: EnrichmentStatus): boolean {
+  const previous = current?.run;
+  const next = incoming.run;
+  if (!previous) return true;
+  // The active-binding polling contract intentionally omits stale runs; a
+  // latest polling response must therefore clear an older local snapshot.
+  if (!next) return true;
+  if (next.bindingGeneration !== previous.bindingGeneration) return next.bindingGeneration > previous.bindingGeneration;
+  // A later polling request owns run replacement; its request sequence is the
+  // ordering authority when a fresh run resets its per-run version to 1.
+  if (next.id !== previous.id) return true;
+  return next.version >= previous.version;
+}
 
 /** Which canvas view the Context page currently shows. */
 export type ContextViewMode = 'overview' | 'file' | 'impact';
@@ -29,6 +47,10 @@ interface ContextStoreState {
   filesLoading: boolean;
   /** Set when the live file tree fetch failed. Fixture mode never populates this. A prior successful fetch, if any, is left in place. */
   filesError?: string;
+  /** Optional post-bind enrichment is loaded independently of the foundation overview. */
+  enrichment?: EnrichmentStatus;
+  enrichmentLoading: boolean;
+  enrichmentError?: string;
   /** Select a file in the tree — shows its read-only content in the canvas. */
   selectFile: (key: string) => void;
   /** Return to the ER + knowledge overview. */
@@ -39,6 +61,9 @@ interface ContextStoreState {
   loadOverview: () => void;
   /** Live-only: fetch the `wren_project` file tree from the BFF. No-op in fixture mode. */
   loadFiles: () => void;
+  loadEnrichment: () => void;
+  /** Re-fetch canonical bound-project artifacts after returning from a native session. */
+  refreshCanonical: () => void;
 }
 
 /**
@@ -52,7 +77,7 @@ interface ContextStoreState {
  * A failed live fetch leaves any prior data in place — the page shows a retry
  * instead of blanking out what was already loaded.
  */
-export const useContextStore = create<ContextStoreState>()((set) => ({
+export const useContextStore = create<ContextStoreState>()((set, get) => ({
   viewMode: 'overview',
   selectedFileKey: undefined,
   impactSeedKey: undefined,
@@ -64,6 +89,9 @@ export const useContextStore = create<ContextStoreState>()((set) => ({
   liveFiles: undefined,
   filesLoading: false,
   filesError: undefined,
+  enrichment: undefined,
+  enrichmentLoading: false,
+  enrichmentError: undefined,
 
   selectFile: (key) => set({ viewMode: 'file', selectedFileKey: key }),
   showOverview: () => set({ viewMode: 'overview' }),
@@ -104,5 +132,29 @@ export const useContextStore = create<ContextStoreState>()((set) => ({
       .catch((err: unknown) => {
         set({ filesLoading: false, filesError: err instanceof Error ? err.message : t('context.filesLoadFailedMessage') });
       });
+  },
+
+  loadEnrichment: () => {
+    if (!isBffEnabled() || typeof getContextEnrichment !== 'function') return;
+    const requestSequence = ++enrichmentRequestSequence;
+    set({ enrichmentLoading: true, enrichmentError: undefined });
+    getContextEnrichment()
+      .then((enrichment) => set((state) => {
+        if (requestSequence !== enrichmentRequestSequence || !acceptsEnrichmentSnapshot(state.enrichment, enrichment)) return { enrichmentLoading: false };
+        return { enrichment, enrichmentLoading: false, enrichmentError: undefined };
+      }))
+      .catch((err: unknown) => {
+        if (requestSequence !== enrichmentRequestSequence) return;
+        // Transport diagnostics are not stable UI/audit data. Keep this
+        // reload-safe message bounded; action failures have their own
+        // version-keyed, bounded presentation in EnrichmentPanel.
+        void err;
+        set({ enrichmentLoading: false, enrichmentError: t('context.enrichmentLoadFailed') });
+      });
+  },
+  refreshCanonical: () => {
+    get().loadOverview();
+    get().loadFiles();
+    get().loadEnrichment();
   },
 }));

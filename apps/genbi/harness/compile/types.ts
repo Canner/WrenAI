@@ -74,9 +74,24 @@ export interface CompileProfileOptions {
   readonly warbleIdentity?: string;
 }
 
+/**
+ * Compiles a profile exactly as authored, without rebinding its context to a
+ * user project. Bootstrap profiles intentionally use this path because their
+ * context is part of the profile source rather than a completed Setup result.
+ */
+export type CompileRawProfileOptions = Omit<CompileProfileOptions, "userProject">;
+
 export interface CompileProfileResult {
   readonly irPath: string;
   readonly bundlePath?: string;
   /** `true` when the result came from the cache without invoking `warble` at all. */
   readonly cacheHit: boolean;
+  /**
+   * The resolved `warble` binary path used for this call, when resolution actually happened —
+   * lets a caller that hits a downstream `BundleCompatError` name which on-disk checkout produced
+   * the bundle (see `loadBundleWithProvenance`, `harness/bundle/loader.ts`). `undefined` only in
+   * the one case where resolution is skippable: a cache hit with an explicit
+   * `options.warbleIdentity` (see that option's doc comment) never touches the binary at all.
+   */
+  readonly warbleBin?: string;
 }

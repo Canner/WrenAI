@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { PageContainer } from '@/ui';
 import { t } from '@/i18n/strings';
 import { useContextStore } from './useContextStore';
@@ -18,11 +19,14 @@ export function ContextPage() {
   const viewMode = useContextStore((s) => s.viewMode);
   const loadOverview = useContextStore((s) => s.loadOverview);
   const loadFiles = useContextStore((s) => s.loadFiles);
+  const loadEnrichment = useContextStore((s) => s.loadEnrichment);
+  const refreshCanonical = useContextStore((s) => s.refreshCanonical);
+  const location = useLocation();
 
   useEffect(() => {
-    loadOverview();
-    loadFiles();
-  }, [loadOverview, loadFiles]);
+    if (location.state?.nativeSessionReturn === 'context') refreshCanonical();
+    else { loadOverview(); loadFiles(); loadEnrichment(); }
+  }, [loadOverview, loadFiles, loadEnrichment, location.state, refreshCanonical]);
 
   let body;
   if (viewMode === 'file') body = <FileViewer />;

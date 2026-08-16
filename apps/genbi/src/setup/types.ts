@@ -25,23 +25,28 @@ export interface SetupStep {
 }
 
 export type AuthMode = 'subscription' | 'byo' | 'local';
+export type SubscriptionProvider = 'claude' | 'codex';
 
 export type Deployment = 'personal' | 'hosted';
 
 /** The api-key adapter a `'byo'` `RuntimeSettings.authMode` dispatches through. */
 export type ApiKeyAdapter = 'anthropic' | 'openai-compatible';
-
-export type ModelTier = 'orchestrator' | 'strong' | 'cheap';
+export type RuntimeTierAdapter = ApiKeyAdapter | 'local';
 
 /**
- * Alias of the Harness page's tier→model binding shape (`{ tier, model }`) so
- * the two surfaces never drift. Setup only configures the orchestrator / strong
- * / cheap tiers (its fixtures use exactly those), but the type is not narrowed.
+ * Extends the Harness page's tier→model binding shape with the persisted
+ * adapter/Base URL choices used to materialize that tier at dispatch time.
+ * Tier names remain unrestricted because the compiled profile owns them.
  */
-export type TierModelSelection = TierModelBinding;
+export interface TierModelSelection extends Omit<TierModelBinding, 'model'> {
+  model?: string;
+  adapter?: RuntimeTierAdapter;
+  baseURL?: string;
+}
 
 export interface RuntimeSettings {
   authMode: AuthMode;
+  subscriptionProvider?: SubscriptionProvider;
   tierModels: TierModelSelection[];
   hybrid: boolean;
   deployment: Deployment;
@@ -51,7 +56,35 @@ export interface RuntimeSettings {
   apiKeyModel?: string;
   /** Base URL override, `openai-compatible` only. Non-secret. */
   apiKeyBaseURL?: string;
+  /** Separate subscription dispatcher driver model; never a compiled profile tier. */
+  subscriptionDriverModel?: string;
 }
+
+/** Login availability only. No credential contents or metadata cross this boundary. */
+export interface SubscriptionLoginStatus {
+  claude: boolean;
+  codex: boolean;
+}
+
+/** Provider-approved suggestion metadata; model fields remain free-form in Setup. */
+export interface SubscriptionModelCatalogEntry {
+  model: string;
+  displayName: string;
+  description?: string;
+  isDefault?: boolean;
+  reasoningEfforts?: { value: string; displayName: string; description?: string }[];
+}
+
+/** Mirrors the BFF's deliberately narrow model discovery wire contract. */
+export type SubscriptionModelCatalog =
+  | { version: 1; status: 'ready'; provider: SubscriptionProvider; models: SubscriptionModelCatalogEntry[] }
+  | {
+      version: 1;
+      status: 'unavailable';
+      provider: SubscriptionProvider;
+      code: 'not_authenticated' | 'runtime_unavailable' | 'timeout' | 'protocol_error';
+      retryable: boolean;
+    };
 
 /**
  * Whether each api-key adapter's required credential env var is present on the BFF process —
@@ -63,7 +96,18 @@ export interface AdapterEnvStatus {
 }
 
 /** `PUT /api/config/runtime`'s response — the persisted settings plus any compliance warnings. */
-export type RuntimeSettingsPutResponse = RuntimeSettings & { warnings: string[] };
+export interface NativeRuntimeBinding {
+  configured: boolean;
+  generation: number;
+  provider?: SubscriptionProvider;
+  target?: 'claude-code:interactive' | 'codex:interactive';
+  targetLabel?: 'Claude CLI' | 'Codex CLI';
+}
+
+export type RuntimeSettingsPutResponse = RuntimeSettings & { warnings: string[]; nativeSessionBinding: NativeRuntimeBinding };
+
+/** Read-only health of the saved Runtime, for correcting legacy settings before dispatch. */
+export type RuntimeSettingsReadiness = { valid: true } | { valid: false; correction: string };
 
 export type ConversationRole = 'assistant' | 'user';
 
@@ -77,6 +121,24 @@ export interface ConversationMessage {
   terminal?: SetupStatusEvent;
 }
 
+/** Safe retry data returned by the BFF; it never includes a provider session anchor. */
+export interface SetupFailureRecovery {
+  attempt: 'connect' | 'connect_resume' | 'context';
+  projectName: string;
+  sourceType: string;
+  error: string;
+  workLog: ToolStep[];
+}
+
+/** Safe reload snapshot for a completed setup turn paused on user input. */
+export interface SetupNeedsInputRecovery {
+  attempt: 'connect' | 'connect_resume' | 'context';
+  projectName: string;
+  sourceType: string;
+  message: string;
+  workLog: ToolStep[];
+}
+
 /** One selectable data source type offered by the Connect step. */
 export interface DataSourceOption {
   key: string;
@@ -86,6 +148,5 @@ export interface DataSourceOption {
 /** Discovered semantic-layer summary shown once the Context step completes. */
 export interface ContextSummary {
   models: number;
-  measures: number;
-  knowledgeNotes: number;
+  relationships: number;
 }

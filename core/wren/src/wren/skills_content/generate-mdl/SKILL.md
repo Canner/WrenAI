@@ -62,6 +62,25 @@ If no existing project is detected, proceed directly to Phase 1.
 Use whatever introspection method is available. Here are common approaches
 ranked by convenience:
 
+### Option 0: Project-pinned Wren connector (recommended for a Wren project)
+
+When the current directory is already a Wren project with a pinned profile,
+use Wren's own profile resolver and connector. This works before the first MDL
+build, does not require reading `.env`, and preserves connector-specific
+semantics such as DuckDB local-file profiles treating `url` as the directory
+that contains `.duckdb` files (never as one database file):
+
+```bash
+WREN_PYTHON="$(sed -n '1s/^#!//p' "$(command -v wren)")"; "$WREN_PYTHON" -c "from pathlib import Path; from wren.profile import resolve_profile_for_project, expand_profile_secrets; from wren.model.data_source import DataSource; from wren.connector import get_connector; _, p = resolve_profile_for_project(Path.cwd(), strict=True); ds = DataSource(p.pop('datasource')); c = get_connector(ds, ds.get_connection_info(expand_profile_secrets(p))); print(c.query(\"SELECT table_catalog, table_schema, table_name, column_name, ordinal_position, data_type, is_nullable FROM information_schema.columns WHERE table_schema NOT IN ('information_schema', 'pg_catalog') ORDER BY table_catalog, table_schema, table_name, ordinal_position\").to_pylist()); c.close()"
+```
+
+Do not replace `WREN_PYTHON` with a generic `python`: `wren` may be installed
+in an isolated tool environment that is not importable from the system Python.
+Do not print the resolved profile or expanded connection fields. The command
+above prints schema metadata only. If the source needs additional constraint
+metadata, issue another `information_schema` query through the same resolved
+connector shape.
+
 ### Option A: SQLAlchemy (recommended if available)
 
 ```python
@@ -126,7 +145,8 @@ wren --sql "SELECT column_name, data_type FROM information_schema.columns WHERE 
 Note: this goes through the MDL layer, so it only works if you already
 have a minimal MDL or if the database supports `information_schema` as
 regular tables (not every data source does). For bootstrapping from zero,
-Option A or B is preferred.
+Option 0 is preferred for an already-pinned Wren project; otherwise use
+Option A or B. Do not use `wren --sql` before `target/mdl.json` exists.
 
 ## Phase 3 — Normalize types
 

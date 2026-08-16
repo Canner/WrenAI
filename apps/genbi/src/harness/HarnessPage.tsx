@@ -1,23 +1,20 @@
 import { useEffect } from 'react';
-import { Button, Tooltip } from 'antd';
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { PageContainer, PageState } from '@/ui';
 import { t } from '@/i18n/strings';
 import { isBffEnabled } from '@/bff/env';
-import { BOUND_PROFILE_KEY, useHarnessStore } from './useHarnessStore';
-import { fixtureHarnessView } from './fixtures';
+import { useHarnessStore } from './useHarnessStore';
+import { fixtureHarnessViews } from './fixtures';
 import { HarnessOverview } from './HarnessOverview';
 
 /**
  * Harness page canvas: a single scrollable status view over how the bound
  * profile is realized — components, capability resolution, model bindings,
- * and the compiled bundle behind every answer (see `HarnessOverview`).
- * Fixture mode (no `VITE_BFF_URL`) renders the fixture bundle exactly as
- * before; live mode fetches the harness from the BFF on mount. Re-compile /
- * Add profile are Phase-3 affordances and render disabled.
+ * with technical diagnostics available on demand (see `HarnessOverview`).
+ * Fixture mode (no `VITE_BFF_URL`) renders the fixture bundle; live mode
+ * fetches the selected purpose from the BFF on mount.
  */
 export function HarnessPage() {
-  const selectedProfileKey = useHarnessStore((s) => s.selectedProfileKey);
+  const selectedPurpose = useHarnessStore((s) => s.selectedPurpose);
   const harness = useHarnessStore((s) => s.harness);
   const loading = useHarnessStore((s) => s.loading);
   const error = useHarnessStore((s) => s.error);
@@ -28,7 +25,7 @@ export function HarnessPage() {
   }, [loadHarness]);
 
   const live = isBffEnabled();
-  const view = live ? harness : fixtureHarnessView;
+  const view = live ? harness : fixtureHarnessViews[selectedPurpose];
 
   let body;
   if (live && loading && !harness) {
@@ -37,7 +34,7 @@ export function HarnessPage() {
     body = (
       <PageState status="error" title={t('harness.loadErrorTitle')} description={error} onRetry={loadHarness} />
     );
-  } else if (view && selectedProfileKey === BOUND_PROFILE_KEY) {
+  } else if (view && view.purpose.purpose === selectedPurpose) {
     body = <HarnessOverview harness={view} />;
   } else {
     body = (
@@ -50,20 +47,6 @@ export function HarnessPage() {
       maxWidth={1000}
       title={t('nav.harness')}
       lead={t('harness.pageSubtitle')}
-      actions={
-        <>
-          <Tooltip title={t('harness.outOfScopeHint')}>
-            <Button icon={<ReloadOutlined />} disabled>
-              {t('harness.recompile')}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t('harness.outOfScopeHint')}>
-            <Button icon={<PlusOutlined />} disabled>
-              {t('harness.addProfile')}
-            </Button>
-          </Tooltip>
-        </>
-      }
     >
       {body}
     </PageContainer>

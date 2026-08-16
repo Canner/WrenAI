@@ -5,7 +5,7 @@ import type {
   LanguageModelV4Usage,
 } from "@ai-sdk/provider";
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createDefaultCapabilityRegistry } from "../harness/capability/registry.js";
@@ -21,9 +21,9 @@ import { WARBLE_REPO } from "./warble-checkout.js";
 /**
  * Opt-in end-to-end coverage (skipped by default, no flag needed): this is
  * the only test in the suite that shells out to a real `wren` binary and
- * reads a real DuckDB-backed wren project, so it's gated on both being
- * present rather than hermetic like the rest of the suite. The LLM stays entirely mocked
- * (no API credits burned) — only the `query` tool call is real.
+ * reads a real DuckDB-backed wren project, so it's gated on its preconditions
+ * being present rather than hermetic like the rest of the suite. The LLM stays
+ * entirely mocked (no API credits burned) — only the tool call is real.
  */
 const DEFAULT_PROJECT_DIR = path.join(WARBLE_REPO, "examples", "jaffle-wren");
 const projectDir = process.env["WREN_TEST_PROJECT"] ?? DEFAULT_PROJECT_DIR;
@@ -37,7 +37,25 @@ function isWrenOnPath(): boolean {
   }
 }
 
-const canRun = existsSync(path.join(projectDir, "wren_project.yml")) && isWrenOnPath();
+/**
+ * Reading the semantic layer needs only the project and the binary. Running a
+ * query additionally needs a pinned connection profile: `wren` refuses to fall
+ * back to whatever profile happens to be active on the machine, so an unpinned
+ * project cannot answer a query however well everything else is set up.
+ *
+ * That third precondition used to be unchecked, and the default project is
+ * unpinned deliberately — the bundled example ships its MDL and DuckDB file with
+ * no connection wired — so the query case failed where it should have skipped.
+ * The two are gated separately so introspection, which genuinely works against
+ * an unpinned project, keeps running. Point WREN_TEST_PROJECT at a pinned
+ * project to exercise the query path too.
+ */
+function isProjectPinned(dir: string): boolean {
+  return /^profile:\s*\S/m.test(readFileSync(path.join(dir, "wren_project.yml"), "utf8"));
+}
+
+const canIntrospect = existsSync(path.join(projectDir, "wren_project.yml")) && isWrenOnPath();
+const canQuery = canIntrospect && isProjectPinned(projectDir);
 
 const EMPTY_USAGE: LanguageModelV4Usage = {
   inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
@@ -75,7 +93,7 @@ function findToolResultOutput(call: LanguageModelV4CallOptions, toolCallId: stri
   throw new Error(`no tool-result content part found for toolCallId "${toolCallId}"`);
 }
 
-describe.skipIf(!canRun)("runAgent against a real wren project (native query tool, mock LLM) [opt-in e2e]", () => {
+describe.skipIf(!canQuery)("runAgent against a real wren project (native query tool, mock LLM) [opt-in e2e]", () => {
   it("executes the query tool through the real wren CLI and returns real jaffle rows", async () => {
     const sql = "SELECT first_name, customer_lifetime_value FROM customers ORDER BY customer_lifetime_value DESC LIMIT 1";
     let capturedToolResult: LanguageModelV4ToolResultOutput | undefined;
@@ -149,7 +167,7 @@ describe.skipIf(!canRun)("runAgent against a real wren project (native query too
   });
 });
 
-describe.skipIf(!canRun)("runAgent(explore_model) against a real wren project (native semantic_introspect tool, mock LLM) [opt-in e2e]", () => {
+describe.skipIf(!canIntrospect)("runAgent(explore_model) against a real wren project (native semantic_introspect tool, mock LLM) [opt-in e2e]", () => {
   it("executes the semantic_introspect tool through the real wren CLI and returns real jaffle model names", async () => {
     let capturedToolResult: LanguageModelV4ToolResultOutput | undefined;
 

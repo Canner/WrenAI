@@ -1,10 +1,8 @@
 /*
  * Artifacts page sidebar — custom list (not the generic `SidebarList`, which
- * has no icon slot). Mirrors the `ContextSidebar` fix: `.genbi-arow` and
- * `.genbi-aname` both get `min-width: 0` so the row can shrink below the
- * label's intrinsic width, and `.genbi-aname` elides with an ellipsis instead
- * of wrapping. Colors come from AntD tokens (`--ant-*`) — nothing here
- * hard-codes a color.
+ * has no icon slot). Artifact names get the primary, two-line region; concise
+ * lifecycle tags sit below it instead of competing for the same narrow row.
+ * Colors come from AntD tokens (`--ant-*`) — nothing here hard-codes a color.
  */
 
 .genbi-artifacts-list {
@@ -15,8 +13,9 @@
 }
 
 .genbi-arow {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
   width: 100%;
   min-width: 0;
   gap: 8px;
@@ -53,14 +52,14 @@
 
 .genbi-aicon {
   display: inline-flex;
-  flex: none;
+  grid-row: 1 / span 2;
   align-items: center;
+  margin-top: 3px;
   font-size: 14px;
   color: var(--ant-color-text-tertiary);
 }
 
 .genbi-atext {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -69,14 +68,19 @@
 
 .genbi-aname {
   min-width: 0;
+  display: -webkit-box;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .genbi-abadges {
   display: flex;
+  grid-column: 2;
   align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
-  flex: none;
+  min-width: 0;
 }

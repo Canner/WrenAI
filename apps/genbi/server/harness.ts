@@ -14,25 +14,19 @@
  * to `gpt-4o`), and per-component introspection's whole job is to report
  * what that component would really run.
  *
- * `runtime.tierModels` (the top-level runtime summary, distinct
- * from each component's own `tiers`) instead reuses `store.getRuntimeSettings()`
- * directly, the SAME source `GET /api/config/runtime` reports (see
- * `buildRuntime`). It used to share the "real binding" resolver above, but
- * under a `subscription` auth choice that real binding is genuinely
- * unobservable here (the `warble-agent-sdk` dispatcher owns model routing
- * internally) and the resolver could only report the same auth label
- * ("Subscription (claude)") for every tier — leaking a non-answer where the
- * UI needs an actual model name, and disagreeing with `/api/config/runtime`
- * for no good reason. `runtime.tierModels` also no longer carries the
- * internal `modeA`/`modeB` dispatch bucket — see `runtimeBackendAndLabel`.
+ * `runtime.tierModels` (the top-level runtime summary) shares that same
+ * effective resolver, so it cannot disagree with the per-component rows.
+ * Explicit subscription settings are knowable because this process generated
+ * the dispatcher models config from them; an unsaved boot-time subscription
+ * config remains opaque and is labeled as such.
  *
  * Naming note — bundle "components" (`HarnessDto.components`,
  * `bundle.agents`) are presented in the frontend as **Components** — not
  * "sub-agents" (that framing is reserved for the profile level). This
- * harness's runtime (`harness/session/run.ts`) only ever executes ONE agent per
- * turn (`answer_query`, the single orchestrator) — the other bundle agents
- * surfaced here are read-only declared components of the compiled bundle,
- * not concurrently-running sub-agents. This comment plus the one on
+ * harness runtime routes exactly ONE component per turn from the user's
+ * intent (for example `answer_query` or `generate_dashboard`) — the other
+ * bundle agents surfaced here are read-only declared components of the
+ * compiled bundle, not concurrently-running sub-agents. This comment plus the one on
  * `HarnessComponent`/`HarnessDto` in `wire-types.ts` document that framing.
  */
 import { createHash } from "node:crypto";
@@ -41,6 +35,10 @@ import { describeConnection, resolveConnectionSource } from "./conn-config.js";
 import { bundleFormatVersion, deriveAdapterSpec, findLockedGatedCheck } from "../harness/index.js";
 import type { AdapterSpec, Agent, Bundle, Capability, Guardrail, RouteOptions, Step } from "../harness/index.js";
 import type { Store } from "./db.js";
+import { assertHarnessPurposeProfile, NATIVE_DISPATCH_REGISTRY } from "./native-dispatch-registry.js";
+import type { NativePurpose } from "./native-dispatch-registry.js";
+import type { NativeSessionReadiness } from "./native-sessions.js";
+import { collectBundleTierNames as collectCompiledBundleTierNames, effectiveTierModel } from "./runtime-binding.js";
 import type {
   CapabilityOutcome,
   HarnessCapability,
@@ -49,6 +47,7 @@ import type {
   HarnessDto,
   HarnessGuardrail,
   HarnessProfile,
+  HarnessPurpose,
   HarnessRuntime,
   HarnessRuntimeBackend,
   HarnessRuntimeDispatcher,
@@ -100,15 +99,13 @@ function configuredFallbackModel(tier: string, store: Store): string {
 }
 
 /**
- * `runtime.tierModels`' model source is `store.getRuntimeSettings().tierModels`,
- * the exact same data `GET /api/config/runtime` returns, so the two endpoints always agree.
- * Unlike `configuredFallbackModel` (used only as a last-resort fallback for the per-component
- * REAL binding), this is the PRIMARY source for `runtime.tierModels`, so it carries no
- * "(configured)" qualifier — it's simply the answer, not a fallback from something else.
+ * Explicit persisted model source. It is authoritative only after a validated
+ * save; seeded Setup defaults never use this path.
  */
 function storeTierModel(tier: string, store: Store): string {
-  const configured = store.getRuntimeSettings().tierModels.find((binding) => binding.tier === tier)?.model;
-  return configured ?? `${tier} (unbound)`;
+  const settings = store.getRuntimeSettings();
+  const configured = settings.tierModels.find((binding) => binding.tier === tier);
+  return configured ? effectiveTierModel(configured, settings) ?? `${tier} (unbound)` : `${tier} (unbound)`;
 }
 
 interface RealTierResolver {
@@ -122,7 +119,7 @@ interface RealTierResolver {
  * reflect what really runs rather than the Setup page's seeded settings:
  *
  * - `subscription` (Mode B): there is no per-tier `AdapterSpec` at all — the
- *   `warble-agent-sdk` dispatcher CLI owns model routing internally, and any
+ *   provider-specific subscription dispatcher owns model routing internally, and any
  *   `--models-config` override is opaque YAML this harness never parses (see
  *   `ModeBOptions.modelsConfig`'s doc comment) — so every tier honestly
  *   reports the same subscription label (matching `runtimeModeAndLabel`'s
@@ -145,6 +142,9 @@ function buildRealTierResolver(baseRouteOptions: BaseRouteOptions, store: Store)
   const { authChoice } = baseRouteOptions;
 
   if (authChoice.mode === "subscription") {
+    if (store.hasExplicitRuntimeSettings()) {
+      return { resolve: (tier) => storeTierModel(tier, store) };
+    }
     const label = `Subscription (${authChoice.provider})`;
     return { resolve: () => label };
   }
@@ -188,18 +188,13 @@ function runtimeBackendAndLabel(authChoice: RouteOptions["authChoice"]): { backe
 }
 
 /**
- * Mirrors `route()`'s OWN back-end predicate (`harness/route/route.ts`,
- * `if (authChoice.mode === "subscription")`) verbatim — a `subscription`
- * `authChoice` is the one and only condition under which `route()` sends the
- * turn to Mode B (`runModeBDefault`, which shells the warble `claude-agent-sdk`
- * dispatcher CLI); every other mode goes to Mode A (`runModeADefault`, fully
- * in-process, no dispatcher subprocess at all). This is deliberately the same
- * condition as `runtimeBackendAndLabel`'s `"subscription"` case rather than an
- * independently-maintained copy of the auth-mode list, so the two can never
- * drift apart.
+ * Reports the provider-specific dispatcher that owns the configured product
+ * path: Claude subscription uses `claude-agent-sdk`, Codex subscription uses
+ * `codex-local`, and non-subscription modes run in-process.
  */
 function runtimeDispatcher(authChoice: RouteOptions["authChoice"]): HarnessRuntimeDispatcher {
-  return authChoice.mode === "subscription" ? "claude-agent-sdk" : "in-process";
+  if (authChoice.mode !== "subscription") return "in-process";
+  return authChoice.provider === "codex" ? "codex-local" : "claude-agent-sdk";
 }
 
 function buildCapability(capability: Capability): HarnessCapability {
@@ -269,10 +264,58 @@ function buildStep(step: Step): HarnessStep {
 
 // The agent's distinct step tiers, each resolved to its REAL model via `resolver` (not the
 // Setup-editable store) — mirrors what `runModeADefault` would actually bind for this agent's
-// steps. NOTE: only `answer_query` is ever actually executed by the runtime (see this file's
-// module doc comment); every component's tiers/model are the real binding "as if" that
-// component ran, for introspection purposes.
-function buildComponent(agent: Agent, resolver: RealTierResolver): HarnessComponent {
+// steps. The runtime routes one component per turn; each component's tiers/model report the
+// real binding that applies when that component is selected.
+/** Public, purpose-level reason used only when native readiness cannot execute the selected purpose. */
+const NATIVE_PURPOSE_UNAVAILABLE_REASON = "The selected native session is unavailable.";
+
+/**
+ * A component can be unavailable for two independent reasons, and only one
+ * of them is ever safe to promote:
+ *
+ * - "bundle-level" (`"availability" in agent`): Warble's compiled dispatch
+ *   target declared this component unavailable on the PROGRAMMATIC path
+ *   (e.g. `apply_enrichment`'s `human_approval: fail`) — but the currently
+ *   selected purpose's native CLI session may still be able to run it. When
+ *   it can, this promotes the row to `"ready"`, qualified by the native
+ *   target label, and moves the programmatic limitation into
+ *   `nativeAvailability` for the expanded row rather than dropping it.
+ * - "purpose-level" (native session readiness for the selected purpose):
+ *   there is no execution path at all right now — never promoted.
+ *
+ * The branch taken here (not any comparison against Warble's reason string)
+ * is what decides promotion, per the DTO's typed `nativeAvailability` field.
+ */
+function buildComponent(agent: Agent, resolver: RealTierResolver, dispatchTarget: string, purposeInfo: HarnessPurpose): HarnessComponent {
+  if ("availability" in agent) {
+    const viaLabel = purposeInfo.available ? purposeInfo.targetLabel : undefined;
+    return {
+      id: agent.id,
+      name: humanize(agent.id),
+      componentType: agent.component_type,
+      realizationKind: agent.realization_kind,
+      trigger: agent.trigger,
+      outcome: agent.outcome,
+      callableAs: agent.verb ?? agent.id,
+      model: "—",
+      tiers: [],
+      capabilities: [],
+      guardrails: [],
+      tools: [],
+      outputBlocks: [],
+      steps: [],
+      ...(viaLabel !== undefined
+        ? {
+            status: "ready",
+            nativeAvailability: {
+              viaLabel,
+              compiledDispatchTarget: dispatchTarget,
+              compiledUnavailableReason: agent.availability.reason,
+            },
+          }
+        : { status: "unavailable", unavailableReason: agent.availability.reason }),
+    };
+  }
   const distinctTiers = [...new Set(agent.steps.map((step) => step.tier))];
   const tiers: TierModelBinding[] = distinctTiers.map((tier) => ({ tier, model: resolver.resolve(tier) }));
   const lastStep = agent.steps[agent.steps.length - 1];
@@ -293,7 +336,9 @@ function buildComponent(agent: Agent, resolver: RealTierResolver): HarnessCompon
     tools: agent.tools.map((tool) => ({ name: tool.name, source: tool.source })),
     outputBlocks: extractOutputBlocks(agent.output_schema),
     steps: agent.steps.map(buildStep),
-    status: "ready",
+    ...(purposeInfo.available
+      ? { status: "ready" }
+      : { status: "unavailable", unavailableReason: purposeInfo.reason ?? NATIVE_PURPOSE_UNAVAILABLE_REASON }),
   };
 }
 
@@ -330,34 +375,39 @@ function computeBundleHash(bundle: Bundle): string {
   return createHash("sha256").update(canonicalJson(bundle)).digest("hex").slice(0, 7);
 }
 
-function buildProfile(bundle: Bundle, baseRouteOptions: BaseRouteOptions, store: Store): HarnessProfile {
+function buildProfile(bundle: Bundle, baseRouteOptions: BaseRouteOptions, store: Store, purpose: NativePurpose): HarnessProfile {
   const verifyGate = bundle.agents.some((agent) => findLockedGatedCheck(agent) !== undefined);
   return {
     id: bundle.profile,
     name: humanize(bundle.profile),
-    boundContext: path.basename(baseRouteOptions.userProject),
+    boundContext: purpose === "setup" ? "Bootstrap workspace (no project bound)" : path.basename(baseRouteOptions.userProject),
     verifyGate,
     bundleId: `${bundle.profile}@${bundle.target}`,
     bundleVersion: bundleFormatVersion(bundle),
     irVersion: deriveIrVersion(bundle.compat),
     dispatchTarget: bundle.target,
     bundleHash: computeBundleHash(bundle),
-    status: deriveProfileStatus(store),
+    status: purpose === "setup" ? "Bootstrap" : deriveProfileStatus(store),
   };
 }
 
-function collectBundleTierNames(bundle: Bundle): string[] {
-  const seen = new Set<string>();
-  for (const agent of bundle.agents) {
-    for (const step of agent.steps) seen.add(step.tier);
-  }
-  return [...seen];
+/** Exported bundle-derived source used by runtime configuration validation. */
+export function collectBundleTierNames(bundle: Bundle): string[] {
+  return collectCompiledBundleTierNames(bundle);
 }
 
-function buildRuntime(bundle: Bundle, baseRouteOptions: BaseRouteOptions, store: Store): HarnessRuntime {
+/**
+ * Keep the compiled bundle's declared profile tied to the BFF-selected
+ * purpose before exposing it through the read-only Harness DTO.
+ */
+export function assertHarnessBundlePurpose(bundle: Bundle, purpose: NativePurpose): void {
+  assertHarnessPurposeProfile(purpose, bundle.profile);
+}
+
+function buildRuntime(bundle: Bundle, baseRouteOptions: BaseRouteOptions, resolver: RealTierResolver): HarnessRuntime {
   const { backend, label } = runtimeBackendAndLabel(baseRouteOptions.authChoice);
   const dispatcher = runtimeDispatcher(baseRouteOptions.authChoice);
-  const tierModels: TierModelBinding[] = collectBundleTierNames(bundle).map((tier) => ({ tier, model: storeTierModel(tier, store) }));
+  const tierModels: TierModelBinding[] = collectBundleTierNames(bundle).map((tier) => ({ tier, model: resolver.resolve(tier) }));
   return { backend, label, dispatcher, tierModels };
 }
 
@@ -372,7 +422,10 @@ function buildRuntime(bundle: Bundle, baseRouteOptions: BaseRouteOptions, store:
 // profile. There is still no real "last synced at"/"via which mechanism"
 // signal available from this harness, so `via`/`lastSync` stay honest "—"
 // too. `tablesSynced` comes from real store data (the context model count).
-function buildConnection(baseRouteOptions: BaseRouteOptions, store: Store): HarnessConnection {
+function buildConnection(baseRouteOptions: BaseRouteOptions, store: Store, purpose: NativePurpose): HarnessConnection {
+  if (purpose === "setup") {
+    return { type: "—", location: "—", via: "Bootstrap workspace", tablesSynced: 0, lastSync: "—", health: "degraded" };
+  }
   const tablesSynced = store.getContextModels().length;
   const source = resolveConnectionSource(baseRouteOptions.userProject);
   const { type, location } = describeConnection(source.datasource, source.fields);
@@ -386,12 +439,33 @@ function buildConnection(baseRouteOptions: BaseRouteOptions, store: Store): Harn
   };
 }
 
-export function buildHarnessDto(bundle: Bundle, store: Store, baseRouteOptions: BaseRouteOptions): HarnessDto {
-  const resolver = buildRealTierResolver(baseRouteOptions, store);
+function buildHarnessPurpose(purpose: NativePurpose, nativeReadiness?: NativeSessionReadiness): HarnessPurpose {
+  const definition = NATIVE_DISPATCH_REGISTRY[purpose];
+  const readiness = nativeReadiness?.purposes[purpose];
+  const available = readiness?.available ?? false;
   return {
-    profile: buildProfile(bundle, baseRouteOptions, store),
-    runtime: buildRuntime(bundle, baseRouteOptions, store),
-    connection: buildConnection(baseRouteOptions, store),
-    components: bundle.agents.map((agent) => buildComponent(agent, resolver)),
+    ...definition,
+    ...(readiness?.target ? { target: readiness.target, targetLabel: readiness.targetLabel as "Claude CLI" | "Codex CLI" } : {}),
+    available,
+    ...(!available ? { reason: readiness?.reason ?? NATIVE_PURPOSE_UNAVAILABLE_REASON } : {}),
+  };
+}
+
+export function buildHarnessDto(bundle: Bundle, store: Store, baseRouteOptions: BaseRouteOptions, purpose: NativePurpose = "analysis", nativeReadiness?: NativeSessionReadiness): HarnessDto {
+  const resolver = buildRealTierResolver(baseRouteOptions, store);
+  const purposeInfo = buildHarnessPurpose(purpose, nativeReadiness);
+  return {
+    purpose: purposeInfo,
+    profile: buildProfile(bundle, baseRouteOptions, store, purpose),
+    runtime: buildRuntime(bundle, baseRouteOptions, resolver),
+    connection: buildConnection(baseRouteOptions, store, purpose),
+    components: bundle.agents.map((agent) => buildComponent(agent, resolver, bundle.target, purposeInfo)),
+    nativeSessions: {
+      binding: store.getNativeRuntimeBinding(),
+      dispatches: Object.values(NATIVE_DISPATCH_REGISTRY).map((definition) => {
+        const readiness = nativeReadiness?.purposes[definition.purpose];
+        return { purpose: definition.purpose, profile: definition.profile, scopeKind: definition.scopeKind, ...(readiness?.target ? { target: readiness.target, targetLabel: readiness.targetLabel as "Claude CLI" | "Codex CLI" } : {}), available: readiness?.available ?? false, ...(readiness?.reason ? { reason: readiness.reason } : {}) };
+      }),
+    },
   };
 }

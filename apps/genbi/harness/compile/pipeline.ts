@@ -8,7 +8,7 @@ import { composeUserProfile } from "./compose-profile.js";
 import { WarbleCommandFailedError } from "./errors.js";
 import { hashDirectory, hashFiles } from "./fingerprint.js";
 import { resolveWarbleBinary } from "./resolve-binary.js";
-import type { CompileCacheKey, CompileProfileOptions, CompileProfileResult } from "./types.js";
+import type { CompileCacheKey, CompileProfileOptions, CompileProfileResult, CompileRawProfileOptions } from "./types.js";
 import { getWarbleIdentity } from "./warble-identity.js";
 
 /** Fixed `providerFragmentHash` for `"native"` mode, which never reads `--provider` fragments at all. */
@@ -69,10 +69,37 @@ const WARBLE_COMMAND_TIMEOUT_MS = 2 * 60 * 1000;
  * a caller-supplied `workDir` is never deleted.
  */
 export async function compileProfile(options: CompileProfileOptions): Promise<CompileProfileResult> {
+  return compileProfileSource(
+    options,
+    await hashDirectory(path.resolve(options.userProject)),
+    (workDir) => composeUserProfile({
+      profileSource: options.profileSource,
+      userProject: options.userProject,
+      destDir: workDir,
+    }),
+  );
+}
+
+/**
+ * Compiles a profile's authored context without composing it against a bound
+ * project. The fixed context fingerprint keeps raw-profile artifacts distinct
+ * from every user-project-bound compile while `profileHash` still invalidates
+ * the entry whenever the source profile changes.
+ */
+export async function compileRawProfile(options: CompileRawProfileOptions): Promise<CompileProfileResult> {
+  return compileProfileSource(options, "raw-profile-context", async () => path.resolve(options.profileSource));
+}
+
+type CompileSourceOptions = Omit<CompileProfileOptions, "userProject">;
+
+async function compileProfileSource(
+  options: CompileSourceOptions,
+  contextFingerprint: string,
+  prepareProfile: (workDir: string) => Promise<string>,
+): Promise<CompileProfileResult> {
   const cache = options.cache ?? createFileSystemCompileCache();
 
   const profileHash = await hashDirectory(path.resolve(options.profileSource));
-  const contextFingerprint = await hashDirectory(path.resolve(options.userProject));
 
   const providerPaths = options.providers ?? [DEFAULT_WREN_PROVIDER_PATH];
   const providerFragmentHash = options.mode === "agnostic" ? await hashFiles(providerPaths) : NATIVE_MODE_PROVIDER_HASH;
@@ -98,7 +125,7 @@ export async function compileProfile(options: CompileProfileOptions): Promise<Co
 
   const cached = await cache.get(cacheKey);
   if (cached !== undefined) {
-    return { ...cached, cacheHit: true };
+    return { ...cached, cacheHit: true, ...(resolvedWarbleBin !== undefined ? { warbleBin: resolvedWarbleBin } : {}) };
   }
 
   const warbleBin = await ensureWarbleBin();
@@ -109,14 +136,10 @@ export async function compileProfile(options: CompileProfileOptions): Promise<Co
   let removeWorkDir = !callerSuppliedWorkDir;
 
   try {
-    const composedDir = await composeUserProfile({
-      profileSource: options.profileSource,
-      userProject: options.userProject,
-      destDir: workDir,
-    });
+    const compiledProfile = await prepareProfile(workDir);
 
     const irPath = path.join(workDir, "ir.json");
-    await runWarble(warbleBin, ["compile", composedDir, "-o", irPath]);
+    await runWarble(warbleBin, ["compile", compiledProfile, "-o", irPath]);
 
     let bundlePath: string | undefined;
     if (options.mode === "agnostic") {
@@ -135,7 +158,7 @@ export async function compileProfile(options: CompileProfileOptions): Promise<Co
     if (persisted.irPath === freshEntry.irPath) {
       removeWorkDir = false;
     }
-    return { ...persisted, cacheHit: false };
+    return { ...persisted, cacheHit: false, warbleBin };
   } finally {
     if (removeWorkDir) {
       await rm(workDir, { recursive: true, force: true });

@@ -14,7 +14,18 @@ import type {
   TierModelBinding,
 } from '@/harness/types';
 import type { AskSessionData } from '@/session/types';
-import type { AdapterEnvStatus, RuntimeSettings, RuntimeSettingsPutResponse, SetupStep } from '@/setup/types';
+import type {
+  AdapterEnvStatus,
+  RuntimeSettings,
+  RuntimeSettingsPutResponse,
+  RuntimeSettingsReadiness,
+  SetupFailureRecovery,
+  SetupNeedsInputRecovery,
+  SetupStep,
+  SubscriptionModelCatalog,
+  SubscriptionProvider,
+  SubscriptionLoginStatus,
+} from '@/setup/types';
 import { bffBaseUrl } from './env';
 
 /**
@@ -26,6 +37,24 @@ import { bffBaseUrl } from './env';
 
 interface ApiError {
   error?: string;
+  code?: string;
+}
+
+/** A BFF failure with an optional stable public classification. */
+export class BffRequestError extends Error {
+  constructor(message: string, readonly status: number, readonly code?: string) {
+    super(message);
+    this.name = 'BffRequestError';
+  }
+}
+
+/** The only native restart error that proves a retained UUID cannot be replayed safely. */
+export const NATIVE_SESSION_LAUNCH_ACTION_STALE_CODE = 'native_session_launch_action_stale';
+
+export function isNativeSessionLaunchActionStale(error: unknown): boolean {
+  return error instanceof BffRequestError
+    && error.status === 409
+    && error.code === NATIVE_SESSION_LAUNCH_ACTION_STALE_CODE;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -35,8 +64,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body: ApiError | undefined = await res.json().catch(() => undefined);
-    throw new Error(body?.error ?? `Request to ${path} failed: ${res.status} ${res.statusText}`);
+    throw new BffRequestError(body?.error ?? `Request to ${path} failed: ${res.status} ${res.statusText}`, res.status, typeof body?.code === 'string' ? body.code : undefined);
   }
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -118,6 +148,147 @@ export function getContextFiles(): Promise<ContextFileNode[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Native Sessions workbench (deliberately separate from structured Ask)
+// ---------------------------------------------------------------------------
+
+export type NativeSessionPurpose = 'analysis' | 'setup' | 'context_enrichment';
+export type NativeSessionLaunchIntent = 'open_existing' | 'start_separate' | 'resume';
+export type NativeSessionVendor = 'claude' | 'codex';
+export type NativeSessionStatus = 'creating' | 'running' | 'detached' | 'exited' | 'stopped' | 'interrupted' | 'failed' | 'stale';
+
+export interface NativeSession {
+  id: string;
+  purpose: NativeSessionPurpose;
+  vendor: NativeSessionVendor;
+  agent: string;
+  scopeKind: 'bootstrap' | 'bound_project';
+  scopeId: string;
+  projectIdentity: string | null;
+  bindingGeneration: number | null;
+  projectRevision: string | null;
+  dispatchProfile?: string | null;
+  dispatchTarget?: string | null;
+  runtimeGeneration?: number | null;
+  status: NativeSessionStatus;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  exitCode: number | null;
+  failure: string | null;
+  /** Server-derived from the sealed provider launch contract; never a raw resume handle. */
+  lifecycle?: { liveAction: 'reattach' | 'resume' | 'restart'; resumeAvailable: boolean; reason?: string };
+}
+
+export interface NativePurposeReadiness {
+  scopeKind: 'bootstrap' | 'bound_project';
+  profile: string;
+  target?: 'claude-code:interactive' | 'codex:interactive';
+  targetLabel?: 'Claude CLI' | 'Codex CLI';
+  available: boolean;
+  reason?: string;
+  /** Stable server category; deliberately excludes producer paths and process output. */
+  producer?: { available: boolean; category?: 'native_session_producer_incompatible' };
+}
+
+export interface NativeSessionReadiness {
+  runtime: import('@/setup/types').NativeRuntimeBinding;
+  purposes: Record<NativeSessionPurpose, NativePurposeReadiness>;
+  /** Host-owned MCP health only; the credential is never sent to the browser. */
+  mcp?: { server: 'GenBI MCP'; tool: 'save_dashboard'; destination: 'GenBI Artifacts'; available: boolean; reason?: string };
+}
+
+export type NativeSetupRecoveryPhase = 'connect' | 'context';
+export type NativeSetupRecoveryState = 'working' | 'needs_input' | 'needs_decision' | 'retryable_failure' | 'reported_complete';
+export type NativeSetupRecoveryCode = 'in_progress' | 'user_action_required' | 'continue_or_stop' | 'retryable' | 'completion_reported';
+export interface NativeSetupRecovery {
+  sessionId: string;
+  phase: NativeSetupRecoveryPhase;
+  state: NativeSetupRecoveryState;
+  code: NativeSetupRecoveryCode;
+  sequence: number;
+  decision: 'continue_or_stop' | null;
+  completionValidated: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NativeSessionLaunchResult {
+  session: NativeSession;
+  capability?: string;
+  recoveryCapability?: string;
+}
+
+export function listNativeSessions(): Promise<{ sessions: NativeSession[] }> {
+  return request('/api/native-sessions');
+}
+
+export function getNativeSessionReadiness(): Promise<NativeSessionReadiness> {
+  return request('/api/native-sessions/readiness');
+}
+
+export function getNativeSession(id: string): Promise<{ session: NativeSession }> {
+  return request(`/api/native-sessions/${encodeURIComponent(id)}`);
+}
+
+export function createNativeSession(purpose: NativeSessionPurpose, launch: { intent: 'start_separate'; idempotencyKey: string }, signal?: AbortSignal): Promise<NativeSessionLaunchResult>;
+export function createNativeSession(purpose: NativeSessionPurpose, launch: { intent: 'resume'; sessionId: string; idempotencyKey: string }, signal?: AbortSignal): Promise<NativeSessionLaunchResult>;
+export function createNativeSession(purpose: NativeSessionPurpose, launch: { intent: 'open_existing'; sessionId?: string }, signal?: AbortSignal): Promise<NativeSessionLaunchResult>;
+export function createNativeSession(purpose: NativeSessionPurpose, vendor: NativeSessionVendor, signal?: AbortSignal): Promise<NativeSessionLaunchResult>;
+export function createNativeSession(purpose: NativeSessionPurpose, signal?: AbortSignal): Promise<NativeSessionLaunchResult>;
+export function createNativeSession(purpose: NativeSessionPurpose, launchOrVendorOrSignal?: { intent: NativeSessionLaunchIntent; idempotencyKey?: string; sessionId?: string } | NativeSessionVendor | AbortSignal, signal?: AbortSignal): Promise<NativeSessionLaunchResult> {
+  const requestSignal = launchOrVendorOrSignal instanceof AbortSignal ? launchOrVendorOrSignal : signal;
+  // Legacy vendor arguments are intentionally ignored: Runtime owns the
+  // provider/target, and the public request payload must not override it.
+  const requestLaunch = typeof launchOrVendorOrSignal === 'object' && !(launchOrVendorOrSignal instanceof AbortSignal)
+    ? launchOrVendorOrSignal
+    : { intent: 'open_existing' as const };
+  return request('/api/native-sessions', { method: 'POST', body: JSON.stringify({ purpose, ...requestLaunch }), signal: requestSignal });
+}
+
+export function getNativeSetupRecovery(id: string): Promise<{ session: NativeSession; recovery?: NativeSetupRecovery }> {
+  return request(`/api/native-sessions/${encodeURIComponent(id)}/recovery`);
+}
+
+export function postNativeSetupRecoveryAction(id: string, capability: string, expectedVersion: number, action: 'retry' | 'continue' | 'stop'): Promise<NativeSessionLaunchResult | undefined> {
+  return request(`/api/native-sessions/${encodeURIComponent(id)}/recovery-action`, { method: 'POST', body: JSON.stringify({ capability, expectedVersion, action }) });
+}
+
+export function stopNativeSession(id: string, capability: string): Promise<void> {
+  return request(`/api/native-sessions/${encodeURIComponent(id)}/stop`, { method: 'POST', body: JSON.stringify({ capability }) });
+}
+
+/** WebSocket attach URL for a browser-session-scoped native terminal capability. */
+export function nativeSessionWebSocketUrl(id: string, capability: string): string {
+  const base = bffBaseUrl();
+  const origin = base || window.location.origin;
+  return `${origin.replace(/^http/, 'ws')}/api/native-sessions/${encodeURIComponent(id)}/attach?cap=${encodeURIComponent(capability)}`;
+}
+
+export type EnrichmentMode = 'grill' | 'autopilot';
+export type EnrichmentRisk = 'low' | 'high' | 'conflict' | 'ambiguous';
+export type EnrichmentChangeKind = 'knowledge_append' | 'new_cube' | 'new_view' | 'new_relationship' | 'mdl_metric' | 'calculated_column' | 'conflict' | 'ambiguous';
+export type EnrichmentOperationState = 'awaiting_decision' | 'awaiting_approval' | 'ready' | 'ready_to_reapply' | 'applying' | 'applied' | 'skipped' | 'reconcile_required';
+export type EnrichmentRunState = 'drafting' | 'awaiting_decision' | 'awaiting_approval' | 'ready' | 'completed' | 'cancelled' | 'reconcile_required' | 'failed';
+export type EnrichmentAuditOutcome = 'applied' | 'skipped' | 'reverted' | 'failed' | 'reconcile_required';
+export type EnrichmentCapability = { available: true } | { available: false; reason: string };
+export interface EnrichmentOperation { id: string; sink: string; risk: EnrichmentRisk; summary: string; draft: string; changeKind: EnrichmentChangeKind; confidence: string; decision: 'accept' | 'edit' | 'skip' | null; completed: boolean; state: EnrichmentOperationState; }
+export interface EnrichmentRun { id: string; mode: EnrichmentMode; projectRevision: string; bindingGeneration: number; version: number; proposalId: string; proposalHash: string; status: EnrichmentRunState; createdAt: string; updatedAt: string; operations: EnrichmentOperation[]; events: { id: string; kind: string; createdAt: string }[]; audit: { entries: { operationId: string; sink: string; confidence: string; summary: string; outcome?: EnrichmentAuditOutcome }[]; history: { outcome: EnrichmentAuditOutcome; createdAt: string }[] }; error?: string; }
+export interface EnrichmentStatus { available: boolean; /** Separates bound foundation readiness from optional callback capability. */ foundationReady?: boolean; capabilities: { draft: EnrichmentCapability; apply: EnrichmentCapability; approval: EnrichmentCapability; reconcile: EnrichmentCapability }; run?: EnrichmentRun; }
+/** Browser-editable fields only. The server derives operation identity, risk, and proposal hash. */
+export interface EnrichmentEditDraft { sink: string; changeKind: EnrichmentChangeKind; summary: string; draft: string; }
+
+export function getContextEnrichment(): Promise<EnrichmentStatus> { return request<EnrichmentStatus>('/api/context/enrichment'); }
+export function startContextEnrichment(mode: EnrichmentMode): Promise<EnrichmentRun> { return request<EnrichmentRun>('/api/context/enrichment/start', { method: 'POST', body: JSON.stringify({ mode }) }); }
+export function postEnrichmentDecision(runId: string, operationId: string, decision: 'accept' | 'edit' | 'skip', proposalHash: string, projectRevision: string, expectedVersion: number): Promise<EnrichmentRun> { return request<EnrichmentRun>(`/api/context/enrichment/${encodeURIComponent(runId)}/decision`, { method: 'POST', body: JSON.stringify({ operationId, decision, proposalHash, projectRevision, expectedVersion }) }); }
+export function postEnrichmentEdit(runId: string, operationId: string, edit: EnrichmentEditDraft, expectedVersion: number): Promise<EnrichmentRun> { return request<EnrichmentRun>(`/api/context/enrichment/${encodeURIComponent(runId)}/edit`, { method: 'POST', body: JSON.stringify({ operationId, ...edit, expectedVersion }) }); }
+export function postEnrichmentApproval(runId: string, operationId: string, proposalHash: string, projectRevision: string, expectedVersion: number): Promise<EnrichmentRun> { return request<EnrichmentRun>(`/api/context/enrichment/${encodeURIComponent(runId)}/approval`, { method: 'POST', body: JSON.stringify({ operationId, proposalHash, projectRevision, expectedVersion }) }); }
+export function postEnrichmentCancel(runId: string, expectedVersion: number): Promise<EnrichmentRun> { return request<EnrichmentRun>(`/api/context/enrichment/${encodeURIComponent(runId)}/cancel`, { method: 'POST', body: JSON.stringify({ expectedVersion }) }); }
+export function postEnrichmentRetry(runId: string, expectedVersion: number): Promise<EnrichmentRun> { return request<EnrichmentRun>(`/api/context/enrichment/${encodeURIComponent(runId)}/retry`, { method: 'POST', body: JSON.stringify({ expectedVersion }) }); }
+export function postEnrichmentReapply(runId: string, operationId: string, expectedVersion: number): Promise<EnrichmentRun> { return request<EnrichmentRun>(`/api/context/enrichment/${encodeURIComponent(runId)}/reapply`, { method: 'POST', body: JSON.stringify({ operationId, expectedVersion }) }); }
+
+// ---------------------------------------------------------------------------
 // Eval page
 // ---------------------------------------------------------------------------
 
@@ -149,6 +320,7 @@ interface ArtifactDto {
   verified: boolean;
   createdAt: string;
   published?: { link: string; scope: PublishScope };
+  nativeSessionId?: string;
 }
 
 function fromArtifactDto(dto: ArtifactDto): ArtifactSummary {
@@ -161,6 +333,8 @@ function fromArtifactDto(dto: ArtifactDto): ArtifactSummary {
     verified: dto.verified,
     createdAt: dto.createdAt,
     ...(dto.published ? { publish: dto.published } : {}),
+    ...(dto.nativeSessionId ? { nativeSessionId: dto.nativeSessionId } : {}),
+    ...(dto.nativeSessionId ? { source: { label: 'Session', href: `/sessions/${encodeURIComponent(dto.nativeSessionId)}` } } : {}),
   };
 }
 
@@ -266,6 +440,11 @@ export function postArtifactUnsave(sessionId: string, key: string): Promise<{ un
   ).then(({ unsavedAt }) => ({ unsavedAt }));
 }
 
+/** Native artifacts do not belong to Ask's session namespace. */
+export function postRetainedArtifactUnsave(key: string): Promise<void> {
+  return request<void>(`/api/artifacts/${encodeURIComponent(key)}/unsave`, { method: 'POST' });
+}
+
 /**
  * Real route is session-scoped: `POST /api/sessions/:sessionId/artifacts/:artifactId/publish`
  * (see the harness's `server/app.ts`), not a flat `/api/artifacts/:id/publish`.
@@ -296,6 +475,16 @@ export function getRuntimeSettings(): Promise<RuntimeSettings> {
   return request<RuntimeSettings>('/api/config/runtime');
 }
 
+/** Saved Runtime health is separate from editable settings so it can never be re-persisted by a form spread. */
+export function getRuntimeSettingsReadiness(): Promise<RuntimeSettingsReadiness> {
+  return request<RuntimeSettingsReadiness>('/api/config/runtime/readiness');
+}
+
+/** Exact step tiers declared by the compiled bundle, not a frontend constant. */
+export function getRuntimeTierNames(): Promise<string[]> {
+  return request<string[]>('/api/config/runtime/tiers');
+}
+
 export function putRuntimeSettings(patch: Partial<RuntimeSettings>): Promise<RuntimeSettingsPutResponse> {
   return request<RuntimeSettingsPutResponse>('/api/config/runtime', {
     method: 'PUT',
@@ -311,6 +500,18 @@ export function getAdapterEnvStatus(): Promise<AdapterEnvStatus> {
   return request<AdapterEnvStatus>('/api/config/env-detect');
 }
 
+/** Subscription CLI login availability only; never returns credential data. */
+export function getSubscriptionLoginStatus(): Promise<SubscriptionLoginStatus> {
+  return request<SubscriptionLoginStatus>('/api/config/subscription-detect');
+}
+
+/** Sanitized catalog for the selected, signed-in subscription provider. */
+export function getSubscriptionModelCatalog(provider: SubscriptionProvider, refresh = false): Promise<SubscriptionModelCatalog> {
+  return request<SubscriptionModelCatalog>(
+    `/api/config/subscription-models?provider=${encodeURIComponent(provider)}&refresh=${refresh ? '1' : '0'}`,
+  );
+}
+
 /**
  * The setup wizard's two entry paths, chosen once at wizard start: `'create'`
  * scaffolds a brand-new project (the pre-existing connect → context → bind
@@ -322,6 +523,11 @@ export type SetupMode = 'create' | 'adopt';
 
 export function getSetupMode(): Promise<{ mode?: SetupMode }> {
   return request<{ mode?: SetupMode }>('/api/setup/mode');
+}
+
+/** Read-only failed-step and pending-context-decision recovery. The BFF deliberately omits SDK resume state. */
+export function getSetupRecovery(): Promise<{ failure?: SetupFailureRecovery; needsInput?: SetupNeedsInputRecovery; sessionId?: string; decision?: SetupDecision }> {
+  return request<{ failure?: SetupFailureRecovery; needsInput?: SetupNeedsInputRecovery; sessionId?: string; decision?: SetupDecision }>('/api/setup/recovery');
 }
 
 /** Records the chosen mode and returns the steps array with `connect`/`adopt` swapped to match (see `StepKey`'s doc comment). */
@@ -391,11 +597,11 @@ export class SetupDecisionRequiredError extends Error {
  * `SetupDecisionRequiredError` rather than a generic request failure, so the
  * caller can render a decision card instead of a plain error message.
  */
-export function postSetupConnectTurn(projectName: string, sourceType: string): Promise<SetupConnectTurn> {
+export function postSetupConnectTurn(projectName: string, sourceType: string, variant?: string): Promise<SetupConnectTurn> {
   return fetch(`${bffBaseUrl()}/api/setup/connect`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ projectName, sourceType }),
+    body: JSON.stringify({ projectName, sourceType, ...(variant ? { variant } : {}) }),
   }).then(async (res) => {
     const body: (ApiError & Partial<SetupConnectTurn> & { status?: string; decision?: SetupDecision }) | undefined =
       await res.json().catch(() => undefined);
@@ -424,6 +630,47 @@ export function postSetupResume(): Promise<SetupConnectTurn> {
 export interface SetupEnvField {
   key: string;
   secret: boolean;
+  /** wren's own metadata for this field, when the key matched one. */
+  label?: string;
+  description?: string;
+  example?: string;
+  required?: boolean;
+  /** A value wren fixes for the chosen connection shape — shown, not asked for. */
+  fixedValue?: string;
+  defaultValue?: string;
+  /** wren wants base64 of a file's contents; the form offers a picker. */
+  fileEncoded?: boolean;
+}
+
+/** Mirrors `server/source-catalog.ts`'s wire shape. */
+export interface SetupSourceCatalogVariant {
+  name?: string;
+  fields: { name: string; label: string; required: boolean; secret: boolean }[];
+  /** How wren tells this shape apart, e.g. `{ field: 'bigquery_type', value: 'dataset' }`. */
+  discriminator?: { field: string; value: string };
+}
+
+export interface SetupSourceCatalogSource {
+  key: string;
+  label: string;
+  variants: SetupSourceCatalogVariant[];
+}
+
+export interface SetupSourceCatalog {
+  sources: SetupSourceCatalogSource[];
+  fromCli: boolean;
+  degradedReason?: string;
+}
+
+/**
+ * The data sources Setup may offer, read server-side from wren's own connector
+ * registry. The picker used to render a hardcoded four-entry fixture; this is
+ * whatever the installed wren actually supports. `fromCli: false` means the
+ * registry could not be read and `sources` is a stated fallback — render that
+ * distinction rather than passing the short list off as complete.
+ */
+export function getSetupSourceCatalog(): Promise<SetupSourceCatalog> {
+  return request<SetupSourceCatalog>('/api/setup/source-catalog');
 }
 
 /**
@@ -576,8 +823,8 @@ export function postSetupReset(): Promise<{ ok: boolean; steps: SetupStep[]; run
 // ---------------------------------------------------------------------------
 
 /**
- * The BFF's wire shape for the harness (`GET /api/harness`): one compiled
- * bundle profile plus its declared components — there is no orchestrator/
+ * The BFF's wire shape for one selected Harness purpose (`GET /api/harness`):
+ * one server-owned compiled profile plus its declared components — there is no orchestrator/
  * sub-agent split on the wire (that vocabulary is a frontend-only profile-
  * level concept; see `HarnessView`/`AgentProfileRow` in `@/harness/types`).
  * Kept private to this module; field names are mirrored 1:1 from the
@@ -627,9 +874,16 @@ interface HarnessComponentDto {
   outputBlocks: string[];
   steps: HarnessStepDto[];
   status: string;
+  unavailableReason?: string;
+  nativeAvailability?: {
+    viaLabel: 'Claude CLI' | 'Codex CLI';
+    compiledDispatchTarget: string;
+    compiledUnavailableReason: string;
+  };
 }
 
 interface HarnessDto {
+  purpose: HarnessView['purpose'];
   profile: {
     id: string;
     name: string;
@@ -650,6 +904,7 @@ interface HarnessDto {
   };
   connection: ConnectionStatus;
   components: HarnessComponentDto[];
+  nativeSessions: HarnessView['nativeSessions'];
 }
 
 function fromComponentDto(dto: HarnessComponentDto): Component {
@@ -691,6 +946,8 @@ function fromComponentDto(dto: HarnessComponentDto): Component {
     outputBlocks: dto.outputBlocks,
     steps,
     status: dto.status,
+    ...(dto.unavailableReason !== undefined ? { unavailableReason: dto.unavailableReason } : {}),
+    ...(dto.nativeAvailability !== undefined ? { nativeAvailability: dto.nativeAvailability } : {}),
   };
 }
 
@@ -720,10 +977,11 @@ function toOrchestratorAgentProfileRow(dto: HarnessDto, components: Component[])
   };
 }
 
-export function getHarness(): Promise<HarnessView> {
-  return request<HarnessDto>('/api/harness').then((dto) => {
+export function getHarness(purpose: HarnessView['purpose']['purpose']): Promise<HarnessView> {
+  return request<HarnessDto>(`/api/harness?purpose=${encodeURIComponent(purpose)}`).then((dto) => {
     const components = dto.components.map(fromComponentDto);
     return {
+      purpose: dto.purpose,
       profile: {
         id: dto.profile.id,
         name: dto.profile.name,
@@ -745,6 +1003,7 @@ export function getHarness(): Promise<HarnessView> {
       connection: dto.connection,
       components,
       agentProfiles: [toOrchestratorAgentProfileRow(dto, components)],
+      nativeSessions: dto.nativeSessions,
     };
   });
 }

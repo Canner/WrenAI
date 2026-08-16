@@ -5,9 +5,12 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AuthChoice } from "../harness/auth/index.js";
 import { describeBundle } from "../harness/route/describe.js";
+import { buildHarnessDto } from "../server/harness.js";
+import { Store } from "../server/db.js";
 import { WARBLE_REPO } from "./warble-checkout.js";
 
 const PROFILE_SOURCE = path.join(WARBLE_REPO, "genbi-default");
+const ENRICH_PROFILE_SOURCE = path.join(WARBLE_REPO, "genbi-enrich-context");
 const JAFFLE_WREN = path.join(WARBLE_REPO, "examples", "jaffle-wren");
 const AGENT_SDK_DIR = path.join(WARBLE_REPO, "dispatcher", "claude-agent-sdk");
 const AGENT_SDK_TSX = path.join(AGENT_SDK_DIR, "node_modules", ".bin", "tsx");
@@ -38,6 +41,7 @@ async function writeAgentSdkWrapper(): Promise<string> {
 
 const canRun =
   existsSync(PROFILE_SOURCE) &&
+  existsSync(ENRICH_PROFILE_SOURCE) &&
   existsSync(JAFFLE_WREN) &&
   existsSync(AGENT_SDK_TSX) &&
   existsSync(AGENT_SDK_ENTRY) &&
@@ -91,6 +95,49 @@ describe.skipIf(!canRun)(
       expect(bundle.target).toBe("vercel:headless");
       expect(expectedDispatcher(authChoice)).toBe("in-process");
       expect(bundle.profile).toBe("genbi-default");
+    });
+
+    it("promotes an enrichment component unavailable on the compiled dispatch target to ready via the native session, through the real manifest, loader, and DTO", async () => {
+      const authChoice: AuthChoice = { mode: "subscription", provider: "claude" };
+      const agentSdkBin = await writeAgentSdkWrapper();
+      const bundle = await describeBundle({
+        authChoice,
+        profileSource: ENRICH_PROFILE_SOURCE,
+        userProject: JAFFLE_WREN,
+        warbleBin: WARBLE_BIN,
+        agentSdkBin,
+      });
+
+      // `describeBundle` runs the actual manifest command and validates its
+      // JSON with `loadBundleWithProvenance` before this DTO mapping.
+      // `apply_enrichment` is unavailable on the compiled programmatic
+      // dispatch target (claude-agent-sdk:local) — but this purpose's native
+      // session IS available, so per decision-43 the component actually runs
+      // (via native CLI, not the programmatic path) and must be promoted to
+      // "ready", qualified by the native target, rather than shown as
+      // Unavailable at the wrong axis.
+      const dto = buildHarnessDto(bundle, new Store(":memory:"), {
+        authChoice,
+        profileSource: ENRICH_PROFILE_SOURCE,
+        userProject: JAFFLE_WREN,
+      }, "context_enrichment", { purposes: { context_enrichment: { available: true, target: "claude-code:interactive", targetLabel: "Claude CLI" } } } as never);
+      expect(dto.components.find((component) => component.id === "inspect_context")?.status).toBe("ready");
+      expect(dto.components.find((component) => component.id === "draft_enrichment")?.status).toBe("ready");
+      expect(dto.components.find((component) => component.id === "apply_enrichment")).toMatchObject({
+        status: "ready",
+        model: "—",
+        tiers: [],
+        capabilities: [],
+        guardrails: [],
+        tools: [],
+        outputBlocks: [],
+        steps: [],
+        nativeAvailability: {
+          viaLabel: "Claude CLI",
+          compiledDispatchTarget: "claude-agent-sdk:local",
+          compiledUnavailableReason: "component is unavailable on the configured runtime",
+        },
+      });
     });
   },
 );

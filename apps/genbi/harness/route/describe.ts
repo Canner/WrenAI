@@ -1,10 +1,12 @@
 import { readFile } from "node:fs/promises";
 import type { AuthChoice } from "../auth/index.js";
 import type { Bundle } from "../bundle/schema.js";
-import { loadBundle } from "../bundle/loader.js";
-import { compileProfile } from "../compile/pipeline.js";
+import { loadBundleWithProvenance } from "../bundle/loader.js";
+import { compileProfile, compileRawProfile } from "../compile/pipeline.js";
 import { buildAgentSdkManifestArgs, runAgentSdkManifest } from "./agent-sdk-manifest.js";
 import { resolveAgentSdkCli } from "./agent-sdk-cli.js";
+import { resolveCodexLocalCli } from "./codex-local-cli.js";
+import { describeCodexAskManifest, describeCodexBootstrapManifest, describeCodexEnrichmentManifest, type CodexManifestModels, type CodexManifestPurpose } from "./codex-local-manifest.js";
 
 /**
  * The subset of `RouteOptions`/`ModeAOptions` needed to describe how a
@@ -13,14 +15,31 @@ import { resolveAgentSdkCli } from "./agent-sdk-cli.js";
  * unlike `question`/`onEvent`/model-routing options, which don't affect what
  * gets described.
  */
-export interface DescribeBundleOptions {
+interface DescribeBundleBaseOptions {
   readonly authChoice: AuthChoice;
   readonly profileSource: string;
-  readonly userProject: string;
   readonly warbleBin?: string;
   readonly agentSdkBin?: string;
+  readonly codexLocalBin?: string;
+  readonly codexModels?: CodexManifestModels;
   readonly workDir?: string;
+  /** Selects the executable component family shown by the purpose-scoped Harness. */
+  readonly codexManifestPurpose?: CodexManifestPurpose;
 }
+
+/** A profile whose context must be rebound to the currently bound project. */
+export interface BoundDescribeBundleOptions extends DescribeBundleBaseOptions {
+  /** Omitted by legacy bound callers; bootstrap must always be explicit. */
+  readonly context?: "bound_project";
+  readonly userProject: string;
+}
+
+/** A profile that owns its authored raw/bootstrap context and has no user project. */
+export interface BootstrapDescribeBundleOptions extends DescribeBundleBaseOptions {
+  readonly context: "bootstrap";
+}
+
+export type DescribeBundleOptions = BoundDescribeBundleOptions | BootstrapDescribeBundleOptions;
 
 /**
  * Describes whichever back-end will ACTUALLY run a turn for
@@ -44,37 +63,64 @@ export interface DescribeBundleOptions {
  */
 export async function describeBundle(options: DescribeBundleOptions): Promise<Bundle> {
   if (options.authChoice.mode === "subscription") {
+    if (options.authChoice.provider === "codex") return describeCodexManifest(options);
     return describeAgentSdkManifest(options);
   }
   return describeVercelBundle(options);
 }
 
+async function describeCodexManifest(options: DescribeBundleOptions): Promise<Bundle> {
+  const compiled = await compileForDescription(options, "native");
+  const purpose = options.codexManifestPurpose ?? (options.context === "bootstrap" ? "setup" : "analysis");
+  if (purpose === "setup") {
+    const cli = await resolveCodexLocalCli(options.codexLocalBin);
+    return describeCodexBootstrapManifest(cli, compiled.irPath);
+  }
+  const models = options.codexModels;
+  if (!models || !models.orchestrator.trim() || !models.cheap.trim() || !models.strong.trim()) {
+    throw new Error("Codex manifest requires orchestrator, cheap, and strong model bindings");
+  }
+  const cli = await resolveCodexLocalCli(options.codexLocalBin);
+  return purpose === "context_enrichment"
+    ? describeCodexEnrichmentManifest(cli, compiled.irPath, models)
+    : describeCodexAskManifest(cli, compiled.irPath, models);
+}
+
 async function describeVercelBundle(options: DescribeBundleOptions): Promise<Bundle> {
-  const compiled = await compileProfile({
-    profileSource: options.profileSource,
-    userProject: options.userProject,
-    mode: "agnostic",
-    ...(options.warbleBin !== undefined ? { warbleBin: options.warbleBin } : {}),
-    ...(options.workDir !== undefined ? { workDir: options.workDir } : {}),
-  });
+  const compiled = await compileForDescription(options, "agnostic");
   // `mode: "agnostic"` always produces a bundle — see `compileProfile`'s doc comment.
   const bundleJson = JSON.parse(await readFile(compiled.bundlePath!, "utf-8"));
-  return loadBundle(bundleJson);
+  return loadBundleWithProvenance(bundleJson, {
+    ...(compiled.warbleBin !== undefined ? { warbleBin: compiled.warbleBin } : {}),
+    profileSource: options.profileSource,
+  });
 }
 
 async function describeAgentSdkManifest(options: DescribeBundleOptions): Promise<Bundle> {
-  const compiled = await compileProfile({
-    profileSource: options.profileSource,
-    userProject: options.userProject,
-    mode: "native",
-    ...(options.warbleBin !== undefined ? { warbleBin: options.warbleBin } : {}),
-    ...(options.workDir !== undefined ? { workDir: options.workDir } : {}),
-  });
+  const compiled = await compileForDescription(options, "native");
   const cli = await resolveAgentSdkCli(options.agentSdkBin);
   const { command, args } = buildAgentSdkManifestArgs(cli, {
     irPath: compiled.irPath,
-    userProject: options.userProject,
+    ...(options.context !== "bootstrap" ? { userProject: options.userProject } : {}),
   });
   const stdout = await runAgentSdkManifest(command, args);
-  return loadBundle(JSON.parse(stdout));
+  return loadBundleWithProvenance(JSON.parse(stdout), {
+    ...(compiled.warbleBin !== undefined ? { warbleBin: compiled.warbleBin } : {}),
+    profileSource: options.profileSource,
+  });
+}
+
+function compileForDescription(
+  options: DescribeBundleOptions,
+  mode: "native" | "agnostic",
+) {
+  const shared = {
+    profileSource: options.profileSource,
+    mode,
+    ...(options.warbleBin !== undefined ? { warbleBin: options.warbleBin } : {}),
+    ...(options.workDir !== undefined ? { workDir: options.workDir } : {}),
+  } as const;
+  return options.context === "bootstrap"
+    ? compileRawProfile(shared)
+    : compileProfile({ ...shared, userProject: options.userProject });
 }

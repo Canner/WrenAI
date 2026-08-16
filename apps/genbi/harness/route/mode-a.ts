@@ -17,6 +17,18 @@ const ANSWER_QUERY_AGENT_ID = "answer_query";
 /** Operator-wide override for `resolveArtifactsDir`'s default, e.g. for a long-running BFF process. */
 const ARTIFACTS_DIR_ENV_VAR = "WREN_HARNESS_ARTIFACTS_DIR";
 
+/** Projects a bundle-wide validated map onto the component selected for one turn. */
+export function filterTierBindingForAgent(
+  agent: { readonly steps: readonly { readonly tier: string }[] },
+  tierBinding: Readonly<Record<string, import("../providers/index.js").AdapterSpec>>,
+): Readonly<Record<string, import("../providers/index.js").AdapterSpec>> {
+  return Object.fromEntries(
+    [...new Set(agent.steps.map((step) => step.tier))]
+      .filter((tier) => tierBinding[tier] !== undefined)
+      .map((tier) => [tier, tierBinding[tier]!]),
+  );
+}
+
 /**
  * Resolves the `rootDir` the native `write_artifact` tool's
  * `createLocalExecutionEnv` scope is rooted at. Precedence: an explicit
@@ -65,9 +77,15 @@ export async function runModeADefault(options: ModeAOptions): Promise<RunAgentRe
     throw new Error(`compiled bundle has no "${agentId}" agent`);
   }
 
+  // Runtime settings are validated against every tier declared by the
+  // compiled bundle, but one turn executes only one selected component. Keep
+  // that complete map at the server boundary and pass this agent's projection
+  // here; `buildHybridTierBinding` intentionally rejects tiers used solely by
+  // another component.
+  const agentTierBinding = options.tierBinding === undefined ? undefined : filterTierBindingForAgent(agent, options.tierBinding);
   const binding =
     options.tierBinding !== undefined
-      ? buildHybridTierBinding(agent, options.tierBinding)
+      ? buildHybridTierBinding(agent, agentTierBinding!)
       : buildUniformTierBinding(
           agent,
           deriveAdapterSpec(options.authChoice, options.model !== undefined ? { model: options.model } : {}),

@@ -1,0 +1,1 @@
+{"version":1,"status":"ready","provider":"claude","models":[{"model":"default","displayName":"Default (recommended)","description":"Opus 4.5 · Most capable for complex work"},{"model":"sonnet","displayName":"Sonnet","description":"Sonnet 4.5 · Best for everyday tasks"},{"model":"haiku","displayName":"Haiku","description":"Haiku 4.5 · Fastest for quick answers"}]}

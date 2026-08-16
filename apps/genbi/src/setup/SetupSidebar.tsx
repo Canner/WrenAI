@@ -6,6 +6,16 @@ import { useSetupStore } from './useSetupStore';
 import { StepStatusTag } from './StepStatusTag';
 
 /**
+ * Step keys are the durable setup contract; persisted titles are presentation
+ * data from older DB rows. Keep the renamed context phase canonical without
+ * rewriting or migrating those legacy rows, while preserving every other
+ * stored title verbatim.
+ */
+function displayStepTitle(step: { key: string; title: string }): string {
+  return step.key === 'context' ? t('setup.contextTitle') : step.title;
+}
+
+/**
  * Setup page's contextual sidebar: the onboarding steps, each showing its
  * progress via `StepStatusTag` (icon+label, not color alone). Selecting a
  * step shows its card in the canvas — same controlled-selection pattern as
@@ -20,6 +30,7 @@ export function SetupSidebar() {
   const selectStep = useSetupStore((s) => s.selectStep);
   const resetSetup = useSetupStore((s) => s.resetSetup);
   const setupMode = useSetupStore((s) => s.setupMode);
+  const runtimeConfigured = steps.find((step) => step.key === 'runtime')?.state === 'done';
 
   if (isBffEnabled() && !setupMode) return null;
 
@@ -45,6 +56,7 @@ export function SetupSidebar() {
               <button
                 type="button"
                 aria-current={selected ? 'true' : undefined}
+                disabled={step.key !== 'runtime' && !runtimeConfigured}
                 onClick={() => selectStep(step.key)}
                 style={{
                   display: 'flex',
@@ -57,13 +69,13 @@ export function SetupSidebar() {
                   marginBottom: 2,
                   border: 'none',
                   borderRadius: 8,
-                  cursor: 'pointer',
+                  cursor: step.key !== 'runtime' && !runtimeConfigured ? 'not-allowed' : 'pointer',
                   background: selected ? 'var(--ant-color-fill-secondary)' : 'transparent',
                   color: 'var(--ant-color-text)',
                 }}
               >
                 <span style={{ fontSize: 13, fontWeight: selected ? 600 : 400 }}>
-                  {index + 1}. {step.title}
+                  {index + 1}. {displayStepTitle(step)}
                 </span>
                 {/* `ask` is the terminal step — reaching it means setup is done,
                     there's nothing "in progress" to complete — so suppress its

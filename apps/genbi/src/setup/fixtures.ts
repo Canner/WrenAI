@@ -7,30 +7,35 @@ import type {
 } from './types';
 
 /**
- * Fixture data for the Setup (onboarding) page. Phase 1 renders entirely
- * from these mocks (no backend) — obviously synthetic, no customer data. See
- * `src/fixtures/index.ts` for the app-wide fixture convention this follows.
+ * Fixture data for the Setup (onboarding) page's no-BFF demo mode. Live mode
+ * replaces runtime settings and tier names with BFF-owned values; these mocks
+ * are synthetic and contain no customer data.
  */
 
 /** First-run steps: step 1 current, the rest todo. */
 export const fixtureSetupSteps: SetupStep[] = [
   { key: 'runtime', title: 'Runtime & models', state: 'current' },
   { key: 'connect', title: 'Connect data source', state: 'todo' },
-  { key: 'context', title: 'Build context', state: 'todo' },
+  { key: 'context', title: 'Build data model', state: 'todo' },
   { key: 'bind', title: 'Bind profile', state: 'todo' },
   { key: 'ask', title: 'Ask', state: 'todo' },
 ];
 
-/** Model options offered per tier — same fixture model names as the Harness page. */
-export const fixtureModelOptions: string[] = ['claude-opus', 'claude-sonnet', 'claude-haiku'];
+export const fixtureTierModelsBySubscriptionProvider = {
+  claude: [
+    { tier: 'strong', model: '' },
+    { tier: 'cheap', model: '' },
+  ],
+  codex: [
+    { tier: 'strong', model: '' },
+    { tier: 'cheap', model: '' },
+  ],
+} satisfies Record<'claude' | 'codex', RuntimeSettings['tierModels']>;
 
 export const fixtureRuntimeSettings: RuntimeSettings = {
   authMode: 'subscription',
-  tierModels: [
-    { tier: 'orchestrator', model: 'claude-opus' },
-    { tier: 'strong', model: 'claude-sonnet' },
-    { tier: 'cheap', model: 'claude-haiku' },
-  ],
+  subscriptionProvider: 'claude',
+  tierModels: fixtureTierModelsBySubscriptionProvider.claude,
   hybrid: false,
   deployment: 'personal',
 };
@@ -44,8 +49,7 @@ export const fixtureDataSourceOptions: DataSourceOption[] = [
 
 export const fixtureContextSummary: ContextSummary = {
   models: 6,
-  measures: 9,
-  knowledgeNotes: 3,
+  relationships: 3,
 };
 
 export const fixtureInitialMessage: ConversationMessage = {

@@ -42,6 +42,13 @@ function hasCredentialFile(relativePathFromHome: string): boolean {
   return existsSync(join(homedir(), relativePathFromHome));
 }
 
+/** Existence-only Codex login signal, honoring an explicitly isolated CODEX_HOME. */
+function hasCodexCredentialFile(): boolean {
+  const configuredHome = process.env.CODEX_HOME?.trim();
+  const codexHome = configuredHome ? configuredHome : join(homedir(), ".codex");
+  return existsSync(join(codexHome, "auth.json"));
+}
+
 /**
  * Real default `LoginProbe`. Best-effort and side-effect-light: it only
  * resolves the CLI binary on `PATH` and checks whether a credential/config
@@ -55,7 +62,7 @@ export function createDefaultLoginProbe(): LoginProbe {
       return resolvesOnPath("claude") && hasCredentialFile(".claude.json");
     },
     codexLoggedIn(): boolean {
-      return resolvesOnPath("codex") && hasCredentialFile(".codex/auth.json");
+      return resolvesOnPath("codex") && hasCodexCredentialFile();
     },
   };
 }

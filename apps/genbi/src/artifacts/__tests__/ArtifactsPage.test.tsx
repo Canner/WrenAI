@@ -85,7 +85,7 @@ describe('Artifacts page', () => {
 
     expect(screen.getByText('New signups by month, last 6 months.')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'line chart' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Ask · Monthly signups trend' })).toHaveAttribute('href', '/ask/s2');
+    expect(screen.getByRole('link', { name: 'Structured Ask · Monthly signups trend' })).toHaveAttribute('href', '/sessions/ask/s2');
     expect(screen.queryByRole('button', { name: /Publish/ })).not.toBeInTheDocument();
   });
 
@@ -95,7 +95,7 @@ describe('Artifacts page', () => {
 
     const sidebar = screen.getByRole('navigation', { name: 'Artifacts' });
     await user.click(within(sidebar).getByText('Monthly signups trend'));
-    expect(screen.getByRole('link', { name: 'Ask · Monthly signups trend' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Structured Ask · Monthly signups trend' })).toBeInTheDocument();
 
     // Unlike Publish, Unpin is not gated by `PUBLISH_UI_ENABLED` — it's always
     // reachable, so this drives it through the real button rather than the

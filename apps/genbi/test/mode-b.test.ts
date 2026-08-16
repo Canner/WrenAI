@@ -229,7 +229,7 @@ describe("runModeBDefault (provider guard, pure — throws before compiling/spaw
         userProject: "/nonexistent/project",
         question: "who is our top customer?",
       }),
-    ).rejects.toThrow(/only supports provider "claude"/);
+    ).rejects.toThrow(/only supports the Claude subscription provider/);
   });
 });
 
@@ -258,6 +258,6 @@ describe("runModeBDefault (belt: re-runs enforceCompliance itself, independent o
         question: "who is our top customer?",
         deployment: "personal",
       }),
-    ).rejects.toThrow(/only supports provider "claude"/);
+    ).rejects.toThrow(/only supports the Claude subscription provider/);
   });
 });

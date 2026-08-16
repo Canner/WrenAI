@@ -5,14 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../server/app.js";
 import type { WrenContextShow } from "../server/context-source.js";
 import { newId, Store } from "../server/db.js";
+import { resolveEnrichmentBinding, resolveProjectIdentity } from "../server/enrichment.js";
 import { streamTurn } from "../server/turn.js";
 import type { TurnDeps } from "../server/turn.js";
-import { BUILD_CONTEXT_AGENT_ID, CONNECT_SOURCE_AGENT_ID, loadBundle, ModeBSessionError, SUBSCRIPTION_TOS_WARNING, WarbleCommandFailedError } from "../harness/index.js";
-import type { AgentEvent, AuthChoice, Bundle, RouteOptions, RouteResult, SetupStepRunner } from "../harness/index.js";
-import type { ContextFileNode, ContextOverview, EvalRun, RuntimeSettings, RuntimeSettingsPutResponse, SetupStatusEvent, SetupStep, SseFrame } from "../server/wire-types.js";
+import { BUILD_CONTEXT_AGENT_ID, CONNECT_SOURCE_AGENT_ID, contextLifecycleIdentityFingerprint, loadBundle, ModeBSessionError, SUBSCRIPTION_TOS_WARNING, WarbleCommandFailedError } from "../harness/index.js";
+import type { AgentEvent, AuthChoice, Bundle, LoginProbe, RouteOptions, RouteResult, SetupStepRunner } from "../harness/index.js";
+import type { ContextFileNode, ContextOverview, EvalRun, RuntimeSettings, RuntimeSettingsPutResponse, SetupDecision, SetupStatusEvent, SetupStep, SseFrame } from "../server/wire-types.js";
 import { parseSse } from "./bff-sse-helpers.js";
 import type { ParsedSseFrame } from "./bff-sse-helpers.js";
 import { buildSyntheticBundle } from "./synthetic-bundle.js";
+import { readFixture } from "./fixtures.js";
 
 // The "context + eval read endpoints" describe block below is the only place in this file that
 // hits the context routes, which now shell out to `wren context show` via context-source.ts. Mock
@@ -33,12 +35,17 @@ const BASE_ROUTE_OPTIONS: Omit<RouteOptions, "question" | "onEvent"> = {
 };
 
 interface BuildAppSetupOptions {
+  readonly store?: Store;
   readonly setupRunner?: SetupStepRunner;
   readonly setupRunnerFor?: (choice: AuthChoice) => SetupStepRunner;
   readonly getAuthChoice?: () => AuthChoice;
   readonly workspaceRoot?: string;
   readonly userProject?: string;
   readonly unbindProject?: () => void;
+  readonly loginProbe?: LoginProbe;
+  readonly setAuthChoice?: (choice: AuthChoice) => void;
+  readonly getRuntimeTierNames?: () => Promise<readonly string[]>;
+  readonly listSubscriptionModels?: TurnDeps["listSubscriptionModels"];
 }
 
 function buildApp(describeBundle?: TurnDeps["describeBundle"], setupOpts?: BuildAppSetupOptions) {
@@ -49,7 +56,7 @@ function buildApp(describeBundle?: TurnDeps["describeBundle"], setupOpts?: Build
     envelope: { blocks: [], summary: "ok" },
     trace: { steps: [] },
   });
-  const store = new Store(":memory:");
+  const store = setupOpts?.store ?? new Store(":memory:");
   const deps: TurnDeps = {
     store,
     route,
@@ -58,10 +65,27 @@ function buildApp(describeBundle?: TurnDeps["describeBundle"], setupOpts?: Build
     ...(setupOpts?.setupRunner ? { setupRunner: setupOpts.setupRunner } : {}),
     ...(setupOpts?.setupRunnerFor ? { setupRunnerFor: setupOpts.setupRunnerFor } : {}),
     ...(setupOpts?.getAuthChoice ? { getAuthChoice: setupOpts.getAuthChoice } : {}),
+    ...(setupOpts?.setAuthChoice ? { setAuthChoice: setupOpts.setAuthChoice } : {}),
+    getRuntimeTierNames: setupOpts?.getRuntimeTierNames ?? (async () => ["cheap", "strong"]),
+    ...(setupOpts?.listSubscriptionModels ? { listSubscriptionModels: setupOpts.listSubscriptionModels } : {}),
     ...(setupOpts?.workspaceRoot !== undefined ? { workspaceRoot: setupOpts.workspaceRoot } : {}),
     ...(setupOpts?.unbindProject ? { unbindProject: setupOpts.unbindProject } : {}),
+    ...(setupOpts?.loginProbe ? { loginProbe: setupOpts.loginProbe } : {}),
   };
   return { app: createApp(deps), store };
+}
+
+/** Establish an explicit valid choice before exercising post-runtime wizard steps. */
+function configureSubscriptionRuntime(store: Store): void {
+  store.setRuntimeSettings({
+    ...store.getRuntimeSettings(),
+    subscriptionDriverModel: "claude-opus",
+    apiKeyModel: "claude-sonnet",
+    tierModels: [
+      { tier: "cheap", model: "haiku" },
+      { tier: "strong", model: "sonnet" },
+    ],
+  });
 }
 
 /** A `SetupStepRunner` stub whose `run()` is fully scripted by the test — no real Mode B/CLI involved. */
@@ -69,7 +93,7 @@ function stubSetupRunner(run: SetupStepRunner["run"]): SetupStepRunner {
   return { run };
 }
 
-/** Records the minimum successful Mode-A setup_execution discovery trace the terminal gate requires. */
+/** Records the canonical successful discovery -> validate -> build trace. */
 function recordSuccessfulSchemaDiscovery(onEvent: ((event: AgentEvent) => void) | undefined): void {
   onEvent?.({
     runId: "test-run",
@@ -92,6 +116,13 @@ function recordSuccessfulSchemaDiscovery(onEvent: ((event: AgentEvent) => void) 
     status: "success",
     summary: '{"exitCode":0,"stdout":"[\\"customers\\"]","stderr":""}',
   });
+  for (const [seq, callId, command, stdout] of [
+    [3, "validate-context", "wren context validate", "validated"],
+    [5, "build-context", "wren context build", "built"],
+  ] as const) {
+    onEvent?.({ runId: "test-run", seq, kind: "tool.call", stepId: "build", callId, tool: "setup_execution", input: { command }, depth: 0, status: "running" });
+    onEvent?.({ runId: "test-run", seq: seq + 1, kind: "tool.result", stepId: "build", callId, tool: "setup_execution", status: "success", summary: `{"exitCode":0,"stdout":"${stdout}","stderr":""}` });
+  }
 }
 
 function bundleWithGatedCheck(locked: boolean): Bundle {
@@ -99,19 +130,587 @@ function bundleWithGatedCheck(locked: boolean): Bundle {
 }
 
 describe("config/runtime + setup wizard endpoints", () => {
+  it("accepts only purpose on the native launch wire contract", async () => {
+    const { app } = buildApp();
+    for (const body of [
+      { purpose: "setup", vendor: "claude" },
+      { purpose: "analysis", target: "codex:interactive" },
+      { purpose: "context_enrichment", profile: "genbi-enrich-context" },
+    ]) {
+      const response = await app.request("/api/native-sessions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      expect(response.status).toBe(400);
+    }
+  });
+  it("GET /api/setup/recovery returns only the latest redacted failed step and never its SDK anchor", async () => {
+    const { app, store } = buildApp();
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const turnId = newId("turn");
+    store.createTurn({
+      id: turnId,
+      sessionId: session.id,
+      question: "setup",
+      composedInput: "setup",
+      agentId: CONNECT_SOURCE_AGENT_ID,
+      setupStepKey: "connect_resume",
+    });
+    store.resolveTurn(turnId, {
+      backend: null,
+      resultKind: "error",
+      answerSummary: null,
+      traceJson: JSON.stringify([{ id: "failed", label: "setup_execution", state: "error", kind: "tool", detail: "PASSWORD=secret" }]),
+      errorMessage: "Authorization: Bearer secret",
+    });
+    store.setTurnResumeAnchor(turnId, { sessionId: "provider-session-secret", provider: "claude", runner: "subscription:claude" });
+
+    const response = await app.request("/api/setup/recovery");
+    expect(response.status).toBe(200);
+    const body = await response.json() as Record<string, unknown>;
+    expect(body).toMatchObject({
+      failure: {
+        attempt: "connect_resume",
+        projectName: "acme",
+        sourceType: "postgres",
+        error: "Authorization: Bearer [REDACTED]",
+      },
+    });
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain("secret");
+    expect(serialized).not.toContain("resumeSession");
+    expect(serialized).not.toContain("provider-session");
+  });
+
+  it("GET /api/setup/recovery ignores a successful or non-setup latest turn", async () => {
+    const { app, store } = buildApp();
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const turnId = newId("turn");
+    store.createTurn({ id: turnId, sessionId: session.id, question: "ask", composedInput: "ask", agentId: "ask" });
+    store.resolveTurn(turnId, { backend: null, resultKind: "error", answerSummary: null, traceJson: null, errorMessage: "not setup" });
+
+    expect(await (await app.request("/api/setup/recovery")).json()).toEqual({});
+  });
+
+  it("GET /api/setup/recovery allowlists worklog fields and strips nested SDK/provider identities", async () => {
+    const { app, store } = buildApp();
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const turnId = newId("turn");
+    store.createTurn({ id: turnId, sessionId: session.id, question: "setup", composedInput: "setup", agentId: CONNECT_SOURCE_AGENT_ID, setupStepKey: "context" });
+    store.resolveTurn(turnId, {
+      backend: null,
+      resultKind: "error",
+      answerSummary: null,
+      traceJson: JSON.stringify([{
+        id: "safe-step", label: "setup_execution", state: "error", kind: "tool", unexpected: "discard me",
+        input: { safe: "kept", resumeSessionId: "sdk-anchor-123", nested: { runnerPath: "subscription:claude", dispatcher: "claude-dispatcher", safeNested: "kept" } },
+        detail: "resumeSessionId=sdk-anchor-123 runner=subscription:claude dispatcher=claude-dispatcher safe diagnostic",
+      }]),
+      errorMessage: "SDK sessionId=sdk-anchor-123 provider=claude runnerPath=subscription:claude dispatcher=claude-dispatcher safe error",
+    });
+    store.setTurnResumeAnchor(turnId, { sessionId: "sdk-anchor-123", provider: "claude", runner: "subscription:claude" });
+
+    const body = await (await app.request("/api/setup/recovery")).json() as { failure: { error: string; workLog: Array<Record<string, unknown>> } };
+    const serialized = JSON.stringify(body);
+    for (const forbidden of ["resumeSessionId", "sessionId", "sdk-anchor-123", "runnerPath", "subscription:claude", "dispatcher", "claude-dispatcher", "provider", "claude", "unexpected"]) {
+      expect(serialized.toLowerCase()).not.toContain(forbidden.toLowerCase());
+    }
+    expect(body.failure.workLog).toEqual([expect.objectContaining({
+      id: "safe-step",
+      label: "setup_execution",
+      inspection: { error: expect.stringContaining("safe diagnostic") },
+    })]);
+    expect(body.failure.workLog[0]).not.toHaveProperty("unexpected");
+    expect(body.failure.workLog[0]).not.toHaveProperty("input");
+    expect(body.failure.workLog[0]).not.toHaveProperty("detail");
+    expect(body.failure.error).toContain("safe error");
+  });
+
+  it("strictly redacts hostile setup diagnostics and worklogs from SSE, SQLite, and recovery", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-strict-setup-redaction-test-"));
+    const setupRunner = stubSetupRunner(async (opts) => {
+      opts.onEvent?.({
+        runId: "hostile", seq: 1, kind: "tool.call", stepId: "hostile", callId: "hostile", tool: "setup_execution", depth: 0, status: "running",
+        input: { safe: "kept", provider: "claude", runner: "subscription:claude", sessionId: "sdk-anchor-hostile" },
+      });
+      opts.onEvent?.({
+        runId: "hostile", seq: 2, kind: "tool.result", stepId: "hostile", callId: "hostile", tool: "setup_execution", status: "error",
+        summary: "provider=claude runner=subscription:claude sessionId=sdk-anchor-hostile safe detail",
+      });
+      throw new ModeBSessionError("provider=claude runner=subscription:claude sessionId=sdk-anchor-hostile dispatch failed", "sdk-anchor-hostile");
+    });
+    const { app, store } = buildApp(undefined, {
+      setupRunner,
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const priorTurnId = newId("turn");
+    store.createTurn({ id: priorTurnId, sessionId: session.id, question: "prior", composedInput: "prior", agentId: CONNECT_SOURCE_AGENT_ID, setupStepKey: "connect_resume" });
+    store.resolveTurn(priorTurnId, { backend: null, resultKind: "error", answerSummary: null, traceJson: "[]", errorMessage: "safe prior failure" });
+    store.setTurnResumeAnchor(priorTurnId, { sessionId: "sdk-anchor-hostile", provider: "claude", runner: "subscription:claude" });
+    const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = (await response.json()) as { turnId: string };
+    const sse = await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+    const persisted = store.getTurn(turnId)!;
+    const recovery = await (await app.request("/api/setup/recovery")).text();
+    const combined = `${sse}${persisted.errorMessage}${persisted.traceJson}${recovery}`.toLowerCase();
+    for (const forbidden of ["claude", "subscription:", "sdk-anchor-hostile", "sessionid", "runner="]) expect(combined).not.toContain(forbidden);
+    expect(recovery).not.toContain("kept");
+    const recoveredWorkLog = JSON.parse(recovery).failure.workLog as Array<Record<string, unknown>>;
+    for (const step of recoveredWorkLog) {
+      expect(step).not.toHaveProperty("input");
+      expect(step).not.toHaveProperty("detail");
+    }
+  });
+
+  it("formats hostile inspection fields identically for live SSE, final persistence, and recovery", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-inspection-formatter-test-"));
+    const secrets = ["equals-secret", "colon-secret", "json-secret", "flag-secret", "shell-secret", "url-secret"];
+    const paths = ["/etc/private-config", "/srv/private-data", "C:\\Users\\private\\config"];
+    const longEmoji = "😀".repeat(600);
+    const setupRunner = stubSetupRunner(async (opts) => {
+      opts.onEvent?.({
+        runId: "hostile", seq: 1, kind: "tool.call", stepId: "hostile", callId: `\u001b[31m${longEmoji}`,
+        tool: `https://example.test/private?token=${secrets[5]} ${longEmoji}`,
+        parent: `/etc/private-parent ${longEmoji}`,
+        input: {
+          command: `curl https://user:${secrets[5]}@example.test/private --password=${secrets[0]} password: ${secrets[1]} \"password\":\"${secrets[2]}\" --token ${secrets[3]} SECRET ${secrets[4]} ${paths.join(" ")}`,
+        },
+        depth: 999, status: "running",
+      } as AgentEvent);
+      opts.onEvent?.({
+        runId: "hostile", seq: 2, kind: "tool.result", stepId: "hostile", callId: `\u001b[31m${longEmoji}`,
+        tool: "setup_execution", status: "error", error: `\u001b[2Kfailure at ${paths.join(" ")} ${longEmoji}`,
+      } as AgentEvent);
+      throw new Error("safe terminal failure");
+    });
+    const { app, store } = buildApp(undefined, { setupRunner, workspaceRoot });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = await response.json() as { turnId: string };
+    const sse = await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+    const persisted = store.getTurn(turnId)!;
+    const recovery = await (await app.request("/api/setup/recovery")).text();
+    const combined = `${sse}${persisted.traceJson}${recovery}`;
+
+    for (const unsafe of [...secrets, ...paths, "https://example.test", "\u001b"]) {
+      expect(combined).not.toContain(unsafe);
+    }
+    const frames = parseSse(sse).filter((frame) => frame.event === "worklog");
+    const liveStep = (frames[0]!.data as Array<Record<string, unknown>>)[0]!;
+    const finalStep = (frames.at(-1)!.data as Array<Record<string, unknown>>)[0]!;
+    const recoveredStep = (JSON.parse(recovery) as { failure: { workLog: Array<Record<string, unknown>> } }).failure.workLog[0]!;
+    for (const step of [liveStep, finalStep, recoveredStep]) {
+      for (const field of [step.id, step.label, step.parent]) {
+        if (typeof field !== "string") continue;
+        expect(field).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/);
+        expect(field).not.toMatch(/[\ud800-\udbff]$/);
+        expect(Array.from(field).length).toBeLessThanOrEqual(160);
+      }
+    }
+    const inspection = finalStep.inspection as { action: string; error: string };
+    expect(inspection.action).toContain("[REDACTED_URL]");
+    expect(inspection.error).toContain("[REDACTED_PATH]");
+    expect(inspection.error).not.toMatch(/[\ud800-\udbff]$/);
+    expect(Array.from(inspection.action).length).toBeLessThanOrEqual(512);
+    expect(Array.from(inspection.error).length).toBeLessThanOrEqual(512);
+    expect(recoveredStep.inspection).toEqual(inspection);
+    expect(liveStep.inspection).toMatchObject({ action: expect.stringContaining("[REDACTED_URL]") });
+    expect(liveStep).not.toHaveProperty("depth");
+  });
+
+  it("redacts escaped JSON credentials from SSE, SQLite, and recovery work logs", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-escaped-credential-test-"));
+    const secrets = ["escaped-password", "double-token", "nested-api-key"] as const;
+    const [passwordSecret, tokenSecret, apiKeySecret] = secrets;
+    const escapedJson = (depth: number, key: string, secret: string) => {
+      const slash = "\\".repeat(depth);
+      return `{${slash}"${key}${slash}":${slash}"${secret}${slash}"}`;
+    };
+    const callId = `call ${escapedJson(1, "password", passwordSecret)}`;
+    const label = `setup_execution ${escapedJson(2, "token", tokenSecret)}`;
+    const parent = `parent ${escapedJson(4, "apiKey", apiKeySecret)}`;
+    const setupRunner = stubSetupRunner(async (opts) => {
+      opts.onEvent?.({
+        runId: "escaped", seq: 1, kind: "tool.call", stepId: "escaped", callId, tool: label, parent,
+        input: { command: `run ${escapedJson(1, "api_key", apiKeySecret)}` }, status: "running",
+      } as AgentEvent);
+      opts.onEvent?.({
+        runId: "escaped", seq: 2, kind: "tool.result", stepId: "escaped", callId, tool: label, status: "error",
+        error: `failed ${escapedJson(2, "PASSWORD", passwordSecret)} ${escapedJson(4, "TOKEN", tokenSecret)}`,
+      } as AgentEvent);
+      throw new Error("safe terminal failure");
+    });
+    const { app, store } = buildApp(undefined, { setupRunner, workspaceRoot });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = await response.json() as { turnId: string };
+    const sse = await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+    const persisted = store.getTurn(turnId)!;
+    const recovery = await (await app.request("/api/setup/recovery")).text();
+    const frames = parseSse(sse).filter((frame) => frame.event === "worklog");
+    const finalStep = (frames.at(-1)!.data as Array<Record<string, unknown>>)[0]!;
+    const recoveredStep = (JSON.parse(recovery) as { failure: { workLog: Array<Record<string, unknown>> } }).failure.workLog[0]!;
+
+    for (const serialized of [sse, persisted.traceJson, recovery, ...frames.map((frame) => JSON.stringify(frame.data))]) {
+      for (const secret of secrets) expect(serialized).not.toContain(secret);
+    }
+    expect(finalStep).toMatchObject({
+      id: expect.stringContaining("password=[REDACTED]"),
+      label: expect.stringContaining("token=[REDACTED]"),
+      parent: expect.stringContaining("apiKey=[REDACTED]"),
+      inspection: {
+        action: expect.stringContaining("api_key=[REDACTED]"),
+        error: expect.stringContaining("PASSWORD=[REDACTED]"),
+      },
+    });
+    expect(recoveredStep).toEqual(finalStep);
+  });
+
+  it("redacts a completed session anchor from normal needs_input SSE, event, and turn persistence", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-normal-anchor-redaction-test-"));
+    const anchor = "sdk-completed-anchor";
+    const setupRunner = stubSetupRunner(async () => {
+      return { finalText: `SETUP_STATUS: needs_input - provider=claude sessionId=${anchor} needs user action`, sessionId: anchor };
+    });
+    const { app, store } = buildApp(undefined, {
+      setupRunner,
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = (await response.json()) as { turnId: string };
+    const sse = await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+    const turn = store.getTurn(turnId)!;
+    const events = JSON.stringify(store.listEventsForTurn(turnId));
+    const combined = `${sse}${turn.answerSummary}${turn.traceJson}${events}`.toLowerCase();
+    for (const forbidden of [anchor, "claude", "provider=", "sessionid="]) expect(combined).not.toContain(forbidden);
+  });
+
+  it("rehydrates a bounded terminal-contract correction paused at needs_input without exposing its anchors", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-needs-input-recovery-test-"));
+    const initialAnchor = "sdk-needs-input-initial";
+    const correctedAnchor = "sdk-needs-input-corrected";
+    let calls = 0;
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+      setupRunner: stubSetupRunner(async () => {
+        calls += 1;
+        return calls === 1
+          ? { finalText: "finished work but omitted terminal", sessionId: initialAnchor }
+          : { finalText: "SETUP_STATUS: needs_input - credentials are required", sessionId: correctedAnchor };
+      }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = (await response.json()) as { turnId: string };
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+
+    const recovery = await (await app.request("/api/setup/recovery")).json() as {
+      sessionId?: string;
+      needsInput?: { attempt: string; projectName: string; sourceType: string; message: string; workLog: unknown[] };
+    };
+    expect(calls).toBe(2);
+    expect(recovery).toMatchObject({
+      sessionId: session.id,
+      needsInput: { attempt: "connect_resume", projectName: "acme", sourceType: "postgres", message: "credentials are required" },
+    });
+    expect(recovery.needsInput?.workLog.some((step) => (step as { label?: string }).label === "Terminal contract")).toBe(true);
+    const serialized = JSON.stringify(recovery).toLowerCase();
+    for (const forbidden of [initialAnchor, correctedAnchor, "claude", "provider", "runner", "sessionid="]) expect(serialized).not.toContain(forbidden);
+  });
+
+  it("lets a later success supersede needs_input while a later retry failure preserves the credential handoff", async () => {
+    const { app, store } = buildApp();
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const pausedTurnId = newId("turn");
+    store.createTurn({ id: pausedTurnId, sessionId: session.id, question: "paused", composedInput: "paused", agentId: CONNECT_SOURCE_AGENT_ID, setupStepKey: "connect_resume" });
+    store.resolveTurn(pausedTurnId, { backend: null, resultKind: "answer", answerSummary: "credentials are required", traceJson: "[]", errorMessage: null });
+    store.insertEvent({ sessionId: session.id, turnId: pausedTurnId, kind: "setup_status", payload: { id: newId("evt"), kind: "setup_status", status: "needs_input", message: "credentials are required" } });
+    const okTurnId = newId("turn");
+    store.createTurn({ id: okTurnId, sessionId: session.id, question: "later ok", composedInput: "later ok", agentId: CONNECT_SOURCE_AGENT_ID, setupStepKey: "connect_resume" });
+    store.resolveTurn(okTurnId, { backend: null, resultKind: "answer", answerSummary: "connected", traceJson: "[]", errorMessage: null });
+    store.insertEvent({ sessionId: session.id, turnId: okTurnId, kind: "setup_status", payload: { id: newId("evt"), kind: "setup_status", status: "ok", message: "connected" } });
+    expect(await (await app.request("/api/setup/recovery")).json()).toEqual({});
+
+    const errorTurnId = newId("turn");
+    store.createTurn({ id: errorTurnId, sessionId: session.id, question: "later error", composedInput: "later error", agentId: CONNECT_SOURCE_AGENT_ID, setupStepKey: "connect_resume" });
+    store.resolveTurn(errorTurnId, { backend: null, resultKind: "error", answerSummary: null, traceJson: "[]", errorMessage: "later failure" });
+    expect(await (await app.request("/api/setup/recovery")).json()).toMatchObject({
+      sessionId: session.id,
+      failure: { attempt: "connect_resume", error: "later failure" },
+      needsInput: { attempt: "connect_resume", message: "credentials are required" },
+    });
+  });
+
+  it("keeps the host credential checkpoint available after a failed connect_resume", async () => {
+    const { app, store } = buildApp();
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "duckdb" });
+    const pausedTurnId = newId("turn");
+    store.createTurn({ id: pausedTurnId, sessionId: session.id, question: "paused", composedInput: "paused", agentId: CONNECT_SOURCE_AGENT_ID, setupStepKey: "connect" });
+    store.resolveTurn(pausedTurnId, { backend: "codex-local", resultKind: "answer", answerSummary: "agent wording is irrelevant", traceJson: JSON.stringify([{ id: "safe", label: "setup.setup_execution", state: "done", kind: "tool" }]), errorMessage: null });
+    store.insertEvent({ sessionId: session.id, turnId: pausedTurnId, kind: "setup_status", payload: { id: newId("evt"), kind: "setup_status", status: "needs_input", message: "user action required" } });
+    const failedTurnId = newId("turn");
+    store.createTurn({ id: failedTurnId, sessionId: session.id, question: "resume", composedInput: "resume", agentId: CONNECT_SOURCE_AGENT_ID, setupStepKey: "connect_resume" });
+    store.resolveTurn(failedTurnId, { backend: null, resultKind: "error", answerSummary: null, traceJson: JSON.stringify([{ id: "blocked", label: "setup.setup_execution", state: "error", kind: "tool" }]), errorMessage: "required MCP tool failed" });
+
+    expect(await (await app.request("/api/setup/recovery")).json()).toMatchObject({
+      sessionId: session.id,
+      failure: { attempt: "connect_resume", projectName: "acme", sourceType: "duckdb", error: "required MCP tool failed" },
+      needsInput: { attempt: "connect", projectName: "acme", sourceType: "duckdb", message: "user action required" },
+    });
+  });
+
+  it("streams a live worklog frame with the bare session anchor dropped (shape-redaction can't catch it), then finalizes with by-value redaction", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-fresh-live-anchor-redaction-test-"));
+    const anchor = "sdk-fresh-bare-anchor";
+    const setupRunner = stubSetupRunner(async (opts) => {
+      opts.onEvent?.({
+        runId: "fresh-anchor", seq: 1, kind: "tool.call", stepId: "fresh-anchor", callId: "fresh-anchor", tool: "setup_execution", depth: 0, status: "running",
+      });
+      opts.onEvent?.({
+        runId: "fresh-anchor", seq: 2, kind: "tool.result", stepId: "fresh-anchor", callId: "fresh-anchor", tool: "setup_execution", status: "success",
+        // Deliberately NOT shaped as `key: value` — this bare anchor embedded in
+        // prose is exactly what shape-based redaction (SETUP_INTERNAL_DIAGNOSTIC)
+        // cannot catch, since it never resolves until this attempt returns. The
+        // live frame must still come out clean, because the live path drops
+        // `detail` outright rather than relying on the pattern to find it.
+        summary: `completed preparatory work in provider conversation ${anchor}`,
+      });
+      return { finalText: "SETUP_STATUS: needs_input - source needs attention", sessionId: anchor };
+    });
+    const { app, store } = buildApp(undefined, {
+      setupRunner,
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+
+    const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = (await response.json()) as { turnId: string };
+    const sse = await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+    const turn = store.getTurn(turnId)!;
+    const combined = `${sse}${turn.answerSummary}${turn.traceJson}`.toLowerCase();
+
+    expect(combined).not.toContain(anchor);
+    const worklogFrames = parseSse(sse).filter((frame) => frame.event === "worklog");
+    // Now streams incrementally: one live frame while the attempt is still
+    // running, plus the terminal frame once it resolves — no more waiting in
+    // silence for the whole turn (the bug this fixes).
+    expect(worklogFrames.length).toBeGreaterThanOrEqual(2);
+
+    const liveFrame = worklogFrames[0]!.data as Array<Record<string, unknown>>;
+    const liveStep = liveFrame.find((step) => step.id === "fresh-anchor")!;
+    expect(liveStep).toBeDefined();
+    // The live frame carries progress shape only — no `detail`, so the bare
+    // anchor embedded in this step's summary text never had anywhere to leak.
+    expect(liveStep).not.toHaveProperty("detail");
+    expect(liveStep).not.toHaveProperty("input");
+
+    const finalFrame = worklogFrames[worklogFrames.length - 1]!.data as Array<Record<string, unknown>>;
+    const finalStep = finalFrame.find((step) => step.id === "fresh-anchor")!;
+    // The end-of-turn snapshot stays authoritative and richer: it knows the
+    // real anchor by now, so it carries a safe inspection projection with
+    // that value redacted, never the raw detail.
+    expect(finalStep.inspection).toEqual({ output: "completed preparatory work in provider conversation [REDACTED]" });
+    expect(finalStep).not.toHaveProperty("detail");
+  });
+
+  it("returns only a sanitized subscription model catalog and keeps expected unavailability as HTTP 200", async () => {
+    const listSubscriptionModels = vi.fn<NonNullable<TurnDeps["listSubscriptionModels"]>>(async (provider) => ({
+      version: 1,
+      status: "ready",
+      provider,
+      models: [{ model: "claude-sonnet", displayName: "Claude Sonnet", description: "Balanced", isDefault: true }],
+    }));
+    const { app } = buildApp(undefined, { listSubscriptionModels });
+
+    const ready = await app.request("/api/config/subscription-models?provider=claude&refresh=1");
+    expect(ready.status).toBe(200);
+    expect(await ready.json()).toEqual({
+      version: 1,
+      status: "ready",
+      provider: "claude",
+      models: [{ model: "claude-sonnet", displayName: "Claude Sonnet", description: "Balanced", isDefault: true }],
+    });
+    expect(listSubscriptionModels).toHaveBeenCalledWith("claude", true);
+
+    const unavailableApp = buildApp(undefined, {
+      listSubscriptionModels: async (provider) => ({ version: 1, status: "unavailable", provider, code: "not_authenticated", retryable: true }),
+    }).app;
+    const unavailable = await unavailableApp.request("/api/config/subscription-models?provider=codex");
+    expect(unavailable.status).toBe(200);
+    expect(await unavailable.json()).toEqual({ version: 1, status: "unavailable", provider: "codex", code: "not_authenticated", retryable: true });
+  });
+
+  it("rejects invalid model-catalog query values without invoking provider discovery", async () => {
+    const listSubscriptionModels = vi.fn<NonNullable<TurnDeps["listSubscriptionModels"]>>();
+    const { app } = buildApp(undefined, { listSubscriptionModels });
+    expect((await app.request("/api/config/subscription-models?provider=other")).status).toBe(400);
+    expect((await app.request("/api/config/subscription-models?provider=claude&refresh=yes")).status).toBe(400);
+    expect(listSubscriptionModels).not.toHaveBeenCalled();
+  });
+
   it("GETs the seeded runtime settings and PUTs a partial patch that merges rather than replaces", async () => {
     const { app } = buildApp();
     const initial = (await (await app.request("/api/config/runtime")).json()) as RuntimeSettings;
     expect(initial.authMode).toBe("subscription");
 
-    const putRes = await app.request("/api/config/runtime", { method: "PUT", body: JSON.stringify({ hybrid: true }) });
+    const putRes = await app.request("/api/config/runtime", {
+      method: "PUT",
+      body: JSON.stringify({
+        hybrid: true,
+        subscriptionDriverModel: "claude-opus",
+        apiKeyModel: "claude-sonnet",
+        tierModels: [
+          { tier: "cheap", model: "haiku" },
+          { tier: "strong", model: "sonnet" },
+        ],
+      }),
+    });
     expect(putRes.status).toBe(200);
     const updated = (await putRes.json()) as RuntimeSettingsPutResponse;
-    expect(updated).toEqual({ ...initial, hybrid: true, warnings: [SUBSCRIPTION_TOS_WARNING] });
+    expect(updated).toEqual({
+      ...initial,
+      hybrid: true,
+      subscriptionDriverModel: "claude-opus",
+      apiKeyModel: "claude-sonnet",
+      tierModels: [
+        { tier: "cheap", model: "haiku" },
+        { tier: "strong", model: "sonnet" },
+      ],
+      warnings: [SUBSCRIPTION_TOS_WARNING],
+      nativeSessionBinding: { configured: true, generation: 2, provider: "claude", target: "claude-code:interactive", targetLabel: "Claude CLI" },
+    });
 
-    const { warnings: _warnings, ...persisted } = updated;
+    const { warnings: _warnings, nativeSessionBinding: _nativeSessionBinding, ...persisted } = updated;
     const reread = (await (await app.request("/api/config/runtime")).json()) as RuntimeSettings;
     expect(reread).toEqual(persisted);
+  });
+
+  it("rejects an unrealizable Claude per-step alias before persistence or live dispatch", async () => {
+    const route = vi.fn(async (): Promise<RouteResult> => ({
+      backend: "agent", warnings: [], kind: "answer", envelope: { blocks: [], summary: "should not run" }, trace: { steps: [] },
+    }));
+    const store = new Store(":memory:");
+    const app = createApp({
+      store,
+      route,
+      baseRouteOptions: BASE_ROUTE_OPTIONS,
+      getRuntimeTierNames: async () => ["cheap", "strong"],
+    });
+    const before = store.getRuntimeSettings();
+
+    const save = await app.request("/api/config/runtime", {
+      method: "PUT",
+      body: JSON.stringify({
+        subscriptionDriverModel: "default",
+        tierModels: [{ tier: "cheap", model: "haiku" }, { tier: "strong", model: "default" }],
+      }),
+    });
+    expect(save.status).toBe(400);
+    expect(await save.json()).toMatchObject({ error: expect.stringContaining('Claude per-step tier "strong"') });
+    expect(store.getRuntimeSettings()).toEqual(before);
+
+    // A database created before the save-time gate can still carry this
+    // shape. It must be diagnosed before either a structured Ask turn or a
+    // native launch can call a dispatcher.
+    store.setRuntimeSettings({
+      ...before,
+      subscriptionDriverModel: "default",
+      tierModels: [{ tier: "cheap", model: "haiku" }, { tier: "strong", model: "default" }],
+    });
+    const readiness = await app.request("/api/config/runtime/readiness");
+    expect(readiness.status).toBe(200);
+    expect(await readiness.json()).toMatchObject({ valid: false, correction: expect.stringContaining("Runtime needs correction in Setup") });
+
+    const session = store.createSession("legacy runtime");
+    const ask = await app.request(`/api/sessions/${session.id}/turns`, { method: "POST", body: JSON.stringify({ question: "show revenue" }) });
+    expect(ask.status).toBe(409);
+    expect(await ask.json()).toMatchObject({ code: "runtime_correction_required" });
+    expect(route).not.toHaveBeenCalled();
+    store.close();
+  });
+
+  it("derives the UI tier list from the compiled bundle and rejects an invalid full map without changing store or live auth", async () => {
+    const describeBundle = vi.fn(async () => loadBundle(readFixture("genbi-default.bundle.json")));
+    const getRuntimeTierNames = vi.fn(async () => ["cheap", "strong"]);
+    let liveAuth: AuthChoice = { mode: "subscription", provider: "claude" };
+    const { app, store } = buildApp(describeBundle, {
+      getAuthChoice: () => liveAuth,
+      setAuthChoice: (choice) => {
+        liveAuth = choice;
+      },
+      getRuntimeTierNames,
+    });
+    const before = store.getRuntimeSettings();
+
+    const tiers = await (await app.request("/api/config/runtime/tiers")).json();
+    expect(tiers).toEqual(["cheap", "strong"]);
+
+    const response = await app.request("/api/config/runtime", {
+      method: "PUT",
+      body: JSON.stringify({
+        tierModels: [...before.tierModels, { tier: "orchestrator", model: "not-a-profile-tier" }],
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining("unknown: orchestrator") });
+    expect(store.getRuntimeSettings()).toEqual(before);
+    expect(liveAuth).toEqual({ mode: "subscription", provider: "claude" });
+    expect(getRuntimeTierNames).toHaveBeenCalledTimes(2);
+    expect(describeBundle).not.toHaveBeenCalled();
+  });
+
+  it("loud-fails tier discovery and save validation when the unbound profile compile fails, without DB-row fallback or mutation", async () => {
+    const failure = new Error("warble compile failed");
+    let liveAuth: AuthChoice = { mode: "subscription", provider: "claude" };
+    const { app, store } = buildApp(undefined, {
+      getAuthChoice: () => liveAuth,
+      setAuthChoice: (choice) => {
+        liveAuth = choice;
+      },
+      getRuntimeTierNames: async () => {
+        throw failure;
+      },
+    });
+    const before = store.getRuntimeSettings();
+
+    const tiersResponse = await app.request("/api/config/runtime/tiers");
+    expect(tiersResponse.status).toBe(500);
+    expect(await tiersResponse.json()).toEqual({ error: "Could not compile the runtime tier contract: warble compile failed" });
+
+    const saveResponse = await app.request("/api/config/runtime", {
+      method: "PUT",
+      body: JSON.stringify({ subscriptionDriverModel: "changed" }),
+    });
+    expect(saveResponse.status).toBe(400);
+    expect(await saveResponse.json()).toEqual({ error: "Could not compile the runtime tier contract: warble compile failed" });
+    expect(store.getRuntimeSettings()).toEqual(before);
+    expect(liveAuth).toEqual({ mode: "subscription", provider: "claude" });
   });
 
   it("saving runtime settings advances the wizard's first step (runtime -> done, connect -> current) exactly once — a later save is a no-op", async () => {
@@ -119,7 +718,18 @@ describe("config/runtime + setup wizard endpoints", () => {
     // Seeded state: runtime current, everything else todo.
     expect(store.getSetupSteps().find((s) => s.key === "runtime")?.state).toBe("current");
 
-    await app.request("/api/config/runtime", { method: "PUT", body: JSON.stringify({ hybrid: true }) });
+    await app.request("/api/config/runtime", {
+      method: "PUT",
+      body: JSON.stringify({
+        hybrid: true,
+        subscriptionDriverModel: "claude-opus",
+        apiKeyModel: "claude-sonnet",
+        tierModels: [
+          { tier: "cheap", model: "haiku" },
+          { tier: "strong", model: "sonnet" },
+        ],
+      }),
+    });
     let steps = store.getSetupSteps();
     expect(steps.find((s) => s.key === "runtime")?.state).toBe("done");
     expect(steps.find((s) => s.key === "connect")?.state).toBe("current");
@@ -156,6 +766,46 @@ describe("config/runtime + setup wizard endpoints", () => {
       expect(await res.json()).toEqual({ anthropic: true, openaiCompatible: false });
     });
 
+    it("reports boolean-only subscription login availability and allows a logged-in Codex selection", async () => {
+      const loginProbe: LoginProbe = { claudeLoggedIn: () => false, codexLoggedIn: () => true };
+      const { app, store } = buildApp(undefined, { loginProbe });
+
+      const status = await app.request("/api/config/subscription-detect");
+      expect(await status.json()).toEqual({ claude: false, codex: true });
+
+      const save = await app.request("/api/config/runtime", {
+        method: "PUT",
+        body: JSON.stringify({
+          authMode: "subscription",
+          subscriptionProvider: "codex",
+          tierModels: [
+            { tier: "strong", model: "gpt-5.6-sol" },
+            { tier: "cheap", model: "gpt-5.6-terra" },
+          ],
+          subscriptionDriverModel: "gpt-5.6-luna",
+        }),
+      });
+      expect(save.status).toBe(200);
+      expect(store.getRuntimeSettings().subscriptionProvider).toBe("codex");
+    });
+
+    it("rejects a logged-out Codex selection without persisting it or exposing credential details", async () => {
+      const loginProbe: LoginProbe = { claudeLoggedIn: () => true, codexLoggedIn: () => false };
+      const { app, store } = buildApp(undefined, { loginProbe });
+      const before = store.getRuntimeSettings();
+      const save = await app.request("/api/config/runtime", {
+        method: "PUT",
+        body: JSON.stringify({ authMode: "subscription", subscriptionProvider: "codex" }),
+      });
+      expect(save.status).toBe(400);
+      const body = await save.json();
+      expect(body).toEqual({
+        error: "codex subscription is not logged in on this server. Run `codex login` in the same environment, then retry.",
+      });
+      expect(JSON.stringify(body)).not.toMatch(/token|auth\.json|credential/i);
+      expect(store.getRuntimeSettings()).toEqual(before);
+    });
+
     it("rejects switching to an api-key adapter whose env var is missing, without persisting or advancing the wizard", async () => {
       vi.stubEnv("ANTHROPIC_API_KEY", "");
       const { app, store } = buildApp();
@@ -163,7 +813,7 @@ describe("config/runtime + setup wizard endpoints", () => {
 
       const res = await app.request("/api/config/runtime", {
         method: "PUT",
-        body: JSON.stringify({ authMode: "byo", apiKeyAdapter: "anthropic" }),
+        body: JSON.stringify({ authMode: "byo", apiKeyAdapter: "anthropic", apiKeyModel: "claude-sonnet" }),
       });
 
       expect(res.status).toBe(400);
@@ -179,13 +829,42 @@ describe("config/runtime + setup wizard endpoints", () => {
 
       const res = await app.request("/api/config/runtime", {
         method: "PUT",
-        body: JSON.stringify({ authMode: "byo", apiKeyAdapter: "openai-compatible" }),
+        body: JSON.stringify({
+          authMode: "byo",
+          apiKeyAdapter: "openai-compatible",
+          apiKeyModel: "gpt-4.1",
+          apiKeyBaseURL: "https://api.openai.com/v1",
+        }),
       });
 
       expect(res.status).toBe(400);
       expect(await res.json()).toMatchObject({ error: expect.stringContaining("OPENAI_API_KEY") });
       expect(store.getRuntimeSettings()).toEqual(before);
       expect(store.getSetupSteps().find((s) => s.key === "runtime")?.state).toBe("current");
+    });
+
+    it("does not require the unused global adapter credential when every materialized tier overrides it", async () => {
+      vi.stubEnv("OPENAI_API_KEY", "");
+      vi.stubEnv("ANTHROPIC_API_KEY", "present");
+      const { app, store } = buildApp();
+
+      const res = await app.request("/api/config/runtime", {
+        method: "PUT",
+        body: JSON.stringify({
+          authMode: "byo",
+          apiKeyAdapter: "openai-compatible",
+          tierModels: [
+            { tier: "cheap", adapter: "local", model: "local-small", baseURL: "http://localhost:11434/v1" },
+            { tier: "strong", adapter: "anthropic", model: "claude-sonnet" },
+          ],
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(store.getRuntimeSettings().tierModels).toMatchObject([
+        { tier: "cheap", adapter: "local" },
+        { tier: "strong", adapter: "anthropic" },
+      ]);
     });
 
     it("rejects switching to an api-key adapter with a blank model, without persisting or advancing the wizard — neither adapter has a default, so a blank value must not slip through as a silent 200", async () => {
@@ -195,7 +874,12 @@ describe("config/runtime + setup wizard endpoints", () => {
 
       const res = await app.request("/api/config/runtime", {
         method: "PUT",
-        body: JSON.stringify({ authMode: "byo", apiKeyAdapter: "anthropic" }), // apiKeyModel omitted
+        body: JSON.stringify({
+          authMode: "byo",
+          apiKeyAdapter: "anthropic",
+          apiKeyModel: "",
+          tierModels: before.tierModels.map((binding) => ({ ...binding, model: "" })),
+        }),
       });
 
       expect(res.status).toBe(400);
@@ -262,6 +946,7 @@ describe("config/runtime + setup wizard endpoints", () => {
           apiKeyAdapter: "openai-compatible",
           apiKeyModel: "https://api.openai.com/v1",
           apiKeyBaseURL: "gpt-4.1",
+          tierModels: before.tierModels.map((binding) => ({ ...binding, model: "" })),
         }),
       });
 
@@ -281,7 +966,12 @@ describe("config/runtime + setup wizard endpoints", () => {
 
       const res = await app.request("/api/config/runtime", {
         method: "PUT",
-        body: JSON.stringify({ authMode: "byo", apiKeyAdapter: "anthropic", apiKeyModel: "https://example.com/model" }),
+        body: JSON.stringify({
+          authMode: "byo",
+          apiKeyAdapter: "anthropic",
+          apiKeyModel: "https://example.com/model",
+          tierModels: before.tierModels.map((binding) => ({ ...binding, model: "" })),
+        }),
       });
 
       expect(res.status).toBe(400);
@@ -324,6 +1014,7 @@ describe("config/runtime + setup wizard endpoints", () => {
           trace: { steps: [] },
         }),
         baseRouteOptions: BASE_ROUTE_OPTIONS,
+        getRuntimeTierNames: async () => ["cheap", "strong"],
         setAuthChoice: (choice) => {
           boundAuthChoice = choice;
         },
@@ -362,10 +1053,12 @@ describe("config/runtime + setup wizard endpoints", () => {
 
   it("POST /api/setup/reset restores first-run wizard state, clears the connect form/session, and unbinds the project — without deleting anything on disk", async () => {
     const unbindProject = vi.fn();
+    const setAuthChoice = vi.fn();
     const { app, store } = buildApp(undefined, {
       setupRunner: stubSetupRunner(async () => ({ finalText: "SETUP_STATUS: ok" })),
       workspaceRoot: mkdtempSync(path.join(tmpdir(), "wren-harness-setup-test-")),
       unbindProject,
+      setAuthChoice,
     });
     // Drive the wizard well past step 1 into a dirtied state.
     store.setSetupSteps([
@@ -392,7 +1085,18 @@ describe("config/runtime + setup wizard endpoints", () => {
     expect(store.getSetupSessionId()).toBeUndefined();
     expect(store.getVerifyGatePassed()).toBe(false);
     expect(store.getRuntimeSettings().hybrid).toBe(false);
+    expect(store.getRuntimeSettings()).toMatchObject({
+      subscriptionProvider: "claude",
+      tierModels: [
+        { tier: "cheap", model: "" },
+        { tier: "strong", model: "" },
+      ],
+    });
+    expect(store.getRuntimeSettings().subscriptionDriverModel).toBeUndefined();
+    expect(store.getRuntimeSettings().apiKeyModel).toBeUndefined();
+    expect(store.hasExplicitRuntimeSettings()).toBe(false);
     expect(unbindProject).toHaveBeenCalledTimes(1);
+    expect(setAuthChoice).toHaveBeenCalledWith(BASE_ROUTE_OPTIONS.authChoice);
   });
 
   it("POST /api/setup/reset 500s when agentic setup isn't configured (no setupRunner/workspaceRoot)", async () => {
@@ -415,7 +1119,8 @@ describe("config/runtime + setup wizard endpoints", () => {
       emit({ kind: "tool.result", stepId: "scaffold", callId: "call-1", tool: "wren_init", status: "success", summary: "scaffolded acme/" });
       return { finalText: "Scaffolded project acme and wrote an empty .env template.\nSETUP_STATUS: ok - connected to postgres" };
     });
-    const { app } = buildApp(async () => bundleWithGatedCheck(true), { setupRunner, workspaceRoot });
+    const { app, store } = buildApp(async () => bundleWithGatedCheck(true), { setupRunner, workspaceRoot });
+    configureSubscriptionRuntime(store);
 
     const initialSteps = (await (await app.request("/api/setup/steps")).json()) as SetupStep[];
     expect(initialSteps).toHaveLength(5);
@@ -716,6 +1421,7 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
       baseRouteOptions: BASE_ROUTE_OPTIONS,
       setupRunner,
       workspaceRoot,
+      describeBundle: async () => bundleWithGatedCheck(true),
       getUserProject: () => boundProject,
       bindProject: (dir: string) => {
         boundProject = dir;
@@ -748,30 +1454,37 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
     expect(await res.json()).toMatchObject({ error: expect.stringContaining("call POST /api/setup/connect first") });
   });
 
-  it("full flow: connect binds the project, then context builds the MDL and advances context->done + bind->current WITHOUT rebinding the project", async () => {
+  it("full flow: compile-bind refreshes the canonical enrichment binding after context rebuilds the MDL", async () => {
     const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-test-"));
     let boundProject: string | undefined;
     let bindCallCount = 0;
     const setupRunner = stubSetupRunner(async (opts) => {
       if (opts.agentId === "build_context") {
+        expect(opts).toMatchObject({ workspaceRoot, projectName: "acme", stepKey: "context" });
         recordSuccessfulSchemaDiscovery(opts.onEvent);
         writeMdl(path.join(workspaceRoot, "acme"), ["customers", "orders", "products"]);
         return { finalText: "Generated MDL from the discovered schema.\nSETUP_STATUS: ok - built MDL with 3 models" };
       }
+      expect(opts).toMatchObject({ workspaceRoot, projectName: "acme", stepKey: "connect" });
       mkdirSync(path.join(workspaceRoot, "acme"), { recursive: true });
       writeFileSync(path.join(workspaceRoot, "acme", "wren_project.yml"), "name: acme\n");
+      writeMdl(path.join(workspaceRoot, "acme"), ["bootstrap"]);
       return { finalText: "Scaffolded project acme and wrote an empty .env template.\nSETUP_STATUS: ok - connected to postgres" };
     });
     const store = new Store(":memory:");
+    configureSubscriptionRuntime(store);
     const deps: TurnDeps = {
       store,
       route: okRoute,
       baseRouteOptions: BASE_ROUTE_OPTIONS,
       setupRunner,
       workspaceRoot,
+      describeBundle: async () => bundleWithGatedCheck(true),
       getUserProject: () => boundProject,
       bindProject: (dir: string) => {
-        boundProject = dir;
+        const binding = resolveEnrichmentBinding(dir);
+        boundProject = binding.path;
+        store.activateEnrichmentBinding(binding);
         bindCallCount += 1;
       },
     };
@@ -785,7 +1498,7 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
     await (await app.request(`/api/sessions/${sessionId}/stream?turn=${connectTurnId}`)).text(); // drives the connect turn to completion (binds the project)
 
     expect(bindCallCount).toBe(1);
-    expect(boundProject).toBe(path.join(workspaceRoot, "acme"));
+    expect(boundProject).toBe(resolveEnrichmentBinding(path.join(workspaceRoot, "acme")).path);
 
     const stepsAfterConnect = (await (await app.request("/api/setup/steps")).json()) as SetupStep[];
     expect(stepsAfterConnect.find((s) => s.key === "context")?.state).toBe("current");
@@ -802,14 +1515,1072 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
     await (await app.request(`/api/sessions/${contextSessionId}/stream?turn=${contextTurnId}`)).text();
 
     expect(bindCallCount).toBe(1); // bindProject was NOT called again by the context step
-    expect(boundProject).toBe(path.join(workspaceRoot, "acme")); // same project, unchanged
+    expect(boundProject).toBe(resolveEnrichmentBinding(path.join(workspaceRoot, "acme")).path); // same canonical project, unchanged
 
     const finalSteps = (await (await app.request("/api/setup/steps")).json()) as SetupStep[];
     expect(finalSteps.find((s) => s.key === "context")?.state).toBe("done");
     expect(finalSteps.find((s) => s.key === "bind")?.state).toBe("current");
+    // The context step just wrote a real, built MDL without calling
+    // bindProject again -- and it doesn't need to: enrichment resolves its
+    // revision fresh from disk at each check rather than trusting whatever
+    // revision was cached at connect-time bind, so foundation readiness
+    // already reflects the real schema here, ahead of the explicit
+    // compile-bind step below.
+    expect((await (await app.request("/api/context/enrichment")).json() as { foundationReady: boolean }).foundationReady).toBe(true);
+
+    const beforeRefresh = store.getEnrichmentBinding()!;
+    const bindRes = await app.request("/api/setup/compile-bind", { method: "POST" });
+    expect(bindRes.status).toBe(200);
+    const refreshed = store.getEnrichmentBinding()!;
+    expect(bindCallCount).toBe(2);
+    expect(refreshed.generation).toBe(beforeRefresh.generation + 1);
+    expect(refreshed.revision).not.toBe(beforeRefresh.revision);
+    expect((await (await app.request("/api/context/enrichment")).json() as { foundationReady: boolean }).foundationReady).toBe(true);
   });
 
-  it("a successful-looking context build without discovery creates one explicit retry checkpoint, then the retry resumes the captured SDK session and succeeds", async () => {
+  it("connect binds a project that has wren_project.yml but no target/mdl.json, and completes the turn normally", async () => {
+    // Regression for the bug where a successful connect step's bindProject
+    // call required the enrichment revision (target/mdl.json) as a
+    // precondition of binding, throwing inside the SSE stream for every
+    // real onboarding run (connect always precedes context, so mdl.json
+    // never exists yet). This stub mirrors server/bin.ts's real
+    // `bindProject` -- resolveProjectIdentity only, never
+    // resolveEnrichmentBinding -- rather than the trivial no-op stub other
+    // connect tests in this file use, so it actually exercises the bug.
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-connect-unbuilt-test-"));
+    let boundProject: string | undefined;
+    let bindCallCount = 0;
+    const setupRunner = stubSetupRunner(async (opts) => {
+      expect(opts).toMatchObject({ workspaceRoot, projectName: "acme", stepKey: "connect" });
+      mkdirSync(path.join(workspaceRoot, "acme"), { recursive: true });
+      writeFileSync(path.join(workspaceRoot, "acme", "wren_project.yml"), "name: acme\n");
+      // Deliberately no target/mdl.json: connect never builds context.
+      return { finalText: "Scaffolded project acme and wrote an empty .env template.\nSETUP_STATUS: ok - connected to postgres" };
+    });
+    const store = new Store(":memory:");
+    configureSubscriptionRuntime(store);
+    const deps: TurnDeps = {
+      store,
+      route: okRoute,
+      baseRouteOptions: BASE_ROUTE_OPTIONS,
+      setupRunner,
+      workspaceRoot,
+      getUserProject: () => boundProject,
+      bindProject: (dir: string) => {
+        const identity = resolveProjectIdentity(dir);
+        boundProject = identity.path;
+        store.activateEnrichmentBinding(identity);
+        bindCallCount += 1;
+      },
+    };
+    const app = createApp(deps);
+
+    const connectRes = await app.request("/api/setup/connect", {
+      method: "POST",
+      body: JSON.stringify({ projectName: "acme", sourceType: "postgres" }),
+    });
+    const { sessionId, turnId } = (await connectRes.json()) as { sessionId: string; turnId: string };
+    const events = parseSse(await (await app.request(`/api/sessions/${sessionId}/stream?turn=${turnId}`)).text());
+
+    // The bug crashed the SSE stream with an uncaught EnrichmentContractError
+    // instead of ever completing the turn.
+    expect(events.some((frame) => frame.event === "error")).toBe(false);
+    expect(events.filter((frame) => frame.event === "done")).toHaveLength(1);
+    const statusFrame = events.find((frame) => frame.event === "event")?.data as SetupStatusEvent | undefined;
+    expect(statusFrame?.kind).toBe("setup_status");
+    expect(statusFrame?.status).toBe("ok");
+    expect(bindCallCount).toBe(1);
+    expect(boundProject).toBe(resolveProjectIdentity(path.join(workspaceRoot, "acme")).path);
+    expect(existsSync(path.join(workspaceRoot, "acme", "target", "mdl.json"))).toBe(false);
+
+    const stepsAfterConnect = (await (await app.request("/api/setup/steps")).json()) as SetupStep[];
+    expect(stepsAfterConnect.find((s) => s.key === "context")?.state).toBe("current");
+
+    // Foundation-bound but unbuilt: enrichment correctly refuses without a 500.
+    const enrichmentStatus = await app.request("/api/context/enrichment");
+    expect(enrichmentStatus.status).toBe(200);
+    expect((await enrichmentStatus.json() as { foundationReady: boolean }).foundationReady).toBe(false);
+  });
+
+  it("carries host-verified discovery through a fresh corrective attempt, then retains validated build/artifact proof", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-lifecycle-recovery-test-"));
+    let contextRuns = 0;
+    const setupRunner = stubSetupRunner(async (opts) => {
+      if (opts.agentId !== "build_context") return { finalText: "SETUP_STATUS: ok - connected" };
+      contextRuns += 1;
+      if (contextRuns === 1) {
+        opts.onEvent?.({ runId: "lifecycle", seq: 1, kind: "tool.call", stepId: "context", callId: "discover", tool: "setup_execution", input: { command: 'wren --sql "SELECT table_name FROM information_schema.tables" -o json' }, depth: 0, status: "running" });
+        opts.onEvent?.({ runId: "lifecycle", seq: 2, kind: "tool.result", stepId: "context", callId: "discover", tool: "setup_execution", status: "success", summary: '{"exitCode":0}' });
+        return { finalText: "SETUP_STATUS: error - validation was interrupted" };
+      }
+      expect(opts.prompt).toMatch(/Host verification already established schema discovery/i);
+      expect(opts.prompt).toMatch(/do NOT repeat discovery/i);
+      opts.onEvent?.({ runId: "lifecycle", seq: 1, kind: "tool.call", stepId: "context", callId: "validate", tool: "setup_execution", input: { command: "wren context validate" }, depth: 0, status: "running" });
+      opts.onEvent?.({ runId: "lifecycle", seq: 2, kind: "tool.result", stepId: "context", callId: "validate", tool: "setup_execution", status: "success", summary: '{"exitCode":0}' });
+      opts.onEvent?.({ runId: "lifecycle", seq: 3, kind: "tool.call", stepId: "context", callId: "build", tool: "setup_execution", input: { command: "wren context build" }, depth: 0, status: "running" });
+      opts.onEvent?.({ runId: "lifecycle", seq: 4, kind: "tool.result", stepId: "context", callId: "build", tool: "setup_execution", status: "success", summary: '{"exitCode":0}' });
+      writeMdl(path.join(workspaceRoot, "acme"), ["customers"]);
+      return { finalText: "SETUP_STATUS: ok - built MDL with 1 model" };
+    });
+    const { app, store } = buildApp(async () => bundleWithGatedCheck(true), { setupRunner, workspaceRoot });
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme_profile\ndata_source: postgres\n");
+    writeFileSync(path.join(projectDir, ".env"), "POSTGRES_URL=postgresql://readonly:secret@db.example.test:5432/analytics\n");
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+
+    const initial = await app.request("/api/setup/context", { method: "POST" });
+    const { turnId: initialTurnId } = await initial.json() as { turnId: string };
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${initialTurnId}`)).text();
+    const identity = contextLifecycleIdentityFingerprint(workspaceRoot, "acme", "postgres")!;
+    expect(store.getSetupContextLifecycleEvidence(session.id, identity)).toMatchObject({ completed: "discovery" });
+
+    const retry = await app.request("/api/setup/context", { method: "POST" });
+    const { turnId: retryTurnId } = await retry.json() as { turnId: string };
+    const frames = parseSse(await (await app.request(`/api/sessions/${session.id}/stream?turn=${retryTurnId}`)).text());
+    expect(frames).toEqual(expect.arrayContaining([expect.objectContaining({ event: "event", data: expect.objectContaining({ status: "ok" }) })]));
+    expect(contextRuns).toBe(2);
+    expect(store.getSetupContextLifecycleEvidence(session.id, identity)).toMatchObject({ completed: "build" });
+  });
+
+  it("fails closed and discards retained lifecycle evidence when the project profile identity changes", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-lifecycle-identity-test-"));
+    const { app, store } = buildApp(undefined, { setupRunner: stubSetupRunner(async () => ({ finalText: "SETUP_STATUS: error - stop" })), workspaceRoot });
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: original\ndata_source: postgres\n");
+    writeFileSync(path.join(projectDir, ".env"), "POSTGRES_URL=postgresql://readonly:secret@db.example.test:5432/analytics\n");
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const originalIdentity = contextLifecycleIdentityFingerprint(workspaceRoot, "acme", "postgres")!;
+    store.mergeSetupContextLifecycleEvidence({ sessionId: session.id, identityFingerprint: originalIdentity, completed: "validate" });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: replacement\ndata_source: postgres\n");
+
+    const response = await app.request("/api/setup/context", { method: "POST" });
+    const { turnId } = await response.json() as { turnId: string };
+    expect(store.getTurn(turnId)?.composedInput).toMatch(/Follow the wren generate-mdl skill/i);
+    expect(store.getTurn(turnId)?.composedInput).not.toMatch(/Host verification already established/i);
+    expect(store.getSetupContextLifecycleEvidence(session.id, originalIdentity)).toBeUndefined();
+  });
+
+  it("fails closed and discards retained lifecycle evidence when only the effective database URL changes", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-lifecycle-connection-identity-test-"));
+    const { app, store } = buildApp(undefined, { setupRunner: stubSetupRunner(async () => ({ finalText: "SETUP_STATUS: error - stop" })), workspaceRoot });
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme_profile\ndata_source: postgres\n");
+    writeFileSync(path.join(projectDir, ".env"), "POSTGRES_URL=postgresql://readonly:initial-secret@db.example.test:5432/analytics\n");
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const originalIdentity = contextLifecycleIdentityFingerprint(workspaceRoot, "acme", "postgres")!;
+    store.mergeSetupContextLifecycleEvidence({ sessionId: session.id, identityFingerprint: originalIdentity, completed: "validate" });
+
+    writeFileSync(path.join(projectDir, ".env"), "POSTGRES_URL=postgresql://readonly:replacement-secret@db.example.test:5432/warehouse\n");
+    const changedIdentity = contextLifecycleIdentityFingerprint(workspaceRoot, "acme", "postgres")!;
+    expect(changedIdentity).not.toBe(originalIdentity);
+    expect(changedIdentity).not.toContain("replacement-secret");
+
+    const response = await app.request("/api/setup/context", { method: "POST" });
+    const { turnId } = await response.json() as { turnId: string };
+    expect(store.getTurn(turnId)?.composedInput).toMatch(/Follow the wren generate-mdl skill/i);
+    expect(store.getTurn(turnId)?.composedInput).not.toMatch(/Host verification already established/i);
+    expect(store.getSetupContextLifecycleEvidence(session.id, originalIdentity)).toBeUndefined();
+    rmSync(workspaceRoot, { recursive: true, force: true });
+  });
+
+  it("fails closed when the effective connection target is absent or ambiguous", () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-lifecycle-connection-target-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme_profile\ndata_source: postgres\n");
+    expect(contextLifecycleIdentityFingerprint(workspaceRoot, "acme", "postgres")).toBeUndefined();
+
+    writeFileSync(
+      path.join(projectDir, ".env"),
+      [
+        "POSTGRES_URL=postgresql://readonly:one-secret@db.example.test:5432/analytics",
+        "PG_URL=postgresql://readonly:two-secret@db.example.test:5432/warehouse",
+      ].join("\n"),
+    );
+    expect(contextLifecycleIdentityFingerprint(workspaceRoot, "acme", "postgres")).toBeUndefined();
+    rmSync(workspaceRoot, { recursive: true, force: true });
+  });
+
+  it("fails closed when an effective URL scheme is mismatched for the selected source", () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-lifecycle-connection-scheme-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme_profile\ndata_source: postgres\n");
+    writeFileSync(path.join(projectDir, ".env"), "POSTGRES_URL=mysql://readonly:secret@db.example.test:3306/analytics\n");
+    expect(contextLifecycleIdentityFingerprint(workspaceRoot, "acme", "postgres")).toBeUndefined();
+
+    rmSync(workspaceRoot, { recursive: true, force: true });
+  });
+
+  it("fails closed for a DuckDB URL because Setup has no host/database URL target for it", () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-lifecycle-duckdb-url-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme_profile\ndata_source: duckdb\n");
+    writeFileSync(path.join(projectDir, ".env"), "DUCKDB_URL=duckdb://warehouse.local/analytics\n");
+    expect(contextLifecycleIdentityFingerprint(workspaceRoot, "acme", "duckdb")).toBeUndefined();
+
+    rmSync(workspaceRoot, { recursive: true, force: true });
+  });
+
+  it("fails closed for DuckDB generic DB_HOST/DB_DATABASE fields", () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-lifecycle-duckdb-fields-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme_profile\ndata_source: duckdb\n");
+    writeFileSync(path.join(projectDir, ".env"), "DB_HOST=warehouse.local\nDB_PORT=5432\nDB_DATABASE=analytics\n");
+    expect(contextLifecycleIdentityFingerprint(workspaceRoot, "acme", "duckdb")).toBeUndefined();
+
+    rmSync(workspaceRoot, { recursive: true, force: true });
+  });
+
+  it("fails closed for a source whose identity is not host/database, even when generic fields exist", () => {
+    // Oracle used to be this case's example. It is a supported Setup source now
+    // and its wren connection model really is host/port/database, so it derives
+    // a truthful identity. Databricks does not — it is serverHostname/httpPath —
+    // so accepting DB_HOST/DB_DATABASE for it would forge one.
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-lifecycle-unsupported-source-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme_profile\ndata_source: databricks\n");
+    writeFileSync(path.join(projectDir, ".env"), "DB_HOST=db.example.test\nDB_PORT=443\nDB_DATABASE=analytics\n");
+    expect(contextLifecycleIdentityFingerprint(workspaceRoot, "acme", "databricks")).toBeUndefined();
+
+    rmSync(workspaceRoot, { recursive: true, force: true });
+  });
+
+  it("now derives a lifecycle identity for a source whose model really is host/database", () => {
+    // The converse of the case above, and the reason retries used to lose their
+    // work: a source absent from the host/database table produced no identity,
+    // so verified progress could not be retained and discovery/validate/build
+    // were silently redone.
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-lifecycle-oracle-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme_profile\ndata_source: oracle\n");
+    writeFileSync(path.join(projectDir, ".env"), "DB_HOST=db.example.test\nDB_PORT=1521\nDB_DATABASE=analytics\n");
+    expect(contextLifecycleIdentityFingerprint(workspaceRoot, "acme", "oracle")).toBeTruthy();
+
+    rmSync(workspaceRoot, { recursive: true, force: true });
+  });
+
+  it.each([false, true])("does not reuse prior build proof for a normal rebuild with %s lifecycle worklog", async (buildOnly) => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-normal-rebuild-test-"));
+    const setupRunner = stubSetupRunner(async (opts) => {
+      if (buildOnly) {
+        opts.onEvent?.({ runId: "normal-rebuild", seq: 1, kind: "tool.call", stepId: "context", callId: "build", tool: "setup_execution", input: { command: "wren context build" }, depth: 0, status: "running" });
+        opts.onEvent?.({ runId: "normal-rebuild", seq: 2, kind: "tool.result", stepId: "context", callId: "build", tool: "setup_execution", status: "success", summary: '{"exitCode":0}' });
+      }
+      return { finalText: "SETUP_STATUS: ok - reused old build" };
+    });
+    const { app, store } = buildApp(undefined, { setupRunner, workspaceRoot });
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme_profile\ndata_source: postgres\n");
+    writeFileSync(path.join(projectDir, ".env"), "POSTGRES_URL=postgresql://readonly:secret@db.example.test:5432/analytics\n");
+    writeMdl(projectDir, ["previous_model"]);
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const identity = contextLifecycleIdentityFingerprint(workspaceRoot, "acme", "postgres")!;
+    store.mergeSetupContextLifecycleEvidence({ sessionId: session.id, identityFingerprint: identity, completed: "build" });
+
+    const response = await app.request("/api/setup/context", { method: "POST" });
+    const { turnId } = await response.json() as { turnId: string };
+    expect(store.getTurn(turnId)?.contextRecovery).toBeNull();
+    const frames = parseSse(await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text());
+
+    expect(JSON.stringify(frames)).not.toContain('"status":"ok"');
+    expect(store.getSetupContextLifecycleEvidence(session.id, identity)).toBeUndefined();
+    rmSync(workspaceRoot, { recursive: true, force: true });
+  });
+
+  it("persists valid evidence across a DB reload and fails closed for another session or malformed state", () => {
+    const dbDir = mkdtempSync(path.join(tmpdir(), "wren-harness-context-lifecycle-store-test-"));
+    const dbPath = path.join(dbDir, "state.sqlite");
+    const identity = "identity";
+    const first = new Store(dbPath);
+    first.mergeSetupContextLifecycleEvidence({ sessionId: "session-a", identityFingerprint: identity, completed: "validate" });
+    first.close();
+
+    const reopened = new Store(dbPath);
+    expect(reopened.getSetupContextLifecycleEvidence("session-a", identity)).toMatchObject({ completed: "validate" });
+    expect(reopened.getSetupContextLifecycleEvidence("session-b", identity)).toBeUndefined();
+    expect(reopened.getSetupContextLifecycleEvidence("session-a", identity)).toBeUndefined();
+    reopened.setConfigJson("setup.contextLifecycleEvidence", { sessionId: "session-a", identityFingerprint: identity, completed: "forged" });
+    expect(reopened.getSetupContextLifecycleEvidence("session-a", identity)).toBeUndefined();
+    expect(reopened.getConfigJson("setup.contextLifecycleEvidence")).toBeUndefined();
+    reopened.close();
+    rmSync(dbDir, { recursive: true, force: true });
+  });
+
+  it("threads the persisted project name and connect_resume step into the runner without changing its workspace root", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-resume-cwd-test-"));
+    const setupRunner = stubSetupRunner(async (opts) => {
+      expect(opts).toMatchObject({
+        workspaceRoot,
+        projectName: "acme",
+        stepKey: "connect_resume",
+        resumeSessionId: undefined,
+      });
+      return { finalText: "SETUP_STATUS: needs_input - verify the remaining datasource field" };
+    });
+    const { app, store } = buildApp(undefined, { setupRunner, workspaceRoot });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+
+    const resume = await app.request("/api/setup/connect/resume", { method: "POST" });
+    expect(resume.status).toBe(200);
+    const { turnId } = (await resume.json()) as { turnId: string };
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+  });
+
+  it("keeps one connect_resume SSE turn open for a single same-session host-contract correction", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-host-contract-recovery-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme-postgres\ndata_source: postgres\n");
+    let calls = 0;
+    const setupRunner = stubSetupRunner(async (opts) => {
+      calls += 1;
+      if (calls === 1) return { finalText: "SETUP_STATUS: ok - connection validated", sessionId: "sdk-connect-session" };
+      expect(opts.resumeSessionId).toBe("sdk-connect-session");
+      expect(opts.prompt).toMatch(/host-side validation rejected/i);
+      expect(opts.prompt).toMatch(/\.wren-validated/i);
+      expect(opts.prompt).toMatch(/do not read, print, or ask for credential values/i);
+      writeFileSync(path.join(projectDir, ".wren-validated"), "");
+      return { finalText: "SETUP_STATUS: ok - connection validated", sessionId: "sdk-connect-session" };
+    });
+    const { app, store } = buildApp(undefined, {
+      setupRunner,
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+
+    const resume = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = (await resume.json()) as { turnId: string };
+    const frames = parseSse(await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text());
+
+    expect(calls).toBe(2);
+    expect(frames.filter((frame) => frame.event === "done")).toHaveLength(1);
+    expect(frames.some((frame) => frame.event === "error")).toBe(false);
+    expect(frames.filter((frame) => frame.event === "event")).toHaveLength(1);
+    expect(frames.some((frame) => frame.event === "worklog" && Array.isArray(frame.data) && frame.data.some((step) => step.label === "Host contract"))).toBe(true);
+    expect(store.getTurn(turnId)?.resultKind).toBe("answer");
+  });
+
+  it("redacts bare anchors from completed host-contract re-emission and correction worklogs", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-host-contract-live-anchor-redaction-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    const originalAnchor = "sdk-host-contract-original-anchor";
+    const replacementAnchor = "sdk-host-contract-replacement-anchor";
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme-postgres\ndata_source: postgres\n");
+    let calls = 0;
+    const setupRunner = stubSetupRunner(async (opts) => {
+      calls += 1;
+      opts.onEvent?.({
+        runId: `host-anchor-${calls}`, seq: 1, kind: "tool.result", stepId: `host-anchor-${calls}`, callId: `host-anchor-${calls}`, tool: "setup_execution", status: "success",
+        summary: `provider conversation ${calls === 1 ? originalAnchor : replacementAnchor} completed work`,
+      });
+      if (calls === 1) return { finalText: "SETUP_STATUS: ok - connection validated", sessionId: originalAnchor };
+      expect(opts.resumeSessionId).toBe(originalAnchor);
+      return { finalText: "SETUP_STATUS: error - correction needs user action", sessionId: replacementAnchor };
+    });
+    const { app, store } = buildApp(undefined, {
+      setupRunner,
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+
+    const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = (await response.json()) as { turnId: string };
+    const sse = await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+    const turn = store.getTurn(turnId)!;
+
+    expect(calls).toBe(2);
+    const combined = `${sse}${turn.errorMessage}${turn.traceJson}`.toLowerCase();
+    for (const anchor of [originalAnchor, replacementAnchor]) expect(combined).not.toContain(anchor);
+  });
+
+  it("does not auto-retry a declared setup error, runner throw, or non-resumable Mode A/Codex completion", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-host-contract-no-retry-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme-postgres\ndata_source: postgres\n");
+
+    for (const [name, run] of [
+      ["declared error", async () => ({ finalText: "SETUP_STATUS: error - authentication needs user action", sessionId: "sdk-session" })],
+      ["runner throw", async () => { throw new Error("dispatcher timed out"); }],
+      ["cancelled runner", async () => { throw new Error("dispatcher cancelled"); }],
+      ["Mode A", async () => ({ finalText: "SETUP_STATUS: ok - connection validated", sessionId: null })],
+      ["Codex", async () => ({ finalText: "SETUP_STATUS: ok - connection validated" })],
+    ] as const) {
+      let calls = 0;
+      const { app, store } = buildApp(undefined, {
+        setupRunner: stubSetupRunner(async () => {
+          calls += 1;
+          return run();
+        }),
+        workspaceRoot,
+      });
+      const session = store.createSession(`Setup: ${name}`);
+      store.setSetupSessionId(session.id);
+      store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+      const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+      const { turnId } = (await response.json()) as { turnId: string };
+      const frames = parseSse(await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text());
+      expect(calls, name).toBe(1);
+      expect(frames.some((frame) => frame.event === "error"), name).toBe(true);
+    }
+  });
+
+  it("retains the completed session anchor when its one host-contract correction still fails", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-host-contract-retain-session-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme-postgres\ndata_source: postgres\n");
+    let calls = 0;
+    const { app, store } = buildApp(undefined, {
+      setupRunner: stubSetupRunner(async (opts) => {
+        calls += 1;
+        if (calls === 3) {
+          expect(opts.resumeSessionId).toBe("sdk-retained-session");
+          expect(opts.prompt).toMatch(/continue and repair the existing connect_resume setup attempt/i);
+          writeFileSync(path.join(projectDir, ".wren-validated"), "");
+        }
+        return { finalText: "SETUP_STATUS: ok - connection validated", sessionId: "sdk-retained-session" };
+      }),
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = (await response.json()) as { turnId: string };
+    const frames = parseSse(await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text());
+
+    expect(calls).toBe(2);
+    expect(frames.filter((frame) => frame.event === "error")).toHaveLength(1);
+    expect(frames.some((frame) => frame.event === "done")).toBe(false);
+    expect(store.getTurn(turnId)).toMatchObject({
+      resultKind: "error",
+      resumeSessionId: "sdk-retained-session",
+      resumeSessionProvider: "claude",
+      resumeRunner: "subscription:claude",
+    });
+
+    const retry = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId: retryTurnId } = (await retry.json()) as { turnId: string };
+    expect(store.getTurn(retryTurnId)?.resumeSessionId).toBe("sdk-retained-session");
+    const retryFrames = parseSse(await (await app.request(`/api/sessions/${session.id}/stream?turn=${retryTurnId}`)).text());
+    expect(calls).toBe(3);
+    expect(retryFrames.filter((frame) => frame.event === "done")).toHaveLength(1);
+  });
+
+  it.each([
+    ["claude", "codex"],
+    ["codex", "claude"],
+  ] as const)("never resumes a %s host-contract session through the %s runner", async (originProvider, currentProvider) => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-host-contract-cross-provider-test-"));
+    let authChoice: AuthChoice = { mode: "subscription", provider: currentProvider };
+    const setupRunner = stubSetupRunner(async (opts) => {
+      expect(opts.resumeSessionId).toBeUndefined();
+      expect(opts.prompt).toMatch(/continue and repair the existing connect_resume setup attempt/i);
+      expect(opts.prompt).toContain("safe prior failure");
+      expect(opts.prompt).toMatch(/preserve existing project files/i);
+      return { finalText: "SETUP_STATUS: needs_input - user action required" };
+    });
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot,
+      getAuthChoice: () => authChoice,
+      setupRunnerFor: () => setupRunner,
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const priorTurnId = newId("turn");
+    store.createTurn({
+      id: priorTurnId,
+      sessionId: session.id,
+      question: "prior correction",
+      composedInput: "prior correction",
+      agentId: CONNECT_SOURCE_AGENT_ID,
+      setupStepKey: "connect_resume",
+    });
+    store.resolveTurn(priorTurnId, { backend: null, resultKind: "error", answerSummary: null, traceJson: JSON.stringify([{ id: "decision-host-contract-recovery" }]), errorMessage: "safe prior failure" });
+    store.setTurnResumeAnchor(priorTurnId, {
+      sessionId: `sdk-${originProvider}`,
+      provider: originProvider,
+      runner: `subscription:${originProvider}`,
+    });
+
+    const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = (await response.json()) as { turnId: string };
+    expect(store.getTurn(turnId)?.resumeSessionId).toBeNull();
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+    authChoice = { mode: "subscription", provider: currentProvider };
+  });
+
+  it.each([
+    ["explicit SETUP_STATUS:error", async () => ({ finalText: "SETUP_STATUS: error - connection validation did not finish", sessionId: "sdk-terminal" }), "connection validation did not finish"],
+    ["ModeBSessionError", async () => { throw new ModeBSessionError("dispatcher exited: error_max_turns", "sdk-terminal"); }, "error_max_turns"],
+  ] as const)("persists a compatible anchor and uses a corrective connect_resume retry after %s", async (_name, firstRun, expectedFailure) => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-corrective-retry-test-"));
+    let calls = 0;
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+      setupRunner: stubSetupRunner(async (opts) => {
+        calls += 1;
+        if (calls === 1) return firstRun();
+        expect(opts.resumeSessionId).toBe("sdk-terminal");
+        expect(opts.prompt).toMatch(/continue and repair the existing connect_resume setup attempt/i);
+        expect(opts.prompt).toContain(expectedFailure);
+        expect(opts.prompt).toMatch(/do not replay the initial setup task/i);
+        expect(opts.prompt).toMatch(/preserve existing project files/i);
+        return { finalText: "SETUP_STATUS: needs_input - one user action remains", sessionId: "sdk-terminal" };
+      }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+
+    const initial = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId: initialTurnId } = (await initial.json()) as { turnId: string };
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${initialTurnId}`)).text();
+    expect(store.getTurn(initialTurnId)).toMatchObject({ resultKind: "error", resumeSessionId: "sdk-terminal", resumeSessionProvider: "claude" });
+
+    const retry = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId: retryTurnId } = (await retry.json()) as { turnId: string };
+    expect(store.getTurn(retryTurnId)?.composedInput).not.toContain('Follow the wren onboarding skill');
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${retryTurnId}`)).text();
+    expect(calls).toBe(2);
+  });
+
+  it("repairs a missing terminal status in the same subscription session, revalidates host proof, and keeps rotated anchors private", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-terminal-contract-repair-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    const originalAnchor = "sdk-terminal-contract-original";
+    const replacementAnchor = "sdk-terminal-contract-replacement";
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme-postgres\ndata_source: postgres\n");
+    let calls = 0;
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+      setupRunner: stubSetupRunner(async (opts) => {
+        calls += 1;
+        const anchor = calls === 1 ? originalAnchor : replacementAnchor;
+        opts.onEvent?.({ runId: `terminal-${calls}`, seq: 1, kind: "tool.result", stepId: `terminal-${calls}`, callId: `terminal-${calls}`, tool: "setup_execution", status: "success", summary: `provider conversation ${anchor} completed work` });
+        if (calls === 1) return { finalText: "connection validated but terminal line was omitted", sessionId: originalAnchor };
+        expect(opts.resumeSessionId).toBe(originalAnchor);
+        expect(opts.prompt).toMatch(/omitted the required SETUP_STATUS terminal line/i);
+        expect(opts.prompt).toMatch(/do not replay, rebuild, clean, or overwrite/i);
+        writeFileSync(path.join(projectDir, ".wren-validated"), "");
+        return { finalText: "SETUP_STATUS: ok - connection validated", sessionId: replacementAnchor };
+      }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+
+    const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = (await response.json()) as { turnId: string };
+    const sse = await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+    const turn = store.getTurn(turnId)!;
+    expect(calls).toBe(2);
+    expect(turn.resultKind).toBe("answer");
+    expect(turn.answerSummary).toContain("connection validated");
+    expect(store.getSetupSteps().find((step) => step.key === "connect")?.state).toBe("done");
+    const combined = `${sse}${turn.answerSummary}${turn.traceJson}`.toLowerCase();
+    for (const anchor of [originalAnchor, replacementAnchor]) expect(combined).not.toContain(anchor);
+  });
+
+  it("rejects a corrected false ok at the host contract without a second automatic correction", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-terminal-contract-false-ok-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\nprofile: acme-postgres\ndata_source: postgres\n");
+    let calls = 0;
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+      setupRunner: stubSetupRunner(async () => {
+        calls += 1;
+        return calls === 1
+          ? { finalText: "terminal omitted", sessionId: "sdk-false-ok" }
+          : { finalText: "SETUP_STATUS: ok - connection validated", sessionId: "sdk-false-ok" };
+      }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = (await response.json()) as { turnId: string };
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+
+    expect(calls).toBe(2);
+    expect(store.getTurn(turnId)?.resultKind).toBe("error");
+    expect(store.getTurn(turnId)?.errorMessage).toMatch(/host contract/i);
+  });
+
+  it.each([
+    ["missing terminal again", "terminal still omitted"],
+    ["declared error", "SETUP_STATUS: error - correction needs user action"],
+  ])("stops after one terminal-contract correction when the correction has %s", async (_name, correctionFinalText) => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-terminal-contract-stop-test-"));
+    let calls = 0;
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+      setupRunner: stubSetupRunner(async () => {
+        calls += 1;
+        return calls === 1
+          ? { finalText: "terminal omitted", sessionId: "sdk-stop-terminal" }
+          : { finalText: correctionFinalText, sessionId: "sdk-stop-terminal" };
+      }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = (await response.json()) as { turnId: string };
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+
+    expect(calls).toBe(2);
+    expect(store.getTurn(turnId)?.resultKind).toBe("error");
+  });
+
+  it("persists a safe actionable failure when the one terminal-contract correction throws", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-terminal-contract-throw-test-"));
+    const originalAnchor = "sdk-terminal-throw-original";
+    const thrownAnchor = "sdk-terminal-throw-replacement";
+    let calls = 0;
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+      setupRunner: stubSetupRunner(async () => {
+        calls += 1;
+        if (calls === 1) return { finalText: "terminal omitted", sessionId: originalAnchor };
+        throw new ModeBSessionError(`provider=claude sessionId=${thrownAnchor} correction dispatcher failed`, thrownAnchor);
+      }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const response = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId } = (await response.json()) as { turnId: string };
+    const sse = await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+    const turn = store.getTurn(turnId)!;
+
+    expect(calls).toBe(2);
+    expect(turn).toMatchObject({ resultKind: "error", errorMessage: expect.stringMatching(/terminal-contract correction did not complete/i) });
+    const combined = `${sse}${turn.errorMessage}${turn.traceJson}`.toLowerCase();
+    for (const anchor of [originalAnchor, thrownAnchor, "claude"]) expect(combined).not.toContain(anchor);
+  });
+
+  it("leaves a missing terminal without a compatible anchor for an explicit corrective retry", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-terminal-contract-no-anchor-test-"));
+    let calls = 0;
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot,
+      setupRunner: stubSetupRunner(async () => {
+        calls += 1;
+        return { finalText: "terminal omitted with no resumable session" };
+      }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const initial = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId: initialTurnId } = (await initial.json()) as { turnId: string };
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${initialTurnId}`)).text();
+    expect(calls).toBe(1);
+    expect(store.getTurn(initialTurnId)).toMatchObject({ resultKind: "error", resumeSessionId: null });
+
+    const retry = await app.request("/api/setup/connect/resume", { method: "POST" });
+    const { turnId: retryTurnId } = (await retry.json()) as { turnId: string };
+    expect(retryTurnId).not.toBe(initialTurnId);
+    expect(store.getTurn(retryTurnId)?.composedInput).toMatch(/continue and repair/i);
+  });
+
+  it("falls back to a fresh corrective connect_resume attempt without an anchor and coalesces duplicate retry POSTs", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-corrective-fallback-test-"));
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot,
+      setupRunner: stubSetupRunner(async () => ({ finalText: "SETUP_STATUS: needs_input - user action required" })),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "duckdb-acme", sourceType: "duckdb" });
+    const failedTurn = newId("turn");
+    store.createTurn({ id: failedTurn, sessionId: session.id, question: "old", composedInput: "old", agentId: CONNECT_SOURCE_AGENT_ID, setupStepKey: "connect_resume" });
+    store.resolveTurn(failedTurn, { backend: null, resultKind: "error", answerSummary: null, traceJson: JSON.stringify([{ id: "finished", label: "Scaffold", state: "done", kind: "step", detail: "project exists" }]), errorMessage: "the setup agent's final message did not contain a SETUP_STATUS line" });
+
+    const [first, second] = await Promise.all([
+      app.request("/api/setup/connect/resume", { method: "POST" }),
+      app.request("/api/setup/connect/resume", { method: "POST" }),
+    ]);
+    const firstBody = await first.json() as { turnId: string };
+    const secondBody = await second.json() as { turnId: string };
+    expect(firstBody.turnId).toBe(secondBody.turnId);
+    const retry = store.getTurn(firstBody.turnId)!;
+    expect(retry.resumeSessionId).toBeNull();
+    expect(retry.composedInput).toMatch(/continue and repair/i);
+    expect(retry.composedInput).toContain("did not contain a SETUP_STATUS");
+    expect(retry.composedInput).toContain("Scaffold (project exists)");
+    expect(retry.composedInput).toMatch(/credential form for the "duckdb" data source; treat that handoff as verified host fact/i);
+    expect(retry.composedInput).toContain('"duckdb" data source');
+    expect(retry.composedInput).toContain('wren project "duckdb-acme"');
+    expect(retry.composedInput).toContain(`"${path.join(workspaceRoot, "duckdb-acme")}"`);
+    expect(retry.composedInput).toContain('wren docs connection-info duckdb');
+    expect(retry.composedInput).not.toContain("<sourceType>");
+    expect(retry.composedInput).toMatch(/do not inspect \.env in any form/i);
+    for (const command of ["cat", "sed", "cut", "grep", "head", "tail", "awk"]) {
+      expect(retry.composedInput).toContain(command);
+    }
+    expect(retry.composedInput).toMatch(/do not .*list its keys/i);
+    expect(retry.composedInput).toMatch(/do not .*test its contents/i);
+    expect(retry.composedInput).toMatch(/do not .*ask setup_execution to read it/i);
+    expect(retry.composedInput).toMatch(/run "wren profile add" using that actual pinned profile name/i);
+    expect(retry.composedInput).toContain('inspect wren_project.yml, never .env, for the currently pinned profile name');
+    expect(retry.composedInput).toContain('"conn.profile.yml" declares "datasource: duckdb"');
+    expect(retry.composedInput).toContain('"--from-file conn.profile.yml"');
+    expect(retry.composedInput).not.toContain("<pinned-profile-name>");
+    expect(retry.composedInput).toMatch(/without "--activate"/i);
+    expect(retry.composedInput).toMatch(/only after that command genuinely reports successful validation, create the empty project-relative sentinel "\.wren-validated"/i);
+    expect(retry.composedInput).toMatch(/never create it after failed or uncertain validation/i);
+    expect(retry.composedInput).toContain('"SETUP_STATUS: ok - connection validated"');
+    expect(retry.composedInput).toContain('"SETUP_STATUS: needs_input - <reason>"');
+    expect(retry.composedInput).toContain('"SETUP_STATUS: error - <reason>"');
+  });
+
+  it("does not coalesce a restart-orphaned setup turn behind a later failure, while duplicate corrective clicks still coalesce", async () => {
+    const dbDir = mkdtempSync(path.join(tmpdir(), "wren-harness-restart-retry-store-"));
+    const dbPath = path.join(dbDir, "bff.sqlite");
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-restart-retry-root-"));
+    try {
+      const beforeRestart = new Store(dbPath);
+      const session = beforeRestart.createSession("Setup: acme");
+      beforeRestart.setSetupSessionId(session.id);
+      beforeRestart.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+      beforeRestart.createTurn({
+        id: "orphaned-connect-resume",
+        sessionId: session.id,
+        question: "old pending setup",
+        composedInput: "old pending setup",
+        agentId: CONNECT_SOURCE_AGENT_ID,
+        setupStepKey: "connect_resume",
+        traceJson: '[{"detail":"sdk-orphaned-anchor"}]',
+      });
+      beforeRestart.createTurn({
+        id: "later-failed-connect-resume",
+        sessionId: session.id,
+        question: "later failed setup",
+        composedInput: "later failed setup",
+        agentId: CONNECT_SOURCE_AGENT_ID,
+        setupStepKey: "connect_resume",
+      });
+      beforeRestart.resolveTurn("later-failed-connect-resume", {
+        backend: null,
+        resultKind: "error",
+        answerSummary: null,
+        traceJson: "[]",
+        errorMessage: "later persisted failure",
+      });
+      beforeRestart.close();
+
+      const reopened = new Store(dbPath);
+      const { app, store } = buildApp(undefined, {
+        store: reopened,
+        workspaceRoot,
+        setupRunner: stubSetupRunner(async () => ({ finalText: "SETUP_STATUS: needs_input - user action required" })),
+      });
+      expect(store.getTurn("orphaned-connect-resume")).toMatchObject({ resultKind: "error", traceJson: "[]" });
+
+      const [first, second] = await Promise.all([
+        app.request("/api/setup/connect/resume", { method: "POST" }),
+        app.request("/api/setup/connect/resume", { method: "POST" }),
+      ]);
+      const firstBody = await first.json() as { turnId: string };
+      const secondBody = await second.json() as { turnId: string };
+      expect(firstBody.turnId).toBe(secondBody.turnId);
+      expect(firstBody.turnId).not.toBe("orphaned-connect-resume");
+      expect(firstBody.turnId).not.toBe("later-failed-connect-resume");
+      const retry = store.getTurn(firstBody.turnId)!;
+      expect(retry).toMatchObject({ resultKind: null, setupStepKey: "connect_resume" });
+      expect(retry.composedInput).toContain("Continue and repair");
+      expect(retry.composedInput).toContain("later persisted failure");
+      reopened.close();
+    } finally {
+      rmSync(dbDir, { recursive: true, force: true });
+      rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("allows only the exact failed initial connect to repair its non-empty scaffold without cleaning it", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-initial-connect-repair-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    let calls = 0;
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot,
+      setupRunner: stubSetupRunner(async (opts) => {
+        calls += 1;
+        if (calls === 1) {
+          mkdirSync(projectDir, { recursive: true });
+          writeFileSync(path.join(projectDir, "keep.txt"), "preserve me");
+          return { finalText: "scaffold complete but terminal omitted" };
+        }
+        expect(opts.prompt).toMatch(/continue and repair the existing connect setup attempt/i);
+        expect(readFileSync(path.join(projectDir, "keep.txt"), "utf-8")).toBe("preserve me");
+        return { finalText: "SETUP_STATUS: needs_input - credentials are needed" };
+      }),
+    });
+
+    const initial = await app.request("/api/setup/connect", { method: "POST", body: JSON.stringify({ projectName: "acme", sourceType: "postgres" }) });
+    const { sessionId, turnId } = (await initial.json()) as { sessionId: string; turnId: string };
+    await (await app.request(`/api/sessions/${sessionId}/stream?turn=${turnId}`)).text();
+    expect(store.getTurn(turnId)?.resultKind).toBe("error");
+
+    const retry = await app.request("/api/setup/connect", { method: "POST", body: JSON.stringify({ projectName: "acme", sourceType: "postgres" }) });
+    expect(retry.status).toBe(200);
+    const { turnId: retryTurnId } = (await retry.json()) as { turnId: string };
+    await (await app.request(`/api/sessions/${sessionId}/stream?turn=${retryTurnId}`)).text();
+    expect(calls).toBe(2);
+    expect(readFileSync(path.join(projectDir, "keep.txt"), "utf-8")).toBe("preserve me");
+  });
+
+  it("uses the same compatible corrective continuation for a persisted context failure", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-context-corrective-retry-test-"));
+    let calls = 0;
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+      setupRunner: stubSetupRunner(async (opts) => {
+        calls += 1;
+        if (calls === 1) return { finalText: "SETUP_STATUS: error - context validation stopped before the required terminal line", sessionId: "sdk-context" };
+        expect(opts.resumeSessionId).toBe("sdk-context");
+        expect(opts.prompt).toMatch(/continue and repair the existing context setup attempt/i);
+        expect(opts.prompt).toContain("context validation stopped before the required terminal line");
+        return { finalText: "SETUP_STATUS: needs_input - source needs attention", sessionId: "sdk-context" };
+      }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+
+    const initial = await app.request("/api/setup/context", { method: "POST" });
+    const { turnId: initialTurnId } = (await initial.json()) as { turnId: string };
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${initialTurnId}`)).text();
+    const retry = await app.request("/api/setup/context", { method: "POST" });
+    const { turnId: retryTurnId } = (await retry.json()) as { turnId: string };
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${retryTurnId}`)).text();
+    expect(calls).toBe(2);
+  });
+
+  it("adds the fresh-discovery addendum to a context corrective retry against an already-built project", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-context-rediscovery-addendum-test-"));
+    let calls = 0;
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+      setupRunner: stubSetupRunner(async (opts) => {
+        calls += 1;
+        if (calls === 1) {
+          return {
+            finalText:
+              "SETUP_STATUS: error - project setup complete and functional, but host SDK reports warble_ir_version mismatch (0.4 vs 0.3 expected) which is an infrastructure issue outside project scope",
+            sessionId: "sdk-context-rediscovery",
+          };
+        }
+        expect(opts.prompt).toContain("may already be stale or resolved");
+        expect(opts.prompt).toContain("schema discovery is the one step you must re-run regardless");
+        expect(opts.prompt).toContain("warble_ir_version mismatch (0.4 vs 0.3 expected)");
+        expect(opts.prompt).toMatch(/do NOT run "wren --sql" for schema discovery/i);
+        expect(opts.prompt).toContain("resolve_profile_for_project(Path.cwd(), strict=True)");
+        expect(opts.prompt).toMatch(/DUCKDB_URL is a DIRECTORY containing one or more \.duckdb files/i);
+        return { finalText: "SETUP_STATUS: needs_input - source needs attention", sessionId: "sdk-context-rediscovery" };
+      }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+
+    const initial = await app.request("/api/setup/context", { method: "POST" });
+    const { turnId: initialTurnId } = (await initial.json()) as { turnId: string };
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${initialTurnId}`)).text();
+    const retry = await app.request("/api/setup/context", { method: "POST" });
+    const { turnId: retryTurnId } = (await retry.json()) as { turnId: string };
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${retryTurnId}`)).text();
+    expect(calls).toBe(2);
+  });
+
+  it("does not add the context-only re-discovery addendum to a connect corrective retry", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-connect-no-rediscovery-addendum-test-"));
+    const projectDir = path.join(workspaceRoot, "acme");
+    let calls = 0;
+    const { app } = buildApp(undefined, {
+      workspaceRoot,
+      setupRunner: stubSetupRunner(async (opts) => {
+        calls += 1;
+        if (calls === 1) {
+          mkdirSync(projectDir, { recursive: true });
+          return { finalText: "scaffold complete but terminal omitted" };
+        }
+        expect(opts.prompt).toMatch(/continue and repair the existing connect setup attempt/i);
+        expect(opts.prompt).not.toContain("may already be stale or resolved");
+        expect(opts.prompt).not.toContain("schema discovery is the one step you must re-run regardless");
+        return { finalText: "SETUP_STATUS: needs_input - credentials are needed" };
+      }),
+    });
+
+    const initial = await app.request("/api/setup/connect", { method: "POST", body: JSON.stringify({ projectName: "acme", sourceType: "postgres" }) });
+    const { sessionId, turnId } = (await initial.json()) as { sessionId: string; turnId: string };
+    await (await app.request(`/api/sessions/${sessionId}/stream?turn=${turnId}`)).text();
+
+    const retry = await app.request("/api/setup/connect", { method: "POST", body: JSON.stringify({ projectName: "acme", sourceType: "postgres" }) });
+    expect(retry.status).toBe(200);
+    const { turnId: retryTurnId } = (await retry.json()) as { turnId: string };
+    await (await app.request(`/api/sessions/${sessionId}/stream?turn=${retryTurnId}`)).text();
+    expect(calls).toBe(2);
+  });
+
+  it("keeps an adopted context corrective retry in its failed turn's parent workspace", async () => {
+    const bootstrapRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-bootstrap-context-retry-root-"));
+    const adoptedRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-adopted-context-retry-root-"));
+    const bootstrapProject = path.join(bootstrapRoot, "acme");
+    const adoptedProject = path.join(adoptedRoot, "acme");
+    mkdirSync(bootstrapProject, { recursive: true });
+    mkdirSync(adoptedProject, { recursive: true });
+    writeFileSync(path.join(bootstrapProject, "bootstrap-only.txt"), "must not be selected");
+    writeFileSync(path.join(adoptedProject, "adopted-only.txt"), "must be selected");
+
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot: bootstrapRoot,
+      userProject: adoptedProject,
+      setupRunner: stubSetupRunner(async (opts) => {
+        const runWorkspaceRoot = opts.workspaceRoot;
+        const runProjectName = opts.projectName;
+        expect(runWorkspaceRoot).toBe(adoptedRoot);
+        if (runWorkspaceRoot === undefined) throw new Error("adopted retry must pass a workspace root");
+        expect(runProjectName).toBe("acme");
+        if (runProjectName === undefined) throw new Error("adopted retry must pass a project name");
+        expect(existsSync(path.join(runWorkspaceRoot, runProjectName, "adopted-only.txt"))).toBe(true);
+        expect(existsSync(path.join(runWorkspaceRoot, runProjectName, "bootstrap-only.txt"))).toBe(false);
+        return { finalText: "SETUP_STATUS: needs_input - source needs attention" };
+      }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const failedTurnId = newId("turn");
+    store.createTurn({
+      id: failedTurnId,
+      sessionId: session.id,
+      question: "context",
+      composedInput: "context",
+      agentId: BUILD_CONTEXT_AGENT_ID,
+      setupStepKey: "context",
+      workspaceRoot: adoptedRoot,
+    });
+    store.resolveTurn(failedTurnId, {
+      backend: null,
+      resultKind: "error",
+      answerSummary: null,
+      traceJson: "[]",
+      errorMessage: "context terminal was missing",
+    });
+
+    const response = await app.request("/api/setup/context", { method: "POST" });
+    expect(response.status).toBe(200);
+    const { turnId } = (await response.json()) as { turnId: string };
+    const retryTurn = store.getTurn(turnId)!;
+    expect(retryTurn.workspaceRoot).toBe(adoptedRoot);
+    expect(retryTurn.composedInput).toContain(adoptedRoot);
+    expect(retryTurn.composedInput).not.toContain(bootstrapRoot);
+    await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+    expect(readFileSync(path.join(bootstrapProject, "bootstrap-only.txt"), "utf8")).toBe("must not be selected");
+  });
+
+  it("redacts a secret-bearing discovery failure from recovery SSE, persistence, and retry prompts while preserving host-step ordering", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-host-contract-redaction-test-"));
+    const secrets = ["schema-discovery-secret", "bearer-header-secret", "basic-header-secret", "api-header-secret"];
+    const projectDir = path.join(workspaceRoot, "acme");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\n");
+    let calls = 0;
+    const setupRunner = stubSetupRunner(async (opts) => {
+      calls += 1;
+      if (calls === 1) {
+        writeMdl(projectDir, ["customers"]);
+        opts.onEvent?.({
+          runId: "redaction",
+          seq: 1,
+          kind: "tool.call",
+          stepId: "build",
+          callId: "secret-discovery",
+          tool: "setup_execution",
+          input: {
+            command: `wren --sql \"SELECT table_name FROM information_schema.tables\" PASSWORD=${secrets[0]} -H 'Authorization: Bearer ${secrets[1]}' -H 'authorization: Basic ${secrets[2]}' -H 'X-API-Key: ${secrets[3]}'`,
+          },
+          depth: 0,
+          status: "running",
+        });
+        opts.onEvent?.({ runId: "redaction", seq: 2, kind: "tool.result", stepId: "build", callId: "secret-discovery", tool: "setup_execution", status: "success", summary: `{"exitCode":2,"stderr":"PASSWORD=${secrets[0]}"}` });
+        return { finalText: `SETUP_STATUS: ok - ${secrets[0]}`, sessionId: "sdk-redacted" };
+      }
+      for (const secret of secrets) expect(opts.prompt).not.toContain(secret);
+      opts.onEvent?.({ runId: "redaction-recovery", seq: 1, kind: "tool.call", stepId: "build", callId: "correction", tool: "setup_execution", input: { command: "wren context build" }, depth: 0, status: "running" });
+      return { finalText: `SETUP_STATUS: error - ${secrets[0]}`, sessionId: "sdk-redacted" };
+    });
+    const { app, store } = buildApp(undefined, {
+      setupRunner,
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const response = await app.request("/api/setup/context", { method: "POST" });
+    const { turnId } = (await response.json()) as { turnId: string };
+    const rawSse = await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text();
+    const turn = store.getTurn(turnId)!;
+
+    expect(calls).toBe(2);
+    for (const secret of secrets) {
+      expect(rawSse).not.toContain(secret);
+      expect(turn.errorMessage).not.toContain(secret);
+      expect(turn.traceJson).not.toContain(secret);
+    }
+    const trace = JSON.parse(turn.traceJson ?? "[]") as Array<{ id?: string }>;
+    expect(trace.map((step) => step.id)).toEqual(["secret-discovery", "decision-host-contract-recovery", "correction"]);
+
+    const retry = await app.request("/api/setup/context", { method: "POST" });
+    const { turnId: retryTurnId } = (await retry.json()) as { turnId: string };
+    const retryTurn = store.getTurn(retryTurnId)!;
+    for (const secret of secrets) expect(retryTurn.composedInput).not.toContain(secret);
+    expect(retryTurn.resumeSessionId).toBe("sdk-redacted");
+  });
+
+  it("a successful-looking context build without discovery automatically corrects once in the same SDK session and original SSE turn", async () => {
     const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-retry-test-"));
     let contextRuns = 0;
     const setupRunner = stubSetupRunner(async (opts) => {
@@ -841,11 +2612,13 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
         return { finalText: "SETUP_STATUS: ok - built MDL", sessionId: "sdk-context-session" };
       }
       expect(opts.resumeSessionId).toBe("sdk-context-session");
-      expect(opts.prompt).toMatch(/corrective requirement/i);
+      expect(opts.prompt).toMatch(/host-side validation rejected/i);
+      expect(opts.prompt).toMatch(/recognized schema-discovery command/i);
       recordSuccessfulSchemaDiscovery(opts.onEvent);
       return { finalText: "SETUP_STATUS: ok - built MDL with 1 model and 1 measure", sessionId: "sdk-context-session" };
     });
-    const { app, store } = buildApp(undefined, { setupRunner, workspaceRoot, getAuthChoice: () => ({ mode: "subscription", provider: "claude" }) });
+    const { app, store } = buildApp(async () => bundleWithGatedCheck(true), { setupRunner, workspaceRoot, getAuthChoice: () => ({ mode: "subscription", provider: "claude" }) });
+    configureSubscriptionRuntime(store);
     mkdirSync(path.join(workspaceRoot, "acme"), { recursive: true });
     writeFileSync(path.join(workspaceRoot, "acme", "wren_project.yml"), "name: acme\n");
     const session = store.createSession("Setup: acme");
@@ -855,32 +2628,29 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
     const initial = await app.request("/api/setup/context", { method: "POST" });
     const { turnId: initialTurnId } = (await initial.json()) as { turnId: string };
     const initialFrames = parseSse(await (await app.request(`/api/sessions/${session.id}/stream?turn=${initialTurnId}`)).text());
-    const checkpoint = initialFrames.find((frame) => frame.event === "event")?.data as SetupStatusEvent;
-    expect(checkpoint).toMatchObject({ status: "needs_decision", decision: { kind: "schema_discovery_retry", options: [{ id: "retry" }, { id: "stop" }] } });
-    expect(store.getSession(session.id)?.status).toBe("awaiting_decision");
+    const finalStatus = initialFrames.find((frame) => frame.event === "event")?.data as SetupStatusEvent;
+    expect(finalStatus).toMatchObject({ status: "ok" });
+    expect(initialFrames.filter((frame) => frame.event === "done")).toHaveLength(1);
+    expect(initialFrames.some((frame) => frame.event === "error")).toBe(false);
+    expect(initialFrames.some((frame) => frame.event === "worklog" && Array.isArray(frame.data) && frame.data.some((step) => step.label === "Host contract"))).toBe(true);
+    expect(store.getSession(session.id)?.status).toBe("active");
     expect(store.getTurn(initialTurnId)?.contextRecovery).toBeNull();
     expect(JSON.parse(store.getTurn(initialTurnId)?.traceJson ?? "[]")).toEqual(
-      expect.arrayContaining([expect.objectContaining({ input: { command: "wren context build" } })]),
+      expect.arrayContaining([
+        expect.objectContaining({ inspection: expect.objectContaining({ action: "wren context build" }) }),
+        expect.objectContaining({ label: "Host contract", state: "error", kind: "decision" }),
+      ]),
     );
-
-    const retry = await app.request("/api/setup/decision", { method: "POST", body: JSON.stringify({ sessionId: session.id, choiceId: "retry" }) });
-    expect(retry.status).toBe(200);
-    const { turnId: retryTurnId } = (await retry.json()) as { turnId: string };
-    expect(store.getTurn(retryTurnId)).toMatchObject({ setupStepKey: "context", contextRecovery: "schema_discovery", resumeSessionId: "sdk-context-session" });
-
-    const retryFrames = parseSse(await (await app.request(`/api/sessions/${session.id}/stream?turn=${retryTurnId}`)).text());
-    expect(retryFrames).toEqual(expect.arrayContaining([expect.objectContaining({ event: "done" })]));
-    expect(store.getSession(session.id)?.status).toBe("active");
     expect(contextRuns).toBe(2);
   });
 
-  it("rejects a second context request while its schema-discovery checkpoint is pending, without creating another turn or dispatching the runner", async () => {
+  it("keeps the explicit schema-discovery checkpoint when a claimed success has no resumable SDK session", async () => {
     const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-pending-decision-test-"));
     let contextRuns = 0;
     const setupRunner = stubSetupRunner(async (opts) => {
       contextRuns += 1;
       writeMdl(path.join(workspaceRoot, "acme"), ["customers"]);
-      return { finalText: "SETUP_STATUS: ok - built MDL", sessionId: "sdk-context-session" };
+      return { finalText: "SETUP_STATUS: ok - built MDL", sessionId: null };
     });
     const { app, store } = buildApp(undefined, { setupRunner, workspaceRoot });
     mkdirSync(path.join(workspaceRoot, "acme"), { recursive: true });
@@ -1086,7 +2856,7 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
   // context flow (through the real SSE stream, exactly like the tests above) with a describeBundle
   // stub standing in for the compile seam, and assert on what the context turn's own setup_status
   // event reports — not just the step-state side effects already covered above.
-  it("a context turn whose profile fails to compile emits a friendly error setup_status instead of a silent ok", async () => {
+  it("a context turn whose profile fails to compile keeps context retryable and resolves as an error", async () => {
     const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-test-"));
     let boundProject: string | undefined;
     const setupRunner = stubSetupRunner(async (opts) => {
@@ -1100,6 +2870,7 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
       return { finalText: "SETUP_STATUS: ok - connected to postgres" };
     });
     const store = new Store(":memory:");
+    configureSubscriptionRuntime(store);
     // The compile healthcheck's stand-in: rejects with the same shape `compileProfile` raises for
     // a genuine `warble compile` failure — a multi-line stderr dump the summarizer must NOT pass
     // through verbatim.
@@ -1133,26 +2904,72 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
     const streamText = await (await app.request(`/api/sessions/${contextSessionId}/stream?turn=${contextTurnId}`)).text();
     const frames = parseSse(streamText);
 
-    // Not a silent success: the setup_status the wizard actually sees reports the compile failure.
-    const setupStatusFrame = frames.find((f) => f.event === "event" && (f.data as { kind?: string }).kind === "setup_status");
-    const statusEvent = setupStatusFrame?.data as SetupStatusEvent | undefined;
-    expect(statusEvent).toBeDefined();
-    expect(statusEvent?.status).toBe("error");
-    // Friendly summary (the FIRST stderr line), never the raw multi-line stderr dump.
-    expect(statusEvent?.message).toContain('relationship "orders_customers" references unknown model "orders"');
-    expect(statusEvent?.message).not.toContain("help: define");
-    expect(statusEvent?.message).not.toContain("relationships.yml:4:3");
+    const errorFrame = frames.find((f) => f.event === "error");
+    const errorMessage = (errorFrame?.data as { message?: string } | undefined)?.message;
+    expect(errorMessage).toContain('relationship "orders_customers" references unknown model "orders"');
+    expect(errorMessage).not.toContain("help: define");
+    expect(errorMessage).not.toContain("relationships.yml:4:3");
+    expect(frames.some((f) => f.event === "event" && (f.data as { kind?: string }).kind === "setup_status")).toBe(false);
+    expect(frames.some((f) => f.event === "done")).toBe(false);
 
-    // Not the generic SSE error path either — the turn resolves normally (an "answer", carrying
-    // the setup_status), with a trailing "done" frame, same as any other resolved setup turn.
-    expect(frames.some((f) => f.event === "error")).toBe(false);
-    expect(frames.some((f) => f.event === "done")).toBe(true);
-
-    // Context genuinely finished building the MDL (that part of the step really succeeded) — the
-    // step-state advance still runs; only the reported status changes.
+    // The artifact may exist, but the success transaction never commits.
     const steps = (await (await app.request("/api/setup/steps")).json()) as SetupStep[];
-    expect(steps.find((s) => s.key === "context")?.state).toBe("done");
-    expect(steps.find((s) => s.key === "bind")?.state).toBe("current");
+    expect(steps.find((s) => s.key === "context")?.state).toBe("current");
+    expect(steps.find((s) => s.key === "bind")?.state).toBe("todo");
+  });
+
+  it("rolls back every context-success write when the setup-status DB write fails", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-context-atomic-persistence-test-"));
+    let boundProject: string | undefined;
+    const setupRunner = stubSetupRunner(async (opts) => {
+      if (opts.agentId === "build_context") {
+        recordSuccessfulSchemaDiscovery(opts.onEvent);
+        writeMdl(path.join(workspaceRoot, "acme"), ["customers"]);
+        return { finalText: "SETUP_STATUS: ok - built MDL with 1 model" };
+      }
+      mkdirSync(path.join(workspaceRoot, "acme"), { recursive: true });
+      writeFileSync(path.join(workspaceRoot, "acme", "wren_project.yml"), "name: acme\n");
+      return { finalText: "SETUP_STATUS: ok - connected to postgres" };
+    });
+    const store = new Store(":memory:", {
+      onContextSuccessWrite: (phase) => {
+        if (phase === "after_event") throw new Error("injected setup-status write failure");
+      },
+    });
+    configureSubscriptionRuntime(store);
+    const deps: TurnDeps = {
+      store,
+      route: okRoute,
+      baseRouteOptions: BASE_ROUTE_OPTIONS,
+      setupRunner,
+      workspaceRoot,
+      describeBundle: async () => bundleWithGatedCheck(true),
+      getUserProject: () => boundProject,
+      bindProject: (dir: string) => {
+        boundProject = dir;
+      },
+    };
+    const app = createApp(deps);
+
+    const connectRes = await app.request("/api/setup/connect", {
+      method: "POST",
+      body: JSON.stringify({ projectName: "acme", sourceType: "postgres" }),
+    });
+    const { sessionId, turnId: connectTurnId } = (await connectRes.json()) as { sessionId: string; turnId: string };
+    await (await app.request(`/api/sessions/${sessionId}/stream?turn=${connectTurnId}`)).text();
+
+    const contextRes = await app.request("/api/setup/context", { method: "POST" });
+    const { turnId: contextTurnId } = (await contextRes.json()) as { turnId: string };
+    const frames = parseSse(await (await app.request(`/api/sessions/${sessionId}/stream?turn=${contextTurnId}`)).text());
+
+    expect(frames).toEqual(expect.arrayContaining([expect.objectContaining({ event: "error" })]));
+    expect(frames.some((frame) => frame.event === "event" && (frame.data as { kind?: string }).kind === "setup_status")).toBe(false);
+    const steps = store.getSetupSteps();
+    expect(steps.find((step) => step.key === "context")?.state).toBe("current");
+    expect(steps.find((step) => step.key === "bind")?.state).toBe("todo");
+    expect(store.listEventsForTurn(contextTurnId)).toEqual([]);
+    expect(store.getTurn(contextTurnId)).toMatchObject({ backend: null, resultKind: "error", answerSummary: null });
+    expect(store.getSession(sessionId)).toMatchObject({ status: "active", pendingQuestion: null });
   });
 
   it("a context turn whose profile compiles cleanly reports the normal ok setup_status (no false alarm)", async () => {
@@ -1170,6 +2987,7 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
       return { finalText: "SETUP_STATUS: ok - connected to postgres" };
     });
     const store = new Store(":memory:");
+    configureSubscriptionRuntime(store);
     const describeBundle: TurnDeps["describeBundle"] = async () => {
       describeBundleCallCount += 1;
       return bundleWithGatedCheck(true);
@@ -1217,6 +3035,7 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
 describe("POST /api/setup/compile-bind — real compile/bind, not theater", () => {
   it("compiles+loads the bundle via describeBundle and sets the gate TRUE when a compiled agent has a locked gated_check", async () => {
     const { app, store } = buildApp(async () => bundleWithGatedCheck(true));
+    configureSubscriptionRuntime(store);
 
     const res = await app.request("/api/setup/compile-bind", { method: "POST" });
     expect(res.status).toBe(200);
@@ -1228,6 +3047,7 @@ describe("POST /api/setup/compile-bind — real compile/bind, not theater", () =
 
   it("compiles+loads the bundle and sets the gate FALSE when no compiled agent has a locked gated_check", async () => {
     const { app, store } = buildApp(async () => bundleWithGatedCheck(false));
+    configureSubscriptionRuntime(store);
 
     const res = await app.request("/api/setup/compile-bind", { method: "POST" });
     expect(res.status).toBe(200);
@@ -1253,6 +3073,42 @@ describe("POST /api/setup/compile-bind — real compile/bind, not theater", () =
     expect(after.find((s) => s.key === "bind")?.state).toBe(bindBefore); // untouched, not silently marked done
     expect(after.find((s) => s.key === "ask")?.state).not.toBe("current");
     expect(store.getVerifyGatePassed()).toBe(false); // never flipped true on a failed compile/bind
+  });
+
+  it("does not call bindProject or mutate the stored binding when compile-bind fails, and resolves enrichment revision fresh rather than from a cached bind-time snapshot", async () => {
+    const projectDir = mkdtempSync(path.join(tmpdir(), "wren-harness-enrichment-bind-test-"));
+    mkdirSync(path.join(projectDir, "target"));
+    writeFileSync(path.join(projectDir, "wren_project.yml"), "name: acme\n");
+    writeFileSync(path.join(projectDir, "target", "mdl.json"), '{"models":[{"name":"before"}]}');
+    const store = new Store(":memory:");
+    const before = store.activateEnrichmentBinding(resolveEnrichmentBinding(projectDir));
+    writeFileSync(path.join(projectDir, "target", "mdl.json"), '{"models":[{"name":"after"}]}');
+    let boundProject = projectDir;
+    const bindProject = vi.fn((dir: string) => {
+      const binding = resolveEnrichmentBinding(dir);
+      boundProject = binding.path;
+      store.activateEnrichmentBinding(binding);
+    });
+    const app = createApp({
+      store,
+      route: async () => ({ backend: "agent", warnings: [], kind: "answer", envelope: { blocks: [], summary: "ok" }, trace: { steps: [] } }),
+      baseRouteOptions: { ...BASE_ROUTE_OPTIONS, userProject: projectDir },
+      getUserProject: () => boundProject,
+      bindProject,
+      describeBundle: async () => { throw new Error("precondition failed: mdl is not parseable"); },
+    });
+
+    // Binding never caches a revision (bindProject only ever resolves
+    // identity), so foundation-readiness is decided by path+identity plus a
+    // revision resolved fresh from disk on every check -- not by comparing
+    // against whatever revision happened to be on record from the last
+    // bind. The project on disk is still built (just with different
+    // content than at bind time), so enrichment is ready throughout.
+    expect((await (await app.request("/api/context/enrichment")).json() as { foundationReady: boolean }).foundationReady).toBe(true);
+    expect((await app.request("/api/setup/compile-bind", { method: "POST" })).status).toBe(500);
+    expect(bindProject).not.toHaveBeenCalled();
+    expect(store.getEnrichmentBinding()).toEqual(before);
+    expect((await (await app.request("/api/context/enrichment")).json() as { foundationReady: boolean }).foundationReady).toBe(true);
   });
 
   it("returns a clear error (not a crash) when describeBundle is not configured", async () => {
@@ -1415,6 +3271,7 @@ describe("setup decision checkpoints (max_turns continue/stop, same-name project
     // "Continue (+N turns)" label. Omitted (as in tests (a)/(c) below) means the stub has no
     // `effectiveMaxTurns`, matching a plain `SetupStepRunner` that predates this override.
     effectiveMaxTurns?: SetupStepRunner["effectiveMaxTurns"],
+    getAuthChoice?: () => AuthChoice,
   ): Promise<{
     app: ReturnType<typeof createApp>;
     store: Store;
@@ -1439,6 +3296,7 @@ describe("setup decision checkpoints (max_turns continue/stop, same-name project
       baseRouteOptions: BASE_ROUTE_OPTIONS,
       setupRunner,
       workspaceRoot,
+      ...(getAuthChoice ? { getAuthChoice } : {}),
       getUserProject: () => boundProject,
       bindProject: (dir: string) => {
         boundProject = dir;
@@ -1462,7 +3320,7 @@ describe("setup decision checkpoints (max_turns continue/stop, same-name project
 
   it("(a) error_max_turns while building context emits a needs_decision setup_status (not an error frame), with continue/stop options and a real on-disk progress count", async () => {
     const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-max-turns-test-"));
-    const { store, sessionId, contextTurnId, frames } = await setupToContextCheckpoint(workspaceRoot, async () => {
+    const { app, store, sessionId, contextTurnId, frames } = await setupToContextCheckpoint(workspaceRoot, async () => {
       mkdirSync(path.join(workspaceRoot, "acme", "models", "customers"), { recursive: true });
       mkdirSync(path.join(workspaceRoot, "acme", "models", "orders"), { recursive: true });
       throw new Error("dispatcher exited: error_max_turns after 120 turns");
@@ -1490,6 +3348,73 @@ describe("setup decision checkpoints (max_turns continue/stop, same-name project
     const session = store.getSession(sessionId);
     expect(session?.status).toBe("awaiting_decision");
     expect(session?.pendingDecision && JSON.parse(session.pendingDecision)).toEqual({ kind: "max_turns_continue", stepKey: "context" });
+
+    const recovery = await (await app.request("/api/setup/recovery")).json() as { sessionId?: string; decision?: SetupDecision };
+    expect(recovery).toMatchObject({ sessionId, decision: { kind: "max_turns_continue", options: [{ id: "continue" }, { id: "stop" }] } });
+    expect(JSON.stringify(recovery)).not.toContain("resumeSession");
+  });
+
+  it("rehydrates a standalone schema-discovery retry checkpoint and resolves its retry route", async () => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-schema-retry-recovery-test-"));
+    const { app, store } = buildApp(undefined, { workspaceRoot, setupRunner: stubSetupRunner(async () => ({ finalText: "SETUP_STATUS: ok" })) });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    store.insertEvent({
+      sessionId: session.id,
+      turnId: null,
+      kind: "setup_status",
+      payload: {
+        id: newId("evt"),
+        kind: "setup_status",
+        status: "needs_decision",
+        message: "Schema discovery needs a corrective retry.",
+        decision: { kind: "schema_discovery_retry", options: [{ id: "retry", label: "Retry schema discovery" }, { id: "stop", label: "Stop" }] },
+      },
+    });
+    store.updateSessionDecision(session.id, "awaiting_decision", JSON.stringify({ kind: "schema_discovery_retry", stepKey: "context" }));
+
+    const recovery = await (await app.request("/api/setup/recovery")).json() as { sessionId?: string; decision?: SetupDecision };
+    expect(recovery).toMatchObject({ sessionId: session.id, decision: { kind: "schema_discovery_retry", options: [{ id: "retry" }, { id: "stop" }] } });
+
+    const retry = await app.request("/api/setup/decision", { method: "POST", body: JSON.stringify({ sessionId: session.id, choiceId: "retry" }) });
+    expect(retry.status).toBe(200);
+    const { turnId } = await retry.json() as { turnId: string };
+    expect(store.getTurn(turnId)).toMatchObject({ setupStepKey: "context", contextRecovery: "schema_discovery" });
+  });
+
+  it("does not resurrect an older max-turn decision when the current checkpoint is schema-discovery retry", async () => {
+    const { app, store } = buildApp();
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.insertEvent({
+      sessionId: session.id,
+      turnId: null,
+      kind: "setup_status",
+      payload: {
+        id: newId("evt"),
+        kind: "setup_status",
+        status: "needs_decision",
+        message: "Older turn limit.",
+        decision: { kind: "max_turns_continue", options: [{ id: "continue", label: "Continue" }, { id: "stop", label: "Stop" }] },
+      },
+    });
+    store.insertEvent({
+      sessionId: session.id,
+      turnId: null,
+      kind: "setup_status",
+      payload: {
+        id: newId("evt"),
+        kind: "setup_status",
+        status: "needs_decision",
+        message: "Current schema retry.",
+        decision: { kind: "schema_discovery_retry", options: [{ id: "retry", label: "Retry schema discovery" }, { id: "stop", label: "Stop" }] },
+      },
+    });
+    store.updateSessionDecision(session.id, "awaiting_decision", JSON.stringify({ kind: "schema_discovery_retry", stepKey: "context" }));
+
+    const recovery = await (await app.request("/api/setup/recovery")).json() as { decision?: SetupDecision };
+    expect(recovery.decision).toMatchObject({ kind: "schema_discovery_retry", options: [{ id: "retry" }, { id: "stop" }] });
   });
 
   it("(a2) with a custom setup max-turns budget, the continue label reflects it (not the hardcoded 120 default) and the resumed turn is dispatched against that same runner", async () => {
@@ -1621,7 +3546,7 @@ describe("setup decision checkpoints (max_turns continue/stop, same-name project
       // warble-agent-sdk `error_max_turns` exit produces once it has read the dispatcher's
       // `{t:"session",id}` line (see runModeBDefault/spawnChat in harness/route/mode-b.ts).
       throw new ModeBSessionError("dispatcher exited: error_max_turns after 120 turns", CAPTURED_SESSION_ID);
-    });
+    }, undefined, () => ({ mode: "subscription", provider: "claude" }));
 
     // The captured session id is persisted on the pending decision, ready for the "continue" branch.
     const session = store.getSession(sessionId);
@@ -1629,7 +3554,13 @@ describe("setup decision checkpoints (max_turns continue/stop, same-name project
       kind: "max_turns_continue",
       stepKey: "context",
       sessionId: CAPTURED_SESSION_ID,
+      sessionProvider: "claude",
+      sessionRunner: "subscription:claude",
     });
+
+    const recovery = await (await app.request("/api/setup/recovery")).json();
+    expect(JSON.stringify(recovery)).not.toContain(CAPTURED_SESSION_ID);
+    expect(JSON.stringify(recovery)).not.toContain("subscription:");
 
     const decisionRes = await app.request("/api/setup/decision", {
       method: "POST",
@@ -1657,6 +3588,55 @@ describe("setup decision checkpoints (max_turns continue/stop, same-name project
     const resumedSession = store.getSession(sessionId);
     expect(resumedSession?.status).toBe("active");
     expect(resumedSession?.pendingDecision).toBeNull();
+  });
+
+  it.each([
+    ["max_turns_continue", "continue"],
+    ["schema_discovery_retry", "retry"],
+  ] as const)("does not resume a %s anchor after the subscription provider changes", async (kind, choiceId) => {
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-decision-provider-switch-test-"));
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot,
+      getAuthChoice: () => ({ mode: "subscription", provider: "codex" }),
+      setupRunner: stubSetupRunner(async () => ({ finalText: "SETUP_STATUS: needs_input - user action required" })),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    store.updateSessionDecision(session.id, "awaiting_decision", JSON.stringify({
+      kind,
+      stepKey: "context",
+      sessionId: "claude-session",
+      sessionProvider: "claude",
+      sessionRunner: "subscription:claude",
+    }));
+
+    const response = await app.request("/api/setup/decision", { method: "POST", body: JSON.stringify({ sessionId: session.id, choiceId }) });
+    expect(response.status).toBe(200);
+    const { turnId } = (await response.json()) as { turnId: string };
+    const turn = store.getTurn(turnId)!;
+    expect(turn.resumeSessionId).toBeNull();
+    expect(turn.composedInput).not.toContain("Continue this same conversation exactly where you left off");
+  });
+
+  it("preserves an adopted context turn's workspace root through a max-turn continuation", async () => {
+    const bootstrapRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-bootstrap-root-"));
+    const adoptedRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-adopted-root-"));
+    const { app, store } = buildApp(undefined, {
+      workspaceRoot: bootstrapRoot,
+      setupRunner: stubSetupRunner(async () => ({ finalText: "SETUP_STATUS: needs_input - user action required" })),
+    });
+    const session = store.createSession("Setup: acme");
+    store.setSetupSessionId(session.id);
+    store.setSetupConnectForm({ projectName: "acme", sourceType: "postgres" });
+    const turnId = newId("turn");
+    store.createTurn({ id: turnId, sessionId: session.id, question: "context", composedInput: "context", agentId: BUILD_CONTEXT_AGENT_ID, setupStepKey: "context", workspaceRoot: adoptedRoot });
+    store.updateSessionDecision(session.id, "awaiting_decision", JSON.stringify({ kind: "max_turns_continue", stepKey: "context", workspaceRoot: adoptedRoot }));
+
+    const response = await app.request("/api/setup/decision", { method: "POST", body: JSON.stringify({ sessionId: session.id, choiceId: "continue" }) });
+    const { turnId: resumedId } = (await response.json()) as { turnId: string };
+    expect(store.getTurn(resumedId)?.workspaceRoot).toBe(adoptedRoot);
+    expect(store.getTurn(resumedId)?.composedInput).toContain(path.join(adoptedRoot, "acme"));
   });
 
   it("(d) POST /api/setup/connect pre-flight: an existing non-empty project directory returns a name_conflict decision instead of dispatching a turn", async () => {

@@ -145,6 +145,16 @@ export const setupExecutionInputSchema = z.object({
 });
 
 export type SetupExecutionInput = z.infer<typeof setupExecutionInputSchema>;
+export type SetupExecutionResult =
+  | {
+      exitCode: number;
+      stdout: string;
+      stderr: string;
+      notFound?: boolean;
+      timedOut?: boolean;
+      maxBufferExceeded?: boolean;
+    }
+  | { written: true; path: string; bytes: number };
 
 /**
  * Rejects a command matching the destructive/redirection/dotenv-read
@@ -352,8 +362,41 @@ function resolveExecCwd(workspaceRoot: string, requestedCwd: string | undefined)
  * additional, not a replacement, since `env.writeFile` has no realpath
  * re-check of its own; see `harness/exec/local.ts`).
  */
-export function createSetupExecutionTool(options: SetupExecutionToolOptions): Tool {
+export async function executeSetupExecution(
+  input: SetupExecutionInput,
+  options: SetupExecutionToolOptions,
+): Promise<SetupExecutionResult> {
   const { env, policy, workspaceRoot } = options;
+
+  if (input.action === "exec") {
+    if (input.command === undefined) {
+      throw new SetupExecutionInputError("exec", "command");
+    }
+    assertCommandAllowed(input.command);
+    const cwd = resolveExecCwd(workspaceRoot, input.cwd);
+    const result = await env.exec(
+      { mode: "write", command: "/bin/sh", args: ["-c", input.command], cwd, timeoutMs: SETUP_EXEC_TIMEOUT_MS },
+      policy,
+    );
+    const { stdout, stderr } = redactSetupExecutionOutput(input.command, result);
+    return {
+      exitCode: result.exitCode,
+      stdout,
+      stderr,
+      ...(result.notFound !== undefined ? { notFound: result.notFound } : {}),
+      ...(result.timedOut !== undefined ? { timedOut: result.timedOut } : {}),
+      ...(result.maxBufferExceeded !== undefined ? { maxBufferExceeded: result.maxBufferExceeded } : {}),
+    };
+  }
+
+  if (input.path === undefined) throw new SetupExecutionInputError("write", "path");
+  if (input.content === undefined) throw new SetupExecutionInputError("write", "content");
+  const writePath = resolveWritePath(workspaceRoot, input.path, input.cwd);
+  await env.writeFile(writePath, input.content, policy);
+  return { written: true, path: writePath, bytes: input.content.length };
+}
+
+export function createSetupExecutionTool(options: SetupExecutionToolOptions): Tool {
 
   return tool({
     description:
@@ -364,51 +407,6 @@ export function createSetupExecutionTool(options: SetupExecutionToolOptions): To
       "are both required; a relative path uses cwd when supplied, otherwise the workspace root; command is unused). A call missing the field(s) its action requires, or " +
       "supplying a cwd/path that escapes the workspace root, is rejected before anything runs or is written.",
     inputSchema: setupExecutionInputSchema,
-    execute: async (input: SetupExecutionInput) => {
-      // Per-action required-field validation — the schema itself (flat
-      // object, all of command/path/content optional; see
-      // `setupExecutionInputSchema`'s doc comment) can't enforce this, so it
-      // happens here, BEFORE assertCommandAllowed/assertWriteWithinScope or
-      // any actual exec/write, preserving zero-side-effect-on-rejection.
-      if (input.action === "exec") {
-        if (input.command === undefined) {
-          throw new SetupExecutionInputError("exec", "command");
-        }
-        assertCommandAllowed(input.command);
-        const cwd = resolveExecCwd(workspaceRoot, input.cwd);
-        const result = await env.exec(
-          { mode: "write", command: "/bin/sh", args: ["-c", input.command], cwd, timeoutMs: SETUP_EXEC_TIMEOUT_MS },
-          policy,
-        );
-        const { stdout, stderr } = redactSetupExecutionOutput(input.command, result);
-        return {
-          // `exitCode` deliberately comes FIRST, ahead of `stdout`/`stderr`: this object is
-          // JSON.stringify'd and then bound to 200 chars by `summarizeToolOutput` before it's
-          // persisted as `ToolStep.detail` (see `harness/loop/executor.ts`), and stdout/stderr on
-          // a failing CLI invocation (e.g. a nonexistent subcommand's usage/error text) routinely
-          // exceed that on their own. Putting the short numeric `exitCode` first means it always
-          // survives truncation, which `harness/setup/runner.ts`'s `parseSetupTerminal` relies on
-          // (via a bounded regex, not `JSON.parse`, since a truncated detail string isn't valid
-          // JSON) to tell "the command executed and failed" apart from "the tool call itself
-          // never returned a result" — see that module's `execExitCode`.
-          exitCode: result.exitCode,
-          stdout,
-          stderr,
-          ...(result.notFound !== undefined ? { notFound: result.notFound } : {}),
-          ...(result.timedOut !== undefined ? { timedOut: result.timedOut } : {}),
-          ...(result.maxBufferExceeded !== undefined ? { maxBufferExceeded: result.maxBufferExceeded } : {}),
-        };
-      }
-
-      if (input.path === undefined) {
-        throw new SetupExecutionInputError("write", "path");
-      }
-      if (input.content === undefined) {
-        throw new SetupExecutionInputError("write", "content");
-      }
-      const writePath = resolveWritePath(workspaceRoot, input.path, input.cwd);
-      await env.writeFile(writePath, input.content, policy);
-      return { written: true as const, path: writePath, bytes: input.content.length };
-    },
+    execute: (input: SetupExecutionInput) => executeSetupExecution(input, options),
   });
 }

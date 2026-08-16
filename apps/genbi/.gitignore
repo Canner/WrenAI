@@ -13,3 +13,7 @@ coverage
 !.vscode/extensions.json
 .idea
 .DS_Store
+
+# Local-only, machine/org-specific sanitizer patterns for harness/replay/sanitize.mjs — never
+# committed to this public repo. See harness/replay/README.md.
+harness/replay/.sanitize-local-patterns.json

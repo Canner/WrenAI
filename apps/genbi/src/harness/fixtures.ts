@@ -1,5 +1,5 @@
 import { deriveRealizationLabel } from './realization';
-import type { AgentProfileRow, Component, ConnectionStatus, HarnessView, ProfileInfo, RuntimeInfo } from './types';
+import type { AgentProfileRow, Component, ConnectionStatus, HarnessPurpose, HarnessView, ProfileInfo, RuntimeInfo } from './types';
 
 /**
  * Fixture data for the Harness page. Mirrors the shape and vocabulary of the
@@ -23,7 +23,7 @@ const fixtureProfile: ProfileInfo = {
   verifyGate: true,
   bundleId: 'genbi-default@claude-agent-sdk:local',
   bundleVersion: '0.1',
-  irVersion: '0.3',
+  irVersion: '0.4',
   dispatchTarget: 'claude-agent-sdk:local',
   bundleHash: '4a7f9c2',
   status: 'Bound',
@@ -278,6 +278,88 @@ export const fixtureComponents: Component[] = [
   monitorFreshness,
 ];
 
+const setupComponents: Component[] = [
+  withRealizationLabel({
+    ...exploreModel,
+    id: 'connect_source',
+    name: 'Connect Source',
+    callableAs: 'connect_source',
+    capabilities: [
+      { capability: 'connection_setup', outcome: 'realize-via', providedBy: 'runtime', criticality: 'required' },
+      { capability: 'llm:strong', outcome: 'native', providedBy: 'runtime', criticality: 'required' },
+    ],
+    guardrails: [{ name: 'setup_execution', enforcement: 'write_scope', locked: true }],
+    tools: [{ name: 'connect_source', source: 'mcp:setup/connect_source' }],
+    model: 'claude-sonnet',
+    tiers: [{ tier: 'strong', model: 'claude-sonnet' }],
+    steps: [{ name: 'connect', tier: 'strong', consumes: [], produces: 'connection_summary', realization: 'independent' }],
+  }),
+  withRealizationLabel({
+    ...exploreModel,
+    id: 'build_context',
+    name: 'Build Context',
+    callableAs: 'build_context',
+    capabilities: [
+      { capability: 'context_build', outcome: 'realize-via', providedBy: 'runtime', criticality: 'required' },
+      { capability: 'llm:strong', outcome: 'native', providedBy: 'runtime', criticality: 'required' },
+    ],
+    guardrails: [{ name: 'setup_execution', enforcement: 'write_scope', locked: true }],
+    tools: [{ name: 'build_context', source: 'mcp:setup/build_context' }],
+    model: 'claude-sonnet',
+    tiers: [{ tier: 'strong', model: 'claude-sonnet' }],
+    steps: [{ name: 'build', tier: 'strong', consumes: [], produces: 'context_summary', realization: 'independent' }],
+  }),
+];
+
+const contextComponents: Component[] = [
+  withRealizationLabel({
+    ...exploreModel,
+    id: 'inspect_context',
+    name: 'Inspect Context',
+    callableAs: 'inspect_context',
+    capabilities: [{ capability: 'semantic_introspection', outcome: 'realize-via', providedBy: 'runtime', criticality: 'required' }],
+    tools: [{ name: 'inspect_context', source: 'mcp:context/inspect_context' }],
+    steps: [{ name: 'inspect', tier: 'cheap', consumes: [], produces: 'enrichment_gaps', realization: 'independent' }],
+  }),
+  withRealizationLabel({
+    ...answerQuery,
+    id: 'draft_enrichment',
+    name: 'Draft Enrichment',
+    callableAs: 'draft_enrichment',
+    capabilities: [{ capability: 'context_enrichment', outcome: 'realize-via', providedBy: 'runtime', criticality: 'required' }],
+    tools: [{ name: 'draft_enrichment', source: 'mcp:context/draft_enrichment' }],
+    steps: [{ name: 'draft', tier: 'strong', consumes: ['enrichment_gaps'], produces: 'enrichment_proposal', realization: 'independent' }],
+  }),
+  withRealizationLabel({
+    ...answerQuery,
+    id: 'apply_enrichment',
+    name: 'Apply Enrichment',
+    callableAs: 'apply_enrichment',
+    outcome: 'mutation',
+    // The compiled programmatic dispatch target (claude-agent-sdk:local)
+    // cannot execute this mutation — but this fixture's purpose
+    // (context_enrichment) has an available native session, so the component
+    // is promoted to "ready", qualified by that native target. Mirror the
+    // display manifest's redacted variant exactly for the fields Warble never
+    // populates for a bundle-unavailable agent: declaration metadata remains
+    // visible, while no plan, tool, capability, guardrail, or output surface
+    // is present, promoted or not.
+    model: '—',
+    tiers: [],
+    capabilities: [],
+    guardrails: [],
+    tools: [],
+    outputBlocks: [],
+    steps: [],
+    status: 'ready',
+    nativeAvailability: {
+      viaLabel: 'Claude CLI',
+      compiledDispatchTarget: 'claude-agent-sdk:local',
+      compiledUnavailableReason: 'component is unavailable on the configured runtime',
+    },
+  }),
+];
+
 /** Capabilities declared across all components, deduped by id in first-seen order — same rule `getHarness` applies live. */
 function aggregateCapabilities(components: Component[]): Component['capabilities'] {
   const byId = new Map<string, Component['capabilities'][number]>();
@@ -289,28 +371,59 @@ function aggregateCapabilities(components: Component[]): Component['capabilities
   return Array.from(byId.values());
 }
 
-const fixtureAgentProfiles: AgentProfileRow[] = [
-  {
-    name: fixtureProfile.name,
-    role: 'orchestrator',
-    tierModel: 'claude-sonnet',
-    capabilities: aggregateCapabilities(fixtureComponents),
-    status: fixtureProfile.status,
-  },
-  // Phase-3 placeholder: a spawnable sub-agent profile not yet bindable — greyed in the UI.
-  {
-    name: 'Forecast Trend',
-    role: 'sub-agent',
-    tierModel: 'claude-sonnet',
-    capabilities: [],
-    status: 'Planned (Phase 3)',
-  },
-];
+function createFixtureAgentProfiles(profile: ProfileInfo, components: Component[]): AgentProfileRow[] {
+  return [
+    { name: profile.name, role: 'orchestrator', tierModel: 'claude-sonnet', capabilities: aggregateCapabilities(components), status: profile.status },
+    { name: 'Forecast Trend', role: 'sub-agent', tierModel: 'claude-sonnet', capabilities: [], status: 'Planned (Phase 3)' },
+  ];
+}
 
-export const fixtureHarnessView: HarnessView = {
-  profile: fixtureProfile,
-  runtime: fixtureRuntime,
-  connection: fixtureConnection,
-  components: fixtureComponents,
-  agentProfiles: fixtureAgentProfiles,
+function fixtureView(
+  purpose: HarnessPurpose,
+  profile: ProfileInfo,
+  components: Component[],
+  connection: ConnectionStatus,
+): HarnessView {
+  return {
+    purpose: {
+      purpose,
+      profile: purpose === 'setup' ? 'genbi-setup' : purpose === 'analysis' ? 'genbi-default' : 'genbi-enrich-context',
+      scopeKind: purpose === 'setup' ? 'bootstrap' : 'bound_project',
+      target: 'claude-code:interactive',
+      targetLabel: 'Claude CLI',
+      available: true,
+    },
+    profile,
+    runtime: fixtureRuntime,
+    connection,
+    components,
+    agentProfiles: createFixtureAgentProfiles(profile, components),
+    nativeSessions: {
+      binding: { configured: true, generation: 1, targetLabel: 'Claude CLI' },
+      dispatches: [
+        { purpose: 'setup', profile: 'genbi-setup', scopeKind: 'bootstrap', targetLabel: 'Claude CLI', available: true },
+        { purpose: 'analysis', profile: 'genbi-default', scopeKind: 'bound_project', targetLabel: 'Claude CLI', available: true },
+        { purpose: 'context_enrichment', profile: 'genbi-enrich-context', scopeKind: 'bound_project', targetLabel: 'Claude CLI', available: true },
+      ],
+    },
+  };
+}
+
+export const fixtureHarnessViews: Record<HarnessPurpose, HarnessView> = {
+  analysis: fixtureView('analysis', fixtureProfile, fixtureComponents, fixtureConnection),
+  setup: fixtureView(
+    'setup',
+    { ...fixtureProfile, id: 'genbi-setup', name: 'Genbi Setup', boundContext: 'Bootstrap workspace (no project bound)', bundleId: 'genbi-setup@claude-agent-sdk:local', status: 'Bootstrap' },
+    setupComponents,
+    { type: '—', location: '—', via: 'Bootstrap workspace', tablesSynced: 0, lastSync: '—', health: 'degraded' },
+  ),
+  context_enrichment: fixtureView(
+    'context_enrichment',
+    { ...fixtureProfile, id: 'genbi-enrich-context', name: 'Genbi Enrich Context', bundleId: 'genbi-enrich-context@claude-agent-sdk:local' },
+    contextComponents,
+    fixtureConnection,
+  ),
 };
+
+/** Backward-compatible analysis fixture for focused panel tests. */
+export const fixtureHarnessView: HarnessView = fixtureHarnessViews.analysis;

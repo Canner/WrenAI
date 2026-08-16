@@ -19,37 +19,32 @@ PWA stays a thin increment.
 ## Prerequisites
 
 - Node 20+ and `pnpm` (the repo pins its version via `corepack`).
-- The `warble` CLI on `PATH` — only if you intend to run the BFF against a
-  real backend. It's what compiles and dispatches the agent profile this app
-  renders answers from. There are no prebuilt releases yet, so you build it
-  from source: see [Building the warble CLI](#building-the-warble-cli). The
-  frontend alone, running against bundled fixtures, doesn't need it.
-- A model for the agent to run on. The server picks one up automatically: a
-  logged-in Claude subscription if it finds one, otherwise an API key, a local
-  model, or a gateway. **A weak local model is the one setup that tends to
-  disappoint**, and it fails in a way that looks like a bug in the app: asked
-  to build a query it will sometimes describe the SQL in prose instead of
-  calling the tool that runs it, so the answer comes back unverified or
-  refused. If that's what you're seeing, try a stronger model before assuming
-  something is misconfigured. Note the server starts whether or not it can
-  actually reach a model — an unusable one surfaces when you ask a question,
-  not at boot, so a clean startup isn't confirmation that this part is set up.
-  If it does pick up a subscription, it says so at boot with a warning about
-  the provider's terms; that line is expected, not a sign of a problem.
+- Python 3.11+ for the separately installed `wren` CLI.
+- The separately installed `wren` CLI on `PATH`. Live questions and context
+  inspection shell out to it; the app does not install it for you.
+- For a live BFF, a clean checkout of
+  [Canner/Warble](https://github.com/Canner/Warble), a Rust toolchain, and
+  [`just`](https://github.com/casey/just). The mandatory launch gate binds the
+  BFF to that checkout's profiles, IR fixtures, release binary, and dispatcher,
+  so a standalone global `warble` install is not enough for live GenBI development.
+- A logged-in Claude CLI subscription. The currently supported attested local
+  launch flow is explicitly `subscription:claude`; API-key, local, gateway,
+  and Codex runtime code are not accepted by the current launch gate.
 
 ## Getting started
 
-This app lives in a pnpm workspace, so install from the repo root:
+This app lives in a pnpm workspace, so install JavaScript dependencies from
+the repo root:
 
 ```bash
 corepack enable
 pnpm install
-pnpm genbi:dev   # or: pnpm --filter @wrenai/genbi dev
 ```
 
-That's enough to work on the UI: `http://localhost:5273`, every store reads
-from bundled fixtures, and with no `VITE_BFF_URL` set the app never makes a
-network call.
+Installation alone does not start the UI. Both `pnpm genbi:dev` and
+`pnpm --filter @wrenai/genbi start:bff` require a launch attestation generated
+from a compatible GenBI/Warble tuple. Follow the live launch flow below for
+hot reload or any BFF-backed work.
 
 **Every other command below runs from `apps/genbi`**, not the repo root — the
 root only forwards `genbi:dev`, `genbi:build` and `genbi:test`, so `pnpm build`
@@ -59,78 +54,139 @@ or `pnpm test` from there will tell you the script doesn't exist.
 cd apps/genbi
 ```
 
-### Building the warble CLI
-
-Skip this if you're only working on the frontend against fixtures.
-
-Clone the repo and build the Rust CLI. You'll need a Rust toolchain (`cargo`)
-and [`just`](https://github.com/casey/just):
-
-```bash
-git clone https://github.com/Canner/Warble.git warble
-cd warble
-just release      # or, without just: cargo build --release -p warble-cli
-```
-
-That produces `target/release/warble`. Put it on your `PATH` (or point the BFF
-at it explicitly — the harness looks for a configured path first, then `PATH`).
-
-Running the agent on a **logged-in Claude subscription** additionally needs
-`warble-agent-sdk`, the TypeScript dispatcher in the same repo. API-key, local
-and gateway auth don't use it, so skip this unless you want the subscription
-path:
-
-```bash
-just install-ts && just build-ts
-cd dispatcher/claude-agent-sdk && npm link   # puts warble-agent-sdk on PATH
-```
-
-Check both resolve before starting the BFF — this is the same probe the harness
-itself does, so if either command fails here it will fail there too:
-
-```bash
-warble --version
-warble-agent-sdk --help   # only if you built it
-```
-
-### Running the BFF
-
-The BFF and the agent harness it wraps live alongside the frontend, in
-`server/` and `harness/`. Build it, then start it with at least one of two
-env vars set — the process exits with an error if neither is:
-
-If you don't already have a wren project, use the second form — the app's setup
-wizard builds one for you. The first form is for pointing at one you have, and
-it means a directory that has already been built (it needs a `target/mdl.json`
-in it); the server does not check at startup, so a wrong path here starts
-cleanly and only fails when something asks it for the project.
+For a fixture-only static preview, no BFF or attestation is needed:
 
 ```bash
 pnpm build
-WREN_HARNESS_PROJECT=/path/to/existing/wren/project pnpm start:bff
-# — or, to boot unbound and let the in-app setup wizard create a project:
-WREN_HARNESS_WORKSPACE_ROOT=/path/to/a/workspace/dir pnpm start:bff
+pnpm preview
 ```
 
-Listens on `:4787` by default (`PORT` to override); state is a SQLite file
-at `./wren-harness-bff.sqlite` by default (`WREN_BFF_DB_PATH` to override).
+The preview server prints its URL at startup. With no `VITE_BFF_URL` in the
+build environment, the SPA stays fixture-driven and makes no BFF calls.
 
-Point the frontend at it:
+### Install the CLIs
+
+Install Wren in an isolated Python environment and verify that the executable
+is on `PATH`. For example, with [`uv`](https://docs.astral.sh/uv/):
 
 ```bash
-# apps/genbi/.env.local (not committed)
-VITE_BFF_URL=http://localhost:4787
+uv tool install wrenai
+wren --version
 ```
+
+Warble 0.2.0 is released on crates.io. For standalone CLI use, you can install
+it without cloning the repository:
 
 ```bash
-pnpm dev   # dev server now proxies /api/* to VITE_BFF_URL
+cargo install warble-cli --version 0.2.0 --locked
+warble --version
 ```
 
-`VITE_BFF_URL` is what makes this real — without it the frontend never calls
-the BFF at all, it just keeps rendering fixtures, which looks like nothing
-happened rather than erroring. A production build has no dev proxy: the
-built app calls `VITE_BFF_URL` directly from the browser, so the BFF then
-needs to either serve the app from the same origin or send CORS headers.
+The GenBI launch gate needs more than that standalone binary: it verifies the
+Warble source identity and hashes the exact profiles, IR files, binary, and
+Claude Agent SDK dispatcher used by the BFF. Clone a clean checkout you have
+access to and build those inputs in place:
+
+```bash
+git clone https://github.com/Canner/Warble.git Warble
+cd Warble
+just release
+just install-ts
+just build-ts
+```
+
+The attested flow passes absolute paths and deliberately does not rely on
+`PATH` or `npm link`. Check the two built executables directly:
+
+```bash
+./target/release/warble --version
+./dispatcher/claude-agent-sdk/dist/cli.js --help
+claude --version
+```
+
+### Generate the launch attestation
+
+Return to this repository's `apps/genbi` directory and identify the exact
+Warble checkout you just built:
+
+```bash
+cd /absolute/path/to/WrenAI/apps/genbi
+WARBLE_ROOT=/absolute/path/to/Warble
+WARBLE_BIN="$WARBLE_ROOT/target/release/warble"
+AGENT_SDK_BIN="$WARBLE_ROOT/dispatcher/claude-agent-sdk/dist/cli.js"
+```
+
+Run exactly one boot mode. Bootstrap accepts a workspace root where Setup may
+create projects; bound mode accepts an existing Wren project. Build that
+project with `wren context build` before using bound mode. Do not set both.
+
+```bash
+# Bootstrap mode
+pnpm run verify:launch -- --mode bootstrap \
+  --workspace-root /absolute/path/to/fresh-bootstrap-workspace \
+  --runtime subscription:claude \
+  --warble-root "$WARBLE_ROOT" --warble-bin "$WARBLE_BIN" \
+  --agent-sdk-bin "$AGENT_SDK_BIN"
+
+# Or bound mode
+pnpm run verify:launch -- --mode bound \
+  --project /absolute/path/to/built-wren-project \
+  --runtime subscription:claude \
+  --warble-root "$WARBLE_ROOT" --warble-bin "$WARBLE_BIN" \
+  --agent-sdk-bin "$AGENT_SDK_BIN"
+```
+
+The command rebuilds `dist-server`, validates the runtime contracts without a
+model call, and writes an attestation bound to both clean worktrees. Export it
+in every terminal that starts the BFF or UI:
+
+```bash
+export WREN_GENBI_LAUNCH_ATTESTATION="$PWD/dist-server/local-launch-attestation.json"
+```
+
+If the command reports `launch gate BLOCKED`, fix the named input and rerun it.
+Do not reuse the attestation after changing either checkout or rebuilding a
+verified runtime input.
+
+### Running the BFF
+
+Start the BFF with the exact paths the gate verified. The SQLite state must be
+outside the bootstrap workspace and every bound project. This example is
+bootstrap mode:
+
+```bash
+mkdir -p /absolute/path/to/private-bff-state
+
+WREN_HARNESS_WARBLE_BIN="$WARBLE_BIN" \
+WREN_HARNESS_AGENT_SDK_BIN="$AGENT_SDK_BIN" \
+WREN_HARNESS_MODE=subscription \
+WREN_HARNESS_PROVIDER=claude \
+WREN_HARNESS_PROFILE="$WARBLE_ROOT/genbi-default" \
+WREN_HARNESS_SETUP_IR="$WARBLE_ROOT/genbi-setup/ir.golden.json" \
+WREN_HARNESS_ENRICH_IR="$WARBLE_ROOT/genbi-enrich-context/ir.golden.json" \
+WREN_HARNESS_ANALYSIS_IR="$WARBLE_ROOT/genbi-default/ir.golden.json" \
+WREN_HARNESS_WORKSPACE_ROOT=/absolute/path/to/fresh-bootstrap-workspace \
+WREN_BFF_DB_PATH=/absolute/path/to/private-bff-state/bff.sqlite \
+PORT=4787 \
+pnpm run start:bff
+```
+
+For bound mode, replace `WREN_HARNESS_WORKSPACE_ROOT` with
+`WREN_HARNESS_PROJECT=/absolute/path/to/built-wren-project`. Keep the same boot
+mode and canonical path used by `verify:launch`.
+
+The BFF listens on `:4787` by default (`PORT` overrides it).
+
+In a second terminal, return to the same `apps/genbi` worktree, export the same
+attestation, and point Vite at the BFF:
+
+```bash
+export WREN_GENBI_LAUNCH_ATTESTATION="$PWD/dist-server/local-launch-attestation.json"
+VITE_BFF_URL=http://localhost:4787 pnpm dev
+```
+
+The UI listens on `http://localhost:5273`. `VITE_BFF_URL` enables the dev proxy;
+without it, the SPA cannot reach the BFF.
 
 To check the two are actually wired up rather than merely both running, ask the
 dev server for something only the BFF can answer:
@@ -149,14 +205,37 @@ bound a project, check the project itself resolved:
 curl -s http://localhost:4787/api/context/overview
 ```
 
-A bound, built project returns its name and its models. A path that isn't one
-returns a `500` naming what's missing — usually that it hasn't been built yet.
+A bound, built project returns its name and models.
+
+Finally, rerun the same launch-gate command with the live endpoints appended:
+
+```bash
+pnpm run verify:launch -- --mode bootstrap \
+  --workspace-root /absolute/path/to/fresh-bootstrap-workspace \
+  --runtime subscription:claude \
+  --warble-root "$WARBLE_ROOT" --warble-bin "$WARBLE_BIN" \
+  --agent-sdk-bin "$AGENT_SDK_BIN" \
+  --live --bff-url http://localhost:4787 --ui-url http://localhost:5273
+```
+
+Use the bound-mode arguments instead when that is the mode you launched. This
+live pass is the proof that the UI, BFF, boot mode, runtime, and Warble tuple are
+the ones selected above.
+
+### Codex status
+
+The codebase contains Codex Setup and Ask runtime support, but the mandatory
+local launch gate currently accepts only `subscription:claude` and an explicit
+Claude Agent SDK binary. Do not substitute `subscription:codex`,
+`warble-codex-local`, or a dedicated `CODEX_HOME` into the commands above: that
+tuple cannot currently produce a valid launch attestation. Codex local-launch
+instructions should be added when the gate supports and verifies that tuple.
 
 ## Build
 
 ```bash
 pnpm build      # tsc -b (frontend typecheck) && vite build (→ dist/) && tsc -p tsconfig.server.json (server + harness → dist-server/)
-pnpm start:bff  # node dist-server/server/bin.js
+pnpm start:bff  # requires WREN_GENBI_LAUNCH_ATTESTATION and the verified BFF env above
 pnpm preview    # serve the frontend production build
 ```
 

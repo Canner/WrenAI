@@ -44,7 +44,20 @@ const capabilitySchema = z.object({
 // and does not interpret it until a later milestone validates output against it.
 const outputSchemaSchema = z.record(z.string(), z.unknown());
 
-const agentSchema = z.object({
+// Keep these variants strict. In particular, an available component must not
+// silently discard an `availability` marker: doing so would turn a redacted
+// unavailable declaration into an executable-looking component downstream.
+//
+// Strictness has a cost worth naming, because it has already been paid once.
+// IR 0.5 added an optional component-level `brief`, and no key for it is
+// declared below. Warble omits the field entirely while no profile sets one, so
+// nothing fails today — but the first time a profile author writes `brief:` on a
+// component, the next dispatch emits that key, `loadBundle` rejects the bundle,
+// and `GET /api/harness` starts returning 500 for a reason that has nothing to
+// do with the annotation someone just added. That is a deliberate deferral, not
+// an oversight: adding a key for a field nothing populates would be guessing at
+// its shape. Declare it here when a profile first needs it.
+const availableAgentSchema = z.object({
   id: z.string(),
   verb: z.string(),
   component_type: z.string(),
@@ -56,7 +69,33 @@ const agentSchema = z.object({
   tools: z.array(toolSchema),
   output_schema: outputSchemaSchema,
   capabilities: z.array(capabilitySchema),
-});
+}).strict();
+
+/** Read-only manifest variant for a declared component this target cannot execute. */
+const unavailableAgentSchema = z.object({
+  id: z.string(),
+  verb: z.string(),
+  component_type: z.string(),
+  realization_kind: z.string(),
+  trigger: z.string(),
+  outcome: z.string(),
+  // Fixed empty executable surfaces: display may name the declaration, never
+  // carry an executable step, tool, capability, guardrail, or output contract.
+  steps: z.tuple([]),
+  guardrails: z.object({}).strict(),
+  tools: z.tuple([]),
+  output_schema: z.object({}).strict(),
+  capabilities: z.tuple([]),
+  availability: z.object({
+    status: z.literal("unavailable"),
+    reason: z.literal("component is unavailable on the configured runtime"),
+  }).strict(),
+}).strict();
+
+// The strict variants make this union a closed discriminator boundary: an
+// `availability` field cannot be stripped by the available branch, and only
+// the unavailable branch accepts the one supported status/reason pair.
+const agentSchema = z.union([availableAgentSchema, unavailableAgentSchema]);
 
 // The bundle's top-level format-version field is target-dependent: `warble
 // dispatch --target vercel` names it `vercel_bundle_version`, while the

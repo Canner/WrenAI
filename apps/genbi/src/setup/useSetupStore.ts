@@ -3,9 +3,15 @@ import { isBffEnabled } from '@/bff/env';
 import {
   getAdapterEnvStatus,
   getContextOverview,
+  getSubscriptionModelCatalog,
   getRuntimeSettings,
+  getRuntimeSettingsReadiness,
+  getRuntimeTierNames,
+  getSubscriptionLoginStatus,
   getSetupEnvFields,
   getSetupMode,
+  getSetupRecovery,
+  getSetupSourceCatalog,
   getSetupSteps,
   postSetupAdopt,
   postSetupCompileBind,
@@ -19,10 +25,11 @@ import {
   putRuntimeSettings,
   SetupDecisionRequiredError,
 } from '@/bff/client';
-import type { SetupDecision, SetupEnvField, SetupMode, SetupStatusEvent } from '@/bff/client';
+import type { SetupDecision, SetupEnvField, SetupMode, SetupSourceCatalogSource, SetupStatusEvent } from '@/bff/client';
 import { setupStream } from '@/session/stream';
 import type { SetupStreamHandlers, Unsubscribe } from '@/session/stream';
 import type { ToolStep } from '@/session/types';
+import { useNativeSessions } from '@/sessions/useNativeSessions';
 import {
   fixtureContextSummary,
   fixtureInitialMessage,
@@ -33,13 +40,19 @@ import type {
   AdapterEnvStatus,
   ContextSummary,
   ConversationMessage,
+  NativeRuntimeBinding,
   RuntimeSettings,
+  SetupFailureRecovery,
+  SubscriptionModelCatalog,
+  SubscriptionLoginStatus,
+  SubscriptionProvider,
   SetupStep,
   StepKey,
 } from './types';
 import { t } from '@/i18n/strings';
 
 let messageSeq = 1;
+let catalogRequestSeq = 0;
 function nextMessageId(): string {
   return `m${messageSeq++}`;
 }
@@ -94,12 +107,16 @@ export interface ConnectStreamState {
   streaming: boolean;
   /** Set when the stream broke (an `error` frame, or the initial POST failing). */
   error?: string;
+  /** Safe retry data — raw diagnostics never become primary card copy. */
+  failure?: SetupFailureRecovery;
   /** The turn's terminal `SetupStatusEvent`, once one arrives. */
   terminal?: SetupStatusEvent;
   /** `true` from a `needs_input` terminal until `resumeConnect` reaches `ok`. */
   needsInput: boolean;
   /** The data source type of the in-flight/last attempt — `resumeConnect` reuses it. */
   sourceType?: string;
+  /** Preserved form value so a failure panel can identify the project before reload. */
+  projectName?: string;
   /**
    * The setup session this stream belongs to — needed by `resolveConnectDecision`
    * to POST `/api/setup/decision`. Populated from every turn-creating response
@@ -158,6 +175,8 @@ export interface ContextStreamState {
   streaming: boolean;
   /** Set when the stream broke (an `error` frame, or the initial POST failing). */
   error?: string;
+  /** Safe retry data — raw diagnostics never become primary card copy. */
+  failure?: SetupFailureRecovery;
   /** The turn's terminal `SetupStatusEvent`, once one arrives. */
   terminal?: SetupStatusEvent;
   /** `true` from a `needs_input` terminal — unlikely for context (no credential handoff), but handled generically. */
@@ -201,16 +220,37 @@ export interface AdoptStreamState {
 const initialAdoptStream: AdoptStreamState = { verifying: false, resolving: false };
 
 /** Nothing discovered yet — the Build-context card's first-run state. */
-const EMPTY_CONTEXT_SUMMARY: ContextSummary = { models: 0, measures: 0, knowledgeNotes: 0 };
+const EMPTY_CONTEXT_SUMMARY: ContextSummary = { models: 0, relationships: 0 };
 
 /** Nothing detected yet — the Runtime card's pre-fetch state (fixture mode never fetches this). */
 const EMPTY_ADAPTER_ENV_STATUS: AdapterEnvStatus = { anthropic: false, openaiCompatible: false };
+const EMPTY_SUBSCRIPTION_LOGIN_STATUS: SubscriptionLoginStatus = { claude: false, codex: false };
+const INITIAL_SUBSCRIPTION_LOGIN_STATUS: SubscriptionLoginStatus = isBffEnabled()
+  ? EMPTY_SUBSCRIPTION_LOGIN_STATUS
+  : { claude: true, codex: false };
 
 interface SetupStoreState {
   steps: SetupStep[];
   /** Which step's card the canvas currently shows (independent of progress). */
   selectedStepKey: StepKey;
   runtimeSettings: RuntimeSettings;
+  /** Monotonic user-edit marker; protects the form from late initial hydration. */
+  runtimeSettingsGeneration: number;
+  /** True after a user changes the runtime form, until an explicit wizard reset. */
+  runtimeSettingsDirty: boolean;
+  /** Exact compiled-bundle tiers; independent of the subscription driver model. */
+  /**
+   * The data sources Setup may offer, from wren's registry via the BFF. Empty
+   * until `fetchSourceCatalog` resolves; the picker falls back to the fixture
+   * list only in fixture mode.
+   */
+  sourceCatalog: SetupSourceCatalogSource[];
+  /** Set when the BFF could read no registry, so the picker can say the list is partial. */
+  sourceCatalogDegradedReason?: string;
+  sourceCatalogLoading: boolean;
+  runtimeTierNames: string[];
+  /** Loud tier-discovery failure; no fixture/DB rows may substitute in live mode. */
+  runtimeTierNamesError?: string;
   /**
    * Whether each api-key adapter's required credential env var is present on
    * the BFF process — booleans only, fetched once via `hydrate()`. Fixture
@@ -218,10 +258,18 @@ interface SetupStoreState {
    * api-key adapter picker isn't wired to real dispatch there anyway).
    */
   adapterEnvStatus: AdapterEnvStatus;
+  /** Boolean-only CLI login availability; no token details are exposed. */
+  subscriptionLoginStatus: SubscriptionLoginStatus;
+  /** Ephemeral, account-specific catalog suggestions; never included in runtime persistence. */
+  subscriptionModelCatalogs: Partial<Record<SubscriptionProvider, SubscriptionModelCatalog>>;
+  subscriptionModelCatalogLoading: Partial<Record<SubscriptionProvider, boolean>>;
+  subscriptionModelCatalogErrors: Partial<Record<SubscriptionProvider, string>>;
   /** True while `PUT /api/config/runtime` is in flight. */
   runtimeSettingsSaving: boolean;
   /** Set when the live save was rejected (e.g. a missing env var, or a compliance error) — never set in fixture mode. */
   runtimeSettingsError?: string;
+  /** Server-confirmed native CLI binding from the most recent Runtime save. */
+  nativeSessionBinding?: NativeRuntimeBinding;
   /** Turned on by `compileAndBind` — mirrors the Harness page's verify gate. */
   verifyGate: boolean;
   /** Key of the connected data source, once step 2 completes. */
@@ -295,6 +343,10 @@ interface SetupStoreState {
    */
   resolveAdoptDecision: (choiceId: string) => void;
   updateRuntimeSettings: (patch: Partial<RuntimeSettings>) => void;
+  /** Selects a provider, clears its incompatible model values, and starts its catalog lookup. */
+  selectSubscriptionProvider: (provider: SubscriptionProvider) => void;
+  /** Loads or refreshes only the current provider's catalog; stale responses are discarded. */
+  loadSubscriptionModelCatalog: (provider: SubscriptionProvider, refresh?: boolean) => void;
   /**
    * Step 1 (runtime) → done; the step that immediately follows it becomes
    * current — 'connect' in create mode, 'adopt' in adopt mode.
@@ -308,13 +360,15 @@ interface SetupStoreState {
    * and leaves the flow on step 2 until `resumeConnect` succeeds. In fixture
    * mode (no BFF), this keeps the old synchronous optimistic advance.
    */
-  connectDataSource: (projectName: string, sourceType: string) => void;
+  connectDataSource: (projectName: string, sourceType: string, variant?: string) => void;
   /**
    * Starts a fresh turn on the same setup session after the user has filled
    * in `.env` credentials out-of-band, following a `needs_input` terminal.
    * No-op in fixture mode (there is no pending `needs_input` to resume).
    */
   resumeConnect: () => void;
+  /** Repeats exactly the persisted failed connect route. */
+  retryConnectFailure: () => void;
   /**
    * Fetches the scaffolded project's `.env` template field KEYS (never
    * values — see `SetupEnvField`) so the credential form can render one input
@@ -322,6 +376,7 @@ interface SetupStoreState {
    * credential VALUES anywhere — this only ever reads key names. No-op in
    * fixture mode.
    */
+  fetchSourceCatalog: () => void;
   fetchConnectEnvFields: () => void;
   /**
    * Submits the filled-in credential form values: POSTs them to the BFF,
@@ -360,10 +415,14 @@ interface SetupStoreState {
    * advance.
    */
   buildContext: () => void;
+  /** Repeats the failed context route. */
+  retryContextFailure: () => void;
   /** Step 4 → done, verify gate ON; step 5 (ask) becomes current. */
   compileAndBind: () => void;
   /** Live-only: hydrate steps + runtime settings from the BFF. No-op in fixture mode. */
   hydrate: () => void;
+  /** Re-reads canonical setup/project state after returning from a native session. */
+  refreshCanonical: () => void;
   /**
    * Resets the whole setup wizard to first-run state: tears down any in-flight
    * setup streams, clears local store state back to initial, and (live mode)
@@ -393,7 +452,7 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
    * connect→context advance on the exact same `ok` / `needs_input` / error
    * semantics, so the handler closure is built once and reused.
    */
-  function connectHandlers(sourceType: string): SetupStreamHandlers {
+  function connectHandlers(sourceType: string, projectName: string, attempt: 'connect' | 'connect_resume' = 'connect'): SetupStreamHandlers {
     return {
       onWorkLog: (steps) => set((s) => ({ connectStream: { ...s.connectStream, workLog: steps } })),
       onEvent: (event) => {
@@ -471,7 +530,18 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
       onError: (message) => {
         get().connectStream.activeUnsubscribe?.();
         set((s) => ({
-          connectStream: { ...s.connectStream, streaming: false, error: message, activeUnsubscribe: undefined },
+          connectStream: {
+            ...s.connectStream,
+            streaming: false,
+            error: message,
+            failure: { attempt, projectName, sourceType, error: message, workLog: finalizeWorkLog(s.connectStream.workLog, 'error') },
+            workLog: finalizeWorkLog(s.connectStream.workLog, 'error'),
+            activeUnsubscribe: undefined,
+          },
+          messages: [
+            ...s.messages,
+            { id: nextMessageId(), role: 'assistant', text: t('setup.connectFailureHistoryMessage'), workLog: finalizeWorkLog(s.connectStream.workLog, 'error') },
+          ],
         }));
       },
       onDone: () => {
@@ -496,8 +566,7 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
         set({
           contextSummary: {
             models: overview.models.length,
-            measures: overview.measures.length,
-            knowledgeNotes: overview.knowledge.verifiedPairCount,
+            relationships: overview.relationships.length,
           },
         }),
       )
@@ -579,7 +648,24 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
       onError: (message) => {
         get().contextStream.activeUnsubscribe?.();
         set((s) => ({
-          contextStream: { ...s.contextStream, streaming: false, error: message, activeUnsubscribe: undefined },
+          contextStream: {
+            ...s.contextStream,
+            streaming: false,
+            error: message,
+            failure: {
+              attempt: 'context',
+              projectName: s.connectStream.projectName ?? s.connectStream.failure?.projectName ?? '',
+              sourceType: s.connectedSourceKey ?? s.connectStream.failure?.sourceType ?? '',
+              error: message,
+              workLog: finalizeWorkLog(s.contextStream.workLog, 'error'),
+            },
+            workLog: finalizeWorkLog(s.contextStream.workLog, 'error'),
+            activeUnsubscribe: undefined,
+          },
+          messages: [
+            ...s.messages,
+            { id: nextMessageId(), role: 'assistant', text: t('setup.contextFailureHistoryMessage'), workLog: finalizeWorkLog(s.contextStream.workLog, 'error') },
+          ],
         }));
       },
       onDone: () => {
@@ -593,7 +679,18 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
   steps: fixtureSetupSteps,
   selectedStepKey: 'runtime',
   runtimeSettings: fixtureRuntimeSettings,
+  runtimeSettingsGeneration: 0,
+  runtimeSettingsDirty: false,
+  sourceCatalog: [],
+  sourceCatalogDegradedReason: undefined,
+  sourceCatalogLoading: false,
+  runtimeTierNames: isBffEnabled() ? [] : fixtureRuntimeSettings.tierModels.map((binding) => binding.tier),
+  runtimeTierNamesError: undefined,
   adapterEnvStatus: EMPTY_ADAPTER_ENV_STATUS,
+  subscriptionLoginStatus: INITIAL_SUBSCRIPTION_LOGIN_STATUS,
+  subscriptionModelCatalogs: {},
+  subscriptionModelCatalogLoading: {},
+  subscriptionModelCatalogErrors: {},
   runtimeSettingsSaving: false,
   runtimeSettingsError: undefined,
   verifyGate: false,
@@ -723,7 +820,61 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
   },
 
   updateRuntimeSettings: (patch) =>
-    set((s) => ({ runtimeSettings: { ...s.runtimeSettings, ...patch } })),
+    set((s) => ({
+      runtimeSettings: { ...s.runtimeSettings, ...patch },
+      runtimeSettingsGeneration: s.runtimeSettingsGeneration + 1,
+      runtimeSettingsDirty: true,
+    })),
+
+  selectSubscriptionProvider: (provider) => {
+    const current = get();
+    if ((current.runtimeSettings.subscriptionProvider ?? 'claude') === provider) {
+      current.loadSubscriptionModelCatalog(provider);
+      return;
+    }
+    set((s) => ({
+      runtimeSettings: {
+        ...s.runtimeSettings,
+        subscriptionProvider: provider,
+        subscriptionDriverModel: '',
+        apiKeyModel: '',
+        tierModels: s.runtimeTierNames.map((tier) => ({ tier })),
+      },
+      runtimeSettingsGeneration: s.runtimeSettingsGeneration + 1,
+      runtimeSettingsDirty: true,
+    }));
+    get().loadSubscriptionModelCatalog(provider);
+  },
+
+  loadSubscriptionModelCatalog: (provider, refresh = false) => {
+    if (!isBffEnabled()) return;
+    const requestSeq = ++catalogRequestSeq;
+    set((s) => ({
+      subscriptionModelCatalogLoading: { ...s.subscriptionModelCatalogLoading, [provider]: true },
+      subscriptionModelCatalogErrors: { ...s.subscriptionModelCatalogErrors, [provider]: undefined },
+    }));
+    getSubscriptionModelCatalog(provider, refresh)
+      .then((catalog) => {
+        // A provider switch or a newer retry may have happened while this
+        // request was in flight. Never let its result populate the active UI.
+        if ((get().runtimeSettings.subscriptionProvider ?? 'claude') !== provider || requestSeq !== catalogRequestSeq) return;
+        set((s) => ({
+          subscriptionModelCatalogs: { ...s.subscriptionModelCatalogs, [provider]: catalog },
+          subscriptionModelCatalogLoading: { ...s.subscriptionModelCatalogLoading, [provider]: false },
+          subscriptionModelCatalogErrors: {
+            ...s.subscriptionModelCatalogErrors,
+            [provider]: catalog.status === 'unavailable' ? catalog.code : undefined,
+          },
+        }));
+      })
+      .catch(() => {
+        if ((get().runtimeSettings.subscriptionProvider ?? 'claude') !== provider || requestSeq !== catalogRequestSeq) return;
+        set((s) => ({
+          subscriptionModelCatalogLoading: { ...s.subscriptionModelCatalogLoading, [provider]: false },
+          subscriptionModelCatalogErrors: { ...s.subscriptionModelCatalogErrors, [provider]: 'runtime_unavailable' },
+        }));
+      });
+  },
 
   saveRuntimeSettings: () => {
     if (!isBffEnabled()) {
@@ -751,13 +902,37 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
     // api-key env var, or a subscription+hosted compliance error) — gate the
     // step advance on its success instead of applying it optimistically, and
     // surface a rejection as `runtimeSettingsError` rather than swallowing it.
-    set({ runtimeSettingsSaving: true, runtimeSettingsError: undefined });
-    putRuntimeSettings(get().runtimeSettings)
-      .then(({ warnings, ...settings }) => {
+    const current = get();
+    const tierModels = current.runtimeTierNames.map((tier) => {
+      const binding = current.runtimeSettings.tierModels.find((entry) => entry.tier === tier);
+      return { tier, ...(binding?.model !== undefined ? { model: binding.model } : {}) };
+    });
+    set((s) => ({
+      runtimeSettingsSaving: true,
+      runtimeSettingsError: undefined,
+      runtimeSettingsGeneration: s.runtimeSettingsGeneration + 1,
+      runtimeSettingsDirty: true,
+    }));
+    putRuntimeSettings({
+      ...current.runtimeSettings,
+      authMode: 'subscription',
+      hybrid: false,
+      // Setup requires an explicit model on every compiled tier. Clear any
+      // hidden legacy default so it cannot silently influence runtime routing;
+      // direct API/CLI callers retain the generic default-model contract.
+      apiKeyModel: '',
+      // The legacy adapter fallback is still consulted by Claude's models
+      // config writer. Pin it to the provider's own adapter while hybrid is
+      // unavailable; Codex ignores this field and consumes only model names.
+      apiKeyAdapter: 'anthropic',
+      tierModels,
+    })
+      .then(({ warnings, nativeSessionBinding, ...settings }) => {
         set((s) => {
           const nextKey = stepAfter(s.steps, 'runtime');
           return {
             runtimeSettings: settings,
+            nativeSessionBinding,
             runtimeSettingsSaving: false,
             runtimeSettingsError: undefined,
             steps: advance(s.steps, 'runtime', nextKey),
@@ -777,6 +952,7 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
             ],
           };
         });
+        void useNativeSessions.getState().refreshReadiness();
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : t('ask.streamErrorGeneric');
@@ -784,7 +960,7 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
       });
   },
 
-  connectDataSource: (projectName, sourceType) => {
+  connectDataSource: (projectName, sourceType, variant) => {
     if (!isBffEnabled()) {
       // Fixture mode has no real turn to stream — keep the old synchronous
       // optimistic advance so local/non-BFF dev still works end to end.
@@ -808,10 +984,10 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
     // before starting a new one so its handler closure can't later `set(...)`
     // into this same slot and stomp the turn we're about to start.
     get().connectStream.activeUnsubscribe?.();
-    set({ connectStream: { ...initialConnectStream, streaming: true, sourceType } });
-    postSetupConnectTurn(projectName, sourceType)
+    set({ connectStream: { ...initialConnectStream, streaming: true, sourceType, projectName } });
+    postSetupConnectTurn(projectName, sourceType, variant)
       .then(({ sessionId, turnId }) => {
-        const activeUnsubscribe = setupStream(sessionId, turnId, connectHandlers(sourceType));
+        const activeUnsubscribe = setupStream(sessionId, turnId, connectHandlers(sourceType, projectName));
         set((s) => ({ connectStream: { ...s.connectStream, sessionId, activeUnsubscribe } }));
       })
       .catch((err: unknown) => {
@@ -845,19 +1021,54 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
   resumeConnect: () => {
     if (!isBffEnabled()) return;
 
-    const sourceType = get().connectStream.sourceType ?? '';
-    get().connectStream.activeUnsubscribe?.();
-    set((s) => ({
-      connectStream: { ...initialConnectStream, streaming: true, sourceType: s.connectStream.sourceType },
-    }));
+    const currentStream = get().connectStream;
+    const previousFailure = currentStream.failure;
+    const sourceType = currentStream.sourceType ?? previousFailure?.sourceType ?? '';
+    const projectName = currentStream.projectName ?? previousFailure?.projectName ?? '';
+    currentStream.activeUnsubscribe?.();
+    set({
+      connectStream: {
+        ...initialConnectStream,
+        streaming: true,
+        sourceType,
+        projectName,
+      },
+    });
     postSetupResume()
       .then(({ sessionId, turnId }) => {
-        const activeUnsubscribe = setupStream(sessionId, turnId, connectHandlers(sourceType));
+        const activeUnsubscribe = setupStream(sessionId, turnId, connectHandlers(sourceType, projectName, 'connect_resume'));
         set((s) => ({ connectStream: { ...s.connectStream, sessionId, activeUnsubscribe } }));
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : t('ask.streamErrorGeneric');
         set((s) => ({ connectStream: { ...s.connectStream, streaming: false, error: message } }));
+      });
+  },
+
+  retryConnectFailure: () => {
+    const failure = get().connectStream.failure;
+    if (!failure) return;
+    if (failure.attempt === 'connect_resume') {
+      get().resumeConnect();
+      return;
+    }
+    get().connectDataSource(failure.projectName, failure.sourceType);
+  },
+
+  fetchSourceCatalog: () => {
+    if (!isBffEnabled()) return;
+    set({ sourceCatalogLoading: true });
+    getSetupSourceCatalog()
+      .then((catalog) =>
+        set({
+          sourceCatalog: catalog.sources,
+          sourceCatalogDegradedReason: catalog.fromCli ? undefined : (catalog.degradedReason ?? t('setup.connectSourceCatalogPartial')),
+          sourceCatalogLoading: false,
+        }),
+      )
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : t('setup.connectSourceCatalogPartial');
+        set({ sourceCatalog: [], sourceCatalogDegradedReason: message, sourceCatalogLoading: false });
       });
   },
 
@@ -895,7 +1106,7 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
         if ('turnId' in result) {
           // `name_conflict` + 'clean' — a fresh connect turn was dispatched;
           // stream it through the same path as `connectDataSource`.
-          const activeUnsubscribe = setupStream(result.sessionId, result.turnId, connectHandlers(sourceType ?? ''));
+          const activeUnsubscribe = setupStream(result.sessionId, result.turnId, connectHandlers(sourceType ?? '', ''));
           set((s) => ({
             connectStream: {
               ...s.connectStream,
@@ -1003,6 +1214,11 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
       });
   },
 
+  retryContextFailure: () => {
+    if (get().contextStream.failure?.attempt !== 'context') return;
+    get().buildContext();
+  },
+
   compileAndBind: () => {
     set((s) => ({
       steps: advance(s.steps, 'bind', 'ask'),
@@ -1026,6 +1242,25 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
       });
   },
 
+  refreshCanonical: () => {
+    if (!isBffEnabled()) return;
+    getSetupSteps()
+      .then((steps) => {
+        const resume = [...steps].reverse().find((step) => step.state === 'current')?.key
+          ?? steps.find((step) => step.state !== 'done')?.key;
+        set(resume ? { steps, selectedStepKey: resume } : { steps });
+      })
+      .catch(() => {});
+    getSetupMode()
+      .then(({ mode }) => set({ setupMode: mode, setupModeLoading: false }))
+      .catch(() => set({ setupModeLoading: false }));
+    // A native session's raw terminal bytes are never read here. The overview
+    // is the canonical project-artifact snapshot when a project is bound.
+    getContextOverview()
+      .then((overview) => set({ contextSummary: { models: overview.models.length, relationships: overview.relationships.length } }))
+      .catch(() => {});
+  },
+
   hydrate: () => {
     if (!isBffEnabled()) return;
 
@@ -1033,10 +1268,80 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
     // the step-advancing actions (which also fire on user clicks); once the
     // user has advanced a step, a late hydrate must not revert their progress.
     const pristine = () => !get().steps.some((st) => st.state === 'done');
+    const runtimeSettingsGeneration = get().runtimeSettingsGeneration;
+    const canSeedRuntimeSettings = () =>
+      pristine()
+      && !get().runtimeSettingsDirty
+      && get().runtimeSettingsGeneration === runtimeSettingsGeneration;
 
     getSetupMode()
       .then(({ mode }) => set({ setupMode: mode, setupModeLoading: false }))
       .catch(() => set({ setupModeLoading: false }));
+    getSetupRecovery()
+      .then(({ failure, needsInput, sessionId, decision }) => {
+        // A reload after connect has progressed naturally has `done` steps,
+        // so this cannot use the generic pristine gate used by initial form
+        // hydration. Only an active replacement turn supersedes recovery.
+        if (get().connectStream.streaming || get().contextStream.streaming) return;
+        if ((decision?.kind === 'max_turns_continue' || decision?.kind === 'schema_discovery_retry') && sessionId) {
+          set({
+            selectedStepKey: 'context',
+            contextStream: { ...initialContextStream, sessionId, decision },
+          });
+          return;
+        }
+        if (needsInput && sessionId) {
+          const terminal: SetupStatusEvent = {
+            id: `recovery-needs-input-${sessionId}`,
+            kind: 'setup_status',
+            status: 'needs_input',
+            message: needsInput.message,
+          };
+          if (needsInput.attempt === 'context') {
+            set({
+              selectedStepKey: 'context',
+              contextStream: { ...initialContextStream, sessionId, terminal, needsInput: true, workLog: needsInput.workLog },
+            });
+            return;
+          }
+          set({
+            selectedStepKey: 'connect',
+            connectStream: {
+              ...initialConnectStream,
+              sessionId,
+              terminal,
+              needsInput: true,
+              sourceType: needsInput.sourceType,
+              projectName: needsInput.projectName,
+              workLog: needsInput.workLog,
+              failure,
+            },
+          });
+          return;
+        }
+        if (!failure) return;
+        if (failure.attempt === 'context') {
+          set({
+            selectedStepKey: 'context',
+            contextStream: { ...initialContextStream, error: failure.error, failure, workLog: failure.workLog },
+          });
+          return;
+        }
+        set({
+          selectedStepKey: 'connect',
+          connectStream: {
+            ...initialConnectStream,
+            error: failure.error,
+            failure,
+            sourceType: failure.sourceType,
+            projectName: failure.projectName,
+            workLog: failure.workLog,
+          },
+        });
+      })
+      .catch(() => {
+        // Recovery is best-effort; starting a fresh setup remains available.
+      });
     getSetupSteps()
       .then((steps) => {
         // Only seed while pristine (see above). On a fresh mount — including
@@ -1057,16 +1362,46 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
       });
     getRuntimeSettings()
       .then((runtimeSettings) => {
-        if (pristine()) set({ runtimeSettings });
+        // The runtime form is independently editable while these initial GETs
+        // are in flight. Do not replace a just-selected provider (or start an
+        // old-provider catalog request) merely because no wizard step is done.
+        if (!canSeedRuntimeSettings()) return;
+        set({ runtimeSettings });
+        get().loadSubscriptionModelCatalog(runtimeSettings.subscriptionProvider ?? 'claude');
       })
       .catch(() => {
         // Best-effort — keep the fixture runtime settings already in state.
+      });
+    getRuntimeSettingsReadiness()
+      .then((readiness) => {
+        if (!canSeedRuntimeSettings() || readiness.valid) return;
+        set({ runtimeSettingsError: readiness.correction });
+      })
+      .catch(() => {
+        // Settings remain editable even if this auxiliary health projection is unavailable.
+      });
+    // Unlike the fetches above, tier names are NOT pristine-gated: they are a
+    // server-owned compiled contract constant (from the bound profile), not
+    // user-editable form state, so a late response can never clobber
+    // in-progress user input. Gating this one silently discarded both the
+    // success and error branches on a mid-flow mount, leaving the Runtime
+    // card with an empty tier list and no visible error.
+    getRuntimeTierNames()
+      .then((runtimeTierNames) => set({ runtimeTierNames, runtimeTierNamesError: undefined }))
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : t('ask.streamErrorGeneric');
+        set({ runtimeTierNames: [], runtimeTierNamesError: message });
       });
     getAdapterEnvStatus()
       .then((adapterEnvStatus) => set({ adapterEnvStatus }))
       .catch(() => {
         // Best-effort — keep the all-`false` default; the Runtime card treats
         // that identically to "not detected".
+      });
+    getSubscriptionLoginStatus()
+      .then((subscriptionLoginStatus) => set({ subscriptionLoginStatus }))
+      .catch(() => {
+        // Best-effort: all-false produces an actionable logged-out state.
       });
   },
 
@@ -1075,12 +1410,19 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
     // a late frame from an abandoned turn can't write into the reset store.
     get().connectStream.activeUnsubscribe?.();
     get().contextStream.activeUnsubscribe?.();
-    set({
+    set((s) => ({
       steps: fixtureSetupSteps,
       selectedStepKey: 'runtime',
       runtimeSettings: fixtureRuntimeSettings,
+      runtimeSettingsGeneration: s.runtimeSettingsGeneration + 1,
+      runtimeSettingsDirty: false,
+      subscriptionLoginStatus: INITIAL_SUBSCRIPTION_LOGIN_STATUS,
+      subscriptionModelCatalogs: {},
+      subscriptionModelCatalogLoading: {},
+      subscriptionModelCatalogErrors: {},
       runtimeSettingsSaving: false,
       runtimeSettingsError: undefined,
+      nativeSessionBinding: undefined,
       verifyGate: false,
       connectedSourceKey: undefined,
       messages: [fixtureInitialMessage],
@@ -1094,12 +1436,35 @@ export const useSetupStore = create<SetupStoreState>()((set, get) => {
       contextStream: initialContextStream,
       adoptStream: initialAdoptStream,
       contextSummary: EMPTY_CONTEXT_SUMMARY,
-    });
+    }));
     if (!isBffEnabled()) return;
     // Authoritative server reset (also unbinds the project); apply its returned
     // steps/runtimeSettings over the optimistic local reset above.
     postSetupReset()
-      .then(({ steps, runtimeSettings }) => set({ steps, runtimeSettings }))
+      .then(({ steps, runtimeSettings }) => {
+        set({ steps, runtimeSettings });
+        // Reset does not alter CLI authentication. The optimistic reset must
+        // clear its stale state, then re-read the BFF's boolean-only status so
+        // a still-authenticated provider is not shown as logged out until a
+        // full page reload. A failed probe deliberately leaves the safe
+        // all-false reset state in place.
+        const loginProbe = getSubscriptionLoginStatus()
+          .then((subscriptionLoginStatus) => set({ subscriptionLoginStatus }))
+          .catch(() => {});
+        // The optimistic reset above does not touch runtimeTierNames, so a
+        // reset after hydrate's failure path would otherwise leave a stale
+        // empty list + error in place with no re-fetch. Re-run the same
+        // ungated success/error semantics as hydrate() (see above) so the
+        // post-reset Runtime card shows real compiled tiers without a full
+        // page reload.
+        const tierProbe = getRuntimeTierNames()
+          .then((runtimeTierNames) => set({ runtimeTierNames, runtimeTierNamesError: undefined }))
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : t('ask.streamErrorGeneric');
+            set({ runtimeTierNames: [], runtimeTierNamesError: message });
+          });
+        return Promise.all([loginProbe, tierProbe]).then(() => useNativeSessions.getState().refreshReadiness());
+      })
       .catch(() => {
         // Best-effort — the optimistic local reset already applied.
       });

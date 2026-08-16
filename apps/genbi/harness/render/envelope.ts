@@ -269,9 +269,12 @@ function coerceToObject(raw: unknown): unknown | undefined {
 
 function normalizeToEnvelopeShape(value: unknown): unknown {
   if (hasBlocksArray(value)) return value;
-  if (!isFlatTablePayload(value)) return value;
+  const candidate = isCodexQueryResultPayload(value)
+    ? codexQueryResultToFlatTable(value)
+    : value;
+  if (!isFlatTablePayload(candidate)) return value;
 
-  const { columns, rows, verified, summary, definition } = value;
+  const { columns, rows, verified, summary, definition } = candidate;
   const blocks: Record<string, unknown>[] = [{ type: "table", columns, rows }];
   if (definition && typeof definition === "object") {
     const { sql, source_tables, filters } = definition as Record<string, unknown>;
@@ -360,10 +363,66 @@ interface FlatTablePayload {
   readonly definition?: Record<string, unknown> | null;
 }
 
+interface CodexQueryResultPayload {
+  readonly result_set: {
+    readonly columns: string[];
+    readonly rows: unknown[];
+  };
+  readonly sql: string;
+  readonly source_tables: string[];
+  readonly filters: unknown[];
+  readonly execution_passed: boolean;
+  readonly validation_passed: boolean;
+  readonly validation_error: string | null;
+}
+
 function isFlatTablePayload(value: unknown): value is FlatTablePayload {
   if (typeof value !== "object" || value === null) return false;
   const record = value as Record<string, unknown>;
   return Array.isArray(record.columns) && Array.isArray(record.rows);
+}
+
+/**
+ * codex:local's terminal child value is deliberately an execution-evidence
+ * object rather than the legacy flat answer_query payload. Recognize only
+ * the complete shape: a partial or model-invented lookalike must fall back
+ * to unverified text instead of being promoted into a verified table.
+ */
+function isCodexQueryResultPayload(value: unknown): value is CodexQueryResultPayload {
+  if (!isPlainRecord(value) || !isPlainRecord(value.result_set)) return false;
+  const resultSet = value.result_set;
+  return (
+    Array.isArray(resultSet.columns) &&
+    resultSet.columns.every((column) => typeof column === "string") &&
+    Array.isArray(resultSet.rows) &&
+    typeof value.sql === "string" &&
+    Array.isArray(value.source_tables) &&
+    value.source_tables.every((table) => typeof table === "string") &&
+    Array.isArray(value.filters) &&
+    typeof value.execution_passed === "boolean" &&
+    typeof value.validation_passed === "boolean" &&
+    (typeof value.validation_error === "string" || value.validation_error === null)
+  );
+}
+
+function codexQueryResultToFlatTable(value: CodexQueryResultPayload): FlatTablePayload {
+  const { columns, rows } = value.result_set;
+  const positionalRows = rows.map((row) =>
+    isPlainRecord(row) ? columns.map((column) => row[column]) : row,
+  );
+  return {
+    columns,
+    rows: positionalRows,
+    verified:
+      value.execution_passed &&
+      value.validation_passed &&
+      value.validation_error === null,
+    definition: {
+      sql: value.sql,
+      source_tables: value.source_tables,
+      filters: value.filters,
+    },
+  };
 }
 
 /**
@@ -426,8 +485,8 @@ export function extractEnvelopeFromText(text: string): RenderEnvelope | undefine
 const MAX_UNWRAP_DEPTH = 2;
 
 function normalizeExtractedCandidate(value: unknown, depth = 0): RenderEnvelope | undefined {
-  if (hasBlocksArray(value)) return value as RenderEnvelope;
-  if (isFlatTablePayload(value)) return normalizeToEnvelopeShape(value) as RenderEnvelope;
+  const normalized = normalizeToEnvelopeShape(value);
+  if (hasBlocksArray(normalized)) return normalized as RenderEnvelope;
   if (depth >= MAX_UNWRAP_DEPTH) return undefined;
 
   const unwrapped = unwrapCallToolResult(value);

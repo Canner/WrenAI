@@ -48,7 +48,7 @@ const ARTIFACT_WRITE_CAPABILITY: Bundle["agents"][number]["capabilities"][number
 
 const BUNDLE: Bundle = {
   vercel_bundle_version: "0.1",
-  compat: { min_ir_version: "0.3", max_ir_version: "0.3" },
+  compat: { min_ir_version: "0.4", max_ir_version: "0.4" },
   profile: "genbi-default",
   target: "vercel:headless",
   agents: [
@@ -60,6 +60,13 @@ const BUNDLE: Bundle = {
 
 function modeBRoute(finalText: string): (options: RouteOptions) => Promise<RouteResult> {
   return async (): Promise<RouteResult> => ({ backend: "agent-sdk", warnings: [], finalText });
+}
+
+function codexRoute(finalText: string, calls?: string[]): (options: RouteOptions) => Promise<RouteResult> {
+  return async (options): Promise<RouteResult> => {
+    calls?.push(options.agentId ?? "");
+    return { backend: "codex-local", warnings: [], finalText };
+  };
 }
 
 function fencedEnvelope(envelope: Record<string, unknown>): string {
@@ -140,6 +147,52 @@ describe("Mode B dashboard/report turns persist an artifact from the recovered e
       body: JSON.stringify({ scope: "public" }),
     });
     expect(publishRes.status).toBe(200);
+  });
+
+  it("a codex-local dashboard is routed, persisted once, replayed, and publishable through the same artifact path", async () => {
+    const envelope = {
+      blocks: [
+        { type: "kpi_card", label: "Orders", value: 42, unit: "orders" },
+        { type: "chart", chart_type: "bar", x: "order_id", series: ["amount"], rows: [{ order_id: 1, amount: 10 }] },
+        { type: "table", columns: ["order_id", "amount"], rows: [{ order_id: 1, amount: 10 }] },
+        { type: "definition", sql: "SELECT order_id, amount FROM orders", source_tables: ["orders"], filters: [] },
+      ],
+      summary: "Orders dashboard",
+      verified: true,
+    };
+    const calls: string[] = [];
+    const deps = buildDeps(codexRoute(JSON.stringify(envelope), calls));
+    const app = createApp(deps);
+    const session = (await (await app.request("/api/sessions", { method: "POST", body: "{}" })).json()) as { id: string };
+    const { turnId } = (await (
+      await app.request(`/api/sessions/${session.id}/turns`, {
+        method: "POST",
+        body: JSON.stringify({ question: "Show me a dashboard of orders" }),
+      })
+    ).json()) as { turnId: string };
+
+    const first = parseSse(await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text());
+    const artifactFrames = first.filter(
+      (frame) => frame.event === "event" && (frame.data as { kind?: string }).kind === "artifact",
+    );
+    expect(artifactFrames).toHaveLength(1);
+    expect(first.find((frame) => frame.event === "event" && (frame.data as { kind?: string }).kind === "answer")?.data)
+      .toMatchObject({ kind: "answer", answer: { form: "rich", envelope } });
+    const artifactId = (artifactFrames[0]!.data as { artifactId: string }).artifactId;
+    expect((await (await app.request(`/api/artifacts/${artifactId}`)).json()) as ArtifactDto).toMatchObject({
+      artifactKind: "dashboard",
+      verified: true,
+    });
+
+    const replay = parseSse(await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text());
+    expect(replay.filter((frame) => frame.event === "event" && (frame.data as { kind?: string }).kind === "artifact"))
+      .toHaveLength(1);
+    expect(calls).toEqual(["generate_dashboard"]);
+    const publish = await app.request(`/api/sessions/${session.id}/artifacts/${artifactId}/publish`, {
+      method: "POST",
+      body: JSON.stringify({ scope: "public" }),
+    });
+    expect(publish.status).toBe(200);
   });
 
   it("an explain_change turn's rich answer creates a 'report' artifact (report-type mapping)", async () => {

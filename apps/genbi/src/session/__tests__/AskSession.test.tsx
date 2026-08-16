@@ -45,6 +45,11 @@ describe('AskSession', () => {
     await user.click(screen.getByRole('button', { name: /send/i }));
 
     expect(screen.getByText('Show me the top vendors by spend')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Working on your request…');
+    expect(screen.getByLabelText('Ask a question')).toBeDisabled();
+
+    await waitFor(() => expect(screen.getByText('Parse question')).toBeInTheDocument());
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
 
     await waitFor(
       () => {
@@ -52,6 +57,7 @@ describe('AskSession', () => {
       },
       { timeout: 2000 },
     );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it("keeps a completed turn's trace disclosure in history after a follow-up turn completes", async () => {
@@ -78,6 +84,7 @@ describe('AskSession', () => {
     // Send a follow-up turn in the same session.
     await user.type(screen.getByLabelText('Ask a question'), 'Now break that down by region please');
     await user.click(screen.getByRole('button', { name: /send/i }));
+    expect(screen.getByRole('status')).toHaveTextContent('Working on your request…');
 
     await waitFor(
       () => {
@@ -110,9 +117,16 @@ describe('AskSession', () => {
       },
       { timeout: 2000 },
     );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     // No fabricated answer content should appear alongside the failure.
     expect(screen.queryByText('Acme Corp')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    const retry = screen.getByRole('button', { name: 'Retry' });
+    expect(retry).toBeInTheDocument();
+
+    await user.click(retry);
+    expect(screen.getByRole('status')).toHaveTextContent('Working on your request…');
+    expect(screen.queryByText('The connection to the agent was lost')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Ask a question')).toBeDisabled();
   });
 
   it('records a publish in state but renders no publish affordances while publishing is unimplemented', async () => {

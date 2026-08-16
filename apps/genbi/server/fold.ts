@@ -75,7 +75,7 @@ export function toAnswerOrRefusalEvent(
   result: RouteResult,
   worklog: readonly ToolStep[] = [],
 ): AnswerEvent | RefusalEvent {
-  if (result.backend === "agent-sdk") {
+  if (result.backend === "agent-sdk" || result.backend === "codex-local") {
     const envelope = extractEnvelopeFromText(result.finalText);
     if (envelope !== undefined) {
       return { id, kind: "answer", answer: { form: "rich", envelope } };
@@ -93,7 +93,11 @@ export function toAnswerOrRefusalEvent(
 }
 
 /** Mode A's native in-process tool names that constitute an actual data claim — schema browsing / artifact saving don't count. */
-const DATA_ACCESS_TOOL_NAMES = new Set<string>([WREN_QUERY_TOOL_NAME, BUILD_DASHBOARD_TOOL_NAME]);
+const DATA_ACCESS_TOOL_NAMES = new Set<string>([
+  WREN_QUERY_TOOL_NAME,
+  BUILD_DASHBOARD_TOOL_NAME,
+  "wren.run_sql",
+]);
 
 /**
  * Mode B never produces those native tool names — the dispatched agent's `answer_query`/
@@ -168,7 +172,7 @@ export function clarifyDecisionStep(detail: string): ToolStep {
  *    -> `undefined`, so no gate entry is appended.
  */
 export function gateDecisionStep(result: RouteResult): ToolStep | undefined {
-  if (result.backend === "agent-sdk") return undefined;
+  if (result.backend === "agent-sdk" || result.backend === "codex-local") return undefined;
   if (result.kind === "refusal") {
     return { id: DECISION_GATE_ID, kind: "decision", label: "Verify gate", state: "error", detail: result.reason };
   }
@@ -187,6 +191,169 @@ export function gateFailureStep(errorMessage: string): ToolStep {
   return { id: DECISION_GATE_ID, kind: "decision", label: "Verify gate", state: "error", detail: truncate(errorMessage, SUMMARY_MAX_LENGTH) };
 }
 
+/**
+ * A BFF-owned setup-contract rejection. This deliberately reuses the
+ * established `ToolStep.kind: "decision"` wire shape, so the frontend can
+ * render recovery evidence without an SSE schema addition.
+ */
+export function hostContractRecoveryStep(detail: string): ToolStep {
+  return {
+    id: "decision-host-contract-recovery",
+    kind: "decision",
+    label: "Host contract",
+    state: "error",
+    detail: truncate(detail, SUMMARY_MAX_LENGTH),
+  };
+}
+
+const SETUP_INTERNAL_DIAGNOSTIC = /["']?(?:resume[_-]?session(?:[_-]?id)?|sdk[_-]?session(?:[_-]?id)?|session[_-]?id|anchor|runner(?:[_-]?path)?|dispatcher|provider(?:[_-]?name)?)["']?\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;}\]]+)/gi;
+const SETUP_PROVIDER_NAME = /\b(?:openai|anthropic|gemini|claude|codex)\b/gi;
+const SETUP_URL = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'`<>()\[\]{}]+/gi;
+const SETUP_ABSOLUTE_PATH = /(^|[\s"'`=:(\[,])(?:(?:~|\/)\/?|[A-Za-z]:\\)[^\s"'`;,)}\]]*/g;
+// JSON is frequently echoed after one or more serialization passes. Limit
+// escaped-quote depth so hostile traces cannot trigger unbounded regex work.
+const SETUP_ESCAPED_CREDENTIAL = /\b([a-z0-9_.-]*(?:password|pass|secret|token|api[-_]?key|credential)[a-z0-9_.-]*)(?:\\{1,4})?["']?\s*(?::|=)\s*(?:\[REDACTED(?:_URL|_PATH)?\]|(?:\\{1,4})?["']?[^\s,;)}\]]+)/gi;
+const SETUP_ANSI = /\u001b(?:\][\s\S]*?(?:\u0007|\u001b\\)|[PX^_][\s\S]*?\u001b\\|\[[0-?]*[ -/]*[@-~]|[@-_])/g;
+const SETUP_C1_ANSI = /\u009b[0-?]*[ -/]*[@-~]/g;
+const SETUP_CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
+const SETUP_FIELD_MAX_LENGTH = 160;
+const SETUP_INSPECTION_MAX_LENGTH = 512;
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Removes terminal escapes and other controls before any setup text crosses a public boundary. */
+function stripSetupControls(text: string): string {
+  return text.replace(SETUP_ANSI, "").replace(SETUP_C1_ANSI, "").replace(SETUP_CONTROL, " ");
+}
+
+/** Redacts URLs, credentials, and arbitrary local absolute paths from setup text. */
+export function redactSetupText(text: string): string {
+  return stripSetupControls(text)
+    // A URL can contain credentials, local paths, query strings, or opaque
+    // provider identifiers. Preserve none of it in a setup work log.
+    .replace(SETUP_URL, "[REDACTED_URL]")
+    .replace(/((?:--user|-u)\s+)(?:\[REDACTED(?:_URL|_PATH)?\]|'[^']*'|\"[^\"]*\"|\S+)/gi, "$1[REDACTED]")
+    .replace(SETUP_ESCAPED_CREDENTIAL, "$1=[REDACTED]")
+    .replace(/\b([a-z0-9_.-]*(?:password|pass|secret|token|api[-_]?key|credential)[a-z0-9_.-]*["']?)\s*(?:=|:)\s*(?:\[REDACTED(?:_URL|_PATH)?\]|'[^']*'|\"[^\"]*\"|[^\s,;)}\]]+)/gi, "$1=[REDACTED]")
+    .replace(/\b((?:proxy-)?authorization\s*:\s*(?:bearer|basic)\s+)(?:\[REDACTED(?:_URL|_PATH)?\]|'[^']*'|\"[^\"]*\"|[^\s,;]+)/gi, "$1[REDACTED]")
+    .replace(/\b((?:x[-_])?api[-_]?key\s*:\s*)(?:\[REDACTED(?:_URL|_PATH)?\]|'[^']*'|\"[^\"]*\"|[^\s,;]+)/gi, "$1[REDACTED]")
+    .replace(/(--?(?:password|pass|secret|token|api[-_]?key|credential)(?:=|\s+))(?:\[REDACTED(?:_URL|_PATH)?\]|'[^']*'|\"[^\"]*\"|\S+)/gi, "$1[REDACTED]")
+    .replace(/(^|\s)((?:export\s+)?(?:[A-Z][A-Z0-9_]*(?:PASSWORD|PASS|SECRET|TOKEN|API_KEY|CREDENTIAL)[A-Z0-9_]*|PASSWORD|PASS|SECRET|TOKEN|API_KEY|CREDENTIAL))\s+(?:\[REDACTED(?:_URL|_PATH)?\]|'[^']*'|\"[^\"]*\"|\S+)/gim, "$1$2=[REDACTED]")
+    .replace(/((?:--user|-u)\s+)(?:'[^']*'|\"[^\"]*\"|\S+)/gi, "$1[REDACTED]")
+    .replace(SETUP_ABSOLUTE_PATH, "$1[REDACTED_PATH]");
+}
+
+/** Strict public setup diagnostic redaction shared by SSE, SQLite, and recovery. */
+export function redactPublicSetupText(text: string, internalValues: readonly string[] = []): string {
+  let publicText = redactSetupText(text)
+    .replace(SETUP_INTERNAL_DIAGNOSTIC, "internal setup detail [REDACTED]")
+    .replace(SETUP_PROVIDER_NAME, "[REDACTED]");
+  for (const value of internalValues) {
+    if (value.length > 0) publicText = publicText.replace(new RegExp(escapeRegExp(value), "gi"), "[REDACTED]");
+  }
+  return publicText;
+}
+
+/** Truncates by Unicode code point, never leaving a dangling UTF-16 surrogate. */
+function truncateCodePoints(text: string, max: number): string {
+  const codePoints = Array.from(text);
+  return codePoints.length > max ? `${codePoints.slice(0, Math.max(0, max - 1)).join("")}…` : text;
+}
+
+/** Strict formatter for every runtime-controlled Setup work-log string field. */
+function formatSetupField(value: string, internalValues: readonly string[], max = SETUP_FIELD_MAX_LENGTH): string {
+  return truncateCodePoints(redactPublicSetupText(value, internalValues), max);
+}
+
+function boundedInspectionText(value: string, internalValues: readonly string[]): string {
+  return formatSetupField(value, internalValues, SETUP_INSPECTION_MAX_LENGTH);
+}
+
+function setupActionSummary(input: unknown, internalValues: readonly string[]): string | undefined {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) return undefined;
+  const action = (input as Record<string, unknown>).command ?? (input as Record<string, unknown>).action;
+  return typeof action === "string" && action.length > 0 ? boundedInspectionText(action, internalValues) : undefined;
+}
+
+function setupDuration(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 86_400_000 ? value : undefined;
+}
+
+function setupInspection(row: Record<string, unknown>, state: ToolStep["state"], internalValues: readonly string[]): ToolStep["inspection"] | undefined {
+  const prior = typeof row.inspection === "object" && row.inspection !== null && !Array.isArray(row.inspection)
+    ? row.inspection as Record<string, unknown>
+    : {};
+  const action = setupActionSummary(row.input, internalValues)
+    ?? (typeof prior.action === "string" ? boundedInspectionText(prior.action, internalValues) : undefined);
+  const detail = typeof row.detail === "string"
+    ? boundedInspectionText(row.detail, internalValues)
+    : state === "error"
+      ? typeof prior.error === "string" ? boundedInspectionText(prior.error, internalValues) : undefined
+      : typeof prior.output === "string" ? boundedInspectionText(prior.output, internalValues) : undefined;
+  const durationMs = setupDuration(row.durationMs) ?? setupDuration(prior.durationMs);
+  const inspection = {
+    ...(action !== undefined ? { action } : {}),
+    ...(detail !== undefined && state === "error" ? { error: detail } : {}),
+    ...(detail !== undefined && state !== "error" ? { output: detail } : {}),
+    ...(durationMs !== undefined ? { durationMs } : {}),
+  };
+  return Object.keys(inspection).length > 0 ? inspection : undefined;
+}
+
+/**
+ * Explicit, strict public worklog allowlist shared by all Setup boundaries.
+ * Raw agent `input` and `detail` never cross this boundary: the BFF derives a
+ * bounded inspection projection instead, so reload/recovery cannot revive a
+ * broader historical trace.
+ */
+export function sanitizePublicSetupWorklog(value: unknown, internalValues: readonly string[] = []): ToolStep[] {
+  if (!Array.isArray(value)) return [];
+  const states = new Set<ToolStep["state"]>(["running", "done", "error"]);
+  const kinds = new Set<ToolStep["kind"]>(["tool", "subagent", "step", "decision"]);
+  return value.flatMap((entry): ToolStep[] => {
+    if (typeof entry !== "object" || entry === null) return [];
+    const row = entry as Record<string, unknown>;
+    if (typeof row.id !== "string" || typeof row.label !== "string" || !states.has(row.state as ToolStep["state"]) || !kinds.has(row.kind as ToolStep["kind"])) return [];
+    const inspection = setupInspection(row, row.state as ToolStep["state"], internalValues);
+    return [{
+      id: formatSetupField(row.id, internalValues),
+      label: formatSetupField(row.label, internalValues),
+      state: row.state as ToolStep["state"],
+      kind: row.kind as ToolStep["kind"],
+      ...(typeof row.parent === "string" ? { parent: formatSetupField(row.parent, internalValues) } : {}),
+      ...(typeof row.depth === "number" && Number.isSafeInteger(row.depth) && row.depth >= 0 && row.depth <= 16 ? { depth: row.depth } : {}),
+      ...(inspection !== undefined ? { inspection } : {}),
+    }];
+  });
+}
+
+/**
+ * Live-frame variant of `sanitizePublicSetupWorklog`, for a subscription-mode
+ * setup turn's in-flight progress stream (see `server/turn.ts`'s
+ * `executeSetupTurn`). The end-of-turn snapshot can redact by KNOWN VALUE —
+ * `sanitizePublicSetupWorklog(..., knownInternalValues)` — once an attempt has
+ * actually returned its session anchor. A live frame can't: the anchor a
+ * rotating subscription attempt will settle on isn't known until it resolves
+ * or throws, so falling back to by-SHAPE redaction (this module's
+ * `SETUP_INTERNAL_DIAGNOSTIC`/`SETUP_PROVIDER_NAME`
+ * patterns) is the only option that can run before then.
+ *
+ * That fallback is a genuine, accepted weakening: a pattern only catches an
+ * anchor that looks the way these patterns anticipate, not any anchor shape a
+ * future provider might introduce. To bound that risk, this also drops raw
+ * `input`/`detail` and the derived `inspection` outright rather than merely
+ * redacting them — a step's raw tool input or diagnostic text is exactly where
+ * an unanticipated anchor shape would hide, and a field never sent cannot
+ * leak. `WorkLog.tsx` only needs `label`/`state`/`kind`/`parent`/`depth` to
+ * render progress; a step becomes expandable with its safe inspection
+ * projection once the end-of-turn snapshot replaces this live one.
+ */
+export function sanitizeLiveSetupWorklog(worklog: readonly ToolStep[]): ToolStep[] {
+  return sanitizePublicSetupWorklog(worklog).map(({ input, detail, inspection, ...rest }) => rest);
+}
+
 const SUMMARY_MAX_LENGTH = 240;
 
 function truncate(text: string, max: number): string {
@@ -195,7 +362,9 @@ function truncate(text: string, max: number): string {
 
 /** Short text used for `turns.answer_summary` — feeds `server/compose.ts`'s D3 context composition. Never the full envelope. */
 export function summarizeResult(result: RouteResult): string {
-  if (result.backend === "agent-sdk") return truncate(result.finalText, SUMMARY_MAX_LENGTH);
+  if (result.backend === "agent-sdk" || result.backend === "codex-local") {
+    return truncate(result.finalText, SUMMARY_MAX_LENGTH);
+  }
   if (result.kind === "answer") {
     const summary = result.envelope.summary;
     return truncate(typeof summary === "string" && summary.length > 0 ? summary : JSON.stringify(result.envelope.blocks), SUMMARY_MAX_LENGTH);
@@ -237,6 +406,7 @@ export class LiveWorkLog {
         this.upsert(event.callId, event.tool, "running", "tool", event.parent, event.depth, event.input);
         return this.snapshot();
       case "tool.result": {
+        if (event.input !== undefined) this.setInput(event.callId, event.input);
         // Detail is the success summary, or the error message on
         // failure — both already bounded/compact at the emission site
         // (`summarizeToolOutput` / `describeError` in `harness/loop/executor.ts`).
@@ -283,5 +453,11 @@ export class LiveWorkLog {
     const existing = this.steps.get(id);
     if (!existing) return; // event for a step we never saw start — ignore rather than fabricate
     this.steps.set(id, { ...existing, state, ...(detail !== undefined ? { detail } : {}) });
+  }
+
+  private setInput(id: string, input: unknown): void {
+    const existing = this.steps.get(id);
+    if (!existing) return;
+    this.steps.set(id, { ...existing, input });
   }
 }

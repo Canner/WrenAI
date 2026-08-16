@@ -6,6 +6,7 @@ import { t } from '@/i18n/strings';
 import { isBffEnabled } from '@/bff/env';
 import { useContextStore } from './useContextStore';
 import { ErDiagram } from './ErDiagram';
+import { EnrichmentPanel } from './EnrichmentPanel';
 import {
   fixtureKnowledgeStatus,
   fixtureMeasures,
@@ -119,6 +120,8 @@ export function Overview() {
           <b>{measures.length}</b> {t('context.measuresStat')}
         </span>
       </div>
+
+      <EnrichmentPanel />
 
       <div className="genbi-mdl-layout">
         <Panel title={t('context.overview')}>

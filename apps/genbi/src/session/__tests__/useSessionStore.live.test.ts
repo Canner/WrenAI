@@ -23,6 +23,7 @@ vi.mock('@/bff/client', () => ({
   postArtifactPublish: (...args: unknown[]) => postArtifactPublish(...args),
   postArtifactSave: (...args: unknown[]) => postArtifactSave(...args),
   turnStreamUrl: (...args: [string, string]) => turnStreamUrl(...args),
+  getRuntimeSettingsReadiness: () => Promise.resolve({ valid: true as const }),
 }));
 
 import { DRAFT_SESSION_ID, useSessionStore } from '../useSessionStore';
@@ -56,6 +57,17 @@ afterEach(() => {
 });
 
 describe('useSessionStore (live mode) — draft lazy-create', () => {
+  it('creates a persisted structured session before the Sessions workbench opens it', async () => {
+    createSession.mockResolvedValueOnce({ id: 'structured-1', title: 'New Structured Ask', createdAt: 'now', updatedAt: 'now' });
+
+    await expect(useSessionStore.getState().startStructuredSession()).resolves.toBe('structured-1');
+
+    expect(createSession).toHaveBeenCalledWith('New Structured Ask');
+    expect(useSessionStore.getState().backendSessionId['structured-1']).toBe('structured-1');
+    expect(useSessionStore.getState().sessionsById['structured-1']).toMatchObject({ id: 'structured-1', title: 'New Structured Ask', events: [], workLog: [] });
+    expect(useSessionStore.getState().sessionList).toEqual([{ id: 'structured-1', title: 'New Structured Ask', updatedAt: 'now' }]);
+  });
+
   it('mounting the draft (getOrCreate) never touches the BFF', () => {
     useSessionStore.getState().getOrCreate(DRAFT_SESSION_ID);
 

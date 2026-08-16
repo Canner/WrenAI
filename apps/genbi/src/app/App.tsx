@@ -1,7 +1,14 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AppShell } from './shell/AppShell';
+import { compatibilityPages, pages, defaultPath } from './registry';
+import { SessionsPage } from '@/sessions/SessionsPage';
 import { AskPage } from '@/pages/AskPage';
-import { pages, defaultPath } from './registry';
+import { structuredAskPath } from '@/sessions/structuredAsk';
+
+function LegacyAskRedirect() {
+  const { sessionId } = useParams<{ sessionId: string }>();
+  return <Navigate to={structuredAskPath(sessionId)} replace />;
+}
 
 /**
  * The route tree, router-agnostic so tests can mount it under a MemoryRouter.
@@ -16,7 +23,12 @@ export function AppRoutes() {
         {pages.map(({ key, path, Page }) => (
           <Route key={key} path={path} element={<Page />} />
         ))}
-        <Route path="/ask/:sessionId" element={<AskPage />} />
+        {compatibilityPages.map(({ key, path, Page }) => <Route key={key} path={path} element={<Page />} />)}
+        <Route path="/sessions/ask" element={<AskPage />} />
+        <Route path="/sessions/ask/:sessionId" element={<AskPage />} />
+        <Route path="/ask" element={<LegacyAskRedirect />} />
+        <Route path="/ask/:sessionId" element={<LegacyAskRedirect />} />
+        <Route path="/sessions/:id" element={<SessionsPage />} />
         <Route path="*" element={<Navigate to={defaultPath} replace />} />
       </Route>
     </Routes>

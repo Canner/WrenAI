@@ -1,152 +1,152 @@
-import { Button, Space, Tag, Tooltip, Typography } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
-import { Panel, KVRow, DataTable } from '@/ui';
+import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { Collapse, Space, Tag, Typography } from 'antd';
+import { DataTable, KVRow, Panel } from '@/ui';
 import { brand } from '@/app/theme/tokens';
 import { t } from '@/i18n/strings';
-import { ConnectionHealthTag } from './ConnectionHealthTag';
 import { AgentProfilesTable } from './AgentProfilesTable';
-import { ComponentsTable } from './ComponentsTable';
 import { CapabilityResolutionTable } from './CapabilityResolutionTable';
+import { ComponentsTable } from './ComponentsTable';
+import { ConnectionHealthTag } from './ConnectionHealthTag';
 import { GuardrailList } from './GuardrailList';
 import type { HarnessView, RuntimeDispatcherKind, TierModelBinding } from './types';
+import './harness.css';
 
 interface HarnessOverviewProps {
   harness: HarnessView;
 }
 
-/**
- * Friendly labels for the runtime dispatcher — deliberately just these two
- * identity strings, never the internal "Mode A" / "Mode B" vocabulary those
- * dispatchers are known by elsewhere in the codebase.
- */
 const DISPATCHER_LABELS: Record<RuntimeDispatcherKind, string> = {
   'claude-agent-sdk': t('harness.dispatcherClaudeAgentSdk'),
+  'codex-local': t('harness.dispatcherCodexLocal'),
   'in-process': t('harness.dispatcherInProcess'),
 };
 
 /**
- * Single scrollable status view over how the bound profile is realized:
- * profile → runtime/back-end → agent profiles → data source/connection →
- * components (expandable step dataflow) → capability resolution → guardrails.
- * Replaces the old orchestrator/sub-agent drill-down — there is exactly one
- * canvas for the one bound profile (see `HarnessSidebar` for the profile
- * selector this responds to).
+ * One purpose's status view. The primary path is purpose/profile → active
+ * runtime target/readiness → executable components; implementation detail is
+ * intentionally grouped in expandable diagnostics below that path.
  */
 export function HarnessOverview({ harness }: HarnessOverviewProps) {
-  const { profile, runtime, connection, components, agentProfiles } = harness;
+  const { purpose, profile, runtime, connection, components, agentProfiles, nativeSessions } = harness;
+  const nativeSessionTarget = purpose.targetLabel ?? t('harness.targetNotConfigured');
+  const readiness = purpose.available ? t('harness.ready') : t('harness.unavailable');
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <Space className="harness-overview" orientation="vertical" size={16} style={{ width: '100%' }}>
       <Typography.Paragraph type="secondary" style={{ maxWidth: '64ch' }}>
-        {t('harness.pageLeadPrefix')} <strong>{profile.name}</strong> {t('harness.pageLeadSuffix')}
+        {t('harness.pageLeadPrefix')} <strong>{purpose.profile}</strong> {t('harness.pageLeadSuffix')}
       </Typography.Paragraph>
 
       <Panel
-        title={profile.name}
+        title={t('harness.executionTitle')}
+        note={t('harness.executionNote')}
         extra={
-          <Tag color={brand.verified} icon={<CheckCircleOutlined />} bordered>
-            {profile.status}
+          <Tag
+            color={purpose.available ? brand.verified : brand.estimate}
+            icon={purpose.available ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+            bordered
+          >
+            {readiness}
           </Tag>
         }
       >
-        <KVRow label={t('harness.source')} value={`warble · IR v${profile.irVersion}`} />
-        <KVRow label={t('harness.boundContext')} value={profile.boundContext} />
-        <KVRow
-          label={t('harness.verifyGate')}
-          value={
-            <Tag
-              color={profile.verifyGate ? brand.verified : brand.refused}
-              icon={profile.verifyGate ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
-              bordered
-            >
-              {profile.verifyGate ? t('harness.verifyGateOn') : t('harness.verifyGateOff')}
-            </Tag>
-          }
-        />
-        <KVRow label={t('harness.dispatchTarget')} value={profile.dispatchTarget} />
-        <KVRow
-          label={t('harness.bundle')}
-          value={`${profile.bundleId} · v${profile.bundleVersion} · ${profile.bundleHash}`}
-        />
-      </Panel>
-
-      <Panel title={t('harness.runtimeTitle')} note={t('harness.runtimeBackendNote')}>
-        <KVRow label={t('harness.activeBackend')} value={runtime.label} />
-        {runtime.dispatcher !== undefined && (
-          <KVRow label={t('harness.dispatcher')} value={DISPATCHER_LABELS[runtime.dispatcher]} />
-        )}
-        {runtime.backend !== 'subscription' && (
-          <KVRow
-            label={
-              <Tooltip title={t('harness.alsoAvailableHint')}>
-                <span>{t('harness.alsoAvailable')}</span>
-              </Tooltip>
-            }
-            value={<Typography.Text type="secondary">{t('harness.subscriptionAvailable')}</Typography.Text>}
-          />
-        )}
-        <DataTable<TierModelBinding>
-          rowKey="tier"
-          dataSource={runtime.tierModels}
-          columns={[
-            { title: t('harness.tier'), dataIndex: 'tier', key: 'tier' },
-            { title: t('harness.model'), dataIndex: 'model', key: 'model' },
-          ]}
-        />
-      </Panel>
-
-      <Panel title={t('harness.agentProfilesTitle')} note={t('harness.agentProfilesNote')}>
-        <AgentProfilesTable profiles={agentProfiles} />
-        <Space wrap style={{ marginTop: 8 }}>
-          <Tooltip title={t('harness.outOfScopeHint')}>
-            <Button icon={<PlusOutlined />} disabled>
-              {t('harness.addProfile')}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t('harness.outOfScopeHint')}>
-            <Button icon={<ImportOutlined />} disabled>
-              {t('harness.importProfile')}
-            </Button>
-          </Tooltip>
-        </Space>
-      </Panel>
-
-      <Panel title={t('harness.connectionTitle')}>
-        <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <KVRow label={t('harness.connectionType')} value={connection.type} />
-            <KVRow label={t('harness.connectionLocation')} value={connection.location} />
-            <KVRow label={t('harness.connectionVia')} value={connection.via} />
+        <div className="harness-execution-path" aria-label={t('harness.executionTitle')}>
+          <div>
+            <Typography.Text type="secondary">{t('harness.purpose')}</Typography.Text>
+            <strong>{purpose.purpose}</strong>
           </div>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <KVRow label={t('harness.health')} value={<ConnectionHealthTag health={connection.health} />} />
-            <KVRow label={t('harness.tablesSynced')} value={connection.tablesSynced} />
-            <KVRow label={t('harness.lastSync')} value={connection.lastSync} />
+          <div>
+            <Typography.Text type="secondary">{t('harness.compiledDispatchTarget')}</Typography.Text>
+            <strong>{profile.dispatchTarget}</strong>
+          </div>
+          <div>
+            <Typography.Text type="secondary">{t('harness.nativeSessionTarget')}</Typography.Text>
+            <strong>{nativeSessionTarget}</strong>
+          </div>
+          <div>
+            <Typography.Text type="secondary">{t('harness.readiness')}</Typography.Text>
+            <strong>{readiness}</strong>
           </div>
         </div>
-        <Space wrap style={{ marginTop: 8 }}>
-          <Tooltip title={t('harness.outOfScopeHint')}>
-            <Button disabled>{t('harness.testConnection')}</Button>
-          </Tooltip>
-          <Tooltip title={t('harness.outOfScopeHint')}>
-            <Button disabled>{t('harness.resyncTables')}</Button>
-          </Tooltip>
-          <Tooltip title={t('harness.outOfScopeHint')}>
-            <Button disabled>{t('harness.manageSource')}</Button>
-          </Tooltip>
-        </Space>
+        <KVRow label={t('harness.profile')} value={purpose.profile} />
+        {!purpose.available && purpose.reason && <KVRow label={t('harness.reason')} value={purpose.reason} />}
       </Panel>
 
-      <Panel title={t('harness.componentsTitle')}>
+      <Panel title={t('harness.componentsTitle')} note={t('harness.componentsNote')}>
         <ComponentsTable components={components} />
       </Panel>
 
-      <Panel title={t('harness.capabilityResolutionTitle')}>
-        <CapabilityResolutionTable components={components} />
-      </Panel>
-
-      <Panel title={t('harness.guardrailsTitle')}>
-        <GuardrailList components={components} />
+      <Panel title={t('harness.technicalDiagnosticsTitle')} note={t('harness.technicalDiagnosticsNote')}>
+        <Collapse
+          destroyOnHidden
+          items={[
+            {
+              key: 'runtime',
+              label: t('harness.runtimeDiagnosticsTitle'),
+              children: <>
+                <KVRow label={t('harness.authenticationBackend')} value={runtime.label} />
+                {runtime.dispatcher !== undefined && (
+                  <KVRow label={t('harness.dispatcherImplementation')} value={DISPATCHER_LABELS[runtime.dispatcher]} />
+                )}
+                <DataTable<TierModelBinding>
+                  rowKey="tier"
+                  dataSource={runtime.tierModels}
+                  columns={[
+                    { title: t('harness.tier'), dataIndex: 'tier', key: 'tier' },
+                    { title: t('harness.model'), dataIndex: 'model', key: 'model' },
+                  ]}
+                />
+              </>,
+            },
+            {
+              key: 'profile',
+              label: t('harness.profileDiagnosticsTitle'),
+              children: <>
+                <KVRow label={t('harness.source')} value={`warble · IR v${profile.irVersion}`} />
+                <KVRow label={t('harness.boundContext')} value={profile.boundContext} />
+                <KVRow
+                  label={t('harness.verifyGate')}
+                  value={
+                    <Tag
+                      color={profile.verifyGate ? brand.verified : brand.refused}
+                      icon={profile.verifyGate ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+                      bordered
+                    >
+                      {profile.verifyGate ? t('harness.verifyGateOn') : t('harness.verifyGateOff')}
+                    </Tag>
+                  }
+                />
+                <KVRow label={t('harness.bundle')} value={`${profile.bundleId} · v${profile.bundleVersion} · ${profile.bundleHash}`} />
+              </>,
+            },
+            {
+              key: 'connection',
+              label: t('harness.connectionTitle'),
+              children: <div className="harness-diagnostic-grid">
+                <div>
+                  <KVRow label={t('harness.connectionType')} value={connection.type} />
+                  <KVRow label={t('harness.connectionLocation')} value={connection.location} />
+                  <KVRow label={t('harness.connectionVia')} value={connection.via} />
+                </div>
+                <div>
+                  <KVRow label={t('harness.health')} value={<ConnectionHealthTag health={connection.health} />} />
+                  <KVRow label={t('harness.tablesSynced')} value={connection.tablesSynced} />
+                  <KVRow label={t('harness.lastSync')} value={connection.lastSync} />
+                </div>
+              </div>,
+            },
+            { key: 'agent-profiles', label: t('harness.agentProfilesTitle'), children: <AgentProfilesTable profiles={agentProfiles} /> },
+            { key: 'capabilities', label: t('harness.capabilityResolutionTitle'), children: <CapabilityResolutionTable components={components} /> },
+            { key: 'guardrails', label: t('harness.guardrailsTitle'), children: <GuardrailList components={components} /> },
+            {
+              key: 'native-session-binding',
+              label: t('harness.nativeBindingDiagnosticsTitle'),
+              children: <>
+                <KVRow label={t('harness.bindingGeneration')} value={nativeSessions.binding.generation} />
+              </>,
+            },
+          ]}
+        />
       </Panel>
     </Space>
   );

@@ -41,8 +41,13 @@ export type {
   WrenSemanticIntrospectResult,
 } from "./native.js";
 
-export { createSetupExecutionTool, setupExecutionInputSchema, SETUP_EXECUTION_TOOL_NAME } from "./setup-native.js";
-export type { SetupExecutionInput, SetupExecutionToolOptions } from "./setup-native.js";
+export {
+  createSetupExecutionTool,
+  executeSetupExecution,
+  setupExecutionInputSchema,
+  SETUP_EXECUTION_TOOL_NAME,
+} from "./setup-native.js";
+export type { SetupExecutionInput, SetupExecutionResult, SetupExecutionToolOptions } from "./setup-native.js";
 
 export { connectMcpServer } from "./mcp.js";
 export type { McpServerConfig, McpServerConfigMap } from "./mcp.js";

@@ -20,6 +20,15 @@ import {
   listArtifacts,
   listEvalRuns,
   listSessions,
+  listNativeSessions,
+  getNativeSessionReadiness,
+  createNativeSession,
+  BffRequestError,
+  NATIVE_SESSION_LAUNCH_ACTION_STALE_CODE,
+  getNativeSetupRecovery,
+  postNativeSetupRecoveryAction,
+  stopNativeSession,
+  nativeSessionWebSocketUrl,
   postArtifactPublish,
   postSetupAdopt,
   postSetupCompileBind,
@@ -118,6 +127,54 @@ describe('bff/client', () => {
 
   it('turnStreamUrl encodes the turn id', () => {
     expect(turnStreamUrl('s1', 't/1')).toBe('http://bff.test/api/sessions/s1/stream?turn=t%2F1');
+  });
+
+  it('uses the separate native-session namespace for list, creation, recovery actions, stop and WebSocket attach', async () => {
+    const row = { id: 'native-1', purpose: 'analysis', vendor: 'codex', status: 'running' };
+    fetchMock.mockResolvedValueOnce(jsonResponse({ sessions: [row] }));
+    expect(await listNativeSessions()).toEqual({ sessions: [row] });
+    expect(fetchMock).toHaveBeenLastCalledWith('http://bff.test/api/native-sessions', expect.objectContaining({}));
+
+    const readiness = { setup: { scopeKind: 'bootstrap', available: true, vendors: { claude: { available: true }, codex: { available: true } } } };
+    fetchMock.mockResolvedValueOnce(jsonResponse(readiness));
+    expect(await getNativeSessionReadiness()).toEqual(readiness);
+    expect(fetchMock).toHaveBeenLastCalledWith('http://bff.test/api/native-sessions/readiness', expect.objectContaining({}));
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ session: row, capability: 'capability' }));
+    await createNativeSession('analysis');
+    expect(fetchMock).toHaveBeenLastCalledWith('http://bff.test/api/native-sessions', expect.objectContaining({ method: 'POST', body: JSON.stringify({ purpose: 'analysis', intent: 'open_existing' }) }));
+
+    for (const vendor of ['claude', 'codex'] as const) {
+      const controller = new AbortController();
+      fetchMock.mockResolvedValueOnce(jsonResponse({ session: row, capability: `${vendor}-capability` }));
+      await createNativeSession('analysis', vendor, controller.signal);
+      expect(fetchMock).toHaveBeenLastCalledWith('http://bff.test/api/native-sessions', expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ purpose: 'analysis', intent: 'open_existing' }),
+        signal: controller.signal,
+      }));
+    }
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ session: row, capability: 'separate-capability' }));
+    await createNativeSession('analysis', { intent: 'start_separate', idempotencyKey: '00000000-0000-4000-8000-000000000001' });
+    expect(fetchMock).toHaveBeenLastCalledWith('http://bff.test/api/native-sessions', expect.objectContaining({ method: 'POST', body: JSON.stringify({ purpose: 'analysis', intent: 'start_separate', idempotencyKey: '00000000-0000-4000-8000-000000000001' }) }));
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ session: row, capability: 'opened-capability' }));
+    await createNativeSession('analysis', { intent: 'open_existing', sessionId: 'native-session-00000000-0000-4000-8000-000000000001' });
+    expect(fetchMock).toHaveBeenLastCalledWith('http://bff.test/api/native-sessions', expect.objectContaining({ method: 'POST', body: JSON.stringify({ purpose: 'analysis', intent: 'open_existing', sessionId: 'native-session-00000000-0000-4000-8000-000000000001' }) }));
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ session: row, recovery: { version: 2 } }));
+    await getNativeSetupRecovery('native/1');
+    expect(fetchMock).toHaveBeenLastCalledWith('http://bff.test/api/native-sessions/native%2F1/recovery', expect.objectContaining({}));
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ session: row, capability: 'fresh', recoveryCapability: 'recovery-fresh' }));
+    await postNativeSetupRecoveryAction('native/1', 'recovery-capability', 2, 'retry');
+    expect(fetchMock).toHaveBeenLastCalledWith('http://bff.test/api/native-sessions/native%2F1/recovery-action', expect.objectContaining({ method: 'POST', body: JSON.stringify({ capability: 'recovery-capability', expectedVersion: 2, action: 'retry' }) }));
+
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 204, statusText: 'No Content', json: () => Promise.resolve(undefined) } as Response);
+    await expect(stopNativeSession('native/1', 'capability')).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenLastCalledWith('http://bff.test/api/native-sessions/native%2F1/stop', expect.objectContaining({ method: 'POST', body: JSON.stringify({ capability: 'capability' }) }));
+    expect(nativeSessionWebSocketUrl('native/1', 'cap ability')).toBe('ws://bff.test/api/native-sessions/native%2F1/attach?cap=cap%20ability');
   });
 
   it('getContextOverview GETs /api/context/overview and maps projectPath through to ContextOverviewData', async () => {
@@ -364,6 +421,29 @@ describe('bff/client', () => {
     });
   });
 
+  it('maps native-session provenance to a Sessions source link without treating it as Share state', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        id: 'native-a1',
+        sessionId: 'native-session-1',
+        nativeSessionId: 'native-session-1',
+        name: 'Verified dashboard',
+        artifactKind: 'dashboard',
+        location: 'native/native-a1.json',
+        verified: true,
+        createdAt: '2026-08-10T12:00:00Z',
+      }),
+    );
+    fetchMock.mockResolvedValueOnce(jsonResponse({ form: 'envelope', envelope: { blocks: [], verified: true } }));
+
+    const artifact = await getArtifact('native-a1');
+    expect(artifact).toMatchObject({
+      nativeSessionId: 'native-session-1',
+      source: { label: 'Session', href: '/sessions/native-session-1' },
+    });
+    expect(artifact).not.toHaveProperty('publish');
+  });
+
   it('getArtifact also fetches /api/artifacts/:key/content and merges an envelope into a chart/dashboard artifact', async () => {
     const envelope = { blocks: [{ type: 'kpi_card', label: 'Revenue', value: 42000 }] };
     fetchMock.mockResolvedValueOnce(
@@ -518,6 +598,16 @@ describe('bff/client', () => {
     await expect(getSession('missing')).rejects.toThrow('session not found');
   });
 
+  it('keeps a typed, redacted native launch stale fence distinct from ambiguous transport failures', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(
+      { error: 'native session launch failed', code: NATIVE_SESSION_LAUNCH_ACTION_STALE_CODE },
+      { ok: false, status: 409, statusText: 'Conflict' },
+    ));
+
+    await expect(createNativeSession('analysis', { intent: 'start_separate', idempotencyKey: '00000000-0000-4000-8000-000000000099' }))
+      .rejects.toMatchObject({ name: 'BffRequestError', message: 'native session launch failed', status: 409, code: NATIVE_SESSION_LAUNCH_ACTION_STALE_CODE } satisfies Partial<BffRequestError>);
+  });
+
   it('falls back to a status-based message when the error body cannot be parsed', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: false,
@@ -534,6 +624,7 @@ describe('bff/client', () => {
     // compiled profile + its declared components — no orchestrator/sub-agent
     // split on the wire (that's a frontend-only profile-level concept).
     const dto = {
+      purpose: { purpose: 'analysis', profile: 'genbi-default', scopeKind: 'bound_project', target: 'claude-code:interactive', targetLabel: 'Claude CLI', available: true },
       profile: {
         id: 'genbi-default',
         name: 'Genbi Default',
@@ -541,7 +632,7 @@ describe('bff/client', () => {
         verifyGate: true,
         bundleId: 'genbi-default@vercel:headless',
         bundleVersion: '0.1',
-        irVersion: '0.3',
+        irVersion: '0.4',
         dispatchTarget: 'vercel:headless',
         bundleHash: '9c31a02',
         status: 'Bound',
@@ -650,11 +741,12 @@ describe('bff/client', () => {
     };
     fetchMock.mockResolvedValueOnce(jsonResponse(dto));
 
-    const result = await getHarness();
+    const result = await getHarness('analysis');
 
-    expect(fetchMock).toHaveBeenCalledWith('http://bff.test/api/harness', expect.objectContaining({}));
+    expect(fetchMock).toHaveBeenCalledWith('http://bff.test/api/harness?purpose=analysis', expect.objectContaining({}));
 
     // Profile / runtime / connection pass through field-for-field.
+    expect(result.purpose).toEqual(dto.purpose);
     expect(result.profile).toEqual(dto.profile);
     expect(result.runtime).toEqual(dto.runtime);
     expect(result.connection).toEqual(dto.connection);

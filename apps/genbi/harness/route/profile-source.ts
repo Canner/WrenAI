@@ -50,3 +50,36 @@ export function resolveDefaultSetupIrPath(): string | undefined {
   }
   return undefined;
 }
+
+/**
+ * Resolves the committed genbi-enrich-context IR
+ * (`warble/genbi-enrich-context/ir.golden.json`) via the same sibling-repo
+ * walk as `resolveDefaultSetupIrPath`. This profile's `context_precondition`
+ * ("an existing pinned Wren project ... that parses and has a successful
+ * build proof") is a host runtime obligation, not something the compiled IR
+ * itself is validated against.
+ *
+ * This used to say the golden was "dispatched against whichever project is
+ * actually bound at runtime via --project". That was the bug: a golden is the
+ * profile compiled once against its own fixture binding, so dispatching it
+ * described warble's example project's schema to an agent working on someone
+ * else's. An enrichment draft now compiles against the bound project (see the
+ * runner's `profileSource`), and this path remains only as the prebuilt
+ * fallback for a caller that has no profile source. Does NOT hard-fail when no
+ * sibling is found — only an enrichment draft call needs this; a BFF
+ * instance that never starts an enrichment run should still boot fine
+ * without it. Callers should surface a clear error at the point of actually
+ * dispatching a draft turn if this returns `undefined`, not at boot.
+ */
+export function resolveDefaultEnrichIrPath(): string | undefined {
+  let dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const maxDepth = 10;
+  for (let i = 0; i < maxDepth; i += 1) {
+    const parent = path.dirname(dir);
+    const candidate = path.join(parent, "warble", "genbi-enrich-context", "ir.golden.json");
+    if (existsSync(candidate)) return candidate;
+    if (parent === dir) break; // reached filesystem root
+    dir = parent;
+  }
+  return undefined;
+}

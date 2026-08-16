@@ -1,4 +1,5 @@
-export { loadBundle, BundleValidationError } from "./bundle/loader.js";
+export { loadBundle, loadBundleWithProvenance, BundleValidationError } from "./bundle/loader.js";
+export type { BundleProvenance } from "./bundle/loader.js";
 export { bundleFormatVersion } from "./bundle/schema.js";
 export { assertCompat, BundleCompatError, HARNESS_SUPPORT } from "./bundle/version.js";
 export type { HarnessSupport } from "./bundle/version.js";
@@ -169,6 +170,7 @@ export type {
 
 export {
   compileProfile,
+  compileRawProfile,
   composeUserProfile,
   createFileSystemCompileCache,
   createInMemoryCompileCache,
@@ -176,6 +178,7 @@ export {
   hashDirectory,
   InvalidProfileShapeError,
   resolveWarbleBinary,
+  runWarble,
   rewriteContextBindingProject,
   WarbleBinaryNotFoundError,
   WarbleCommandFailedError,
@@ -187,12 +190,14 @@ export type {
   CompileMode,
   CompileProfileOptions,
   CompileProfileResult,
+  CompileRawProfileOptions,
 } from "./compile/index.js";
 
 export {
   AgentSdkCliNotFoundError,
   buildAgentSdkChatArgs,
   buildAgentSdkManifestArgs,
+  buildCodexAskArgs,
   buildHybridTierBinding,
   buildUniformTierBinding,
   DEFAULT_LOCAL_ENDPOINT,
@@ -203,12 +208,14 @@ export {
   resolveAgentSdkCli,
   resolveArtifactContent,
   resolveArtifactsDir,
+  resolveDefaultEnrichIrPath,
   resolveDefaultProfileSource,
   resolveDefaultSetupIrPath,
   route,
   runAgentSdkManifest,
   runModeADefault,
   runModeBDefault,
+  runCodexAskDefault,
 } from "./route/index.js";
 export type {
   AgentSdkChatCommand,
@@ -221,6 +228,9 @@ export type {
   DescribeBundleOptions,
   ModeAExecutor,
   ModeAOptions,
+  CodexAskExecutor,
+  CodexAskOptions,
+  CodexAskResult,
   ModeBExecutor,
   ModeBOptions,
   ModeBResult,
@@ -235,18 +245,52 @@ export {
   BUILD_CONTEXT_AGENT_ID,
   CONNECT_SOURCE_AGENT_ID,
   DEFAULT_SETUP_MAX_TURNS,
+  CodexSetupRunner,
+  contextLifecycleIdentityFingerprint,
   ModeASetupRunner,
   ModeBSetupRunner,
   parseSetupTerminal,
+  recordedContextLifecyclePrefix,
+  selectSetupRunnerForAuth,
 } from "./setup/runner.js";
 export type {
+  CodexSetupRunnerOptions,
   ModeASetupRunnerOptions,
   ModeBSetupRunnerOptions,
   SetupStepRunner,
+  SetupRunnerSet,
   SetupStepRunOptions,
   SetupStepRunResult,
   SetupTerminalContext,
   SetupTerminalResult,
   SetupTerminalStatus,
+  ContextLifecyclePrefix,
 } from "./setup/runner.js";
 export type { ComplianceResult, Deployment } from "./compliance/index.js";
+
+export {
+  NATIVE_PRODUCER_VERSION,
+  createNativeProducerCassette,
+  createRouteNativeProducer,
+  nativeProducerCassetteKey,
+  produceNoninteractiveNative,
+  replayNoninteractiveNative,
+} from "./native-producer/index.js";
+export type {
+  NativeProducerArtifactReference,
+  NativeProducerCassette,
+  NativeProducerDispatch,
+  NativeProducerDispatchInput,
+  NativeProducerDispatchResult,
+  NativeProducerErrorCode,
+  NativeProducerFailure,
+  NativeProducerHostFence,
+  NativeProducerLifecycle,
+  NativeProducerLifecycleState,
+  NativeProducerOptions,
+  NativeProducerRequest,
+  NativeProducerResponse,
+  NativeProducerScope,
+  NativeProducerSuccess,
+  NativeProducerVendor,
+} from "./native-producer/index.js";

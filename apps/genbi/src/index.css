@@ -12,6 +12,7 @@ body,
 
 body {
   font-family: var(--ant-font-family);
+  overflow: hidden;
 }
 
 /*

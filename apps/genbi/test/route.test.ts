@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ComplianceError, SUBSCRIPTION_TOS_WARNING } from "../harness/compliance/index.js";
 import { route } from "../harness/route/index.js";
-import type { ModeAExecutor, ModeAOptions, ModeBExecutor, ModeBOptions } from "../harness/route/index.js";
+import type { CodexAskExecutor, CodexAskOptions, ModeAExecutor, ModeAOptions, ModeBExecutor, ModeBOptions } from "../harness/route/index.js";
 import type { AuthChoice } from "../harness/auth/index.js";
 
 const PROFILE_SOURCE = "/fixture/profile";
@@ -111,7 +111,7 @@ describe("route (seam)", () => {
     };
 
     await route({
-      authChoice: { mode: "subscription", provider: "codex" },
+      authChoice: { mode: "subscription", provider: "claude" },
       profileSource: PROFILE_SOURCE,
       userProject: USER_PROJECT,
       question: QUESTION,
@@ -137,7 +137,7 @@ describe("route (seam)", () => {
     };
 
     await route({
-      authChoice: { mode: "subscription", provider: "codex" },
+      authChoice: { mode: "subscription", provider: "claude" },
       profileSource: PROFILE_SOURCE,
       userProject: USER_PROJECT,
       question: QUESTION,
@@ -155,7 +155,7 @@ describe("route (seam)", () => {
     };
 
     await route({
-      authChoice: { mode: "subscription", provider: "codex" },
+      authChoice: { mode: "subscription", provider: "claude" },
       profileSource: PROFILE_SOURCE,
       userProject: USER_PROJECT,
       question: QUESTION,
@@ -164,6 +164,50 @@ describe("route (seam)", () => {
     });
 
     expect(receivedUnset?.agentId).toBeUndefined();
+  });
+
+  it("routes Codex subscription Ask only to codex:local with its explicit runtime bindings", async () => {
+    let received: CodexAskOptions | undefined;
+    const codexAsk: CodexAskExecutor = async (options) => {
+      received = options;
+      return { finalText: "verified" };
+    };
+    const models = { orchestrator: "driver", cheap: "cheap", strong: "strong" };
+    const result = await route({
+      authChoice: { mode: "subscription", provider: "codex" },
+      profileSource: PROFILE_SOURCE,
+      userProject: USER_PROJECT,
+      question: QUESTION,
+      modeA: neverCalledModeA(),
+      modeB: neverCalledModeB(),
+      codexAsk,
+      codexModels: models,
+      codexHome: "/private/codex-home",
+      codexLocalBin: "/opt/warble-codex-local",
+      codexBin: "/opt/codex",
+      agentId: "generate_dashboard",
+    });
+    expect(result).toEqual({ backend: "codex-local", warnings: [SUBSCRIPTION_TOS_WARNING], finalText: "verified" });
+    expect(received).toMatchObject({
+      authChoice: { mode: "subscription", provider: "codex" },
+      codexModels: models,
+      codexHome: "/private/codex-home",
+      codexLocalBin: "/opt/warble-codex-local",
+      codexBin: "/opt/codex",
+      agentId: "generate_dashboard",
+    });
+  });
+
+  it("propagates a codex:local failure without invoking Claude or Mode A", async () => {
+    await expect(route({
+      authChoice: { mode: "subscription", provider: "codex" },
+      profileSource: PROFILE_SOURCE,
+      userProject: USER_PROJECT,
+      question: QUESTION,
+      modeA: neverCalledModeA(),
+      modeB: neverCalledModeB(),
+      codexAsk: async () => { throw new Error("codex child failed"); },
+    })).rejects.toThrow("codex child failed");
   });
 
   describe("compliance gate wiring", () => {

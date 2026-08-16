@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { PageContainer } from '@/ui';
 import { t } from '@/i18n/strings';
 import { isBffEnabled } from '@/bff/env';
@@ -22,11 +23,14 @@ import { SetupModeChoice } from './SetupModeChoice';
 export function SetupPage() {
   const messages = useSetupStore((s) => s.messages);
   const hydrate = useSetupStore((s) => s.hydrate);
+  const refreshCanonical = useSetupStore((s) => s.refreshCanonical);
   const setupMode = useSetupStore((s) => s.setupMode);
+  const location = useLocation();
 
   useEffect(() => {
-    hydrate();
-  }, [hydrate]);
+    if (location.state?.nativeSessionReturn === 'setup') refreshCanonical();
+    else hydrate();
+  }, [hydrate, location.state, refreshCanonical]);
 
   const showModeChoice = isBffEnabled() && !setupMode;
 

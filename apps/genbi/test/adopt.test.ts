@@ -14,6 +14,11 @@ vi.mock("node:child_process", async (importOriginal) => {
 
 const { verifyAdoptProject, runSetProfile, adoptWithChosenProfile } = await import("../server/adopt.js");
 
+// Test input, not a mirror of production: `verifyAdoptProject` takes the
+// supported set as a parameter, and the route now passes wren's own registry
+// (see server/source-catalog.ts). These are simply the keys these cases
+// exercise. The copy that mattered — a hardcoded allowlist in app.ts that had
+// drifted from both the picker and wren — is gone.
 const SUPPORTED = new Set(["duckdb", "postgres", "mysql", "bigquery", "snowflake", "clickhouse", "mssql", "trino"]);
 
 let projectDir: string;

@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useLocation } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import { renderWithProviders } from '@/test/utils';
-import { AppRoutes } from '@/app/App';
+import { AskPage } from '@/pages/AskPage';
+import { AskSidebar } from '../AskSidebar';
 
 // Force the dispatcher down the live branch regardless of `VITE_BFF_URL`.
 vi.mock('@/bff/env', () => ({
@@ -24,6 +25,7 @@ vi.mock('@/bff/client', () => ({
   listSessions: (...args: unknown[]) => listSessions(...args),
   postTurn: (...args: unknown[]) => postTurn(...args),
   turnStreamUrl: (...args: [string, string]) => turnStreamUrl(...args),
+  getRuntimeSettingsReadiness: () => Promise.resolve({ valid: true as const }),
 }));
 
 vi.mock('echarts', () => ({
@@ -39,10 +41,13 @@ function LocationProbe() {
   return <div data-testid="location-probe">{location.pathname}</div>;
 }
 
-function AppWithLocationProbe() {
+function SessionsAskWithLocationProbe() {
   return (
     <>
-      <AppRoutes />
+      <Routes>
+        <Route path="/sessions/ask" element={<><AskSidebar /><AskPage /></>} />
+        <Route path="/sessions/ask/:sessionId" element={<><AskSidebar /><AskPage /></>} />
+      </Routes>
       <LocationProbe />
     </>
   );
@@ -60,17 +65,16 @@ beforeEach(() => {
 });
 
 describe('AskSession (live mode) — draft to real-id transition', () => {
-  it('asking a question from /ask lazily creates the backend session, keeps the thread visible throughout, and replaces the route onto the real id', async () => {
+  it('asking a question from the Sessions-owned draft lazily creates the backend session, keeps the thread visible throughout, and replaces the route onto the real id', async () => {
     createSession.mockResolvedValueOnce({ id: 'real-9', title: 'x', createdAt: 'now', updatedAt: 'now' });
     postTurn.mockResolvedValueOnce({ turnId: 't1', clarify: { prompt: 'Which range?', chips: ['This month'] } });
-    // Not `...Once`: the sidebar's own mount effect calls `loadSessions()`
-    // once already, before the lazy-create's refresh calls it again.
+    // The compatibility sidebar's mount loads once, then lazy-create refreshes it.
     listSessions.mockResolvedValue([{ id: 'real-9', title: 'x', updatedAt: 'now' }]);
 
     const user = userEvent.setup();
-    renderWithProviders(<AppWithLocationProbe />, { route: '/ask' });
+    renderWithProviders(<SessionsAskWithLocationProbe />, { route: '/sessions/ask' });
 
-    expect(screen.getByTestId('location-probe').textContent).toBe('/ask');
+    expect(screen.getByTestId('location-probe').textContent).toBe('/sessions/ask');
 
     await user.type(screen.getByLabelText('Ask a question'), 'How much revenue this quarter');
     await user.click(screen.getByRole('button', { name: /send/i }));
@@ -86,7 +90,7 @@ describe('AskSession (live mode) — draft to real-id transition', () => {
     expect(await screen.findByText('How much revenue this quarter')).toBeInTheDocument();
 
     await vi.waitFor(() => {
-      expect(screen.getByTestId('location-probe').textContent).toBe('/ask/real-9');
+      expect(screen.getByTestId('location-probe').textContent).toBe('/sessions/ask/real-9');
     });
     expect(await screen.findByText('How much revenue this quarter')).toBeInTheDocument();
 
@@ -96,7 +100,7 @@ describe('AskSession (live mode) — draft to real-id transition', () => {
     });
 
     expect(createSession).toHaveBeenCalledTimes(1);
-    // Once from the sidebar's mount, once from the lazy-create's refresh.
+    // Once from the compatibility sidebar's mount, once from the lazy-create refresh.
     expect(listSessions).toHaveBeenCalledTimes(2);
   });
 
@@ -104,36 +108,15 @@ describe('AskSession (live mode) — draft to real-id transition', () => {
     createSession.mockResolvedValueOnce({ id: 'real-9', title: 'x', createdAt: 'now', updatedAt: 'now' });
     postTurn.mockResolvedValueOnce({ turnId: 't1', clarify: { prompt: 'Which range?', chips: ['This month'] } });
     listSessions.mockResolvedValue([{ id: 'real-9', title: 'x', updatedAt: 'now' }]);
-
     const user = userEvent.setup();
-    renderWithProviders(<AppWithLocationProbe />, { route: '/ask' });
-
+    renderWithProviders(<SessionsAskWithLocationProbe />, { route: '/sessions/ask' });
     await user.type(screen.getByLabelText('Ask a question'), 'How much revenue this quarter');
     await user.click(screen.getByRole('button', { name: /send/i }));
-
-    // First conversation: the draft converts and the route replaces onto it.
-    await vi.waitFor(() => {
-      expect(screen.getByTestId('location-probe').textContent).toBe('/ask/real-9');
-    });
-    await vi.waitFor(() => {
-      expect(screen.getByText('Which range?')).toBeInTheDocument();
-    });
-
-    // Click "New session" again, exactly as a user starting a second,
-    // unrelated conversation would.
+    await vi.waitFor(() => { expect(screen.getByTestId('location-probe').textContent).toBe('/sessions/ask/real-9'); });
+    await vi.waitFor(() => { expect(screen.getByText('Which range?')).toBeInTheDocument(); });
     await user.click(screen.getByRole('button', { name: /new session/i }));
-
-    // Must land on — and *stay* on — a fresh empty draft. Without the
-    // `clearDraft()` call in `AskSession`'s redirect effect, the stale
-    // `backendSessionId['draft']` left over from the first conversion makes
-    // this bounce straight back to `/ask/real-9`.
-    // Wrapped in `waitFor` (not a bare synchronous `expect` block) for the
-    // same reason as the click above: right after `user.click`, under
-    // full-parallel-suite CPU contention the resulting re-render isn't
-    // guaranteed to have committed yet — retry against the real DOM instead
-    // of assuming a same-tick commit.
     await vi.waitFor(() => {
-      expect(screen.getByTestId('location-probe').textContent).toBe('/ask');
+      expect(screen.getByTestId('location-probe').textContent).toBe('/sessions/ask');
       expect(screen.getByText('Ask anything about your data')).toBeInTheDocument();
       expect(screen.queryByText('How much revenue this quarter')).not.toBeInTheDocument();
       expect(screen.queryByText('Which range?')).not.toBeInTheDocument();

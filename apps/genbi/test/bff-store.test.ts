@@ -49,6 +49,45 @@ describe("Store", () => {
     store.close();
   });
 
+  it("uses rowid to deterministically select the latest turn when timestamps tie", () => {
+    const store = new Store(":memory:", { now: () => new Date("2026-01-01T00:00:00.000Z") });
+    const session = store.createSession("same timestamp");
+    store.createTurn({ id: "turn-first", sessionId: session.id, question: "first", composedInput: "first" });
+    store.createTurn({ id: "turn-second", sessionId: session.id, question: "second", composedInput: "second" });
+    expect(store.getLatestTurn(session.id)?.id).toBe("turn-second");
+    store.close();
+  });
+
+  it("reconciles an orphaned setup turn to a browser-safe recovery error when a persistent store reopens", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "wren-harness-orphaned-setup-store-"));
+    const dbPath = path.join(dir, "bff.sqlite");
+    try {
+      const beforeRestart = new Store(dbPath);
+      const session = beforeRestart.createSession("Setup: acme");
+      beforeRestart.updateSessionStatus(session.id, "streaming", null);
+      beforeRestart.createTurn({
+        id: "orphaned-setup",
+        sessionId: session.id,
+        question: "connect resume",
+        composedInput: "connect resume",
+        setupStepKey: "connect_resume",
+        traceJson: '[{"detail":"bare sdk-orphaned-anchor"}]',
+      });
+      beforeRestart.setTurnResumeAnchor("orphaned-setup", { sessionId: "sdk-orphaned-anchor", provider: "claude", runner: "subscription:claude" });
+      beforeRestart.close();
+
+      const afterRestart = new Store(dbPath);
+      const recovered = afterRestart.getTurn("orphaned-setup")!;
+      expect(recovered).toMatchObject({ resultKind: "error", backend: null, answerSummary: null, traceJson: "[]" });
+      expect(recovered.errorMessage).toMatch(/interrupted by a BFF restart; Continue & repair/i);
+      expect(`${recovered.errorMessage}${recovered.traceJson}`).not.toContain("sdk-orphaned-anchor");
+      expect(afterRestart.getSession(session.id)?.status).toBe("active");
+      afterRestart.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("round-trips artifacts and publications", () => {
     const store = new Store(":memory:");
     const session = store.createSession("dash");
@@ -125,6 +164,15 @@ describe("Store", () => {
     expect(full?.componentScores).toHaveLength(2);
 
     expect(store.getRuntimeSettings().authMode).toBe("subscription");
+    expect(store.getRuntimeSettings()).toMatchObject({
+      subscriptionProvider: "claude",
+      tierModels: [
+        { tier: "cheap", model: "" },
+        { tier: "strong", model: "" },
+      ],
+    });
+    expect(store.getRuntimeSettings().subscriptionDriverModel).toBeUndefined();
+    expect(store.getRuntimeSettings().apiKeyModel).toBeUndefined();
     expect(store.getSetupSteps()).toHaveLength(5);
     expect(store.getVerifyGatePassed()).toBe(false);
 
@@ -154,6 +202,33 @@ describe("Store", () => {
     expect(again.getVerifyGatePassed()).toBe(false); // separate :memory: instance, unaffected by the first
     again.close();
 
+    store.close();
+  });
+
+  it("resetSetup restores blank model selections while retaining the seeded tier identities", () => {
+    const store = new Store(":memory:");
+    store.setRuntimeSettings({
+      ...store.getRuntimeSettings(),
+      subscriptionDriverModel: "claude-opus",
+      apiKeyModel: "claude-sonnet",
+      tierModels: [
+        { tier: "cheap", model: "claude-haiku" },
+        { tier: "strong", model: "claude-sonnet" },
+      ],
+    });
+
+    store.resetSetup();
+
+    expect(store.getRuntimeSettings()).toMatchObject({
+      subscriptionProvider: "claude",
+      tierModels: [
+        { tier: "cheap", model: "" },
+        { tier: "strong", model: "" },
+      ],
+    });
+    expect(store.getRuntimeSettings().subscriptionDriverModel).toBeUndefined();
+    expect(store.getRuntimeSettings().apiKeyModel).toBeUndefined();
+    expect(store.hasExplicitRuntimeSettings()).toBe(false);
     store.close();
   });
 

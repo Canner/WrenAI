@@ -1,0 +1,6 @@
+{
+  "capturedAt": "2026-08-10T03:38:00.000Z",
+  "exitCode": 0,
+  "signal": null,
+  "note": "Sanitized compact extraction of the real answer event that exposed string confidence handling."
+}

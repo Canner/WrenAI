@@ -78,6 +78,12 @@ export interface ToolResultEvent extends AgentEventBase {
   readonly callId: string;
   readonly tool: string;
   readonly status: "success" | "error";
+  /**
+   * Optional late-bound input for back-ends that only receive a safe tool
+   * payload when the call completes. LiveWorkLog merges this onto the
+   * matching tool.call entry before persisting the result.
+   */
+  readonly input?: unknown;
   readonly summary?: string;
   readonly error?: string;
 }

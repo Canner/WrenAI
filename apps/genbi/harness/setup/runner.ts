@@ -32,16 +32,19 @@
  *    and a caller picks between them purely on `authChoice.mode` without
  *    otherwise caring which one served a given turn.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AuthChoice } from "../auth/index.js";
-import { loadBundle } from "../bundle/loader.js";
+import { loadBundleWithProvenance } from "../bundle/loader.js";
 import { runWarble } from "../compile/pipeline.js";
 import { resolveWarbleBinary } from "../compile/resolve-binary.js";
-import { createAgentEventEmitter, type AgentEvent } from "../events/index.js";
+import { createAgentEventEmitter, type AgentEvent, type AgentEventInput } from "../events/index.js";
 import { createLocalExecutionEnv, type ExecutionPolicy } from "../exec/index.js";
 import { executeAgent, StepBudgetExhaustedError } from "../loop/index.js";
 
@@ -53,11 +56,15 @@ import { executeAgent, StepBudgetExhaustedError } from "../loop/index.js";
 // here without also reaching into `harness/loop/index.js`.
 export { StepBudgetExhaustedError };
 import { createDefaultProviderRegistry } from "../providers/index.js";
+import type { AdapterSpec } from "../providers/index.js";
 import { deriveAdapterSpec } from "../route/adapter-spec.js";
+import { resolveCodexLocalCli } from "../route/codex-local-cli.js";
+import type { ResolvedCli } from "../route/agent-sdk-cli.js";
 import { runModeBDefault } from "../route/mode-b.js";
 import { buildUniformTierBinding } from "../route/tier-binding.js";
 import { createNativeToolRegistry, createSetupExecutionTool, SETUP_EXECUTION_TOOL_NAME } from "../tools/index.js";
 import { withResolvedTools } from "../tools/wiring.js";
+import { CodexSetupEventMapper } from "./codex-events.js";
 
 /** The warble component the setup wizard's connect step dispatches. */
 export const CONNECT_SOURCE_AGENT_ID = "connect_source";
@@ -78,8 +85,19 @@ export const DEFAULT_SETUP_MAX_TURNS = 120;
 export interface SetupStepRunOptions {
   /** The composed single-line prompt (see `composeSetupPrompt`). */
   readonly prompt: string;
-  /** The workspace root the agent scaffolds `<name>/` into — Mode B's `userProject`/cwd. */
+  /** The workspace root the initial connect turn scaffolds `<name>/` into. */
   readonly workspaceRoot: string;
+  /**
+   * The persisted, validated single-segment project name. Required by the
+   * project-bound `connect_resume` and `context` turns; optional only so
+   * pre-existing initial-connect callers retain their workspace-root cwd.
+   */
+  readonly projectName?: string;
+  /**
+   * Step semantics for the dispatch cwd. Initial `connect` is intentionally
+   * workspace-bound so it can scaffold; later turns are project-bound.
+   */
+  readonly stepKey?: "connect" | "connect_resume" | "context";
   readonly authChoice: AuthChoice;
   /**
    * Which warble component to dispatch — `CONNECT_SOURCE_AGENT_ID` for the
@@ -136,6 +154,18 @@ export interface SetupStepRunner {
   effectiveMaxTurns?(agentId: string): number | undefined;
 }
 
+export interface SetupRunnerSet {
+  readonly claudeSubscription: SetupStepRunner;
+  readonly codexSubscription: SetupStepRunner;
+  readonly nonSubscription: SetupStepRunner;
+}
+
+/** Single provider-aware selection seam shared by boot wiring and tests. */
+export function selectSetupRunnerForAuth(authChoice: AuthChoice, runners: SetupRunnerSet): SetupStepRunner {
+  if (authChoice.mode !== "subscription") return runners.nonSubscription;
+  return authChoice.provider === "codex" ? runners.codexSubscription : runners.claudeSubscription;
+}
+
 /**
  * Resolves the `--max-turns` budget for dispatching `agentId`, given an
  * optional explicit override (`ModeBSetupRunnerOptions.maxTurns`, wired from
@@ -147,6 +177,40 @@ function resolveEffectiveMaxTurns(configuredMaxTurns: number | undefined, agentI
   return configuredMaxTurns ?? (agentId === BUILD_CONTEXT_AGENT_ID ? DEFAULT_SETUP_MAX_TURNS : undefined);
 }
 
+const SAFE_PROJECT_NAME = /^[a-zA-Z0-9_-]+$/;
+
+/**
+ * Subscription dispatchers have one cwd per turn, while their guarded setup
+ * tool accepts a separately bounded working root. Keep the initial scaffold
+ * at the workspace root. Immediately before a project-bound dispatch,
+ * canonicalize the existing workspace/project dirs and require the latter to
+ * be a strict descendant of the former. This is a pre-dispatch guard, not a
+ * claim that filesystem paths cannot change after the child process starts.
+ */
+function resolveModeBUserProject(runOptions: SetupStepRunOptions, agentId: string): string {
+  const stepKey = runOptions.stepKey ?? (agentId === BUILD_CONTEXT_AGENT_ID ? "context" : "connect");
+  if (stepKey === "connect") return runOptions.workspaceRoot;
+
+  const projectName = runOptions.projectName;
+  if (projectName === undefined || !SAFE_PROJECT_NAME.test(projectName)) {
+    throw new Error(`Mode B ${stepKey} requires a validated single-segment projectName`);
+  }
+
+  const canonicalDirectory = (directory: string, label: string): string => {
+    if (!existsSync(directory)) throw new Error(`Mode B ${stepKey} ${label} must exist before dispatch`);
+    if (!statSync(directory).isDirectory()) throw new Error(`Mode B ${stepKey} ${label} must be a directory`);
+    return realpathSync(directory);
+  };
+  const canonicalWorkspace = canonicalDirectory(runOptions.workspaceRoot, "workspace root");
+  const projectDir = path.resolve(runOptions.workspaceRoot, projectName);
+  const canonicalProject = canonicalDirectory(projectDir, "project directory");
+  const relative = path.relative(canonicalWorkspace, canonicalProject);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`Mode B ${stepKey} project directory must be a strict descendant of the setup workspace root`);
+  }
+  return canonicalProject;
+}
+
 export interface ModeBSetupRunnerOptions {
   /** Path to the committed genbi-setup IR (e.g. `warble/genbi-setup/ir.golden.json`) — see `resolveSetupIrPath`. */
   readonly irPath: string;
@@ -154,6 +218,8 @@ export interface ModeBSetupRunnerOptions {
   readonly agentSdkBin?: string;
   readonly outDir?: string;
   readonly workDir?: string;
+  /** Live dispatcher config generated from the persisted runtime tier rows. */
+  readonly getModelsConfig?: () => string | undefined;
   /** Agent-loop budget forwarded as `--max-turns`; defaults to `DEFAULT_SETUP_MAX_TURNS` when unset. */
   readonly maxTurns?: number;
 }
@@ -194,13 +260,15 @@ export class ModeBSetupRunner implements SetupStepRunner {
       );
     }
 
+    const modelsConfig = this.options.getModelsConfig?.();
+    const userProject = resolveModeBUserProject(runOptions, agentId);
     const result = await runModeBDefault({
       authChoice,
       // Unused: `irPath` below makes `runModeBDefault` skip compileProfile
       // entirely (see its short-circuit), so this value is never read. It is
       // set to the same setup IR for clarity, not because it is consulted.
       profileSource: this.options.irPath,
-      userProject: runOptions.workspaceRoot,
+      userProject,
       question: runOptions.prompt,
       agentId,
       irPath: this.options.irPath,
@@ -208,6 +276,7 @@ export class ModeBSetupRunner implements SetupStepRunner {
       ...(this.options.agentSdkBin !== undefined ? { agentSdkBin: this.options.agentSdkBin } : {}),
       ...(this.options.outDir !== undefined ? { outDir: this.options.outDir } : {}),
       ...(this.options.workDir !== undefined ? { workDir: this.options.workDir } : {}),
+      ...(modelsConfig !== undefined ? { modelsConfig } : {}),
       ...(maxTurns !== undefined ? { maxTurns } : {}),
       ...(runOptions.onEvent !== undefined ? { onEvent: runOptions.onEvent } : {}),
       ...(runOptions.resumeSessionId !== undefined ? { resumeSessionId: runOptions.resumeSessionId } : {}),
@@ -215,6 +284,195 @@ export class ModeBSetupRunner implements SetupStepRunner {
 
     return { finalText: result.finalText, ...(result.sessionId !== undefined ? { sessionId: result.sessionId } : {}) };
   }
+}
+
+const CODEX_BILLING_ENV_KEYS = new Set([
+  "OPENAI_API_KEY",
+  "CODEX_API_KEY",
+  "AZURE_OPENAI_API_KEY",
+  "OPENAI_ORGANIZATION",
+  "OPENAI_ORG_ID",
+  "OPENAI_PROJECT",
+  "OPENAI_PROJECT_ID",
+]);
+
+export interface CodexSetupRunnerOptions {
+  readonly irPath: string;
+  readonly getStrongModel: () => string;
+  readonly codexLocalBin?: string;
+  /** Test/dev override for a command with required prefix args. */
+  readonly codexLocalCli?: ResolvedCli;
+  readonly codexBin?: string;
+  readonly mcpServer?: ResolvedCli;
+  readonly timeoutMs?: number;
+}
+
+/**
+ * Setup-only Codex subscription runner. It invokes the target's `dispatch`
+ * command directly against the committed setup IR and exposes exactly one
+ * guarded MCP tool. Normal Ask routing never calls this class.
+ */
+export class CodexSetupRunner implements SetupStepRunner {
+  constructor(private readonly options: CodexSetupRunnerOptions) {}
+
+  async run(runOptions: SetupStepRunOptions): Promise<SetupStepRunResult> {
+    if (runOptions.authChoice.mode !== "subscription" || runOptions.authChoice.provider !== "codex") {
+      throw new Error("Codex setup runner requires a Codex subscription auth choice");
+    }
+    const agentId = runOptions.agentId ?? CONNECT_SOURCE_AGENT_ID;
+    if (agentId !== CONNECT_SOURCE_AGENT_ID && agentId !== BUILD_CONTEXT_AGENT_ID) {
+      throw new Error(`Codex setup only supports "${CONNECT_SOURCE_AGENT_ID}" and "${BUILD_CONTEXT_AGENT_ID}"`);
+    }
+    const model = this.options.getStrongModel().trim();
+    if (!model) throw new Error("Codex setup requires a configured strong-tier model");
+
+    const cli = this.options.codexLocalCli ?? (await resolveCodexLocalCli(this.options.codexLocalBin));
+    const traceDir = this.options.mcpServer ? undefined : await mkdtemp(path.join(os.tmpdir(), "wren-codex-setup-trace-"));
+    const tracePath = traceDir ? path.join(traceDir, "setup-execution.jsonl") : undefined;
+    if (tracePath) await writeFile(tracePath, "", { encoding: "utf8", mode: 0o600 });
+    const mcp = this.options.mcpServer ?? defaultCodexSetupMcpInvocation(tracePath!);
+    const timeoutMs = this.options.timeoutMs ?? 10 * 60 * 1000;
+    const turnRoot = resolveModeBUserProject(runOptions, agentId);
+    const args = [
+      ...cli.prefixArgs,
+      "dispatch",
+      this.options.irPath,
+      runOptions.prompt,
+      "--component",
+      agentId,
+      "--project",
+      turnRoot,
+      "--model",
+      model,
+      "--server",
+      "setup",
+      "--server-command",
+      mcp.command,
+      ...mcp.prefixArgs.flatMap((arg) => (arg.startsWith("-") ? [`--server-arg=${arg}`] : ["--server-arg", arg])),
+      "--server-arg=--workspace-root",
+      "--server-arg",
+      turnRoot,
+      "--source-tool",
+      SETUP_EXECUTION_TOOL_NAME,
+      "--context-tool",
+      SETUP_EXECUTION_TOOL_NAME,
+      "--timeout",
+      String(timeoutMs),
+      ...(this.options.codexBin ? ["--codex-bin", this.options.codexBin] : []),
+      "--stream-json",
+    ];
+
+    const emitter = createAgentEventEmitter(runOptions.onEvent);
+    emitter.emit({ kind: "run.start", mode: "B", agentId });
+    const mapper = new CodexSetupEventMapper(tracePath);
+    try {
+      const finalText = await spawnCodexSetup(cli.command, args, mapper, emitter.emit, timeoutMs + 5_000);
+      emitter.emit({ kind: "run.finish", status: "answer" });
+      return { finalText };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emitter.emit({ kind: "error", message });
+      emitter.emit({ kind: "run.finish", status: "error" });
+      throw error;
+    } finally {
+      if (traceDir) await rm(traceDir, { recursive: true, force: true });
+    }
+  }
+}
+
+function defaultCodexSetupMcpInvocation(tracePath: string): ResolvedCli {
+  return {
+    command: process.execPath,
+    prefixArgs: [fileURLToPath(new URL("../../server/codex-setup-mcp.js", import.meta.url)), "--trace-path", tracePath],
+  };
+}
+
+function sanitizedCodexSetupEnvironment(): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key, value]) => value !== undefined && !CODEX_BILLING_ENV_KEYS.has(key.toUpperCase()),
+    ),
+  );
+}
+
+function spawnCodexSetup(
+  command: string,
+  args: readonly string[],
+  mapper: CodexSetupEventMapper,
+  emit: (event: AgentEventInput) => void,
+  timeoutMs: number,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, [...args], {
+      env: sanitizedCodexSetupEnvironment(),
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform !== "win32",
+    });
+    let stderr = "";
+    let settled = false;
+    let timedOut = false;
+    let killTimer: ReturnType<typeof setTimeout> | undefined;
+    const terminate = (signal: NodeJS.Signals) => {
+      if (child.pid !== undefined && process.platform !== "win32") {
+        try {
+          process.kill(-child.pid, signal);
+          return;
+        } catch {
+          // Fall through to the direct child.
+        }
+      }
+      child.kill(signal);
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      terminate("SIGTERM");
+      killTimer = setTimeout(() => terminate("SIGKILL"), 1_000);
+    }, timeoutMs);
+    const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
+    lines.on("line", (line) => {
+      if (settled || !line.trim()) return;
+      try {
+        const event = mapper.nextLine(line);
+        if (event) emit(event);
+      } catch (error) {
+        settled = true;
+        clearTimeout(timer);
+        terminate("SIGTERM");
+        killTimer = setTimeout(() => terminate("SIGKILL"), 1_000);
+        reject(error);
+      }
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      if (stderr.length < 8_192) stderr += chunk.toString("utf8");
+    });
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (killTimer) clearTimeout(killTimer);
+      reject(new Error(`warble-codex-local failed to start: ${error.message}`));
+    });
+    child.on("close", (code, signal) => {
+      clearTimeout(timer);
+      lines.close();
+      // Do not cancel an already-scheduled process-group SIGKILL here. The
+      // direct dispatcher can exit on SIGTERM while one of its descendants
+      // ignores the signal; the escalation still has to reap that descendant.
+      if (settled) return;
+      settled = true;
+      if (timedOut) {
+        reject(new Error(`warble-codex-local timed out after ${timeoutMs}ms`));
+      } else if (code !== 0) {
+        reject(new Error(`warble-codex-local exited with ${code ?? signal ?? "unknown"}: ${stderr.trim()}`));
+      } else {
+        try {
+          resolve(mapper.result());
+        } catch (error) {
+          reject(error);
+        }
+      }
+    });
+  });
 }
 
 /**
@@ -241,6 +499,8 @@ export interface ModeASetupRunnerOptions {
   readonly outDir?: string;
   /** Forwarded to `deriveAdapterSpec` for `authChoice.mode === "local"` (see its own doc comment). */
   readonly model?: string;
+  /** Live strong-tier adapter/model binding from persisted runtime settings. */
+  readonly getStrongAdapterSpec?: (authChoice: AuthChoice) => AdapterSpec;
   /**
    * Agent-loop step budget forwarded as `ExecuteAgentContext.maxSteps`;
    * resolved the same way as `ModeBSetupRunnerOptions.maxTurns` via the
@@ -360,17 +620,20 @@ export class ModeASetupRunner implements SetupStepRunner {
       ]);
 
       const bundlePath = path.join(outDir, "bundle.json");
-      const bundle = loadBundle(JSON.parse(await readFile(bundlePath, "utf-8")));
+      const bundle = loadBundleWithProvenance(JSON.parse(await readFile(bundlePath, "utf-8")), {
+        warbleBin,
+        profileSource: this.options.irPath,
+      });
 
       const agent = bundle.agents.find((candidate) => candidate.id === agentId);
       if (!agent) {
         throw new Error(`compiled setup bundle has no "${agentId}" agent`);
       }
 
-      const binding = buildUniformTierBinding(
-        agent,
-        deriveAdapterSpec(authChoice, this.options.model !== undefined ? { model: this.options.model } : {}),
-      );
+      const adapterSpec = this.options.getStrongAdapterSpec
+        ? this.options.getStrongAdapterSpec(authChoice)
+        : deriveAdapterSpec(authChoice, this.options.model !== undefined ? { model: this.options.model } : {});
+      const binding = buildUniformTierBinding(agent, adapterSpec);
       const registry = createDefaultProviderRegistry();
 
       // Hardcoded, NOT `deriveEnforcement(agent)` — see this class's doc
@@ -506,9 +769,9 @@ export interface SetupTerminalContext {
    *    build --help`: "Build into target/mdl.json for the engine" — and by
    *    inspecting a real built fixture, whose top-level shape is
    *    `{ catalog, schema, models: [...], relationships, views, cubes,
-   *    dataSource, layoutVersion }`). A missing file, invalid JSON, or a
-   *    `models` array with zero entries, no nested cube measure, or (when a
-   *    worklog is available) no successfully completed recognized schema
+   *    dataSource, layoutVersion }`). A missing file, invalid JSON, a
+   *    `models` array with zero entries, or (when a worklog is available) no
+   *    successfully completed recognized schema
    *    discovery command all downgrade a claimed "ok" to "error" — an agent
    *    that ran `wren context build` against an empty/unfinished MDL project
    *    must not be trusted just because it self-reports success.
@@ -589,17 +852,32 @@ export interface SetupTerminalContext {
    * {@link firstFailedExec}.
    */
   readonly worklog?: readonly SetupWorklogEntry[];
+  /**
+   * A host-recorded, identity-bound completed prefix from earlier corrective
+   * context attempts. Agent prose never supplies this value. It is optional
+   * so callers that only have one worklog retain the original behavior.
+   */
+  readonly priorContextLifecycle?: ContextLifecyclePrefix;
 }
 
 /**
  * The minimal structural shape of a `ToolStep` (`server/wire-types.ts`) that
  * {@link firstFailedExec} needs. Declared locally rather than imported — see
  * `SetupTerminalContext.worklog`'s doc comment.
+ *
+ * `state` mirrors `ToolStep.state` and is ALREADY populated correctly, today,
+ * for every mode: `LiveWorkLog.ingest` (`server/fold.ts`) sets it straight
+ * from the originating `AgentEvent`'s own structured `status`/`outcome`
+ * field, and `server/turn.ts` passes that raw, unsanitized snapshot into
+ * `parseSetupTerminal` — no plumbing change was needed to expose it here.
+ * See {@link execSucceeded} for why it is trustworthy for a Mode B (`Bash`)
+ * entry but NOT for a Mode A / Codex local (`setup_execution`-shaped) one.
  */
 export interface SetupWorklogEntry {
   readonly label: string;
   readonly input?: unknown;
   readonly detail?: string;
+  readonly state?: "running" | "done" | "error";
 }
 
 /**
@@ -628,16 +906,267 @@ function readProjectYamlField(yamlPath: string, field: string): string | undefin
   return (unquoted ? unquoted[1]! : raw).trim();
 }
 
+/** Parses the small KEY=value subset of a project .env file used by Wren profiles. */
+function parseDotEnv(text: string): ReadonlyMap<string, string> {
+  const values = new Map<string, string>();
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const assignment = line.startsWith("export ") ? line.slice("export ".length) : line;
+    const separator = assignment.indexOf("=");
+    if (separator === -1) continue;
+    const key = assignment.slice(0, separator).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+    const rawValue = assignment.slice(separator + 1).trim();
+    const quoted = /^(".*"|'.*')$/.test(rawValue) ? rawValue.slice(1, -1) : rawValue;
+    values.set(key, quoted);
+  }
+  return values;
+}
+
+interface ConnectionTarget {
+  readonly scheme: string;
+  readonly host: string;
+  readonly port: string;
+  readonly database: string;
+}
+
+function normalizeConnectionScheme(scheme: string): string {
+  const normalized = scheme.replace(/:$/, "").toLowerCase();
+  return normalized === "postgresql" ? "postgres" : normalized;
+}
+
+/**
+ * Closed URL-scheme allowlist for the source types accepted by Setup. Keep
+ * this local rather than importing `server/app.ts`: harness must not depend
+ * on its BFF consumer. A source without an unambiguous host/database URL
+ * shape (for example DuckDB's filesystem `url`) deliberately has no entries
+ * and therefore cannot retain lifecycle proof through this URL path.
+ */
+const URL_SCHEMES_BY_SOURCE: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["postgres", new Set(["postgres"])],
+  ["mysql", new Set(["mysql", "mysql+pymysql", "mysql+mysqldb"])],
+  ["bigquery", new Set(["bigquery"])],
+  ["snowflake", new Set(["snowflake"])],
+  ["clickhouse", new Set(["clickhouse", "clickhouse+http", "clickhouse+https"])],
+  ["mssql", new Set(["mssql"])],
+  ["trino", new Set(["trino", "trino+https"])],
+  ["duckdb", new Set()],
+]);
+
+/**
+ * Only these Setup sources have the host/port/database fields represented by
+ * the generic field fallback below. Other supported sources use different
+ * identity shapes (for example BigQuery project/dataset and Trino
+ * catalog/schema), so accepting generic DB_HOST/DB_DATABASE for them would
+ * forge an identity rather than derive the effective connection target.
+ */
+const HOST_DATABASE_FIELD_SOURCES = new Set([
+  "postgres",
+  "mysql",
+  "clickhouse",
+  "mssql",
+  // Added when Setup began offering wren's full connector set. Each of these
+  // has host/port/database in its own wren connection model, so the generic
+  // fallback derives their identity rather than forging one. Sources whose
+  // identity is shaped differently — BigQuery's project/dataset, Trino's
+  // catalog/schema, Databricks' serverHostname/httpPath, Athena's S3 staging
+  // dir, Spark's bare host/port — are still deliberately absent.
+  "oracle",
+  "redshift",
+  "doris",
+]);
+
+function connectionTargetFromUrl(value: string, sourceType: string): ConnectionTarget | undefined {
+  try {
+    const url = new URL(value);
+    const database = decodeURIComponent(url.pathname).replace(/^\/+|\/+$/g, "");
+    const scheme = normalizeConnectionScheme(url.protocol);
+    if (!url.protocol || !url.hostname || !database || !URL_SCHEMES_BY_SOURCE.get(sourceType)?.has(scheme)) return undefined;
+    // Intentionally do not return username, password, query, or fragment.
+    return {
+      scheme,
+      host: url.hostname.toLowerCase(),
+      port: url.port,
+      database,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function connectionTargetFromFields(
+  scheme: string,
+  host: string | undefined,
+  port: string | undefined,
+  database: string | undefined,
+): ConnectionTarget | undefined {
+  if (!host || !database) return undefined;
+  return { scheme: normalizeConnectionScheme(scheme), host: host.toLowerCase(), port: port ?? "", database };
+}
+
+/**
+ * Resolves a single effective value using Wren's shell-over-.env precedence.
+ * Multiple aliases that disagree are ambiguous, so retained proof must not be
+ * reused. The returned value is never persisted directly.
+ */
+function effectiveConnectionValue(dotenv: ReadonlyMap<string, string>, aliases: readonly string[]): string | undefined {
+  const values = new Set<string>();
+  for (const key of aliases) {
+    const value = process.env[key] ?? dotenv.get(key);
+    if (value !== undefined && value.trim()) values.add(value.trim());
+  }
+  return values.size === 1 ? [...values][0] : undefined;
+}
+
+function connectionAliases(sourceType: string): {
+  readonly urls: readonly string[];
+  readonly hosts: readonly string[];
+  readonly ports: readonly string[];
+  readonly databases: readonly string[];
+} {
+  const source = sourceType.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  const generic = {
+    urls: [`${source}_URL`, "DATABASE_URL", "DB_URL"],
+    hosts: [`${source}_HOST`, "DB_HOST"],
+    ports: [`${source}_PORT`, "DB_PORT"],
+    databases: [`${source}_DATABASE`, `${source}_DB`, "DB_DATABASE", "DB_NAME"],
+  };
+  if (source !== "POSTGRES" && source !== "POSTGRESQL") return generic;
+  return {
+    urls: ["POSTGRES_URL", "POSTGRESQL_URL", "PG_URL", ...generic.urls],
+    hosts: ["POSTGRES_HOST", "PGHOST", ...generic.hosts],
+    ports: ["POSTGRES_PORT", "PGPORT", ...generic.ports],
+    databases: ["POSTGRES_DATABASE", "POSTGRES_DB", "PGDATABASE", "PG_DB", ...generic.databases],
+  };
+}
+
+/**
+ * Returns a digest of the effective, non-secret database target. It accepts a
+ * URL or host/database fields, but deliberately retains only scheme, host,
+ * port, and database; credentials and raw URLs never enter persisted state.
+ * Missing or contradictory target facts fail closed.
+ */
+function effectiveConnectionTargetDigest(projectDir: string, sourceType: string): string | undefined {
+  let dotenv: ReadonlyMap<string, string>;
+  try {
+    dotenv = parseDotEnv(readFileSync(path.join(projectDir, ".env"), "utf-8"));
+  } catch {
+    return undefined;
+  }
+
+  const aliases = connectionAliases(sourceType);
+  const targets = new Set<string>();
+  for (const key of aliases.urls) {
+    const value = process.env[key] ?? dotenv.get(key);
+    if (value === undefined || !value.trim()) continue;
+    const target = connectionTargetFromUrl(value.trim(), sourceType);
+    if (target === undefined) return undefined;
+    targets.add(JSON.stringify(target));
+  }
+  const fieldTarget = !HOST_DATABASE_FIELD_SOURCES.has(sourceType)
+    ? undefined
+    : connectionTargetFromFields(
+      sourceType,
+      effectiveConnectionValue(dotenv, aliases.hosts),
+      effectiveConnectionValue(dotenv, aliases.ports),
+      effectiveConnectionValue(dotenv, aliases.databases),
+    );
+  if (fieldTarget !== undefined) targets.add(JSON.stringify(fieldTarget));
+  if (targets.size !== 1) return undefined;
+  return createHash("sha256").update([...targets][0]!).digest("hex");
+}
+
+/**
+ * A non-secret, host-derived identity for retained context lifecycle proof.
+ * It deliberately binds the canonical on-disk project, the BFF-selected
+ * source type, wren's project-level profile declaration, and a non-secret
+ * digest of the effective connection target. If any required filesystem fact
+ * cannot be read or is ambiguous, callers must fail closed and not reuse
+ * evidence from an earlier attempt.
+ */
+export function contextLifecycleIdentityFingerprint(
+  root: string,
+  name: string,
+  selectedSourceType: string,
+): string | undefined {
+  try {
+    const projectDir = realpathSync(path.join(root, name));
+    if (!statSync(projectDir).isDirectory()) return undefined;
+    const projectYml = path.join(projectDir, "wren_project.yml");
+    const profile = readProjectYamlField(projectYml, "profile");
+    const declaredSourceType = readProjectYamlField(projectYml, "data_source");
+    const normalizedSelectedSourceType = selectedSourceType.trim().toLowerCase();
+    const normalizedDeclaredSourceType = declaredSourceType?.trim().toLowerCase();
+    if (profile === undefined || normalizedDeclaredSourceType === undefined || normalizedDeclaredSourceType !== normalizedSelectedSourceType) return undefined;
+    const connectionTargetDigest = effectiveConnectionTargetDigest(projectDir, normalizedSelectedSourceType);
+    if (connectionTargetDigest === undefined) return undefined;
+    return createHash("sha256")
+      .update(JSON.stringify({ version: 2, projectDir, selectedSourceType: normalizedSelectedSourceType, profile, declaredSourceType: normalizedDeclaredSourceType, connectionTargetDigest }))
+      .digest("hex");
+  } catch {
+    return undefined;
+  }
+}
+
 export interface SetupTerminalResult {
   readonly status: SetupTerminalStatus;
   readonly message: string;
   /**
+   * A host-owned rejection of an agent's claimed `SETUP_STATUS: ok`.
+   *
+   * This is deliberately structured rather than inferred from the display
+   * message: `server/turn.ts` uses it to decide whether the completed,
+   * resumable agent session gets one corrective continuation. Agent-declared
+   * errors, dispatcher failures, cancellation, and timeouts do not create
+   * this diagnostic and therefore cannot enter that recovery path.
+   */
+  readonly diagnostic?: HostContractDiagnostic;
+  /**
    * A deterministic workflow outcome, deliberately separate from the
    * human-facing message so callers never have to re-classify prose.
-   * Present only when a context turn reached a terminal status without a
-   * successfully recorded schema-discovery command.
+   * Present when a context turn needs the BFF's explicit bounded
+   * missing-discovery correction.
    */
-  readonly failureKind?: "no_successful_schema_discovery";
+  readonly failureKind?: "no_successful_schema_discovery" | "missing_terminal_status";
+}
+
+export type HostContractCode =
+  | "connect_artifact_missing"
+  | "connection_marker_missing"
+  | "connection_profile_missing"
+  | "connection_source_mismatch"
+  | "context_schema_discovery_missing"
+  | "context_schema_discovery_failed"
+  | "context_validate_missing"
+  | "context_build_missing"
+  | "context_lifecycle_out_of_order"
+  | "context_mdl_missing"
+  | "context_mdl_empty";
+
+/** Non-secret, host-owned evidence returned when a claimed setup success fails its artifact gate. */
+export interface HostContractDiagnostic {
+  readonly kind: "host_contract";
+  readonly code: HostContractCode;
+  /** What the BFF observed. This must remain safe to return to the agent. */
+  readonly observed: string;
+  /** The concrete artifact/workflow conditions that must be true before another claimed success. */
+  readonly expectedArtifactContract: readonly string[];
+}
+
+function hostContractFailure(
+  code: HostContractCode,
+  message: string,
+  observed: string,
+  expectedArtifactContract: readonly string[],
+  failureKind?: SetupTerminalResult["failureKind"],
+): SetupTerminalResult {
+  return {
+    status: "error",
+    message,
+    diagnostic: { kind: "host_contract", code, observed, expectedArtifactContract },
+    ...(failureKind !== undefined ? { failureKind } : {}),
+  };
 }
 
 const SETUP_STATUS_LINE = /^SETUP_STATUS:\s*(ok|needs_input|error)\b\s*[-:]?\s*(.*)$/i;
@@ -653,21 +1182,13 @@ function defaultMessageFor(status: SetupTerminalStatus): string {
   }
 }
 
-/** Counts the built MDL's models and declared cube measures; unreadable/malformed content is deliberately treated as empty rather than trusted. */
-function countMdlContents(mdlPath: string): { readonly models: number; readonly measures: number } {
+/** Counts the built MDL's models; unreadable/malformed content is deliberately treated as empty rather than trusted. */
+function countMdlModels(mdlPath: string): number {
   try {
-    const parsed = JSON.parse(readFileSync(mdlPath, "utf-8")) as { models?: unknown; cubes?: unknown };
-    const models = Array.isArray(parsed.models) ? parsed.models.length : 0;
-    const measures = Array.isArray(parsed.cubes)
-      ? parsed.cubes.reduce((count, cube) => {
-          if (typeof cube !== "object" || cube === null) return count;
-          const candidateMeasures = (cube as { measures?: unknown }).measures;
-          return count + (Array.isArray(candidateMeasures) ? candidateMeasures.length : 0);
-        }, 0)
-      : 0;
-    return { models, measures };
+    const parsed = JSON.parse(readFileSync(mdlPath, "utf-8")) as { models?: unknown };
+    return Array.isArray(parsed.models) ? parsed.models.length : 0;
   } catch {
-    return { models: 0, measures: 0 };
+    return 0;
   }
 }
 
@@ -695,16 +1216,32 @@ function missingConnectArtifact(context: SetupTerminalContext): string | undefin
 }
 
 /**
- * Matches a `setup_execution` "exec" call's `ToolStep.detail` — a
- * `summarizeToolOutput`-bounded (200-char) `JSON.stringify` of
- * `{exitCode, stdout, stderr, ...}` (see `harness/tools/setup-native.ts`) or
- * a Mode-B Bash result's `Exit code: N` text, and extracts the exit code.
- * A regex, not `JSON.parse`: once `stdout`/`stderr` push a stringified object
- * past 200 characters (routine for a CLI usage/error message), the truncated
- * detail is no longer valid JSON, but Mode A serializes `exitCode` first.
+ * Matches Mode A's / Codex local's `setup_execution` "exec" call's
+ * `ToolStep.detail` — a `summarizeToolOutput`-bounded (200-char)
+ * `JSON.stringify` of `{exitCode, stdout, stderr, ...}` (see
+ * `harness/tools/setup-native.ts`) — and extracts the exit code. A regex, not
+ * `JSON.parse`: once `stdout`/`stderr` push a stringified object past 200
+ * characters (routine for a CLI usage/error message), the truncated detail
+ * is no longer valid JSON, but Mode A serializes `exitCode` first so it
+ * always survives.
+ *
+ * Deliberately Mode-A/Codex-local-only. There used to be a sibling
+ * `MODE_B_BASH_EXIT_CODE` regex here matching a literal `"exit code: N"`
+ * phrase, on the theory that a Mode B Bash result might carry that text —
+ * but no real code path ever writes it: Mode B's `detail` is the command's
+ * raw (240-char-truncated) stdout via `summarizeResultContent` in warble's
+ * `dispatcher/claude-agent-sdk/src/events.ts`, with no such wrapping. That
+ * dead regex made `execSucceeded` return `undefined` for every genuine Mode B
+ * discovery/validate/build call, which made the `context` step's discovery
+ * gate structurally unsatisfiable in Mode B — see `execSucceeded` for the fix.
  */
 const SETUP_EXEC_EXIT_CODE = /^\{"exitCode":(-?\d+)/;
-const MODE_B_BASH_EXIT_CODE = /\bexit\s+code\s*:?\s*(-?\d+)\b/i;
+
+function modeAExecExitCode(detail: string | undefined): number | undefined {
+  if (detail === undefined) return undefined;
+  const match = SETUP_EXEC_EXIT_CODE.exec(detail);
+  return match ? Number(match[1]) : undefined;
+}
 
 /**
  * Mode A registers the scoped execution capability under its policy name,
@@ -712,15 +1249,55 @@ const MODE_B_BASH_EXIT_CODE = /\bexit\s+code\s*:?\s*(-?\d+)\b/i;
  * Both names represent the same setup-only command boundary at this layer.
  */
 const MODE_B_SETUP_EXECUTION_TOOL_NAME = "Bash";
+/** Codex local streams the same allowlisted tool with its MCP server prefix. */
+const CODEX_SETUP_EXECUTION_TOOL_NAME = `setup.${SETUP_EXECUTION_TOOL_NAME}`;
 
 function isSetupExecutionEntry(entry: SetupWorklogEntry): boolean {
-  return entry.label === SETUP_EXECUTION_TOOL_NAME || entry.label === MODE_B_SETUP_EXECUTION_TOOL_NAME;
+  return (
+    entry.label === SETUP_EXECUTION_TOOL_NAME ||
+    entry.label === MODE_B_SETUP_EXECUTION_TOOL_NAME ||
+    entry.label === CODEX_SETUP_EXECUTION_TOOL_NAME
+  );
 }
 
-function execExitCode(detail: string | undefined): number | undefined {
-  if (detail === undefined) return undefined;
-  const match = SETUP_EXEC_EXIT_CODE.exec(detail) ?? MODE_B_BASH_EXIT_CODE.exec(detail);
-  return match ? Number(match[1]) : undefined;
+/** Mode A and Codex local share the same non-throwing `setup_execution` tool — see {@link execSucceeded}. */
+function isModeAShapedExecEntry(entry: SetupWorklogEntry): boolean {
+  return entry.label === SETUP_EXECUTION_TOOL_NAME || entry.label === CODEX_SETUP_EXECUTION_TOOL_NAME;
+}
+
+/**
+ * Whether a setup-execution worklog entry represents a genuinely successful
+ * command run — `true`/`false` when that's known, `undefined` when it isn't
+ * recorded either way (e.g. a Mode A file-write action, which has no exit
+ * code at all).
+ *
+ * Mode A and Codex local share the same non-throwing `setup_execution` tool
+ * (`harness/tools/setup-native.ts`): the JS tool call itself only throws on a
+ * pre-flight denylist/scope violation (`SetupCommandDeniedError`), never on
+ * the shell command's own exit code — a nonexistent CLI subcommand still
+ * returns normally as `{exitCode: 2, ...}` structured output. That means
+ * `ToolStep.state` is ALWAYS `"done"` for these entries regardless of
+ * whether the shell command itself succeeded, so the only trustworthy signal
+ * for them is the structured exit code folded into `detail`
+ * ({@link modeAExecExitCode}) — unchanged from before this fix.
+ *
+ * Mode B's Bash tool has no such gap: `LiveWorkLog.ingest` (`server/fold.ts`)
+ * already sets `ToolStep.state` from the originating `AgentEvent`'s own
+ * `status` field ("success" -> "done", "error" -> "error") at fold time, for
+ * both a genuine command failure and a blocked/guardrail-denied execution —
+ * either way the tool call itself did not succeed, so `state` is sound to
+ * trust directly. It is also the ONLY signal available: Mode B's `detail` is
+ * the command's raw (240-char-truncated) stdout, never a structured exit
+ * code.
+ */
+function execSucceeded(entry: SetupWorklogEntry): boolean | undefined {
+  if (isModeAShapedExecEntry(entry)) {
+    const exitCode = modeAExecExitCode(entry.detail);
+    return exitCode === undefined ? undefined : exitCode === 0;
+  }
+  if (entry.state === "done") return true;
+  if (entry.state === "error") return false;
+  return undefined;
 }
 
 /** Best-effort extraction of the `command` an exec-action worklog entry ran, for a readable error message; `undefined` if the input isn't the expected shape. */
@@ -748,20 +1325,27 @@ function execCommandOf(entry: SetupWorklogEntry): string | undefined {
  * nothing in the trace shows a command failing outright first.
  *
  * KNOWN LIMITATION (disclosed, not silently assumed away): this flags ANY
- * non-zero exit among the step's setup execution calls, without judging
+ * failed exec among the step's setup execution calls, without judging
  * whether that particular command was expected to fail as part of ordinary
  * exploration (e.g. a `grep` with no match, or a conditional shell test) —
  * doing so reliably would require actually understanding the command's
  * intent, which this module has no basis to do. The returned message is
  * worded as advisory ("does not by itself confirm...") rather than as a
  * counter-assertion for exactly this reason.
+ *
+ * `exitCode` is optional: Mode A/Codex local failures carry a real numeric
+ * exit code; a Mode B (Bash) failure — including a blocked/guardrail-denied
+ * execution — has none (only the fact that it failed), so callers must
+ * degrade their wording gracefully rather than assume a number is present.
  */
-function firstFailedExec(worklog: readonly SetupWorklogEntry[]): { readonly command: string | undefined; readonly exitCode: number } | undefined {
+function firstFailedExec(
+  worklog: readonly SetupWorklogEntry[],
+): { readonly command: string | undefined; readonly exitCode?: number } | undefined {
   for (const entry of worklog) {
     if (!isSetupExecutionEntry(entry)) continue;
-    const exitCode = execExitCode(entry.detail);
-    if (exitCode !== undefined && exitCode !== 0) {
-      return { command: execCommandOf(entry), exitCode };
+    if (execSucceeded(entry) === false) {
+      const exitCode = isModeAShapedExecEntry(entry) ? modeAExecExitCode(entry.detail) : undefined;
+      return { command: execCommandOf(entry), ...(exitCode !== undefined ? { exitCode } : {}) };
     }
   }
   return undefined;
@@ -793,20 +1377,23 @@ const SCHEMA_DISCOVERY_EVIDENCE =
 const SCHEMA_INTROSPECTION_COMMANDS = [
   /\bwren(?:\s+query)?\s+--sql(?:\s|=)/i,
   /\b(?:python(?:3(?:\.\d+)?)?|uv\s+run\s+python)\b[\s\S]*\b(?:sqlalchemy|psycopg|asyncpg|google\.cloud\.bigquery|snowflake\.connector|clickhouse_driver)\b/i,
+  /\b(?:python(?:3(?:\.\d+)?)?|uv\s+run\s+python)\b[\s\S]*\bwren\.profile\b[\s\S]*\bwren\.connector\b/i,
+  /\bWREN_PYTHON\b[\s\S]*\bcommand\s+-v\s+wren\b[\s\S]*\bwren\.profile\b[\s\S]*\bwren\.connector\b/i,
   /\b(?:psql|mysql|sqlite3|duckdb|snowsql|clickhouse-client|trino(?:-cli)?)\b[\s\S]*(?:\s(?:-c|--command|--execute|--query)\s|\b(?:information_schema|show\s+(?:tables|columns)|describe\s+(?:table|schema)|\.tables)\b)/i,
   /\bbq\s+query\b/i,
 ] as const;
 
 export type RecordedSchemaDiscovery =
   | { readonly kind: "successful"; readonly command: string }
-  | { readonly kind: "failed"; readonly command: string; readonly exitCode: number }
+  | { readonly kind: "failed"; readonly command: string; readonly exitCode?: number }
   | { readonly kind: "none" };
 
 /**
  * The single setup-workflow contract for recognisable schema discovery. A
- * matching command is evidence only after it completed with exit code zero;
- * command text alone proves neither execution nor a readable schema. Callers
- * use this for both terminal acceptance and the no-introspection diagnostic,
+ * matching command is evidence only after it completed successfully (see
+ * {@link execSucceeded} for what "successfully" means per mode); command
+ * text alone proves neither execution nor a readable schema. Callers use
+ * this for both terminal acceptance and the no-introspection diagnostic,
  * rather than reimplementing the allowlist elsewhere.
  */
 export function classifyRecordedSchemaDiscovery(worklog: readonly SetupWorklogEntry[]): RecordedSchemaDiscovery {
@@ -820,11 +1407,126 @@ export function classifyRecordedSchemaDiscovery(worklog: readonly SetupWorklogEn
     ) {
       continue;
     }
-    const exitCode = execExitCode(entry.detail);
-    if (exitCode === 0) return { kind: "successful", command };
-    if (exitCode !== undefined && failed === undefined) failed = { kind: "failed", command, exitCode };
+    const succeeded = execSucceeded(entry);
+    if (succeeded === true) return { kind: "successful", command };
+    if (succeeded === false && failed === undefined) {
+      const exitCode = isModeAShapedExecEntry(entry) ? modeAExecExitCode(entry.detail) : undefined;
+      failed = { kind: "failed", command, ...(exitCode !== undefined ? { exitCode } : {}) };
+    }
   }
   return failed ?? { kind: "none" };
+}
+
+type ContextLifecycleStage = "discovery" | "validate" | "build";
+
+/** Ordered, host-recorded progress; each value includes all preceding work. */
+export type ContextLifecyclePrefix = "none" | "discovery" | "validate" | "build";
+
+const SHELL_ENV_ASSIGNMENT = String.raw`[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]+)`;
+const DIRECT_CONTEXT_LIFECYCLE_COMMAND = new RegExp(
+  String.raw`^\s*(?:(?:${SHELL_ENV_ASSIGNMENT}\s+)*|env\s+(?:${SHELL_ENV_ASSIGNMENT}\s+)+)?wren\s+context\s+(validate|build)(?:\s+--path\s+(?:\.|"\."|'\.'))?\s*$`,
+  "i",
+);
+
+/**
+ * The mandatory foundation has a native, host-verifiable sequence. A context
+ * success needs schema discovery, then `wren context validate`, then `wren
+ * context build`, each recorded as a successful setup execution. An artifact
+ * alone or merely naming a command in the final message is not evidence.
+ */
+function contextLifecycleStage(command: string): Exclude<ContextLifecycleStage, "discovery"> | undefined {
+  // This evidence must describe the actual lifecycle invocation, rather than
+  // merely mention it. `setup_execution` already supplies the project cwd as
+  // a separate structured field; the only shell prefixes we accept here are
+  // environment assignments (including the standard `env KEY=value` form).
+  // The one accepted flag is `--path .`: setup_execution separately binds the
+  // command cwd to the canonical project, so this is the same project-local
+  // lifecycle operation emitted by some Wren guidance. Arbitrary paths, other
+  // flags, shell sequencing, quoted text, and wrappers remain unrecognized.
+  const match = DIRECT_CONTEXT_LIFECYCLE_COMMAND.exec(command);
+  return match?.[1]?.toLowerCase() as Exclude<ContextLifecycleStage, "discovery"> | undefined;
+}
+
+export type RecordedContextLifecycle =
+  | { readonly kind: "successful" }
+  | { readonly kind: "missing_discovery" }
+  | { readonly kind: "validate_missing"; readonly observed: string }
+  | { readonly kind: "build_missing"; readonly observed: string }
+  | { readonly kind: "out_of_order"; readonly observed: string };
+
+function stageAfter(prefix: ContextLifecyclePrefix): ContextLifecycleStage {
+  if (prefix === "discovery") return "validate";
+  if (prefix === "validate" || prefix === "build") return "build";
+  return "discovery";
+}
+
+function prefixFor(stage: ContextLifecycleStage): ContextLifecyclePrefix {
+  if (stage === "validate") return "discovery";
+  return stage === "build" ? "validate" : "none";
+}
+
+function scanRecordedContextLifecycle(worklog: readonly SetupWorklogEntry[], prior: ContextLifecyclePrefix) {
+  let stage = stageAfter(prior);
+  let completed = prior === "build";
+  let outOfOrderObserved: string | undefined;
+
+  for (const entry of worklog) {
+    if (!isSetupExecutionEntry(entry) || execSucceeded(entry) !== true) continue;
+    const command = execCommandOf(entry);
+    if (command === undefined) continue;
+
+    if (stage === "discovery") {
+      if (classifyRecordedSchemaDiscovery([entry]).kind === "successful") {
+        stage = "validate";
+        continue;
+      }
+      if (contextLifecycleStage(command) !== undefined) {
+        outOfOrderObserved ??= `successful \`${command}\` ran before successful schema discovery`;
+      }
+      continue;
+    }
+
+    const nativeStage = contextLifecycleStage(command);
+    if (stage === "validate") {
+      if (nativeStage === "validate") {
+        stage = "build";
+      } else if (nativeStage === "build") {
+        outOfOrderObserved ??= `successful \`${command}\` ran before successful \`wren context validate\``;
+      }
+      continue;
+    }
+
+    if (nativeStage === "build") completed = true;
+  }
+
+  return { stage, completed, outOfOrderObserved };
+}
+
+/**
+ * Returns the greatest ordered prefix proved by the supplied successful tool
+ * calls. This intentionally retains an earlier valid prefix even if a later
+ * call in the same attempt is out of order, so a corrective attempt can ask
+ * only for the unproven suffix.
+ */
+export function recordedContextLifecyclePrefix(
+  worklog: readonly SetupWorklogEntry[],
+  prior: ContextLifecyclePrefix = "none",
+): ContextLifecyclePrefix {
+  const scan = scanRecordedContextLifecycle(worklog, prior);
+  return scan.completed ? "build" : prefixFor(scan.stage);
+}
+
+export function classifyRecordedContextLifecycle(
+  worklog: readonly SetupWorklogEntry[],
+  prior: ContextLifecyclePrefix = "none",
+): RecordedContextLifecycle {
+  const { stage, completed, outOfOrderObserved } = scanRecordedContextLifecycle(worklog, prior);
+
+  if (completed) return { kind: "successful" };
+  if (outOfOrderObserved !== undefined) return { kind: "out_of_order", observed: outOfOrderObserved };
+  if (stage === "discovery") return { kind: "missing_discovery" };
+  if (stage === "validate") return { kind: "validate_missing", observed: "no successful `wren context validate` followed successful schema discovery" };
+  return { kind: "build_missing", observed: "no successful `wren context build` followed successful `wren context validate`" };
 }
 
 /** A narrow terminal-message check: only override a context error that explicitly claims a zero-table/model outcome. */
@@ -843,7 +1545,7 @@ function claimsNoTablesOrModels(message: string): boolean {
  * agent's self-report, rather than blindly advancing the wizard — see
  * `SetupTerminalContext.stepKey`'s doc comment for exactly which artifact each
  * step checks (`wren_project.yml` / `.wren-validated` / `target/mdl.json`
- * with at least one model and nested cube measure).
+ * with at least one model).
  *
  * The `context` step's `ok` check also requires a successfully completed
  * recognized schema-discovery command whenever a worklog is available. It
@@ -879,72 +1581,132 @@ export function parseSetupTerminal(finalText: string, context: SetupTerminalCont
     return {
       status: "error",
       message: "the setup agent's final message did not contain a SETUP_STATUS line",
+      failureKind: "missing_terminal_status",
     };
   }
 
   if (matched.status === "ok") {
     if (context.stepKey === "context") {
       if (context.worklog !== undefined) {
-        const discovery = classifyRecordedSchemaDiscovery(context.worklog);
-        if (discovery.kind === "none") {
-          return {
-            status: "error",
-            failureKind: "no_successful_schema_discovery",
-            message:
-              "The agent never completed recognized schema discovery in its recorded worklog, so its model/build result cannot be accepted. This is an agent-workflow failure, not evidence that the connection or data source lacks tables.",
-          };
+        const lifecycle = classifyRecordedContextLifecycle(context.worklog, context.priorContextLifecycle);
+        if (lifecycle.kind === "missing_discovery") {
+          return hostContractFailure(
+            "context_schema_discovery_missing",
+            "The agent never completed recognized schema discovery in its recorded worklog, so its model/build result cannot be accepted. This is an agent-workflow failure, not evidence that the connection or data source lacks tables.",
+            "the recorded worklog has no successful recognized schema-discovery command",
+            [
+              "run a recognized schema-discovery command against the connected source and make sure it exits successfully",
+              "build target/mdl.json only from that discovered schema, with at least one model",
+            ],
+            "no_successful_schema_discovery",
+          );
         }
+        const discovery = classifyRecordedSchemaDiscovery(context.worklog);
         if (discovery.kind === "failed") {
-          return {
-            status: "error",
-            message: `\`${discovery.command}\` failed with exit code ${discovery.exitCode} during schema discovery — a model/build result cannot be accepted until that command/tool failure is resolved; this is not evidence that the connection or data source lacks tables.`,
-          };
+          const exitCodeSuffix = discovery.exitCode !== undefined ? ` with exit code ${discovery.exitCode}` : "";
+          return hostContractFailure(
+            "context_schema_discovery_failed",
+            `\`${discovery.command}\` failed${exitCodeSuffix} during schema discovery — a model/build result cannot be accepted until that command/tool failure is resolved; this is not evidence that the connection or data source lacks tables.`,
+            discovery.exitCode !== undefined
+              ? `the recorded schema-discovery command exited with code ${discovery.exitCode}`
+              : "the recorded schema-discovery command failed",
+            [
+              "resolve the schema-discovery command failure and run a recognized discovery command successfully",
+              "build target/mdl.json only from that discovered schema, with at least one model",
+            ],
+          );
+        }
+        if (lifecycle.kind === "validate_missing") {
+          return hostContractFailure(
+            "context_validate_missing",
+            "The agent did not successfully run `wren context validate` after recognized schema discovery, so its model/build result cannot be accepted.",
+            lifecycle.observed,
+            [
+              "run a recognized schema-discovery command successfully",
+              "run `wren context validate` successfully before `wren context build`",
+              "build target/mdl.json only after validation, with at least one model",
+            ],
+          );
+        }
+        if (lifecycle.kind === "build_missing") {
+          return hostContractFailure(
+            "context_build_missing",
+            "The agent did not successfully run `wren context build` after `wren context validate`, so its claimed context success cannot be accepted.",
+            lifecycle.observed,
+            [
+              "run a recognized schema-discovery command successfully",
+              "run `wren context validate` successfully",
+              "run `wren context build` successfully after validation and produce target/mdl.json with at least one model",
+            ],
+          );
+        }
+        if (lifecycle.kind === "out_of_order") {
+          return hostContractFailure(
+            "context_lifecycle_out_of_order",
+            "The native context lifecycle ran out of order; Setup requires successful schema discovery followed by `wren context validate` and then `wren context build`.",
+            lifecycle.observed,
+            [
+              "run a recognized schema-discovery command successfully",
+              "run `wren context validate` successfully before `wren context build`",
+              "produce target/mdl.json with at least one schema-derived model",
+            ],
+          );
         }
       }
       const mdlPath = path.join(context.root, context.name, "target", "mdl.json");
       if (!existsSync(mdlPath)) {
-        return {
-          status: "error",
-          message: `the setup agent reported "ok" but ${mdlPath} does not exist — treating this as a failed context build`,
-        };
+        return hostContractFailure(
+          "context_mdl_missing",
+          `the setup agent reported "ok" but ${mdlPath} does not exist — treating this as a failed context build`,
+          "target/mdl.json is missing after the claimed context build",
+          ["target/mdl.json must exist", "target/mdl.json must contain at least one model"],
+        );
       }
-      const { models: modelCount, measures: measureCount } = countMdlContents(mdlPath);
+      const modelCount = countMdlModels(mdlPath);
       if (modelCount < 1) {
-        return {
-          status: "error",
-          message: `the setup agent reported "ok" but ${mdlPath} has ${modelCount} models — treating this as a failed context build`,
-        };
-      }
-      if (measureCount < 1) {
-        return {
-          status: "error",
-          message: `the setup agent reported "ok" but ${mdlPath} has ${measureCount} measures — treating this as a failed context build`,
-        };
+        return hostContractFailure(
+          "context_mdl_empty",
+          `the setup agent reported "ok" but ${mdlPath} has ${modelCount} models — treating this as a failed context build`,
+          `target/mdl.json has ${modelCount} models after the claimed context build`,
+          ["target/mdl.json must contain at least one model"],
+        );
       }
     } else {
       const markerName = context.stepKey === "connect_resume" ? ".wren-validated" : "wren_project.yml";
       const marker = path.join(context.root, context.name, markerName);
       if (!existsSync(marker)) {
-        return {
-          status: "error",
-          message: `the setup agent reported "ok" but ${marker} does not exist — treating this as a failed setup`,
-        };
+        return hostContractFailure(
+          context.stepKey === "connect_resume" ? "connection_marker_missing" : "connect_artifact_missing",
+          `the setup agent reported "ok" but ${marker} does not exist — treating this as a failed setup`,
+          `${markerName} is missing after the claimed setup success`,
+          context.stepKey === "connect_resume"
+            ? ["create .wren-validated only after the connection profile validates successfully"]
+            : ["create the project directory", "create wren_project.yml", "create the empty .env template"],
+        );
       }
       if (context.stepKey === "connect_resume" && context.expectedSourceType !== undefined) {
         const projectYml = path.join(context.root, context.name, "wren_project.yml");
         const pinnedProfile = readProjectYamlField(projectYml, "profile");
         if (pinnedProfile === undefined || pinnedProfile.length === 0) {
-          return {
-            status: "error",
-            message: `the setup agent reported "ok" but ${projectYml} has no "profile:" pin — the connection profile was never actually pinned to this project (check the profile, not .env)`,
-          };
+          return hostContractFailure(
+            "connection_profile_missing",
+            `the setup agent reported "ok" but ${projectYml} has no "profile:" pin — the connection profile was never actually pinned to this project (check the profile, not .env)`,
+            "wren_project.yml has no non-empty profile pin",
+            ["wren_project.yml must have a non-empty profile pin", "the pinned profile must match the selected data source"],
+          );
         }
         const pinnedDataSource = readProjectYamlField(projectYml, "data_source");
         if ((pinnedDataSource ?? "").trim().toLowerCase() !== context.expectedSourceType.trim().toLowerCase()) {
-          return {
-            status: "error",
-            message: `the setup agent reported "ok" but ${projectYml}'s "data_source: ${pinnedDataSource ?? "(missing)"}" does not match the selected data source "${context.expectedSourceType}" — the connection profile is for the wrong data source (check the profile, not .env)`,
-          };
+          return hostContractFailure(
+            "connection_source_mismatch",
+            `the setup agent reported "ok" but ${projectYml}'s "data_source: ${pinnedDataSource ?? "(missing)"}" does not match the selected data source "${context.expectedSourceType}" — the connection profile is for the wrong data source (check the profile, not .env)`,
+            `the pinned data source does not match the selected ${context.expectedSourceType} source`,
+            [
+              "wren_project.yml must have a non-empty profile pin",
+              `the pinned data_source must match the selected ${context.expectedSourceType} source`,
+              "create .wren-validated only after the matching profile validates successfully",
+            ],
+          );
         }
       }
     }
@@ -968,9 +1730,10 @@ export function parseSetupTerminal(finalText: string, context: SetupTerminalCont
     const failedExec = firstFailedExec(context.worklog);
     if (failedExec !== undefined) {
       const command = failedExec.command !== undefined ? `\`${failedExec.command}\`` : "a command";
+      const exitCodeSuffix = failedExec.exitCode !== undefined ? ` with exit code ${failedExec.exitCode}` : "";
       return {
         status: "error",
-        message: `${command} failed with exit code ${failedExec.exitCode} during this step — a command in this step's own history exited non-zero, so this step's error framing can't be trusted until that's ruled out; this is a command/tool failure, not by itself evidence that the connection or data source lacks tables. The agent's own report was: "${matched.message}"`,
+        message: `${command} failed${exitCodeSuffix} during this step — a command in this step's own history failed, so this step's error framing can't be trusted until that's ruled out; this is a command/tool failure, not by itself evidence that the connection or data source lacks tables. The agent's own report was: "${matched.message}"`,
       };
     }
     if (claimsNoTablesOrModels(matched.message) && classifyRecordedSchemaDiscovery(context.worklog).kind === "none") {

@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { loadBundle, BundleValidationError } from "../harness/bundle/loader.js";
+import { loadBundle, loadBundleWithProvenance, BundleValidationError } from "../harness/bundle/loader.js";
 import { bundleFormatVersion } from "../harness/bundle/schema.js";
 import { BundleCompatError } from "../harness/bundle/version.js";
 import { buildSyntheticBundle } from "./synthetic-bundle.js";
 
 describe("loadBundle: version/compat check", () => {
   it("loud-fails when the compat IR window excludes the harness's supported version", () => {
+    // 0.4–0.4 is the exact stale-checkout scenario this ticket fixed: a compat window one warble
+    // IR bump behind the harness's current "0.5" (harness/bundle/version.ts's HARNESS_SUPPORT).
     const bundle = buildSyntheticBundle({ minIrVersion: "0.4", maxIrVersion: "0.4" });
     expect(() => loadBundle(bundle)).toThrow(BundleCompatError);
-    expect(() => loadBundle(bundle)).toThrow(/0\.4/);
+    // Names both sides: the bundle's own window and the harness's version.
+    expect(() => loadBundle(bundle)).toThrow(/\[0\.4, 0\.4\]/);
+    expect(() => loadBundle(bundle)).toThrow(/harness IR version "0\.5"/);
   });
 
   it("loud-fails on an unknown vercel_bundle_version", () => {
@@ -36,6 +40,47 @@ describe("loadBundle: version/compat check", () => {
     const bundle = buildSyntheticBundle() as Record<string, unknown>;
     delete bundle.vercel_bundle_version;
     expect(() => loadBundle(bundle)).toThrow(BundleValidationError);
+  });
+});
+
+describe("loadBundleWithProvenance: names the resolved checkout(s) on a compat mismatch", () => {
+  // Regression for the "which warble checkout produced this" gap: `resolveWarbleBinary` and
+  // `resolveDefaultProfileSource`/`resolveDefaultSetupIrPath` (harness/compile/resolve-binary.ts,
+  // harness/route/profile-source.ts) each walk this package's ancestors independently and can
+  // resolve to two different sibling `warble` checkouts without either side knowing — a bare
+  // BundleCompatError names the version mismatch but not which on-disk checkout(s) produced it,
+  // so diagnosing it means reading the resolver source. loadBundleWithProvenance closes that gap.
+  const MISMATCHED_BUNDLE = buildSyntheticBundle({ minIrVersion: "0.3", maxIrVersion: "0.3" });
+
+  it("appends both the warble binary and profile/IR source paths to the thrown message", () => {
+    expect(() =>
+      loadBundleWithProvenance(MISMATCHED_BUNDLE, {
+        warbleBin: "/sibling/warble/target/release/warble",
+        profileSource: "/sibling/warble/genbi-default",
+      }),
+    ).toThrow(BundleCompatError);
+    expect(() =>
+      loadBundleWithProvenance(MISMATCHED_BUNDLE, {
+        warbleBin: "/sibling/warble/target/release/warble",
+        profileSource: "/sibling/warble/genbi-default",
+      }),
+    ).toThrow(
+      /warble binary resolved from "\/sibling\/warble\/target\/release\/warble".*profile\/IR source resolved from "\/sibling\/warble\/genbi-default"/s,
+    );
+  });
+
+  it("still throws BundleCompatError with the original message when no provenance is known", () => {
+    expect(() => loadBundleWithProvenance(MISMATCHED_BUNDLE, {})).toThrow(BundleCompatError);
+    expect(() => loadBundleWithProvenance(MISMATCHED_BUNDLE, {})).toThrow(/does not include harness IR version/);
+  });
+
+  it("passes non-compat errors (malformed structure) through unchanged", () => {
+    expect(() => loadBundleWithProvenance({ not: "a bundle" }, { warbleBin: "/x" })).toThrow(BundleValidationError);
+  });
+
+  it("does not throw, and behaves exactly like loadBundle, on a compatible bundle", () => {
+    const bundle = buildSyntheticBundle();
+    expect(loadBundleWithProvenance(bundle, { warbleBin: "/x", profileSource: "/y" })).toEqual(loadBundle(bundle));
   });
 });
 

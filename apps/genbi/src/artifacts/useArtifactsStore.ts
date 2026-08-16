@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { isBffEnabled } from '@/bff/env';
-import { listArtifacts, getArtifact, postArtifactPublish, postArtifactUnsave } from '@/bff/client';
+import { listArtifacts, getArtifact, postArtifactPublish, postArtifactUnsave, postRetainedArtifactUnsave } from '@/bff/client';
 import { fixtureArtifacts } from './fixtures';
 import type { Artifact, ArtifactPublish, ArtifactSummary } from './types';
 import { t } from '@/i18n/strings';
@@ -92,7 +92,8 @@ export const useArtifactsStore = create<ArtifactsStoreState>()((set, get) => ({
   },
 
   publish: (key) => {
-    const sessionId = get().summaries.find((a) => a.key === key)?.sessionId;
+    const item = get().summaries.find((a) => a.key === key);
+    const sessionId = item?.sessionId;
 
     if (isBffEnabled() && sessionId) {
       postArtifactPublish(sessionId, key)
@@ -123,7 +124,8 @@ export const useArtifactsStore = create<ArtifactsStoreState>()((set, get) => ({
   },
 
   unpin: (key) => {
-    const sessionId = get().summaries.find((a) => a.key === key)?.sessionId;
+    const item = get().summaries.find((a) => a.key === key);
+    const sessionId = item?.sessionId;
 
     const removeLocally = () => {
       set((s) => {
@@ -139,7 +141,8 @@ export const useArtifactsStore = create<ArtifactsStoreState>()((set, get) => ({
     };
 
     if (isBffEnabled() && sessionId) {
-      postArtifactUnsave(sessionId, key)
+      const native = item?.nativeSessionId !== undefined;
+      (native ? postRetainedArtifactUnsave(key) : postArtifactUnsave(sessionId, key))
         .then(removeLocally)
         .catch(() => {
           // Best-effort — leave the artifact listed on failure.

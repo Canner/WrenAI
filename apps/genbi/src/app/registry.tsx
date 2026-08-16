@@ -1,13 +1,13 @@
 import {
   SettingOutlined,
-  MessageOutlined,
+  ConsoleSqlOutlined,
   AppstoreOutlined,
   DatabaseOutlined,
   DeploymentUnitOutlined,
   ExperimentOutlined,
 } from '@ant-design/icons';
-import { AskPage } from '@/pages/AskPage';
-import { AskSidebar } from '@/session/AskSidebar';
+import { SessionsPage } from '@/sessions/SessionsPage';
+import { SessionsSidebar } from '@/sessions/SessionsSidebar';
 import { ArtifactsPage } from '@/artifacts/ArtifactsPage';
 import { ArtifactsSidebar } from '@/artifacts/ArtifactsSidebar';
 import { ContextPage } from '@/context/ContextPage';
@@ -36,12 +36,12 @@ const allPages: PageDef[] = [
     Sidebar: SetupSidebar,
   },
   {
-    key: 'ask',
-    path: '/ask',
-    label: t('nav.ask'),
-    icon: <MessageOutlined />,
-    Page: AskPage,
-    Sidebar: AskSidebar,
+    key: 'sessions',
+    path: '/sessions',
+    label: t('nav.sessions'),
+    icon: <ConsoleSqlOutlined />,
+    Page: SessionsPage,
+    Sidebar: SessionsSidebar,
   },
   {
     key: 'artifacts',
@@ -88,5 +88,11 @@ export const pages: PageDef[] = allPages.filter(
   (page) => page.key !== 'eval' || EVAL_UI_ENABLED,
 );
 
+/**
+ * Secondary compatibility pages keep their old structured URLs working inside
+ * the same shell without reintroducing them to primary navigation.
+ */
+export const compatibilityPages: PageDef[] = [];
+
 /** Landing route (product home). First-run onboarding lives at `/setup`. */
-export const defaultPath = '/ask';
+export const defaultPath = '/sessions';

@@ -69,7 +69,7 @@ export function ArtifactsSidebar() {
                   {KIND_ICON[artifact.kind]}
                 </span>
                 <span className="genbi-atext">
-                  <span className="genbi-aname">{artifact.name}</span>
+                  <span className="genbi-aname" title={artifact.name}>{artifact.name}</span>
                 </span>
                 <span className="genbi-abadges">
                   <StatusTag state={verifiedStateOf(artifact.verified)} />

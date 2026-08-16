@@ -1,0 +1,6 @@
+{
+    "capturedAt": "2026-08-07T09:20:00.000Z",
+    "exitCode": 0,
+    "signal": null,
+    "note": "Real recording: a Mode B build_context turn against a connected but UNBUILT project, so the agent's single allowlist-matching discovery command (wren --sql over information_schema) genuinely exits 1. Captured to establish ground truth for how the dispatcher reports a non-blocked, command-level failure: tool_result carries ok:false and an error string beginning 'Exit code 1'. Redacted only by substituting the machine-specific project path prefix."
+}

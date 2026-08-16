@@ -83,7 +83,7 @@ function detailLabel(step: ToolStep): string {
  */
 function isExpandable(step: ToolStep): boolean {
   if (step.kind === 'decision') return false;
-  return step.input !== undefined || step.detail !== undefined;
+  return step.input !== undefined || step.detail !== undefined || step.inspection !== undefined;
 }
 
 /**
@@ -100,6 +100,11 @@ function formatInput(input: unknown): string {
     return (input as { sql: string }).sql;
   }
   return JSON.stringify(input, null, 2);
+}
+
+function formatDuration(durationMs: number): string {
+  if (durationMs < 1_000) return `${durationMs} ms`;
+  return `${(durationMs / 1_000).toFixed(durationMs % 1_000 === 0 ? 0 : 1)} s`;
 }
 
 /**
@@ -148,7 +153,9 @@ export function WorkLog({ steps, title, defaultOpen = false }: WorkLogProps) {
         // A decision row shows its detail INLINE (never behind a click): the
         // turn's control-flow choice + reasoning is visible at a glance.
         const inlineDetail =
-          step.kind === 'decision' && step.detail !== undefined ? step.detail : undefined;
+          step.kind === 'decision'
+            ? step.detail ?? step.inspection?.error ?? step.inspection?.output
+            : undefined;
 
         const rowContent = (
           <>
@@ -256,6 +263,46 @@ export function WorkLog({ steps, title, defaultOpen = false }: WorkLogProps) {
                       {step.detail}
                     </div>
                   </div>
+                )}
+                {step.inspection !== undefined && (
+                  <>
+                    {step.inspection.action !== undefined && (
+                      <div>
+                        <div style={{ fontSize: 10, opacity: 0.65 }}>{t('ask.stepActionLabel')}</div>
+                        <pre
+                          style={{
+                            margin: '2px 0 0',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          <code>{step.inspection.action}</code>
+                        </pre>
+                      </div>
+                    )}
+                    {step.inspection.output !== undefined && (
+                      <div>
+                        <div style={{ fontSize: 10, opacity: 0.65 }}>{t('ask.stepOutputLabel')}</div>
+                        <div style={{ marginTop: 2, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {step.inspection.output}
+                        </div>
+                      </div>
+                    )}
+                    {step.inspection.error !== undefined && (
+                      <div>
+                        <div style={{ fontSize: 10, opacity: 0.65 }}>{t('ask.stepErrorDetailLabel')}</div>
+                        <div style={{ marginTop: 2, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {step.inspection.error}
+                        </div>
+                      </div>
+                    )}
+                    {step.inspection.durationMs !== undefined && (
+                      <div>
+                        <span style={{ fontSize: 10, opacity: 0.65 }}>{t('ask.stepDurationLabel')}: </span>
+                        <span>{formatDuration(step.inspection.durationMs)}</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}

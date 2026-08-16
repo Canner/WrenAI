@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Setup Work log inspection regression</title>
+  </head>
+  <body>
+    <main id="root"></main>
+    <script type="module">
+      import React from 'react';
+      import { createRoot } from 'react-dom/client';
+      import { ThemeProvider } from '../src/app/theme/ThemeProvider';
+      import { WorkLog } from '../src/session/WorkLog';
+
+      const steps = [
+        {
+          id: 'done', label: 'Build context', state: 'done', kind: 'tool',
+          inspection: { action: 'wren context build', output: 'Built 3 models.', durationMs: 1250 },
+        },
+        {
+          id: 'running', label: 'Discover schema', state: 'running', kind: 'tool',
+          inspection: { action: 'wren context discover' },
+        },
+        {
+          id: 'error', label: 'Validate context', state: 'error', kind: 'tool',
+          inspection: { action: 'wren context validate', error: 'Connection refused. Check the database host and retry.' },
+        },
+        { id: 'missing', label: 'Prepare workspace', state: 'done', kind: 'tool' },
+        {
+          id: 'long-output', label: 'Generate model', state: 'done', kind: 'tool',
+          inspection: { output: `${'Bounded output. '.repeat(30)}…` },
+        },
+      ];
+
+      createRoot(document.querySelector('#root')).render(
+        React.createElement(ThemeProvider, null, React.createElement(WorkLog, {
+          steps,
+          title: 'Execution trace',
+          defaultOpen: true,
+        })),
+      );
+    </script>
+  </body>
+</html>

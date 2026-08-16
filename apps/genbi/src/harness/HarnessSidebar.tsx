@@ -1,9 +1,7 @@
 import type { SidebarItem } from '@/fixtures';
 import { SidebarList } from '@/app/shell/SidebarList';
 import { t } from '@/i18n/strings';
-import { isBffEnabled } from '@/bff/env';
-import { BOUND_PROFILE_KEY, useHarnessStore } from './useHarnessStore';
-import { fixtureHarnessView } from './fixtures';
+import { HARNESS_PURPOSES, useHarnessStore } from './useHarnessStore';
 
 /**
  * Harness page's contextual sidebar: a profile selector, not a per-agent
@@ -14,28 +12,27 @@ import { fixtureHarnessView } from './fixtures';
  * `useHarnessStore` so selection drives the canvas (`HarnessPage`).
  */
 export function HarnessSidebar() {
-  const selectedProfileKey = useHarnessStore((s) => s.selectedProfileKey);
+  const selectedPurpose = useHarnessStore((s) => s.selectedPurpose);
   const selectProfile = useHarnessStore((s) => s.selectProfile);
   const harness = useHarnessStore((s) => s.harness);
 
-  const live = isBffEnabled();
-  const view = live ? harness : fixtureHarnessView;
-
-  const placeholders = (view?.agentProfiles ?? [])
-    .filter((profile) => profile.role === 'sub-agent')
-    .map((profile) => ({ key: `planned:${profile.name}`, label: profile.name, meta: profile.status, disabled: true }));
-
-  const items: SidebarItem[] = [
-    ...(view ? [{ key: BOUND_PROFILE_KEY, label: view.profile.name, meta: t('harness.profileStatusBound') }] : []),
-    ...placeholders,
-  ];
+  const labels: Record<typeof HARNESS_PURPOSES[number], string> = {
+    setup: 'Setup',
+    analysis: 'Analyze data',
+    context_enrichment: 'Context enrichment',
+  };
+  const items: SidebarItem[] = HARNESS_PURPOSES.map((purpose) => ({
+    key: purpose,
+    label: labels[purpose],
+    meta: harness?.purpose.purpose === purpose ? harness.purpose.profile : undefined,
+  }));
 
   return (
     <SidebarList
       header={t('harness.profilesHeader')}
       items={items}
-      selectedKey={selectedProfileKey}
-      onSelect={selectProfile}
+      selectedKey={selectedPurpose}
+      onSelect={(key) => selectProfile(key as typeof HARNESS_PURPOSES[number])}
     />
   );
 }

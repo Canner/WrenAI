@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../server/app.js";
 import { Store } from "../server/db.js";
 import { invalidateBundleAgentIdsCache, isProjectBound, resolveAuthChoice, resolveUserProject } from "../server/turn.js";
 import type { TurnDeps } from "../server/turn.js";
 import { loadBundle } from "../harness/index.js";
 import type { AuthChoice, Bundle, RouteOptions, RouteResult } from "../harness/index.js";
+import { NATIVE_DISPATCH_REGISTRY } from "../server/native-dispatch-registry.js";
 import { buildSyntheticBundle } from "./synthetic-bundle.js";
 
 const BASE_ROUTE_OPTIONS: Omit<RouteOptions, "question" | "onEvent"> = {
@@ -21,7 +22,7 @@ const okRoute = async (): Promise<RouteResult> => ({
   trace: { steps: [] },
 });
 
-const okBundle = (): Bundle => loadBundle(buildSyntheticBundle());
+const okBundle = (profile = "synthetic-profile"): Bundle => loadBundle(buildSyntheticBundle({ profile }));
 
 /** Builds a bootstrap-mode `TurnDeps`: starts unbound, with a `bindProject`/`getUserProject` pair mirroring `server/bin.ts`'s mutable-binding closure. */
 function buildBootstrapApp() {
@@ -41,6 +42,7 @@ function buildBootstrapApp() {
     route: okRoute,
     baseRouteOptions: BASE_ROUTE_OPTIONS,
     describeBundle: async () => okBundle(),
+    describeHarnessBundle: async (purpose) => okBundle(NATIVE_DISPATCH_REGISTRY[purpose].profile),
     getUserProject,
     bindProject,
   };
@@ -122,15 +124,27 @@ describe("bootstrap-mode project binding (getUserProject/bindProject)", () => {
       expect(await after.json()).toMatchObject({ turnId: expect.any(String) });
     });
 
-    it("GET /api/harness 409s while unbound, and succeeds once bound", async () => {
-      const { app, bindProject } = buildBootstrapApp();
+    it("GET /api/harness permits raw Setup while unbound, but keeps analysis and context enrichment bound-gated", async () => {
+      const { app, bindProject, deps } = buildBootstrapApp();
+      const describeHarnessBundle = vi.fn(async (purpose: keyof typeof NATIVE_DISPATCH_REGISTRY) => okBundle(NATIVE_DISPATCH_REGISTRY[purpose].profile));
+      (deps as { describeHarnessBundle?: TurnDeps["describeHarnessBundle"] }).describeHarnessBundle = describeHarnessBundle;
 
-      const before = await app.request("/api/harness");
-      expect(before.status).toBe(409);
+      const setup = await app.request("/api/harness?purpose=setup");
+      expect(setup.status).toBe(200);
+      expect(await setup.json()).toMatchObject({
+        purpose: { purpose: "setup", scopeKind: "bootstrap" },
+        profile: { boundContext: "Bootstrap workspace (no project bound)", status: "Bootstrap" },
+        connection: { via: "Bootstrap workspace", tablesSynced: 0 },
+      });
+      expect(describeHarnessBundle).toHaveBeenCalledWith("setup", expect.objectContaining({ userProject: "" }));
+
+      for (const purpose of ["analysis", "context_enrichment"]) {
+        const before = await app.request(`/api/harness?purpose=${purpose}`);
+        expect(before.status).toBe(409);
+      }
 
       bindProject("/workspace/root/acme");
-
-      const after = await app.request("/api/harness");
+      const after = await app.request("/api/harness?purpose=analysis");
       expect(after.status).toBe(200);
     });
 

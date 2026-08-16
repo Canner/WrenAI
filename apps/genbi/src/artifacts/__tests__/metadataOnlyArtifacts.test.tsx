@@ -36,6 +36,22 @@ describe('metadata-only artifacts render without crashing', () => {
     ).toBeInTheDocument();
   });
 
+  it('DashboardView renders a native artifact source link without a Share affordance', () => {
+    const artifact: DashboardArtifact = {
+      ...baseMeta,
+      key: 'native-a1',
+      kind: 'dashboard',
+      nativeSessionId: 'native-session-1',
+      source: { label: 'Session', href: '/sessions/native-session-1' },
+      envelope: { blocks: [], verified: true },
+    };
+
+    renderWithProviders(<DashboardView artifact={artifact} onPublish={vi.fn()} onUnpin={vi.fn()} />);
+
+    expect(screen.getByRole('link', { name: 'Session' })).toHaveAttribute('href', '/sessions/native-session-1');
+    expect(screen.queryByText('Not published yet.')).not.toBeInTheDocument();
+  });
+
   it('ReportView omits the preview panel when preview is absent', () => {
     const artifact: ReportArtifact = {
       ...baseMeta,

@@ -64,6 +64,60 @@ describe('WorkLog', () => {
     expect(screen.getByText('resolve_intent')).toBeInTheDocument();
   });
 
+  it('expands a sanitized Setup inspection with action, output, duration, and error details independently', async () => {
+    const user = userEvent.setup();
+    const steps: ToolStep[] = [
+      {
+        id: 'done',
+        label: 'Build context',
+        state: 'done',
+        kind: 'tool',
+        inspection: { action: 'wren context build', output: 'Built 3 models.', durationMs: 1250 },
+      },
+      {
+        id: 'running',
+        label: 'Discover schema',
+        state: 'running',
+        kind: 'tool',
+        inspection: { action: 'wren context discover' },
+      },
+      {
+        id: 'error',
+        label: 'Validate context',
+        state: 'error',
+        kind: 'tool',
+        inspection: { action: 'wren context validate', error: 'Connection refused. Check the database host and retry.' },
+      },
+      { id: 'missing', label: 'Prepare workspace', state: 'done', kind: 'tool' },
+    ];
+    renderSteps(steps);
+
+    const toggles = screen.getAllByRole('button');
+    expect(toggles).toHaveLength(3);
+    expect(screen.queryByText('Built 3 models.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Connection refused. Check the database host and retry.')).not.toBeInTheDocument();
+
+    await user.click(toggles[0]);
+    expect(toggles[0]).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Action')).toBeInTheDocument();
+    expect(screen.getByText('wren context build')).toBeInTheDocument();
+    expect(screen.getByText('Output')).toBeInTheDocument();
+    expect(screen.getByText('Built 3 models.')).toBeInTheDocument();
+    expect(screen.getByText('Duration:')).toBeInTheDocument();
+    expect(screen.getByText('1.3 s')).toBeInTheDocument();
+
+    await user.click(toggles[2]);
+    expect(toggles[2]).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Connection refused. Check the database host and retry.')).toBeInTheDocument();
+    expect(screen.getAllByText('Error')).toHaveLength(1);
+
+    await user.click(toggles[0]);
+    expect(toggles[0]).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Built 3 models.')).not.toBeInTheDocument();
+    // Expanding one row never collapses another.
+    expect(screen.getByText('Connection refused. Check the database host and retry.')).toBeInTheDocument();
+  });
+
   it('expands a step with input + detail on click, showing its SQL input and result detail', async () => {
     const user = userEvent.setup();
     const steps: ToolStep[] = [
