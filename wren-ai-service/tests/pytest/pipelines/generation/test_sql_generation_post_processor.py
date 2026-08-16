@@ -7,6 +7,7 @@ from src.core.engine import Engine
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    construct_ask_history_messages,
 )
 
 
@@ -58,6 +59,15 @@ class FakeEngine(Engine):
 def test_sql_generation_model_kwargs_preserve_strict_schema():
     assert SQL_GENERATION_MODEL_KWARGS["preserve_json_schema"] is True
     assert SQL_GENERATION_MODEL_KWARGS["response_format"]["type"] == "json_schema"
+    assert SQL_GENERATION_MODEL_KWARGS["response_format"]["json_schema"]["strict"] is True
+    schema = SQL_GENERATION_MODEL_KWARGS["response_format"]["json_schema"]["schema"]
+    assert schema["additionalProperties"] is False
+
+
+def test_construct_ask_history_messages_matches_legacy_empty_context():
+    histories = [{"question": "q", "sql": "SELECT 1"}]
+
+    assert construct_ask_history_messages(histories) == []
 
 
 @pytest.mark.asyncio
@@ -66,21 +76,19 @@ async def test_post_processor_extracts_tool_call_query_argument():
     processor = SQLGenPostProcessor(engine)
 
     result = await processor.run(
-        [
-            '{"name":"query","arguments":{"query":"SELECT supplierid, COUNT(*) FROM PO_Invoices GROUP BY supplierid;"}}'
-        ],
+        ['{"name":"query","arguments":{"query":"SELECT 1"}}'],
         project_id="project-id",
         mdl_hash="manifest-hash",
         data_source="mssql",
     )
 
     assert result["valid_generation_result"] == {
-        "sql": "SELECT supplierid, COUNT(*) FROM PO_Invoices GROUP BY supplierid",
+        "sql": "SELECT 1",
         "correlation_id": "correlation-id",
     }
     assert engine.dry_plan_calls == [
         {
-            "sql": "SELECT supplierid, COUNT(*) FROM PO_Invoices GROUP BY supplierid",
+            "sql": "SELECT 1",
             "data_source": "mssql",
             "project_id": "project-id",
             "mdl_hash": "manifest-hash",
@@ -95,7 +103,7 @@ async def test_post_processor_returns_no_relevant_sql_for_missing_sql_field():
     processor = SQLGenPostProcessor(FakeEngine())
 
     result = await processor.run(
-        ['{"name":"query","arguments":{"question":"Show suppliers"}}'],
+        ['{"name":"query","arguments":{"value":"q"}}'],
         project_id="project-id",
         data_source="mssql",
     )
@@ -126,7 +134,7 @@ async def test_post_processor_rejects_code_tool_payload():
     processor = SQLGenPostProcessor(engine)
 
     result = await processor.run(
-        ['{"name":"execute_code","arguments":{"code":"SELECT * FROM orders"}}'],
+        ['{"name":"execute_code","arguments":{"code":"SELECT 1"}}'],
         project_id="project-id",
         data_source="mssql",
     )
@@ -138,12 +146,30 @@ async def test_post_processor_rejects_code_tool_payload():
 
 
 @pytest.mark.asyncio
+async def test_post_processor_rejects_plain_text_non_sql_response():
+    engine = FakeEngine()
+    processor = SQLGenPostProcessor(engine)
+
+    result = await processor.run(
+        ["q"],
+        project_id="project-id",
+        data_source="mssql",
+    )
+
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "NO_RELEVANT_SQL"
+    assert "supported SQL JSON payload" in result["invalid_generation_result"]["error"]
+    assert engine.dry_plan_calls == []
+    assert engine.execute_sql_calls == []
+
+
+@pytest.mark.asyncio
 async def test_post_processor_dry_plans_before_preview_execution():
     engine = FakeEngine(dry_plan_success=False)
     processor = SQLGenPostProcessor(engine)
 
     result = await processor.run(
-        ['{"sql":"SELECT * FROM orders"}'],
+        ['{"sql":"SELECT 1"}'],
         project_id="project-id",
         mdl_hash="manifest-hash",
         data_source="mssql",
@@ -151,8 +177,8 @@ async def test_post_processor_dry_plans_before_preview_execution():
 
     assert result["valid_generation_result"] == {}
     assert result["invalid_generation_result"] == {
-        "sql": "SELECT * FROM orders",
-        "original_sql": "SELECT * FROM orders",
+        "sql": "SELECT 1",
+        "original_sql": "SELECT 1",
         "type": "DRY_PLAN",
         "error": "plan failed",
         "correlation_id": "",

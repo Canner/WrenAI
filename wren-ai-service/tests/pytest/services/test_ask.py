@@ -20,7 +20,7 @@ from src.web.v1.services.semantics_preparation import (
 
 
 def test_ask_defaults_follow_legacy_grounded_sql_flow():
-    request = AskRequest(query="How many invoices are there?", mdl_hash="mdl-hash")
+    request = AskRequest(query="q", mdl_hash="mdl-hash")
     service = AskService({})
 
     assert request.ignore_sql_generation_reasoning is True

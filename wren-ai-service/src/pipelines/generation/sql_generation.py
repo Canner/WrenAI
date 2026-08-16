@@ -28,6 +28,14 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_user_prompt_template = """
+{% if validation_contexts %}
+### VALID WREN SQL IDENTIFIERS ###
+Copy executable table, column, and relationship identifiers only from this section or the DATABASE SCHEMA below. Preserve each identifier exactly, including prefixes, spaces, digits, underscores, case, and punctuation. Semantic descriptions, aliases, source names, physical names, and user wording are not executable identifiers.
+{% for validation_context in validation_contexts %}
+{{ validation_context }}
+{% endfor %}
+{% endif %}
+
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -85,6 +93,7 @@ def prompt(
     documents: list[str],
     prompt_builder: PromptBuilder,
     sql_generation_reasoning: str | None = None,
+    validation_contexts: list[str] | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -96,6 +105,7 @@ def prompt(
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        validation_contexts=validation_contexts or [],
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,

@@ -357,6 +357,11 @@ class AskService:
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_names = [document.get("table_name") for document in documents]
                 table_ddls = [document.get("table_ddl") for document in documents]
+                identifier_contexts = [
+                    document.get("identifier_context")
+                    for document in documents
+                    if document.get("identifier_context")
+                ]
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
@@ -477,6 +482,7 @@ class AskService:
                         histories=histories,
                         project_id=ask_request.project_id,
                         mdl_hash=ask_request.mdl_hash,
+                        validation_contexts=identifier_contexts,
                         sql_samples=sql_samples,
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
@@ -496,6 +502,7 @@ class AskService:
                         sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
                         mdl_hash=ask_request.mdl_hash,
+                        validation_contexts=identifier_contexts,
                         sql_samples=sql_samples,
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,

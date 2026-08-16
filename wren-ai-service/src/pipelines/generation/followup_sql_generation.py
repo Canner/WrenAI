@@ -34,6 +34,14 @@ text_to_sql_with_followup_user_prompt_template = """
 Given the user's current follow-up question and the current retrieved DATABASE SCHEMA,
 generate one SQL query to best answer the user's question.
 
+{% if validation_contexts %}
+### VALID WREN SQL IDENTIFIERS ###
+Copy executable table, column, and relationship identifiers only from this section or the DATABASE SCHEMA below. Preserve each identifier exactly, including prefixes, spaces, digits, underscores, case, and punctuation. Semantic descriptions, aliases, source names, physical names, and user wording are not executable identifiers.
+{% for validation_context in validation_contexts %}
+{{ validation_context }}
+{% endfor %}
+{% endif %}
+
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -60,11 +68,10 @@ generate one SQL query to best answer the user's question.
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
-SQL:
-{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -77,12 +84,10 @@ SQL:
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
-{% if sql_generation_reasoning %}
-### REASONING PLAN ###
-{{ sql_generation_reasoning }}
-{% endif %}
+Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
+If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA, VALID WREN SQL IDENTIFIERS, or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql. Never create a table or column from the user's wording, even when the wording looks like a business term or object name.
 
-Let's think step by step.
+Return only the final JSON SQL response.
 """
 
 
@@ -93,6 +98,7 @@ def prompt(
     documents: list[str],
     sql_generation_reasoning: str,
     prompt_builder: PromptBuilder,
+    validation_contexts: list[str] | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -104,6 +110,7 @@ def prompt(
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        validation_contexts=validation_contexts or [],
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,

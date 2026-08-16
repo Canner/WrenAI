@@ -300,6 +300,47 @@ def _format_identifier_contract(context: dict) -> str:
     return "\n".join(lines)
 
 
+def _format_prompt_identifier_context(
+    table_name: str,
+    column_names: list[str],
+    relationship_constraints: list[str] | None = None,
+) -> str:
+    lines = [
+        f"table: {table_name}",
+        "columns:",
+    ]
+    lines.extend(f"- {column_name}" for column_name in column_names)
+
+    if relationship_constraints:
+        lines.append("relationships:")
+        lines.extend(f"- {constraint}" for constraint in relationship_constraints)
+
+    return "\n".join(lines)
+
+
+def _table_identifier_context(
+    content: dict,
+    columns: Optional[set[str]] = None,
+    tables: Optional[set[str]] = None,
+) -> str:
+    included_columns = _included_columns(content, columns, tables)
+    included_relationships = _included_relationships(content, tables)
+    return _format_prompt_identifier_context(
+        content["name"],
+        [column["name"] for column in included_columns],
+        [relationship["constraint"] for relationship in included_relationships],
+    )
+
+
+def _semantic_object_identifier_context(content: dict) -> str:
+    columns = [
+        column["name"]
+        for column in content.get("columns", [])
+        if column.get("name") and column.get("data_type", "").lower() != "unknown"
+    ]
+    return _format_prompt_identifier_context(content["name"], columns)
+
+
 def _included_relationship_columns(content: dict, tables: Optional[set[str]]) -> set:
     relationship_columns = {
         column.get("column")
@@ -640,6 +681,7 @@ def check_using_db_schemas_without_pruning(
                 {
                     "table_name": table_schema["name"],
                     "table_ddl": ddl,
+                    "identifier_context": _table_identifier_context(table_schema),
                 }
             )
             if _has_calculated_field:
@@ -655,6 +697,7 @@ def check_using_db_schemas_without_pruning(
                 {
                     "table_name": content["name"],
                     "table_ddl": _build_metric_ddl(content),
+                    "identifier_context": _semantic_object_identifier_context(content),
                 }
             )
             has_metric = True
@@ -663,6 +706,7 @@ def check_using_db_schemas_without_pruning(
                 {
                     "table_name": content["name"],
                     "table_ddl": _build_view_ddl(content),
+                    "identifier_context": _semantic_object_identifier_context(content),
                 }
             )
 
@@ -772,6 +816,11 @@ def construct_retrieval_results(
                     {
                         "table_name": table_schema["name"],
                         "table_ddl": ddl,
+                        "identifier_context": _table_identifier_context(
+                            table_schema,
+                            columns=columns,
+                            tables=tables,
+                        ),
                     }
                 )
 
@@ -783,6 +832,9 @@ def construct_retrieval_results(
                     {
                         "table_name": content["name"],
                         "table_ddl": _build_metric_ddl(content),
+                        "identifier_context": _semantic_object_identifier_context(
+                            content
+                        ),
                     }
                 )
                 has_metric = True
@@ -791,6 +843,9 @@ def construct_retrieval_results(
                     {
                         "table_name": content["name"],
                         "table_ddl": _build_view_ddl(content),
+                        "identifier_context": _semantic_object_identifier_context(
+                            content
+                        ),
                     }
                 )
 

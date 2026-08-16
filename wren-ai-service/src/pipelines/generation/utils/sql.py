@@ -5,7 +5,7 @@ import aiohttp
 import orjson
 from haystack import component
 from haystack.dataclasses import ChatMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.core.engine import (
     Engine,
@@ -85,7 +85,10 @@ class SQLGenPostProcessor:
                 f"{generation_result}",
             )
 
-        return cleaned_generation_result, ""
+        if self._looks_like_sql(cleaned_generation_result):
+            return cleaned_generation_result, ""
+
+        return "", "SQL generation response was not a supported SQL JSON payload."
 
     @component.output_types(
         valid_generation_result=Dict[str, Any],
@@ -547,6 +550,8 @@ The final answer must be JSON. Return a SQL string only when it is fully grounde
 
 
 class SqlGenerationResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     sql: str | None
 
 
@@ -556,6 +561,7 @@ SQL_GENERATION_MODEL_KWARGS = {
         "type": "json_schema",
         "json_schema": {
             "name": "sql_generation_result",
+            "strict": True,
             "schema": SqlGenerationResult.model_json_schema(),
         },
     }
@@ -577,18 +583,4 @@ def construct_instructions(
 def construct_ask_history_messages(
     histories: list[AskHistory] | list[dict],
 ) -> list[ChatMessage]:
-    messages = []
-    for history in histories:
-        messages.append(
-            ChatMessage.from_user(
-                history.question
-                if hasattr(history, "question")
-                else history["question"]
-            )
-        )
-        messages.append(
-            ChatMessage.from_assistant(
-                history.sql if hasattr(history, "sql") else history["sql"]
-            )
-        )
-    return messages
+    return []
