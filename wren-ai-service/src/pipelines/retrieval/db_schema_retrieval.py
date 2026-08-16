@@ -773,9 +773,24 @@ def construct_retrieval_results(
     dbschema_retrieval: list[Document],
 ) -> dict[str, Any]:
     if filter_columns_in_tables:
-        columns_and_tables_needed = orjson.loads(
-            filter_columns_in_tables["replies"][0]
-        )["results"]
+        try:
+            columns_and_tables_needed = orjson.loads(
+                filter_columns_in_tables["replies"][0]
+            ).get("results")
+        except (IndexError, KeyError, orjson.JSONDecodeError, AttributeError) as e:
+            logger.warning(
+                f"Column pruning returned unusable output; using retrieved schemas without column pruning: {e}"
+            )
+            columns_and_tables_needed = None
+
+        if not isinstance(columns_and_tables_needed, list):
+            logger.warning(
+                "Column pruning output omitted results; using retrieved schemas without column pruning."
+            )
+            return _build_retrieval_results_without_column_pruning(
+                construct_db_schemas,
+                dbschema_retrieval,
+            )
 
         # we need to change the below code to match the new schema of structured output
         # the objective of this loop is to change the structure of JSON to match the needed format
@@ -866,6 +881,61 @@ def construct_retrieval_results(
             "has_metric": check_using_db_schemas_without_pruning["has_metric"],
             "has_json_field": check_using_db_schemas_without_pruning["has_json_field"],
         }
+
+
+def _build_retrieval_results_without_column_pruning(
+    construct_db_schemas: list[dict],
+    dbschema_retrieval: list[Document],
+) -> dict[str, Any]:
+    retrieval_results = []
+    has_calculated_field = False
+    has_metric = False
+    has_json_field = False
+
+    for table_schema in construct_db_schemas:
+        if table_schema["type"] == "TABLE":
+            ddl, _has_calculated_field, _has_json_field = (
+                _build_table_retrieval_context(table_schema)
+            )
+            retrieval_results.append(
+                {
+                    "table_name": table_schema["name"],
+                    "table_ddl": ddl,
+                    "identifier_context": _table_identifier_context(table_schema),
+                }
+            )
+            if _has_calculated_field:
+                has_calculated_field = True
+            if _has_json_field:
+                has_json_field = True
+
+    for document in dbschema_retrieval:
+        content = ast.literal_eval(document.content)
+
+        if content["type"] == "METRIC":
+            retrieval_results.append(
+                {
+                    "table_name": content["name"],
+                    "table_ddl": _build_metric_ddl(content),
+                    "identifier_context": _semantic_object_identifier_context(content),
+                }
+            )
+            has_metric = True
+        elif content["type"] == "VIEW":
+            retrieval_results.append(
+                {
+                    "table_name": content["name"],
+                    "table_ddl": _build_view_ddl(content),
+                    "identifier_context": _semantic_object_identifier_context(content),
+                }
+            )
+
+    return {
+        "retrieval_results": retrieval_results,
+        "has_calculated_field": has_calculated_field,
+        "has_metric": has_metric,
+        "has_json_field": has_json_field,
+    }
 
 
 ## End of Pipeline

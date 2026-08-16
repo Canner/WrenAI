@@ -34,11 +34,11 @@ text_to_sql_with_followup_user_prompt_template = """
 Given the user's current follow-up question and the current retrieved DATABASE SCHEMA,
 generate one SQL query to best answer the user's question.
 
-{% if validation_contexts %}
-### VALID WREN SQL IDENTIFIERS ###
-Copy executable table, column, and relationship identifiers only from this section or the DATABASE SCHEMA below. Preserve each identifier exactly, including prefixes, spaces, digits, underscores, case, and punctuation. Semantic descriptions, aliases, source names, physical names, and user wording are not executable identifiers.
-{% for validation_context in validation_contexts %}
-{{ validation_context }}
+{% if identifier_contexts %}
+### EXECUTABLE WREN IDENTIFIER CATALOG ###
+The following catalog is derived from the retrieved DATABASE SCHEMA. Use it as a quick index of the exact executable model, column, and relationship names available for this request.
+{% for identifier_context in identifier_contexts %}
+{{ identifier_context }}
 {% endfor %}
 {% endif %}
 
@@ -84,8 +84,8 @@ Question:
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
-If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA, VALID WREN SQL IDENTIFIERS, or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql. Never create a table or column from the user's wording, even when the wording looks like a business term or object name.
+Generate one Wren SQL query that answers the user's follow-up question using the retrieved DATABASE SCHEMA. Use exact model and column names from DATABASE SCHEMA. Use aliases, descriptions, comments, samples, and previous questions only to understand business meaning.
+If the retrieved DATABASE SCHEMA does not contain the model, column, relationship, metric, or supported function needed to answer the question, return {"sql": null}.
 
 Return only the final JSON SQL response.
 """
@@ -98,7 +98,7 @@ def prompt(
     documents: list[str],
     sql_generation_reasoning: str,
     prompt_builder: PromptBuilder,
-    validation_contexts: list[str] | None = None,
+    identifier_contexts: list[str] | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -110,7 +110,7 @@ def prompt(
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        validation_contexts=validation_contexts or [],
+        identifier_contexts=identifier_contexts or [],
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -157,7 +157,6 @@ async def post_process(
     data_source: str,
     project_id: str | None = None,
     mdl_hash: str | None = None,
-    validation_contexts: list[str] | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
 ) -> dict:
@@ -165,7 +164,6 @@ async def post_process(
         generate_sql_in_followup.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
-        validation_contexts=validation_contexts,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
@@ -214,7 +212,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         instructions: list[dict] | None = None,
         project_id: str | None = None,
         mdl_hash: str | None = None,
-        validation_contexts: list[str] | None = None,
+        identifier_contexts: list[str] | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
         has_json_field: bool = False,
@@ -241,7 +239,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "histories": histories,
                 "project_id": project_id,
                 "mdl_hash": mdl_hash,
-                "validation_contexts": validation_contexts,
+                "identifier_contexts": identifier_contexts,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "has_calculated_field": has_calculated_field,

@@ -164,25 +164,6 @@ async def test_post_processor_rejects_plain_text_non_sql_response():
 
 
 @pytest.mark.asyncio
-async def test_post_processor_rejects_sql_with_unretrieved_table_before_engine_call():
-    engine = FakeEngine()
-    processor = SQLGenPostProcessor(engine)
-
-    result = await processor.run(
-        ['{"sql":"SELECT 1 FROM missing_model"}'],
-        project_id="project-id",
-        data_source="mssql",
-        validation_contexts=["table: allowed_model\ncolumns:\n- allowed_column"],
-    )
-
-    assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "NO_RELEVANT_SQL"
-    assert "missing_model" in result["invalid_generation_result"]["error"]
-    assert engine.dry_plan_calls == []
-    assert engine.execute_sql_calls == []
-
-
-@pytest.mark.asyncio
 async def test_post_processor_dry_plans_before_preview_execution():
     engine = FakeEngine(dry_plan_success=False)
     processor = SQLGenPostProcessor(engine)

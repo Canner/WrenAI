@@ -165,13 +165,11 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
     mdl_hash: str | None = None,
-    validation_contexts: list[str] | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
-        validation_contexts=validation_contexts,
     )
 
 
@@ -212,7 +210,6 @@ class SQLRegeneration(BasicPipeline):
         instructions: list[dict] | None = None,
         project_id: str | None = None,
         mdl_hash: str | None = None,
-        validation_contexts: list[str] | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
         has_json_field: bool = False,
@@ -232,7 +229,6 @@ class SQLRegeneration(BasicPipeline):
                 "instructions": instructions,
                 "project_id": project_id,
                 "mdl_hash": mdl_hash,
-                "validation_contexts": validation_contexts,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 "has_json_field": has_json_field,

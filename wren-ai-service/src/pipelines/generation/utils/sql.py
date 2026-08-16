@@ -1,15 +1,11 @@
 import logging
-from collections.abc import Iterable
 from typing import Any, Dict, List
 
 import aiohttp
 import orjson
-import sqlparse
 from haystack import component
 from haystack.dataclasses import ChatMessage
 from pydantic import BaseModel, ConfigDict
-from sqlparse.sql import Identifier, IdentifierList, TokenList
-from sqlparse.tokens import Keyword, Name
 
 from src.core.engine import (
     Engine,
@@ -94,129 +90,6 @@ class SQLGenPostProcessor:
 
         return "", "SQL generation response was not a supported SQL JSON payload."
 
-    def _allowed_tables(self, validation_contexts: list[str]) -> set[str]:
-        allowed_tables = set()
-        for context in validation_contexts:
-            for line in context.splitlines():
-                if line.startswith("table: "):
-                    allowed_tables.add(line.removeprefix("table: ").strip())
-        return allowed_tables
-
-    def _cte_names(self, statement: TokenList) -> set[str]:
-        names = set()
-        tokens = [
-            token
-            for token in statement.tokens
-            if not token.is_whitespace
-        ]
-        for index, token in enumerate(tokens):
-            if token.normalized != "WITH":
-                continue
-            if index + 1 >= len(tokens):
-                return names
-
-            cte_token = tokens[index + 1]
-            identifiers: Iterable[Identifier]
-            if isinstance(cte_token, IdentifierList):
-                identifiers = cte_token.get_identifiers()
-            elif isinstance(cte_token, Identifier):
-                identifiers = [cte_token]
-            else:
-                return names
-
-            for identifier in identifiers:
-                name = identifier.get_name()
-                if name:
-                    names.add(name)
-            return names
-
-        return names
-
-    def _identifier_name(self, token) -> str | None:
-        if isinstance(token, Identifier):
-            return token.get_real_name() or token.get_name()
-        if token.ttype in (Name, Keyword):
-            return token.value.strip('"')
-        return None
-
-    def _table_identifiers(self, sql: str) -> set[str]:
-        tables = set()
-        stop_keywords = {
-            "WHERE",
-            "GROUP BY",
-            "ORDER BY",
-            "HAVING",
-            "LIMIT",
-            "UNION",
-            "EXCEPT",
-            "INTERSECT",
-            "WINDOW",
-        }
-        source_keywords = {
-            "FROM",
-            "JOIN",
-            "INNER JOIN",
-            "LEFT JOIN",
-            "LEFT OUTER JOIN",
-            "RIGHT JOIN",
-            "RIGHT OUTER JOIN",
-            "FULL JOIN",
-            "FULL OUTER JOIN",
-            "CROSS JOIN",
-        }
-
-        for statement in sqlparse.parse(sql):
-            cte_names = self._cte_names(statement)
-            collecting_sources = False
-            for token in statement.tokens:
-                if token.is_whitespace:
-                    continue
-
-                if token.ttype in Keyword and token.normalized in stop_keywords:
-                    collecting_sources = False
-                    continue
-
-                if token.ttype in Keyword and token.normalized in source_keywords:
-                    collecting_sources = True
-                    continue
-
-                if not collecting_sources:
-                    continue
-
-                if isinstance(token, IdentifierList):
-                    identifiers = token.get_identifiers()
-                else:
-                    identifiers = [token]
-
-                for identifier in identifiers:
-                    name = self._identifier_name(identifier)
-                    if name and name not in cte_names:
-                        tables.add(name)
-
-        return tables
-
-    def _validate_sql_tables(
-        self,
-        sql: str,
-        validation_contexts: list[str] | None,
-    ) -> str:
-        if not validation_contexts:
-            return ""
-
-        allowed_tables = self._allowed_tables(validation_contexts)
-        if not allowed_tables:
-            return ""
-
-        referenced_tables = self._table_identifiers(sql)
-        ungrounded_tables = referenced_tables - allowed_tables
-        if ungrounded_tables:
-            return (
-                "Generated SQL referenced table identifiers outside the retrieved "
-                "Wren schema: " + ", ".join(sorted(ungrounded_tables))
-            )
-
-        return ""
-
     @component.output_types(
         valid_generation_result=Dict[str, Any],
         invalid_generation_result=Dict[str, Any],
@@ -230,7 +103,6 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
-        validation_contexts: list[str] | None = None,
     ) -> dict:
         try:
             generation_result, extraction_error = self._extract_sql(replies)
@@ -243,22 +115,6 @@ class SQLGenPostProcessor:
                         "type": "NO_RELEVANT_SQL",
                         "error": extraction_error
                         or "No grounded SQL was generated from the current schema.",
-                        "correlation_id": "",
-                    },
-                }
-
-            validation_error = self._validate_sql_tables(
-                generation_result,
-                validation_contexts,
-            )
-            if validation_error:
-                return {
-                    "valid_generation_result": {},
-                    "invalid_generation_result": {
-                        "sql": generation_result,
-                        "original_sql": generation_result,
-                        "type": "NO_RELEVANT_SQL",
-                        "error": validation_error,
                         "correlation_id": "",
                     },
                 }

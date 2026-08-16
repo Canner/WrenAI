@@ -9,10 +9,12 @@ from src.pipelines.retrieval.db_schema_retrieval import (
     construct_retrieval_results,
     dbschema_retrieval,
     embedding,
-    prompt as build_column_selection_prompt,
-    table_retrieval,
     table_columns_selection_system_prompt,
     table_columns_selection_user_prompt_template,
+    table_retrieval,
+)
+from src.pipelines.retrieval.db_schema_retrieval import (
+    prompt as build_column_selection_prompt,
 )
 
 
@@ -648,6 +650,40 @@ def test_construct_retrieval_results_keeps_schema_when_pruner_returns_unknown_co
     assert "stored_measure DOUBLE" in table_ddl
     assert "sql_column_names_use_exactly:\n- stored_dimension\n- stored_measure" in (
         table_ddl
+    )
+
+
+def test_construct_retrieval_results_falls_back_when_pruner_omits_results():
+    result = construct_retrieval_results(
+        check_using_db_schemas_without_pruning={},
+        filter_columns_in_tables={"replies": ['{"message":"not structured"}']},
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "modeled_dataset",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "stored_attribute",
+                        "data_type": "VARCHAR",
+                        "comment": "",
+                        "is_primary_key": False,
+                    }
+                ],
+                "properties": {},
+                "primaryKey": "",
+            }
+        ],
+        dbschema_retrieval=[],
+    )
+
+    assert [item["table_name"] for item in result["retrieval_results"]] == [
+        "modeled_dataset"
+    ]
+    assert "CREATE TABLE modeled_dataset" in result["retrieval_results"][0]["table_ddl"]
+    assert result["retrieval_results"][0]["identifier_context"] == (
+        "table: modeled_dataset\ncolumns:\n- stored_attribute"
     )
 
 
