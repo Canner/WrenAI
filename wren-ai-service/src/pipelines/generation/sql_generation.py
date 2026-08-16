@@ -28,14 +28,6 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_user_prompt_template = """
-{% if identifier_contexts %}
-### EXECUTABLE WREN IDENTIFIER CATALOG ###
-The following catalog is derived from the retrieved DATABASE SCHEMA. Use it as a quick index of the exact executable model, column, and relationship names available for this request.
-{% for identifier_context in identifier_contexts %}
-{{ identifier_context }}
-{% endfor %}
-{% endif %}
-
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -62,10 +54,11 @@ The following catalog is derived from the retrieved DATABASE SCHEMA. Use it as a
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
+SQL:
+{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -78,10 +71,13 @@ Question:
 
 ### QUESTION ###
 User's Question: {{ query }}
-Generate one Wren SQL query that answers the user's question using the retrieved DATABASE SCHEMA. Use exact model and column names from DATABASE SCHEMA. Use aliases, descriptions, comments, and samples only to understand business meaning.
-If the retrieved DATABASE SCHEMA does not contain the model, column, relationship, metric, or supported function needed to answer the question, return {"sql": null}.
 
-Return only the final JSON SQL response.
+{% if sql_generation_reasoning %}
+### REASONING PLAN ###
+{{ sql_generation_reasoning }}
+{% endif %}
+
+Let's think step by step.
 """
 
 
@@ -92,7 +88,6 @@ def prompt(
     documents: list[str],
     prompt_builder: PromptBuilder,
     sql_generation_reasoning: str | None = None,
-    identifier_contexts: list[str] | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -104,7 +99,6 @@ def prompt(
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        identifier_contexts=identifier_contexts or [],
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -203,7 +197,6 @@ class SQLGeneration(BasicPipeline):
         instructions: list[dict] | None = None,
         project_id: str | None = None,
         mdl_hash: str | None = None,
-        identifier_contexts: list[str] | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
         has_json_field: bool = False,
@@ -232,7 +225,6 @@ class SQLGeneration(BasicPipeline):
                 "instructions": instructions,
                 "project_id": project_id,
                 "mdl_hash": mdl_hash,
-                "identifier_contexts": identifier_contexts,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 "has_json_field": has_json_field,

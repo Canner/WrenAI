@@ -31,16 +31,8 @@ logger = logging.getLogger("wren-ai-service")
 
 text_to_sql_with_followup_user_prompt_template = """
 ### TASK ###
-Given the user's current follow-up question and the current retrieved DATABASE SCHEMA,
-generate one SQL query to best answer the user's question.
-
-{% if identifier_contexts %}
-### EXECUTABLE WREN IDENTIFIER CATALOG ###
-The following catalog is derived from the retrieved DATABASE SCHEMA. Use it as a quick index of the exact executable model, column, and relationship names available for this request.
-{% for identifier_context in identifier_contexts %}
-{{ identifier_context }}
-{% endfor %}
-{% endif %}
+Given the following user's follow-up question and previous SQL query and summary,
+generate one SQL query to best answer user's question.
 
 ### DATABASE SCHEMA ###
 {% for document in documents %}
@@ -68,10 +60,11 @@ The following catalog is derived from the retrieved DATABASE SCHEMA. Use it as a
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
-Question:
-{{sample.question}}
+Summary:
+{{sample.summary}}
+SQL:
+{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -84,10 +77,11 @@ Question:
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
-Generate one Wren SQL query that answers the user's follow-up question using the retrieved DATABASE SCHEMA. Use exact model and column names from DATABASE SCHEMA. Use aliases, descriptions, comments, samples, and previous questions only to understand business meaning.
-If the retrieved DATABASE SCHEMA does not contain the model, column, relationship, metric, or supported function needed to answer the question, return {"sql": null}.
 
-Return only the final JSON SQL response.
+### REASONING PLAN ###
+{{ sql_generation_reasoning }}
+
+Let's think step by step.
 """
 
 
@@ -98,7 +92,6 @@ def prompt(
     documents: list[str],
     sql_generation_reasoning: str,
     prompt_builder: PromptBuilder,
-    identifier_contexts: list[str] | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -110,7 +103,6 @@ def prompt(
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        identifier_contexts=identifier_contexts or [],
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -212,7 +204,6 @@ class FollowUpSQLGeneration(BasicPipeline):
         instructions: list[dict] | None = None,
         project_id: str | None = None,
         mdl_hash: str | None = None,
-        identifier_contexts: list[str] | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
         has_json_field: bool = False,
@@ -239,7 +230,6 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "histories": histories,
                 "project_id": project_id,
                 "mdl_hash": mdl_hash,
-                "identifier_contexts": identifier_contexts,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "has_calculated_field": has_calculated_field,

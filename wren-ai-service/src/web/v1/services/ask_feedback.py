@@ -184,7 +184,6 @@ class AskFeedbackService:
                     "sql_regeneration"
                 ].run(
                     contexts=table_ddls,
-                    query=ask_feedback_request.question,
                     sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                     sql=ask_feedback_request.sql,
                     project_id=ask_feedback_request.project_id,
@@ -212,15 +211,10 @@ class AskFeedbackService:
                 elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_result"]:
-                    if failed_dry_run_result["type"] not in (
-                        "TIME_OUT",
-                        "NO_RELEVANT_SQL",
-                        "SQL_GENERATION",
-                    ):
+                    if failed_dry_run_result["type"] != "TIME_OUT":
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
-                        sql_diagnosis_reasoning = None
 
                         self._ask_feedback_results[
                             query_id
@@ -245,23 +239,16 @@ class AskFeedbackService:
                                 "post_process"
                             ].get("reasoning")
 
-                        correction_error_message = error_message
-                        if sql_diagnosis_reasoning:
-                            correction_error_message = (
-                                f"{error_message}\nDiagnosis: {sql_diagnosis_reasoning}"
-                            )
-
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
-                            query=ask_feedback_request.question,
-                            sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                             instructions=instructions,
                             invalid_generation_result={
-                                "original_sql": original_sql,
-                                "sql": invalid_sql,
-                                "error": correction_error_message,
+                                "sql": original_sql,
+                                "error": sql_diagnosis_reasoning
+                                if allow_sql_diagnosis
+                                else error_message,
                             },
                             project_id=ask_feedback_request.project_id,
                             mdl_hash=ask_feedback_request.mdl_hash,
