@@ -10,6 +10,7 @@ from src.core.engine import (
     Engine,
     clean_generation_result,
 )
+from src.providers.llm import ChatMessage
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
