@@ -110,6 +110,25 @@ const ForwardDiagram = forwardRef(function ForwardDiagram(props: any, ref) {
   return <Diagram {...props} forwardRef={ref} />;
 });
 
+const semanticText = (value: any): string => {
+  if (Array.isArray(value)) {
+    return value.map(semanticText).filter(Boolean).join(', ');
+  }
+  return typeof value === 'string' ? value.trim() : '';
+};
+
+const firstSemanticText = (...values: any[]): string =>
+  values.map(semanticText).find(Boolean) || '';
+
+const semanticFallbackDisplayName = (name: string): string => {
+  return String(name || '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/[_\-.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 const DiagramWrapper = styled.div`
   position: relative;
   height: 100%;
@@ -683,34 +702,46 @@ export default function Modeling() {
         ASSISTANT_INITIAL_POLL_INTERVAL_MS * Math.max(1, attempt + 1),
         ASSISTANT_MAX_POLL_INTERVAL_MS,
       );
-      await new Promise((resolve) =>
-        setTimeout(resolve, pollInterval),
-      );
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
     }
     throw new Error('AI assistant timed out.');
   };
 
-  const normalizeSemanticModel = (name: string, value: any): any => ({
-    name: value?.name || name,
-    displayName:
-      value?.displayName ||
-      value?.alias ||
-      value?.properties?.displayName ||
-      value?.properties?.alias ||
-      '',
-    description: value?.description || value?.properties?.description || '',
-    columns: (value?.columns || []).map((column) => ({
-      name: column?.name,
-      type: column?.type,
+  const normalizeSemanticModel = (name: string, value: any): any => {
+    const modelName = semanticText(value?.name) || semanticText(name);
+    return {
+      name: modelName,
       displayName:
-        column?.displayName ||
-        column?.alias ||
-        column?.properties?.displayName ||
-        column?.properties?.alias ||
-        '',
-      description: column?.description || column?.properties?.description || '',
-    })),
-  });
+        firstSemanticText(
+          value?.displayName,
+          value?.alias,
+          value?.properties?.displayName,
+          value?.properties?.alias,
+        ) || semanticFallbackDisplayName(modelName),
+      description: firstSemanticText(
+        value?.description,
+        value?.properties?.description,
+      ),
+      columns: (value?.columns || []).map((column) => {
+        const columnName = semanticText(column?.name);
+        return {
+          name: columnName,
+          type: column?.type,
+          displayName:
+            firstSemanticText(
+              column?.displayName,
+              column?.alias,
+              column?.properties?.displayName,
+              column?.properties?.alias,
+            ) || semanticFallbackDisplayName(columnName),
+          description: firstSemanticText(
+            column?.description,
+            column?.properties?.description,
+          ),
+        };
+      }),
+    };
+  };
 
   const normalizeSemanticResult = (result: any): any[] => {
     if (Array.isArray(result)) {
@@ -1005,7 +1036,9 @@ export default function Modeling() {
           if (!diagramModel) return [];
           return {
             modelId: diagramModel.modelId,
-            displayName: model.displayName,
+            displayName:
+              firstSemanticText(model.displayName) ||
+              semanticFallbackDisplayName(model.name),
             description: model.description,
             columns: (model.columns || [])
               .map((column) => {
@@ -1015,7 +1048,11 @@ export default function Modeling() {
                 return field
                   ? {
                       id: field.columnId,
-                      displayName: column.displayName || field.displayName,
+                      displayName:
+                        firstSemanticText(
+                          column.displayName,
+                          field.displayName,
+                        ) || semanticFallbackDisplayName(column.name),
                       description: column.description,
                     }
                   : null;

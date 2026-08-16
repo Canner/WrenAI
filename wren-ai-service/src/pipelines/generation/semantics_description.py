@@ -26,7 +26,7 @@ Requirements:
 2. Return every input model exactly once and every input column exactly once.
 3. Preserve every model and column `name` exactly as provided.
 4. Put each generated description in `properties.description`.
-5. Put natural-language aliases and synonyms in `properties.displayName` as a short comma-separated phrase. Do not put SQL identifiers there.
+5. Put natural-language aliases and synonyms in `properties.displayName` as a required, non-empty, short comma-separated phrase. Do not put SQL identifiers there unless the identifier itself is the natural user-facing name.
 6. Make descriptions business-friendly, factual, and useful for text-to-SQL retrieval.
 7. Include business context, common analytical use, and the field role when it is supported by the name, type, or relationships: ID/key, date/time, measure, dimension, status, currency, quantity, cost, revenue, rate, percentage, or code.
 8. Ground descriptions and aliases only in the user prompt, model and column names, aliases, data types, existing descriptions, and provided schema/relationship context.
@@ -48,7 +48,7 @@ Localization Language: {{ language }}
 Write semantic descriptions for every picked model and every column.
 For each model, describe the real-world records represented and the analytical questions it can support.
 For each column, describe the business meaning and analytical use of that exact field.
-For each model and column, generate aliases/synonyms that users may naturally type in questions and place them in properties.displayName.
+For each model and column, generate non-empty aliases/synonyms that users may naturally type in questions and place them in properties.displayName.
 If an existing description is already meaningful, preserve its business meaning while making it clearer and more useful for retrieval.
 Keep every description and alias grounded in the picked model metadata, user prompt, data types, and relationship context.
 """
@@ -208,7 +208,7 @@ def output(normalize: dict, picked_models: list[dict]) -> dict:
 ## End of Pipeline
 class ModelProperties(BaseModel):
     description: str
-    displayName: str = ""
+    displayName: str
 
 
 class ModelColumns(BaseModel):
