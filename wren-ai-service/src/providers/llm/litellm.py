@@ -19,10 +19,6 @@ from src.providers.loader import provider
 from src.utils import extract_braces_content, remove_trailing_slash
 
 
-def _is_openai_api_base(api_base: Optional[str]) -> bool:
-    return bool(api_base) and "api.openai.com" in api_base.lower()
-
-
 @provider("litellm_llm")
 class LitellmLLMProvider(LLMProvider):
     def __init__(
@@ -69,42 +65,10 @@ class LitellmLLMProvider(LLMProvider):
         generation_kwargs: Optional[Dict[str, Any]] = None,
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
     ):
-        component_generation_kwargs = generation_kwargs or {}
-
-        def _normalize_generation_kwargs(
-            kwargs: Optional[Dict[str, Any]],
-            explicit_response_format: bool = False,
-        ) -> Dict[str, Any]:
-            normalized = dict(kwargs or {})
-            preserve_json_schema = normalized.pop("preserve_json_schema", False)
-            response_format = normalized.get("response_format")
-
-            # Plain text is the default chat-completions behavior.
-            # Some OpenAI-compatible endpoints reject an explicit
-            # {"type": "text"} payload or serialize it incorrectly.
-            if (
-                isinstance(response_format, dict)
-                and response_format.get("type") == "text"
-            ):
-                normalized.pop("response_format", None)
-
-            if (
-                self._api_base
-                and not _is_openai_api_base(self._api_base)
-                and isinstance(response_format, dict)
-                and response_format.get("type") == "json_schema"
-                and not preserve_json_schema
-            ):
-                if explicit_response_format:
-                    normalized["response_format"] = {"type": "json_object"}
-                else:
-                    normalized.pop("response_format", None)
-
-            if self._api_base and not _is_openai_api_base(self._api_base):
-                # Some local OpenAI-compatible servers reject non-OpenAI keys.
-                normalized.pop("speed", None)
-
-            return normalized
+        combined_generation_kwargs = {
+            **(generation_kwargs or {}),
+            **(self._model_kwargs or {}),
+        }
 
         @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
         async def _run(
@@ -135,42 +99,10 @@ class LitellmLLMProvider(LLMProvider):
                 convert_message_to_openai_format(message) for message in messages
             ]
 
-            runtime_generation_kwargs = generation_kwargs or {}
-            model_generation_kwargs = self._model_kwargs or {}
-            explicit_response_format = (
-                "response_format" in component_generation_kwargs
-                or "response_format" in model_generation_kwargs
-                or "response_format" in runtime_generation_kwargs
-            )
-            merged_generation_kwargs = {
-                **component_generation_kwargs,
-                **model_generation_kwargs,
-                **runtime_generation_kwargs,
+            generation_kwargs = {
+                **combined_generation_kwargs,
+                **(generation_kwargs or {}),
             }
-            if (
-                component_generation_kwargs.get("preserve_json_schema")
-                and isinstance(
-                    component_generation_kwargs.get("response_format"), dict
-                )
-                and component_generation_kwargs["response_format"].get("type")
-                == "json_schema"
-                and "response_format" not in runtime_generation_kwargs
-            ):
-                merged_generation_kwargs["response_format"] = (
-                    component_generation_kwargs["response_format"]
-                )
-                merged_generation_kwargs["preserve_json_schema"] = True
-
-            generation_kwargs = _normalize_generation_kwargs(
-                merged_generation_kwargs,
-                explicit_response_format=explicit_response_format,
-            )
-            completion_timeout = generation_kwargs.pop("timeout", self._timeout)
-            should_stream = (
-                streaming_callback is not None
-                and query_id is not None
-                and generation_kwargs.pop("stream", True)
-            )
 
             allowed_openai_params = generation_kwargs.get(
                 "allowed_openai_params", []
@@ -180,10 +112,9 @@ class LitellmLLMProvider(LLMProvider):
                 completion = await self._router.acompletion(
                     model=self._model,
                     messages=openai_formatted_messages,
-                    stream=should_stream,
+                    stream=streaming_callback is not None,
                     allowed_openai_params=allowed_openai_params,
                     mock_testing_fallbacks=self._enable_fallback_testing,
-                    timeout=completion_timeout,
                     **generation_kwargs,
                 )
             else:
@@ -192,15 +123,15 @@ class LitellmLLMProvider(LLMProvider):
                     api_key=self._api_key,
                     api_base=self._api_base,
                     api_version=self._api_version,
-                    timeout=completion_timeout,
+                    timeout=self._timeout,
                     messages=openai_formatted_messages,
-                    stream=should_stream,
+                    stream=streaming_callback is not None,
                     allowed_openai_params=allowed_openai_params,
                     **generation_kwargs,
                 )
 
             completions: List[ChatMessage] = []
-            if should_stream:
+            if streaming_callback is not None:
                 num_responses = generation_kwargs.pop("n", 1)
                 if num_responses > 1:
                     raise ValueError(
