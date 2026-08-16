@@ -141,3 +141,60 @@ def test_normalize_preserves_generated_aliases():
         "order id, order number"
     )
     assert result["orders"]["columns"][0]["type"] == "VARCHAR"
+
+
+def test_normalize_ignores_extra_llm_fields_but_keeps_semantics():
+    result = normalize(
+        {
+            "replies": [
+                """
+                {
+                  "models": [
+                    {
+                      "name": "orders",
+                      "entity": "transaction",
+                      "properties": {
+                        "description": "Customer order transactions.",
+                        "displayName": "orders, sales orders",
+                        "businessUse": "reporting"
+                      },
+                      "columns": [
+                        {
+                          "name": "order_id",
+                          "type": "VARCHAR",
+                          "role": "identifier",
+                          "nullable": false,
+                          "properties": {
+                            "description": "Unique order identifier.",
+                            "displayName": "order id, order number",
+                            "examples": ["1001"]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """
+            ]
+        }
+    )
+
+    assert result == {
+        "orders": {
+            "name": "orders",
+            "columns": [
+                {
+                    "name": "order_id",
+                    "type": "VARCHAR",
+                    "properties": {
+                        "description": "Unique order identifier.",
+                        "displayName": "order id, order number",
+                    },
+                }
+            ],
+            "properties": {
+                "description": "Customer order transactions.",
+                "displayName": "orders, sales orders",
+            },
+        }
+    }

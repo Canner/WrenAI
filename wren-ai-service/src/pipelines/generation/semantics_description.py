@@ -160,6 +160,43 @@ async def generate(prompt: dict, generator: Any, generator_name: str) -> dict:
 
 @observe(capture_input=False)
 def normalize(generate: dict) -> dict:
+    def semantic_properties(payload: dict) -> dict:
+        properties = payload.get("properties")
+        properties = properties if isinstance(properties, dict) else {}
+        return {
+            "description": properties.get(
+                "description", payload.get("description", "")
+            ),
+            "displayName": (
+                properties.get("displayName")
+                or properties.get("alias")
+                or payload.get("displayName")
+                or payload.get("alias")
+                or ""
+            ),
+        }
+
+    def semantic_schema_payload(payload: dict) -> dict:
+        return {
+            "models": [
+                {
+                    "name": model.get("name", ""),
+                    "columns": [
+                        {
+                            "name": column.get("name", ""),
+                            "type": column.get("type", ""),
+                            "properties": semantic_properties(column),
+                        }
+                        for column in model.get("columns", []) or []
+                        if isinstance(column, dict)
+                    ],
+                    "properties": semantic_properties(model),
+                }
+                for model in payload.get("models", []) or []
+                if isinstance(model, dict)
+            ]
+        }
+
     def wrapper(text: str) -> str:
         text = text.replace("\n", " ")
         text = " ".join(text.split())
@@ -181,7 +218,9 @@ def normalize(generate: dict) -> dict:
     reply = replies[0]  # Expecting only one reply
     normalized = wrapper(reply)
     try:
-        validated = SemanticResult.model_validate(normalized)
+        validated = SemanticResult.model_validate(
+            semantic_schema_payload(normalized)
+        )
     except ValidationError as e:
         raise ValueError(
             "Semantics description LLM returned incomplete semantic metadata. "
