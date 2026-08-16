@@ -858,6 +858,193 @@ async def test_llm_descriptions_are_not_rewritten_by_service(
 
 
 @pytest.mark.asyncio
+async def test_single_model_output_is_bound_to_selected_schema_name(
+    service: SemanticsDescription,
+):
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Describe the selected datasource",
+        selected_models=["schema_source_table"],
+        mdl=orjson.dumps(
+            {
+                "models": [
+                    {
+                        "name": "schema_source_table",
+                        "columns": [
+                            {"name": "entity_code", "type": "varchar"},
+                            {"name": "event_date", "type": "timestamp"},
+                        ],
+                    }
+                ]
+            }
+        ).decode(),
+    )
+    service._pipelines["semantics_description"].run.return_value = {
+        "output": {
+            "source table": {
+                "name": "source table",
+                "properties": {
+                    "description": "Business records for source-table activity and reporting.",
+                    "displayName": "source records, source activity",
+                },
+                "columns": [
+                    {
+                        "name": "entity_code",
+                        "properties": {
+                            "description": "Entity code used to group and filter records by business entity.",
+                            "displayName": "entity code, business entity code",
+                        },
+                    },
+                    {
+                        "name": "event_date",
+                        "properties": {
+                            "description": "Date associated with the business event represented by the record.",
+                            "displayName": "event date, record date",
+                        },
+                    },
+                ],
+            }
+        }
+    }
+
+    await service.generate(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    assert response.error is None
+    assert list(response.response) == ["schema_source_table"]
+    assert response.response["schema_source_table"]["name"] == "schema_source_table"
+    assert [
+        column["name"]
+        for column in response.response["schema_source_table"]["columns"]
+    ] == [
+        "entity_code",
+        "event_date",
+    ]
+    assert response.response["schema_source_table"]["properties"]["displayName"] == (
+        "source records, source activity"
+    )
+
+
+@pytest.mark.asyncio
+async def test_single_column_output_is_bound_to_selected_schema_name(
+    service: SemanticsDescription,
+):
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Describe the selected datasource",
+        selected_models=["users"],
+        mdl=orjson.dumps(
+            {
+                "models": [
+                    {
+                        "name": "users",
+                        "columns": [
+                            {"name": "created_at", "type": "timestamp"},
+                        ],
+                    }
+                ]
+            }
+        ).decode(),
+    )
+    service._pipelines["semantics_description"].run.return_value = {
+        "output": {
+            "users": {
+                "name": "users",
+                "properties": {
+                    "description": "User account records for application access and profile management.",
+                    "displayName": "users, user accounts",
+                },
+                "columns": [
+                    {
+                        "name": "created at",
+                        "properties": {
+                            "description": "Timestamp when the user account was created.",
+                            "displayName": "created date, signup date",
+                        },
+                    },
+                ],
+            }
+        }
+    }
+
+    await service.generate(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    assert response.error is None
+    column = response.response["users"]["columns"][0]
+    assert column["name"] == "created_at"
+    assert column["type"] == "timestamp"
+    assert column["properties"]["displayName"] == "created date, signup date"
+
+
+@pytest.mark.asyncio
+async def test_multi_model_name_mismatch_fails_without_ambiguous_binding(
+    service: SemanticsDescription,
+):
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Describe the models",
+        selected_models=["orders", "customers"],
+        mdl=orjson.dumps(
+            {
+                "models": [
+                    {
+                        "name": "orders",
+                        "columns": [{"name": "order_id", "type": "varchar"}],
+                    },
+                    {
+                        "name": "customers",
+                        "columns": [{"name": "customer_id", "type": "varchar"}],
+                    },
+                ]
+            }
+        ).decode(),
+    )
+    service._pipelines["semantics_description"].run.return_value = {
+        "output": {
+            "sales orders": {
+                "description": "Customer order transactions.",
+                "displayName": "orders, sales orders",
+                "columns": [
+                    {
+                        "name": "order_id",
+                        "properties": {
+                            "description": "Unique identifier for an order.",
+                            "displayName": "order id, order number",
+                        },
+                    }
+                ],
+            },
+            "customer records": {
+                "description": "Customer master records.",
+                "displayName": "customers, customer records",
+                "columns": [
+                    {
+                        "name": "customer_id",
+                        "properties": {
+                            "description": "Unique identifier for a customer.",
+                            "displayName": "customer id, customer number",
+                        },
+                    }
+                ],
+            },
+        }
+    }
+
+    await service.generate(request)
+    response = service[request.id]
+
+    assert response.status == "failed"
+    assert response.response is None
+    assert "omitted required metadata" in response.error.message
+
+
+@pytest.mark.asyncio
 async def test_batch_processing_partial_failure(
     service: SemanticsDescription,
 ):

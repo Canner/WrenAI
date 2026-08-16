@@ -182,6 +182,97 @@ class SemanticsDescription:
         )
         return "" if value is None else str(value).strip()
 
+    def _identifier_key(self, value: object) -> str:
+        return "".join(
+            character for character in str(value).casefold() if character.isalnum()
+        )
+
+    def _bind_generated_output_to_chunk_schema(
+        self, chunk: dict, output: dict
+    ) -> dict:
+        chunk_models = [
+            model
+            for model in chunk.get("mdl", {}).get("models", []) or []
+            if isinstance(model, dict) and model.get("name")
+        ]
+        generated_models = [
+            model
+            for model in output.values()
+            if isinstance(model, dict)
+        ]
+        bound_output: dict = {}
+
+        for expected_model in chunk_models:
+            expected_model_name = expected_model["name"]
+            generated_model = output.get(expected_model_name)
+            if not isinstance(generated_model, dict):
+                if len(chunk_models) == 1 and len(generated_models) == 1:
+                    generated_model = generated_models[0]
+                    logger.warning(
+                        "Semantics description output used model name %s for selected model %s; binding to selected schema name.",
+                        generated_model.get("name", ""),
+                        expected_model_name,
+                    )
+                else:
+                    continue
+
+            expected_columns = [
+                column
+                for column in expected_model.get("columns", []) or []
+                if isinstance(column, dict) and column.get("name")
+            ]
+            generated_column_items = [
+                column
+                for column in generated_model.get("columns", []) or []
+                if isinstance(column, dict)
+            ]
+            generated_columns = {
+                column.get("name"): column
+                for column in generated_column_items
+                if column.get("name")
+            }
+            bound_columns = []
+
+            for expected_column in expected_columns:
+                expected_column_name = expected_column["name"]
+                generated_column = generated_columns.get(expected_column_name)
+                if not isinstance(generated_column, dict):
+                    if (
+                        len(expected_columns) == 1
+                        and len(generated_column_items) == 1
+                        and self._identifier_key(
+                            generated_column_items[0].get("name", "")
+                        )
+                        == self._identifier_key(expected_column_name)
+                    ):
+                        generated_column = generated_column_items[0]
+                        logger.warning(
+                            "Semantics description output used column name %s for selected column %s.%s; binding to selected schema name.",
+                            generated_column.get("name", ""),
+                            expected_model_name,
+                            expected_column_name,
+                        )
+                    else:
+                        generated_column = {}
+
+                bound_columns.append(
+                    {
+                        **generated_column,
+                        "name": expected_column_name,
+                        "type": expected_column.get(
+                            "type", generated_column.get("type", "")
+                        ),
+                    }
+                )
+
+            bound_output[expected_model_name] = {
+                **generated_model,
+                "name": expected_model_name,
+                "columns": bound_columns,
+            }
+
+        return bound_output
+
     def _validate_generated_output(self, chunk: dict, output: dict) -> None:
         missing: list[str] = []
 
@@ -232,6 +323,7 @@ class SemanticsDescription:
         output = resp.get("output") or {}
         if not isinstance(output, dict):
             raise ValueError("Semantics description pipeline returned invalid output")
+        output = self._bind_generated_output_to_chunk_schema(chunk, output)
         self._validate_generated_output(chunk, output)
         return output
 

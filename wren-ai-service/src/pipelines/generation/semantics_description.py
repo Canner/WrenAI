@@ -237,12 +237,33 @@ def normalize(generate: dict) -> dict:
 
 @observe(capture_input=False)
 def output(normalize: dict, picked_models: list[dict]) -> dict:
+    def _identifier_key(value: object) -> str:
+        return "".join(
+            character for character in str(value).casefold() if character.isalnum()
+        )
+
     def _filter(enriched: list[dict], columns: list[dict]) -> list[dict]:
         valid_columns = [col["name"] for col in columns]
+        matched_columns = [col for col in enriched if col["name"] in valid_columns]
 
-        return [col for col in enriched if col["name"] in valid_columns]
+        if matched_columns:
+            return matched_columns
+
+        if (
+            len(enriched) == 1
+            and len(columns) == 1
+            and _identifier_key(enriched[0].get("name", ""))
+            == _identifier_key(columns[0].get("name", ""))
+        ):
+            return [{**enriched[0], "name": columns[0]["name"]}]
+
+        return []
 
     models = {model["name"]: model for model in picked_models}
+    if len(normalize) == 1 and len(models) == 1:
+        model_name = next(iter(models))
+        model_data = next(iter(normalize.values()))
+        normalize = {model_name: {**model_data, "name": model_name}}
 
     return {
         name: {
