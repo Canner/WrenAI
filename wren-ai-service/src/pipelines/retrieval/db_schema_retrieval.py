@@ -175,6 +175,7 @@ def _build_view_ddl(content: dict) -> str:
         for column in content.get("columns", [])
         if column.get("name") and column.get("data_type", "").lower() != "unknown"
     ]
+    statement = content.get("statement", "")
     context = _format_semantic_context(
         {
             "object_type": "view",
@@ -187,7 +188,6 @@ def _build_view_ddl(content: dict) -> str:
             "semantic_context_not_sql_identifiers": {
                 "role": "stable virtual table interface",
                 "description": content["comment"],
-                "definition_omitted_from_executable_schema": True,
             },
             "columns": [
                 {
@@ -201,16 +201,18 @@ def _build_view_ddl(content: dict) -> str:
             ],
         }
     )
-    columns_ddl = [
-        f"{column['name']} {get_engine_supported_data_type(column.get('data_type'))}"
-        for column in columns
-    ]
+    if columns:
+        columns_ddl = [
+            f"{column['name']} {get_engine_supported_data_type(column.get('data_type'))}"
+            for column in columns
+        ]
+        return (
+            f"{context}CREATE TABLE {content['name']} (\n  "
+            + ",\n  ".join(columns_ddl)
+            + "\n);"
+        )
 
-    return (
-        f"{context}CREATE TABLE {content['name']} (\n  "
-        + ",\n  ".join(columns_ddl)
-        + "\n);"
-    )
+    return f"{context}{content['comment']}CREATE VIEW {content['name']}\nAS {statement}"
 
 
 def _format_semantic_context(context: dict) -> str:
@@ -427,6 +429,16 @@ def _build_retrieval_item(table_schema: dict) -> tuple[dict[str, str], bool, boo
         has_calculated_field,
         has_json_field,
     )
+
+
+def _build_pruning_context(content: dict) -> str:
+    if content["type"] == "TABLE":
+        return _build_table_retrieval_context(content)[0]
+    if content["type"] == "METRIC":
+        return _build_metric_ddl(content)
+    if content["type"] == "VIEW":
+        return _build_view_ddl(content)
+    return ""
 
 
 def _fallback_retrieval_results(
@@ -715,9 +727,16 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
                     db_schemas[document.meta["name"]]["columns"] = content["columns"]
                 else:
                     db_schemas[document.meta["name"]]["columns"] += content["columns"]
+        elif content["type"] in {"VIEW", "METRIC"}:
+            db_schemas[document.meta["name"]] = content
 
     # remove incomplete schemas
-    db_schemas = {k: v for k, v in db_schemas.items() if "type" in v and "columns" in v}
+    db_schemas = {
+        k: v
+        for k, v in db_schemas.items()
+        if v.get("type") in {"VIEW", "METRIC"}
+        or (v.get("type") == "TABLE" and "columns" in v)
+    }
 
     return list(db_schemas.values())
 
@@ -825,10 +844,15 @@ def prompt(
     histories: list[AskHistory],
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
-        db_schemas = [
-            _build_table_retrieval_context(construct_db_schema)[0]
-            for construct_db_schema in construct_db_schemas
-        ]
+        db_schemas = list(
+            filter(
+                None,
+                [
+                    _build_pruning_context(construct_db_schema)
+                    for construct_db_schema in construct_db_schemas
+                ],
+            )
+        )
 
         _prompt = prompt_builder.run(question=query, db_schemas=db_schemas)
         return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}

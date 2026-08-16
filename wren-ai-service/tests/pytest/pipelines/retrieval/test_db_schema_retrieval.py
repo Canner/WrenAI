@@ -6,6 +6,7 @@ from src.pipelines.common import build_table_ddl
 from src.pipelines.retrieval.db_schema_retrieval import (
     _build_view_ddl,
     check_using_db_schemas_without_pruning,
+    construct_db_schemas,
     construct_retrieval_results,
     dbschema_retrieval,
     embedding,
@@ -81,7 +82,7 @@ def test_table_selection_prompt_prefers_best_schema_supported_dataset_set():
     )
 
 
-def test_view_schema_context_uses_declared_view_columns_not_view_definition():
+def test_view_schema_context_uses_declared_view_columns_when_available():
     result = _build_view_ddl(
         {
             "type": "VIEW",
@@ -101,8 +102,49 @@ def test_view_schema_context_uses_declared_view_columns_not_view_definition():
     assert "CREATE TABLE retrieved_view" in result
     assert "visible_attribute VARCHAR" in result
     assert "sql_column_names_use_exactly" in result
-    assert "definition_omitted_from_executable_schema" in result
     assert "NON_EXECUTABLE_DEFINITION_TOKEN" not in result
+
+
+def test_view_schema_context_uses_deployed_view_statement_without_declared_columns():
+    result = _build_view_ddl(
+        {
+            "type": "VIEW",
+            "comment": "Semantic description.",
+            "name": "retrieved_view",
+            "statement": "SELECT modeled_column FROM deployed_model",
+        }
+    )
+
+    assert "CREATE VIEW retrieved_view" in result
+    assert "AS SELECT modeled_column FROM deployed_model" in result
+    assert "sql_table_name_use_exactly: retrieved_view" in result
+
+
+def test_construct_db_schemas_keeps_deployed_views_for_column_pruning():
+    result = construct_db_schemas(
+        [
+            Document(
+                content=str(
+                    {
+                        "type": "VIEW",
+                        "comment": "",
+                        "name": "retrieved_view",
+                        "statement": "SELECT modeled_column FROM deployed_model",
+                    }
+                ),
+                meta={"type": "TABLE_SCHEMA", "name": "retrieved_view"},
+            )
+        ]
+    )
+
+    assert result == [
+        {
+            "type": "VIEW",
+            "comment": "",
+            "name": "retrieved_view",
+            "statement": "SELECT modeled_column FROM deployed_model",
+        }
+    ]
 
 
 @pytest.mark.asyncio
