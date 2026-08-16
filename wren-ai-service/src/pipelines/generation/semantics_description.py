@@ -166,7 +166,7 @@ def normalize(generate: dict) -> dict:
     reply = generate.get("replies")[0]  # Expecting only one reply
     normalized = wrapper(reply)
 
-    return {model["name"]: model for model in normalized["models"]}
+    return {model["name"]: model for model in normalized.get("models", [])}
 
 
 @observe(capture_input=False)
