@@ -456,6 +456,61 @@ async def test_malformed_chunk_retries_with_smaller_column_groups(
 
 
 @pytest.mark.asyncio
+async def test_truncated_smallest_chunk_preserves_selected_schema(
+    service: SemanticsDescription,
+):
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Describe the model",
+        selected_models=["orders"],
+        mdl=orjson.dumps(
+            {
+                "models": [
+                    {
+                        "name": "orders",
+                        "properties": {"description": "Existing order model."},
+                        "columns": [
+                            {
+                                "name": "order_id",
+                                "type": "varchar",
+                                "properties": {"description": "Existing order id."},
+                            }
+                        ],
+                    }
+                ]
+            }
+        ).decode(),
+    )
+
+    async def truncated_response(**kwargs):
+        raise ValueError(
+            "The completion for index 0 has been truncated before reaching a "
+            "natural stopping point. Finish reason: length. unexpected end of data"
+        )
+
+    service._pipelines["semantics_description"].run.side_effect = truncated_response
+
+    await service.generate(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    assert response.error is None
+    assert response.response["orders"] == {
+        "name": "orders",
+        "columns": [
+            {
+                "name": "order_id",
+                "type": "varchar",
+                "properties": {"description": "Existing order id."},
+            }
+        ],
+        "properties": {"description": "Existing order model."},
+    }
+    assert service._pipelines["semantics_description"].run.call_count == 1
+
+
+@pytest.mark.asyncio
 async def test_incomplete_llm_output_uses_available_descriptions(
     service: SemanticsDescription,
 ):

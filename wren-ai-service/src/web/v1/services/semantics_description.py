@@ -186,19 +186,80 @@ class SemanticsDescription:
         ]
 
     def _is_retryable_chunk_error(self, error: Exception) -> bool:
-        return isinstance(error, RetryableSemanticsDescriptionError) or (
-            "malformed JSON" in str(error)
+        if isinstance(error, RetryableSemanticsDescriptionError):
+            return True
+
+        message = str(error).casefold()
+        return any(
+            marker in message
+            for marker in (
+                "malformed json",
+                "truncated",
+                "unexpected end of data",
+                "output omitted",
+                "max_tokens",
+                "natural stopping point",
+            )
         )
+
+    def _fallback_output_for_chunk(self, chunk: dict) -> dict:
+        output = {}
+        for model in chunk.get("mdl", {}).get("models", []):
+            if not isinstance(model, dict):
+                continue
+
+            model_name = model.get("name")
+            if not model_name:
+                continue
+
+            columns = []
+            for column in model.get("columns", []):
+                if not isinstance(column, dict):
+                    continue
+
+                column_name = column.get("name")
+                if not column_name:
+                    continue
+
+                columns.append(
+                    {
+                        "name": column_name,
+                        "type": column.get("type", ""),
+                        "properties": {
+                            "description": self._description(column),
+                        },
+                    }
+                )
+
+            output[model_name] = {
+                "name": model_name,
+                "columns": columns,
+                "properties": {
+                    "description": self._description(model),
+                },
+            }
+
+        return output
 
     async def _generate_task_with_retry_splitting(self, chunk: dict) -> list[dict]:
         try:
             return [await self._generate_task(chunk)]
         except ValueError as e:
-            split_chunks = self._split_chunk(chunk)
-            if not split_chunks or not self._is_retryable_chunk_error(e):
+            if not self._is_retryable_chunk_error(e):
                 raise
 
-            model_name = chunk.get("selected_models", [""])[0]
+            split_chunks = self._split_chunk(chunk)
+            model_name = (chunk.get("selected_models") or [""])[0]
+            if not split_chunks:
+                logger.warning(
+                    "Preserving selected semantics schema for model %s after "
+                    "LLM description generation failed on the smallest retry "
+                    "chunk: %s",
+                    model_name,
+                    str(e),
+                )
+                return [self._fallback_output_for_chunk(chunk)]
+
             logger.warning(
                 "Retrying semantics description for model %s with smaller "
                 "column chunks after incomplete response: %s",
