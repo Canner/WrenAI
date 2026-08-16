@@ -1,10 +1,9 @@
 import logging
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
-from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 
 from langfuse.decorators import observe
@@ -102,7 +101,7 @@ Return only the final JSON SQL response.
 ## Start of Pipeline
 @observe(capture_input=False)
 def prompt(
-    documents: List[Document],
+    documents: list[str],
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
     query: str | None = None,
@@ -193,7 +192,7 @@ class SQLCorrection(BasicPipeline):
     @observe(name="SQL Correction")
     async def run(
         self,
-        contexts: List[Document],
+        contexts: list[str],
         invalid_generation_result: Dict[str, str],
         query: str | None = None,
         sql_generation_reasoning: str | None = None,
