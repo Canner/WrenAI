@@ -118,7 +118,7 @@ async def test_generate_semantics_description_with_exception(
 
 
 @pytest.mark.asyncio
-async def test_generate_semantics_description_with_llm_timeout_fails():
+async def test_generate_semantics_description_with_llm_timeout_preserves_schema():
     mock_pipeline = AsyncMock()
 
     async def never_returns(**_):
@@ -140,9 +140,21 @@ async def test_generate_semantics_description_with_llm_timeout_fails():
     await service.generate(request)
     response = service[request.id]
 
-    assert response.status == "failed"
-    assert response.response is None
-    assert "timed out" in response.error.message
+    assert response.status == "finished"
+    assert response.error is None
+    assert response.response == {
+        "model1": {
+            "name": "model1",
+            "columns": [
+                {
+                    "name": "column1",
+                    "type": "varchar",
+                    "properties": {"description": ""},
+                }
+            ],
+            "properties": {"description": ""},
+        }
+    }
 
 
 def test_get_semantics_description_result(
@@ -571,6 +583,88 @@ async def test_malformed_chunk_retries_with_smaller_column_groups(
     assert response.status == "finished"
     assert len(response.response["orders"]["columns"]) == 3
     assert service._pipelines["semantics_description"].run.call_count == 5
+
+
+@pytest.mark.asyncio
+async def test_timed_out_chunk_retries_with_smaller_column_groups_and_relationships():
+    mock_pipeline = AsyncMock()
+    service = SemanticsDescription(
+        pipelines={"semantics_description": mock_pipeline},
+        generation_timeout_seconds=0.01,
+        max_columns_per_batch=2,
+    )
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Describe the model",
+        selected_models=["orders"],
+        mdl=orjson.dumps(
+            {
+                "models": [
+                    {
+                        "name": "orders",
+                        "columns": [
+                            {"name": "order_id", "type": "varchar"},
+                            {"name": "customer_id", "type": "varchar"},
+                        ],
+                    }
+                ],
+                "relationships": [
+                    {
+                        "name": "OrdersCustomers",
+                        "models": ["orders", "customers"],
+                        "joinType": "MANY_TO_ONE",
+                        "condition": "orders.customer_id = customers.customer_id",
+                    }
+                ],
+            }
+        ).decode(),
+    )
+    observed_relationships = []
+
+    async def response_for_chunk(**kwargs):
+        model = kwargs["mdl"]["models"][0]
+        observed_relationships.append(kwargs["mdl"].get("relationships", []))
+        if len(model["columns"]) > 1:
+            await asyncio.sleep(1)
+        column = model["columns"][0]
+        return {
+            "output": {
+                "orders": {
+                    "description": "Customer order transactions.",
+                    "columns": [
+                        {
+                            "name": column["name"],
+                            "properties": {
+                                "description": f"Description for {column['name']}",
+                            },
+                        }
+                    ],
+                }
+            }
+        }
+
+    mock_pipeline.run.side_effect = response_for_chunk
+
+    await service.generate(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    assert [
+        column["properties"]["description"]
+        for column in response.response["orders"]["columns"]
+    ] == ["Description for order_id", "Description for customer_id"]
+    assert all(
+        relationships == [
+            {
+                "name": "OrdersCustomers",
+                "models": ["orders", "customers"],
+                "joinType": "MANY_TO_ONE",
+                "condition": "orders.customer_id = customers.customer_id",
+            }
+        ]
+        for relationships in observed_relationships
+    )
 
 
 @pytest.mark.asyncio

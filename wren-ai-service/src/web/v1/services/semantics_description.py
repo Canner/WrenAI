@@ -37,7 +37,7 @@ class SemanticsDescription:
         pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
-        generation_timeout_seconds: float = 120.0,
+        generation_timeout_seconds: float = 300.0,
         max_models_per_batch: int = 1,
         max_columns_per_batch: int = 50,
         max_concurrent_tasks: int = 4,
@@ -191,16 +191,23 @@ class SemanticsDescription:
 
         split_at = max(1, len(columns) // 2)
         model = chunk["mdl"]["models"][0]
+        relationships = chunk.get("mdl", {}).get("relationships", [])
         return [
             {
                 **chunk,
-                "mdl": {"models": [{**model, "columns": column_chunk}]},
+                "mdl": {
+                    "models": [{**model, "columns": column_chunk}],
+                    "relationships": relationships,
+                },
             }
             for column_chunk in (columns[:split_at], columns[split_at:])
             if column_chunk
         ]
 
     def _is_retryable_chunk_error(self, error: Exception) -> bool:
+        if isinstance(error, asyncio.TimeoutError):
+            return True
+
         if isinstance(error, RetryableSemanticsDescriptionError):
             return True
 
@@ -214,6 +221,7 @@ class SemanticsDescription:
                 "output omitted",
                 "max_tokens",
                 "natural stopping point",
+                "timed out",
             )
         )
 
@@ -254,8 +262,13 @@ class SemanticsDescription:
 
     async def _generate_task_with_retry_splitting(self, chunk: dict) -> list[dict]:
         try:
-            return [await self._generate_task(chunk)]
-        except ValueError as e:
+            return [
+                await asyncio.wait_for(
+                    self._generate_task(chunk),
+                    timeout=self._generation_timeout_seconds,
+                )
+            ]
+        except (ValueError, asyncio.TimeoutError) as e:
             if not self._is_retryable_chunk_error(e):
                 raise
 
@@ -273,7 +286,7 @@ class SemanticsDescription:
 
             logger.warning(
                 "Retrying semantics description for model %s with smaller "
-                "column chunks after incomplete response: %s",
+                "column chunks after incomplete or timed-out response: %s",
                 model_name,
                 str(e),
             )
@@ -503,10 +516,7 @@ class SemanticsDescription:
                     "No selected models matched the current semantic model metadata"
                 )
             request_timeout_seconds = self._request_timeout_seconds(len(chunks))
-            outputs = await asyncio.wait_for(
-                self._generate_chunks(chunks),
-                timeout=request_timeout_seconds,
-            )
+            outputs = await self._generate_chunks(chunks)
 
             self[request.id] = self.Resource(
                 id=request.id,
