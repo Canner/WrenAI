@@ -165,7 +165,7 @@ class SQLGenPostProcessor:
                 else:
                     error_message = addition.get("error_message", "")
                     invalid_generation_result = {
-                        "sql": addition.get("error_sql", generation_result),
+                        "sql": generation_result,
                         "original_sql": generation_result,
                         "type": "TIME_OUT"
                         if error_message.startswith("Request timed out")
@@ -196,7 +196,7 @@ class SQLGenPostProcessor:
                         else "PREVIEW_FAILED"
                     )
                     invalid_generation_result = {
-                        "sql": addition.get("error_sql", generation_result),
+                        "sql": generation_result,
                         "original_sql": generation_result,
                         "type": "TIME_OUT"
                         if error_message.startswith("Request timed out")
@@ -695,4 +695,18 @@ def construct_instructions(
 def construct_ask_history_messages(
     histories: list[AskHistory] | list[dict],
 ) -> list[ChatMessage]:
-    return []
+    messages = []
+    for history in histories:
+        messages.append(
+            ChatMessage.from_user(
+                history.question
+                if hasattr(history, "question")
+                else history["question"]
+            )
+        )
+        messages.append(
+            ChatMessage.from_assistant(
+                history.sql if hasattr(history, "sql") else history["sql"]
+            )
+        )
+    return messages

@@ -4,6 +4,7 @@ import aiohttp
 import pytest
 
 from src.core.engine import Engine
+from src.providers.llm import ChatRole
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
@@ -64,10 +65,15 @@ def test_sql_generation_model_kwargs_preserve_strict_schema():
     assert schema["additionalProperties"] is False
 
 
-def test_construct_ask_history_messages_matches_legacy_empty_context():
+def test_construct_ask_history_messages_matches_legacy_context():
     histories = [{"question": "q", "sql": "SELECT 1"}]
 
-    assert construct_ask_history_messages(histories) == []
+    messages = construct_ask_history_messages(histories)
+
+    assert [(message.role, message.content) for message in messages] == [
+        (ChatRole.USER, "q"),
+        (ChatRole.ASSISTANT, "SELECT 1"),
+    ]
 
 
 @pytest.mark.asyncio

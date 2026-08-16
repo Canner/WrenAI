@@ -60,11 +60,10 @@ generate one SQL query to best answer user's question.
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
-Summary:
-{{sample.summary}}
-SQL:
-{{sample.sql}}
+Question:
+{{sample.question}}
 {% endfor %}
 {% endif %}
 
@@ -81,7 +80,9 @@ User's Follow-up Question: {{ query }}
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
 
-Let's think step by step.
+Follow the grounded reasoning plan step by step when it cites exact identifiers from DATABASE SCHEMA. If the reasoning plan contains a table or column that is not declared in DATABASE SCHEMA, ignore that identifier and use DATABASE SCHEMA as the source of truth.
+
+Return only the final JSON SQL response.
 """
 
 

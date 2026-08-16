@@ -72,7 +72,13 @@ Question:
 User's Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
 If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql. Never create a table or column from the user's wording, even when the wording looks like a business term or object name.
-Do not generate SQL from a reasoning plan. The reasoning plan is not executable context and cannot provide table names, column names, filters, functions, joins, or examples.
+
+{% if sql_generation_reasoning %}
+### REASONING PLAN ###
+{{ sql_generation_reasoning }}
+
+Follow the grounded reasoning plan step by step when it cites exact identifiers from DATABASE SCHEMA. If the reasoning plan contains a table or column that is not declared in DATABASE SCHEMA, ignore that identifier and use DATABASE SCHEMA as the source of truth.
+{% endif %}
 
 Return only the final JSON SQL response.
 """
