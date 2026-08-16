@@ -4,14 +4,17 @@ import sys
 from typing import Any, Optional
 
 import orjson
+import sqlparse
 import tiktoken
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
-from langfuse.decorators import observe
 from pydantic import BaseModel
+from sqlparse.sql import Identifier, IdentifierList
+from sqlparse.tokens import DML, Comment, Keyword
 
+from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import (
@@ -139,9 +142,7 @@ def _build_metric_ddl(content: dict) -> str:
             "object_type": "metric",
             "sql_identifier_contract": {
                 "sql_table_name_use_exactly": content["name"],
-                "sql_column_names_use_exactly": [
-                    column["name"] for column in columns
-                ],
+                "sql_column_names_use_exactly": [column["name"] for column in columns],
             },
             "semantic_context_not_sql_identifiers": {
                 "role": "stable analytical aggregation interface",
@@ -169,6 +170,67 @@ def _build_metric_ddl(content: dict) -> str:
     )
 
 
+def _strip_identifier_quotes(identifier: str | None) -> str | None:
+    if not identifier:
+        return identifier
+
+    return identifier.strip().strip('"`[]')
+
+
+def _view_columns_from_statement(statement: str) -> list[dict]:
+    if not statement:
+        return []
+
+    parsed = sqlparse.parse(statement)
+    if not parsed:
+        return []
+
+    statement_tokens = parsed[0].tokens
+    select_seen = False
+    output_columns: list[str] = []
+
+    for token in statement_tokens:
+        if token.is_whitespace or token.ttype in Comment:
+            continue
+
+        if token.ttype is DML and token.normalized == "SELECT":
+            select_seen = True
+            continue
+
+        if not select_seen:
+            continue
+
+        if token.ttype is Keyword and token.normalized == "FROM":
+            break
+
+        identifiers: list[Identifier] = []
+        if isinstance(token, IdentifierList):
+            identifiers.extend(
+                identifier
+                for identifier in token.get_identifiers()
+                if isinstance(identifier, Identifier)
+            )
+        elif isinstance(token, Identifier):
+            identifiers.append(token)
+
+        for identifier in identifiers:
+            column_name = _strip_identifier_quotes(
+                identifier.get_alias() or identifier.get_real_name()
+            )
+            if column_name and column_name != "*":
+                output_columns.append(column_name)
+
+    deduplicated_columns = list(dict.fromkeys(output_columns))
+    return [
+        {
+            "name": column_name,
+            "data_type": "VARCHAR",
+            "comment": "Output column declared by the view statement.",
+        }
+        for column_name in deduplicated_columns
+    ]
+
+
 def _build_view_ddl(content: dict) -> str:
     columns = [
         column
@@ -176,14 +238,15 @@ def _build_view_ddl(content: dict) -> str:
         if column.get("name") and column.get("data_type", "").lower() != "unknown"
     ]
     statement = content.get("statement", "")
+    if not columns:
+        columns = _view_columns_from_statement(statement)
+
     context = _format_semantic_context(
         {
             "object_type": "view",
             "sql_identifier_contract": {
                 "sql_table_name_use_exactly": content["name"],
-                "sql_column_names_use_exactly": [
-                    column["name"] for column in columns
-                ],
+                "sql_column_names_use_exactly": [column["name"] for column in columns],
             },
             "semantic_context_not_sql_identifiers": {
                 "role": "stable virtual table interface",
@@ -201,18 +264,16 @@ def _build_view_ddl(content: dict) -> str:
             ],
         }
     )
-    if columns:
-        columns_ddl = [
-            f"{column['name']} {get_engine_supported_data_type(column.get('data_type'))}"
-            for column in columns
-        ]
-        return (
-            f"{context}CREATE TABLE {content['name']} (\n  "
-            + ",\n  ".join(columns_ddl)
-            + "\n);"
-        )
+    columns_ddl = [
+        f"{column['name']} {get_engine_supported_data_type(column.get('data_type'))}"
+        for column in columns
+    ]
 
-    return f"{context}{content['comment']}CREATE VIEW {content['name']}\nAS {statement}"
+    return (
+        f"{context}CREATE TABLE {content['name']} (\n  "
+        + ",\n  ".join(columns_ddl)
+        + "\n);"
+    )
 
 
 def _format_semantic_context(context: dict) -> str:
@@ -910,9 +971,7 @@ def construct_retrieval_results(
                 )
                 columns = (
                     selected_columns
-                    if _selected_columns_are_executable(
-                        table_schema, selected_columns
-                    )
+                    if _selected_columns_are_executable(table_schema, selected_columns)
                     else None
                 )
                 ddl, _has_calculated_field, _has_json_field = (

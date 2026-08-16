@@ -76,6 +76,7 @@ Question:
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
+Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, relationships, and history only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, prior failed SQL, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql.
 
 Return only the final JSON SQL response.
 """
@@ -142,6 +143,7 @@ async def post_process(
     generate_sql_in_followup: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
+    documents: list[str],
     project_id: str | None = None,
     mdl_hash: str | None = None,
     use_dry_plan: bool = False,
@@ -154,6 +156,7 @@ async def post_process(
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
+        contexts=documents,
     )
 
 

@@ -3,15 +3,18 @@ from typing import Any, Dict, List
 
 import aiohttp
 import orjson
+import sqlparse
 from haystack import component
 from pydantic import BaseModel, ConfigDict
+from sqlparse.sql import Identifier, IdentifierList, TokenList
+from sqlparse.tokens import Comment, Keyword
 
 from src.core.engine import (
     Engine,
     clean_generation_result,
 )
-from src.providers.llm import ChatMessage
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
+from src.providers.llm import ChatMessage
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -35,6 +38,7 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
+        contexts: list[str] | None = None,
     ) -> dict:
         try:
             cleaned_generation_result, extraction_error = _extract_sql_response(
@@ -48,6 +52,20 @@ class SQLGenPostProcessor:
                         "original_sql": "",
                         "type": "NO_RELEVANT_SQL",
                         "error": extraction_error,
+                        "correlation_id": "",
+                    },
+                }
+
+            schema_catalog = _SchemaCatalog.from_contexts(contexts or [])
+            grounding_error = schema_catalog.validate_sql(cleaned_generation_result)
+            if grounding_error:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result or "",
+                        "original_sql": cleaned_generation_result or "",
+                        "type": "SCHEMA_GROUNDING",
+                        "error": grounding_error,
                         "correlation_id": "",
                     },
                 }
@@ -206,6 +224,216 @@ class SQLGenPostProcessor:
                     }
 
         return valid_generation_result, invalid_generation_result
+
+
+class _SchemaCatalog:
+    def __init__(self, tables: dict[str, set[str]]):
+        self._tables = tables
+
+    @classmethod
+    def from_contexts(cls, contexts: list[str]) -> "_SchemaCatalog":
+        tables: dict[str, set[str]] = {}
+        current_table: str | None = None
+        in_columns = False
+
+        for context in contexts:
+            for raw_line in context.splitlines():
+                line = raw_line.strip()
+                if line.startswith("table: "):
+                    current_table = line.removeprefix("table: ").strip()
+                    if current_table:
+                        tables.setdefault(current_table, set())
+                    in_columns = False
+                    continue
+
+                if current_table and line == "columns:":
+                    in_columns = True
+                    continue
+
+                if in_columns and current_table and line.startswith("- "):
+                    column_name = line.removeprefix("- ").strip()
+                    if column_name:
+                        tables.setdefault(current_table, set()).add(column_name)
+                    continue
+
+                if in_columns and line and not line.startswith("- "):
+                    in_columns = False
+
+        return cls(tables)
+
+    def validate_sql(self, sql: str | None) -> str | None:
+        if not sql or not self._tables:
+            return None
+
+        parsed_statements = sqlparse.parse(sql)
+        if not parsed_statements:
+            return "Generated SQL could not be parsed for schema grounding."
+
+        referenced_tables: set[str] = set()
+        table_aliases: dict[str, str] = {}
+        qualified_columns: list[tuple[str, str]] = []
+        cte_names: set[str] = set()
+
+        for statement in parsed_statements:
+            cte_names.update(_extract_cte_names(statement))
+            statement_tables, statement_aliases = _extract_table_references(statement)
+            referenced_tables.update(statement_tables)
+            table_aliases.update(statement_aliases)
+            qualified_columns.extend(_extract_qualified_columns(statement))
+
+        executable_tables = referenced_tables - cte_names
+        unknown_tables = sorted(
+            table_name
+            for table_name in executable_tables
+            if table_name not in self._tables
+        )
+        if unknown_tables:
+            return (
+                "Generated SQL referenced table(s) not present in the retrieved "
+                f"schema context: {', '.join(unknown_tables)}."
+            )
+
+        unknown_columns = []
+        for qualifier, column_name in qualified_columns:
+            table_name = table_aliases.get(qualifier, qualifier)
+            if table_name in cte_names:
+                continue
+            if table_name in self._tables and self._tables[table_name]:
+                if column_name not in self._tables[table_name]:
+                    unknown_columns.append(f"{qualifier}.{column_name}")
+
+        if unknown_columns:
+            return (
+                "Generated SQL referenced column(s) not present in the retrieved "
+                f"schema context: {', '.join(sorted(set(unknown_columns)))}."
+            )
+
+        return None
+
+
+def _extract_cte_names(token_list: TokenList) -> set[str]:
+    cte_names: set[str] = set()
+    with_seen = False
+
+    for token in token_list.tokens:
+        if token.is_whitespace or token.ttype in Comment:
+            continue
+
+        if token.normalized == "WITH":
+            with_seen = True
+            continue
+
+        if not with_seen:
+            continue
+
+        if isinstance(token, IdentifierList):
+            for identifier in token.get_identifiers():
+                name = _clean_identifier(identifier.get_name())
+                if name:
+                    cte_names.add(name)
+            break
+
+        if isinstance(token, Identifier):
+            name = _clean_identifier(token.get_name())
+            if name:
+                cte_names.add(name)
+            break
+
+        if token.ttype is Keyword:
+            break
+
+    return cte_names
+
+
+def _extract_table_references(token_list: TokenList) -> tuple[set[str], dict[str, str]]:
+    table_names: set[str] = set()
+    aliases: dict[str, str] = {}
+    expect_table = False
+
+    for token in token_list.tokens:
+        if token.is_whitespace or token.ttype in Comment:
+            continue
+
+        if isinstance(token, TokenList):
+            nested_tables, nested_aliases = _extract_table_references(token)
+            table_names.update(nested_tables)
+            aliases.update(nested_aliases)
+
+        if token.ttype is Keyword and token.normalized in {
+            "FROM",
+            "JOIN",
+            "INNER JOIN",
+            "LEFT JOIN",
+            "LEFT OUTER JOIN",
+            "RIGHT JOIN",
+            "RIGHT OUTER JOIN",
+            "FULL JOIN",
+            "FULL OUTER JOIN",
+            "CROSS JOIN",
+        }:
+            expect_table = True
+            continue
+
+        if not expect_table:
+            continue
+
+        if isinstance(token, IdentifierList):
+            for identifier in token.get_identifiers():
+                _add_table_reference(identifier, table_names, aliases)
+            expect_table = False
+            continue
+
+        if isinstance(token, Identifier):
+            _add_table_reference(token, table_names, aliases)
+            expect_table = False
+            continue
+
+        if token.ttype is Keyword:
+            expect_table = False
+
+    return table_names, aliases
+
+
+def _add_table_reference(
+    identifier: Identifier, table_names: set[str], aliases: dict[str, str]
+) -> None:
+    table_name = _clean_identifier(identifier.get_real_name())
+    alias = _clean_identifier(identifier.get_alias())
+    if not table_name:
+        return
+
+    table_names.add(table_name)
+    aliases[table_name] = table_name
+    if alias:
+        aliases[alias] = table_name
+
+
+def _extract_qualified_columns(token_list: TokenList) -> list[tuple[str, str]]:
+    columns: list[tuple[str, str]] = []
+
+    for token in token_list.tokens:
+        if isinstance(token, Identifier):
+            parent_name = _clean_identifier(token.get_parent_name())
+            column_name = _clean_identifier(token.get_real_name())
+            if parent_name and column_name and column_name != "*":
+                columns.append((parent_name, column_name))
+        elif isinstance(token, IdentifierList):
+            for identifier in token.get_identifiers():
+                parent_name = _clean_identifier(identifier.get_parent_name())
+                column_name = _clean_identifier(identifier.get_real_name())
+                if parent_name and column_name and column_name != "*":
+                    columns.append((parent_name, column_name))
+        elif isinstance(token, TokenList):
+            columns.extend(_extract_qualified_columns(token))
+
+    return columns
+
+
+def _clean_identifier(identifier: str | None) -> str | None:
+    if identifier is None:
+        return None
+    cleaned = identifier.strip().strip('"`[]')
+    return cleaned or None
 
 
 def _extract_sql_response(generation_result: str) -> tuple[str | None, str | None]:
@@ -682,7 +910,7 @@ SQL_GENERATION_MODEL_KWARGS = {
             "strict": True,
             "schema": SqlGenerationResult.model_json_schema(),
         },
-    }
+    },
 }
 
 

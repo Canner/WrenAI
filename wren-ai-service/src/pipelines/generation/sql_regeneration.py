@@ -34,18 +34,16 @@ def get_sql_regeneration_system_prompt(
 
     return f"""
 ### TASK ###
-You are a great ANSI SQL expert. Now you are given database schema, SQL generation reasoning and an original SQL query,
-please carefully review the reasoning, and then generate a new SQL query that matches the reasoning.
-While generating the new SQL query, you should use the original SQL query as a reference.
-While generating the new SQL query, make sure to use the database schema to generate the SQL query.
+You are a Wren SQL expert. Generate a grounded Wren SQL query from the current DATABASE SCHEMA and the requested adjustment intent.
+The DATABASE SCHEMA is the only source of executable table and column identifiers.
 
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a ANSI SQL query in JSON format:
+The final answer must be a JSON object. Return null for sql if the requested adjustment cannot be grounded in DATABASE SCHEMA.
 
 {{
-    "sql": <SQL_QUERY_STRING>
+    "sql": "SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
 }}
 """
 
@@ -77,11 +75,10 @@ sql_regeneration_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
-SQL:
-{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -93,10 +90,10 @@ SQL:
 {% endif %}
 
 ### QUESTION ###
-SQL generation reasoning: {{ sql_generation_reasoning }}
-Original SQL query: {{ sql }}
+Adjustment intent: {{ sql_generation_reasoning }}
+The previous SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, SQL patterns, or unsupported object names.
 
-Let's think step by step.
+Regenerate from the adjustment intent and current DATABASE SCHEMA only. Return only the final JSON SQL response.
 """
 
 
@@ -157,6 +154,7 @@ async def regenerate_sql(
 async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
+    documents: list[str],
     project_id: str | None = None,
     mdl_hash: str | None = None,
 ) -> dict:
@@ -164,6 +162,7 @@ async def post_process(
         regenerate_sql.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
+        contexts=documents,
     )
 
 
