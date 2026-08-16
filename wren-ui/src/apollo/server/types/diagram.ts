@@ -68,7 +68,7 @@ export interface DiagramModelField {
   description: string;
   isPrimaryKey?: boolean;
   expression?: string;
-  lineage?: string;
+  lineage?: number[];
   aggregation?: string;
   nestedFields?: DiagramModelNestedField[];
 }

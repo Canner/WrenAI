@@ -71,3 +71,71 @@ def test_with_hallucination_and_no_columns():
 def test_malformed_json_fails_instead_of_returning_empty_output():
     with pytest.raises(ValueError, match="malformed JSON"):
         normalize({"replies": ['{"models": [']})
+
+
+def test_normalize_requires_generated_aliases():
+    with pytest.raises(ValueError, match="incomplete semantic metadata"):
+        normalize(
+            {
+                "replies": [
+                    """
+                    {
+                      "models": [
+                        {
+                          "name": "orders",
+                          "properties": {
+                            "description": "Customer order transactions.",
+                            "displayName": "orders"
+                          },
+                          "columns": [
+                            {
+                              "name": "order_id",
+                              "properties": {
+                                "description": "Unique order identifier.",
+                                "displayName": ""
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                    """
+                ]
+            }
+        )
+
+
+def test_normalize_preserves_generated_aliases():
+    result = normalize(
+        {
+            "replies": [
+                """
+                {
+                  "models": [
+                    {
+                      "name": "orders",
+                      "properties": {
+                        "description": "Customer order transactions.",
+                        "displayName": "orders, sales orders"
+                      },
+                      "columns": [
+                        {
+                          "name": "order_id",
+                          "properties": {
+                            "description": "Unique order identifier.",
+                            "displayName": "order id, order number"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """
+            ]
+        }
+    )
+
+    assert result["orders"]["properties"]["displayName"] == "orders, sales orders"
+    assert result["orders"]["columns"][0]["properties"]["displayName"] == (
+        "order id, order number"
+    )

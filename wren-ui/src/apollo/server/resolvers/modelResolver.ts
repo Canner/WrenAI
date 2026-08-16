@@ -505,6 +505,8 @@ export class ModelResolver {
         ? modelByReferenceName.get(item.referenceName)
         : undefined;
     };
+    const hasMetadataText = (value?: string) =>
+      typeof value === 'string' && value.trim().length > 0;
 
     for (const item of requestedItems) {
       if (!resolveModel(item)) {
@@ -516,18 +518,23 @@ export class ModelResolver {
 
     await Promise.all(
       requestedItems.map(async (item) => {
-        if (isNil(item.description) && isNil(item.displayName)) return;
+        if (
+          !hasMetadataText(item.description) &&
+          !hasMetadataText(item.displayName)
+        ) {
+          return;
+        }
 
         const model = resolveModel(item);
         const modelMetadata: Partial<Model> = {};
 
-        if (!isNil(item.displayName)) {
+        if (hasMetadataText(item.displayName)) {
           modelMetadata.displayName = this.determineMetadataValue(
             item.displayName,
           );
         }
 
-        if (!isNil(item.description)) {
+        if (hasMetadataText(item.description)) {
           const properties = model?.properties
             ? JSON.parse(model.properties)
             : {};
@@ -582,13 +589,13 @@ export class ModelResolver {
           if (!column) return;
 
           const columnMetadata: Partial<ModelColumn> = {};
-          if (!isNil(requestedColumn.displayName)) {
+          if (hasMetadataText(requestedColumn.displayName)) {
             columnMetadata.displayName = this.determineMetadataValue(
               requestedColumn.displayName,
             );
           }
 
-          if (!isNil(requestedColumn.description)) {
+          if (hasMetadataText(requestedColumn.description)) {
             const properties = column.properties
               ? JSON.parse(column.properties)
               : {};
@@ -600,7 +607,7 @@ export class ModelResolver {
 
           if (!isEmpty(columnMetadata)) {
             await ctx.modelColumnRepository.updateOne(
-              requestedColumn.id,
+              column.id,
               columnMetadata,
             );
           }

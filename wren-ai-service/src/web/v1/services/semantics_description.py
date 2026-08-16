@@ -276,6 +276,7 @@ class SemanticsDescription:
                 "truncated",
                 "unexpected end of data",
                 "output omitted",
+                "incomplete semantic metadata",
                 "max_tokens",
                 "natural stopping point",
                 "timed out",

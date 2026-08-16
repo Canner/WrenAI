@@ -7,7 +7,7 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
@@ -180,10 +180,18 @@ def normalize(generate: dict) -> dict:
 
     reply = replies[0]  # Expecting only one reply
     normalized = wrapper(reply)
+    try:
+        validated = SemanticResult.model_validate(normalized)
+    except ValidationError as e:
+        raise ValueError(
+            "Semantics description LLM returned incomplete semantic metadata. "
+            "Every selected model and column must include non-empty "
+            "properties.description and properties.displayName."
+        ) from e
 
     return {
         model["name"]: model
-        for model in normalized.get("models", [])
+        for model in validated.model_dump().get("models", [])
         if isinstance(model, dict) and model.get("name")
     }
 
@@ -211,8 +219,14 @@ def output(normalize: dict, picked_models: list[dict]) -> dict:
 class ModelProperties(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    description: str
-    displayName: str
+    description: str = Field(min_length=1)
+    displayName: str = Field(
+        min_length=1,
+        description=(
+            "Comma-separated natural-language aliases and synonyms users may "
+            "type for this model or column."
+        ),
+    )
 
 
 class ModelColumns(BaseModel):

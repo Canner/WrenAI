@@ -138,11 +138,12 @@ export class DiagramResolver {
 
   private transformModel(model: Model): DiagramModel {
     const properties = this.parseProperties(model.properties);
+    const displayName = model.displayName || model.referenceName;
     return {
       id: uuidv4(),
       modelId: model.id,
       nodeType: NodeType.MODEL,
-      displayName: model.displayName,
+      displayName,
       referenceName: model.referenceName,
       sourceTableName: model.sourceTableName,
       refSql: model.refSql,
@@ -160,6 +161,7 @@ export class DiagramResolver {
     nestedColumns: ModelNestedColumn[],
   ): DiagramModelField {
     const properties = this.parseProperties(column.properties);
+    const displayName = column.displayName || column.referenceName;
     return {
       id: uuidv4(),
       columnId: column.id,
@@ -167,7 +169,7 @@ export class DiagramResolver {
         ? NodeType.CALCULATED_FIELD
         : NodeType.FIELD,
       type: column.type,
-      displayName: column.displayName,
+      displayName,
       referenceName: column.referenceName,
       description: properties?.description,
       isPrimaryKey: column.isPk,
@@ -178,7 +180,7 @@ export class DiagramResolver {
             nestedColumnId: nestedColumn.id,
             columnPath: nestedColumn.columnPath,
             type: nestedColumn.type,
-            displayName: nestedColumn.displayName,
+            displayName: nestedColumn.displayName || nestedColumn.referenceName,
             referenceName: nestedColumn.referenceName,
             description: nestedColumn.properties?.description,
           }))
@@ -192,6 +194,7 @@ export class DiagramResolver {
   ): DiagramModelField | null {
     const properties = this.parseProperties(column.properties);
     const lineage = this.parseLineage(column.lineage);
+    const displayName = column.displayName || column.referenceName;
     const columnMDL = columnsMDL.find(
       ({ name }) => name === column.referenceName,
     );
@@ -214,7 +217,7 @@ export class DiagramResolver {
       aggregation: column.aggregation,
       lineage,
       type: column.type,
-      displayName: column.displayName,
+      displayName,
       referenceName: column.referenceName,
       description: properties?.description,
       isPrimaryKey: column.isPk,
@@ -259,7 +262,8 @@ export class DiagramResolver {
       toModelDisplayName: relation.toModelDisplayName || relation.toModelName,
       toColumnId: relation.toColumnId,
       toColumnName: relation.toColumnName,
-      toColumnDisplayName: relation.toColumnDisplayName || relation.toColumnName,
+      toColumnDisplayName:
+        relation.toColumnDisplayName || relation.toColumnName,
       description: properties?.description,
     };
   }

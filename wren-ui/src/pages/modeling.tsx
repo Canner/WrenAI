@@ -120,6 +120,15 @@ const semanticText = (value: any): string => {
 const firstSemanticText = (...values: any[]): string =>
   values.map(semanticText).find(Boolean) || '';
 
+const addSemanticText = <T extends Record<string, any>>(
+  payload: T,
+  key: string,
+  value: any,
+): T => {
+  const text = semanticText(value);
+  return text ? { ...payload, [key]: text } : payload;
+};
+
 const DiagramWrapper = styled.div`
   position: relative;
   height: 100%;
@@ -1023,27 +1032,37 @@ export default function Modeling() {
             (item) => item.referenceName === model.name,
           );
           if (!diagramModel) return [];
-          return {
+          const modelPayload = {
             modelId: diagramModel.modelId,
             referenceName: diagramModel.referenceName,
-            displayName: firstSemanticText(model.displayName),
-            description: model.description,
             columns: (model.columns || [])
               .map((column) => {
                 const field = diagramModel.fields.find(
                   (item) => item.referenceName === column.name,
                 );
                 return field
-                  ? {
-                      id: field.columnId,
-                      referenceName: field.referenceName,
-                      displayName: firstSemanticText(column.displayName),
-                      description: column.description,
-                    }
+                  ? addSemanticText(
+                      addSemanticText(
+                        {
+                          id: field.columnId,
+                          referenceName: field.referenceName,
+                        },
+                        'displayName',
+                        column.displayName,
+                      ),
+                      'description',
+                      column.description,
+                    )
                   : null;
               })
               .filter(Boolean),
           };
+
+          return addSemanticText(
+            addSemanticText(modelPayload, 'displayName', model.displayName),
+            'description',
+            model.description,
+          );
         });
 
         if (!data.length) {
