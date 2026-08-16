@@ -338,7 +338,6 @@ class SemanticsDescription:
                         model_name,
                         column_name,
                     )
-                    continue
 
                 columns.append(
                     {
@@ -352,7 +351,7 @@ class SemanticsDescription:
 
             if not model_description:
                 model_description = description(model)
-            if not model_description and not columns:
+            if not model_description and not model.get("columns", []):
                 logger.warning(
                     "Semantics description output omitted selected model: %s",
                     model_name,

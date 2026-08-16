@@ -504,7 +504,7 @@ async def test_incomplete_llm_output_uses_available_descriptions(
 
     assert response.status == "finished"
     assert response.error is None
-    assert list(response.response.keys()) == ["orders"]
+    assert list(response.response.keys()) == ["orders", "customers"]
     assert response.response["orders"]["properties"]["description"] == (
         "Customer purchase transactions."
     )
@@ -513,8 +513,24 @@ async def test_incomplete_llm_output_uses_available_descriptions(
             "name": "order_id",
             "type": "varchar",
             "properties": {"description": "Unique order identifier."},
-        }
+        },
+        {
+            "name": "order_date",
+            "type": "date",
+            "properties": {"description": ""},
+        },
     ]
+    assert response.response["customers"] == {
+        "name": "customers",
+        "columns": [
+            {
+                "name": "customer_id",
+                "type": "varchar",
+                "properties": {"description": ""},
+            }
+        ],
+        "properties": {"description": ""},
+    }
 
 
 @pytest.mark.asyncio
