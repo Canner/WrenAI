@@ -4,7 +4,10 @@ import aiohttp
 import pytest
 
 from src.core.engine import Engine
-from src.pipelines.generation.utils.sql import SQLGenPostProcessor
+from src.pipelines.generation.utils.sql import (
+    SQL_GENERATION_MODEL_KWARGS,
+    SQLGenPostProcessor,
+)
 
 
 class FakeEngine(Engine):
@@ -50,6 +53,11 @@ class FakeEngine(Engine):
             }
         )
         return self.execute_success, {}, {"correlation_id": "correlation-id"}
+
+
+def test_sql_generation_model_kwargs_preserve_strict_schema():
+    assert SQL_GENERATION_MODEL_KWARGS["preserve_json_schema"] is True
+    assert SQL_GENERATION_MODEL_KWARGS["response_format"]["type"] == "json_schema"
 
 
 @pytest.mark.asyncio

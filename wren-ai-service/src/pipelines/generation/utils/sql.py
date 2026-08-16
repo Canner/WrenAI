@@ -551,6 +551,7 @@ class SqlGenerationResult(BaseModel):
 
 
 SQL_GENERATION_MODEL_KWARGS = {
+    "preserve_json_schema": True,
     "response_format": {
         "type": "json_schema",
         "json_schema": {

@@ -19,6 +19,18 @@ from src.web.v1.services.semantics_preparation import (
 )
 
 
+def test_ask_defaults_follow_legacy_grounded_sql_flow():
+    request = AskRequest(query="How many invoices are there?", mdl_hash="mdl-hash")
+    service = AskService({})
+
+    assert request.ignore_sql_generation_reasoning is True
+    assert request.use_dry_plan is True
+    assert request.allow_dry_plan_fallback is False
+    assert service._allow_sql_generation_reasoning is False
+    assert service._enable_column_pruning is True
+    assert service._max_sql_correction_retries == 0
+
+
 @pytest.fixture
 def ask_service():
     pipe_components = generate_components(settings.components)
