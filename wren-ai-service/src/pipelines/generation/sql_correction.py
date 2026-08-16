@@ -30,13 +30,12 @@ def get_sql_correction_system_prompt(sql_knowledge: SqlKnowledge | None = None) 
 
     return f"""
 ### TASK ###
-You are a great ANSI SQL expert with exceptional logical thinking skills and debugging skills.
+You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills, you need to fix the syntactically incorrect ANSI SQL query.
 
 ### SQL CORRECTION INSTRUCTIONS ###
 
-Now you are given a database schema, a user's question, a sql generation reasoning, and an original SQL query.
-The original SQL query has a syntax error or does not follow the SQL rules.
-Please read the SQL rules carefully and generate a new SQL query that fixes the original SQL query.
+1. First, think hard about the error message, and figure out the root cause first(please use the DATABASE SCHEMA, SQL FUNCTIONS and USER INSTRUCTIONS to help you figure out the root cause).
+2. Then, generate the syntactically correct ANSI SQL query to correct the error.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -44,10 +43,10 @@ Make sure you follow the SQL Rules strictly.
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a SQL query in JSON format:
+The final answer must be in JSON format:
 
 {{
-    "sql": <SQL_QUERY_STRING>
+    "sql": <CORRECTED_SQL_QUERY_STRING>
 }}
 """
 

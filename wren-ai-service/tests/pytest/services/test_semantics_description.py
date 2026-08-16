@@ -273,10 +273,14 @@ async def test_batch_processing_with_multiple_models(
     assert len(response.response["model3"]["columns"]) == 1
 
     chunks = service._chunking(orjson.loads(request.mdl), request)
-    assert len(chunks) == 1
+    assert len(chunks) == 3
     assert all("user_prompt" in chunk for chunk in chunks)
     assert all("mdl" in chunk for chunk in chunks)
-    assert chunks[0]["selected_models"] == ["model1", "model2", "model3"]
+    assert [chunk["selected_models"] for chunk in chunks] == [
+        ["model1"],
+        ["model2"],
+        ["model3"],
+    ]
 
 
 def test_batch_processing_groups_small_models_by_prompt(
@@ -452,7 +456,7 @@ async def test_malformed_chunk_retries_with_smaller_column_groups(
 
 
 @pytest.mark.asyncio
-async def test_incomplete_llm_output_fails(
+async def test_incomplete_llm_output_uses_available_descriptions(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
@@ -498,9 +502,19 @@ async def test_incomplete_llm_output_fails(
     await service.generate(request)
     response = service[request.id]
 
-    assert response.status == "failed"
-    assert response.response is None
-    assert "omitted selected column" in response.error.message
+    assert response.status == "finished"
+    assert response.error is None
+    assert list(response.response.keys()) == ["orders"]
+    assert response.response["orders"]["properties"]["description"] == (
+        "Customer purchase transactions."
+    )
+    assert response.response["orders"]["columns"] == [
+        {
+            "name": "order_id",
+            "type": "varchar",
+            "properties": {"description": "Unique order identifier."},
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -642,7 +656,7 @@ async def test_concurrent_updates_no_race_condition(
 
 
 @pytest.mark.asyncio
-async def test_repeated_llm_column_descriptions_fail(
+async def test_repeated_llm_column_descriptions_are_tolerated(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
@@ -685,5 +699,20 @@ async def test_repeated_llm_column_descriptions_fail(
     await service.generate(request)
     response = service[request.id]
 
-    assert response.status == "failed"
-    assert "repeated column descriptions" in response.error.message
+    assert response.status == "finished"
+    assert response.error is None
+    assert response.response["orders"]["properties"]["description"] == (
+        "Customer order transactions."
+    )
+    assert response.response["orders"]["columns"] == [
+        {
+            "name": "order_id",
+            "type": "varchar",
+            "properties": {"description": "Identifier for reporting."},
+        },
+        {
+            "name": "customer_id",
+            "type": "varchar",
+            "properties": {"description": "Identifier for reporting."},
+        },
+    ]

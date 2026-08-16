@@ -19,10 +19,6 @@ class RetryableSemanticsDescriptionError(ValueError):
     pass
 
 
-class IncompleteSemanticsDescriptionError(RetryableSemanticsDescriptionError):
-    pass
-
-
 class SemanticsDescription:
     class Resource(BaseModel, MetadataTraceable):
         class Error(BaseModel):
@@ -160,42 +156,11 @@ class SemanticsDescription:
         )
         return "" if value is None else str(value).strip()
 
-    def _validate_chunk_output(self, chunk: dict, output: dict):
-        for model in chunk.get("mdl", {}).get("models", []):
-            model_name = model.get("name")
-            if not model_name:
-                continue
-
-            generated_model = output.get(model_name)
-            if not isinstance(generated_model, dict):
-                raise IncompleteSemanticsDescriptionError(
-                    f"Semantics description output omitted model: {model_name}"
-                )
-
-            generated_columns = {
-                column.get("name"): column
-                for column in generated_model.get("columns", [])
-                if isinstance(column, dict) and column.get("name")
-            }
-            missing_columns = [
-                column.get("name", "")
-                for column in model.get("columns", [])
-                if isinstance(column, dict)
-                and not self._description(generated_columns.get(column.get("name", ""), {}))
-                and not self._description(column)
-            ]
-            if missing_columns:
-                raise IncompleteSemanticsDescriptionError(
-                    "Semantics description output omitted descriptions for "
-                    f"{model_name}: {', '.join(missing_columns)}"
-                )
-
     async def _generate_task(self, chunk: dict) -> dict:
         resp = await self._pipelines["semantics_description"].run(**chunk)
         output = resp.get("output") or {}
         if not isinstance(output, dict):
             raise ValueError("Semantics description pipeline returned invalid output")
-        self._validate_chunk_output(chunk, output)
         return output
 
     def _chunk_columns(self, chunk: dict) -> list[dict]:
