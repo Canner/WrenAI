@@ -7,7 +7,7 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
@@ -19,40 +19,74 @@ logger = logging.getLogger("wren-ai-service")
 
 
 system_prompt = """
-Generate high-quality semantic metadata for selected data models and their columns.
+I have a data model represented in JSON format, with the following structure:
 
-Requirements:
-1. Return valid JSON that matches the provided schema.
-2. Return every input model exactly once and every input column exactly once.
-3. Preserve every model and column `name` exactly as provided.
-4. Put each generated description in `properties.description`.
-5. Put natural-language aliases and synonyms in `properties.displayName` as a required, non-empty, short comma-separated phrase. Do not put SQL identifiers there unless the identifier itself is the natural user-facing name.
-6. Make descriptions business-friendly, factual, and useful for text-to-SQL retrieval.
-7. Include business context, common analytical use, and the field role when it is supported by the name, type, or relationships: ID/key, date/time, measure, dimension, status, currency, quantity, cost, revenue, rate, percentage, or code.
-8. Ground descriptions and aliases only in the user prompt, model and column names, aliases, data types, existing descriptions, and provided schema/relationship context.
-9. Use relationship context to distinguish foreign keys, join keys, facts, and dimensions, but do not invent unsupported joins.
-10. Make each model and column description specific to that model or column. Never reuse identical descriptions across models or columns in the same response.
-11. If two columns have similar names or business meaning, explain the distinction using the exact column name, alias, type, or surrounding model context.
-12. Do not invent unsupported tables, columns, relationships, metrics, or business concepts.
-13. Do not use generic boilerplate or copy the technical name as the whole description.
-14. For each input column, return a matching column object with the exact same `name`, a non-empty `properties.description`, and a non-empty `properties.displayName`.
-15. Return complete JSON only. Do not include markdown, comments, examples, or explanatory text outside the JSON object.
+```
+[
+    {'name': 'model', 'columns': [
+            {'name': 'column_1', 'type': 'type', 'properties': {}
+            },
+            {'name': 'column_2', 'type': 'type', 'properties': {}
+            },
+            {'name': 'column_3', 'type': 'type', 'properties': {}
+            }
+        ], 'properties': {}
+    }
+]
+```
+
+Your task is to update this JSON structure by adding a `description` field inside both the `properties` attribute of each `column` and the `model` itself.
+Each `description` should be derived from a user-provided input that explains the purpose or context of the `model` and its respective columns.
+Follow these steps:
+1. **For the `model`**: Prompt the user to provide a brief description of the model's overall purpose or its context. Insert this description in the `properties` field of the `model`.
+2. **For each `column`**: Ask the user to describe each column's role or significance. Each column's description should be added under its respective `properties` field in the format: `'description': 'user-provided text'`.
+3. Ensure that the output is a well-formatted JSON structure, preserving the input's original format and adding the appropriate `description` fields.
+
+### Output Format:
+
+```
+{
+    "models": [
+        {
+        "name": "model",
+        "columns": [
+            {
+                "name": "column_1",
+                "properties": {
+                    "description": "<description for column_1>"
+                }
+            },
+            {
+                "name": "column_2",
+                "properties": {
+                    "description": "<description for column_1>"
+                }
+            },
+            {
+                "name": "column_3",
+                "properties": {
+                    "description": "<description for column_1>"
+                }
+            }
+        ],
+        "properties": {
+                "description": "<description for model>"
+            }
+        }
+    ]
+}
+```
+
+Make sure that the descriptions are concise, informative, and contextually appropriate based on the input provided by the user.
 """
 
 user_prompt_template = """
 ### Input:
 User's prompt: {{ user_prompt }}
 Picked models: {{ picked_models }}
-Relationship context: {{ relationship_context }}
 Localization Language: {{ language }}
 
-Write semantic descriptions for every picked model and every column.
-For each model, describe the real-world records represented and the analytical questions it can support.
-For each column, describe the business meaning and analytical use of that exact field.
-For each model and column, generate non-empty aliases/synonyms that users may naturally type in questions and place them in properties.displayName.
-If an existing description is already meaningful, preserve its business meaning while making it clearer and more useful for retrieval.
-Keep every description and alias grounded in the picked model metadata, user prompt, data types, and relationship context.
-The number of output columns for each model must exactly match the number of input columns for that model.
+Please provide a brief description for the model and each column based on the user's prompt.
 """
 
 
@@ -62,40 +96,29 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
     def relation_filter(column: dict) -> bool:
         return "relationship" not in column
 
-    def _properties(payload: dict) -> dict:
-        properties = payload.get("properties")
-        return properties if isinstance(properties, dict) else {}
-
-    def _text(value) -> str:
-        return "" if value is None else str(value)
-
     def column_formatter(columns: list[dict]) -> list[dict]:
         return [
             {
-                "name": column.get("name", ""),
-                "type": column.get("type", ""),
+                "name": column["name"],
+                "type": column["type"],
                 "properties": {
-                    "description": _text(
-                        _properties(column).get("description", "")
-                    ),
-                    "displayName": clean_display_name(
-                        _text(_properties(column).get("displayName", ""))
+                    "description": column["properties"].get("description", ""),
+                    "alias": clean_display_name(
+                        column["properties"].get("displayName", "")
                     ),
                 },
             }
-            for column in columns or []
+            for column in columns
             if relation_filter(column)
         ]
 
     def extract(model: dict) -> dict:
         return {
-            "name": model.get("name", ""),
-            "columns": column_formatter(model.get("columns", [])),
+            "name": model["name"],
+            "columns": column_formatter(model["columns"]),
             "properties": {
-                "description": _text(_properties(model).get("description", "")),
-                "displayName": clean_display_name(
-                    _text(_properties(model).get("displayName", ""))
-                ),
+                "description": model["properties"].get("description", ""),
+                "alias": clean_display_name(model["properties"].get("displayName", "")),
             },
         }
 
@@ -107,45 +130,14 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
 
 
 @observe(capture_input=False)
-def relationship_context(mdl: dict, selected_models: list[str]) -> list[dict]:
-    selected = set(selected_models)
-    relationships = []
-
-    for relationship in mdl.get("relationships", []) or []:
-        if not isinstance(relationship, dict):
-            continue
-
-        models = relationship.get("models", []) or []
-        if not any(model in selected for model in models):
-            continue
-
-        properties = relationship.get("properties")
-        properties = properties if isinstance(properties, dict) else {}
-        relationships.append(
-            {
-                "name": relationship.get("name", ""),
-                "models": models,
-                "joinType": relationship.get("joinType", ""),
-                "condition": relationship.get("condition", ""),
-                "description": relationship.get("description")
-                or properties.get("description", ""),
-            }
-        )
-
-    return relationships
-
-
-@observe(capture_input=False)
 def prompt(
     picked_models: list[dict],
-    relationship_context: list[dict],
     user_prompt: str,
     prompt_builder: PromptBuilder,
     language: str,
 ) -> dict:
     _prompt = prompt_builder.run(
         picked_models=picked_models,
-        relationship_context=relationship_context,
         user_prompt=user_prompt,
         language=language,
     )
@@ -160,43 +152,6 @@ async def generate(prompt: dict, generator: Any, generator_name: str) -> dict:
 
 @observe(capture_input=False)
 def normalize(generate: dict) -> dict:
-    def semantic_properties(payload: dict) -> dict:
-        properties = payload.get("properties")
-        properties = properties if isinstance(properties, dict) else {}
-        return {
-            "description": properties.get(
-                "description", payload.get("description", "")
-            ),
-            "displayName": (
-                properties.get("displayName")
-                or properties.get("alias")
-                or payload.get("displayName")
-                or payload.get("alias")
-                or ""
-            ),
-        }
-
-    def semantic_schema_payload(payload: dict) -> dict:
-        return {
-            "models": [
-                {
-                    "name": model.get("name", ""),
-                    "columns": [
-                        {
-                            "name": column.get("name", ""),
-                            "type": column.get("type", ""),
-                            "properties": semantic_properties(column),
-                        }
-                        for column in model.get("columns", []) or []
-                        if isinstance(column, dict)
-                    ],
-                    "properties": semantic_properties(model),
-                }
-                for model in payload.get("models", []) or []
-                if isinstance(model, dict)
-            ]
-        }
-
     def wrapper(text: str) -> str:
         text = text.replace("\n", " ")
         text = " ".join(text.split())
@@ -205,71 +160,26 @@ def normalize(generate: dict) -> dict:
             text_dict = orjson.loads(text.strip())
             return text_dict
         except orjson.JSONDecodeError as e:
-            raise ValueError(
-                "Semantics description LLM returned malformed JSON. "
-                "The response may have been truncated; reduce the selected "
-                "schema size or increase the configured output token limit."
-            ) from e
+            logger.error(f"Error decoding JSON: {e}")
+            return {"models": []}  # Return an empty list if JSON decoding fails
 
-    replies = generate.get("replies") or []
-    if not replies:
-        return {}
-
-    reply = replies[0]  # Expecting only one reply
+    reply = generate.get("replies")[0]  # Expecting only one reply
     normalized = wrapper(reply)
-    try:
-        validated = SemanticResult.model_validate(
-            semantic_schema_payload(normalized)
-        )
-    except ValidationError as e:
-        raise ValueError(
-            "Semantics description LLM returned incomplete semantic metadata. "
-            "Every selected model and column must include non-empty "
-            "properties.description and properties.displayName."
-        ) from e
 
-    return {
-        model["name"]: model
-        for model in validated.model_dump().get("models", [])
-        if isinstance(model, dict) and model.get("name")
-    }
+    return {model["name"]: model for model in normalized["models"]}
 
 
 @observe(capture_input=False)
 def output(normalize: dict, picked_models: list[dict]) -> dict:
-    def _identifier_key(value: object) -> str:
-        return "".join(
-            character for character in str(value).casefold() if character.isalnum()
-        )
-
     def _filter(enriched: list[dict], columns: list[dict]) -> list[dict]:
         valid_columns = [col["name"] for col in columns]
-        matched_columns = [col for col in enriched if col["name"] in valid_columns]
 
-        if matched_columns:
-            return matched_columns
-
-        if (
-            len(enriched) == 1
-            and len(columns) == 1
-            and _identifier_key(enriched[0].get("name", ""))
-            == _identifier_key(columns[0].get("name", ""))
-        ):
-            return [{**enriched[0], "name": columns[0]["name"]}]
-
-        return []
+        return [col for col in enriched if col["name"] in valid_columns]
 
     models = {model["name"]: model for model in picked_models}
-    if len(normalize) == 1 and len(models) == 1:
-        model_name = next(iter(models))
-        model_data = next(iter(normalize.values()))
-        normalize = {model_name: {**model_data, "name": model_name}}
 
     return {
-        name: {
-            **data,
-            "columns": _filter(data.get("columns", []), models[name]["columns"]),
-        }
+        name: {**data, "columns": _filter(data["columns"], models[name]["columns"])}
         for name, data in normalize.items()
         if name in models
     }
@@ -277,37 +187,21 @@ def output(normalize: dict, picked_models: list[dict]) -> dict:
 
 ## End of Pipeline
 class ModelProperties(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    description: str = Field(min_length=1)
-    displayName: str = Field(
-        min_length=1,
-        description=(
-            "Comma-separated natural-language aliases and synonyms users may "
-            "type for this model or column."
-        ),
-    )
+    description: str
 
 
 class ModelColumns(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     name: str
-    type: str = ""
     properties: ModelProperties
 
 
 class SemanticModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     name: str
     columns: list[ModelColumns]
     properties: ModelProperties
 
 
 class SemanticResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     models: list[SemanticModel]
 
 
@@ -316,7 +210,6 @@ SEMANTICS_DESCRIPTION_MODEL_KWARGS = {
         "type": "json_schema",
         "json_schema": {
             "name": "semantic_description",
-            "strict": True,
             "schema": SemanticResult.model_json_schema(),
         },
     }

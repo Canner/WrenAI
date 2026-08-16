@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import math
 from typing import Dict, Literal, Optional
 
 import orjson
@@ -13,10 +12,6 @@ from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
-
-
-class RetryableSemanticsDescriptionError(ValueError):
-    pass
 
 
 class SemanticsDescription:
@@ -37,17 +32,9 @@ class SemanticsDescription:
         pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
-        generation_timeout_seconds: float = 120.0,
-        max_models_per_batch: int = 1,
-        max_columns_per_batch: int = 50,
-        max_concurrent_tasks: int = 4,
     ):
         self._pipelines = pipelines
         self._cache: Dict[str, self.Resource] = TTLCache(maxsize=maxsize, ttl=ttl)
-        self._generation_timeout_seconds = generation_timeout_seconds
-        self._max_models_per_batch = max(1, max_models_per_batch)
-        self._max_columns_per_batch = max(1, max_columns_per_batch)
-        self._max_concurrent_tasks = max(1, max_concurrent_tasks)
 
     def _handle_exception(
         self,
@@ -73,542 +60,68 @@ class SemanticsDescription:
         mdl: str
 
     def _chunking(
-        self,
-        mdl_dict: dict,
-        request: GenerateRequest,
-        chunk_size: Optional[int] = None,
+        self, mdl_dict: dict, request: GenerateRequest, chunk_size: int = 50
     ) -> list[dict]:
-        chunk_size = chunk_size or self._max_models_per_batch
         template = {
             "user_prompt": request.user_prompt,
             "language": request.configurations.language,
         }
-        relationships = mdl_dict.get("relationships", []) or []
 
-        selected_models = [
-            model
-            for model in mdl_dict.get("models", [])
-            if model.get("name") in request.selected_models
+        chunks = [
+            {
+                **model,
+                "columns": model["columns"][i : i + chunk_size],
+            }
+            for model in mdl_dict["models"]
+            if model["name"] in request.selected_models
+            for i in range(0, len(model["columns"]), chunk_size)
         ]
 
-        model_slices: list[tuple[str, dict, int]] = []
-        for model in selected_models:
-            model_name = model["name"]
-            columns = model.get("columns", [])
-            column_chunks = [
-                columns[j : j + self._max_columns_per_batch]
-                for j in range(0, len(columns), self._max_columns_per_batch)
-            ] or [[]]
-
-            for column_chunk in column_chunks:
-                model_slices.append(
-                    (
-                        model_name,
-                        {**model, "columns": column_chunk},
-                        len(column_chunk),
-                    )
-                )
-
-        chunks = []
-        batch_models: list[dict] = []
-        batch_model_names: set[str] = set()
-        batch_column_count = 0
-
-        def relationships_for(model_names: set[str]) -> list[dict]:
-            return [
-                relationship
-                for relationship in relationships
-                if isinstance(relationship, dict)
-                and any(
-                    model_name in model_names
-                    for model_name in relationship.get("models", []) or []
-                )
-            ]
-
-        def flush_batch():
-            nonlocal batch_models, batch_model_names, batch_column_count
-            if not batch_models:
-                return
-            chunks.append(
-                {
-                    **template,
-                    "mdl": {
-                        "models": batch_models,
-                        "relationships": relationships_for(batch_model_names),
-                    },
-                    "selected_models": [model["name"] for model in batch_models],
-                }
-            )
-            batch_models = []
-            batch_model_names = set()
-            batch_column_count = 0
-
-        for model_name, model_slice, column_count in model_slices:
-            would_exceed_models = len(batch_models) >= chunk_size
-            would_exceed_columns = (
-                batch_column_count > 0
-                and batch_column_count + column_count > self._max_columns_per_batch
-            )
-            would_repeat_model = model_name in batch_model_names
-            if would_exceed_models or would_exceed_columns or would_repeat_model:
-                flush_batch()
-
-            batch_models.append(model_slice)
-            batch_model_names.add(model_name)
-            batch_column_count += column_count
-
-        flush_batch()
-
-        return chunks
-
-    def _properties(self, payload: dict) -> dict:
-        value = payload.get("properties")
-        return value if isinstance(value, dict) else {}
-
-    def _description(self, payload: dict) -> str:
-        value = payload.get("description") or self._properties(payload).get(
-            "description", ""
-        )
-        return "" if value is None else str(value).strip()
-
-    def _display_name(self, payload: dict) -> str:
-        payload_properties = self._properties(payload)
-        value = (
-            payload.get("displayName")
-            or payload.get("alias")
-            or payload_properties.get("displayName")
-            or payload_properties.get("alias")
-            or ""
-        )
-        return "" if value is None else str(value).strip()
-
-    def _identifier_key(self, value: object) -> str:
-        return "".join(
-            character for character in str(value).casefold() if character.isalnum()
-        )
-
-    def _bind_generated_output_to_chunk_schema(
-        self, chunk: dict, output: dict
-    ) -> dict:
-        chunk_models = [
-            model
-            for model in chunk.get("mdl", {}).get("models", []) or []
-            if isinstance(model, dict) and model.get("name")
-        ]
-        generated_models = [
-            model
-            for model in output.values()
-            if isinstance(model, dict)
-        ]
-        bound_output: dict = {}
-
-        for expected_model in chunk_models:
-            expected_model_name = expected_model["name"]
-            generated_model = output.get(expected_model_name)
-            if not isinstance(generated_model, dict):
-                if len(chunk_models) == 1 and len(generated_models) == 1:
-                    generated_model = generated_models[0]
-                    logger.warning(
-                        "Semantics description output used model name %s for selected model %s; binding to selected schema name.",
-                        generated_model.get("name", ""),
-                        expected_model_name,
-                    )
-                else:
-                    continue
-
-            expected_columns = [
-                column
-                for column in expected_model.get("columns", []) or []
-                if isinstance(column, dict) and column.get("name")
-            ]
-            generated_column_items = [
-                column
-                for column in generated_model.get("columns", []) or []
-                if isinstance(column, dict)
-            ]
-            generated_columns = {
-                column.get("name"): column
-                for column in generated_column_items
-                if column.get("name")
-            }
-            bound_columns = []
-
-            for expected_column in expected_columns:
-                expected_column_name = expected_column["name"]
-                generated_column = generated_columns.get(expected_column_name)
-                if not isinstance(generated_column, dict):
-                    if (
-                        len(expected_columns) == 1
-                        and len(generated_column_items) == 1
-                        and self._identifier_key(
-                            generated_column_items[0].get("name", "")
-                        )
-                        == self._identifier_key(expected_column_name)
-                    ):
-                        generated_column = generated_column_items[0]
-                        logger.warning(
-                            "Semantics description output used column name %s for selected column %s.%s; binding to selected schema name.",
-                            generated_column.get("name", ""),
-                            expected_model_name,
-                            expected_column_name,
-                        )
-                    else:
-                        generated_column = {}
-
-                bound_columns.append(
-                    {
-                        **generated_column,
-                        "name": expected_column_name,
-                        "type": expected_column.get(
-                            "type", generated_column.get("type", "")
-                        ),
-                    }
-                )
-
-            bound_output[expected_model_name] = {
-                **generated_model,
-                "name": expected_model_name,
-                "columns": bound_columns,
-            }
-
-        return bound_output
-
-    def _validate_generated_output(self, chunk: dict, output: dict) -> None:
-        missing: list[str] = []
-
-        for model in chunk.get("mdl", {}).get("models", []) or []:
-            if not isinstance(model, dict):
-                continue
-
-            model_name = model.get("name", "")
-            generated_model = output.get(model_name)
-            if not isinstance(generated_model, dict):
-                missing.append(f"{model_name} model")
-                continue
-
-            if not self._description(generated_model):
-                missing.append(f"{model_name} description")
-            if not self._display_name(generated_model):
-                missing.append(f"{model_name} alias")
-
-            generated_columns = {
-                column.get("name"): column
-                for column in generated_model.get("columns", []) or []
-                if isinstance(column, dict) and column.get("name")
-            }
-            for column in model.get("columns", []) or []:
-                if not isinstance(column, dict):
-                    continue
-
-                column_name = column.get("name", "")
-                generated_column = generated_columns.get(column_name)
-                if not isinstance(generated_column, dict):
-                    missing.append(f"{model_name}.{column_name} column")
-                    continue
-                if not self._description(generated_column):
-                    missing.append(f"{model_name}.{column_name} description")
-                if not self._display_name(generated_column):
-                    missing.append(f"{model_name}.{column_name} alias")
-
-        if missing:
-            preview = ", ".join(missing[:10])
-            suffix = "..." if len(missing) > 10 else ""
-            raise RetryableSemanticsDescriptionError(
-                "Semantics description output omitted required metadata: "
-                f"{preview}{suffix}"
-            )
-
-    async def _generate_task(self, chunk: dict) -> dict:
-        resp = await self._pipelines["semantics_description"].run(**chunk)
-        output = resp.get("output") or {}
-        if not isinstance(output, dict):
-            raise ValueError("Semantics description pipeline returned invalid output")
-        output = self._bind_generated_output_to_chunk_schema(chunk, output)
-        self._validate_generated_output(chunk, output)
-        return output
-
-    def _chunk_columns(self, chunk: dict) -> list[dict]:
-        models = chunk.get("mdl", {}).get("models", [])
-        if not models:
-            return []
-        return models[0].get("columns", []) or []
-
-    def _split_chunk(self, chunk: dict) -> list[dict]:
-        columns = self._chunk_columns(chunk)
-        if len(columns) <= 1:
-            return []
-
-        split_at = max(1, len(columns) // 2)
-        model = chunk["mdl"]["models"][0]
-        relationships = chunk.get("mdl", {}).get("relationships", [])
         return [
             {
-                **chunk,
-                "mdl": {
-                    "models": [{**model, "columns": column_chunk}],
-                    "relationships": relationships,
-                },
+                **template,
+                "mdl": {"models": [chunk]},
+                "selected_models": [chunk["name"]],
             }
-            for column_chunk in (columns[:split_at], columns[split_at:])
-            if column_chunk
+            for chunk in chunks
         ]
 
-    def _is_retryable_chunk_error(self, error: Exception) -> bool:
-        if isinstance(error, asyncio.TimeoutError):
-            return True
+    async def _generate_task(self, request_id: str, chunk: dict):
+        resp = await self._pipelines["semantics_description"].run(**chunk)
+        output = resp.get("output")
 
-        if isinstance(error, RetryableSemanticsDescriptionError):
-            return True
+        current = self[request_id]
+        current.response = current.response or {}
 
-        message = str(error).casefold()
-        return any(
-            marker in message
-            for marker in (
-                "malformed json",
-                "truncated",
-                "unexpected end of data",
-                "output omitted",
-                "incomplete semantic metadata",
-                "max_tokens",
-                "natural stopping point",
-                "timed out",
-            )
-        )
-
-    async def _generate_task_with_retry_splitting(self, chunk: dict) -> list[dict]:
-        try:
-            return [
-                await asyncio.wait_for(
-                    self._generate_task(chunk),
-                    timeout=self._generation_timeout_seconds,
-                )
-            ]
-        except (ValueError, asyncio.TimeoutError) as e:
-            if not self._is_retryable_chunk_error(e):
-                raise
-
-            split_chunks = self._split_chunk(chunk)
-            model_name = (chunk.get("selected_models") or [""])[0]
-            if not split_chunks:
-                raise
-
-            logger.warning(
-                "Retrying semantics description for model %s with smaller "
-                "column chunks after incomplete or timed-out response: %s",
-                model_name,
-                str(e),
-            )
-            outputs: list[dict] = []
-            for split_chunk in split_chunks:
-                outputs.extend(
-                    await self._generate_task_with_retry_splitting(split_chunk)
-                )
-            return outputs
-
-    async def _generate_chunks(self, chunks: list[dict]) -> list[dict]:
-        semaphore = asyncio.Semaphore(self._max_concurrent_tasks)
-
-        async def _bounded_generate(chunk: dict) -> list[dict]:
-            async with semaphore:
-                return await self._generate_task_with_retry_splitting(chunk)
-
-        output_groups = await asyncio.gather(
-            *[_bounded_generate(chunk) for chunk in chunks]
-        )
-        return [output for group in output_groups for output in group]
-
-    def _request_timeout_seconds(self, chunk_count: int) -> int:
-        waves = max(1, math.ceil(chunk_count / self._max_concurrent_tasks))
-        return self._generation_timeout_seconds * waves
-
-    def _merge_outputs(
-        self, mdl_dict: dict, selected_models: list[str], outputs: list[dict]
-    ) -> dict:
-        def properties(payload: dict) -> dict:
-            value = payload.get("properties")
-            return value if isinstance(value, dict) else {}
-
-        def description(payload: dict) -> str:
-            value = payload.get("description") or properties(payload).get(
-                "description", ""
-            )
-            return "" if value is None else str(value).strip()
-
-        def display_name(payload: dict) -> str:
-            return self._display_name(payload)
-
-        def normalized_description(value: str) -> str:
-            return " ".join(value.casefold().split())
-
-        generated_by_model: dict[str, dict] = {}
-        for output in outputs:
-            for model_name, model_data in output.items():
-                if not isinstance(model_data, dict):
-                    continue
-
-                generated = generated_by_model.setdefault(
-                    model_name,
-                    {
-                        "name": model_name,
-                        "columns": [],
-                        "properties": {},
-                    },
-                )
-                if not description(generated) and description(model_data):
-                    generated["properties"] = {
-                        **properties(generated),
-                        "description": description(model_data),
-                    }
-                if not display_name(generated) and display_name(model_data):
-                    generated["properties"] = {
-                        **properties(generated),
-                        "displayName": display_name(model_data),
-                    }
-                generated.setdefault("columns", [])
-                generated["columns"].extend(model_data.get("columns", []))
-
-        response: dict = {}
-        for model in mdl_dict.get("models", []):
-            model_name = model.get("name")
-            if model_name not in selected_models:
+        for key in output.keys():
+            if key not in current.response:
+                current.response[key] = output[key]
                 continue
 
-            generated_model = generated_by_model.get(model_name, {})
-
-            model_description = description(generated_model)
-            model_display_name = display_name(generated_model)
-
-            generated_columns: dict[str, dict] = {}
-            for column in generated_model.get("columns", []):
-                if not isinstance(column, dict):
-                    continue
-
-                column_name = column.get("name")
-                if not column_name:
-                    continue
-
-                if column_name in generated_columns:
-                    logger.warning(
-                        "Semantics description output duplicated column: %s.%s",
-                        model_name,
-                        column_name,
-                    )
-                    continue
-
-                generated_columns[column_name] = column
-
-            columns = []
-            used_generated_descriptions: dict[str, str] = {}
-            for column in model.get("columns", []):
-                if not isinstance(column, dict):
-                    continue
-
-                column_name = column.get("name", "")
-                generated_column = generated_columns.get(column_name)
-                original_description = description(column)
-                original_display_name = display_name(column)
-                generated_description = (
-                    description(generated_column) if generated_column else ""
-                )
-                generated_display_name = (
-                    display_name(generated_column) if generated_column else ""
-                )
-                normalized_generated_description = normalized_description(
-                    generated_description
-                )
-                is_repeated_generated_description = (
-                    generated_description
-                    and normalized_generated_description in used_generated_descriptions
-                    and used_generated_descriptions[normalized_generated_description]
-                    != column_name
-                )
-                if is_repeated_generated_description and original_description:
-                    logger.warning(
-                        "Semantics description output reused description for columns: %s.%s and %s.%s",
-                        model_name,
-                        used_generated_descriptions[normalized_generated_description],
-                        model_name,
-                        column_name,
-                    )
-                    column_description = original_description
-                else:
-                    column_description = generated_description or original_description
-                    if generated_description:
-                        used_generated_descriptions.setdefault(
-                            normalized_generated_description, column_name
-                        )
-
-                column_display_name = (
-                    generated_display_name or original_display_name
-                )
-
-                columns.append(
-                    {
-                        "name": column_name,
-                        "type": column.get("type", ""),
-                        "properties": {
-                            "description": column_description,
-                            "displayName": column_display_name,
-                        },
-                    }
-                )
-
-            if not model_description:
-                model_description = description(model)
-            if not model_display_name:
-                model_display_name = display_name(model)
-
-            response[model_name] = {
-                "name": model_name,
-                "columns": columns,
-                "properties": {
-                    "description": model_description,
-                    "displayName": model_display_name,
-                },
-            }
-
-        return response
+            current.response[key]["columns"].extend(output[key]["columns"])
 
     @observe(name="Generate Semantics Description")
     @trace_metadata
     async def generate(self, request: GenerateRequest, **kwargs) -> Resource:
         logger.info("Generate Semantics Description pipeline is running...")
         trace_id = kwargs.get("trace_id")
-        request_timeout_seconds = self._generation_timeout_seconds
 
         try:
             mdl_dict = orjson.loads(request.mdl)
 
             chunks = self._chunking(mdl_dict, request)
-            if not chunks:
-                raise ValueError(
-                    "No selected models matched the current semantic model metadata"
-                )
-            request_timeout_seconds = self._request_timeout_seconds(len(chunks))
-            outputs = await self._generate_chunks(chunks)
+            tasks = [self._generate_task(request.id, chunk) for chunk in chunks]
 
-            self[request.id] = self.Resource(
-                id=request.id,
-                status="finished",
-                response=self._merge_outputs(
-                    mdl_dict, request.selected_models, list(outputs)
-                ),
-                trace_id=trace_id,
-                request_from=request.request_from,
-            )
+            await asyncio.gather(*tasks)
+
+            self[request.id].status = "finished"
+            self[request.id].trace_id = trace_id
+            self[request.id].request_from = request.request_from
         except orjson.JSONDecodeError as e:
             self._handle_exception(
                 request.id,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
-                trace_id=trace_id,
-                request_from=request.request_from,
-            )
-        except asyncio.TimeoutError:
-            self._handle_exception(
-                request.id,
-                "Semantics description generation timed out after "
-                f"{request_timeout_seconds} seconds",
                 trace_id=trace_id,
                 request_from=request.request_from,
             )
