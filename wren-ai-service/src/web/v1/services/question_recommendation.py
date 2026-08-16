@@ -87,7 +87,7 @@ class QuestionRecommendation:
             )
             return None
 
-        async def _document_retrieval() -> tuple[list[str], list[str], bool, bool, bool]:
+        async def _document_retrieval() -> tuple[list[str], bool, bool, bool]:
             retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                 query=candidate["question"],
                 project_id=project_id,
@@ -95,21 +95,10 @@ class QuestionRecommendation:
             _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
             documents = _retrieval_result.get("retrieval_results", [])
             table_ddls = [document.get("table_ddl") for document in documents]
-            identifier_contexts = [
-                document.get("identifier_context")
-                for document in documents
-                if document.get("identifier_context")
-            ]
             has_calculated_field = _retrieval_result.get("has_calculated_field", False)
             has_metric = _retrieval_result.get("has_metric", False)
             has_json_field = _retrieval_result.get("has_json_field", False)
-            return (
-                table_ddls,
-                identifier_contexts,
-                has_calculated_field,
-                has_metric,
-                has_json_field,
-            )
+            return table_ddls, has_calculated_field, has_metric, has_json_field
 
         async def _sql_pairs_retrieval() -> list[dict]:
             sql_pairs_result = await self._pipelines["sql_pairs_retrieval"].run(
@@ -134,13 +123,7 @@ class QuestionRecommendation:
                 _sql_pairs_retrieval(),
                 _instructions_retrieval(),
             )
-            (
-                table_ddls,
-                identifier_contexts,
-                has_calculated_field,
-                has_metric,
-                has_json_field,
-            ) = _document
+            table_ddls, has_calculated_field, has_metric, has_json_field = _document
 
             if self._allow_sql_functions_retrieval:
                 sql_functions = await self._pipelines["sql_functions_retrieval"].run(
@@ -160,7 +143,6 @@ class QuestionRecommendation:
                 query=candidate["question"],
                 contexts=table_ddls,
                 project_id=project_id,
-                identifier_contexts=identifier_contexts,
                 sql_samples=sql_samples,
                 instructions=instructions,
                 has_calculated_field=has_calculated_field,

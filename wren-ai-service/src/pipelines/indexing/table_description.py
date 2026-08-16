@@ -22,10 +22,6 @@ logger = logging.getLogger("wren-ai-service")
 
 @component
 class TableDescriptionChunker:
-    def _properties(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        properties = payload.get("properties")
-        return properties if isinstance(properties, dict) else {}
-
     @component.output_types(documents=List[Document])
     def run(
         self,
@@ -64,161 +60,27 @@ class TableDescriptionChunker:
             ]
         }
 
-    def _get_table_descriptions(self, mdl: Dict[str, Any]) -> List[Dict[str, Any]]:
-        def _text(value: Any) -> str:
-            return "" if value is None else str(value)
-
-        def _source_context(payload: Dict[str, Any]) -> str:
-            table_reference = payload.get("tableReference")
-            if isinstance(table_reference, dict):
-                reference_parts = [
-                    _text(table_reference.get("catalog", "")),
-                    _text(table_reference.get("schema", "")),
-                    _text(table_reference.get("table", "")),
-                ]
-                return ".".join(part for part in reference_parts if part)
-
-            return _text(payload.get("baseObject", ""))
-
-        def _columns(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
-            columns = payload.get("columns", [])
-            if columns:
-                return [
-                    {**column, "role": _text(column.get("role", ""))}
-                    for column in columns
-                    if isinstance(column, dict)
-                ]
-
-            metric_columns = []
-            for role, key in [("dimension", "dimension"), ("measure", "measure")]:
-                metric_columns += [
-                    {**column, "role": role}
-                    for column in payload.get(key, []) or []
-                    if isinstance(column, dict)
-                ]
-
-            return metric_columns
-
+    def _get_table_descriptions(self, mdl: Dict[str, Any]) -> List[str]:
         def _structure_data(mdl_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-            properties = self._properties(payload)
-
             return {
                 "mdl_type": mdl_type,
                 "name": payload.get("name"),
-                "displayName": _text(properties.get("displayName", "")),
-                "source": _source_context(payload),
-                "columns": [
-                    {
-                        "name": _text(column.get("name", "")),
-                        "type": _text(column.get("type", "")),
-                        "role": _text(column.get("role", "")),
-                        "expression": _text(column.get("expression", "")),
-                        "description": _text(
-                            self._properties(column).get("description", "")
-                        ),
-                        "displayName": _text(
-                            self._properties(column).get("displayName", "")
-                        ),
-                    }
-                    for column in _columns(payload)
-                ],
-                "properties": properties,
+                "columns": [column["name"] for column in payload.get("columns", [])],
+                "properties": payload.get("properties", {}),
             }
 
-        def _relationship_context_by_model() -> Dict[str, List[str]]:
-            relationships = {model.get("name"): [] for model in mdl.get("models", [])}
-
-            for relationship in mdl.get("relationships", []) or []:
-                models = relationship.get("models", [])
-                if len(models) != 2:
-                    continue
-
-                properties = self._properties(relationship)
-                summary = " ".join(
-                    part
-                    for part in [
-                        _text(relationship.get("name", "")),
-                        _text(relationship.get("joinType", "")),
-                        _text(relationship.get("condition", "")),
-                        _text(properties.get("description", "")),
-                        f"models {' <-> '.join(_text(model) for model in models)}",
-                    ]
-                    if part
-                )
-                if not summary:
-                    continue
-
-                for model_name in models:
-                    relationships.setdefault(model_name, []).append(summary)
-
-            return relationships
-
-        def _column_context(columns: List[Dict[str, Any]]) -> str:
-            details = []
-
-            for column in columns:
-                semantic_parts = [
-                    column["type"],
-                    column["role"],
-                    column["displayName"],
-                    column["description"],
-                    column["expression"],
-                ]
-                if not any(semantic_parts):
-                    continue
-
-                details.append(
-                    " ".join(
-                        part for part in [column["name"], *semantic_parts] if part
-                    )
-                )
-
-            return "; ".join(detail for detail in details if detail)
-
-        relationship_context = _relationship_context_by_model()
         resources = (
             [_structure_data("MODEL", model) for model in mdl["models"]]
             + [_structure_data("METRIC", metric) for metric in mdl["metrics"]]
             + [_structure_data("VIEW", view) for view in mdl["views"]]
         )
 
-        def _resource_description(resource: Dict[str, Any]) -> Dict[str, str]:
-            column_context = _column_context(resource["columns"])
-            relationships = "; ".join(relationship_context.get(resource["name"], []))
-            description = {
-                "name": resource["name"],
-                "resource_type": resource["mdl_type"],
-                "description": resource["properties"].get("description", "") or "",
-                "columns": ", ".join(
-                    column["name"] for column in resource["columns"]
-                ),
-            }
-
-            if resource["displayName"]:
-                description["displayName"] = resource["displayName"]
-
-            if resource["source"]:
-                description["source"] = resource["source"]
-
-            if column_context:
-                description["column_context"] = column_context
-
-            if relationships:
-                description["relationships"] = relationships
-
-            semantic_parts = [
-                description.get("displayName", ""),
-                description.get("source", ""),
-                column_context,
-                relationships,
-            ]
-            if semantic_context := "; ".join(part for part in semantic_parts if part):
-                description["semantic_context"] = semantic_context
-
-            return description
-
         return [
-            _resource_description(resource)
+            {
+                "name": resource["name"],
+                "description": resource["properties"].get("description", ""),
+                "columns": ", ".join(resource["columns"]),
+            }
             for resource in resources
             if resource["name"] is not None
         ]

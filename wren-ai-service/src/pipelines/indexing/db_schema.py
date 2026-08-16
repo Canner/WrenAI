@@ -26,20 +26,6 @@ from src.pipelines.indexing.utils import helper
 
 logger = logging.getLogger("wren-ai-service")
 
-MAX_DB_SCHEMA_METADATA_TEXT_LENGTH = 1000
-
-
-def _truncate_metadata_text(value: Any) -> Any:
-    if value is None:
-        return ""
-    if isinstance(value, str) and len(value) > MAX_DB_SCHEMA_METADATA_TEXT_LENGTH:
-        return value[: MAX_DB_SCHEMA_METADATA_TEXT_LENGTH - 3] + "..."
-    if isinstance(value, dict):
-        return {key: _truncate_metadata_text(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_truncate_metadata_text(item) for item in value]
-    return value
-
 
 @component
 class DDLChunker:
@@ -91,7 +77,7 @@ class DDLChunker:
             column: Dict[str, Any], addition: Dict[str, Any]
         ) -> Dict[str, Any]:
             addition = {
-                key: _truncate_metadata_text(helper(column, **addition))
+                key: helper(column, **addition)
                 for key, helper in helper.COLUMN_PREPROCESSORS.items()
                 if helper.condition(column, **addition)
             }
@@ -104,7 +90,7 @@ class DDLChunker:
 
         async def _preprocessor(model: Dict[str, Any], **kwargs) -> Dict[str, Any]:
             addition = {
-                key: _truncate_metadata_text(await helper(model, **kwargs))
+                key: await helper(model, **kwargs)
                 for key, helper in helper.MODEL_PREPROCESSORS.items()
                 if helper.condition(model, **kwargs)
             }
@@ -116,7 +102,7 @@ class DDLChunker:
             ]
             return {
                 "name": model.get("name", ""),
-                "properties": _truncate_metadata_text(model.get("properties", {})),
+                "properties": model.get("properties", {}),
                 "columns": columns,
                 "primaryKey": model.get("primaryKey", ""),
             }
@@ -203,69 +189,20 @@ class DDLChunker:
             if join_type not in ["MANY_TO_ONE", "ONE_TO_MANY", "ONE_TO_ONE"]:
                 return None
 
-            condition_parts = [
-                part.strip() for part in condition.split("=", maxsplit=1)
-            ]
-            if len(condition_parts) != 2:
-                return None
+            # Get related table and foreign key column
+            is_source = table_name == models[0]
+            related_table = models[1] if is_source else models[0]
+            condition_parts = condition.split(" = ")
+            fk_column = condition_parts[0 if is_source else 1].split(".")[1]
 
-            model_columns = []
-            for condition_part in condition_parts:
-                name_parts = [
-                    part.strip() for part in condition_part.split(".", maxsplit=1)
-                ]
-                if len(name_parts) != 2:
-                    return None
-                model_columns.append(
-                    {"table": name_parts[0], "column": name_parts[1]}
-                )
-
-            left, right = model_columns
-
-            if join_type == "MANY_TO_ONE":
-                foreign_side, referenced_side = left, right
-            elif join_type == "ONE_TO_MANY":
-                foreign_side, referenced_side = right, left
-            elif table_name == left["table"]:
-                foreign_side, referenced_side = left, right
-            else:
-                foreign_side, referenced_side = right, left
-
-            if table_name != foreign_side["table"]:
-                return None
-
-            related_table = referenced_side["table"]
-            referenced_column = referenced_side["column"] or primary_keys_map.get(
-                related_table, ""
-            )
-            fk_column = foreign_side["column"]
-            fk_constraint = (
-                f"FOREIGN KEY ({fk_column}) "
-                f"REFERENCES {related_table}({referenced_column})"
-            )
-
-            properties = relationship.get("properties", {})
-            relationship_properties = {
-                "name": relationship.get("name", ""),
-                "condition": condition,
-                "joinType": join_type,
-                "description": _truncate_metadata_text(
-                    properties.get("description", "")
-                )
-                if isinstance(properties, dict)
-                else "",
-                "from": f"{foreign_side['table']}.{foreign_side['column']}",
-                "to": f"{referenced_side['table']}.{referenced_side['column']}",
-            }
+            # Build foreign key constraint
+            fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
 
             return {
                 "type": "FOREIGN_KEY",
-                "comment": f"-- {relationship_properties}\n  ",
+                "comment": f'-- {{"condition": {condition}, "joinType": {join_type}}}\n  ',
                 "constraint": fk_constraint,
                 "tables": models,
-                "column": fk_column,
-                "referenced_table": related_table,
-                "referenced_column": referenced_column,
             }
 
         def _column_batch(
@@ -304,18 +241,6 @@ class DDLChunker:
         ]
 
     def _convert_views(self, views: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-        def _columns(view: Dict[str, Any]) -> List[dict]:
-            properties = view.get("properties", {}) or {}
-            return [
-                {
-                    "name": column.get("name", ""),
-                    "data_type": column.get("type", ""),
-                    "comment": column.get("description", ""),
-                }
-                for column in properties.get("columns", [])
-                if column.get("name")
-            ]
-
         def _payload(view: Dict[str, Any]) -> dict:
             return {
                 "type": "VIEW",
@@ -324,7 +249,6 @@ class DDLChunker:
                 else "",
                 "name": view["name"],
                 "statement": view["statement"],
-                "columns": _columns(view),
             }
 
         return [
