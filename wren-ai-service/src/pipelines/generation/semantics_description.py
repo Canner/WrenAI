@@ -233,6 +233,7 @@ class ModelColumns(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
+    type: str = ""
     properties: ModelProperties
 
 

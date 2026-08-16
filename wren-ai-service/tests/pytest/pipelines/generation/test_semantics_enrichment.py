@@ -121,6 +121,7 @@ def test_normalize_preserves_generated_aliases():
                       "columns": [
                         {
                           "name": "order_id",
+                          "type": "VARCHAR",
                           "properties": {
                             "description": "Unique order identifier.",
                             "displayName": "order id, order number"
@@ -139,3 +140,4 @@ def test_normalize_preserves_generated_aliases():
     assert result["orders"]["columns"][0]["properties"]["displayName"] == (
         "order id, order number"
     )
+    assert result["orders"]["columns"][0]["type"] == "VARCHAR"
