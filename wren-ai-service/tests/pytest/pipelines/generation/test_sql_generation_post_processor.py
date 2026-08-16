@@ -98,6 +98,38 @@ async def test_post_processor_returns_no_relevant_sql_for_missing_sql_field():
 
 
 @pytest.mark.asyncio
+async def test_post_processor_treats_null_sql_as_no_relevant_sql():
+    processor = SQLGenPostProcessor(FakeEngine())
+
+    result = await processor.run(
+        ['{"sql": null}'],
+        project_id="project-id",
+        data_source="mssql",
+    )
+
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "NO_RELEVANT_SQL"
+    assert "No grounded SQL" in result["invalid_generation_result"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_post_processor_rejects_code_tool_payload():
+    engine = FakeEngine()
+    processor = SQLGenPostProcessor(engine)
+
+    result = await processor.run(
+        ['{"name":"execute_code","arguments":{"code":"SELECT * FROM orders"}}'],
+        project_id="project-id",
+        data_source="mssql",
+    )
+
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "NO_RELEVANT_SQL"
+    assert engine.dry_plan_calls == []
+    assert engine.execute_sql_calls == []
+
+
+@pytest.mark.asyncio
 async def test_post_processor_dry_plans_before_preview_execution():
     engine = FakeEngine(dry_plan_success=False)
     processor = SQLGenPostProcessor(engine)

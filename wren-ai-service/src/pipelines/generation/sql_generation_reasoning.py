@@ -6,8 +6,8 @@ from typing import Any, Optional
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
-from langfuse.decorators import observe
 
+from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
@@ -29,11 +29,10 @@ sql_generation_reasoning_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
-SQL:
-{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -49,7 +48,7 @@ User's Question: {{ query }}
 Language: {{ language }}
 Current Time: {{ current_time }}
 
-Let's think step by step.
+Return only the reasoning plan described by the system instructions. When relevant, ground the plan by using the literal prefix `table:` followed by an exact declared table name from DATABASE SCHEMA, or the literal prefix `column:` followed by an exact declared table name, a dot, and an exact declared column name. Do not include SQL, SQL-like expressions, aliases, source names, physical names, lineage names, schema names, database names, literal values, placeholders, template markers, functions, or identifier-like labels.
 """
 
 
