@@ -157,6 +157,7 @@ async def post_process(
     data_source: str,
     project_id: str | None = None,
     mdl_hash: str | None = None,
+    validation_contexts: list[str] | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
 ) -> dict:
@@ -164,6 +165,7 @@ async def post_process(
         generate_sql_in_followup.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
+        validation_contexts=validation_contexts,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,

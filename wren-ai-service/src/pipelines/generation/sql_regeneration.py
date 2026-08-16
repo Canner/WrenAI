@@ -5,8 +5,8 @@ from typing import Any
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
-from langfuse.decorators import observe
 
+from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
@@ -35,16 +35,19 @@ def get_sql_regeneration_system_prompt(
     return f"""
 ### TASK ###
 You are a great ANSI SQL expert. Now you are given database schema and a user's question.
-Generate a new SQL query that answers the user's question.
-While generating the new SQL query, make sure to use the database schema and SQL rules.
+Carefully review the user's question and current DATABASE SCHEMA, then generate a new SQL query that answers the user's intent.
+The original SQL query and UI planning text are intentionally omitted from the prompt and must not be used as executable context.
+While generating the new SQL query, make sure to use the database schema as the only source of executable table and column identifiers.
+If the original SQL query or reasoning contains unsupported identifiers, placeholders, or assumptions, ignore those parts and regenerate from the user's question and DATABASE SCHEMA.
+Treat physical/source/lineage names from the original SQL, reasoning, samples, comments, or descriptions as semantic context only; never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
 
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a SQL query in JSON format:
+The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS and answers the user's requested intent. Do not create table or column identifiers from the user's wording. If no fully grounded SQL can be generated, return null for sql.
 
 {{
-    "sql": <SQL_QUERY_STRING>
+    "sql": "SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
 }}
 """
 
@@ -76,11 +79,10 @@ sql_regeneration_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
-SQL:
-{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -93,14 +95,12 @@ SQL:
 
 ### QUESTION ###
 User's Question: {{ query }}
-{% if sql_generation_reasoning %}
-### REASONING PLAN ###
-{{ sql_generation_reasoning }}
-{% endif %}
+Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
+Regenerate with executable identifiers from the current DATABASE SCHEMA only.
 ### ORIGINAL SQL QUERY ###
-{{ sql }}
+The original SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 
-Let's think step by step.
+Return only the final JSON SQL response.
 """
 
 
@@ -165,11 +165,13 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
     mdl_hash: str | None = None,
+    validation_contexts: list[str] | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
+        validation_contexts=validation_contexts,
     )
 
 
