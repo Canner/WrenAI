@@ -1605,8 +1605,6 @@ def test_validate_project_reports_non_list_v1_views_container(
     assert not (tmp_path / "views").exists()
 
 
-
-
 # ── Regression: model columns non-list / non-dict entries ─────────────────
 
 
@@ -1616,13 +1614,22 @@ def test_load_models_v2_normalises_non_list_columns(tmp_path):
     d = tmp_path / "models" / "orders"
     d.mkdir(parents=True)
     (d / "metadata.yml").write_text(
-        "name: orders\n"
-        "table_reference:\n  table: orders\n"
-        "columns: id, customer_id\n"
+        "name: orders\ntable_reference:\n  table: orders\ncolumns: id, customer_id\n"
     )
     models = load_models(tmp_path)
     assert len(models) == 1
     assert models[0]["columns"] == []
+
+
+def test_load_models_v2_omits_missing_columns_key(tmp_path):
+    """Absent columns key stays absent (no empty list injection)."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text("name: orders\ntable_reference:\n  table: orders\n")
+    models = load_models(tmp_path)
+    assert len(models) == 1
+    assert "columns" not in models[0]
 
 
 def test_load_models_v2_drops_non_dict_column_entries(tmp_path):
@@ -1649,13 +1656,12 @@ def test_validate_project_reports_non_list_model_columns(tmp_path):
     d = tmp_path / "models" / "orders"
     d.mkdir(parents=True)
     (d / "metadata.yml").write_text(
-        "name: orders\n"
-        "table_reference:\n  table: orders\n"
-        "columns: id, customer_id\n"
+        "name: orders\ntable_reference:\n  table: orders\ncolumns: id, customer_id\n"
     )
     errors = validate_project(tmp_path)
     msgs = [f"{e.path}: {e.message}" for e in errors]
     assert any("must be a list, got str" in m for m in msgs), msgs
+    assert any("models/orders/metadata.yml > orders > columns" in m for m in msgs), msgs
 
 
 def test_validate_project_reports_null_model_columns(tmp_path):
@@ -1664,15 +1670,50 @@ def test_validate_project_reports_null_model_columns(tmp_path):
     d = tmp_path / "models" / "orders"
     d.mkdir(parents=True)
     (d / "metadata.yml").write_text(
+        "name: orders\ntable_reference:\n  table: orders\ncolumns:\n"
+    )
+    errors = validate_project(tmp_path)
+    msgs = [f"{e.path}: {e.message}" for e in errors]
+    assert any("columns" in m and "must be a list, got NoneType" in m for m in msgs), (
+        msgs
+    )
+
+
+def test_validate_project_reports_non_dict_column_entries(tmp_path):
+    """Bare-string column entries must error, not vanish silently."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
         "name: orders\n"
         "table_reference:\n  table: orders\n"
         "columns:\n"
+        "  - name: id\n    type: INTEGER\n"
+        "  - bare_column\n"
     )
     errors = validate_project(tmp_path)
     msgs = [f"{e.path}: {e.message}" for e in errors]
     assert any(
-        "columns" in m and "must be a list, got NoneType" in m for m in msgs
+        "columns[1]" in m and "column entry must be an object" in m for m in msgs
     ), msgs
+
+
+def test_validate_project_uses_dir_name_when_model_name_missing(tmp_path):
+    """v2 error path should use models/<dir>, not stem 'metadata'."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "table_reference:\n  table: orders\ncolumns: not-a-list\n"
+    )
+    errors = validate_project(tmp_path)
+    msgs = [f"{e.path}: {e.message}" for e in errors]
+    assert any(
+        "models/orders/metadata.yml > orders > columns" in m and "must be a list" in m
+        for m in msgs
+    ), msgs
+
+
 def test_build_manifest_drops_v1_views_yml_non_mapping_entries(tmp_path):
     _make_v1_project(tmp_path)
     _corrupt_v1_views_yml(tmp_path)
@@ -2059,7 +2100,9 @@ def test_validate_project_reports_non_dict_relationship_entries(tmp_path: Path) 
 
 def test_validate_project_reports_relationships_not_list(tmp_path: Path) -> None:
     (tmp_path / "wren_project.yml").write_text("schema_version: 1\n", encoding="utf-8")
-    (tmp_path / "relationships.yml").write_text("relationships: nope\n", encoding="utf-8")
+    (tmp_path / "relationships.yml").write_text(
+        "relationships: nope\n", encoding="utf-8"
+    )
     errors = validate_project(tmp_path)
     msgs = [e.message for e in errors]
     assert any("'relationships' must be a list, got str" in m for m in msgs)
@@ -2083,16 +2126,11 @@ def test_validate_project_relationship_indices_match_file(tmp_path: Path) -> Non
     """Junk at [0] must not renumber a later unnamed relationship's warnings."""
     (tmp_path / "wren_project.yml").write_text("schema_version: 1\n", encoding="utf-8")
     (tmp_path / "relationships.yml").write_text(
-        "relationships:\n"
-        "  - 42\n"
-        "  - models: [a, b]\n"
-        "    condition: a.id = b.id\n",
+        "relationships:\n  - 42\n  - models: [a, b]\n    condition: a.id = b.id\n",
         encoding="utf-8",
     )
     errors = validate_project(tmp_path)
-    diagnostics = [
-        f"{getattr(e, 'path', '')} {e.message}" for e in errors
-    ]
+    diagnostics = [f"{getattr(e, 'path', '')} {e.message}" for e in errors]
     assert any("got int" in diagnostic for diagnostic in diagnostics)
     assert any(
         "relationships[1]" in diagnostic and "join_type" in diagnostic

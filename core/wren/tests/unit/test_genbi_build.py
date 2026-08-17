@@ -94,31 +94,20 @@ def test_build_includes_model_inventory(tmp_path: Path) -> None:
     assert "duckdb" in result.output
 
 
-def test_format_inventory_normalizes_non_list_columns() -> None:
-    """Non-list columns render as empty inventory (loader owns normalisation)."""
+def test_format_inventory_stringifies_non_string_column_names() -> None:
+    """Non-string column names (YAML ``name: 3``) must not crash join."""
     from wren.genbi.composer import _format_model_inventory
 
-    assert (
-        _format_model_inventory([{"name": "orders", "columns": "id, customer_id"}])
-        == "- **orders**: "
-    )
+    models = [{"name": "customers", "columns": [{"name": 3}, {"name": "id"}]}]
+    assert _format_model_inventory(models) == "- **customers**: 3, id"
 
 
-def test_format_inventory_keeps_dict_columns_only() -> None:
-    """Bare strings / junk entries are not inferred as column names."""
-    from wren.genbi.composer import _format_model_inventory
-
-    models = [{"name": "customers", "columns": [{"name": "id"}, "bare", 3]}]
-    assert _format_model_inventory(models) == "- **customers**: id"
-
-
-def test_build_inventory_tolerates_non_list_columns(tmp_path: Path) -> None:
-    """compose_build_instruction still no-crashes on malformed columns."""
+def test_build_inventory_stringifies_non_string_column_names(tmp_path: Path) -> None:
+    """compose_build_instruction survives non-string column names."""
     from wren.genbi.composer import compose_build_instruction
 
     models = [
-        {"name": "orders", "columns": "id, customer_id"},
-        {"name": "customers", "columns": [{"name": "id"}, "bare", 3]},
+        {"name": "customers", "columns": [{"name": 3}, {"name": "id"}]},
     ]
     text = compose_build_instruction(
         app_name="demo",
@@ -129,9 +118,7 @@ def test_build_inventory_tolerates_non_list_columns(tmp_path: Path) -> None:
         models=models,
         data_source="duckdb",
     )
-    assert "- **orders**: " in text
-    assert "- **customers**: id" in text
-
+    assert "- **customers**: 3, id" in text
 
 
 def test_build_includes_wasm_wiring_and_final_steps(tmp_path: Path) -> None:

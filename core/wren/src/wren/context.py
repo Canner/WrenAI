@@ -532,8 +532,13 @@ def _normalize_model_columns(model: dict) -> dict:
     Hand-edited project YAML can set ``columns:`` to a scalar or mix bare
     strings into the list. Loaders drop malformed entries (matching views/
     relationships); ``validate_project`` re-reads the raw file to report them.
+
+    Omit the key when absent so ``target/mdl.json`` does not gain an empty
+    ``columns: []`` solely from loader defaults.
     """
-    raw = model.get("columns", [])
+    if "columns" not in model:
+        return model
+    raw = model.get("columns")
     if not isinstance(raw, list):
         model["columns"] = []
         return model
@@ -1004,7 +1009,13 @@ def validate_project(project_path: Path) -> list[ValidationError]:
         if "columns" not in raw_model:
             continue
         raw_cols = raw_model.get("columns")
-        mname = raw_model.get("name") or Path(src_path).stem
+        # v2 path is models/<dir>/metadata.yml — prefer directory name over
+        # stem "metadata" when the YAML omits `name`.
+        if src_path.endswith("/metadata.yml"):
+            dir_name = Path(src_path).parent.name
+            mname = raw_model.get("name") or dir_name
+        else:
+            mname = raw_model.get("name") or Path(src_path).stem
         if not isinstance(raw_cols, list):
             errors.append(
                 ValidationError(
@@ -1013,6 +1024,16 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                     f"must be a list, got {type(raw_cols).__name__}",
                 )
             )
+            continue
+        for j, col in enumerate(raw_cols):
+            if not isinstance(col, dict):
+                errors.append(
+                    ValidationError(
+                        "error",
+                        f"{src_path} > {mname} > columns[{j}]",
+                        "column entry must be an object",
+                    )
+                )
 
     # Check models
     for i, model in enumerate(models):
@@ -1059,15 +1080,9 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                     )
                 )
 
+        # columns shape is owned by load_models + the raw re-read above.
         columns = model.get("columns", [])
         if not isinstance(columns, list):
-            errors.append(
-                ValidationError(
-                    "error",
-                    f"{src_path} > {name} > columns",
-                    f"must be a list, got {type(columns).__name__}",
-                )
-            )
             columns = []
         if not columns:
             errors.append(
@@ -1078,15 +1093,8 @@ def validate_project(project_path: Path) -> list[ValidationError]:
 
         col_names = set()
         for j, col in enumerate(columns):
-            if not isinstance(col, dict):
-                errors.append(
-                    ValidationError(
-                        "error",
-                        f"{src_path} > {name} > columns[{j}]",
-                        "column entry must be an object",
-                    )
-                )
-                continue
+            # Non-dict entries are dropped by the loader and reported via the
+            # raw re-read; remaining entries are dicts.
             col_name = col.get("name")
             if not col_name:
                 errors.append(
