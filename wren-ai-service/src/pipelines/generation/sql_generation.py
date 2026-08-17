@@ -144,6 +144,7 @@ async def post_process(
     documents: list[str],
     project_id: str | None = None,
     mdl_hash: str | None = None,
+    validation_contexts: list[str] | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
     allow_data_preview: bool = False,
@@ -152,11 +153,11 @@ async def post_process(
         generate_sql.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
+        contexts=validation_contexts or documents,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
         allow_data_preview=allow_data_preview,
-        contexts=documents,
     )
 
 
@@ -209,6 +210,7 @@ class SQLGeneration(BasicPipeline):
         allow_dry_plan_fallback: bool = True,
         allow_data_preview: bool = False,
         sql_knowledge: SqlKnowledge | None = None,
+        validation_contexts: list[str] | None = None,
     ):
         logger.info("SQL Generation pipeline is running...")
 
@@ -238,6 +240,7 @@ class SQLGeneration(BasicPipeline):
                 "data_source": metadata.get("data_source", "local_file"),
                 "allow_data_preview": allow_data_preview,
                 "sql_knowledge": sql_knowledge,
+                "validation_contexts": validation_contexts,
                 **self._components,
             },
         )

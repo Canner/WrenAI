@@ -68,16 +68,18 @@ def prompt(
     sql_samples: list[dict],
     instructions: list[dict],
     prompt_builder: PromptBuilder,
+    validation_contexts: Optional[list[str]] = None,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
+    schema_documents = validation_contexts or documents
     _prompt = prompt_builder.run(
         query=query,
-        documents=documents,
+        documents=schema_documents,
         sql_samples=sql_samples,
         instructions=construct_instructions(
             instructions=instructions,
         ),
-        schema_identifier_catalog=construct_schema_identifier_catalog(documents),
+        schema_identifier_catalog=construct_schema_identifier_catalog(schema_documents),
         language=configuration.language,
         current_time=configuration.show_current_time(),
     )

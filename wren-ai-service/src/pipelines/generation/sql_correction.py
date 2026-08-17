@@ -166,6 +166,7 @@ async def post_process(
     documents: list[str],
     project_id: str | None = None,
     mdl_hash: str | None = None,
+    validation_contexts: list[str] | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
 ) -> dict:
@@ -173,10 +174,10 @@ async def post_process(
         generate_sql_correction.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
+        contexts=validation_contexts or documents,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
-        contexts=documents,
     )
 
 
@@ -225,6 +226,7 @@ class SQLCorrection(BasicPipeline):
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
+        validation_contexts: list[str] | None = None,
     ):
         logger.info("SQLCorrection pipeline is running...")
 
@@ -250,6 +252,7 @@ class SQLCorrection(BasicPipeline):
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
                 "data_source": metadata.get("data_source", "local_file"),
                 "sql_knowledge": sql_knowledge,
+                "validation_contexts": validation_contexts,
                 **self._components,
             },
         )

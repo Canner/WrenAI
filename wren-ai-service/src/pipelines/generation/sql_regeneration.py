@@ -164,12 +164,13 @@ async def post_process(
     documents: list[str],
     project_id: str | None = None,
     mdl_hash: str | None = None,
+    validation_contexts: list[str] | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
-        contexts=documents,
+        contexts=validation_contexts or documents,
     )
 
 
@@ -214,6 +215,7 @@ class SQLRegeneration(BasicPipeline):
         has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
         sql_knowledge: SqlKnowledge | None = None,
+        validation_contexts: list[str] | None = None,
     ):
         logger.info("SQL Regeneration pipeline is running...")
 
@@ -232,6 +234,7 @@ class SQLRegeneration(BasicPipeline):
                 "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
                 "sql_knowledge": sql_knowledge,
+                "validation_contexts": validation_contexts,
                 **self._components,
             },
         )

@@ -35,6 +35,716 @@ _DDL_COLUMN_KEYWORDS = {
 }
 
 
+_IDENTIFIER_TOKEN = r'"[^"]+"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*'
+_QUALIFIED_IDENTIFIER = rf"(?:{_IDENTIFIER_TOKEN})(?:\s*\.\s*(?:{_IDENTIFIER_TOKEN}))*"
+_SIMPLE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
+_DDL_RELATION = re.compile(
+    rf"\bCREATE\s+(?:TABLE|VIEW)\s+(?P<name>{_QUALIFIED_IDENTIFIER})",
+    re.IGNORECASE,
+)
+_RELATION_REFERENCE = re.compile(
+    rf"\b(?:FROM|JOIN)\s+(?P<name>{_QUALIFIED_IDENTIFIER})"
+    rf"(?:\s+(?:AS\s+)?(?P<alias>{_IDENTIFIER_TOKEN}))?",
+    re.IGNORECASE,
+)
+_CTE_REFERENCE = re.compile(
+    rf"(?:\bWITH|,)\s+(?P<name>{_IDENTIFIER_TOKEN})\s+AS\s*\(",
+    re.IGNORECASE,
+)
+_QUALIFIED_COLUMN = re.compile(
+    rf"(?P<qualifier>{_QUALIFIED_IDENTIFIER})\s*\.\s*(?P<column>{_IDENTIFIER_TOKEN})"
+)
+_SQL_START = re.compile(r"^\s*(?:WITH|SELECT)\b", re.IGNORECASE | re.DOTALL)
+_SQL_OBJECT_ALIAS_STOP_WORDS = {
+    "CROSS",
+    "EXCEPT",
+    "FETCH",
+    "FULL",
+    "GROUP",
+    "HAVING",
+    "INNER",
+    "INTERSECT",
+    "JOIN",
+    "LEFT",
+    "LIMIT",
+    "MATCH_RECOGNIZE",
+    "NATURAL",
+    "OFFSET",
+    "ORDER",
+    "RIGHT",
+    "TABLESAMPLE",
+    "UNION",
+    "WHERE",
+}
+_SQL_RESERVED_WORDS = {
+    "ALL",
+    "ALTER",
+    "AND",
+    "AS",
+    "BY",
+    "CASE",
+    "CAST",
+    "COUNT",
+    "CREATE",
+    "CROSS",
+    "DELETE",
+    "DESC",
+    "DISTINCT",
+    "ELSE",
+    "END",
+    "EXCEPT",
+    "FALSE",
+    "FETCH",
+    "FOR",
+    "FROM",
+    "FULL",
+    "GROUP",
+    "HAVING",
+    "IN",
+    "INNER",
+    "INSERT",
+    "INTERSECT",
+    "IS",
+    "JOIN",
+    "LEFT",
+    "LIKE",
+    "LIMIT",
+    "NATURAL",
+    "NOT",
+    "NULL",
+    "OFFSET",
+    "ON",
+    "OR",
+    "ORDER",
+    "OUTER",
+    "RIGHT",
+    "SELECT",
+    "TABLE",
+    "TABLESAMPLE",
+    "THEN",
+    "TRUE",
+    "UNION",
+    "UPDATE",
+    "WHEN",
+    "WHERE",
+    "WINDOW",
+    "WITH",
+}
+
+
+def _unquote_identifier(identifier: str) -> str:
+    identifier = identifier.strip()
+    if len(identifier) >= 2 and identifier[0] == "[" and identifier[-1] == "]":
+        return identifier[1:-1].replace("]]", "]")
+    if len(identifier) >= 2 and identifier[0] == '"' and identifier[-1] == '"':
+        return identifier[1:-1].replace('""', '"')
+    return identifier
+
+
+def _split_qualified_identifier(identifier: str) -> list[str]:
+    parts = []
+    current = []
+    in_double_quote = False
+    in_bracket = False
+    index = 0
+
+    while index < len(identifier):
+        char = identifier[index]
+        nxt = identifier[index + 1] if index + 1 < len(identifier) else None
+
+        if in_double_quote:
+            current.append(char)
+            if char == '"' and nxt == '"':
+                current.append(nxt)
+                index += 2
+                continue
+            if char == '"':
+                in_double_quote = False
+            index += 1
+            continue
+
+        if in_bracket:
+            current.append(char)
+            if char == "]":
+                in_bracket = False
+            index += 1
+            continue
+
+        if char == '"':
+            current.append(char)
+            in_double_quote = True
+        elif char == "[":
+            current.append(char)
+            in_bracket = True
+        elif char == ".":
+            part = "".join(current).strip()
+            if part:
+                parts.append(part)
+            current = []
+        else:
+            current.append(char)
+        index += 1
+
+    part = "".join(current).strip()
+    if part:
+        parts.append(part)
+
+    return parts
+
+
+def _normalize_identifier(identifier: str) -> str:
+    return ".".join(_unquote_identifier(part) for part in _split_qualified_identifier(identifier))
+
+
+def _quote_identifier(identifier: str) -> str:
+    return f'"{identifier.replace(chr(34), chr(34) * 2)}"'
+
+
+def _split_sql_tokens(sql: str) -> list[str]:
+    tokens = []
+    current = []
+    in_double_quote = False
+
+    for char in sql:
+        if char == '"':
+            current.append(char)
+            in_double_quote = not in_double_quote
+            continue
+        if char == "," and not in_double_quote:
+            token = "".join(current).strip()
+            if token:
+                tokens.append(token)
+            current = []
+            continue
+        current.append(char)
+
+    token = "".join(current).strip()
+    if token:
+        tokens.append(token)
+    return tokens
+
+
+def _identifier_needs_quotes(identifier: str) -> bool:
+    return (
+        not _SIMPLE_IDENTIFIER.fullmatch(identifier)
+        or identifier.upper() in _SQL_RESERVED_WORDS
+    )
+
+
+def _iter_context_texts(contexts: list[Any] | None):
+    if not contexts:
+        return
+    for context in contexts:
+        yield getattr(context, "content", context)
+
+
+def _clean_contract_value(value: str) -> str:
+    value = value.strip().strip(",")
+    if not value:
+        return ""
+    return _normalize_identifier(value)
+
+
+def _parse_contract_values(value: str) -> list[str]:
+    value = value.strip().strip(",")
+    if not value:
+        return []
+
+    try:
+        loaded = orjson.loads(value)
+    except orjson.JSONDecodeError:
+        loaded = None
+
+    if isinstance(loaded, list):
+        return [
+            _clean_contract_value(str(item))
+            for item in loaded
+            if _clean_contract_value(str(item))
+        ]
+
+    parsed = _clean_contract_value(value)
+    return [parsed] if parsed else []
+
+
+def _extract_contract_schema_index(
+    contexts: list[Any] | None,
+) -> dict[str, set[str] | None]:
+    schema_index: dict[str, set[str] | None] = {}
+    if not contexts:
+        return schema_index
+
+    for context in _iter_context_texts(contexts):
+        current_relation = None
+        reading_columns = False
+
+        for raw_line in str(context).splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            if line.startswith("sql_table_name_use_exactly:"):
+                current_relation = _clean_contract_value(line.split(":", 1)[1])
+                if current_relation:
+                    schema_index.setdefault(current_relation, set())
+                reading_columns = False
+                continue
+
+            if line.startswith("sql_column_names_use_exactly:"):
+                reading_columns = True
+                if current_relation:
+                    columns = schema_index.setdefault(current_relation, set())
+                    if columns is not None:
+                        for value in _parse_contract_values(line.split(":", 1)[1]):
+                            columns.add(value)
+                continue
+
+            if line.startswith("relationship_constraints_use_exactly:"):
+                reading_columns = False
+                continue
+
+            if line.startswith("sql_column_name_use_exactly:"):
+                if current_relation:
+                    columns = schema_index.setdefault(current_relation, set())
+                    if columns is not None:
+                        for value in _parse_contract_values(line.split(":", 1)[1]):
+                            columns.add(value)
+                continue
+
+            if reading_columns and line.startswith("-") and current_relation:
+                columns = schema_index.setdefault(current_relation, set())
+                if columns is not None:
+                    value = _clean_contract_value(line[1:])
+                    if value:
+                        columns.add(value)
+                continue
+
+            if line.startswith(("END WREN SQL IDENTIFIER CONTRACT", "Only ")):
+                reading_columns = False
+
+    return schema_index
+
+
+def _extract_schema_identifiers(contexts: list[Any] | None) -> list[str]:
+    if not contexts:
+        return []
+
+    identifiers: list[str] = []
+    seen = set()
+
+    def add(identifier: str) -> None:
+        identifier = _unquote_identifier(identifier.strip().rstrip(","))
+        if not identifier or identifier.upper() in {"FOREIGN", "PRIMARY", "KEY"}:
+            return
+        if identifier not in seen:
+            seen.add(identifier)
+            identifiers.append(identifier)
+
+    for relation, columns in _extract_schema_index(contexts).items():
+        add(relation)
+        if columns:
+            for column in columns:
+                add(column)
+
+    for context in _iter_context_texts(contexts):
+        for match in _DDL_RELATION.finditer(context):
+            add(match.group("name"))
+
+        in_table = False
+        for raw_line in context.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("--") or line.startswith("/*"):
+                continue
+            if re.search(r"\bCREATE\s+TABLE\b", line, re.IGNORECASE):
+                in_table = True
+                remainder = line.split("(", 1)
+                if len(remainder) == 1:
+                    continue
+                line = remainder[1].strip()
+            if not in_table:
+                continue
+            if line.startswith(");") or line == ")":
+                in_table = False
+                continue
+            line = line.split("--", 1)[0].strip().rstrip(",")
+            if not line or line.upper().startswith(("FOREIGN KEY", "PRIMARY KEY")):
+                continue
+            if line.startswith('"'):
+                end = line.find('"', 1)
+                while end != -1 and end + 1 < len(line) and line[end + 1] == '"':
+                    end = line.find('"', end + 2)
+                if end > 0:
+                    add(line[: end + 1])
+            else:
+                add(line.split(None, 1)[0])
+
+    return identifiers
+
+
+def _extract_schema_index(contexts: list[Any] | None) -> dict[str, set[str] | None]:
+    if not contexts:
+        return {}
+
+    schema_index = _extract_contract_schema_index(contexts)
+
+    for context in _iter_context_texts(contexts):
+        relation_match = _DDL_RELATION.search(context)
+        if not relation_match:
+            continue
+
+        relation_name = _normalize_identifier(relation_match.group("name"))
+        if re.search(r"\bCREATE\s+VIEW\b", context, re.IGNORECASE):
+            schema_index.setdefault(relation_name, None)
+            continue
+
+        column_block_match = re.search(
+            r"\bCREATE\s+TABLE\b[^(]*\((?P<columns>.*)\)\s*;?",
+            context,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not column_block_match:
+            schema_index.setdefault(relation_name, None)
+            continue
+
+        columns = set()
+        for raw_column in _split_sql_tokens(column_block_match.group("columns")):
+            line = "\n".join(
+                line.strip()
+                for line in raw_column.splitlines()
+                if line.strip()
+                and not line.strip().startswith("--")
+                and not line.strip().startswith("/*")
+            ).strip()
+            if not line:
+                continue
+            line = line.split("--", 1)[0].strip()
+            if not line or line.startswith("/*"):
+                continue
+            if line.upper().startswith(("FOREIGN KEY", "PRIMARY KEY")):
+                continue
+            if line.startswith('"'):
+                end = line.find('"', 1)
+                while end != -1 and end + 1 < len(line) and line[end + 1] == '"':
+                    end = line.find('"', end + 2)
+                if end > 0:
+                    columns.add(_unquote_identifier(line[: end + 1]))
+            else:
+                columns.add(_unquote_identifier(line.split(None, 1)[0]))
+
+        existing_columns = schema_index.get(relation_name)
+        if existing_columns is None:
+            schema_index[relation_name] = columns
+        else:
+            existing_columns.update(columns)
+
+    return schema_index
+
+
+def _is_identifier_boundary(char: str | None) -> bool:
+    return char is None or not (char.isalnum() or char in {"_", "$", '"'})
+
+
+def _replace_identifier_outside_literals(sql: str, identifier: str) -> str:
+    quoted = _quote_identifier(identifier)
+    result = []
+    index = 0
+    in_single_quote = False
+    in_double_quote = False
+    in_line_comment = False
+    in_block_comment = False
+    length = len(sql)
+    identifier_length = len(identifier)
+
+    while index < length:
+        current = sql[index]
+        nxt = sql[index + 1] if index + 1 < length else None
+
+        if in_line_comment:
+            result.append(current)
+            if current == "\n":
+                in_line_comment = False
+            index += 1
+            continue
+        if in_block_comment:
+            result.append(current)
+            if current == "*" and nxt == "/":
+                result.append(nxt)
+                index += 2
+                in_block_comment = False
+            else:
+                index += 1
+            continue
+        if in_single_quote:
+            result.append(current)
+            if current == "'" and nxt == "'":
+                result.append(nxt)
+                index += 2
+            elif current == "'":
+                in_single_quote = False
+                index += 1
+            else:
+                index += 1
+            continue
+        if in_double_quote:
+            result.append(current)
+            if current == '"' and nxt == '"':
+                result.append(nxt)
+                index += 2
+            elif current == '"':
+                in_double_quote = False
+                index += 1
+            else:
+                index += 1
+            continue
+
+        if current == "-" and nxt == "-":
+            result.append(current)
+            result.append(nxt)
+            index += 2
+            in_line_comment = True
+            continue
+        if current == "/" and nxt == "*":
+            result.append(current)
+            result.append(nxt)
+            index += 2
+            in_block_comment = True
+            continue
+        if current == "'":
+            result.append(current)
+            index += 1
+            in_single_quote = True
+            continue
+        if current == '"':
+            result.append(current)
+            index += 1
+            in_double_quote = True
+            continue
+
+        if sql.startswith(identifier, index):
+            before = sql[index - 1] if index > 0 else None
+            after_index = index + identifier_length
+            after = sql[after_index] if after_index < length else None
+            if _is_identifier_boundary(before) and _is_identifier_boundary(after):
+                result.append(quoted)
+                index = after_index
+                continue
+
+        result.append(current)
+        index += 1
+
+    return "".join(result)
+
+
+def _replace_bracket_identifiers(sql: str, valid_identifiers: set[str]) -> str:
+    result = []
+    index = 0
+    in_single_quote = False
+    in_double_quote = False
+    length = len(sql)
+
+    while index < length:
+        current = sql[index]
+        nxt = sql[index + 1] if index + 1 < length else None
+
+        if in_single_quote:
+            result.append(current)
+            if current == "'" and nxt == "'":
+                result.append(nxt)
+                index += 2
+            elif current == "'":
+                in_single_quote = False
+                index += 1
+            else:
+                index += 1
+            continue
+        if in_double_quote:
+            result.append(current)
+            if current == '"' and nxt == '"':
+                result.append(nxt)
+                index += 2
+            elif current == '"':
+                in_double_quote = False
+                index += 1
+            else:
+                index += 1
+            continue
+        if current == "'":
+            result.append(current)
+            in_single_quote = True
+            index += 1
+            continue
+        if current == '"':
+            result.append(current)
+            in_double_quote = True
+            index += 1
+            continue
+        if current == "[":
+            end = sql.find("]", index + 1)
+            if end > index:
+                identifier = sql[index + 1 : end]
+                if identifier in valid_identifiers:
+                    result.append(_quote_identifier(identifier))
+                    index = end + 1
+                    continue
+        result.append(current)
+        index += 1
+
+    return "".join(result)
+
+
+def _extract_sql_grounding(sql: str) -> dict[str, Any]:
+    cte_names = {
+        _normalize_identifier(match.group("name"))
+        for match in _CTE_REFERENCE.finditer(sql)
+    }
+    relation_references = []
+    alias_to_relation = {}
+
+    for match in _RELATION_REFERENCE.finditer(sql):
+        relation = _normalize_identifier(match.group("name"))
+        if relation.upper() in {"UNNEST", "LATERAL"}:
+            continue
+        alias = match.group("alias")
+        alias = _normalize_identifier(alias) if alias else relation
+        if alias.upper() in _SQL_OBJECT_ALIAS_STOP_WORDS:
+            alias = relation
+        relation_references.append(relation)
+        alias_to_relation[alias] = relation
+        alias_to_relation[relation] = relation
+
+    qualified_columns = [
+        (
+            _normalize_identifier(match.group("qualifier")),
+            _normalize_identifier(match.group("column")),
+        )
+        for match in _QUALIFIED_COLUMN.finditer(sql)
+    ]
+
+    return {
+        "cte_names": cte_names,
+        "relation_references": relation_references,
+        "alias_to_relation": alias_to_relation,
+        "qualified_columns": qualified_columns,
+    }
+
+
+def validate_sql_against_contexts(
+    sql: str,
+    contexts: list[Any] | None = None,
+) -> str | None:
+    schema_index = _extract_schema_index(contexts)
+    if not schema_index:
+        return None
+
+    valid_relations = set(schema_index)
+    grounding = _extract_sql_grounding(sql)
+    cte_names = grounding["cte_names"]
+
+    shadowed_relations = sorted(cte_names & valid_relations)
+    if shadowed_relations:
+        return (
+            "Schema grounding failed. The SQL creates CTEs with names that already "
+            f"belong to verified schema objects: {', '.join(shadowed_relations)}. "
+            "Do not create dummy CTEs for schema objects; use the verified tables or views directly."
+        )
+
+    invalid_relations = sorted(
+        {
+            relation
+            for relation in grounding["relation_references"]
+            if relation not in valid_relations and relation not in cte_names
+        }
+    )
+    if invalid_relations:
+        return (
+            "Schema grounding failed. The SQL references tables or views that are not "
+            f"in the retrieved schema for the active question: {', '.join(invalid_relations)}. "
+            f"Use only verified tables or views: {', '.join(sorted(valid_relations))}."
+        )
+
+    alias_to_relation = grounding["alias_to_relation"]
+    for qualifier, column in grounding["qualified_columns"]:
+        relation = alias_to_relation.get(qualifier)
+        if not relation or relation in cte_names:
+            continue
+        valid_columns = schema_index.get(relation)
+        if valid_columns is None:
+            continue
+        if column not in valid_columns:
+            return (
+                "Schema grounding failed. The SQL references column "
+                f"{qualifier}.{column}, but column {column} is not present in verified "
+                f"table or view {relation}. Use only verified columns: "
+                f"{', '.join(sorted(valid_columns))}."
+            )
+
+    return None
+
+
+def _extract_sql_from_value(value: Any) -> str | None:
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+
+        try:
+            parsed = orjson.loads(text)
+        except orjson.JSONDecodeError:
+            return text if _SQL_START.search(text) else None
+
+        return _extract_sql_from_value(parsed)
+
+    if isinstance(value, dict):
+        for key in ("sql", "query", "code"):
+            extracted = _extract_sql_from_value(value.get(key))
+            if extracted:
+                return extracted
+
+        extracted = _extract_sql_from_value(value.get("arguments"))
+        if extracted:
+            return extracted
+
+        return None
+
+    if isinstance(value, list):
+        for item in value:
+            extracted = _extract_sql_from_value(item)
+            if extracted:
+                return extracted
+
+    return None
+
+
+def _extract_generation_sql(generation_result: str | None) -> str | None:
+    if not generation_result:
+        return None
+
+    extracted = _extract_sql_from_value(generation_result)
+    if extracted:
+        return extracted
+
+    text = generation_result.strip()
+    return text if _SQL_START.search(text) else None
+
+
+def normalize_sql_with_schema_identifiers(
+    sql: str,
+    contexts: list[Any] | None = None,
+) -> str:
+    schema_identifiers = set(_extract_schema_identifiers(contexts))
+    identifiers = [
+        identifier
+        for identifier in schema_identifiers
+        if "." not in identifier and _identifier_needs_quotes(identifier)
+    ]
+    sql = _replace_bracket_identifiers(sql, schema_identifiers)
+    for identifier in sorted(identifiers, key=len, reverse=True):
+        sql = _replace_identifier_outside_literals(sql, identifier)
+    return sql
+
+
 @component
 class SQLGenPostProcessor:
     def __init__(self, engine: Engine):
@@ -68,8 +778,15 @@ class SQLGenPostProcessor:
                         "type": "NO_RELEVANT_SQL",
                         "error": extraction_error,
                         "correlation_id": "",
+                        "data_source": data_source,
                     },
                 }
+
+            if cleaned_generation_result:
+                cleaned_generation_result = normalize_sql_with_schema_identifiers(
+                    cleaned_generation_result,
+                    contexts=contexts,
+                )
 
             schema_catalog = _SchemaCatalog.from_contexts(contexts or [])
             grounding_error = schema_catalog.validate_sql(cleaned_generation_result)
@@ -82,7 +799,8 @@ class SQLGenPostProcessor:
                         "type": "SCHEMA_GROUNDING",
                         "error": grounding_error,
                         "correlation_id": "",
-                    },
+                        "data_source": data_source,
+                    }
                 }
 
             (
@@ -507,6 +1225,9 @@ def _extract_table_references(token_list: TokenList) -> tuple[set[str], dict[str
 def _add_table_reference(
     identifier: Identifier, table_names: set[str], aliases: dict[str, str]
 ) -> None:
+    if not isinstance(identifier, Identifier):
+        return
+
     table_name = _table_reference_name(identifier)
     alias = _clean_identifier(identifier.get_alias())
     if not table_name:
@@ -519,8 +1240,13 @@ def _add_table_reference(
 
 
 def _table_reference_name(identifier: Identifier) -> str | None:
-    parent_name = _clean_identifier(identifier.get_parent_name())
-    real_name = _clean_identifier(identifier.get_real_name())
+    if not isinstance(identifier, Identifier):
+        return None
+
+    parent_getter = getattr(identifier, "get_parent_name", None)
+    real_getter = getattr(identifier, "get_real_name", None)
+    parent_name = _clean_identifier(parent_getter() if parent_getter else None)
+    real_name = _clean_identifier(real_getter() if real_getter else None)
     if parent_name and real_name:
         return f"{parent_name}.{real_name}"
     return real_name
@@ -547,8 +1273,13 @@ def _extract_qualified_columns(token_list: TokenList) -> list[tuple[str, str]]:
 def _add_qualified_column(
     identifier: Identifier, columns: list[tuple[str, str]]
 ) -> None:
-    parent_name = _clean_identifier(identifier.get_parent_name())
-    column_name = _clean_identifier(identifier.get_real_name())
+    if not isinstance(identifier, Identifier):
+        return
+
+    parent_getter = getattr(identifier, "get_parent_name", None)
+    real_getter = getattr(identifier, "get_real_name", None)
+    parent_name = _clean_identifier(parent_getter() if parent_getter else None)
+    column_name = _clean_identifier(real_getter() if real_getter else None)
     if parent_name and column_name and column_name != "*":
         columns.append((parent_name, column_name))
 
@@ -687,12 +1418,51 @@ def _clean_identifier(identifier: str | None) -> str | None:
     return cleaned or None
 
 
+def _extract_sql_from_json_value(value: Any) -> str | None:
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return None
+        if candidate.upper().startswith(("SELECT", "WITH")):
+            return candidate
+        if candidate.startswith(("{", "[")):
+            try:
+                return _extract_sql_from_json_value(orjson.loads(candidate))
+            except orjson.JSONDecodeError:
+                return None
+        return None
+
+    if isinstance(value, dict):
+        for key in ("sql", "query"):
+            sql = _extract_sql_from_json_value(value.get(key))
+            if sql:
+                return sql
+
+        for key in ("arguments", "content", "tool_calls", "function_call", "message"):
+            sql = _extract_sql_from_json_value(value.get(key))
+            if sql:
+                return sql
+
+        for nested_value in value.values():
+            sql = _extract_sql_from_json_value(nested_value)
+            if sql:
+                return sql
+
+    if isinstance(value, list):
+        for item in value:
+            sql = _extract_sql_from_json_value(item)
+            if sql:
+                return sql
+
+    return None
+
+
 def _extract_sql_response(generation_result: str) -> tuple[str | None, str | None]:
     cleaned_generation_result = generation_result.strip()
     if not cleaned_generation_result:
         return None, "No grounded SQL was generated from the current schema."
 
-    if cleaned_generation_result.startswith("{"):
+    if cleaned_generation_result.startswith(("{", "[")):
         try:
             payload = orjson.loads(cleaned_generation_result)
         except orjson.JSONDecodeError:
@@ -701,15 +1471,9 @@ def _extract_sql_response(generation_result: str) -> tuple[str | None, str | Non
                 "SQL generation response did not include a supported SQL JSON payload.",
             )
 
-        if "sql" in payload:
-            return payload.get("sql"), None
-
-        if payload.get("name") == "query":
-            arguments = payload.get("arguments")
-            if isinstance(arguments, dict):
-                sql = arguments.get("query") or arguments.get("sql")
-                if sql:
-                    return sql, None
+        sql = _extract_sql_from_json_value(payload)
+        if sql:
+            return sql, None
 
         return (
             None,
