@@ -405,15 +405,6 @@ def _included_relationships(content: dict, tables: Optional[set[str]]) -> list[d
     ]
 
 
-def _selected_columns_are_executable(content: dict, columns: set[str]) -> bool:
-    executable_columns = {
-        column["name"]
-        for column in content["columns"]
-        if column["type"] == "COLUMN" and column["data_type"].lower() != "unknown"
-    }
-    return bool(columns) and columns.issubset(executable_columns)
-
-
 def _build_table_retrieval_context(
     content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
 ) -> tuple[str, bool, bool]:
@@ -563,6 +554,15 @@ def _fallback_retrieval_results(
         "has_calculated_field": has_calculated_field,
         "has_metric": has_metric,
         "has_json_field": has_json_field,
+    }
+
+
+def _empty_retrieval_results() -> dict[str, Any]:
+    return {
+        "retrieval_results": [],
+        "has_calculated_field": False,
+        "has_metric": False,
+        "has_json_field": False,
     }
 
 
@@ -950,7 +950,11 @@ def construct_retrieval_results(
             columns_and_tables_needed = None
 
         if not columns_and_tables_needed:
-            return _fallback_retrieval_results(construct_db_schemas, dbschema_retrieval)
+            logger.warning(
+                "Column pruning did not return grounded schema selections; "
+                "skipping broad schema fallback."
+            )
+            return _empty_retrieval_results()
 
         # we need to change the below code to match the new schema of structured output
         # the objective of this loop is to change the structure of JSON to match the needed format
@@ -969,11 +973,20 @@ def construct_retrieval_results(
                 selected_columns = set(
                     columns_and_tables_needed[table_schema["name"]]["columns"]
                 )
-                columns = (
-                    selected_columns
-                    if _selected_columns_are_executable(table_schema, selected_columns)
-                    else None
-                )
+                executable_columns = {
+                    column["name"]
+                    for column in table_schema["columns"]
+                    if column["type"] == "COLUMN"
+                    and column["data_type"].lower() != "unknown"
+                }
+                columns = selected_columns.intersection(executable_columns)
+                if not columns:
+                    logger.warning(
+                        "Column pruning selected no executable columns for %s; "
+                        "excluding the model from SQL generation context.",
+                        table_schema["name"],
+                    )
+                    continue
                 ddl, _has_calculated_field, _has_json_field = (
                     _build_table_retrieval_context(
                         table_schema,
