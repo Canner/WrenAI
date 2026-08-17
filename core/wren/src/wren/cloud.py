@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import time
@@ -38,6 +39,19 @@ from pathlib import Path
 
 _WREN_HOME = Path(os.environ.get("WREN_HOME", Path.home() / ".wren"))
 _CLOUD_FILE = _WREN_HOME / "cloud.yml"
+
+# The one definition of the helper: the executable git will resolve from PATH,
+# and the sub-command it must be able to serve. The string written into git
+# config and the string the pre-flight check probes are both derived from
+# these, so a change to one cannot silently leave the other behind — the check
+# would then be verifying a command git never runs.
+HELPER_EXECUTABLE = "wren"
+HELPER_SUBCOMMAND = ("cloud", "git-credential")
+HELPER_COMMAND = "!" + " ".join((HELPER_EXECUTABLE, *HELPER_SUBCOMMAND))
+
+# How long to wait for the probe below. Generous: it pays one interpreter
+# start-up, and a slow machine must not turn a working install into a refusal.
+_HELPER_PROBE_TIMEOUT_S = 30.0
 
 # Matches both the API's own `repo` field ("org/{org}/{project}/name.git")
 # and the `path=` field git hands the credential helper, which carries the
@@ -298,6 +312,81 @@ def _git_config_add_global(key: str, value: str) -> None:
     run_git(["config", "--global", "--add", key, value])
 
 
+def check_helper_command_serviceable() -> None:
+    """Refuse to write a helper git would not be able to run.
+
+    `configure_git_credential_helper` writes `HELPER_COMMAND`, whose `!`
+    prefix makes git run it through a shell — so `wren` is resolved from
+    `PATH` at *git*-invocation time, not now, and not pinned to the
+    interpreter running this command. A `wren` on `PATH` that predates the
+    `cloud` command group therefore breaks **every** git operation against
+    that host: clone, fetch and push alike, since the entry lives in global
+    config. The error the user sees comes from git, talks about credentials,
+    and names neither `wren` nor a version, so there is no path from the
+    symptom back to the cause — and `login` would have reported success,
+    because at login time the CLI *is* the capable one and the breakage only
+    appears later, in a different tool.
+
+    Probing the resolved executable turns that into an immediate refusal that
+    names the real cause, before anything is written.
+
+    What this cannot cover: `PATH` changing *after* login. Once a different
+    `wren` is what git runs, nothing on this side is in the path of the
+    failure — that executable's output is not ours to shape. That residual is
+    why the helper's own failures identify themselves (`helper_failure_note`).
+    """
+    resolved = shutil.which(HELPER_EXECUTABLE)
+    if resolved is None:
+        raise CloudError(
+            f"No `{HELPER_EXECUTABLE}` found on PATH, so the git credential "
+            f"helper this command is about to configure "
+            f"(`{HELPER_COMMAND.lstrip('!')}`) would not be runnable: git "
+            f"resolves it from PATH every time it authenticates, not from "
+            f"the interpreter running this command. Install wren so that "
+            f"`{HELPER_EXECUTABLE}` is on PATH (e.g. `uv tool install "
+            f"wrenai` or `pipx install wrenai`), then run this again."
+        )
+
+    probe = [resolved, *HELPER_SUBCOMMAND, "--help"]
+    try:
+        completed = subprocess.run(  # noqa: S603
+            probe,
+            capture_output=True,
+            text=True,
+            timeout=_HELPER_PROBE_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise CloudError(
+            f"`{' '.join(probe)}` did not respond within "
+            f"{_HELPER_PROBE_TIMEOUT_S:.0f}s, so whether the `"
+            f"{HELPER_EXECUTABLE}` on PATH ({resolved}) can serve git's "
+            f"credential requests could not be established. Nothing was "
+            f"written. Try running that command by hand to see what it does."
+        ) from exc
+    except OSError as exc:
+        raise CloudError(
+            f"Could not run `{' '.join(probe)}` ({exc}), so whether the "
+            f"`{HELPER_EXECUTABLE}` on PATH ({resolved}) can serve git's "
+            f"credential requests could not be established. Nothing was "
+            f"written."
+        ) from exc
+
+    if completed.returncode != 0:
+        raise CloudError(
+            f"The `{HELPER_EXECUTABLE}` on PATH ({resolved}) cannot serve "
+            f"`{' '.join((HELPER_EXECUTABLE, *HELPER_SUBCOMMAND))}` — it "
+            f"exited {completed.returncode} when asked. That is the exact "
+            f"executable git would run to authenticate, every time, for "
+            f"every clone / fetch / push against this host, so configuring "
+            f"it now would break them all with an error that comes from git "
+            f"and mentions neither wren nor a version.\n"
+            f"Nothing was written. Most likely this PATH entry is an older "
+            f"wren without the `cloud` commands: upgrade it (e.g. `uv tool "
+            f"install --force wrenai`), or put the wren you are running now "
+            f"first on PATH, then run this again."
+        )
+
+
 def configure_git_credential_helper(git_host: str) -> None:
     """Write a URL-scoped credential-helper entry into the global git config.
 
@@ -330,11 +419,13 @@ def configure_git_credential_helper(git_host: str) -> None:
     token to mint. This is why `login` needs no separate per-directory
     state — the binding lives in the git remote, which git already manages.
 
-    Our helper value (2) must be `!`-prefixed: git only runs a helper string
-    through a shell (and appends the `get`/`store`/`erase` argument
-    correctly) when it starts with `!`. A bare multi-word value like
-    `wren cloud git-credential` would instead have `git-credential-`
-    prepended to just its first word, which is not what we want.
+    Our helper value (2) is `HELPER_COMMAND`, and must be `!`-prefixed: git
+    only runs a helper string through a shell (and appends the
+    `get`/`store`/`erase` argument correctly) when it starts with `!`. A bare
+    multi-word value like `wren cloud git-credential` would instead have
+    `git-credential-` prepended to just its first word, which is not what we
+    want. That `!` is also what makes `wren` PATH-resolved at git-invocation
+    time, which is what `check_helper_command_serviceable` exists to guard.
 
     Re-running this (e.g. a second `wren cloud login`) stays idempotent:
     `--replace-all` first collapses the `helper` key back down to the single
@@ -343,7 +434,7 @@ def configure_git_credential_helper(git_host: str) -> None:
     """
     section = f"credential.{git_host}"
     _git_config_set_global(f"{section}.helper", "")
-    _git_config_add_global(f"{section}.helper", "!wren cloud git-credential")
+    _git_config_add_global(f"{section}.helper", HELPER_COMMAND)
     _git_config_set_global(f"{section}.useHttpPath", "true")
 
 
@@ -363,9 +454,16 @@ def login(
     when they differ — e.g. a local/self-hosted setup with no such unified
     ingress in front, where the API and the git server sit on separate
     hosts or ports.
+
+    The credential helper is checked for serviceability first, before the key
+    is validated or anything is stored: a login that cannot produce working
+    git authentication has not achieved what it claims, and refusing before
+    any write leaves nothing behind to undo.
     """
     api_host = host.rstrip("/")
     resolved_git_host = (git_host or host).rstrip("/")
+
+    check_helper_command_serviceable()
 
     token = mint_git_token(api_host, project_id, api_key)
     org_id, parsed_project_id, _repo_name = parse_repo_path(token.repo)
@@ -433,6 +531,35 @@ def git_credential_get(input_data: dict[str, str]) -> str:
 
     token = mint_git_token(entry["api_host"], project_id, entry["api_key"])
     return format_credential_output("x-access-token", token.token)
+
+
+def helper_failure_note(message: str) -> str:
+    """Label a credential-helper failure with what produced it.
+
+    git prints a helper's stderr in the middle of its own output and then
+    fails with a credentials message of its own. Unlabelled, our line reads as
+    if git produced it, and the user is left with no way to tell which of
+    their tools is at fault — the same illegibility as the version-skew case
+    `check_helper_command_serviceable` guards, arriving by a different route.
+
+    So name the tool, the build, and the executable that actually ran. That
+    last one is the load-bearing part: git resolves `wren` from PATH at
+    invocation time, so the wren serving this request is not necessarily the
+    one the user thinks they installed, and printing its path is what makes
+    that visible at the only moment it matters.
+    """
+    import sys  # noqa: PLC0415
+
+    from wren import __version__  # noqa: PLC0415
+
+    ran_as = sys.argv[0] or sys.executable
+    return (
+        f"wren cloud git-credential (wrenai {__version__}, {ran_as}): "
+        f"{message}\n"
+        "This is the git credential helper that `wren cloud login` "
+        "configured for this host. git will report a credential failure of "
+        "its own next; the cause is the line above."
+    )
 
 
 def git_credential_store(input_data: dict[str, str]) -> None:  # noqa: ARG001
@@ -874,9 +1001,13 @@ def create(
 ) -> tuple[CreatedProject, LinkOutcome]:
     """Create a new agent-mode project on `host` and bind `target` to it.
 
-    Checks `target` is not nested inside a foreign git repository *before*
-    creating anything server-side, so a refusal here (unlike a refusal
-    partway through) never leaves an orphaned project behind.
+    Checks `target` is not nested inside a foreign git repository, and that
+    the git credential helper is serviceable, *before* creating anything
+    server-side — so a refusal here (unlike a refusal partway through) never
+    leaves an orphaned project behind. The helper check is repeated inside
+    `login` below, which is where it belongs for a bare `login`; running it
+    up front too is what keeps this command's failure free of side effects,
+    since by the time `login` runs, a project and a key already exist.
 
     Ends in exactly the state `login` + `link` leave a directory in: a
     stored project key, a configured git credential helper, and a bound
@@ -899,6 +1030,7 @@ def create(
     """
     target = target.resolve()
     check_not_nested(target)
+    check_helper_command_serviceable()
 
     api_host = host.rstrip("/")
     resolved_git_host = (git_host or host).rstrip("/")

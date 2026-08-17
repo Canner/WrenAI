@@ -491,6 +491,27 @@ def test_git_credential_get_error_goes_to_stderr_not_stdout(monkeypatch):
     assert "No stored Wren Cloud login" in result.output
 
 
+def test_git_credential_get_error_says_which_tool_produced_it(monkeypatch):
+    """git prints this line in among its own output, then fails with a
+    credentials message of its own. Unlabelled, the user cannot tell that
+    wren — and which wren — is what needs fixing."""
+    from wren import __version__
+
+    def raise_it(input_data):
+        raise cloud.CloudError("No stored Wren Cloud login for project 16.")
+
+    monkeypatch.setattr(cloud, "git_credential_get", raise_it)
+    result = runner.invoke(
+        app,
+        ["cloud", "git-credential", "get"],
+        input="protocol=http\nhost=localhost:8081\npath=git/org/2/16/x.git\n\n",
+    )
+
+    assert result.exit_code != 0
+    assert "wren cloud git-credential" in result.output
+    assert __version__ in result.output
+
+
 def test_git_credential_store_produces_no_output(monkeypatch):
     monkeypatch.setattr(cloud, "git_credential_store", lambda input_data: None)
     result = runner.invoke(

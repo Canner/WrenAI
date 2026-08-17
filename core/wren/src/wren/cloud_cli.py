@@ -59,6 +59,13 @@ def login(
     and writes a git credential helper entry scoped to the git host so that
     ``git clone`` / ``git push`` / ``git pull`` against this project's
     remote just work, with no token ever appearing in the remote URL.
+
+    That helper entry names ``wren``, which git resolves from PATH every time
+    it authenticates. So this refuses up front — before validating the key or
+    writing anything — when the ``wren`` on PATH cannot serve
+    ``wren cloud git-credential``: configuring it anyway would break every
+    git operation against the host, with an error from git that names neither
+    wren nor a version.
     """
     from wren import cloud  # noqa: PLC0415
 
@@ -283,8 +290,10 @@ def create(  # noqa: PLR0913
     fails with a specific error rather than a bare HTTP error, and reports
     how to recover the project's key.
 
-    Refuses up front if `directory` sits inside another git repository,
-    before creating anything on the server — the same check `link` uses.
+    Refuses up front — before creating anything on the server — if
+    `directory` sits inside another git repository (the same check `link`
+    uses), or if the `wren` on PATH cannot serve the git credential helper
+    (the same check `login` uses).
     """
     from wren import cloud  # noqa: PLC0415
 
@@ -398,6 +407,7 @@ def credential_get() -> None:
     from wren.cloud import (  # noqa: PLC0415
         CloudError,
         git_credential_get,
+        helper_failure_note,
         read_credential_input,
     )
 
@@ -405,7 +415,7 @@ def credential_get() -> None:
     try:
         output = git_credential_get(input_data)
     except CloudError as exc:
-        typer.echo(str(exc), err=True)
+        typer.echo(helper_failure_note(str(exc)), err=True)
         raise typer.Exit(1)
     sys.stdout.write(output)
 

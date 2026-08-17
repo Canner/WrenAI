@@ -60,6 +60,30 @@ def _isolated_wren_home(tmp_path, monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _isolated_git_global_config(tmp_path, monkeypatch):
+    """Keep `git config --global` writes out of the real user's config.
+
+    `configure_git_credential_helper` writes to global git config, and the
+    `create` tests below reach it for real. Without this, every run left a
+    dead `credential.<tmp path>` section behind in the developer's (or CI
+    runner's) own `~/.gitconfig`, one per run, forever — the tests were
+    mutating the machine they ran on.
+    """
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+
+
+@pytest.fixture
+def _helper_check_passes(monkeypatch):
+    """Let `login`/`create` past the credential-helper pre-flight check.
+
+    The check shells out to whatever `wren` is on PATH, which is a property
+    of the machine rather than of the code under test. It has its own tests
+    below; these flows only need it not to be the thing under test.
+    """
+    monkeypatch.setattr(cloud, "check_helper_command_serviceable", lambda: None)
+
+
 def test_store_and_get_login_roundtrip():
     cloud.store_login(
         git_host="https://cloud.getwren.ai",
@@ -656,7 +680,9 @@ def _patch_create_http(monkeypatch, *, project_status="succeeded", project_error
     return created, calls
 
 
-def test_create_end_to_end_binds_and_stores_only_the_project_key(tmp_path, monkeypatch):
+def test_create_end_to_end_binds_and_stores_only_the_project_key(
+    tmp_path, monkeypatch, _helper_check_passes
+):
     git_host = str(tmp_path / "host")
     _seed_remote(tmp_path / "host" / "git" / "org" / "2" / "16" / "shared-data.git")
     created, calls = _patch_create_http(monkeypatch)
@@ -702,7 +728,9 @@ def test_create_end_to_end_binds_and_stores_only_the_project_key(tmp_path, monke
     assert (target / "seed.txt").exists()
 
 
-def test_create_refuses_nested_directory_before_any_server_call(tmp_path, monkeypatch):
+def test_create_refuses_nested_directory_before_any_server_call(
+    tmp_path, monkeypatch, _helper_check_passes
+):
     outer = tmp_path / "outer"
     (outer / ".git").mkdir(parents=True)
     target = outer / "nested" / "proj"
@@ -724,7 +752,7 @@ def test_create_refuses_nested_directory_before_any_server_call(tmp_path, monkey
 
 
 def test_create_failed_project_creation_leaves_nothing_to_clean_up(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, _helper_check_passes
 ):
     def fake_create_project(api_host, org_key, **kwargs):
         raise cloud.CloudError("boom")
@@ -748,7 +776,7 @@ def test_create_failed_project_creation_leaves_nothing_to_clean_up(
 
 
 def test_create_reports_not_agentic_actionably_and_includes_the_project_key(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, _helper_check_passes
 ):
     # Deliberately does NOT monkeypatch `login` or `mint_git_token` — this
     # drives the real `login()` -> real `mint_git_token()` path, stubbing
@@ -806,7 +834,7 @@ def test_create_reports_not_agentic_actionably_and_includes_the_project_key(
     ],
 )
 def test_create_degrades_to_generic_bind_failure_on_an_unrecognized_git_token_error(
-    tmp_path, monkeypatch, resp_kwargs
+    tmp_path, monkeypatch, resp_kwargs, _helper_check_passes
 ):
     # Same 404 status as the real PROJECT_NOT_AGENTIC case, but a body that
     # doesn't say so — a different code, no code at all, or no parseable
@@ -840,7 +868,9 @@ def test_create_degrades_to_generic_bind_failure_on_an_unrecognized_git_token_er
     assert not (target / ".git").exists()
 
 
-def test_create_reports_bind_failure_with_recovery_hint(tmp_path, monkeypatch):
+def test_create_reports_bind_failure_with_recovery_hint(
+    tmp_path, monkeypatch, _helper_check_passes
+):
     _patch_create_http(monkeypatch)
 
     def fake_login(*, host, project_id, api_key, git_host):
@@ -888,3 +918,177 @@ def test_link_reports_already_linked_on_rerun_with_nothing_new(tmp_path):
     assert head_after_second == head_after_first
     assert (target / "mine.txt").exists()
     assert (target / "seed.txt").exists()
+
+
+# ── the credential helper's PATH pre-flight check ────────────────────────────
+#
+# git resolves the `wren` in `!wren cloud git-credential` from PATH at
+# *git*-invocation time, so `login` writing that entry is a promise about an
+# executable it does not control. These cover the check that refuses to make
+# the promise when it cannot be kept. What they cannot cover is PATH changing
+# after login — nothing on this side is in that failure's path, which is why
+# `helper_failure_note` exists as well.
+
+
+def _unserviceable_helper(monkeypatch):
+    """Make the pre-flight check refuse, whatever this machine's PATH holds."""
+
+    def refuse():
+        raise cloud.CloudError("no usable wren on PATH")
+
+    monkeypatch.setattr(cloud, "check_helper_command_serviceable", refuse)
+
+
+def _fake_probe(monkeypatch, *, which="/usr/local/bin/wren", returncode=0):
+    """Stand in for the PATH lookup and the probe subprocess, recording both."""
+    seen = {}
+
+    def fake_which(name):
+        seen["which"] = name
+        return which
+
+    monkeypatch.setattr(cloud.shutil, "which", fake_which)
+
+    def fake_run(args, **kwargs):
+        seen["argv"] = list(args)
+        seen["kwargs"] = kwargs
+        return subprocess.CompletedProcess(args, returncode, stdout="", stderr="")
+
+    monkeypatch.setattr(cloud.subprocess, "run", fake_run)
+    return seen
+
+
+def test_check_passes_when_the_path_wren_can_serve_the_helper(monkeypatch):
+    seen = _fake_probe(monkeypatch, returncode=0)
+
+    cloud.check_helper_command_serviceable()
+
+    assert seen["which"] == cloud.HELPER_EXECUTABLE
+    assert seen["argv"][0] == "/usr/local/bin/wren"
+
+
+def test_check_refuses_when_no_wren_is_on_path(monkeypatch):
+    monkeypatch.setattr(cloud.shutil, "which", lambda name: None)
+
+    with pytest.raises(cloud.CloudError) as excinfo:
+        cloud.check_helper_command_serviceable()
+
+    assert "PATH" in str(excinfo.value)
+
+
+def test_check_refuses_when_the_path_wren_cannot_serve_the_helper(monkeypatch):
+    # The reported failure: an older wren on PATH with no `cloud` group at
+    # all, which exits non-zero when asked for it.
+    _fake_probe(monkeypatch, which="/opt/old/bin/wren", returncode=2)
+
+    with pytest.raises(cloud.CloudError) as excinfo:
+        cloud.check_helper_command_serviceable()
+
+    message = str(excinfo.value)
+    # Names the executable git would actually run, so the user can tell which
+    # of possibly several installs is the problem.
+    assert "/opt/old/bin/wren" in message
+    assert "cloud git-credential" in message
+
+
+def test_check_refuses_when_the_probe_times_out(monkeypatch):
+    monkeypatch.setattr(cloud.shutil, "which", lambda name: "/usr/local/bin/wren")
+
+    def fake_run(args, **kwargs):
+        raise subprocess.TimeoutExpired(args, kwargs.get("timeout", 0))
+
+    monkeypatch.setattr(cloud.subprocess, "run", fake_run)
+
+    with pytest.raises(cloud.CloudError):
+        cloud.check_helper_command_serviceable()
+
+
+def test_probe_and_written_helper_come_from_the_same_definition(monkeypatch):
+    """The check must probe the command that actually gets written.
+
+    A drift between the two would leave the check verifying a command git
+    never runs — which looks exactly like a working guard.
+    """
+    seen = _fake_probe(monkeypatch, which="/usr/local/bin/wren", returncode=0)
+    cloud.check_helper_command_serviceable()
+    probed = seen["argv"]
+
+    written = []
+
+    def record_git(args, **kwargs):
+        written.append(list(args))
+
+    monkeypatch.setattr(cloud, "run_git", record_git)
+    cloud.configure_git_credential_helper("https://cloud.getwren.ai")
+
+    helper_values = [
+        args[-1]
+        for args in written
+        if args[:2] == ["config", "--global"] and args[-2].endswith(".helper")
+    ]
+    # The value git will run, minus the `!` that makes git shell it out...
+    assert cloud.HELPER_COMMAND in helper_values
+    shelled_out = cloud.HELPER_COMMAND.lstrip("!").split()
+    # ...is the same command the probe asked about, minus `--help`.
+    assert probed[1:-1] == shelled_out[1:]
+    assert probed[-1] == "--help"
+
+
+def test_login_refuses_before_any_network_or_config_write(monkeypatch):
+    _unserviceable_helper(monkeypatch)
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("must not be reached when the helper is unserviceable")
+
+    monkeypatch.setattr(cloud, "mint_git_token", fail_if_called)
+    monkeypatch.setattr(cloud, "run_git", fail_if_called)
+
+    with pytest.raises(cloud.CloudError):
+        cloud.login(
+            host="https://cloud.getwren.ai",
+            project_id="16",
+            api_key="sk-test",
+        )
+
+    # Nothing stored either: a refused login leaves no trace to undo.
+    assert not cloud._CLOUD_FILE.exists()
+
+
+def test_create_refuses_before_any_server_call_when_the_helper_is_unserviceable(
+    tmp_path, monkeypatch
+):
+    _unserviceable_helper(monkeypatch)
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("no project may be created when the helper cannot work")
+
+    monkeypatch.setattr(cloud, "create_project", fail_if_called)
+    monkeypatch.setattr(cloud, "mint_project_key", fail_if_called)
+
+    target = tmp_path / "project"
+    target.mkdir()
+
+    with pytest.raises(cloud.CloudError):
+        cloud.create(
+            target,
+            host="https://cloud.getwren.ai",
+            org_id="2",
+            org_key="osk-x",
+            display_name="proj",
+        )
+
+
+# ── the helper's own failure output ──────────────────────────────────────────
+
+
+def test_helper_failure_note_identifies_the_tool_and_the_executable_that_ran():
+    from wren import __version__
+
+    note = cloud.helper_failure_note("No stored Wren Cloud login for project 16.")
+
+    assert "wren cloud git-credential" in note
+    assert __version__ in note
+    # The original cause survives verbatim...
+    assert "No stored Wren Cloud login for project 16." in note
+    # ...and the note says why the user is about to see a git error too.
+    assert "git" in note.lower()
