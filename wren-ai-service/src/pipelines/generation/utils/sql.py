@@ -227,14 +227,20 @@ class SQLGenPostProcessor:
 
 
 class _SchemaCatalog:
-    def __init__(self, tables: dict[str, set[str]]):
+    def __init__(
+        self,
+        tables: dict[str, set[str]],
+        relationships: dict[str, set[str]] | None = None,
+    ):
         self._tables = tables
+        self._relationships = relationships or {}
 
     @classmethod
     def from_contexts(cls, contexts: list[str]) -> "_SchemaCatalog":
         tables: dict[str, set[str]] = {}
+        relationships: dict[str, set[str]] = {}
         current_table: str | None = None
-        in_columns = False
+        current_section: str | None = None
 
         for context in contexts:
             for raw_line in context.splitlines():
@@ -243,23 +249,32 @@ class _SchemaCatalog:
                     current_table = line.removeprefix("table: ").strip()
                     if current_table:
                         tables.setdefault(current_table, set())
-                    in_columns = False
+                        relationships.setdefault(current_table, set())
+                    current_section = None
                     continue
 
                 if current_table and line == "columns:":
-                    in_columns = True
+                    current_section = "columns"
                     continue
 
-                if in_columns and current_table and line.startswith("- "):
-                    column_name = line.removeprefix("- ").strip()
-                    if column_name:
-                        tables.setdefault(current_table, set()).add(column_name)
+                if current_table and line == "relationships:":
+                    current_section = "relationships"
                     continue
 
-                if in_columns and line and not line.startswith("- "):
-                    in_columns = False
+                if current_section and current_table and line.startswith("- "):
+                    value = line.removeprefix("- ").strip()
+                    if not value:
+                        continue
+                    if current_section == "columns":
+                        tables.setdefault(current_table, set()).add(value)
+                    elif current_section == "relationships":
+                        relationships.setdefault(current_table, set()).add(value)
+                    continue
 
-        return cls(tables)
+                if current_section and line and not line.startswith("- "):
+                    current_section = None
+
+        return cls(tables, relationships)
 
     def to_prompt(self) -> str:
         if not self._tables:
@@ -268,6 +283,8 @@ class _SchemaCatalog:
         lines = [
             "### VALIDATED RETRIEVED SCHEMA IDENTIFIERS ###",
             "The SQL must use only these exact deployed Wren identifiers.",
+            "Each table value below is one indivisible Wren model identifier; never split it into database, schema, or table parts.",
+            "Use a multipart table reference only when that exact multipart identifier is listed below as a table value.",
             "Do not derive table or column names from the user's wording, source SQL, physical names, comments, aliases, or descriptions.",
         ]
         for table_name, column_names in self._tables.items():
@@ -275,6 +292,13 @@ class _SchemaCatalog:
             if column_names:
                 lines.append("columns:")
                 lines.extend(f"- {column_name}" for column_name in sorted(column_names))
+            table_relationships = self._relationships.get(table_name)
+            if table_relationships:
+                lines.append("relationships:")
+                lines.extend(
+                    f"- {relationship}"
+                    for relationship in sorted(table_relationships)
+                )
         lines.extend(
             [
                 "If the requested intent cannot be expressed with these exact identifiers, return null for sql.",
@@ -507,6 +531,9 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - When DATABASE SCHEMA contains WREN RETRIEVED SEMANTIC CONTEXT blocks, first use those blocks to understand each retrieved object's exact SQL identifier contract, semantic meaning, relationships, views, metrics, and calculated fields.
 - When DATABASE SCHEMA contains WREN SQL IDENTIFIER CONTRACT sections, treat them as the compact authoritative list of executable identifiers for each retrieved object before reading semantic descriptions.
 - In WREN RETRIEVED SEMANTIC CONTEXT, copy executable identifiers only from sql_table_name_use_exactly, sql_column_name_use_exactly, sql_column_names_use_exactly, relationship_constraints_use_exactly, or the following DDL declarations.
+- Treat every retrieved Wren table/model name as one indivisible executable identifier. Prefixes, suffixes, underscores, source schema names, connector names, or words that look like database/schema parts are still part of that single Wren identifier.
+- Never convert an exact Wren table/model name into a multipart native database reference. If DATABASE SCHEMA declares a table named abc_def, use "abc_def"; do not write abc.def, "abc"."def", or any other split form.
+- Use multipart table references such as schema.table or "schema"."table" only when DATABASE SCHEMA declares that exact multipart Wren identifier as the executable table/model name.
 - Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier are meaning only. Do not combine words, labels, ordinals, prefixes, suffixes, abbreviations, comments, or descriptions from those values into a table or column identifier.
 - When a business term is represented by a column alias, display label, or description, use the corresponding real table and column name from DATABASE SCHEMA in the SQL, not the display text.
 - The executable identifier is the name in the CREATE TABLE, CREATE VIEW, or metric field declaration. Do not derive executable identifiers by rewriting, translating, singularizing, pluralizing, spacing, casing, or abbreviating natural language, comments, aliases, display labels, or descriptions.
@@ -545,6 +572,9 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - PREFER USING CTEs over subqueries.
+- Copy table names exactly as one Wren identifier from DATABASE SCHEMA. Do not split underscores or source-schema-like prefixes into dot-qualified database/schema/table references.
+- Use table aliases only as SQL aliases for already-declared Wren table names; never use aliases or source schema names as replacements for Wren table names.
+- Qualify every source column reference with its exact Wren table name or SQL table alias in SELECT, JOIN, WHERE, GROUP BY, HAVING, and ORDER BY. Output aliases in the final SELECT may be unqualified.
 - When generating SQL query, always:
     - Put double quotes around column and table names.
     - Put single quotes around string literals.
