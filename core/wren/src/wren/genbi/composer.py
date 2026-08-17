@@ -64,11 +64,7 @@ def _format_model_inventory(models: list[dict]) -> str:
         raw_cols = model.get("columns", [])
         if not isinstance(raw_cols, list):
             raw_cols = []
-        names = [
-            str(c.get("name", "?"))
-            for c in raw_cols
-            if isinstance(c, dict)
-        ]
+        names = [str(c.get("name", "?")) for c in raw_cols if isinstance(c, dict)]
         cols = ", ".join(names)
         lines.append(f"- **{model.get('name', '?')}**: {cols}")
     return "\n".join(lines)

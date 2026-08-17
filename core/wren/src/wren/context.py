@@ -526,7 +526,6 @@ def require_schema_version(project_path: Path) -> int:
 # ── Loaders (all return snake_case dicts) ─────────────────────────────────
 
 
-
 def _normalize_model_columns(model: dict) -> dict:
     """Normalise YAML-sourced ``columns`` to ``list[dict]``.
 
