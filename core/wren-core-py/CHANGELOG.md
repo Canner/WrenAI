@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.5](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.4...wren-core-py-v0.7.5) (2026-08-17)
+
+
+### Performance Improvements
+
+* **core-py:** remove per-context call lock for same-context concurrency ([#2666](https://github.com/Canner/WrenAI/issues/2666)) ([28920e7](https://github.com/Canner/WrenAI/commit/28920e7e2689fa1af0494742fcc19edba42399ab))
+
 ## [0.7.4](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.3...wren-core-py-v0.7.4) (2026-08-11)
 
 
