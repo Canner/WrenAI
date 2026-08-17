@@ -1117,6 +1117,29 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                     )
                 )
 
+        props = model.get("properties")
+        if props is not None and not isinstance(props, dict):
+            errors.append(
+                ValidationError(
+                    "error",
+                    f"{src_path} > {name}",
+                    "properties must be a mapping",
+                )
+            )
+        for j, col in enumerate(columns):
+            if not isinstance(col, dict):
+                continue
+            col_props = col.get("properties")
+            if col_props is not None and not isinstance(col_props, dict):
+                col_name = col.get("name") or f"columns[{j}]"
+                errors.append(
+                    ValidationError(
+                        "error",
+                        f"{src_path} > {name} > {col_name}",
+                        "properties must be a mapping",
+                    )
+                )
+
     # v1 legacy views.yml may contain non-mapping entries (e.g. `- null`).
     # load_views() silently drops those (matching the other loaders), but
     # validate_project's job is to tell the user about hand-edited mistakes
@@ -1231,6 +1254,16 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                         f"unknown dialect '{view_dialect}'",
                     )
                 )
+
+        view_props = view.get("properties")
+        if view_props is not None and not isinstance(view_props, dict):
+            errors.append(
+                ValidationError(
+                    "error",
+                    f"views/{src_dir}",
+                    "properties must be a mapping",
+                )
+            )
 
     # Check relationships — walk the raw list when available so indices match
     # the file (filtered loader positions would renumber past dropped junk).
@@ -1644,7 +1677,10 @@ _VALID_LEVELS = frozenset({"error", "warning", "strict"})
 
 
 def _prop_description(item: dict) -> str | None:
-    return (item.get("properties") or {}).get("description")
+    props = item.get("properties") or {}
+    if not isinstance(props, dict):
+        return None
+    return props.get("description")
 
 
 def _check_descriptions(manifest: dict, *, strict: bool = False) -> list[str]:
