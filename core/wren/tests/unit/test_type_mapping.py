@@ -574,3 +574,5 @@ def test_cli_translate_types_rejects_non_list_string_payload() -> None:
     )
     assert result.returncode == 1
     assert "Error: input must be a JSON array (got str)" in result.stderr
+    assert "Traceback (most recent call last)" not in result.stderr
+    assert "AssertionError" not in result.stderr
