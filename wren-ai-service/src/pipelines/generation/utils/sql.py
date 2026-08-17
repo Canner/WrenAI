@@ -471,20 +471,26 @@ def _extract_qualified_columns(token_list: TokenList) -> list[tuple[str, str]]:
 
     for token in token_list.tokens:
         if isinstance(token, Identifier):
-            parent_name = _clean_identifier(token.get_parent_name())
-            column_name = _clean_identifier(token.get_real_name())
-            if parent_name and column_name and column_name != "*":
-                columns.append((parent_name, column_name))
+            _add_qualified_column(token, columns)
         elif isinstance(token, IdentifierList):
             for identifier in token.get_identifiers():
-                parent_name = _clean_identifier(identifier.get_parent_name())
-                column_name = _clean_identifier(identifier.get_real_name())
-                if parent_name and column_name and column_name != "*":
-                    columns.append((parent_name, column_name))
+                if isinstance(identifier, Identifier):
+                    _add_qualified_column(identifier, columns)
+                elif isinstance(identifier, TokenList):
+                    columns.extend(_extract_qualified_columns(identifier))
         elif isinstance(token, TokenList):
             columns.extend(_extract_qualified_columns(token))
 
     return columns
+
+
+def _add_qualified_column(
+    identifier: Identifier, columns: list[tuple[str, str]]
+) -> None:
+    parent_name = _clean_identifier(identifier.get_parent_name())
+    column_name = _clean_identifier(identifier.get_real_name())
+    if parent_name and column_name and column_name != "*":
+        columns.append((parent_name, column_name))
 
 
 def _clean_identifier(identifier: str | None) -> str | None:
