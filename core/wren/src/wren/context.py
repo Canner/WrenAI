@@ -1005,7 +1005,7 @@ def validate_project(project_path: Path) -> list[ValidationError]:
             continue
         raw_cols = raw_model.get("columns")
         mname = raw_model.get("name") or Path(src_path).stem
-        if raw_cols is not None and not isinstance(raw_cols, list):
+        if not isinstance(raw_cols, list):
             errors.append(
                 ValidationError(
                     "error",

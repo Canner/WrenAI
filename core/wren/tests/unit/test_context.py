@@ -1656,6 +1656,23 @@ def test_validate_project_reports_non_list_model_columns(tmp_path):
     errors = validate_project(tmp_path)
     msgs = [f"{e.path}: {e.message}" for e in errors]
     assert any("must be a list, got str" in m for m in msgs), msgs
+
+
+def test_validate_project_reports_null_model_columns(tmp_path):
+    """Explicit `columns:` (YAML null) is present and non-list — report it."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n"
+    )
+    errors = validate_project(tmp_path)
+    msgs = [f"{e.path}: {e.message}" for e in errors]
+    assert any(
+        "columns" in m and "must be a list, got NoneType" in m for m in msgs
+    ), msgs
 def test_build_manifest_drops_v1_views_yml_non_mapping_entries(tmp_path):
     _make_v1_project(tmp_path)
     _corrupt_v1_views_yml(tmp_path)
