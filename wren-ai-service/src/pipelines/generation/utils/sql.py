@@ -522,7 +522,8 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - If the question requires fields that are spread across multiple schema objects, use all required related tables, views, or metrics only when the DATABASE SCHEMA provides the needed columns and relationship path.
 - Do not query INFORMATION_SCHEMA, system catalogs, metadata tables, or table-existence checks to answer the user. Query only the business tables, views, and metrics in DATABASE SCHEMA.
 - SQL samples and query history are examples of intent and style only. Never copy a table name, column name, alias, literal value, or function from them unless it is also valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
-- Generate Wren SQL only. Do not use warehouse-specific functions unless they are explicitly listed in SQL FUNCTIONS for this request.
+- Generate Wren SQL only, not the native SQL dialect of the connected warehouse. Do not use SQL Server TOP, square-bracket quoting, backtick quoting, FETCH FIRST, OFFSET/FETCH pagination, or warehouse-specific functions unless they are explicitly listed in SQL FUNCTIONS for this request.
+- For top, first, highest, lowest, largest, smallest, or other limited result requests, express the ranking/order with ORDER BY and apply a final LIMIT clause in Wren SQL. Never use SELECT TOP n.
 - Apply relative date or time filters only when DATABASE SCHEMA contains an exact date/time field for the requested time concept and SQL FUNCTIONS contains the exact date/time operation needed. Do not compare text fields to date functions.
 - Treat reasoning plans, correction notes, and error messages as non-executable context. Never copy SQL fragments, inferred identifiers, placeholder names, template markers, literal values, or unsupported functions from them.
 - If a column comment, alias, display label, or description names a business concept, first locate the exact declared source column for that concept in DATABASE SCHEMA. If no exact declared source column exists, omit that concept.
@@ -590,6 +591,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - DON'T USE "TO_CHAR" function in the generated SQL query.
 - Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
 - You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
+- Do not use SELECT TOP n, FETCH FIRST, OFFSET/FETCH, square-bracket quoting, or backtick quoting. Use Wren SQL syntax with ORDER BY and a final LIMIT n clause for limited or top-N results.
 - For the ranking problem, you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
 - For the ranking problem, you must add the ranking column to the final SELECT clause.
 """
