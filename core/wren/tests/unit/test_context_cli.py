@@ -659,6 +659,23 @@ def test_upgrade_cli_explicit_to_version(tmp_path):
     assert config["schema_version"] == 2
 
 
+def test_upgrade_cli_handles_apply_upgrade_error_cleanly(tmp_path, monkeypatch):
+    _make_v1_project(tmp_path)
+
+    import wren.context as context_mod  # noqa: PLC0415
+
+    def _broken_apply(*_args, **_kwargs):
+        raise context_mod.UpgradeError("simulated apply-time failure")
+
+    monkeypatch.setattr(context_mod, "apply_upgrade", _broken_apply)
+
+    result = runner.invoke(app, ["context", "upgrade", "--path", str(tmp_path)])
+
+    assert result.exit_code == 1, result.output
+    assert isinstance(result.exception, SystemExit), result.exception
+    assert "Error: simulated apply-time failure" in result.output
+
+
 def test_upgrade_cli_v4_to_v5_builds_knowledge(tmp_path):
     """Upgrading a v4 project to latest creates the knowledge/ skeleton."""
     (tmp_path / "wren_project.yml").write_text(
