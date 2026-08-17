@@ -1698,6 +1698,24 @@ def test_validate_project_reports_non_dict_column_entries(tmp_path):
     ), msgs
 
 
+def test_validate_project_v1_model_paths_use_flat_yml(tmp_path):
+    """v1 errors should label models/<stem>.yml, not models/<stem>/metadata.yml."""
+    (tmp_path / "wren_project.yml").write_text("schema_version: 1\n", encoding="utf-8")
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    (models_dir / "orders.yml").write_text(
+        "name: orders\ncolumns: id, customer_id\n",
+        encoding="utf-8",
+    )
+    errors = validate_project(tmp_path)
+    diagnostics = [f"{e.path} {e.message}" for e in errors]
+    assert any(
+        "models/orders.yml > orders > columns" in d and "must be a list" in d
+        for d in diagnostics
+    ), diagnostics
+    assert not any("models/orders/metadata.yml" in d for d in diagnostics), diagnostics
+
+
 def test_validate_project_uses_dir_name_when_model_name_missing(tmp_path):
     """v2 error path should use models/<dir>, not stem 'metadata'."""
     _make_v2_project(tmp_path)

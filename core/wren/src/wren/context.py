@@ -1038,7 +1038,14 @@ def validate_project(project_path: Path) -> list[ValidationError]:
     # Check models
     for i, model in enumerate(models):
         src = model.get("_source_dir", f"models[{i}]")
-        src_path = f"models/{src}/metadata.yml"
+        # v1 is flat models/<stem>.yml; v2+ is models/<dir>/metadata.yml.
+        # Keep labels consistent with the raw re-read paths above.
+        if sv == 1:
+            src_path = (
+                f"models/{src}.yml" if not str(src).startswith("models[") else str(src)
+            )
+        else:
+            src_path = f"models/{src}/metadata.yml"
         name = model.get("name")
         if not name:
             errors.append(ValidationError("error", src_path, "model missing 'name'"))
@@ -1082,8 +1089,6 @@ def validate_project(project_path: Path) -> list[ValidationError]:
 
         # columns shape is owned by load_models + the raw re-read above.
         columns = model.get("columns", [])
-        if not isinstance(columns, list):
-            columns = []
         if not columns:
             errors.append(
                 ValidationError(
