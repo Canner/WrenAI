@@ -618,9 +618,10 @@ def test_concurrent_calls_from_threads():
         results = list(ex.map(worker, contexts))
     assert all(r == expected for batch in results for r in batch)
 
-    # mode 2: one shared context, mixed methods. This is the mode that
-    # catches the same-context catalog race if the per-context call lock
-    # is ever removed while the GIL is released.
+    # mode 2: one shared context, mixed methods. Same-context concurrency
+    # relies on private catalog snapshots and per-invocation analyzer
+    # state; this hammer pins that contract (the register-heavy variant
+    # lives in test_same_context_concurrency.py).
     shared = SessionContext(manifest_str, None)
     expected_functions = len(shared.get_available_functions())
     barrier = threading.Barrier(4)
