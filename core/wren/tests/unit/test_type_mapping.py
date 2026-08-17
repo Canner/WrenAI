@@ -459,6 +459,14 @@ def test_cli_parse_types_skip_report_truncates_past_limit() -> None:
     assert "[11] int: 10" not in result.stderr
 
 
+def test_value_repr_limit_is_the_documented_cap() -> None:
+    # The cap is a display knob, but moving it changes user-visible output, so
+    # it should take a deliberate edit rather than drift silently. The
+    # rendering tests below derive their expectations from the constant, so
+    # this is the one place the value itself is pinned.
+    assert _VALUE_REPR_LIMIT == 120
+
+
 def test_cli_parse_types_corrupt_value_repr_is_bounded() -> None:
     # A few large corrupt values must not flood stderr just because there are
     # fewer of them than _SKIP_REPORT_LIMIT. The cut must also be visible, so a
