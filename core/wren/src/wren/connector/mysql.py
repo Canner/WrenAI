@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from contextlib import closing
 from decimal import Decimal as PyDecimal
+from decimal import InvalidOperation
 from functools import cache
 
 import pyarrow as pa
@@ -321,7 +322,10 @@ def _arrow_decimal_type(precision: int, scale: int) -> pa.DataType:
 
 def _mysql_decimal_value_shape(value) -> tuple[int, int] | None:
     """Return integer digits and scale needed to preserve one decimal value."""
-    value = value if isinstance(value, PyDecimal) else PyDecimal(str(value))
+    try:
+        value = value if isinstance(value, PyDecimal) else PyDecimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
     if not value.is_finite():
         return None
     _, digits, exponent = value.as_tuple()
@@ -345,8 +349,8 @@ def _mysql_decimal_type_for_values(
         _mysql_decimal_value_shape(value) for value in values if value is not None
     ]
     if not shapes:
-        if precision > _ARROW_DECIMAL256_MAX_PRECISION:
-            return pa.string()
+        precision = min(precision, _ARROW_DECIMAL256_MAX_PRECISION)
+        scale = min(scale, precision)
         return _arrow_decimal_type(precision, scale)
     if any(shape is None for shape in shapes):
         return pa.string()
@@ -382,6 +386,7 @@ def _mysql_field_arrow_type(
     flags: int = 0,
     precision: int | None = None,
     scale: int | None = None,
+    values: list | None = None,
 ) -> pa.DataType:
     from MySQLdb.constants import FLAG  # noqa: PLC0415
 
@@ -401,6 +406,13 @@ def _mysql_field_arrow_type(
     # — the previous hard-coded ``decimal128(38, 9)`` would lose digits when
     # ``D > 9``.
     if type_code in decimal_codes:
+        if values is not None:
+            return _mysql_decimal_type_for_values(
+                precision,
+                scale,
+                is_unsigned=bool(flags & FLAG.UNSIGNED),
+                values=values,
+            )
         return _arrow_decimal_from_mysql_field(
             precision, scale, is_unsigned=bool(flags & FLAG.UNSIGNED)
         )
@@ -444,19 +456,13 @@ def _build_mysql_arrow_table(cursor) -> pa.Table:
         precision = col[4] if len(col) > 4 else None
         scale = col[5] if len(col) > 5 else None
         flags = flag_list[i] or 0
-        if col[1] in _mysql_decimal_codes():
-            from MySQLdb.constants import FLAG  # noqa: PLC0415
-
-            arrow_type = _mysql_decimal_type_for_values(
-                precision,
-                scale,
-                is_unsigned=bool(flags & FLAG.UNSIGNED),
-                values=[row[i] for row in rows],
-            )
-        else:
-            arrow_type = _mysql_field_arrow_type(
-                col[1], flags, precision=precision, scale=scale
-            )
+        arrow_type = _mysql_field_arrow_type(
+            col[1],
+            flags,
+            precision=precision,
+            scale=scale,
+            values=[row[i] for row in rows],
+        )
         fields.append(pa.field(col[0], arrow_type, nullable=True))
     schema = pa.schema(fields)
 
