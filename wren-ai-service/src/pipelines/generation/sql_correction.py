@@ -93,12 +93,27 @@ Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliase
 If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql. Never create a table or column from the user's wording, failed SQL, dry-run diagnostic, or reasoning plan.
 {% endif %}
 ### FAILED SQL ###
-The failed SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, SQL patterns, or unsupported object names.
+The failed SQL below is diagnostic context only. It is not an executable schema source.
+Only preserve an identifier, function, literal filter, grouping, ordering, or join from this SQL when it is also declared exactly in the WREN SQL IDENTIFIER CONTRACT, DATABASE SCHEMA, SQL FUNCTIONS, or USER INSTRUCTIONS.
+If it contains placeholders, assumed business names, connector-specific syntax, source/physical names, or unsupported objects, discard those parts and regenerate from the QUESTION plus DATABASE SCHEMA.
+
+{% if invalid_generation_result and invalid_generation_result.sql %}
+{{ invalid_generation_result.sql }}
+{% else %}
+No failed SQL was provided.
+{% endif %}
 
 ### DRY-RUN DIAGNOSTIC ###
-The dry-run diagnostic text is intentionally omitted because it may contain failed SQL, guessed identifiers, connector-specific syntax, source names, physical names, or invalid replacement candidates.
+The diagnostic below explains why the previous SQL failed. Use it to understand the failure only.
+Do not copy identifiers, source names, physical names, SQL fragments, or replacement candidates from the diagnostic unless they appear exactly in the WREN SQL IDENTIFIER CONTRACT, DATABASE SCHEMA, SQL FUNCTIONS, or USER INSTRUCTIONS.
 
-Regenerate from the user question and current DATABASE SCHEMA only. Do not repair, preserve, or copy anything from the failed SQL or dry-run diagnostic.
+{% if invalid_generation_result and invalid_generation_result.error %}
+{{ invalid_generation_result.error }}
+{% else %}
+No dry-run diagnostic was provided.
+{% endif %}
+
+Regenerate from the user question, current DATABASE SCHEMA, and the diagnostic failure. Keep DATABASE SCHEMA as the only executable identifier source.
 
 Return only the final JSON SQL response.
 """
