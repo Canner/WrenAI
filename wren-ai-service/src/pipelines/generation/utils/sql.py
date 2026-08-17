@@ -447,7 +447,7 @@ def _extract_table_references(token_list: TokenList) -> tuple[set[str], dict[str
 def _add_table_reference(
     identifier: Identifier, table_names: set[str], aliases: dict[str, str]
 ) -> None:
-    table_name = _clean_identifier(identifier.get_real_name())
+    table_name = _table_reference_name(identifier)
     alias = _clean_identifier(identifier.get_alias())
     if not table_name:
         return
@@ -456,6 +456,14 @@ def _add_table_reference(
     aliases[table_name] = table_name
     if alias:
         aliases[alias] = table_name
+
+
+def _table_reference_name(identifier: Identifier) -> str | None:
+    parent_name = _clean_identifier(identifier.get_parent_name())
+    real_name = _clean_identifier(identifier.get_real_name())
+    if parent_name and real_name:
+        return f"{parent_name}.{real_name}"
+    return real_name
 
 
 def _extract_qualified_columns(token_list: TokenList) -> list[tuple[str, str]]:

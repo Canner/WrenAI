@@ -987,13 +987,13 @@ def construct_retrieval_results(
                     and column["data_type"].lower() != "unknown"
                 }
                 columns = selected_columns.intersection(executable_columns)
-                if not columns:
+                if selected_columns and not columns:
                     logger.warning(
                         "Column pruning selected no executable columns for %s; "
-                        "excluding the model from SQL generation context.",
+                        "including the full model schema to preserve grounding.",
                         table_schema["name"],
                     )
-                    continue
+                    columns = None
                 ddl, _has_calculated_field, _has_json_field = (
                     _build_table_retrieval_context(
                         table_schema,
