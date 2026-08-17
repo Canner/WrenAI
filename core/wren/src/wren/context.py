@@ -1005,6 +1005,8 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                     out.append((f"models/{d.name}/metadata.yml", data))
         return out
 
+    # model name -> raw columns list (file order) for index-stable diagnostics
+    raw_model_columns: dict[str, list] = {}
     for src_path, raw_model in _iter_raw_model_files():
         if "columns" not in raw_model:
             continue
@@ -1025,6 +1027,7 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                 )
             )
             continue
+        raw_model_columns[mname] = raw_cols
         for j, col in enumerate(raw_cols):
             if not isinstance(col, dict):
                 errors.append(
@@ -1041,9 +1044,7 @@ def validate_project(project_path: Path) -> list[ValidationError]:
         # v1 is flat models/<stem>.yml; v2+ is models/<dir>/metadata.yml.
         # Keep labels consistent with the raw re-read paths above.
         if sv == 1:
-            src_path = (
-                f"models/{src}.yml" if not str(src).startswith("models[") else str(src)
-            )
+            src_path = f"models/{src}.yml"
         else:
             src_path = f"models/{src}/metadata.yml"
         name = model.get("name")
@@ -1096,10 +1097,18 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                 )
             )
 
+        # Walk the raw columns list when available so indices match the file
+        # (filtered loader positions would renumber past dropped junk).
+        col_entries = (
+            list(enumerate(raw_model_columns[name]))
+            if name in raw_model_columns
+            else list(enumerate(columns))
+        )
         col_names = set()
-        for j, col in enumerate(columns):
-            # Non-dict entries are dropped by the loader and reported via the
-            # raw re-read; remaining entries are dicts.
+        for j, col in col_entries:
+            if not isinstance(col, dict):
+                # Non-mappings already reported from the raw re-read above.
+                continue
             col_name = col.get("name")
             if not col_name:
                 errors.append(
@@ -1195,7 +1204,13 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                     "properties must be a mapping",
                 )
             )
-        for j, col in enumerate(columns):
+        # Prefer raw-file indices for properties diagnostics too.
+        prop_entries = (
+            list(enumerate(raw_model_columns[name]))
+            if name in raw_model_columns
+            else list(enumerate(columns))
+        )
+        for j, col in prop_entries:
             if not isinstance(col, dict):
                 continue
             col_props = col.get("properties")

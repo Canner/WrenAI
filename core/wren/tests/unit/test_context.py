@@ -1391,9 +1391,7 @@ def test_plan_upgrade_v1_to_v2_requires_portable_path_component(tmp_path, entity
 
 
 @pytest.mark.parametrize("statement", [42, 0])
-def test_plan_upgrade_v1_to_v2_rejects_non_string_view_statement(
-    tmp_path, statement
-):
+def test_plan_upgrade_v1_to_v2_rejects_non_string_view_statement(tmp_path, statement):
     _make_v1_project(tmp_path)
     _set_v1_view_statement(tmp_path, statement)
     source_contents = _snapshot_v1_sources(tmp_path)
@@ -1696,6 +1694,32 @@ def test_validate_project_reports_non_dict_column_entries(tmp_path):
     assert any(
         "columns[1]" in m and "column entry must be an object" in m for m in msgs
     ), msgs
+
+
+def test_validate_project_column_indices_match_file(tmp_path):
+    """Junk at [0] must not renumber a later unnamed column's error."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n"
+        "  - bare_junk\n"
+        "  - type: INTEGER\n"
+        "  - name: amt\n    type: DOUBLE\n"
+    )
+    errors = validate_project(tmp_path)
+    diagnostics = [f"{e.path}: {e.message}" for e in errors]
+    assert any(
+        "columns[0]" in d and "column entry must be an object" in d for d in diagnostics
+    ), diagnostics
+    assert any(
+        "columns[1]" in d and "column missing 'name'" in d for d in diagnostics
+    ), diagnostics
+    # Must not report missing-name against the renumbered filtered index 0.
+    missing_name_paths = [d for d in diagnostics if "column missing 'name'" in d]
+    assert all("columns[0]" not in d for d in missing_name_paths), missing_name_paths
 
 
 def test_validate_project_v1_model_paths_use_flat_yml(tmp_path):
