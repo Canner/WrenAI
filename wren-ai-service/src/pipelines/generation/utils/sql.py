@@ -261,6 +261,28 @@ class _SchemaCatalog:
 
         return cls(tables)
 
+    def to_prompt(self) -> str:
+        if not self._tables:
+            return ""
+
+        lines = [
+            "### VALIDATED RETRIEVED SCHEMA IDENTIFIERS ###",
+            "The SQL must use only these exact deployed Wren identifiers.",
+            "Do not derive table or column names from the user's wording, source SQL, physical names, comments, aliases, or descriptions.",
+        ]
+        for table_name, column_names in self._tables.items():
+            lines.append(f"table: {table_name}")
+            if column_names:
+                lines.append("columns:")
+                lines.extend(f"- {column_name}" for column_name in sorted(column_names))
+        lines.extend(
+            [
+                "If the requested intent cannot be expressed with these exact identifiers, return null for sql.",
+                "### END VALIDATED RETRIEVED SCHEMA IDENTIFIERS ###",
+            ]
+        )
+        return "\n".join(lines)
+
     def validate_sql(self, sql: str | None) -> str | None:
         if not sql or not self._tables:
             return None
@@ -309,6 +331,10 @@ class _SchemaCatalog:
             )
 
         return None
+
+
+def construct_schema_identifier_catalog(contexts: list[str] | None) -> str:
+    return _SchemaCatalog.from_contexts(contexts or []).to_prompt()
 
 
 def _extract_cte_names(token_list: TokenList) -> set[str]:

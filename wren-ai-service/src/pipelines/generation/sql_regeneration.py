@@ -15,6 +15,7 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
+    construct_schema_identifier_catalog,
     get_calculated_field_instructions,
     get_json_field_instructions,
     get_metric_instructions,
@@ -89,6 +90,8 @@ Question:
 {% endfor %}
 {% endif %}
 
+{{ schema_identifier_catalog }}
+
 ### QUESTION ###
 Adjustment intent: {{ sql_generation_reasoning }}
 The previous SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, SQL patterns, or unsupported object names.
@@ -132,6 +135,7 @@ def prompt(
         ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
+        schema_identifier_catalog=construct_schema_identifier_catalog(documents),
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 

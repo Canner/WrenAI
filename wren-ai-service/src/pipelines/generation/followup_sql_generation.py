@@ -16,6 +16,7 @@ from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_ask_history_messages,
     construct_instructions,
+    construct_schema_identifier_catalog,
     get_calculated_field_instructions,
     get_json_field_instructions,
     get_metric_instructions,
@@ -74,6 +75,8 @@ Question:
 {% endfor %}
 {% endif %}
 
+{{ schema_identifier_catalog }}
+
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, relationships, and history only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, prior failed SQL, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql.
@@ -116,6 +119,7 @@ def prompt(
         ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
+        schema_identifier_catalog=construct_schema_identifier_catalog(documents),
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 

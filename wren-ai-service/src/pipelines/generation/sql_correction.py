@@ -15,6 +15,7 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
+    construct_schema_identifier_catalog,
     get_text_to_sql_rules,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
@@ -80,6 +81,8 @@ sql_correction_user_prompt_template = """
 {% endfor %}
 {% endif %}
 
+{{ schema_identifier_catalog }}
+
 ### QUESTION ###
 {% if query %}
 User's Question: {{ query }}
@@ -118,6 +121,7 @@ def prompt(
             instructions=instructions,
         ),
         sql_functions=sql_functions,
+        schema_identifier_catalog=construct_schema_identifier_catalog(documents),
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
