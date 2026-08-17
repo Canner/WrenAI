@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any, Dict, List
 
 import aiohttp
@@ -18,6 +19,20 @@ from src.providers.llm import ChatMessage
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
+
+_DDL_CREATE_PATTERN = re.compile(
+    r"\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+(?P<table>[^\s(]+)\s*\(",
+    re.IGNORECASE,
+)
+_DDL_COLUMN_KEYWORDS = {
+    "CHECK",
+    "CONSTRAINT",
+    "FOREIGN",
+    "INDEX",
+    "KEY",
+    "PRIMARY",
+    "UNIQUE",
+}
 
 
 @component
@@ -239,42 +254,87 @@ class _SchemaCatalog:
     def from_contexts(cls, contexts: list[str]) -> "_SchemaCatalog":
         tables: dict[str, set[str]] = {}
         relationships: dict[str, set[str]] = {}
+
+        for context in contexts:
+            cls._add_contract_identifiers(context, tables, relationships)
+            cls._add_ddl_identifiers(context, tables)
+
+        return cls(tables, relationships)
+
+    @staticmethod
+    def _add_contract_identifiers(
+        context: str,
+        tables: dict[str, set[str]],
+        relationships: dict[str, set[str]],
+    ) -> None:
         current_table: str | None = None
         current_section: str | None = None
 
-        for context in contexts:
-            for raw_line in context.splitlines():
-                line = raw_line.strip()
-                if line.startswith("table: "):
-                    current_table = line.removeprefix("table: ").strip()
-                    if current_table:
-                        tables.setdefault(current_table, set())
-                        relationships.setdefault(current_table, set())
-                    current_section = None
+        for raw_line in context.splitlines():
+            line = raw_line.strip()
+            if line.startswith("table: "):
+                current_table = _clean_identifier(line.removeprefix("table: "))
+                if current_table:
+                    tables.setdefault(current_table, set())
+                    relationships.setdefault(current_table, set())
+                current_section = None
+                continue
+
+            if line.startswith("sql_table_name_use_exactly:"):
+                current_table = _clean_identifier(
+                    line.removeprefix("sql_table_name_use_exactly:")
+                )
+                if current_table:
+                    tables.setdefault(current_table, set())
+                    relationships.setdefault(current_table, set())
+                current_section = None
+                continue
+
+            if current_table and line in {"columns:", "sql_column_names_use_exactly:"}:
+                current_section = "columns"
+                continue
+
+            if current_table and line in {
+                "relationships:",
+                "relationship_constraints_use_exactly:",
+            }:
+                current_section = "relationships"
+                continue
+
+            if current_section and current_table and line.startswith("- "):
+                value = line.removeprefix("- ").strip()
+                if not value:
                     continue
+                if current_section == "columns":
+                    column_name = _clean_identifier(value)
+                    if column_name:
+                        tables.setdefault(current_table, set()).add(column_name)
+                elif current_section == "relationships":
+                    relationships.setdefault(current_table, set()).add(value)
+                continue
 
-                if current_table and line == "columns:":
-                    current_section = "columns"
-                    continue
+            if current_section and line and not line.startswith("- "):
+                current_section = None
 
-                if current_table and line == "relationships:":
-                    current_section = "relationships"
-                    continue
+    @staticmethod
+    def _add_ddl_identifiers(
+        context: str,
+        tables: dict[str, set[str]],
+    ) -> None:
+        for match in _DDL_CREATE_PATTERN.finditer(context):
+            table_name = _clean_identifier(match.group("table"))
+            if not table_name:
+                continue
 
-                if current_section and current_table and line.startswith("- "):
-                    value = line.removeprefix("- ").strip()
-                    if not value:
-                        continue
-                    if current_section == "columns":
-                        tables.setdefault(current_table, set()).add(value)
-                    elif current_section == "relationships":
-                        relationships.setdefault(current_table, set()).add(value)
-                    continue
+            body_start = match.end()
+            body_end = _find_matching_parenthesis(context, body_start)
+            if body_end is None:
+                tables.setdefault(table_name, set())
+                continue
 
-                if current_section and line and not line.startswith("- "):
-                    current_section = None
-
-        return cls(tables, relationships)
+            tables.setdefault(table_name, set()).update(
+                _extract_ddl_column_names(context[body_start:body_end])
+            )
 
     def to_prompt(self) -> str:
         if not self._tables:
@@ -491,6 +551,133 @@ def _add_qualified_column(
     column_name = _clean_identifier(identifier.get_real_name())
     if parent_name and column_name and column_name != "*":
         columns.append((parent_name, column_name))
+
+
+def _find_matching_parenthesis(text: str, body_start: int) -> int | None:
+    depth = 1
+    quote: str | None = None
+    i = body_start
+
+    while i < len(text):
+        char = text[i]
+        if quote:
+            if char == quote:
+                if quote == "'" and i + 1 < len(text) and text[i + 1] == "'":
+                    i += 2
+                    continue
+                quote = None
+            i += 1
+            continue
+
+        if char in {"'", '"', "`"}:
+            quote = char
+        elif char == "[":
+            closing = text.find("]", i + 1)
+            if closing == -1:
+                return None
+            i = closing
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+
+    return None
+
+
+def _extract_ddl_column_names(ddl_body: str) -> set[str]:
+    column_names: set[str] = set()
+    for column_definition in _split_top_level_commas(ddl_body):
+        column_name = _extract_ddl_column_name(column_definition)
+        if column_name:
+            column_names.add(column_name)
+    return column_names
+
+
+def _split_top_level_commas(value: str) -> list[str]:
+    parts: list[str] = []
+    depth = 0
+    quote: str | None = None
+    start = 0
+    i = 0
+
+    while i < len(value):
+        char = value[i]
+        if quote:
+            if char == quote:
+                if quote == "'" and i + 1 < len(value) and value[i + 1] == "'":
+                    i += 2
+                    continue
+                quote = None
+            i += 1
+            continue
+
+        if char in {"'", '"', "`"}:
+            quote = char
+        elif char == "[":
+            closing = value.find("]", i + 1)
+            if closing == -1:
+                break
+            i = closing
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth = max(depth - 1, 0)
+        elif char == "," and depth == 0:
+            parts.append(value[start:i].strip())
+            start = i + 1
+        i += 1
+
+    tail = value[start:].strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def _extract_ddl_column_name(column_definition: str) -> str | None:
+    definition = _strip_leading_sql_comments(column_definition.strip())
+    if not definition:
+        return None
+
+    first_word = definition.split(maxsplit=1)[0].strip().strip('"`[]').upper()
+    if first_word in _DDL_COLUMN_KEYWORDS:
+        return None
+
+    if definition.startswith("["):
+        closing = definition.find("]")
+        if closing > 0:
+            return _clean_identifier(definition[: closing + 1])
+
+    if definition.startswith('"'):
+        closing = definition.find('"', 1)
+        if closing > 0:
+            return _clean_identifier(definition[: closing + 1])
+
+    if definition.startswith("`"):
+        closing = definition.find("`", 1)
+        if closing > 0:
+            return _clean_identifier(definition[: closing + 1])
+
+    return _clean_identifier(definition.split(maxsplit=1)[0])
+
+
+def _strip_leading_sql_comments(value: str) -> str:
+    stripped = value.strip()
+    while stripped:
+        if stripped.startswith("--"):
+            lines = stripped.splitlines()
+            stripped = "\n".join(lines[1:]).strip()
+            continue
+        if stripped.startswith("/*"):
+            closing = stripped.find("*/")
+            if closing == -1:
+                return ""
+            stripped = stripped[closing + 2 :].strip()
+            continue
+        break
+    return stripped
 
 
 def _clean_identifier(identifier: str | None) -> str | None:
