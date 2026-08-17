@@ -1302,6 +1302,19 @@ def _set_v1_view_statement(project_path: Path, statement: int) -> None:
     )
 
 
+def _set_v1_model_ref_sql(project_path: Path, ref_sql: int) -> None:
+    model_file = project_path / "models" / "revenue.yml"
+    content = model_file.read_text(encoding="utf-8")
+    model_file.write_text(
+        content.replace(
+            "ref_sql: SELECT SUM(amount) FROM orders\n",
+            f"ref_sql: {ref_sql}\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+
 _V1_UPGRADE_FILE_TARGETS = [
     "models/orders/metadata.yml",
     "models/revenue/ref_sql.sql",
@@ -1388,6 +1401,20 @@ def test_plan_upgrade_v1_to_v2_rejects_non_string_view_statement(
     from wren.context import UpgradeError as _UE  # noqa: PLC0415
 
     with pytest.raises(_UE, match="view 'summary' statement must be a string"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+@pytest.mark.parametrize("ref_sql", [42, 0])
+def test_plan_upgrade_v1_to_v2_rejects_non_string_model_ref_sql(tmp_path, ref_sql):
+    _make_v1_project(tmp_path)
+    _set_v1_model_ref_sql(tmp_path, ref_sql)
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="model 'revenue' ref_sql must be a string"):
         plan_upgrade(tmp_path, target_version=2)
 
     _assert_v1_sources_unchanged(tmp_path, source_contents)
@@ -1642,6 +1669,23 @@ def test_apply_upgrade_v1_to_v2_rejects_non_string_view_statement_before_writing
     from wren.context import UpgradeError as _UE  # noqa: PLC0415
 
     with pytest.raises(_UE, match="view 'summary' statement must be a string"):
+        apply_upgrade(tmp_path, result)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+@pytest.mark.parametrize("ref_sql", [42, 0])
+def test_apply_upgrade_v1_to_v2_rejects_non_string_model_ref_sql_before_writing(
+    tmp_path, ref_sql
+):
+    _make_v1_project(tmp_path)
+    result = plan_upgrade(tmp_path, target_version=2)
+    _set_v1_model_ref_sql(tmp_path, ref_sql)
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="model 'revenue' ref_sql must be a string"):
         apply_upgrade(tmp_path, result)
 
     _assert_v1_sources_unchanged(tmp_path, source_contents)

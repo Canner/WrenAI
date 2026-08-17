@@ -961,7 +961,11 @@ def upgrade(
         f"Upgrading project from schema_version {result.from_version} -> {result.to_version}..."
     )
 
-    apply_upgrade(project_path, result)
+    try:
+        apply_upgrade(project_path, result)
+    except UpgradeError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
 
     for f in result.files_created:
         typer.echo(f"  + {f}")

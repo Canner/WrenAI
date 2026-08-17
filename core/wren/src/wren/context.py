@@ -1449,6 +1449,15 @@ def _validate_upgrade_view_statement(name: str, statement: Any) -> str | None:
     return statement
 
 
+def _validate_upgrade_model_ref_sql(name: str, ref_sql: Any) -> str | None:
+    """Reject malformed legacy model SQL before migration."""
+    if ref_sql is not None and not isinstance(ref_sql, str):
+        raise UpgradeError(
+            f"Cannot upgrade: model {name!r} ref_sql must be a string, got {ref_sql!r}"
+        )
+    return ref_sql
+
+
 def _knowledge_skeleton_targets() -> list[str]:
     """Canonical relative paths of a fresh knowledge/ skeleton.
 
@@ -1544,7 +1553,7 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
         name = model.get("name", source_dir or "unknown")
         model_dir = _resolve_upgrade_directory(project_path, "models", "model", name)
 
-        ref_sql = model.get("ref_sql")
+        ref_sql = _validate_upgrade_model_ref_sql(name, model.get("ref_sql"))
         if ref_sql:
             ref_sql_file = _resolve_upgrade_file(model_dir, "ref_sql.sql")
             created.append(ref_sql_file.relative_to(project_root).as_posix())
