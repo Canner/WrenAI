@@ -13,6 +13,7 @@ from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     construct_instructions,
+    construct_schema_identifier_catalog,
     sql_generation_reasoning_system_prompt,
 )
 from src.utils import trace_cost
@@ -22,6 +23,13 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_reasoning_user_prompt_template = """
+{{ schema_identifier_catalog }}
+
+The WREN SQL IDENTIFIER CONTRACT above is the authoritative executable schema.
+Use exact model, column, and relationship names from that contract whenever reasoning names schema objects.
+Treat source metadata, physical names, lineage names, semantic labels, and user wording as non-executable background unless the exact same identifier is declared in the contract.
+If the contract does not contain a table, column, or relationship required by the user's intent, say the current schema context is insufficient instead of naming an assumed object.
+
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -69,6 +77,7 @@ def prompt(
         instructions=construct_instructions(
             instructions=instructions,
         ),
+        schema_identifier_catalog=construct_schema_identifier_catalog(documents),
         language=configuration.language,
         current_time=configuration.show_current_time(),
     )

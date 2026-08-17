@@ -50,6 +50,11 @@ The final answer must be a JSON object. Return null for sql if the requested adj
 
 
 sql_regeneration_user_prompt_template = """
+{{ schema_identifier_catalog }}
+
+The WREN SQL IDENTIFIER CONTRACT above is the authoritative executable schema.
+The DATABASE SCHEMA below provides type, semantic, and relationship details for those exact identifiers.
+
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -89,8 +94,6 @@ Question:
 {{ loop.index }}. {{ instruction }}
 {% endfor %}
 {% endif %}
-
-{{ schema_identifier_catalog }}
 
 ### QUESTION ###
 Adjustment intent: {{ sql_generation_reasoning }}

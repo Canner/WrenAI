@@ -35,6 +35,11 @@ text_to_sql_with_followup_user_prompt_template = """
 Given the following user's follow-up question and previous SQL query and summary,
 generate one SQL query to best answer user's question.
 
+{{ schema_identifier_catalog }}
+
+The WREN SQL IDENTIFIER CONTRACT above is the authoritative executable schema.
+The DATABASE SCHEMA below provides type, semantic, and relationship details for those exact identifiers.
+
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -75,11 +80,9 @@ Question:
 {% endfor %}
 {% endif %}
 
-{{ schema_identifier_catalog }}
-
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, relationships, and history only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, prior failed SQL, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql.
+Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, calculated fields, metrics, relationships, and history only to understand meaning; the SQL must use exact declared table and column names from the WREN SQL IDENTIFIER CONTRACT and DATABASE SCHEMA. Treat source metadata, physical names, lineage names, semantic labels, user question words, and prior SQL as non-executable background unless the exact same identifier is declared in the contract. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql.
 
 Return only the final JSON SQL response.
 """
