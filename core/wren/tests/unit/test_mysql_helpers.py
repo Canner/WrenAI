@@ -19,6 +19,7 @@ from wren.connector.mysql import (
     _mysql_blob_codes,
     _mysql_decimal_codes,
     _mysql_decimal_type_for_values,
+    _mysql_field_arrow_type,
     _mysql_field_type_map,
     _mysql_string_codes,
     _mysql_unsigned_variant_map,
@@ -240,6 +241,22 @@ def test_decimal_type_scale_not_greater_than_precision() -> None:
     assert t.scale <= t.precision
 
 
+def test_decimal_field_type_uses_concrete_values() -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    type_code = next(iter(_mysql_decimal_codes()))
+    value = Decimal("1" + "0" * 65)
+
+    arrow_type = _mysql_field_arrow_type(
+        type_code,
+        precision=66,
+        scale=0,
+        values=[value],
+    )
+
+    assert arrow_type == pa.decimal256(66, 0)
+
+
 # ── value-aware DECIMAL conversion ────────────────────────────────
 
 
@@ -307,6 +324,15 @@ def test_decimal_column_above_arrow_limit_uses_exact_strings() -> None:
     ]
 
 
+def test_decimal_unparseable_value_uses_exact_strings() -> None:
+    values = [b"1.5"]
+    arrow_type = _mysql_decimal_type_for_values(4, 1, False, values)
+    column = _build_mysql_column(values, arrow_type)
+
+    assert arrow_type == pa.string()
+    assert column.to_pylist() == ["1.5"]
+
+
 def test_decimal_metadata_above_arrow_limit_with_fitting_value_stays_numeric() -> None:
     from decimal import Decimal  # noqa: PLC0415
 
@@ -320,16 +346,14 @@ def test_decimal_metadata_above_arrow_limit_with_fitting_value_stays_numeric() -
 
 
 @pytest.mark.parametrize("rows", [[], [(None,)]], ids=["empty", "all_null"])
-def test_decimal_metadata_above_arrow_limit_without_values_uses_string(
+def test_decimal_metadata_above_arrow_limit_without_values_stays_numeric(
     rows: list[tuple],
 ) -> None:
-    # Signed precision 89 is not representable in Arrow Decimal256, and no
-    # concrete value proves that a narrower numeric schema would be safe.
     values = [row[0] for row in rows]
     arrow_type = _mysql_decimal_type_for_values(90, 0, False, values)
     column = _build_mysql_column(values, arrow_type)
 
-    assert arrow_type == pa.string()
+    assert arrow_type == pa.decimal256(76, 0)
     assert column.to_pylist() == values
 
 
