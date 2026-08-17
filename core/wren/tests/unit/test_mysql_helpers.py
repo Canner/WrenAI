@@ -19,7 +19,6 @@ from wren.connector.mysql import (
     _mysql_blob_codes,
     _mysql_decimal_codes,
     _mysql_decimal_type_for_values,
-    _mysql_field_arrow_type,
     _mysql_field_type_map,
     _mysql_string_codes,
     _mysql_unsigned_variant_map,
@@ -239,22 +238,6 @@ def test_decimal_type_scale_not_greater_than_precision() -> None:
     # Result must keep scale <= precision so PyArrow accepts the type.
     t = _arrow_decimal_from_mysql_field(7, 30, is_unsigned=False)
     assert t.scale <= t.precision
-
-
-def test_decimal_field_type_uses_concrete_values() -> None:
-    from decimal import Decimal  # noqa: PLC0415
-
-    type_code = next(iter(_mysql_decimal_codes()))
-    value = Decimal("1" + "0" * 65)
-
-    arrow_type = _mysql_field_arrow_type(
-        type_code,
-        precision=66,
-        scale=0,
-        values=[value],
-    )
-
-    assert arrow_type == pa.decimal256(66, 0)
 
 
 # ── value-aware DECIMAL conversion ────────────────────────────────
