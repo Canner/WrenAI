@@ -757,6 +757,20 @@ def link(
         == 0
     )
     if already_linked:
+        # Nothing to merge — but "already linked" must not mean "already
+        # working". The reachable case is a user who hit a conflict on the
+        # merge below, resolved it and committed as that error tells them
+        # to: `origin/<branch>` is then an ancestor of HEAD, yet upstream
+        # was never set, because the merge returned non-zero and this
+        # function raised before reaching `_set_upstream`. Reporting
+        # already-linked and pointing at `git pull` while `git pull` itself
+        # cannot run is the failure this whole design keeps trying to avoid.
+        #
+        # Only when absent: a user who deliberately points the branch
+        # somewhere else keeps their choice. No merge happens here either
+        # way, so this stays a bind, not the update path.
+        if not _has_upstream(target):
+            _set_upstream(target, branch)
         return LinkOutcome.ALREADY_LINKED
 
     merge = run_git(
@@ -784,10 +798,29 @@ def link(
             f"{detail}"
         )
 
-    # A plain `git clone` leaves the local branch tracking its remote
-    # automatically; `git init` + `merge` does not. Without this, the
-    # first `git push` after adopting an existing directory fails with
-    # "no upstream branch" even though the merge itself succeeded.
+    _set_upstream(target, branch)
+    return LinkOutcome.LINKED
+
+
+def _has_upstream(target: Path) -> bool:
+    return (
+        run_git(
+            ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+            cwd=target,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
+def _set_upstream(target: Path, branch: str) -> None:
+    """Make the current branch track `origin/<branch>`.
+
+    A plain `git clone` leaves the local branch tracking its remote
+    automatically; `git init` + `merge` does not. Without this, the first
+    `git push` after adopting an existing directory fails with "no upstream
+    branch" even though the merge itself succeeded.
+    """
     current_branch = run_git(
         ["rev-parse", "--abbrev-ref", "HEAD"], cwd=target
     ).stdout.strip()
@@ -796,7 +829,6 @@ def link(
         cwd=target,
         check=False,
     )
-    return LinkOutcome.LINKED
 
 
 # ── create: make a new project and bind it, in one step ─────────────────────

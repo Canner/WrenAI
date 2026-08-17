@@ -1092,3 +1092,70 @@ def test_helper_failure_note_identifies_the_tool_and_the_executable_that_ran():
     assert "No stored Wren Cloud login for project 16." in note
     # ...and the note says why the user is about to see a git error too.
     assert "git" in note.lower()
+
+
+def test_link_sets_upstream_when_already_linked_but_tracking_was_never_set(tmp_path):
+    """The state the conflict message itself sends users into.
+
+    A conflicted bind raises before upstream is set. The user resolves and
+    commits, as instructed — now `origin/<branch>` is an ancestor of HEAD,
+    so `link` short-circuits to ALREADY_LINKED and points at `git pull`.
+    Without setting upstream here, that `git pull` (and any `git push`)
+    cannot run, which makes the success message untrue.
+    """
+    git_host = str(tmp_path / "host")
+    remote = tmp_path / "host" / "git" / "shared-data.git"
+    _seed_remote(remote)
+
+    target = tmp_path / "project"
+    target.mkdir()
+    (target / "mine.txt").write_text("my existing file")
+
+    # Reproduce the aftermath by hand rather than through link(), so the
+    # test does not depend on how the merge came to be resolved: HEAD
+    # contains origin/main, and upstream was never set.
+    cloud.run_git(["init"], cwd=target)
+    cloud.run_git(["add", "-A"], cwd=target)
+    cloud.run_git(["commit", "-m", "Existing local project"], cwd=target)
+    cloud.run_git(
+        ["remote", "add", "origin", f"{git_host}/git/shared-data.git"], cwd=target
+    )
+    cloud.run_git(["fetch", "origin"], cwd=target)
+    cloud.run_git(
+        ["merge", "--allow-unrelated-histories", "origin/main", "-m", "merged by hand"],
+        cwd=target,
+    )
+    assert not cloud._has_upstream(target), "precondition: no tracking branch yet"
+
+    outcome = _link(target, git_host=git_host)
+
+    # Still reported as already-linked — this is not a fresh bind...
+    assert outcome is cloud.LinkOutcome.ALREADY_LINKED
+    # ...but the directory is now actually usable with plain git.
+    assert cloud._has_upstream(target)
+    upstream = cloud.run_git(
+        ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], cwd=target
+    ).stdout.strip()
+    assert upstream == "origin/main"
+
+
+def test_link_leaves_an_existing_upstream_alone(tmp_path):
+    git_host = str(tmp_path / "host")
+    remote = tmp_path / "host" / "git" / "shared-data.git"
+    _seed_remote(remote)
+    # A second branch on the remote, so "some other upstream" is a real ref
+    # rather than a value git would reject.
+    cloud.run_git(["branch", "other"], cwd=remote)
+
+    target = tmp_path / "project"
+    cloud.run_git(["clone", f"{git_host}/git/shared-data.git", str(target)])
+    cloud.run_git(["fetch", "origin"], cwd=target)
+    cloud.run_git(["branch", "--set-upstream-to=origin/other"], cwd=target)
+
+    outcome = _link(target, git_host=git_host)
+
+    assert outcome is cloud.LinkOutcome.ALREADY_LINKED
+    upstream = cloud.run_git(
+        ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], cwd=target
+    ).stdout.strip()
+    assert upstream == "origin/other", "a deliberate upstream must not be re-pointed"
