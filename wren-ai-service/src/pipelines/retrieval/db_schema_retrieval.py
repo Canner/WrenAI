@@ -615,6 +615,7 @@ async def dbschema_retrieval(
     dbschema_retriever: Any,
     embedding: dict,
     mdl_hash: str | None = None,
+    include_related_models: bool = True,
 ) -> list[Document]:
     table_names = _table_names_from_description_documents(
         table_retrieval.get("documents", [])
@@ -627,22 +628,28 @@ async def dbschema_retrieval(
         table_names = _table_names_from_schema_documents(documents)
 
     if table_names:
-        retrieved_table_names = set()
-        pending_table_names = table_names
+        if include_related_models:
+            retrieved_table_names = set()
+            pending_table_names = table_names
 
-        while pending_table_names:
-            retrieved_table_names.update(pending_table_names)
-            retrieved_documents = await _retrieve_schema_documents(
-                pending_table_names, project_id, mdl_hash, dbschema_retriever
-            )
-            documents = _dedupe_documents(documents + retrieved_documents)
-            pending_table_names = [
-                table_name
-                for table_name in _related_table_names(documents)
-                if table_name not in retrieved_table_names
-            ]
+            while pending_table_names:
+                retrieved_table_names.update(pending_table_names)
+                retrieved_documents = await _retrieve_schema_documents(
+                    pending_table_names, project_id, mdl_hash, dbschema_retriever
+                )
+                documents = _dedupe_documents(documents + retrieved_documents)
+                pending_table_names = [
+                    table_name
+                    for table_name in _related_table_names(documents)
+                    if table_name not in retrieved_table_names
+                ]
 
-        return documents
+            return documents
+
+        retrieved_documents = await _retrieve_schema_documents(
+            table_names, project_id, mdl_hash, dbschema_retriever
+        )
+        return _dedupe_documents(documents + retrieved_documents)
 
     return []
 
@@ -1108,6 +1115,7 @@ class DbSchemaRetrieval(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         table_retrieval_size: int = 50,
         table_column_retrieval_size: int = 100,
+        include_related_models: bool = False,
         **kwargs,
     ):
         self._components = {
@@ -1140,6 +1148,7 @@ class DbSchemaRetrieval(BasicPipeline):
         self._configs = {
             "encoding": _encoding,
             "context_window_size": llm_provider.get_context_window_size(),
+            "include_related_models": include_related_models,
         }
 
         super().__init__(
