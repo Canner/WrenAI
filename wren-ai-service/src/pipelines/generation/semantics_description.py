@@ -172,9 +172,17 @@ def normalize(generate: dict) -> dict:
 @observe(capture_input=False)
 def output(normalize: dict, picked_models: list[dict]) -> dict:
     def _filter(enriched: list[dict], columns: list[dict]) -> list[dict]:
-        valid_columns = [col["name"] for col in columns]
+        valid_columns = {
+            col.get("name")
+            for col in columns
+            if isinstance(col, dict) and col.get("name")
+        }
 
-        return [col for col in enriched if col["name"] in valid_columns]
+        return [
+            col
+            for col in enriched or []
+            if isinstance(col, dict) and col.get("name") in valid_columns
+        ]
 
     models = {model["name"]: model for model in picked_models}
 
