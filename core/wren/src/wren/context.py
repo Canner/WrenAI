@@ -968,6 +968,15 @@ def validate_project(project_path: Path) -> list[ValidationError]:
         if not name:
             errors.append(ValidationError("error", src_path, "model missing 'name'"))
             continue
+        if isinstance(name, (list, dict)):
+            errors.append(
+                ValidationError(
+                    "error",
+                    src_path,
+                    f"model 'name' must be a scalar value, got {type(name).__name__}",
+                )
+            )
+            continue
 
         if name in model_names:
             errors.append(
@@ -1217,6 +1226,15 @@ def validate_project(project_path: Path) -> list[ValidationError]:
             errors.append(
                 ValidationError(
                     "error", f"views/{src_dir}/metadata.yml", "view missing 'name'"
+                )
+            )
+            continue
+        if isinstance(name, (list, dict)):
+            errors.append(
+                ValidationError(
+                    "error",
+                    f"views/{src_dir}/metadata.yml",
+                    f"view 'name' must be a scalar value, got {type(name).__name__}",
                 )
             )
             continue
