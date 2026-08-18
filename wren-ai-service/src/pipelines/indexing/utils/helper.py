@@ -11,6 +11,18 @@ from src.pipelines.indexing import clean_display_name
 
 logger = logging.getLogger("wren-ai-service")
 
+SEMANTIC_METADATA_KEYS = (
+    "aliases",
+    "synonyms",
+    "businessContext",
+    "dataMeaning",
+    "semanticType",
+    "useCases",
+    "aggregationDefault",
+    "format",
+    "examples",
+)
+
 
 class Helper:
     def __init__(
@@ -28,12 +40,26 @@ class Helper:
         return self.helper(column, **kwargs)
 
 
-def _properties_comment(column: Dict[str, Any], **_) -> str:
-    props = column["properties"]
-    column_properties = {
+def normalize_semantic_properties(props: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(props, dict):
+        props = {}
+
+    semantic_properties = {
         "alias": clean_display_name(props.get("displayName", "")),
         "description": props.get("description", ""),
     }
+
+    for key in SEMANTIC_METADATA_KEYS:
+        value = props.get(key)
+        if value not in ("", None, [], {}):
+            semantic_properties[key] = value
+
+    return semantic_properties
+
+
+def _properties_comment(column: Dict[str, Any], **_) -> str:
+    props = column["properties"]
+    column_properties = normalize_semantic_properties(props)
 
     # Add any nested columns if they exist
     nested = {k: v for k, v in props.items() if k.startswith("nested")}

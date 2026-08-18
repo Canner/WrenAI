@@ -19,7 +19,6 @@ from src.pipelines.indexing import (
     AsyncDocumentWriter,
     DocumentCleaner,
     MDLValidator,
-    clean_display_name,
 )
 from src.pipelines.common import build_project_deploy_filter
 from src.pipelines.indexing.utils import helper
@@ -139,10 +138,7 @@ class DDLChunker:
         def _model_command(model: Dict[str, Any]) -> dict:
             properties = model.get("properties", {})
 
-            model_properties = {
-                "alias": clean_display_name(properties.get("displayName", "")),
-                "description": properties.get("description", ""),
-            }
+            model_properties = helper.normalize_semantic_properties(properties)
             comment = f"\n/* {str(model_properties)} */\n"
 
             table_name = model["name"]

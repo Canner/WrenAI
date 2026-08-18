@@ -4,6 +4,81 @@
   "title": "WrenMDL Manifest Schema",
   "description": "A schema for WrenMDL manifest file",
   "$defs": {
+    "semanticProperties": {
+      "description": "Optional semantic metadata used by WrenAI retrieval and SQL generation. These fields add business context while preserving exact MDL model, column, and relationship identifiers.",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "description": "Business-friendly display name or alias.",
+          "type": "string"
+        },
+        "description": {
+          "description": "Business meaning and purpose.",
+          "type": "string"
+        },
+        "aliases": {
+          "description": "Alternative names users may use in natural-language questions.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "synonyms": {
+          "description": "Synonyms that refer to this object.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "businessContext": {
+          "description": "Business context and common use cases.",
+          "type": "string"
+        },
+        "dataMeaning": {
+          "description": "Meaning of the data based on schema context.",
+          "type": "string"
+        },
+        "semanticType": {
+          "description": "Semantic role such as identifier, date, measure, dimension, status, currency, quantity, cost, or revenue.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "useCases": {
+          "description": "Common analytical uses.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "aggregationDefault": {
+          "description": "Default aggregation intent when relevant.",
+          "type": "string"
+        },
+        "format": {
+          "description": "Expected value format when relevant.",
+          "type": "string"
+        },
+        "examples": {
+          "description": "Representative values or phrasing examples.",
+          "type": "array",
+          "items": {
+            "type": ["string", "number", "boolean", "null"]
+          }
+        }
+      },
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "object", "array", "null"]
+      }
+    },
     "column": {
       "type": "object",
       "properties": {
@@ -91,11 +166,8 @@
           "additionalProperties": false
         },
         "properties": {
-          "description": "the customize properties of the column",
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
+          "description": "the customized semantic properties of the column",
+          "$ref": "#/$defs/semanticProperties"
         }
       },
       "required": ["name", "type"],
@@ -236,11 +308,8 @@
             }
           },
           "properties": {
-            "description": "the customize properties of the model",
-            "type": "object",
-            "additionalProperties": {
-              "type": ["string", "number", "boolean", "object", "array", "null"]
-            }
+            "description": "the customized semantic properties of the model",
+            "$ref": "#/$defs/semanticProperties"
           }
         },
         "required": ["name"],
@@ -285,11 +354,8 @@
             "minLength": 1
           },
           "properties": {
-            "description": "the customize properties of the relationship",
-            "type": "object",
-            "additionalProperties": {
-              "type": ["string", "number", "boolean", "object", "array", "null"]
-            }
+            "description": "the customized semantic properties of the relationship",
+            "$ref": "#/$defs/semanticProperties"
           }
         },
         "required": ["name", "models", "joinType", "condition"]
@@ -376,10 +442,7 @@
             "pattern": "^\\s*(\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)\\s*$"
           },
           "properties": {
-            "type": "object",
-            "additionalProperties": {
-              "type": ["string", "number", "boolean", "object", "array", "null"]
-            }
+            "$ref": "#/$defs/semanticProperties"
           }
         },
         "required": ["name", "baseObject", "dimension", "measure"]
@@ -403,11 +466,8 @@
             "minLength": 1
           },
           "properties": {
-            "description": "the customize properties of the view",
-            "type": "object",
-            "additionalProperties": {
-              "type": ["string", "number", "boolean", "object", "array", "null"]
-            }
+            "description": "the customized semantic properties of the view",
+            "$ref": "#/$defs/semanticProperties"
           }
         },
         "required": ["name", "statement"]
@@ -444,22 +504,16 @@
                   "minLength": 1
                 },
                 "properties": {
-                  "description": "the customize properties of the member",
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": ["string", "number", "boolean", "object", "array", "null"]
-                  }
+                  "description": "the customized semantic properties of the member",
+                  "$ref": "#/$defs/semanticProperties"
                 }
               },
               "required": ["name"]
             }
           },
           "properties": {
-            "description": "the customize properties of the enum",
-            "type": "object",
-            "additionalProperties": {
-              "type": ["string", "number", "boolean", "object", "array", "null"]
-            }
+            "description": "the customized semantic properties of the enum",
+            "$ref": "#/$defs/semanticProperties"
           }
         },
         "required": ["name", "values"]
