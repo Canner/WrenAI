@@ -207,6 +207,14 @@ _FORBIDDEN_NODES: tuple[type[exp.Expression], ...] = (
     exp.Grant,
     exp.Insert,
     exp.Into,
+    # ``FOR UPDATE`` / ``FOR SHARE``. Not a write, but not a read-only request
+    # either: it asks for write-intent locks. Through the semantic layer the row
+    # mark currently lands on a generated CTE, which PostgreSQL takes no blocking
+    # lock for (measured: an independent writer is not blocked) — but that is an
+    # accident of how the rewriter wraps the query, and the connector holds a
+    # long-lived connection it never commits, so a row mark that did reach a base
+    # table would be held for the life of that connection.
+    exp.Lock,
     exp.Merge,
     exp.Set,
     exp.TruncateTable,

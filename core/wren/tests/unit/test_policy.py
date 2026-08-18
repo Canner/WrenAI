@@ -572,7 +572,6 @@ def _assert_blocked(sql: str, dialect: str = "postgres") -> WrenError:
         "WITH c AS (SELECT 1 AS a) SELECT a FROM c",
         "(SELECT 1)",
         "VALUES (1), (2)",
-        "SELECT * FROM orders FOR UPDATE",
     ],
 )
 def test_read_only_queries_pass(sql):
@@ -591,6 +590,10 @@ def test_read_only_queries_pass(sql):
         "ALTER TABLE orders ADD COLUMN b int",
         "GRANT SELECT ON orders TO public",
         "COPY orders TO '/tmp/x.csv'",
+        # Locking reads: not writes, but they request write-intent locks, and
+        # the connector never commits the connection they would be held on.
+        "SELECT * FROM orders FOR UPDATE",
+        "SELECT * FROM orders FOR SHARE",
     ],
 )
 def test_writes_are_blocked_with_strict_mode_off(sql):
