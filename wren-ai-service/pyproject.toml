@@ -18,10 +18,10 @@ qdrant-haystack = "^7.0.0"
 backoff = "^2.2.1"
 tqdm = "^4.66.4"
 numpy = "^1.26.4"
-sqlparse = "^0.5.4"
+sqlparse = "^0.6.0"  # CVE: quadratic DoS in lexer/grouping/comment handling
 orjson = "^3.11.5"
 sf-hamilton = {version = "^1.69.0"}
-aiohttp = {extras = ["speedups"], version = "^3.13.3"}
+aiohttp = {extras = ["speedups"], version = "^3.14.3"}  # CVE: OOB heap read in C HTTP response parser
 ollama-haystack = "^2.0.0"
 langfuse = "^2.43.3"
 ollama = "^0.4.0"
@@ -32,15 +32,17 @@ pydantic-settings = "^2.5.2"
 google-auth = "^2.35.0"
 tiktoken = "^0.12.0"
 jsonschema = "^4.23.0"
-litellm = "^1.83.7"
+litellm = "^1.84.0"  # CVE: MCP auth bypass via OAuth2 passthrough
 boto3 = "^1.34.34" # Litellm requires boto3 = 1.34.34
 qdrant-client = "==1.15.0"
 filelock = "^3.20.1"
 urllib3 = ">=2.6.3"
 werkzeug = ">=3.1.5"  # CVE: safe_join Windows device name vulnerability
 marshmallow = ">=3.26.2"  # CVE: Schema.load(many=True) DoS
-pillow = ">=12.1.1"  # CVE: out-of-bounds write when loading PSD images
+pillow = ">=12.3.0"  # CVE: heap out-of-bounds writes, decompression-bomb DoS
 protobuf = ">=5.29.6"
+pyasn1 = ">=0.6.4"  # CVE: unbounded length / quadratic OID decoding DoS
+h2 = ">=4.4.1"  # CVE: duplicate Host header enables request smuggling
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.7.1"
@@ -54,11 +56,13 @@ requests = "^2.32.4"
 extra-streamlit-components = "^0.1.71"
 deepeval = "^3.0.0"
 tomlkit = "^0.13.0"
-nltk = "^3.9.3"
+nltk = "^3.10.0"  # CVE: path traversal, SSRF filter bypass, ReDoS
+tornado = ">=6.5.3"  # CVE: quadratic DoS via multipart params and header coalescing
+setuptools = ">=83.0.0"  # CVE: MANIFEST.in exclusion bypass in sdist via Unicode normalization
 psycopg2 = "^2.9.10"
 
 [tool.poetry.group.eval.dependencies]
-gitpython = "^3.1.43"
+gitpython = "^3.1.58"  # CVE: git option injection / arbitrary file write
 plotly = "^5.24.1"
 nbformat = "^5.1.3"
 ipykernel = "^6.29.5"
