@@ -26,7 +26,7 @@ def test_query_invokes_wren_engine_with_resolved_manifest(
         result = toolkit.query("SELECT 1", limit=10)
 
     assert result is fake_table
-    fake_engine.query.assert_called_once_with("SELECT 1", limit=10)
+    fake_engine.query.assert_called_once_with("SELECT 1", limit=10, properties=None)
     # Engine constructed with manifest bytes + datasource + connection_info
     engine_ctor.assert_called_once()
     kwargs = engine_ctor.call_args.kwargs
@@ -106,7 +106,9 @@ def test_dry_plan_delegates_to_engine(tmp_project, fake_active_profile):
         result = toolkit.dry_plan("SELECT * FROM orders")
 
     assert result == "SELECT * FROM cte_orders"
-    fake_engine.dry_plan.assert_called_once_with("SELECT * FROM orders")
+    fake_engine.dry_plan.assert_called_once_with(
+        "SELECT * FROM orders", properties=None
+    )
 
 
 def test_dry_run_delegates_to_engine(tmp_project, fake_active_profile):
@@ -118,4 +120,54 @@ def test_dry_run_delegates_to_engine(tmp_project, fake_active_profile):
     with patch("wren_pydantic._toolkit.WrenEngine", return_value=fake_engine):
         toolkit.dry_run("SELECT 1")
 
-    fake_engine.dry_run.assert_called_once_with("SELECT 1")
+    fake_engine.dry_run.assert_called_once_with("SELECT 1", properties=None)
+
+
+def test_query_forwards_session_properties(tmp_project, fake_active_profile):
+    """Session properties reach the engine, so RLAC-protected models are readable."""
+    fake_engine = MagicMock(name="engine")
+    fake_engine.query.return_value = pa.table({"x": [1]})
+    fake_engine._connector = MagicMock()
+    properties = {"session_user_id": "'u_42'"}
+
+    toolkit = WrenToolkit.from_project(tmp_project)
+
+    with patch("wren_pydantic._toolkit.WrenEngine", return_value=fake_engine):
+        toolkit.query("SELECT * FROM orders", limit=5, properties=properties)
+
+    fake_engine.query.assert_called_once_with(
+        "SELECT * FROM orders", limit=5, properties=properties
+    )
+
+
+def test_dry_plan_forwards_session_properties(tmp_project, fake_active_profile):
+    """dry_plan forwards properties: RLAC predicates are injected while planning."""
+    fake_engine = MagicMock(name="engine")
+    fake_engine.dry_plan.return_value = "SELECT 1"
+    fake_engine._connector = MagicMock()
+    properties = {"session_user_id": "'u_42'"}
+
+    toolkit = WrenToolkit.from_project(tmp_project)
+
+    with patch("wren_pydantic._toolkit.WrenEngine", return_value=fake_engine):
+        toolkit.dry_plan("SELECT * FROM orders", properties=properties)
+
+    fake_engine.dry_plan.assert_called_once_with(
+        "SELECT * FROM orders", properties=properties
+    )
+
+
+def test_dry_run_forwards_session_properties(tmp_project, fake_active_profile):
+    """dry_run forwards properties so validation matches what query will run."""
+    fake_engine = MagicMock(name="engine")
+    fake_engine._connector = MagicMock()
+    properties = {"session_user_id": "'u_42'"}
+
+    toolkit = WrenToolkit.from_project(tmp_project)
+
+    with patch("wren_pydantic._toolkit.WrenEngine", return_value=fake_engine):
+        toolkit.dry_run("SELECT * FROM orders", properties=properties)
+
+    fake_engine.dry_run.assert_called_once_with(
+        "SELECT * FROM orders", properties=properties
+    )
