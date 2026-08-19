@@ -81,6 +81,16 @@ def test_query_canceled_rolls_back():
     connector.connection.rollback.assert_called_once_with()
 
 
+def test_dry_run_query_canceled_rolls_back():
+    query_canceled = sys.modules["psycopg"].errors.QueryCanceled
+    connector, _ = _make_connector(query_canceled("canceling statement due to timeout"))
+
+    with pytest.raises(query_canceled):
+        connector.dry_run("SELECT pg_sleep(10)")
+
+    connector.connection.rollback.assert_called_once_with()
+
+
 def test_successful_query_does_not_roll_back(monkeypatch):
     connector, _ = _make_connector()
     monkeypatch.setattr(
