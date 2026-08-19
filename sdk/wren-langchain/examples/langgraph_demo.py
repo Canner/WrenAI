@@ -26,13 +26,17 @@ The graph topology is the standard ReAct pattern::
                              │  (ToolNode)  │
                              └──────────────┘
 
-Prereqs match ``langchain_demo.py``: a CLI-prepared Wren project, OPENAI_API_KEY,
-and ``langchain-openai`` installed.
+Prereqs match ``langchain_demo.py``: a CLI-prepared Wren project, OPENAI_API_KEY
+(or ORCAROUTER_API_KEY), and ``langchain-openai`` installed.
 
 Usage
 =====
     export OPENAI_API_KEY=sk-...
     export PROJECT_PATH=/path/to/your-wren-project
+    python examples/langgraph_demo.py
+
+    # Route the agent through the OrcaRouter gateway instead of OpenAI:
+    export ORCAROUTER_API_KEY=sk-orca-...
     python examples/langgraph_demo.py
 
     # Custom question + streaming view:
@@ -63,6 +67,19 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
 from wren_langchain import WrenToolkit
+from wren_langchain.orcarouter import create_orcarouter_chat_model
+
+
+def build_chat_model() -> ChatOpenAI:
+    """Return a ChatOpenAI, routed through OrcaRouter when ``ORCAROUTER_API_KEY`` is set.
+
+    OrcaRouter (https://www.orcarouter.ai) is an OpenAI-compatible gateway, so any
+    LangChain ``ChatOpenAI`` endpoint works. When no OrcaRouter key is present the
+    demo falls back to the default OpenAI model.
+    """
+    if os.environ.get("ORCAROUTER_API_KEY"):
+        return create_orcarouter_chat_model()
+    return ChatOpenAI(model="gpt-4o", temperature=0)
 
 
 class AgentState(TypedDict):
@@ -76,11 +93,20 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
 
-def build_app(toolkit: WrenToolkit, model_name: str = "gpt-4o"):
-    """Compile a ReAct graph that uses Wren tools."""
+def build_app(toolkit: WrenToolkit, model_name: str | None = None):
+    """Compile a ReAct graph that uses Wren tools.
+
+    ``model_name`` defaults to ``gpt-4o`` unless ``ORCAROUTER_API_KEY`` is set, in
+    which case the graph routes through the OrcaRouter gateway.
+    """
     tools = toolkit.get_tools()
     system_prompt = toolkit.system_prompt()
-    model_with_tools = ChatOpenAI(model=model_name, temperature=0).bind_tools(tools)
+    model = (
+        build_chat_model()
+        if model_name is None
+        else ChatOpenAI(model=model_name, temperature=0)
+    )
+    model_with_tools = model.bind_tools(tools)
 
     def agent_node(state: AgentState) -> dict:
         """Call the model. Inject the Wren system prompt only on the first turn."""
@@ -131,8 +157,8 @@ def main() -> None:
             "PROJECT_PATH is required. Example:\n"
             "  PROJECT_PATH=/Users/you/my-wren-project python examples/langgraph_demo.py"
         )
-    if not os.environ.get("OPENAI_API_KEY"):
-        sys.exit("OPENAI_API_KEY is required.")
+    if not (os.environ.get("OPENAI_API_KEY") or os.environ.get("ORCAROUTER_API_KEY")):
+        sys.exit("OPENAI_API_KEY (or ORCAROUTER_API_KEY) is required.")
 
     question = os.environ.get(
         "QUESTION",

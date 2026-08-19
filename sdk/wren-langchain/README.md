@@ -26,6 +26,25 @@ Complete runnable demos:
   conditional edges). Use this when you need custom routing, state, or
   streaming.
 
+### Routing through OrcaRouter
+
+[OrcaRouter](https://www.orcarouter.ai) is a unified model gateway with an
+OpenAI-compatible endpoint. Point a `ChatOpenAI` at it to route the agent
+through OrcaRouter — the examples above pick it up automatically when
+`ORCAROUTER_API_KEY` is set:
+
+```bash
+export ORCAROUTER_API_KEY=sk-orca-...       # required
+export ORCAROUTER_MODEL=orcarouter/auto     # optional, default: orcarouter/auto
+export ORCAROUTER_BASE_URL=https://api.orcarouter.ai/v1  # optional, default above
+python examples/langchain_demo.py
+```
+
+OrcaRouter gives you one key for 150+ models across providers, and also runs
+gateway-level, zero-trust security for AI agents on the same endpoint —
+screening every prompt/response and governing every tool call on a
+default-deny basis, with no application code changes.
+
 ## Prerequisites
 
 This package assumes you have already used the Wren CLI to prepare a project:

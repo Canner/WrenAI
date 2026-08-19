@@ -62,6 +62,42 @@ print(result.output)
 
 The toolkit reads your project's MDL, connection profile, and `instructions.md`; the instructions string teaches the agent the recommended workflow (recall → fetch context → write SQL → store the result).
 
+## Using OrcaRouter as the model gateway
+
+The SDK's tools and instructions are model-agnostic — any Pydantic AI model works.
+To route the agent through the [OrcaRouter](https://www.orcarouter.ai) gateway
+instead of OpenAI, construct an `OpenAIChatModel` pointed at OrcaRouter's
+OpenAI-compatible endpoint:
+
+```python
+import os
+
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
+
+model = OpenAIChatModel(
+    os.environ.get("ORCAROUTER_MODEL", "orcarouter/auto"),
+    provider=OpenAIProvider(
+        base_url=os.environ.get("ORCAROUTER_BASE_URL", "https://api.orcarouter.ai/v1"),
+        api_key=os.environ["ORCAROUTER_API_KEY"],
+    ),
+)
+
+agent = Agent(
+    model,
+    instructions=toolkit.instructions(),
+    toolsets=[toolkit.toolset()],
+)
+```
+
+OrcaRouter is a unified model gateway: one key routes to 150+ models across
+providers, with a single `orcarouter/auto` model id for smart default routing.
+It also runs gateway-level, zero-trust security for AI agents on the same
+endpoint — screening every prompt/response and governing every tool call on a
+default-deny basis, with no application code changes. The runnable
+[`examples/pydantic_ai_demo.py`](https://github.com/Canner/WrenAI/blob/main/sdk/wren-pydantic/examples/pydantic_ai_demo.py)
+picks OrcaRouter automatically when `ORCAROUTER_API_KEY` is set.
+
 ---
 
 ## API Reference

@@ -62,6 +62,40 @@ print(result["messages"][-1].content)
 
 That's it. The toolkit reads your project's MDL, connection profile, and `instructions.md`; the system prompt teaches the agent the recommended workflow (fetch context → recall similar queries → write SQL → store the result).
 
+## Using OrcaRouter as the model gateway
+
+The SDK's tools and system prompt are model-agnostic — any LangChain-compatible
+chat model works. To route the agent through the [OrcaRouter](https://www.orcarouter.ai)
+gateway instead of OpenAI, point a `ChatOpenAI` at OrcaRouter's OpenAI-compatible
+endpoint:
+
+```python
+import os
+
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(
+    model=os.environ.get("ORCAROUTER_MODEL", "orcarouter/auto"),
+    base_url=os.environ.get("ORCAROUTER_BASE_URL", "https://api.orcarouter.ai/v1"),
+    api_key=os.environ["ORCAROUTER_API_KEY"],
+    temperature=0,
+)
+
+agent = create_agent(
+    model=model,
+    tools=toolkit.get_tools(),
+    system_prompt=toolkit.system_prompt(),
+)
+```
+
+OrcaRouter is a unified model gateway: one key routes to 150+ models across
+providers, with a single `orcarouter/auto` model id for smart default routing.
+It also runs gateway-level, zero-trust security for AI agents on the same
+endpoint — screening every prompt/response and governing every tool call on a
+default-deny basis, with no application code changes. The runnable
+[`examples/langchain_demo.py`](https://github.com/Canner/WrenAI/blob/main/sdk/wren-langchain/examples/langchain_demo.py)
+picks OrcaRouter automatically when `ORCAROUTER_API_KEY` is set.
+
 ---
 
 ## API Reference
@@ -146,6 +180,10 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langchain.chat_models import init_chat_model
 
 tools = toolkit.get_tools()
+
+# Swap in an OrcaRouter-routed model the same way:
+#   export ORCAROUTER_API_KEY=sk-orca-...
+#   init_chat_model("openai:orcarouter/auto", base_url="https://api.orcarouter.ai/v1")
 llm = init_chat_model("openai:gpt-4o").bind_tools(tools)
 
 def chatbot(state: MessagesState) -> dict:
