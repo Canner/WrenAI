@@ -301,6 +301,25 @@ class PostgresConnector(ConnectorABC):
         )
         self._closed = False
 
+    def _rollback_after_failure(self) -> None:
+        """Clear the aborted transaction left behind by a failed statement.
+
+        psycopg opens an implicit transaction per statement, so a statement that
+        fails on the backend leaves the session ``idle in transaction (aborted)``
+        and every later statement returns "current transaction is aborted".
+        This connector is long-lived — ``WrenEngine._get_connector`` caches it and
+        the MCP server shares one engine across the process — so the caller has no
+        way to reach this connection and reset it.
+
+        Rolling back is a no-op when the transaction is still healthy, so it runs
+        on every failure path rather than guessing which errors came from the
+        backend. A rollback failure must not mask the original error.
+        """
+        try:
+            self.connection.rollback()
+        except Exception as e:
+            logger.warning(f"Error rolling back postgres transaction: {e}")
+
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         limit = coerce_limit(limit)
         # Strip terminating ``;`` even when no LIMIT wrapper is applied so
@@ -314,10 +333,13 @@ class PostgresConnector(ConnectorABC):
                 cursor.execute(sql)
                 return _build_pg_arrow_table(cursor)
         except psycopg.errors.QueryCanceled:
+            self._rollback_after_failure()
             raise
         except (WrenError, TimeoutError):
+            self._rollback_after_failure()
             raise
         except Exception as e:
+            self._rollback_after_failure()
             raise WrenError(
                 ErrorCode.GENERIC_USER_ERROR,
                 str(e),
@@ -331,10 +353,13 @@ class PostgresConnector(ConnectorABC):
             with self.connection.cursor() as cursor:
                 cursor.execute(wrapped)
         except psycopg.errors.QueryCanceled:
+            self._rollback_after_failure()
             raise
         except (WrenError, TimeoutError):
+            self._rollback_after_failure()
             raise
         except Exception as e:
+            self._rollback_after_failure()
             raise WrenError(
                 ErrorCode.GENERIC_USER_ERROR,
                 str(e),

@@ -479,3 +479,60 @@ def test_helper_preserves_semicolon_inside_string_literal() -> None:
 
 def test_helper_no_trailing_semicolon_unchanged() -> None:
     assert _strip_trailing_semicolon("SELECT 1") == "SELECT 1"
+
+
+class TestPostgresConnectorTransactionRecovery:
+    """A failed statement must not poison the connector's long-lived connection.
+
+    ``WrenEngine._get_connector`` caches one connector per engine and the MCP
+    server shares one engine per process, so a connection left ``idle in
+    transaction (aborted)`` fails every later query until the process restarts.
+    The fixture is class-scoped on purpose: both tests reuse the same connection.
+    """
+
+    @pytest.fixture(scope="class")
+    def connector(self):
+        with PostgresContainer("postgres:16") as pg:
+            url = pg.get_connection_url().replace("+psycopg2", "")
+            with psycopg.connect(url) as setup:
+                setup.execute("CREATE TABLE recovery (id integer)")
+                setup.execute("INSERT INTO recovery VALUES (1), (2)")
+                setup.commit()
+
+            parsed = urlparse(url)
+            conn_info = DataSource.postgres.get_connection_info(
+                {
+                    "host": parsed.hostname,
+                    "port": parsed.port,
+                    "database": parsed.path.lstrip("/"),
+                    "user": parsed.username,
+                    "password": parsed.password,
+                }
+            )
+            connector = PostgresConnector(conn_info)
+            try:
+                yield connector
+            finally:
+                connector.close()
+
+    def test_query_succeeds_after_failed_query(
+        self, connector: PostgresConnector
+    ) -> None:
+        from wren.model.error import WrenError
+
+        with pytest.raises(WrenError):
+            connector.query("SELECT no_such_column FROM recovery")
+
+        result = connector.query("SELECT count(*) AS n FROM recovery")
+        assert result.column("n").to_pylist() == [2]
+
+    def test_query_succeeds_after_failed_dry_run(
+        self, connector: PostgresConnector
+    ) -> None:
+        from wren.model.error import WrenError
+
+        with pytest.raises(WrenError):
+            connector.dry_run("SELECT no_such_column FROM recovery")
+
+        result = connector.query("SELECT count(*) AS n FROM recovery")
+        assert result.column("n").to_pylist() == [2]
