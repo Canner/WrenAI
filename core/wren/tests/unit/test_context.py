@@ -1696,6 +1696,81 @@ def test_validate_project_reports_non_dict_column_entries(tmp_path):
     ), msgs
 
 
+def test_validate_project_duplicate_model_names_do_not_crosswire_columns(tmp_path):
+    """Duplicate model names must not share/steal each other's raw column lists."""
+    _make_v2_project(tmp_path)
+    for dirname, columns_yaml, clean in (
+        (
+            "a",
+            "  - bare_junk\n  - type: INTEGER\n  - name: ok\n    type: INT\n",
+            False,
+        ),
+        (
+            "b",
+            "  - name: only\n    type: INT\n",
+            True,
+        ),
+    ):
+        d = tmp_path / "models" / dirname
+        d.mkdir(parents=True)
+        (d / "metadata.yml").write_text(
+            f"name: orders\ntable_reference:\n  table: orders\ncolumns:\n{columns_yaml}"
+        )
+    errors = validate_project(tmp_path)
+    diagnostics = [f"{e.path}: {e.message}" for e in errors]
+    assert any("duplicate model name" in d for d in diagnostics), diagnostics
+    # Real errors on a/ must remain.
+    assert any(
+        "models/a/metadata.yml" in d
+        and "columns[0]" in d
+        and "column entry must be an object" in d
+        for d in diagnostics
+    ), diagnostics
+    assert any(
+        "models/a/metadata.yml" in d
+        and "columns[1]" in d
+        and "column missing 'name'" in d
+        for d in diagnostics
+    ), diagnostics
+    # No phantom column errors against clean b/.
+    b_col_errs = [
+        d
+        for d in diagnostics
+        if "models/b/metadata.yml" in d
+        and ("column entry must be an object" in d or "column missing 'name'" in d)
+    ]
+    assert b_col_errs == [], b_col_errs
+
+
+def test_plan_upgrade_v1_to_v2_rejects_malformed_model_columns(tmp_path):
+    """v1→v2 must abort before discarding non-list / non-object columns."""
+    _make_v1_project(tmp_path)
+    models_dir = tmp_path / "models"
+    (models_dir / "orders.yml").write_text(
+        "name: orders\ntable_reference:\n  table: orders\ncolumns: id, customer_id\n",
+        encoding="utf-8",
+    )
+    (models_dir / "items.yml").write_text(
+        "name: items\n"
+        "table_reference:\n  table: items\n"
+        "columns:\n"
+        "  - name: id\n    type: INTEGER\n"
+        "  - bare_column\n",
+        encoding="utf-8",
+    )
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="malformed model columns"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+    # Source content still intact (not normalised away).
+    assert "id, customer_id" in (models_dir / "orders.yml").read_text(encoding="utf-8")
+    assert "bare_column" in (models_dir / "items.yml").read_text(encoding="utf-8")
+
+
 def test_validate_project_column_indices_match_file(tmp_path):
     """Junk at [0] must not renumber a later unnamed column's error."""
     _make_v2_project(tmp_path)

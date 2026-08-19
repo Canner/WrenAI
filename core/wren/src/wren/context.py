@@ -1005,7 +1005,9 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                     out.append((f"models/{d.name}/metadata.yml", data))
         return out
 
-    # model name -> raw columns list (file order) for index-stable diagnostics
+    # source key (_source_dir) -> raw columns list (file order) for
+    # index-stable diagnostics. Key by source identity, not model name —
+    # duplicate names are reachable and must not cross-wire column lists.
     raw_model_columns: dict[str, list] = {}
     for src_path, raw_model in _iter_raw_model_files():
         if "columns" not in raw_model:
@@ -1014,10 +1016,11 @@ def validate_project(project_path: Path) -> list[ValidationError]:
         # v2 path is models/<dir>/metadata.yml — prefer directory name over
         # stem "metadata" when the YAML omits `name`.
         if src_path.endswith("/metadata.yml"):
-            dir_name = Path(src_path).parent.name
-            mname = raw_model.get("name") or dir_name
+            source_key = Path(src_path).parent.name
+            mname = raw_model.get("name") or source_key
         else:
-            mname = raw_model.get("name") or Path(src_path).stem
+            source_key = Path(src_path).stem
+            mname = raw_model.get("name") or source_key
         if not isinstance(raw_cols, list):
             errors.append(
                 ValidationError(
@@ -1027,7 +1030,7 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                 )
             )
             continue
-        raw_model_columns[mname] = raw_cols
+        raw_model_columns[source_key] = raw_cols
         for j, col in enumerate(raw_cols):
             if not isinstance(col, dict):
                 errors.append(
@@ -1099,9 +1102,11 @@ def validate_project(project_path: Path) -> list[ValidationError]:
 
         # Walk the raw columns list when available so indices match the file
         # (filtered loader positions would renumber past dropped junk).
+        # Keyed by _source_dir so duplicate model names cannot cross-wire.
+        raw_cols_for_model = raw_model_columns.get(src)
         col_entries = (
-            list(enumerate(raw_model_columns[name]))
-            if name in raw_model_columns
+            list(enumerate(raw_cols_for_model))
+            if raw_cols_for_model is not None
             else list(enumerate(columns))
         )
         col_names = set()
@@ -1204,13 +1209,8 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                     "properties must be a mapping",
                 )
             )
-        # Prefer raw-file indices for properties diagnostics too.
-        prop_entries = (
-            list(enumerate(raw_model_columns[name]))
-            if name in raw_model_columns
-            else list(enumerate(columns))
-        )
-        for j, col in prop_entries:
+        # Prefer raw-file indices for properties diagnostics too (same list).
+        for j, col in col_entries:
             if not isinstance(col, dict):
                 continue
             col_props = col.get("properties")
@@ -1657,11 +1657,52 @@ def plan_upgrade(
     )
 
 
+def _reject_malformed_v1_model_columns(project_path: Path) -> None:
+    """Abort v1→v2 upgrade if any model YAML has malformed ``columns``.
+
+    Loader normalisation is correct for validation/runtime, but migration
+    deletes the source file after writing the normalised model. Require a
+    clean columns shape up front so content is never silently discarded.
+    """
+    models_dir = project_path / "models"
+    if not models_dir.is_dir():
+        return
+    problems: list[str] = []
+    for f in sorted(models_dir.glob("*.yml")):
+        data = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+        if not isinstance(data, dict) or "columns" not in data:
+            continue
+        raw_cols = data.get("columns")
+        src = f"models/{f.name}"
+        name = data.get("name") or f.stem
+        if not isinstance(raw_cols, list):
+            problems.append(
+                f"{src} > {name} > columns: must be a list, "
+                f"got {type(raw_cols).__name__}"
+            )
+            continue
+        for j, col in enumerate(raw_cols):
+            if not isinstance(col, dict):
+                problems.append(
+                    f"{src} > {name} > columns[{j}]: column entry must be an object"
+                )
+    if problems:
+        detail = "; ".join(problems)
+        raise UpgradeError(
+            "Cannot upgrade: malformed model columns would be discarded — " + detail
+        )
+
+
 def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
     """Plan the v1→v2 file restructuring. Returns (files_created, files_deleted)."""
     created: list[str] = []
     deleted: list[str] = []
     project_root = project_path.resolve()
+
+    # Reject malformed model columns before any write: load_models normalises
+    # (drops non-list / non-dict entries), and _apply_v1_to_v2 then unlinks the
+    # v1 source. Abort in preflight so upgrade cannot silently discard data.
+    _reject_malformed_v1_model_columns(project_path)
 
     # Models: flat files → directories
     models = _load_models_v1(project_path)
