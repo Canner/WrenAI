@@ -965,9 +965,6 @@ def validate_project(project_path: Path) -> list[ValidationError]:
         src = model.get("_source_dir", f"models[{i}]")
         src_path = f"models/{src}/metadata.yml"
         name = model.get("name")
-        if not name:
-            errors.append(ValidationError("error", src_path, "model missing 'name'"))
-            continue
         if isinstance(name, (list, dict)):
             errors.append(
                 ValidationError(
@@ -976,6 +973,9 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                     f"model 'name' must be a scalar value, got {type(name).__name__}",
                 )
             )
+            continue
+        if not name:
+            errors.append(ValidationError("error", src_path, "model missing 'name'"))
             continue
 
         if name in model_names:
@@ -1222,19 +1222,19 @@ def validate_project(project_path: Path) -> list[ValidationError]:
     for i, view in enumerate(views):
         src_dir = view.get("_source_dir", f"views[{i}]")
         name = view.get("name")
-        if not name:
-            errors.append(
-                ValidationError(
-                    "error", f"views/{src_dir}/metadata.yml", "view missing 'name'"
-                )
-            )
-            continue
         if isinstance(name, (list, dict)):
             errors.append(
                 ValidationError(
                     "error",
                     f"views/{src_dir}/metadata.yml",
                     f"view 'name' must be a scalar value, got {type(name).__name__}",
+                )
+            )
+            continue
+        if not name:
+            errors.append(
+                ValidationError(
+                    "error", f"views/{src_dir}/metadata.yml", "view missing 'name'"
                 )
             )
             continue

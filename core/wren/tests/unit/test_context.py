@@ -594,6 +594,36 @@ def test_validate_model_name_int_is_not_rejected(tmp_path):
     assert not any("must be a scalar value" in e.message for e in errors)
 
 
+def test_validate_model_name_empty_list_reports_scalar_error_not_missing(tmp_path):
+    # An empty list is falsy, so the type guard must run before the missing-name
+    # check or this reports "missing 'name'" instead of the malformed type.
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: []\ntable_reference:\n  table: orders\ncolumns: []\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any(
+        "model 'name' must be a scalar value, got list" in e.message for e in errors
+    )
+    assert not any("model missing 'name'" in e.message for e in errors)
+
+
+def test_validate_model_name_empty_dict_reports_scalar_error_not_missing(tmp_path):
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: {}\ntable_reference:\n  table: orders\ncolumns: []\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any(
+        "model 'name' must be a scalar value, got dict" in e.message for e in errors
+    )
+    assert not any("model missing 'name'" in e.message for e in errors)
+
+
 def test_validate_both_tref_and_ref_sql(tmp_path):
     _make_v2_project(tmp_path)
     d = tmp_path / "models" / "conflict"
@@ -741,6 +771,32 @@ def test_validate_view_name_dict_reports_error(tmp_path):
     assert any(
         "view 'name' must be a scalar value, got dict" in e.message for e in errors
     )
+
+
+def test_validate_view_name_empty_list_reports_scalar_error_not_missing(tmp_path):
+    # An empty list is falsy, so the type guard must run before the missing-name
+    # check or this reports "missing 'name'" instead of the malformed type.
+    _make_v2_project(tmp_path)
+    d = tmp_path / "views" / "monthly"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text("name: []\nstatement: SELECT 1\n")
+    errors = validate_project(tmp_path)
+    assert any(
+        "view 'name' must be a scalar value, got list" in e.message for e in errors
+    )
+    assert not any("view missing 'name'" in e.message for e in errors)
+
+
+def test_validate_view_name_empty_dict_reports_scalar_error_not_missing(tmp_path):
+    _make_v2_project(tmp_path)
+    d = tmp_path / "views" / "monthly"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text("name: {}\nstatement: SELECT 1\n")
+    errors = validate_project(tmp_path)
+    assert any(
+        "view 'name' must be a scalar value, got dict" in e.message for e in errors
+    )
+    assert not any("view missing 'name'" in e.message for e in errors)
 
 
 def test_validate_missing_join_type(tmp_path):
