@@ -1026,6 +1026,13 @@ def load(
         if "nl" not in p or "sql" not in p:
             typer.echo(f"Error: pair #{i + 1} missing 'nl' or 'sql'.", err=True)
             raise typer.Exit(1)
+        for field in ("nl", "sql", "source", "datasource"):
+            if field in p and not isinstance(p[field], str):
+                typer.echo(
+                    f"Error: pair #{i + 1} field '{field}' must be a string.",
+                    err=True,
+                )
+                raise typer.Exit(1)
 
     # ── Summary ──
     from collections import Counter  # noqa: PLC0415

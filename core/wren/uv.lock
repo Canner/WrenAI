@@ -6,13 +6,13 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'win32'",
-    "python_full_version == '3.12.*' and sys_platform == 'win32'",
-    "python_full_version < '3.12' and sys_platform == 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
-    "python_full_version < '3.12' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.12' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and sys_platform == 'emscripten'",
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
@@ -3531,19 +3531,19 @@ wheels = [
 
 [[package]]
 name = "wren-core-py"
-version = "0.7.3"
+version = "0.7.5"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/08/5d/58c7abf661e644997a8c9879c54e1ec5568cad0a6bbe739d2392452c4e54/wren_core_py-0.7.3.tar.gz", hash = "sha256:4ca0484010cd29170af830132ce7d60d42a97be0f8c7830290b79af279cf9697", size = 216368, upload-time = "2026-07-28T10:37:26.214Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8d/05/43add76ef792f29396be457a145deb4078ce573c09976e9c2dcd42ae6e3e/wren_core_py-0.7.5.tar.gz", hash = "sha256:a1e42efc4a8eb6ed60ce04c76fd08466169d346de3f530873b913a78fadc10e9", size = 223288, upload-time = "2026-08-18T02:43:23.326Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5a/7f/653638f6ecec340877e4c715a78aca9cd8958a536365ad7eefbdb2c1e6d6/wren_core_py-0.7.3-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:9cd934c60828dcc090251bd0d0ba48b147cdb3b9463c6a872f128b46f10cdbfc", size = 43358309, upload-time = "2026-07-28T10:37:14.635Z" },
-    { url = "https://files.pythonhosted.org/packages/eb/71/e2e8535843d227d71b630a9ced49d5fc8706c2888a8628c8a89dba22ca94/wren_core_py-0.7.3-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:4091496114b02ab0e5987e96e719f967f19da37a9b901d7dd4140ca2ad7b8e97", size = 41553986, upload-time = "2026-07-28T10:37:17.424Z" },
-    { url = "https://files.pythonhosted.org/packages/ee/02/0fd9d84f6bc286d6871663e20e97d7c95e29a0ba0ba597241eabf7d00241/wren_core_py-0.7.3-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ad0aca6112302f03fac2db52256d8fc0b9b14056c25dd632a8cbddd734449e89", size = 46359467, upload-time = "2026-07-28T10:37:20.427Z" },
-    { url = "https://files.pythonhosted.org/packages/64/3f/af852318ad4a6abee37bcce71ac06928cb669bf1e9655a615225ef9b7818/wren_core_py-0.7.3-cp311-abi3-win_amd64.whl", hash = "sha256:da193cadedf1b1ef8e3b45f1deba5a2f3b83f6283cf37f96e4b5f2314b5fe38a", size = 41413867, upload-time = "2026-07-28T10:37:23.663Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/6f/157ad227c3e94f9853fb0b8caefb3ab2f05e929390219ad1d40c5c8bbf69/wren_core_py-0.7.5-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:1bd3c616a15c79f62376b8b8998b62cb38ce2d23f91be79df0ece3e99ba25144", size = 43402120, upload-time = "2026-08-18T02:43:09.496Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/1e/e63d7abbda38a7c380a06bc87d68d145d26befd1d83ab787974ef339dd38/wren_core_py-0.7.5-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:0bf427671e10df08e12fd70654f8b5d071b5a55aed16d83b13f7a3d3a887185e", size = 41597974, upload-time = "2026-08-18T02:43:13.299Z" },
+    { url = "https://files.pythonhosted.org/packages/5c/c3/7c160c35b6337a3269deb8292b1c491a823125dd405a192a71a4be281d82/wren_core_py-0.7.5-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:04bf5c5f9a52cf458e09eaaf49c939b36961be7d648129cd525d9c5579437877", size = 46389938, upload-time = "2026-08-18T02:43:16.909Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/26/386d02b53b5e0c12e483f6c9ae4ecda70225ce073c71df171525c3c94e7a/wren_core_py-0.7.5-cp311-abi3-win_amd64.whl", hash = "sha256:1f4be094465bc324c63967d3696c2f7d2f2353afa12d0551310823c1a8734bf6", size = 41448498, upload-time = "2026-08-18T02:43:20.468Z" },
 ]
 
 [[package]]
 name = "wrenai"
-version = "0.13.2"
+version = "0.13.3"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
@@ -3708,7 +3708,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12" },
     { name = "urllib3", specifier = ">=2.7.0" },
     { name = "uvicorn", marker = "extra == 'ui'", specifier = ">=0.29" },
-    { name = "wren-core-py", specifier = ">=0.7.3" },
+    { name = "wren-core-py", specifier = ">=0.7.5" },
     { name = "wrenai", extras = ["interactive", "ui"], marker = "extra == 'main'" },
     { name = "wrenai", extras = ["postgres", "mysql", "bigquery", "snowflake", "clickhouse", "trino", "mssql", "databricks", "redshift", "athena", "oracle", "spark", "main", "memory", "mcp"], marker = "extra == 'all'" },
 ]
