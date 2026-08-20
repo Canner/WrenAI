@@ -1,7 +1,13 @@
-"""SQL policy validation for strict query mode.
+"""SQL policy validation.
 
-Validates that a parsed SQL AST only references tables defined in the MDL
-manifest and does not use any denied functions.
+Two independent controls live here:
+
+- **Read-only statements** — always on. The planned SQL is handed to a connector
+  and executed verbatim, and several connectors run with ``autocommit=True``, so
+  a write that reaches the database is durable. Only SELECT-family queries are
+  accepted; see :func:`validate_read_only_ast`.
+- **Strict mode** — opt-in. Validates that a parsed SQL AST only references
+  tables defined in the MDL manifest and does not use any denied functions.
 """
 
 from __future__ import annotations
@@ -170,6 +176,107 @@ def resolve_model_name(
     return None
 
 
+# Statement shapes that are read-only queries. ``SetOperation`` is the base class
+# of UNION / INTERSECT / EXCEPT; ``WITH ... SELECT`` roots at ``Select``; a
+# parenthesised ``(SELECT ...)`` roots at ``Subquery``. A bare ``VALUES (1),(2)``
+# roots at ``Values`` and reads no table at all.
+_ALLOWED_ROOTS: tuple[type[exp.Expression], ...] = (
+    exp.Select,
+    exp.SetOperation,
+    exp.Subquery,
+    exp.Values,
+)
+
+# Nodes that write, change session state, or hide SQL sqlglot could not parse.
+# Enumerated explicitly because sqlglot's ``exp.DDL`` / ``exp.DML`` marker classes
+# do not cover them all — ``Drop``, ``TruncateTable``, ``Alter`` and ``Grant``
+# carry neither tag. ``Into`` catches T-SQL ``SELECT ... INTO t2``, ``Block``
+# catches multi-statement input such as ``SELECT 1; DROP TABLE t``, and
+# ``Command`` is sqlglot's fallback node for syntax it cannot model (``EXPLAIN``,
+# ``SHOW``, ``DO $$ ... $$``) — which is why this is an allow-list and not a
+# deny-list.
+_FORBIDDEN_NODES: tuple[type[exp.Expression], ...] = (
+    exp.Alter,
+    exp.Analyze,
+    exp.Block,
+    exp.Command,
+    exp.Copy,
+    exp.Create,
+    exp.Delete,
+    exp.Drop,
+    exp.Grant,
+    exp.Insert,
+    exp.Into,
+    # ``FOR UPDATE`` / ``FOR SHARE``. Not a write, but not a read-only request
+    # either: it asks for write-intent locks. Through the semantic layer the row
+    # mark currently lands on a generated CTE, which PostgreSQL takes no blocking
+    # lock for (measured: an independent writer is not blocked) — but that is an
+    # accident of how the rewriter wraps the query, and the connector holds a
+    # long-lived connection it never commits, so a row mark that did reach a base
+    # table would be held for the life of that connection.
+    exp.Lock,
+    exp.Merge,
+    exp.Set,
+    exp.TruncateTable,
+    exp.Update,
+    exp.Use,
+)
+
+# Second net, so a mutating node type introduced by a future sqlglot upgrade is
+# rejected even before anyone adds it to the list above.
+_FORBIDDEN_MARKERS: tuple[type[exp.Expression], ...] = (exp.DDL, exp.DML)
+
+_READ_ONLY_ADVICE = "Only read-only SELECT statements are accepted."
+
+
+def _blocked_statement(detail: str) -> WrenError:
+    return WrenError(
+        ErrorCode.BLOCKED_STATEMENT,
+        f"{detail} {_READ_ONLY_ADVICE}",
+        phase=ErrorPhase.SQL_POLICY_CHECK,
+    )
+
+
+def validate_read_only_ast(ast: exp.Expression) -> None:
+    """Raise ``WrenError`` unless *ast* is a single read-only query.
+
+    Two layers, because the root type alone is not sufficient: a PostgreSQL
+    data-modifying CTE (``WITH x AS (DELETE ... RETURNING *) SELECT * FROM x``)
+    and a T-SQL ``SELECT ... INTO t2`` both root at ``exp.Select`` while mutating
+    the database, so the whole tree is scanned as well.
+    """
+    if not isinstance(ast, _ALLOWED_ROOTS):
+        raise _blocked_statement(f"'{ast.key.upper()}' is not a read-only query.")
+
+    for node in ast.walk():
+        if isinstance(node, (*_FORBIDDEN_NODES, *_FORBIDDEN_MARKERS)):
+            raise _blocked_statement(
+                f"The statement contains a '{node.key.upper()}' clause, which "
+                f"writes to or alters the data source."
+            )
+
+
+def validate_planned_sql(sql: str, dialect: str | None = None) -> None:
+    """Re-check planned SQL before it is executed or returned.
+
+    The input check cannot see what planning *adds*. ``CTERewriter`` inlines MDL
+    view statements and model ``ref_sql`` into the planned query, so an
+    unimpeachable ``SELECT * FROM some_view`` can still produce a mutating
+    statement — and that is what reaches the connector.
+
+    Unlike the input check this **fails open on parse errors**: the caller does
+    not author this string, and rejecting a valid query because sqlglot cannot
+    re-parse the transpiler's dialect-specific output would be a regression. A
+    mutating node in output that *does* parse is still rejected.
+    """
+    try:
+        parsed = parse_one(sql, dialect=dialect)
+    except Exception:
+        return
+    if parsed is not None:
+        validate_read_only_ast(parsed)
+
+
 def validate_sql_policy(
     ast: exp.Expression,
     model_names: set[str],
@@ -186,6 +293,10 @@ def validate_sql_policy(
     config:
         Wren configuration with strict_mode and denied_functions settings.
     """
+    # Always on, independent of strict mode: strict mode governs *which tables*
+    # may be named, not *what may be done to them*.
+    validate_read_only_ast(ast)
+
     if config.strict_mode:
         # Data-reading TVFs (read_csv / dblink / postgres_scan / ...) are
         # blocked in EVERY position first (issue #2409 section C) so a reader
