@@ -399,6 +399,36 @@ Direct SQL smoke:
 - board model/location without location field -> unsupported schema
 ```
 
+## Follow-up Fix: Ticket / Status / Updated Grounding
+
+Additional generic fixes were added for the latest observed PCB_DB failures:
+
+- Ticket questions are now treated as a first-class business entity, so ticket/status questions prefer verified ticket/case/issue tables and avoid unrelated user/team tables.
+- Blocked/open/closed/completed status filters require a verified status/state/progress/blocking column. A generic activity `kind` column is not enough unless metadata clearly marks it as a status-like field.
+- Filter values are checked against verified column meaning and structured sample values when present. Values from user wording are not allowed to become filters on unrelated columns.
+- `ordered by ticket ID` now selects a verified ticket id/number column for `ORDER BY`.
+- `updated each month` now requires a verified updated/modified timestamp and will not silently fall back to `created_at`.
+- Monthly repair counts now count a repair identifier from raw user intent instead of counting a status/failure column introduced by expanded retrieval terms.
+- Semantic validation now rejects LLM-generated SQL that uses valid identifiers but filters the wrong column/value or uses created timestamps for updated-time questions.
+- Retrieval expansion/ranking now includes ticket, activity, status, blocked/open/closed, and updated/modified concepts, with extra deboosting for user/team tables on ticket questions.
+
+Focused validation passed after this follow-up:
+
+```text
+py_compile:
+- wren-ai-service/src/pipelines/generation/utils/sql.py
+- wren-ai-service/src/pipelines/retrieval/db_schema_retrieval.py
+- wren-ai-service/tests/pytest/pipelines/generation/test_sql_schema_grounding.py
+
+git diff --check: passed
+
+Direct Python test-function harness using `D:\WrenAI\wren-ai-service\venv\Scripts\python.exe` and real service imports:
+- ran=43 failures=0
+
+Pytest could not run because the available service venv does not have pytest installed.
+Ruff could not run because no ruff module/binary is installed in this shell.
+```
+
 ## Recommended Next Steps
 
 1. Review PR #1: `https://github.com/hbalasubramanya-rgb/WrenAI/pull/1`.

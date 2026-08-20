@@ -854,6 +854,160 @@ def test_board_models_associated_with_locations_without_location_is_unsupported(
     assert "location" in message
 
 
+def test_blocked_tickets_use_verified_ticket_status_and_order_by_ticket_id():
+    contexts = [
+        """
+        CREATE TABLE dbo_ticket_records (
+            ticket_id VARCHAR,
+            status VARCHAR,
+            priority VARCHAR,
+            updated_at TIMESTAMP
+        );
+        """,
+        """
+        CREATE TABLE dbo_team_users (
+            id VARCHAR,
+            active BOOLEAN,
+            email VARCHAR
+        );
+        """,
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show all blocked tickets ordered by ticket ID.",
+        contexts,
+    )
+
+    assert sql is not None
+    assert 'FROM "dbo_ticket_records"' in sql
+    assert 'LOWER("status") = \'blocked\'' in sql
+    assert 'ORDER BY "ticket_id" ASC' in sql
+    assert 'dbo_team_users' not in sql
+
+
+def test_blocked_ticket_activity_kind_without_status_is_unsupported():
+    contexts = [
+        """
+        CREATE TABLE dbo_ticket_activity_log (
+            ticket_id VARCHAR,
+            kind VARCHAR,
+            created_at TIMESTAMP
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show all blocked tickets ordered by ticket ID.",
+        contexts,
+    )
+    message = unsupported_schema_message(
+        "Show all blocked tickets ordered by ticket ID.",
+        contexts,
+    )
+
+    assert sql is None
+    assert message is not None
+    assert "status" in message
+
+
+def test_semantic_coverage_rejects_blocked_ticket_filter_on_activity_kind():
+    contexts = [
+        """
+        CREATE TABLE dbo_ticket_activity_log (
+            ticket_id VARCHAR,
+            kind VARCHAR,
+            created_at TIMESTAMP
+        );
+        """
+    ]
+
+    error = validate_sql_semantic_coverage(
+        """
+        SELECT ticket_id, kind
+        FROM dbo_ticket_activity_log
+        WHERE LOWER(kind) = 'blocked'
+        ORDER BY ticket_id
+        """,
+        "Show all blocked tickets ordered by ticket ID.",
+        contexts,
+    )
+
+    assert error is not None
+    assert "status" in error
+
+
+def test_repair_counts_updated_each_month_use_verified_updated_timestamp():
+    contexts = [
+        """
+        CREATE TABLE dbo_repair_logs (
+            repair_id VARCHAR,
+            status VARCHAR,
+            updated_at TIMESTAMP,
+            created_at TIMESTAMP
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show the number of repairs updated each month.",
+        contexts,
+    )
+
+    assert sql is not None
+    assert 'FROM "dbo_repair_logs"' in sql
+    assert 'EXTRACT(YEAR FROM "updated_at") AS "year"' in sql
+    assert 'EXTRACT(MONTH FROM "updated_at") AS "month"' in sql
+    assert 'COUNT("repair_id") AS "record_count"' in sql
+    assert '"created_at"' not in sql
+
+
+def test_repair_counts_updated_each_month_without_updated_timestamp_is_unsupported():
+    contexts = [
+        """
+        CREATE TABLE dbo_repair_logs (
+            repair_id VARCHAR,
+            status VARCHAR,
+            created_at TIMESTAMP
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show the number of repairs updated each month.",
+        contexts,
+    )
+
+    assert sql is None
+
+
+def test_semantic_coverage_rejects_created_timestamp_for_updated_question():
+    contexts = [
+        """
+        CREATE TABLE dbo_repair_logs (
+            repair_id VARCHAR,
+            status VARCHAR,
+            updated_at TIMESTAMP,
+            created_at TIMESTAMP
+        );
+        """
+    ]
+
+    error = validate_sql_semantic_coverage(
+        """
+        SELECT EXTRACT(YEAR FROM created_at) AS year,
+               EXTRACT(MONTH FROM created_at) AS month,
+               COUNT(repair_id) AS record_count
+        FROM dbo_repair_logs
+        GROUP BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at)
+        """,
+        "Show the number of repairs updated each month.",
+        contexts,
+    )
+
+    assert error is not None
+    assert "updated" in error
+
+
 def test_semantic_coverage_rejects_count_for_average_intent():
     contexts = [
         """

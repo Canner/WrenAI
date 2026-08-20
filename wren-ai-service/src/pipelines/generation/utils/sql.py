@@ -273,8 +273,13 @@ def _expand_fallback_token_aliases(tokens: set[str]) -> set[str]:
         "avg": {"average"},
         "averages": {"average"},
         "balances": {"balance"},
+        "blocked": {"block", "status"},
+        "blocker": {"priority", "severity"},
         "breakdown": {"count", "distribution", "group"},
         "breakdowns": {"breakdown", "count", "distribution", "group"},
+        "cases": {"case", "ticket"},
+        "closed": {"status"},
+        "completed": {"status"},
         "cust": {"customer"},
         "customers": {"customer"},
         "critical": {"priority", "severity"},
@@ -311,10 +316,14 @@ def _expand_fallback_token_aliases(tokens: set[str]) -> set[str]:
         "models": {"model"},
         "inv": {"invoice"},
         "invoices": {"invoice"},
+        "issues": {"issue", "ticket"},
         "net": {"amount", "value"},
         "netamount": {"amount", "net", "value"},
+        "opened": {"created", "date", "status", "time"},
+        "open": {"status"},
         "ord": {"order"},
         "orders": {"order"},
+        "pending": {"status"},
         "preparergroup": {"group", "preparer"},
         "preparers": {"preparer"},
         "qty": {"quantity"},
@@ -346,7 +355,14 @@ def _expand_fallback_token_aliases(tokens: set[str]) -> set[str]:
         "tasks": {"status", "task"},
         "tech": {"technician"},
         "technician": {"tech"},
+        "ticketid": {"id", "ticket"},
+        "ticketnumber": {"number", "ticket"},
+        "tickets": {"case", "issue", "ticket"},
         "transid": {"id", "trans", "transaction"},
+        "updated": {"date", "modified", "time", "updated"},
+        "updatedat": {"date", "time", "updated"},
+        "modified": {"date", "modified", "time", "updated"},
+        "modifiedat": {"date", "modified", "time", "updated"},
         "vendor": {"supplier"},
         "vendors": {"supplier", "vendor"},
         "workflow": {"approval", "status"},
@@ -789,10 +805,10 @@ def _extract_semantic_context_payload(context: str) -> dict[str, Any]:
 
 def _extract_semantic_tokens_by_column(
     context: str,
-) -> tuple[set[str], dict[str, set[str]]]:
+) -> tuple[set[str], dict[str, set[str]], dict[str, list[str]]]:
     payload = _extract_semantic_context_payload(context)
     if not payload:
-        return set(), {}
+        return set(), {}, {}
 
     table_tokens = _semantic_tokens_from_value(
         payload.get("semantic_context_not_sql_identifiers")
@@ -800,6 +816,7 @@ def _extract_semantic_tokens_by_column(
     table_tokens.update(_semantic_tokens_from_value(payload.get("object_type")))
 
     column_tokens: dict[str, set[str]] = {}
+    column_sample_values: dict[str, list[str]] = {}
     for column in payload.get("columns", []) or []:
         if not isinstance(column, dict):
             continue
@@ -811,8 +828,42 @@ def _extract_semantic_tokens_by_column(
         )
         if tokens:
             column_tokens[column_name] = tokens
+        sample_values = _extract_column_sample_values(column)
+        if sample_values:
+            column_sample_values[column_name] = sample_values
 
-    return table_tokens, column_tokens
+    return table_tokens, column_tokens, column_sample_values
+
+
+def _extract_column_sample_values(column: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+
+    def add(value: Any) -> None:
+        if value is None:
+            return
+        if isinstance(value, (list, tuple, set)):
+            for item in value:
+                add(item)
+            return
+        if isinstance(value, dict):
+            for item in value.values():
+                add(item)
+            return
+        text = str(value).strip()
+        if text and text.lower() not in {item.lower() for item in values}:
+            values.append(text)
+
+    for key in (
+        "sample_values",
+        "sample_value",
+        "samples",
+        "values",
+        "example_values",
+        "examples",
+        "distinct_values",
+    ):
+        add(column.get(key))
+    return values
 
 
 def _extract_schema_details(
@@ -829,7 +880,7 @@ def _extract_schema_details(
             continue
 
         relation_name = _unquote_identifier(relation_match.group("name"))
-        table_semantic_tokens, column_semantic_tokens = (
+        table_semantic_tokens, column_semantic_tokens, column_sample_values = (
             _extract_semantic_tokens_by_column(context)
         )
         column_block_match = re.search(
@@ -876,6 +927,7 @@ def _extract_schema_details(
                     "name": name,
                     "data_type": data_type,
                     "semantic_tokens": column_semantic_tokens.get(name, set()),
+                    "sample_values": column_sample_values.get(name, []),
                     "_table_semantic_tokens": table_semantic_tokens,
                 }
             )
@@ -1152,6 +1204,15 @@ def _sql_mentions_identifier(sql: str, identifier: str) -> bool:
     )
 
 
+def _sql_mentions_literal_value(sql: str, values: list[str]) -> bool:
+    lowered_sql = sql.lower()
+    for value in values:
+        cleaned = _clean_filter_value(value)
+        if cleaned and _quote_literal(cleaned.lower()) in lowered_sql:
+            return True
+    return False
+
+
 def _validate_unqualified_columns_for_single_relation(
     sql: str,
     schema_index: dict[str, set[str] | None],
@@ -1387,6 +1448,56 @@ def validate_sql_semantic_coverage(
         label for label, concept_tokens in concepts if not schema_tokens & concept_tokens
     ]
     if not missing_concepts:
+        status_filter_values = _extract_status_filter_values(query)
+        if status_filter_values:
+            supported_status_columns = []
+            for relation in referenced_relations:
+                for column in schema_details.get(relation, []):
+                    if not _sql_mentions_identifier(sql, column["name"]):
+                        continue
+                    if _column_supports_filter_values(column, status_filter_values):
+                        supported_status_columns.append(column["name"])
+            if not supported_status_columns:
+                return (
+                    "Schema grounding failed. The question asks for a status "
+                    "filter value, but the generated SQL does not filter on a "
+                    "verified status/state/blocking column that supports that "
+                    "value. Use a verified status field and value, ask a "
+                    "clarifying question, or return no SQL."
+                )
+            if not _sql_mentions_literal_value(sql, status_filter_values):
+                value_backed_by_column_name = any(
+                    _fallback_tokens(column_name)
+                    & {
+                        token
+                        for value in status_filter_values
+                        for token in _fallback_tokens(value)
+                    }
+                    for column_name in supported_status_columns
+                )
+                if not value_backed_by_column_name:
+                    return (
+                        "Schema grounding failed. The question asks for a "
+                        "specific status value, but the generated SQL does not "
+                        "apply that verified value as a filter."
+                    )
+
+        if raw_query_tokens & {"updated", "modified"}:
+            temporal_columns = [
+                _choose_temporal_column(raw_query_tokens, schema_details.get(relation, []))
+                for relation in referenced_relations
+            ]
+            temporal_columns = [column for column in temporal_columns if column]
+            if not temporal_columns or not any(
+                _sql_mentions_identifier(sql, column) for column in temporal_columns
+            ):
+                return (
+                    "Schema grounding failed. The question asks for records "
+                    "updated or modified over time, but the generated SQL does "
+                    "not use a verified updated/modified timestamp column. Use "
+                    "that column or return no SQL if it is not available."
+                )
+
         if _is_average_metric_intent(raw_query_tokens):
             if not re.search(r"(?is)\bAVG\s*\(", sql):
                 return (
@@ -1624,8 +1735,29 @@ def _expanded_fallback_query_tokens(query: str) -> set[str]:
         tokens.update({"batch", "board", "defect", "inspection", "rate", "supplier"})
     if tokens & {"repair", "repairs"}:
         tokens.update({"date", "failure", "log", "priority", "progress", "repair", "status"})
+    if tokens & {"ticket", "tickets"}:
+        tokens.update(
+            {
+                "activity",
+                "case",
+                "date",
+                "id",
+                "issue",
+                "log",
+                "modified",
+                "priority",
+                "state",
+                "status",
+                "ticket",
+                "updated",
+            }
+        )
     if tokens & {"failure", "failures", "defect", "defects"}:
         tokens.update({"code", "defect", "failure", "severity", "status", "type"})
+    if tokens & {"blocked", "closed", "completed", "escalated", "open", "pending", "resolved"}:
+        tokens.update({"progress", "state", "status"})
+    if tokens & {"updated", "modified"}:
+        tokens.update({"date", "day", "modified", "month", "time", "updated", "year"})
     if tokens & {"age", "duration", "elapsed"}:
         tokens.update({"age", "days", "duration", "elapsed", "hours"})
     if tokens & {"average", "avg", "mean"}:
@@ -1711,6 +1843,25 @@ _PRIORITY_ORDER = [
     ("minor", 3),
     ("low", 2),
 ]
+_STATUS_STATE_COLUMN_TOKENS = {
+    "progress",
+    "stage",
+    "state",
+    "status",
+    "workflow",
+}
+_BLOCKING_COLUMN_TOKENS = {"block", "blocked", "blocking", "hold", "held"}
+_STATUS_VALUE_ALIASES = {
+    "blocked": ("blocked",),
+    "closed": ("closed",),
+    "completed": ("completed", "complete"),
+    "escalated": ("escalated",),
+    "in progress": ("in progress", "in-progress"),
+    "in-progress": ("in-progress", "in progress"),
+    "open": ("open",),
+    "pending": ("pending",),
+    "resolved": ("resolved",),
+}
 
 
 def _is_rate_metric_intent(raw_query_tokens: set[str]) -> bool:
@@ -1761,9 +1912,20 @@ def _requested_business_concepts(query_tokens: set[str]) -> list[tuple[str, set[
             {"failure", "failed", "defect"},
         ),
         ("repair", {"repair"}, {"repair"}),
+        ("ticket", {"ticket"}, {"ticket", "case", "issue"}),
         ("material", {"material"}, {"material", "part"}),
         ("location", {"location"}, {"location", "site", "area"}),
         ("age/duration", {"age", "duration", "elapsed"}, _AVERAGE_MEASURE_TOKENS),
+        (
+            "updated/modified",
+            {"modified", "updated"},
+            {"changed", "modified", "updated"},
+        ),
+        (
+            "date/time",
+            {"created", "date", "july", "latest", "month", "monthly", "recent", "year"},
+            {"created", "date", "day", "month", "time", "year"},
+        ),
         ("customer", {"customer"}, {"customer", "cust"}),
         ("supplier/vendor", {"supplier", "vendor"}, {"supplier", "vendor"}),
         ("technician", {"technician", "tech"}, {"technician", "tech"}),
@@ -1771,9 +1933,9 @@ def _requested_business_concepts(query_tokens: set[str]) -> list[tuple[str, set[
         (
             "priority/severity",
             {"critical", "priority", "severity"},
-            {"priority", "severity"},
+            {"priority", "rank", "severity", "urgency"},
         ),
-        ("status", {"status"}, {"status"}),
+        ("status", {"status"}, {"progress", "stage", "state", "status"}),
         ("order", {"order"}, {"order", "ord"}),
         ("invoice", {"invoice"}, {"invoice", "inv"}),
         ("email/address", {"email", "address"}, {"email", "email1", "address", "mail"}),
@@ -1907,6 +2069,10 @@ def _choose_fallback_table(
                     * 4
                 )
 
+        has_date_capable_column = bool(
+            _choose_temporal_column(query_tokens | concept_tokens, columns)
+        )
+
         if not _table_covers_requested_concepts(table_name, columns, concept_tokens):
             continue
 
@@ -2011,6 +2177,28 @@ def _choose_fallback_table(
                 if not column_token_union & {"technician", "tech"}:
                     continue
                 score += 90
+
+        if query_tokens & {"ticket"}:
+            table_and_columns = table_tokens | column_token_union
+            if not table_and_columns & {"case", "issue", "ticket"}:
+                continue
+            score += 100
+            if concept_tokens & {"status"}:
+                has_status_or_blocking = bool(_choose_status_column(columns)) or any(
+                    _column_business_tokens(column) & _BLOCKING_COLUMN_TOKENS
+                    for column in columns
+                )
+                if not has_status_or_blocking:
+                    continue
+                score += 55
+            if concept_tokens & {"priority", "severity"}:
+                if not _choose_priority_column(columns):
+                    continue
+                score += 35
+            if concept_tokens & {"updated", "modified", "latest", "recent", "month", "monthly"}:
+                if not has_date_capable_column:
+                    continue
+                score += 35
 
         if query_tokens & {"order", "orders"}:
             table_and_columns = table_tokens | column_token_union
@@ -2227,6 +2415,204 @@ def _choose_ranked_column_by_tokens(
     return candidates[0][1]
 
 
+def _choose_status_column(columns: list[dict[str, str]]) -> dict[str, str] | None:
+    candidates = []
+    for column in columns:
+        column_tokens = _column_business_tokens(column)
+        score = len(column_tokens & _STATUS_STATE_COLUMN_TOKENS) * 20
+        if "status" in column_tokens:
+            score += 30
+        if column_tokens & {"kind", "type", "category"} and not column_tokens & (
+            _STATUS_STATE_COLUMN_TOKENS
+        ):
+            score -= 20
+        if score > 0:
+            candidates.append((score, column))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (-item[0], item[1]["name"]))
+    return candidates[0][1]
+
+
+def _sample_value_tokens(column: dict[str, Any]) -> set[str]:
+    tokens: set[str] = set()
+    for value in column.get("sample_values") or []:
+        tokens.update(_fallback_tokens(value))
+    return tokens
+
+
+def _column_supports_filter_values(
+    column: dict[str, Any],
+    values: list[str],
+) -> bool:
+    cleaned_values = [value for value in (_clean_filter_value(value) for value in values) if value]
+    if not cleaned_values:
+        return True
+
+    column_tokens = _column_business_tokens(column)
+    sample_tokens = _sample_value_tokens(column)
+    value_tokens: set[str] = set()
+    for value in cleaned_values:
+        value_tokens.update(_fallback_tokens(value))
+
+    if value_tokens & sample_tokens:
+        return True
+    if value_tokens & column_tokens:
+        return True
+    if value_tokens & set(_PRIORITY_VALUE_ALIASES.values()) and column_tokens & {
+        "priority",
+        "rank",
+        "severity",
+        "urgency",
+    }:
+        return True
+    if value_tokens & {
+        "blocked",
+        "closed",
+        "completed",
+        "complete",
+        "escalated",
+        "open",
+        "pending",
+        "progress",
+        "resolved",
+        "status",
+    } and column_tokens & _STATUS_STATE_COLUMN_TOKENS:
+        return True
+    if value_tokens & {"block", "blocked"} and column_tokens & _BLOCKING_COLUMN_TOKENS:
+        return True
+    return False
+
+
+def _filter_predicate_for_values(
+    column: dict[str, str],
+    values: list[str],
+) -> str:
+    cleaned_values = [
+        value for value in (_clean_filter_value(value) for value in values) if value
+    ]
+    if not cleaned_values:
+        return _non_missing_value_predicate(column)
+
+    column_tokens = _column_business_tokens(column)
+    value_tokens: set[str] = set()
+    for value in cleaned_values:
+        value_tokens.update(_fallback_tokens(value))
+
+    if (
+        _is_boolean_type(column["data_type"])
+        and value_tokens & {"block", "blocked"}
+        and column_tokens & _BLOCKING_COLUMN_TOKENS
+    ):
+        return f"{_quote_identifier(column['name'])} = TRUE"
+
+    return _value_match_predicate(column, cleaned_values[0], cleaned_values[1:])
+
+
+def _choose_status_filter_column(
+    columns: list[dict[str, str]],
+    values: list[str],
+) -> dict[str, str] | None:
+    candidates: list[tuple[int, dict[str, str]]] = []
+
+    for column in columns:
+        column_tokens = _column_business_tokens(column)
+        if not _column_supports_filter_values(column, values):
+            continue
+        score = len(column_tokens & _STATUS_STATE_COLUMN_TOKENS) * 25
+        score += len(column_tokens & _BLOCKING_COLUMN_TOKENS) * 12
+        score += len(_sample_value_tokens(column)) * 2
+        if "status" in column_tokens:
+            score += 35
+        if column_tokens & {"kind", "type", "category"} and not column_tokens & (
+            _STATUS_STATE_COLUMN_TOKENS
+        ):
+            score -= 25
+        if score > 0:
+            candidates.append((score, column))
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (-item[0], item[1]["name"]))
+    return candidates[0][1]
+
+
+def _choose_temporal_column(
+    query_tokens: set[str],
+    columns: list[dict[str, str]],
+) -> str | None:
+    strict_token_groups: list[set[str]] = []
+    if query_tokens & {"updated", "modified"}:
+        strict_token_groups.append({"changed", "modified", "updated"})
+    if query_tokens & {"created", "opened"}:
+        strict_token_groups.append({"created", "opened"})
+
+    candidates = []
+    for column in columns:
+        column_tokens = _column_business_tokens(column)
+        if not (
+            _is_date_type(column["data_type"])
+            or column_tokens & {"date", "day", "month", "time", "year"}
+        ):
+            continue
+        if strict_token_groups and not any(
+            column_tokens & strict_tokens for strict_tokens in strict_token_groups
+        ):
+            continue
+        score = len(
+            query_tokens
+            & column_tokens
+            & {"created", "date", "day", "modified", "month", "time", "updated", "year"}
+        ) * 12
+        if _is_date_type(column["data_type"]):
+            score += 20
+        if query_tokens & {"updated", "modified"} and column_tokens & {
+            "modified",
+            "updated",
+        }:
+            score += 45
+        if query_tokens & {"created", "opened"} and column_tokens & {"created", "opened"}:
+            score += 35
+        if score > 0:
+            candidates.append((score, column["name"]))
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    return candidates[0][1]
+
+
+def _order_by_phrase_tokens(query: str) -> set[str]:
+    match = re.search(
+        r"(?is)\b(?:order(?:ed)?|sort(?:ed)?)\s+by\s+(?P<value>[A-Za-z0-9_ /-]+)",
+        query,
+    )
+    if not match:
+        return set()
+    return _fallback_tokens(match.group("value"))
+
+
+def _choose_order_by_column(
+    query: str,
+    query_tokens: set[str],
+    columns: list[dict[str, str]],
+) -> str | None:
+    order_tokens = _order_by_phrase_tokens(query)
+    if not order_tokens:
+        return None
+
+    if order_tokens & {"id", "number", "no"} and query_tokens & {"ticket"}:
+        column = _choose_ranked_column_by_tokens(
+            columns,
+            {"id", "no", "number", "ticket"},
+        )
+        if column:
+            return column["name"]
+
+    column = _choose_ranked_column_by_tokens(columns, order_tokens)
+    return column["name"] if column else None
+
+
 def _choose_dimension_column(
     query_tokens: set[str],
     columns: list[dict[str, str]],
@@ -2250,6 +2636,7 @@ def _choose_dimension_columns(
         ({"product"}, {"product", "prod", "item", "material", "name"}),
         ({"salesperson", "representative"}, {"salesperson", "sales", "person", "rep"}),
         ({"technician", "tech"}, {"technician", "tech"}),
+        ({"ticket"}, {"ticket", "id", "number", "no"}),
         ({"location"}, {"location", "site", "area"}),
         ({"material"}, {"material", "part", "item"}),
         ({"priority", "severity"}, {"priority", "severity", "urgency", "rank"}),
@@ -2316,6 +2703,7 @@ def _choose_count_subject_column(
         ({"reconciliation", "recon"}, {"reconciliation", "recon", "trans", "id"}),
         ({"journal"}, {"journal", "entry", "number", "id"}),
         ({"account", "gl", "glaccount"}, {"account", "gl", "glaccount", "id"}),
+        ({"ticket"}, {"ticket", "case", "issue", "id", "number", "no"}),
         (
             {"failure"},
             {"failure", "failed", "defect", "code", "line", "status", "sys", "type"},
@@ -2361,6 +2749,10 @@ def _choose_average_measure_column(
 
 def _is_text_type(data_type: str) -> bool:
     return data_type.upper() in {"CHAR", "NCHAR", "NVARCHAR", "STRING", "TEXT", "VARCHAR"}
+
+
+def _is_boolean_type(data_type: str) -> bool:
+    return data_type.upper() in {"BIT", "BOOL", "BOOLEAN"}
 
 
 def _missing_value_predicate(column: dict[str, str]) -> str:
@@ -2450,6 +2842,27 @@ def _select_listing_columns(
             score += (
                 len(tokens & {"board", "code", "date", "failure", "id", "priority", "status"})
                 * 14
+            )
+        if query_tokens & {"ticket"}:
+            score += (
+                len(
+                    tokens
+                    & {
+                        "case",
+                        "created",
+                        "date",
+                        "id",
+                        "issue",
+                        "modified",
+                        "number",
+                        "priority",
+                        "state",
+                        "status",
+                        "ticket",
+                        "updated",
+                    }
+                )
+                * 16
             )
         if query_tokens & {"journal", "workflow", "approval", "approver", "reviewer", "signer"}:
             score += (
@@ -2641,9 +3054,19 @@ def _extract_status_filter_values(query: str) -> list[str]:
     if re.search(r"(?i)\bin\s+progress\b", query):
         add("in progress")
         add("in-progress")
-    for status in ("completed", "pending", "escalated", "open", "closed"):
+    for status in (
+        "blocked",
+        "closed",
+        "completed",
+        "complete",
+        "escalated",
+        "open",
+        "pending",
+        "resolved",
+    ):
         if re.search(rf"(?i)\b{re.escape(status)}\b", query):
-            add(status)
+            for value in _STATUS_VALUE_ALIASES.get(status, (status,)):
+                add(value)
     return values
 
 
@@ -2749,10 +3172,15 @@ def generate_simple_analytics_sql(
         "average",
         "balance",
         "balances",
+        "blocked",
         "board",
         "breakdown",
         "business",
+        "case",
+        "closed",
+        "completed",
         "count",
+        "created",
         "customer",
         "defect",
         "distribution",
@@ -2776,13 +3204,16 @@ def generate_simple_analytics_sql(
         "material",
         "mean",
         "missing",
+        "modified",
         "model",
         "monthly",
         "most",
         "net",
         "number",
+        "open",
         "order",
         "orders",
+        "pending",
         "preparer",
         "priority",
         "product",
@@ -2807,12 +3238,15 @@ def generate_simple_analytics_sql(
         "tasks",
         "tech",
         "technician",
+        "ticket",
+        "tickets",
         "top",
         "trend",
         "trends",
         "type",
         "unit",
         "units",
+        "updated",
         "workflow",
         "workflows",
         "year",
@@ -2890,7 +3324,17 @@ def generate_simple_analytics_sql(
             f"FROM {quoted_table}"
         )
 
-    status_column = _choose_ranked_column_by_tokens(columns, {"status"})
+    date_column_tokens = {"date", "day", "month", "time", "year"}
+    if raw_query_tokens & {"year"} and not raw_query_tokens & {"month", "monthly"}:
+        date_column_tokens = {"date", "day", "time", "year"}
+    date_column = _choose_temporal_column(raw_query_tokens | query_tokens, columns)
+    if not date_column and not raw_query_tokens & {"updated", "modified"}:
+        date_column = _choose_column_by_tokens(
+            columns,
+            date_column_tokens,
+            date=True,
+        )
+
     repair_filter_intent = raw_query_tokens & {
         "closed",
         "completed",
@@ -2922,13 +3366,15 @@ def generate_simple_analytics_sql(
                 count_expression = f"COUNT({_quote_identifier(subject_column['name'])})"
                 predicates.append(_non_missing_value_predicate(subject_column))
             status_filter_values = _extract_status_filter_values(query)
-            if status_column and status_filter_values:
+            if status_filter_values:
+                status_filter_column = _choose_status_filter_column(
+                    columns,
+                    status_filter_values,
+                )
+                if not status_filter_column:
+                    return None
                 predicates.append(
-                    _value_match_predicate(
-                        status_column,
-                        status_filter_values[0],
-                        status_filter_values[1:],
-                    )
+                    _filter_predicate_for_values(status_filter_column, status_filter_values)
                 )
             where_clause = f"\nWHERE {' AND '.join(predicates)}" if predicates else ""
             quoted_dimensions = _quote_joined(dimension_columns)
@@ -2941,30 +3387,81 @@ def generate_simple_analytics_sql(
     if query_tokens & {"repair", "repairs"} and repair_filter_intent:
         predicates = []
         status_filter_values = _extract_status_filter_values(query)
-        if status_column and status_filter_values:
+        if status_filter_values:
+            status_filter_column = _choose_status_filter_column(
+                columns,
+                status_filter_values,
+            )
+            if not status_filter_column:
+                return None
             predicates.append(
-                _value_match_predicate(
-                    status_column,
-                    status_filter_values[0],
-                    status_filter_values[1:],
-                )
+                _filter_predicate_for_values(status_filter_column, status_filter_values)
             )
         priority_filter_value = _extract_priority_filter_value(query)
         if priority_filter_value:
             priority_column = _choose_priority_column(columns)
-            if priority_column:
-                predicates.append(_value_match_predicate(priority_column, priority_filter_value))
+            if not priority_column or not _column_supports_filter_values(
+                priority_column,
+                [priority_filter_value],
+            ):
+                return None
+            predicates.append(_filter_predicate_for_values(priority_column, [priority_filter_value]))
         if predicates:
             return f"SELECT *\nFROM {quoted_table}\nWHERE {' AND '.join(predicates)}"
 
-    date_column_tokens = {"date", "day", "month", "time", "year"}
-    if raw_query_tokens & {"year"} and not raw_query_tokens & {"month", "monthly"}:
-        date_column_tokens = {"date", "day", "time", "year"}
-    date_column = _choose_column_by_tokens(
-        columns,
-        date_column_tokens,
-        date=True,
-    )
+    if query_tokens & {"ticket"} and not (
+        average_metric_intent
+        or distribution_metric_intent
+        or failure_count_intent
+        or raw_query_tokens & (_COUNT_METRIC_TOKENS | _RATE_METRIC_TOKENS)
+    ):
+        predicates = []
+        status_filter_values = _extract_status_filter_values(query)
+        if status_filter_values:
+            status_filter_column = _choose_status_filter_column(
+                columns,
+                status_filter_values,
+            )
+            if not status_filter_column:
+                return None
+            predicates.append(
+                _filter_predicate_for_values(status_filter_column, status_filter_values)
+            )
+
+        priority_filter_value = _extract_priority_filter_value(query)
+        if priority_filter_value:
+            priority_filter_column = _choose_priority_column(columns)
+            if not priority_filter_column or not _column_supports_filter_values(
+                priority_filter_column,
+                [priority_filter_value],
+            ):
+                return None
+            predicates.append(
+                _filter_predicate_for_values(priority_filter_column, [priority_filter_value])
+            )
+
+        order_column = _choose_order_by_column(query, raw_query_tokens, columns)
+        selected_columns = _select_listing_columns(
+            raw_query_tokens | {"id", "status", "ticket"},
+            columns,
+            date_column=date_column,
+            max_columns=8,
+        )
+        for required_column in [order_column]:
+            if required_column and required_column not in selected_columns:
+                selected_columns.insert(0, required_column)
+        if not selected_columns:
+            selected_columns = column_names[:8]
+        where_clause = f"\nWHERE {' AND '.join(predicates)}" if predicates else ""
+        order_clause = (
+            f"\nORDER BY {_quote_identifier(order_column)} ASC" if order_column else ""
+        )
+        limit_clause = f"\nLIMIT {limit}" if limit else ""
+        if predicates or order_clause or raw_query_tokens & {"all", "list", "show"}:
+            return (
+                f"SELECT {_quote_joined(selected_columns)}\n"
+                f"FROM {quoted_table}{where_clause}{order_clause}{limit_clause}"
+            )
 
     priority_column = _choose_priority_column(columns)
     if average_metric_intent:
@@ -3242,7 +3739,7 @@ def generate_simple_analytics_sql(
     }:
         year_expr = f"EXTRACT(YEAR FROM {_quote_identifier(date_column)})"
         month_expr = f"EXTRACT(MONTH FROM {_quote_identifier(date_column)})"
-        subject_column = _choose_count_subject_column(raw_query_tokens | query_tokens, columns)
+        subject_column = _choose_count_subject_column(raw_query_tokens, columns)
         count_expression = "COUNT(*)"
         where_clause = ""
         if subject_column:
