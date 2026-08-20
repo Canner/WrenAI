@@ -26,6 +26,33 @@ Current projects visible through `/api/v1/projects/current`:
 - id `12`, `CWPay`
 - id `13`, `CW_GL`
 
+## Source Control / PR Status
+
+The work is pushed to the fork branch:
+
+- Repository: `hbalasubramanya-rgb/WrenAI`
+- Branch: `organization/ask-schema-grounding-20260820`
+- PR: `https://github.com/hbalasubramanya-rgb/WrenAI/pull/1`
+- PR base: `organization-feature`
+- Current remote PR head: `cc55d1e05`
+
+The PR branch was rebased onto the latest `origin/organization-feature` after GitHub initially reported conflicts against the wrong compare/base. It was then pushed with `--force-with-lease`.
+
+GitHub readback after the rebase:
+
+- `mergeable=True`
+- `mergeable_state=unstable`
+
+`unstable` means GitHub checks are pending or failing; it is not a merge-conflict state.
+
+If the previous/old branch view is gone or stale, use this branch and PR instead:
+
+- Use branch `organization/ask-schema-grounding-20260820` for this work.
+- Review and merge PR #1 into `organization-feature`.
+- After merge, use `organization-feature` as the updated canonical branch.
+
+Do not open this work against upstream `Canner/WrenAI:main` unless that is explicitly intended; this branch was prepared for the fork's `organization-feature` base.
+
 ## What Changed Today
 
 ### Generic Schema Grounding
@@ -252,6 +279,8 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:3000/api/v1/projects/current
 
 ## Current Dirty Files To Review
 
+In the pushed PR branch, the source changes below are committed. The original local checkout at `D:\WrenAI` may still show unrelated dirty runtime/data files and may also show the old pre-rebase local commit until it is refreshed from origin.
+
 Relevant tracked files:
 
 - `wren-ai-service/src/pipelines/generation/followup_sql_generation.py`
@@ -276,8 +305,11 @@ There are also many local untracked runtime/data artifacts in the repository. Do
 
 ## Recommended Next Steps
 
-1. Install or enable pytest in `wren-ai-service\venv`, then run focused tests.
-2. Review the large `utils/sql.py` diff carefully; consider extracting fallback/grounding helpers into smaller modules after behavior is stable.
-3. Add sample-value metadata to retrieval context if available, then make value matching use that metadata instead of only text normalization.
-4. Run a broader live Ask regression across PCB_DB, Orders, CWPay, and CW_GL when their data sources are available.
-5. Commit the source changes after review, excluding local runtime/data artifacts.
+1. Review PR #1: `https://github.com/hbalasubramanya-rgb/WrenAI/pull/1`.
+2. Confirm the PR base is `organization-feature`, not `Canner/WrenAI:main`.
+3. Resolve any GitHub check failures if `mergeable_state` remains `unstable`, then merge PR #1.
+4. After merge, continue from `organization-feature`.
+5. Install or enable pytest in `wren-ai-service\venv`, then run focused tests.
+6. Review the large `utils/sql.py` diff carefully; consider extracting fallback/grounding helpers into smaller modules after behavior is stable.
+7. Add sample-value metadata to retrieval context if available, then make value matching use that metadata instead of only text normalization.
+8. Run a broader live Ask regression across PCB_DB, Orders, CWPay, and CW_GL when their data sources are available.
