@@ -140,6 +140,17 @@ Randomized validation used synthetic selected-project schemas and shuffled quest
 
 ## Remaining Blockers
 
-- Full browser/application verification against live local PCB_DB/Orders projects was not rerun in this pass.
-- Filter-value grounding depends on sample/enum metadata being available. If a project has no samples/enums for categorical values, the safer behavior is unsupported/clarification rather than guessed filters.
-- The local checkout at `D:\WrenAI` may not contain the latest branch source until refreshed from `origin/organization/ask-schema-grounding-20260820`.
+- Live local `D:\WrenAI` was refreshed with the branch source because the running app was still using older code.
+- Fixed a generic word-form coverage bug where `repairs` did not ground to verified schema token `repair`.
+- Fixed SQL table-reference validation so `EXTRACT(YEAR FROM "updated_at")` is not misread as a table reference.
+- Changed generated date buckets to `CAST(EXTRACT(... ) AS BIGINT)` because uncast `EXTRACT` passed generation validation but failed live preview result conversion.
+- Added schema-derived user-value filtering for the case where exactly one verified categorical column is explicitly mentioned. Values are escaped and attached only to that verified column; identifier columns such as `ticket_id`, `repair_id`, and `org_id` are excluded.
+- Tightened dimension selection so identifier columns are not used as grouping dimensions unless an identifier grouping is explicitly requested.
+- Live API validation on `org / PCB_DB` now passes:
+  - `show number of repairs updated each month` -> `dbo_repair_logs.updated_at`, monthly `COUNT(*)`, successful summary.
+  - `Show repairs by status.` -> `dbo_repair_logs.status`, grouped count, successful summary.
+  - `Show latest repair logs.` -> `dbo_repair_logs`, date ordering, successful summary.
+  - `Show the distribution of repairs across completed and in-progress statuses.` -> `dbo_repair_logs.status`, filtered grouped count, successful summary.
+  - `Show customer revenue by year.` while PCB_DB is selected -> clear `NO_RELEVANT_SQL`, no invalid SQL.
+  - `Show all blocked tickets ordered by ticket id.` -> clear `NO_RELEVANT_SQL` for missing verified `blocked` concept, no invalid SQL.
+- `pytest` is still not installed in the local AI-service venv, so validation used `py_compile`, direct function harnesses, and live API calls.

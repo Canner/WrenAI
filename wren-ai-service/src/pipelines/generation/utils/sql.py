@@ -8,7 +8,7 @@ import orjson
 import sqlparse
 from haystack import component
 from pydantic import BaseModel, ConfigDict
-from sqlparse.sql import Identifier, IdentifierList, TokenList
+from sqlparse.sql import Function, Identifier, IdentifierList, TokenList
 from sqlparse.tokens import Comment, Keyword
 
 from src.core.engine import (
@@ -227,6 +227,7 @@ _DATE_PART_WORDS = {
     "YEAR",
 }
 _FALLBACK_TOKEN = re.compile(r"[a-z0-9]+")
+_QUERY_VALUE_TOKEN = re.compile(r"[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*")
 _FALLBACK_STOPWORDS = {
     "a",
     "an",
@@ -258,15 +259,41 @@ _MONTH_NAME_TO_NUMBER = {
 }
 
 
+def _fallback_token_variants(token: str) -> set[str]:
+    token = token.lower()
+    variants = {token}
+
+    generic_tokens = globals().get("_GENERIC_SCHEMA_INTENT_TOKENS", set())
+    if token in generic_tokens:
+        return variants
+
+    if len(token) > 4 and token.endswith("ies"):
+        variants.add(token[:-3] + "y")
+    elif len(token) > 4 and token.endswith("es"):
+        variants.add(token[:-2])
+    elif len(token) > 3 and token.endswith("s"):
+        variants.add(token[:-1])
+    if len(token) > 4 and token.endswith("ed"):
+        stem = token[:-2]
+        variants.add(stem)
+        if len(token) > 5 and token[-3] in {"d", "s", "t", "v", "z"}:
+            variants.add(token[:-1])
+        if len(stem) > 2 and stem[-1] == stem[-2]:
+            variants.add(stem[:-1])
+    if len(token) > 5 and token.endswith("ing"):
+        stem = token[:-3]
+        variants.add(stem)
+        variants.add(stem + "e")
+        if len(stem) > 2 and stem[-1] == stem[-2]:
+            variants.add(stem[:-1])
+
+    return {variant for variant in variants if variant}
+
+
 def _expand_fallback_token_variants(tokens: set[str]) -> set[str]:
-    expanded = set(tokens)
+    expanded = set()
     for token in tokens:
-        if len(token) > 4 and token.endswith("ies"):
-            expanded.add(token[:-3] + "y")
-        if len(token) > 4 and token.endswith("es"):
-            expanded.add(token[:-2])
-        if len(token) > 3 and token.endswith("s"):
-            expanded.add(token[:-1])
+        expanded.update(_fallback_token_variants(token))
     return expanded
 
 
@@ -1370,7 +1397,11 @@ def validate_sql_semantic_coverage(
             schema_tokens.update(_schema_tokens_for_table(relation, columns))
 
     required_tokens = _schema_derived_query_tokens(raw_query_tokens, schema_details)
-    unsupported_tokens = _unsupported_query_tokens(raw_query_tokens, schema_details)
+    unsupported_tokens = _unsupported_query_tokens(
+        raw_query_tokens,
+        schema_details,
+        query=query,
+    )
     if unsupported_tokens:
         return (
             "Schema grounding failed. The retrieved schema metadata does not "
@@ -1431,7 +1462,11 @@ def unsupported_schema_message(
     if not schema_details:
         return None
     required_tokens = _schema_derived_query_tokens(query_tokens, schema_details)
-    unsupported_tokens = _unsupported_query_tokens(query_tokens, schema_details)
+    unsupported_tokens = _unsupported_query_tokens(
+        query_tokens,
+        schema_details,
+        query=query,
+    )
     if unsupported_tokens:
         return (
             "No retrieved table or view in the active project contains verified "
@@ -1524,8 +1559,12 @@ def _table_business_tokens(
     return tokens
 
 
+def _data_type_base(data_type: str) -> str:
+    return data_type.upper().split("(", 1)[0].strip()
+
+
 def _is_numeric_type(data_type: str) -> bool:
-    return data_type.upper() in {
+    return _data_type_base(data_type) in {
         "BIGINT",
         "DECIMAL",
         "DOUBLE",
@@ -1544,7 +1583,7 @@ def _is_numeric_type(data_type: str) -> bool:
 
 
 def _is_date_type(data_type: str) -> bool:
-    return data_type.upper() in {
+    return _data_type_base(data_type) in {
         "DATE",
         "DATETIME",
         "DATETIME2",
@@ -1662,7 +1701,7 @@ def _is_rate_like_column(column: dict[str, str]) -> bool:
 
 def _is_identifier_like_column(column: dict[str, str]) -> bool:
     tokens = _fallback_tokens(column["name"])
-    return bool(tokens) and tokens <= {"id", "identifier", "key", "uuid"}
+    return bool(tokens & {"id", "identifier", "key", "uuid"})
 
 
 def _quote_joined(identifiers: list[str]) -> str:
@@ -1691,26 +1730,32 @@ def _schema_derived_query_tokens(
     schema_details: dict[str, list[dict[str, str]]],
 ) -> set[str]:
     schema_tokens = set().union(*_schema_tokens_by_table(schema_details).values())
-    return {
-        token
-        for token in query_tokens
-        if token not in _GENERIC_SCHEMA_INTENT_TOKENS
-        and not token.isdigit()
-        and token in schema_tokens
-    }
+    supported_tokens: set[str] = set()
+    for token in query_tokens:
+        if token in _GENERIC_SCHEMA_INTENT_TOKENS or token.isdigit():
+            continue
+        supported_tokens.update(_fallback_token_variants(token) & schema_tokens)
+    return supported_tokens
 
 
 def _unsupported_query_tokens(
     query_tokens: set[str],
     schema_details: dict[str, list[dict[str, str]]],
+    query: str | None = None,
 ) -> set[str]:
     schema_tokens = set().union(*_schema_tokens_by_table(schema_details).values())
+    user_value_tokens = _schema_driven_user_value_tokens(
+        query,
+        query_tokens,
+        schema_details,
+    )
     return {
         token
         for token in query_tokens
         if token not in _GENERIC_SCHEMA_INTENT_TOKENS
         and not token.isdigit()
-        and token not in schema_tokens
+        and not (_fallback_token_variants(token) & schema_tokens)
+        and token not in user_value_tokens
     }
 
 
@@ -1727,7 +1772,7 @@ def _table_covers_requested_concepts(
     if not required_tokens:
         return True
     schema_tokens = _schema_tokens_for_table(table_name, columns)
-    return required_tokens <= schema_tokens
+    return all(_fallback_token_variants(token) & schema_tokens for token in required_tokens)
 
 
 def _choose_fallback_table(
@@ -1957,15 +2002,24 @@ def _choose_dimension_columns(
     columns: list[dict[str, str]],
     max_columns: int = 3,
 ) -> list[str]:
-    candidates = []
+    name_candidates = []
+    semantic_candidates = []
     filtered_query_tokens = query_tokens - _GENERIC_SCHEMA_INTENT_TOKENS
+    identifier_requested = bool(filtered_query_tokens & {"id", "identifier", "key", "uuid"})
     for index, column in enumerate(columns):
         if _is_numeric_type(column["data_type"]):
             continue
-        column_tokens = _column_business_tokens(column)
-        score = len(filtered_query_tokens & column_tokens) * 10
-        if score > 0:
-            candidates.append((score, index, column["name"]))
+        if _is_identifier_like_column(column) and not identifier_requested:
+            continue
+        name_tokens = _fallback_tokens(column["name"])
+        semantic_tokens = set(column.get("semantic_tokens") or set())
+        name_score = len(filtered_query_tokens & name_tokens) * 10
+        semantic_score = len(filtered_query_tokens & semantic_tokens) * 3
+        if name_score > 0:
+            name_candidates.append((name_score + semantic_score, index, column["name"]))
+        elif semantic_score > 0:
+            semantic_candidates.append((semantic_score, index, column["name"]))
+    candidates = name_candidates or semantic_candidates
     candidates.sort(key=lambda item: (-item[0], item[1]))
     return [name for _, _, name in candidates[:max_columns]]
 
@@ -2021,11 +2075,29 @@ def _choose_average_measure_column(
 
 
 def _is_text_type(data_type: str) -> bool:
-    return data_type.upper() in {"CHAR", "NCHAR", "NVARCHAR", "STRING", "TEXT", "VARCHAR"}
+    return _data_type_base(data_type) in {
+        "CHAR",
+        "CHARACTER",
+        "NCHAR",
+        "NTEXT",
+        "NVARCHAR",
+        "STRING",
+        "TEXT",
+        "VARCHAR",
+    }
 
 
 def _is_boolean_type(data_type: str) -> bool:
-    return data_type.upper() in {"BIT", "BOOL", "BOOLEAN"}
+    return _data_type_base(data_type) in {"BIT", "BOOL", "BOOLEAN"}
+
+
+def _is_categorical_value_column(column: dict[str, Any]) -> bool:
+    return not (
+        _is_identifier_like_column(column)
+        or _is_numeric_type(column["data_type"])
+        or _is_date_type(column["data_type"])
+        or _is_boolean_type(column["data_type"])
+    )
 
 
 def _missing_value_predicate(column: dict[str, str]) -> str:
@@ -2130,7 +2202,7 @@ def _current_year_where_clause(
         "month",
         "time",
     }:
-        return f"\nWHERE EXTRACT(YEAR FROM {quoted_column}) = {current_year}"
+        return f"\nWHERE {_date_part_expression(date_column, 'YEAR')} = {current_year}"
     return ""
 
 
@@ -2154,7 +2226,9 @@ def _value_match_predicate(
     if not values:
         return f"{quoted_column} IS NOT NULL"
 
-    if isinstance(column, dict) and _is_text_type(column["data_type"]):
+    if isinstance(column, dict) and (
+        _is_text_type(column["data_type"]) or _is_categorical_value_column(column)
+    ):
         lowered_values = [_quote_literal(candidate.lower()) for candidate in values]
         if len(lowered_values) == 1:
             return f"LOWER({quoted_column}) = {lowered_values[0]}"
@@ -2273,6 +2347,123 @@ def _sample_value_filters(
     return filters
 
 
+def _mentioned_text_columns_for_query(
+    query_tokens: set[str],
+    columns: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    mentioned_columns = []
+    for column in columns:
+        if not _is_categorical_value_column(column):
+            continue
+        column_tokens = _fallback_tokens(column["name"])
+        if any(_fallback_token_variants(token) & column_tokens for token in query_tokens):
+            mentioned_columns.append(column)
+    return mentioned_columns
+
+
+def _matched_column_query_tokens(
+    query_tokens: set[str],
+    column: dict[str, Any],
+) -> set[str]:
+    column_tokens = _fallback_tokens(column["name"])
+    matched_tokens: set[str] = set()
+    for token in query_tokens:
+        matched_tokens.update(_fallback_token_variants(token) & column_tokens)
+    return matched_tokens
+
+
+def _query_schema_value_terms(
+    query: str | None,
+    schema_tokens: set[str],
+) -> list[str]:
+    if not query:
+        return []
+
+    values: list[str] = []
+    for match in _QUERY_VALUE_TOKEN.finditer(query):
+        raw_value = match.group(0).replace("_", " ")
+        value_tokens = _fallback_tokens(raw_value)
+        if not value_tokens:
+            continue
+        if value_tokens & _GENERIC_SCHEMA_INTENT_TOKENS:
+            continue
+        if value_tokens & schema_tokens:
+            continue
+        if all(token.isdigit() for token in value_tokens):
+            continue
+        cleaned_value = _clean_filter_value(raw_value)
+        if cleaned_value and cleaned_value.lower() not in {
+            value.lower() for value in values
+        }:
+            values.append(cleaned_value)
+
+    return values
+
+
+def _schema_driven_user_value_tokens(
+    query: str | None,
+    query_tokens: set[str],
+    schema_details: dict[str, list[dict[str, Any]]],
+) -> set[str]:
+    if not query:
+        return set()
+
+    mentioned_columns: list[dict[str, Any]] = []
+    for columns in schema_details.values():
+        mentioned_columns.extend(_mentioned_text_columns_for_query(query_tokens, columns))
+
+    matched_concepts = [
+        _matched_column_query_tokens(query_tokens, column)
+        for column in mentioned_columns
+    ]
+    matched_concepts = [concepts for concepts in matched_concepts if concepts]
+    if not matched_concepts:
+        logger.info(
+            "Schema-derived user value grounding skipped: no mentioned categorical columns query=%s",
+            query,
+        )
+        return set()
+    shared_concepts = set.intersection(*matched_concepts)
+    if not shared_concepts:
+        logger.info(
+            "Schema-derived user value grounding skipped: ambiguous categorical concepts query=%s columns=%s concepts=%s",
+            query,
+            [column["name"] for column in mentioned_columns],
+            [sorted(concepts) for concepts in matched_concepts],
+        )
+        return set()
+
+    schema_tokens = set().union(*_schema_tokens_by_table(schema_details).values())
+    value_tokens: set[str] = set()
+    value_terms = _query_schema_value_terms(query, schema_tokens)
+    for value in value_terms:
+        value_tokens.update(_fallback_tokens(value))
+    logger.info(
+        "Schema-derived user value grounding query=%s shared_concepts=%s values=%s value_tokens=%s columns=%s",
+        query,
+        sorted(shared_concepts),
+        value_terms,
+        sorted(value_tokens),
+        [column["name"] for column in mentioned_columns],
+    )
+    return value_tokens
+
+
+def _schema_driven_user_value_filters(
+    query: str | None,
+    query_tokens: set[str],
+    table_name: str,
+    columns: list[dict[str, Any]],
+) -> list[tuple[dict[str, Any], list[str]]]:
+    mentioned_columns = _mentioned_text_columns_for_query(query_tokens, columns)
+    if len(mentioned_columns) != 1:
+        return []
+
+    schema_tokens = _schema_tokens_for_table(table_name, columns)
+    values = _query_schema_value_terms(query, schema_tokens)
+    return [(mentioned_columns[0], values)] if values else []
+
+
 def _where_clause(predicates: list[str]) -> str:
     return f"\nWHERE {' AND '.join(predicates)}" if predicates else ""
 
@@ -2291,11 +2482,14 @@ def _count_expression_for_query(
 
 
 def _date_bucket_expressions(date_column: str) -> tuple[str, str]:
-    quoted_date = _quote_identifier(date_column)
     return (
-        f"EXTRACT(YEAR FROM {quoted_date})",
-        f"EXTRACT(MONTH FROM {quoted_date})",
+        _date_part_expression(date_column, "YEAR"),
+        _date_part_expression(date_column, "MONTH"),
     )
+
+
+def _date_part_expression(date_column: str, part: str) -> str:
+    return f"CAST(EXTRACT({part} FROM {_quote_identifier(date_column)}) AS BIGINT)"
 
 
 def generate_simple_analytics_sql(
@@ -2315,7 +2509,11 @@ def generate_simple_analytics_sql(
 
     content_tokens = _query_content_tokens(query_tokens)
     schema_backed_tokens = _schema_derived_query_tokens(query_tokens, schema_details)
-    unsupported_tokens = _unsupported_query_tokens(query_tokens, schema_details)
+    unsupported_tokens = _unsupported_query_tokens(
+        query_tokens,
+        schema_details,
+        query=query,
+    )
     if unsupported_tokens:
         logger.info(
             "Schema-derived SQL fallback skipped unsupported_tokens=%s",
@@ -2350,11 +2548,23 @@ def generate_simple_analytics_sql(
     date_column = _choose_temporal_column(query_tokens, columns)
     order_column = _choose_order_by_column(query, query_tokens, columns)
     sample_filters = _sample_value_filters(query_tokens, columns)
+    sample_filter_column_names = {column["name"] for column, _ in sample_filters}
+    user_value_filters = [
+        (column, values)
+        for column, values in _schema_driven_user_value_filters(
+            query,
+            query_tokens,
+            table_name,
+            columns,
+        )
+        if column["name"] not in sample_filter_column_names
+    ]
+    value_filters = [*sample_filters, *user_value_filters]
     sample_predicates = [
         _filter_predicate_for_values(column, values)
-        for column, values in sample_filters
+        for column, values in value_filters
     ]
-    selected_sample_filter_columns = [column["name"] for column, _ in sample_filters]
+    selected_sample_filter_columns = [column["name"] for column, _ in value_filters]
     month_filter = _fallback_month_filter(query)
     metric_intent = {
         "average": _is_average_metric_intent(query_tokens),
@@ -2471,7 +2681,7 @@ def generate_simple_analytics_sql(
         and "monthly" not in query_tokens
         and (_has_sum_intent(query_tokens) or _has_grouping_intent(query, query_tokens))
     ):
-        year_expr = f"EXTRACT(YEAR FROM {_quote_identifier(date_column)})"
+        year_expr = _date_part_expression(date_column, "YEAR")
         aggregate, alias = _aggregate_for_measure(measure_column["name"])
         return (
             f"SELECT {year_expr} AS {_quote_identifier('year')}, "
@@ -2692,9 +2902,9 @@ class SQLGenPostProcessor:
                         cleaned_generation_result,
                     )
                     grounding_invalid_generation_result = {
-                        "sql": cleaned_generation_result,
-                        "original_sql": cleaned_generation_result,
-                        "type": "SCHEMA_GROUNDING",
+                        "sql": "",
+                        "original_sql": "",
+                        "type": "NO_RELEVANT_SQL",
                         "error": grounding_error,
                         "correlation_id": "",
                         "data_source": data_source,
@@ -3183,6 +3393,9 @@ def _extract_table_references(token_list: TokenList) -> tuple[set[str], dict[str
 
     for token in token_list.tokens:
         if token.is_whitespace or token.ttype in Comment:
+            continue
+
+        if isinstance(token, Function):
             continue
 
         if isinstance(token, TokenList):

@@ -2,6 +2,7 @@ import asyncio
 
 from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
+    _SchemaCatalog,
     generate_simple_analytics_sql,
     normalize_sql_with_schema_identifiers,
     normalize_wren_sql_dialect,
@@ -157,6 +158,79 @@ def test_unsupported_schema_generation_result_has_no_invalid_sql():
     assert "unknown" in invalid["error"] or "segment" in invalid["error"]
 
 
+def test_schema_coverage_accepts_generic_word_form_variants():
+    contexts = [
+        """
+        CREATE TABLE work_update_log (
+            item_id VARCHAR,
+            updated_at TIMESTAMP
+        );
+        """
+    ]
+
+    sql = """
+    SELECT
+      CAST(EXTRACT(YEAR FROM updated_at) AS BIGINT) AS year,
+      CAST(EXTRACT(MONTH FROM updated_at) AS BIGINT) AS month,
+      COUNT(*) AS record_count
+    FROM work_update_log
+    GROUP BY
+      CAST(EXTRACT(YEAR FROM updated_at) AS BIGINT),
+      CAST(EXTRACT(MONTH FROM updated_at) AS BIGINT)
+    """
+
+    error = validate_sql_semantic_coverage(
+        sql,
+        "Show the number of work updates updated each month.",
+        contexts,
+    )
+
+    assert error is None
+    assert unsupported_schema_message(
+        "Show the number of work updates updated each month.",
+        contexts,
+    ) is None
+
+
+def test_schema_fallback_uses_verified_monthly_update_timestamp():
+    contexts = [
+        """
+        CREATE TABLE work_update_log (
+            item_id VARCHAR,
+            updated_at TIMESTAMP
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show the number of work updates updated each month.",
+        contexts,
+    )
+
+    assert sql is not None
+    assert 'FROM "work_update_log"' in sql
+    assert 'CAST(EXTRACT(YEAR FROM "updated_at") AS BIGINT)' in sql
+    assert "COUNT(*)" in sql
+
+
+def test_schema_catalog_ignores_extract_from_column_clause():
+    contexts = [
+        """
+        CREATE TABLE work_update_log (
+            item_id VARCHAR,
+            updated_at TIMESTAMP
+        );
+        """
+    ]
+    sql = """
+    SELECT CAST(EXTRACT(YEAR FROM "updated_at") AS BIGINT) AS "year", COUNT(*) AS "record_count"
+    FROM "work_update_log"
+    GROUP BY CAST(EXTRACT(YEAR FROM "updated_at") AS BIGINT)
+    """
+
+    assert _SchemaCatalog.from_contexts(contexts).validate_sql(sql) is None
+
+
 def test_post_processor_clears_sql_for_unsupported_schema():
     contexts = [
         """
@@ -215,6 +289,30 @@ def test_schema_sample_value_filter_is_grounded_in_metadata():
     assert sql is not None
     assert 'FROM "work_items"' in sql
     assert 'LOWER("State") = \'in progress\'' in sql
+
+
+def test_user_values_are_allowed_for_single_verified_text_column():
+    contexts = [
+        """
+        CREATE TABLE work_update_log (
+            item_id VARCHAR,
+            state_name VARCHAR(255),
+            updated_at TIMESTAMP
+        );
+        """
+    ]
+
+    query = (
+        "Show the distribution of work updates across completed and "
+        "in-progress state names."
+    )
+    sql = generate_simple_analytics_sql(query, contexts)
+
+    assert unsupported_schema_message(query, contexts) is None
+    assert sql is not None
+    assert 'FROM "work_update_log"' in sql
+    assert 'LOWER("state_name") IN (\'completed\', \'in-progress\')' in sql
+    assert 'GROUP BY "state_name"' in sql
 
 
 def test_unverified_filter_value_is_not_invented():
@@ -337,8 +435,8 @@ def test_monthly_count_uses_requested_temporal_column_when_verified():
     )
 
     assert sql is not None
-    assert 'EXTRACT(YEAR FROM "updated_at") AS "year"' in sql
-    assert 'EXTRACT(MONTH FROM "updated_at") AS "month"' in sql
+    assert 'CAST(EXTRACT(YEAR FROM "updated_at") AS BIGINT) AS "year"' in sql
+    assert 'CAST(EXTRACT(MONTH FROM "updated_at") AS BIGINT) AS "month"' in sql
     assert 'COUNT(*) AS "record_count"' in sql
 
 
@@ -405,7 +503,7 @@ def test_sum_by_year_uses_verified_measure_and_temporal_column():
     sql = generate_simple_analytics_sql("Show total amount by year.", contexts)
 
     assert sql is not None
-    assert 'EXTRACT(YEAR FROM "posted_at") AS "year"' in sql
+    assert 'CAST(EXTRACT(YEAR FROM "posted_at") AS BIGINT) AS "year"' in sql
     assert 'SUM("amount_value") AS "total_value"' in sql
 
 

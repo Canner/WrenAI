@@ -578,6 +578,18 @@ def _empty_retrieval_results() -> dict[str, Any]:
     }
 
 
+def _merge_names(*name_lists: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for names in name_lists:
+        for name in names:
+            if name in seen:
+                continue
+            merged.append(name)
+            seen.add(name)
+    return merged
+
+
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
