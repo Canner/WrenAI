@@ -110,6 +110,9 @@ _SQL_RESERVED_WORDS = {
     "COUNT",
     "CREATE",
     "CROSS",
+    "CURRENT_DATE",
+    "CURRENT_TIME",
+    "CURRENT_TIMESTAMP",
     "DELETE",
     "DESC",
     "DISTINCT",
@@ -127,6 +130,7 @@ _SQL_RESERVED_WORDS = {
     "ISNULL",
     "INNER",
     "INSERT",
+    "INTERVAL",
     "INTERSECT",
     "IS",
     "JOIN",
@@ -166,6 +170,9 @@ _SQL_FUNCTION_WORDS = {
     "CONCAT",
     "COUNT",
     "COUNT_BIG",
+    "CURRENT_DATE",
+    "CURRENT_TIME",
+    "CURRENT_TIMESTAMP",
     "DATE_TRUNC",
     "DAY",
     "EXTRACT",
@@ -254,12 +261,40 @@ _MONTH_NAME_TO_NUMBER = {
 def _expand_fallback_token_aliases(tokens: set[str]) -> set[str]:
     aliases = {
         "bu": {"business", "unit"},
+        "acct": {"account"},
+        "accounting": {"account", "ledger"},
+        "accounts": {"account"},
+        "address": {"email", "mail"},
+        "addresses": {"address", "email", "mail"},
+        "approval": {"approver", "reviewer", "signer", "status"},
+        "approvals": {"approval", "approver", "reviewer", "signer", "status"},
+        "approver": {"approval", "reviewer", "signer"},
+        "approvers": {"approval", "approver", "reviewer", "signer"},
+        "balances": {"balance"},
         "cust": {"customer"},
         "customers": {"customer"},
         "critical": {"priority", "severity"},
+        "curr": {"currency"},
         "boards": {"board"},
+        "email": {"address", "mail"},
+        "email1": {"address", "email", "first", "mail", "primary"},
+        "emails": {"address", "email", "mail"},
+        "endbalance": {"balance", "end", "ending"},
+        "ending": {"end"},
+        "gl": {"account", "ledger"},
+        "glaccount": {"account", "gl", "ledger"},
+        "glaccounts": {"account", "gl", "ledger"},
+        "gross": {"amount", "value"},
+        "grossamount": {"amount", "gross", "value"},
         "high": {"priority", "severity"},
         "highest": {"top"},
+        "invoicedate": {"date", "invoice"},
+        "invoicemonth": {"invoice", "month"},
+        "invoicenumber": {"invoice", "number"},
+        "invoiceyear": {"invoice", "year"},
+        "journals": {"journal"},
+        "journalid": {"id", "journal"},
+        "journalnumber": {"journal", "number"},
         "logs": {"log", "record"},
         "log": {"record"},
         "lows": {"low"},
@@ -267,8 +302,12 @@ def _expand_fallback_token_aliases(tokens: set[str]) -> set[str]:
         "models": {"model"},
         "inv": {"invoice"},
         "invoices": {"invoice"},
+        "net": {"amount", "value"},
+        "netamount": {"amount", "net", "value"},
         "ord": {"order"},
         "orders": {"order"},
+        "preparergroup": {"group", "preparer"},
+        "preparers": {"preparer"},
         "qty": {"quantity"},
         "num": {"number"},
         "no": {"number"},
@@ -278,17 +317,32 @@ def _expand_fallback_token_aliases(tokens: set[str]) -> set[str]:
         "priorities": {"priority", "severity"},
         "priority": {"severity"},
         "recent": {"latest"},
+        "recon": {"reconciliation", "reconcile"},
+        "reconciliations": {"reconciliation", "reconcile", "recon"},
+        "reconciliation": {"reconcile", "recon"},
         "records": {"record"},
         "rep": {"representative", "salesperson"},
         "repairs": {"repair"},
+        "reviewer": {"approval", "approver", "signer"},
+        "reviewers": {"approval", "approver", "reviewer", "signer"},
         "salesperson": {"sales", "person"},
         "severity": {"priority"},
+        "signer": {"approval", "approver", "reviewer"},
+        "signers": {"approval", "approver", "reviewer", "signer"},
         "supplier": {"vendor"},
+        "supplierid": {"id", "supplier", "vendor"},
+        "suppliername": {"name", "supplier", "vendor"},
         "suppliers": {"supplier", "vendor"},
+        "taskstatus": {"status", "task"},
+        "tasks": {"status", "task"},
         "tech": {"technician"},
         "technician": {"tech"},
+        "transid": {"id", "trans", "transaction"},
         "vendor": {"supplier"},
         "vendors": {"supplier", "vendor"},
+        "workflow": {"approval", "status"},
+        "workflows": {"approval", "status", "workflow"},
+        "counts": {"count"},
         "failed": {"failure"},
         "failures": {"failure"},
         "defects": {"defect"},
@@ -1454,7 +1508,57 @@ def _expanded_fallback_query_tokens(query: str) -> set[str]:
     if tokens & {"order", "orders"}:
         tokens.update({"amount", "customer", "date", "ord", "order", "value"})
     if tokens & {"invoice", "invoices"}:
-        tokens.update({"amount", "currency", "date", "invoice", "supplier"})
+        tokens.update(
+            {
+                "amount",
+                "currency",
+                "date",
+                "gross",
+                "invoice",
+                "month",
+                "net",
+                "number",
+                "status",
+                "supplier",
+                "task",
+                "year",
+            }
+        )
+    if tokens & {"supplier", "vendor"}:
+        tokens.update({"email", "id", "name", "number", "supplier", "vendor"})
+    if tokens & {"email", "address"}:
+        tokens.update({"address", "email", "first", "mail", "primary"})
+    if tokens & {"reconciliation", "recon", "reconcile"}:
+        tokens.update(
+            {
+                "account",
+                "gl",
+                "group",
+                "period",
+                "preparer",
+                "recon",
+                "reconciliation",
+                "reviewer",
+                "status",
+            }
+        )
+    if tokens & {"journal", "workflow", "approval", "approver", "reviewer", "signer"}:
+        tokens.update(
+            {
+                "approval",
+                "approver",
+                "date",
+                "journal",
+                "reviewer",
+                "signer",
+                "status",
+                "workflow",
+            }
+        )
+    if tokens & {"account", "accounts", "gl", "glaccount", "ledger"}:
+        tokens.update({"account", "balance", "gl", "glaccount", "ledger", "period", "year"})
+    if tokens & {"balance", "balances"}:
+        tokens.update({"amount", "balance", "end", "ending", "value", "year"})
     if tokens & {"batch", "batches"}:
         tokens.update({"batch", "board", "defect", "inspection", "rate", "supplier"})
     if tokens & {"repair", "repairs"}:
@@ -1584,6 +1688,29 @@ def _requested_business_concepts(query_tokens: set[str]) -> list[tuple[str, set[
         ),
         ("status", {"status"}, {"status"}),
         ("order", {"order"}, {"order", "ord"}),
+        ("invoice", {"invoice"}, {"invoice", "inv"}),
+        ("email/address", {"email", "address"}, {"email", "email1", "address", "mail"}),
+        (
+            "account",
+            {"account", "gl", "glaccount", "ledger"},
+            {"account", "gl", "glaccount", "ledger"},
+        ),
+        ("balance", {"balance"}, {"balance", "endbalance"}),
+        (
+            "reconciliation",
+            {"reconciliation", "recon", "reconcile"},
+            {"reconciliation", "recon", "reconcile"},
+        ),
+        (
+            "journal/workflow",
+            {"journal", "workflow"},
+            {"journal", "workflow"},
+        ),
+        (
+            "approval",
+            {"approval", "approver", "reviewer", "signer"},
+            {"approval", "approver", "reviewer", "signer"},
+        ),
     ]
     for label, triggers, schema_tokens in specs:
         if query_tokens & triggers:
@@ -1629,12 +1756,22 @@ def _choose_fallback_table(
     for table_name, columns in schema_details.items():
         table_tokens = _table_business_tokens(table_name, columns)
         column_token_union = set()
+        has_numeric_amount_measure = False
         has_numeric_sales_measure = False
         has_date_capable_column = False
         score = len(query_tokens & table_tokens) * 8
         for column in columns:
             column_tokens = _column_business_tokens(column)
             column_token_union.update(column_tokens)
+            if _is_numeric_type(column["data_type"]) and column_tokens & {
+                "amount",
+                "balance",
+                "cost",
+                "gross",
+                "net",
+                "value",
+            }:
+                has_numeric_amount_measure = True
             if _is_numeric_type(column["data_type"]) and column_tokens & {
                 "amount",
                 "intake",
@@ -1658,9 +1795,12 @@ def _choose_fallback_table(
                     & column_tokens
                     & {
                         "amount",
+                        "balance",
                         "cost",
                         "count",
+                        "gross",
                         "margin",
+                        "net",
                         "quantity",
                         "rate",
                         "score",
@@ -1793,6 +1933,86 @@ def _choose_fallback_table(
             else:
                 score -= 60
 
+        if concept_tokens & {"invoice", "invoices"}:
+            table_and_columns = table_tokens | column_token_union
+            if not table_and_columns & {"invoice", "inv"}:
+                continue
+            score += 80
+            if query_tokens & {"supplier", "vendor"}:
+                if not table_and_columns & {"supplier", "vendor"}:
+                    continue
+                score += 45
+            if concept_tokens & {"status", "task"}:
+                if not table_and_columns & {"status", "state", "task"}:
+                    continue
+                score += 40
+            if concept_tokens & {"gross", "net", "amount", "value", "top", "highest"}:
+                if not has_numeric_amount_measure:
+                    continue
+                score += 55
+            if concept_tokens & {"date", "month", "monthly", "year", "latest", "recent"}:
+                if not has_date_capable_column:
+                    continue
+                score += 35
+
+        if concept_tokens & {"supplier", "vendor"}:
+            table_and_columns = table_tokens | column_token_union
+            if not table_and_columns & {"supplier", "vendor"}:
+                if query_tokens & {"email", "address", "missing", "blank", "empty", "null"}:
+                    continue
+                score -= 45
+            else:
+                score += 35
+
+        if concept_tokens & {"email", "address"}:
+            if not column_token_union & {"email", "email1", "address", "mail"}:
+                continue
+            score += 65
+
+        if concept_tokens & {"reconciliation", "recon", "reconcile"}:
+            table_and_columns = table_tokens | column_token_union
+            if not table_and_columns & {"reconciliation", "recon", "reconcile"}:
+                continue
+            score += 90
+            if query_tokens & {"status"}:
+                if not table_and_columns & {"status", "state"}:
+                    continue
+                score += 45
+            if query_tokens & {"preparer", "group"}:
+                if not table_and_columns & {"preparer", "group"}:
+                    continue
+                score += 45
+
+        if concept_tokens & {"journal", "workflow"}:
+            table_and_columns = table_tokens | column_token_union
+            if not table_and_columns & {"journal", "workflow"}:
+                continue
+            if "journal" in concept_tokens and "journal" not in table_and_columns:
+                continue
+            if "workflow" in concept_tokens and "workflow" not in table_and_columns:
+                continue
+            score += 85
+            if concept_tokens & {"approval", "approver", "reviewer", "signer"}:
+                if not table_and_columns & {"approval", "approver", "reviewer", "signer"}:
+                    continue
+                score += 45
+            if query_tokens & {"latest", "recent"}:
+                if not has_date_capable_column:
+                    continue
+                score += 35
+
+        if concept_tokens & {"account", "gl", "glaccount", "ledger"}:
+            table_and_columns = table_tokens | column_token_union
+            if not table_and_columns & {"account", "gl", "glaccount", "ledger"}:
+                continue
+            score += 45
+            if query_tokens & {"balance", "end", "ending"}:
+                if not table_and_columns & {"balance", "endbalance"}:
+                    continue
+                if not has_numeric_amount_measure:
+                    continue
+                score += 70
+
         if query_tokens & {"batch", "batches"} and {"defect", "rate"}.issubset(
             column_token_union
         ):
@@ -1911,11 +2131,22 @@ def _choose_dimension_column(
     query_tokens: set[str],
     columns: list[dict[str, str]],
 ) -> str | None:
+    columns = _choose_dimension_columns(query_tokens, columns, max_columns=1)
+    return columns[0] if columns else None
+
+
+def _choose_dimension_columns(
+    query_tokens: set[str],
+    columns: list[dict[str, str]],
+    max_columns: int = 3,
+) -> list[str]:
     dimension_specs = [
         ({"board", "model"}, {"board", "model"}),
         ({"business", "unit"}, {"business", "unit", "bu", "division", "company"}),
         ({"customer"}, {"customer", "cust", "name"}),
         ({"supplier"}, {"supplier", "vendor", "name"}),
+        ({"email", "address"}, {"email", "email1", "address", "mail"}),
+        ({"invoice"}, {"invoice", "inv", "number", "no", "id"}),
         ({"product"}, {"product", "prod", "item", "material", "name"}),
         ({"salesperson", "representative"}, {"salesperson", "sales", "person", "rep"}),
         ({"technician", "tech"}, {"technician", "tech"}),
@@ -1923,17 +2154,24 @@ def _choose_dimension_column(
         ({"material"}, {"material", "part", "item"}),
         ({"priority", "severity"}, {"priority", "severity", "urgency", "rank"}),
         ({"status"}, {"status"}),
+        ({"preparer"}, {"preparer", "group"}),
+        ({"reviewer"}, {"reviewer", "group"}),
+        ({"approval", "approver", "signer"}, {"approval", "approver", "reviewer", "signer"}),
+        ({"account", "gl", "glaccount", "ledger"}, {"account", "gl", "glaccount", "ledger"}),
         ({"currency"}, {"currency", "curr"}),
         ({"country"}, {"country"}),
         ({"order"}, {"order", "ord", "number"}),
         ({"batch"}, {"batch", "id"}),
     ]
+    selected: list[str] = []
     for trigger_tokens, column_tokens in dimension_specs:
         if query_tokens & trigger_tokens:
             column = _choose_ranked_column_by_tokens(columns, column_tokens)
-            if column:
-                return column["name"]
-    return None
+            if column and column["name"] not in selected:
+                selected.append(column["name"])
+            if len(selected) >= max_columns:
+                break
+    return selected
 
 
 def _choose_missing_value_column(
@@ -1941,6 +2179,7 @@ def _choose_missing_value_column(
     columns: list[dict[str, str]],
 ) -> dict[str, str] | None:
     missing_specs = [
+        ({"email", "address"}, {"email", "email1", "address", "mail", "first", "primary"}),
         ({"customer"}, {"customer", "cust", "number", "id", "no"}),
         ({"order"}, {"order", "ord", "number", "id", "no"}),
         ({"supplier"}, {"supplier", "vendor", "number", "id", "no"}),
@@ -1962,7 +2201,11 @@ def _choose_count_subject_column(
 ) -> dict[str, str] | None:
     subject_specs = [
         ({"order"}, {"order", "ord", "number", "id", "no"}),
+        ({"invoice"}, {"invoice", "inv", "number", "id", "no"}),
         ({"customer"}, {"customer", "cust", "number", "id", "no"}),
+        ({"reconciliation", "recon"}, {"reconciliation", "recon", "trans", "id"}),
+        ({"journal"}, {"journal", "entry", "number", "id"}),
+        ({"account", "gl", "glaccount"}, {"account", "gl", "glaccount", "id"}),
         (
             {"failure"},
             {"failure", "failed", "defect", "code", "line", "status", "sys", "type"},
@@ -2027,6 +2270,43 @@ def _select_listing_columns(
         if query_tokens & {"order"}:
             score += len(tokens & {"order", "ord", "number", "customer", "cust", "item", "product"}) * 18
             score += len(tokens & {"date", "day", "month", "year"}) * 8
+        if query_tokens & {"invoice"}:
+            score += (
+                len(
+                    tokens
+                    & {
+                        "amount",
+                        "currency",
+                        "date",
+                        "gross",
+                        "invoice",
+                        "net",
+                        "number",
+                        "status",
+                        "supplier",
+                        "task",
+                    }
+                )
+                * 18
+            )
+        if query_tokens & {"supplier", "vendor", "email", "address"}:
+            score += (
+                len(
+                    tokens
+                    & {
+                        "address",
+                        "email",
+                        "email1",
+                        "id",
+                        "mail",
+                        "name",
+                        "number",
+                        "supplier",
+                        "vendor",
+                    }
+                )
+                * 18
+            )
         if query_tokens & {"customer"}:
             score += len(tokens & {"customer", "cust", "name", "number", "id"}) * 18
         if query_tokens & {"product", "material"}:
@@ -2037,6 +2317,49 @@ def _select_listing_columns(
             score += (
                 len(tokens & {"board", "code", "date", "failure", "id", "priority", "status"})
                 * 14
+            )
+        if query_tokens & {"journal", "workflow", "approval", "approver", "reviewer", "signer"}:
+            score += (
+                len(
+                    tokens
+                    & {
+                        "approval",
+                        "approver",
+                        "date",
+                        "doc",
+                        "entry",
+                        "journal",
+                        "number",
+                        "reviewer",
+                        "signer",
+                        "status",
+                        "workflow",
+                    }
+                )
+                * 16
+            )
+        if query_tokens & {"reconciliation", "recon", "reconcile"}:
+            score += (
+                len(
+                    tokens
+                    & {
+                        "account",
+                        "gl",
+                        "glaccount",
+                        "group",
+                        "period",
+                        "preparer",
+                        "recon",
+                        "reviewer",
+                        "status",
+                    }
+                )
+                * 16
+            )
+        if query_tokens & {"account", "gl", "glaccount", "balance"}:
+            score += (
+                len(tokens & {"account", "balance", "endbalance", "gl", "glaccount", "month", "year"})
+                * 16
             )
         if tokens & {"repair", "failure", "failed", "defect"} and not query_tokens & {
             "repair",
@@ -2076,8 +2399,69 @@ def _fallback_month_filter(query: str) -> tuple[int, int] | None:
     return None
 
 
+def _grouping_phrase_tokens(query: str) -> set[str]:
+    match = re.search(
+        r"(?is)\b(?:grouped\s+by|group\s+by|by)\s+(?P<value>[A-Za-z0-9_ /-]+)",
+        query,
+    )
+    if not match:
+        return set()
+    return _fallback_tokens(match.group("value"))
+
+
+def _current_year_where_clause(
+    date_column: str | None,
+    columns: list[dict[str, str]],
+    query_tokens: set[str],
+) -> str:
+    if not date_column or not {"this", "year"}.issubset(query_tokens):
+        return ""
+
+    column = next((column for column in columns if column["name"] == date_column), None)
+    if not column:
+        return ""
+
+    current_year = datetime.now(timezone.utc).year
+    quoted_column = _quote_identifier(date_column)
+    if _is_numeric_type(column["data_type"]) or _fallback_tokens(date_column) & {"year"}:
+        return f"\nWHERE {quoted_column} = {current_year}"
+    if _is_date_type(column["data_type"]) or _fallback_tokens(date_column) & {
+        "date",
+        "day",
+        "month",
+        "time",
+    }:
+        return f"\nWHERE EXTRACT(YEAR FROM {quoted_column}) = {current_year}"
+    return ""
+
+
 def _quote_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
+
+
+def _value_match_predicate(
+    column: dict[str, str] | str,
+    value: str,
+    alternate_values: list[str] | None = None,
+) -> str:
+    column_name = column["name"] if isinstance(column, dict) else column
+    quoted_column = _quote_identifier(column_name)
+    values = []
+    for candidate in [value] + (alternate_values or []):
+        cleaned = _clean_filter_value(candidate)
+        if cleaned and cleaned.lower() not in {item.lower() for item in values}:
+            values.append(cleaned)
+
+    if not values:
+        return f"{quoted_column} IS NOT NULL"
+
+    if isinstance(column, dict) and _is_text_type(column["data_type"]):
+        lowered_values = [_quote_literal(candidate.lower()) for candidate in values]
+        if len(lowered_values) == 1:
+            return f"LOWER({quoted_column}) = {lowered_values[0]}"
+        return f"LOWER({quoted_column}) IN ({', '.join(lowered_values)})"
+
+    return f"{quoted_column} = {_quote_literal(values[0])}"
 
 
 def _clean_filter_value(value: str | None) -> str | None:
@@ -2092,6 +2476,7 @@ def _extract_failure_type_filter_value(query: str) -> str | None:
         (
             r"(?is)\bwith\s+"
             r"(?P<value>[A-Za-z0-9][A-Za-z0-9 _./+\-]{0,80}?)"
+            r"(?:\s+(?:listed|marked|recorded|shown|set))?"
             r"\s+as\s+(?:the\s+)?(?:failure|defect)\s+"
             r"(?:type|code|category)\b"
         ),
@@ -2110,15 +2495,28 @@ def _extract_failure_type_filter_value(query: str) -> str | None:
     return None
 
 
-def _extract_status_filter_value(query: str) -> str | None:
+def _extract_status_filter_values(query: str) -> list[str]:
+    values: list[str] = []
+
+    def add(value: str):
+        if value not in values:
+            values.append(value)
+
     if re.search(r"(?i)\bin-progress\b", query):
-        return "in-progress"
+        add("in-progress")
+        add("in progress")
     if re.search(r"(?i)\bin\s+progress\b", query):
-        return "in progress"
+        add("in progress")
+        add("in-progress")
     for status in ("completed", "pending", "escalated", "open", "closed"):
         if re.search(rf"(?i)\b{re.escape(status)}\b", query):
-            return status
-    return None
+            add(status)
+    return values
+
+
+def _extract_status_filter_value(query: str) -> str | None:
+    values = _extract_status_filter_values(query)
+    return values[0] if values else None
 
 
 def _extract_priority_filter_value(query: str) -> str | None:
@@ -2208,16 +2606,32 @@ def generate_simple_analytics_sql(
     if not query_tokens & {
         "batch",
         "batches",
+        "account",
+        "accounts",
+        "address",
+        "approval",
+        "approvals",
+        "approver",
+        "balance",
+        "balances",
         "board",
         "business",
         "count",
         "customer",
         "defect",
+        "email",
         "failure",
         "failures",
+        "gl",
+        "glaccount",
+        "gross",
         "highest",
+        "invoice",
+        "invoices",
+        "journal",
         "july",
         "latest",
+        "ledger",
         "log",
         "logs",
         "location",
@@ -2226,13 +2640,19 @@ def generate_simple_analytics_sql(
         "model",
         "monthly",
         "most",
+        "net",
         "number",
         "order",
         "orders",
+        "preparer",
         "priority",
         "product",
         "rate",
         "recent",
+        "recon",
+        "reconciliation",
+        "reconciliations",
+        "reviewer",
         "record",
         "records",
         "repair",
@@ -2241,8 +2661,11 @@ def generate_simple_analytics_sql(
         "sale",
         "sales",
         "severity",
+        "signer",
         "supplier",
         "status",
+        "task",
+        "tasks",
         "tech",
         "technician",
         "top",
@@ -2251,6 +2674,8 @@ def generate_simple_analytics_sql(
         "type",
         "unit",
         "units",
+        "workflow",
+        "workflows",
         "year",
     }:
         return None
@@ -2307,8 +2732,7 @@ def generate_simple_analytics_sql(
             return (
                 f"SELECT COUNT(*) AS {_quote_identifier('record_count')}\n"
                 f"FROM {quoted_table}\n"
-                f"WHERE {_quote_identifier(failure_type_filter_column['name'])} = "
-                f"{_quote_literal(failure_type_filter_value)}"
+                f"WHERE {_value_match_predicate(failure_type_filter_column, failure_type_filter_value)}"
             )
 
     material_column = _choose_column_by_tokens(columns, {"material"})
@@ -2323,7 +2747,7 @@ def generate_simple_analytics_sql(
             f"FROM {quoted_table}"
         )
 
-    status_column = _choose_column_by_tokens(columns, {"status"})
+    status_column = _choose_ranked_column_by_tokens(columns, {"status"})
     repair_filter_intent = raw_query_tokens & {
         "closed",
         "completed",
@@ -2343,25 +2767,29 @@ def generate_simple_analytics_sql(
     }
     if query_tokens & {"repair", "repairs"} and repair_filter_intent:
         predicates = []
-        status_filter_value = _extract_status_filter_value(query)
-        if status_column and status_filter_value:
+        status_filter_values = _extract_status_filter_values(query)
+        if status_column and status_filter_values:
             predicates.append(
-                f"{_quote_identifier(status_column)} = {_quote_literal(status_filter_value)}"
+                _value_match_predicate(
+                    status_column,
+                    status_filter_values[0],
+                    status_filter_values[1:],
+                )
             )
         priority_filter_value = _extract_priority_filter_value(query)
         if priority_filter_value:
             priority_column = _choose_priority_column(columns)
             if priority_column:
-                predicates.append(
-                    f"{_quote_identifier(priority_column['name'])} = "
-                    f"{_quote_literal(priority_filter_value)}"
-                )
+                predicates.append(_value_match_predicate(priority_column, priority_filter_value))
         if predicates:
             return f"SELECT *\nFROM {quoted_table}\nWHERE {' AND '.join(predicates)}"
 
+    date_column_tokens = {"date", "day", "month", "time", "year"}
+    if raw_query_tokens & {"year"} and not raw_query_tokens & {"month", "monthly"}:
+        date_column_tokens = {"date", "day", "time", "year"}
     date_column = _choose_column_by_tokens(
         columns,
-        {"date", "day", "month", "time", "year"},
+        date_column_tokens,
         date=True,
     )
 
@@ -2437,10 +2865,51 @@ def generate_simple_analytics_sql(
             {"amount", "intake", "sales", "value"},
             numeric=True,
         )
+    if not measure_column and query_tokens & {"invoice", "invoices"} and raw_query_tokens & {
+        "amount",
+        "bottom",
+        "gross",
+        "highest",
+        "lowest",
+        "net",
+        "top",
+        "total",
+        "value",
+    }:
+        if query_tokens & {"gross"}:
+            measure_column = _choose_column_by_tokens(
+                columns,
+                {"gross", "amount", "value"},
+                numeric=True,
+            )
+        elif query_tokens & {"net"}:
+            measure_column = _choose_column_by_tokens(
+                columns,
+                {"net", "amount", "value"},
+                numeric=True,
+            )
+        if not measure_column:
+            measure_column = _choose_column_by_tokens(
+                columns,
+                {"amount", "gross", "net", "value"},
+                numeric=True,
+            )
     if not measure_column and query_tokens & {"revenue", "sale", "sales"}:
         measure_column = _choose_column_by_tokens(
             columns,
             {"amount", "intake", "revenue", "sales", "value"},
+            numeric=True,
+        )
+    if not measure_column and query_tokens & {"balance", "balances"}:
+        measure_column = _choose_column_by_tokens(
+            columns,
+            {"balance", "end", "ending", "value"},
+            numeric=True,
+        )
+    if not measure_column and query_tokens & {"amount", "gross", "net", "value"}:
+        measure_column = _choose_column_by_tokens(
+            columns,
+            {"amount", "gross", "net", "value"},
             numeric=True,
         )
     if (
@@ -2450,7 +2919,19 @@ def generate_simple_analytics_sql(
     ):
         measure_column = _choose_column_by_tokens(
             columns,
-            {"amount", "cost", "count", "margin", "quantity", "rate", "score", "value"},
+            {
+                "amount",
+                "balance",
+                "cost",
+                "count",
+                "gross",
+                "margin",
+                "net",
+                "quantity",
+                "rate",
+                "score",
+                "value",
+            },
             numeric=True,
         )
 
@@ -2488,17 +2969,82 @@ def generate_simple_analytics_sql(
                 f"WHERE {_missing_value_predicate(missing_column)}{limit_clause}"
             )
 
+    explicit_grouping_intent = bool(raw_query_tokens & {"group", "grouped"}) or bool(
+        re.search(r"(?i)\bby\s+[A-Za-z0-9_ -]+\b", query)
+    )
+    explicit_measure_intent = bool(
+        raw_query_tokens
+        & {
+            "amount",
+            "balance",
+            "gross",
+            "margin",
+            "net",
+            "rate",
+            "revenue",
+            "sale",
+            "sales",
+            "score",
+            "value",
+        }
+    )
+    if (
+        explicit_grouping_intent
+        and not explicit_measure_intent
+        and not (
+            raw_query_tokens & {"month", "monthly"}
+            and raw_query_tokens & {"count", "number"}
+        )
+    ):
+        grouping_tokens = _grouping_phrase_tokens(query) or raw_query_tokens
+        dimension_columns = _choose_dimension_columns(grouping_tokens, columns)
+        if dimension_columns:
+            subject_column = _choose_count_subject_column(raw_query_tokens, columns)
+            count_expression = "COUNT(*)"
+            where_clause = ""
+            if subject_column:
+                count_expression = f"COUNT({_quote_identifier(subject_column['name'])})"
+                where_clause = f"\nWHERE {_non_missing_value_predicate(subject_column)}"
+            quoted_dimensions = _quote_joined(dimension_columns)
+            limit_clause = f"\nLIMIT {limit}" if limit else ""
+            return (
+                f"SELECT {quoted_dimensions}, {count_expression} AS {_quote_identifier('record_count')}\n"
+                f"FROM {quoted_table}{where_clause}\nGROUP BY {quoted_dimensions}\n"
+                f"ORDER BY {_quote_identifier('record_count')} DESC{limit_clause}"
+            )
+
+    if date_column and raw_query_tokens & {"month", "monthly"} and raw_query_tokens & {
+        "count",
+        "number",
+    }:
+        year_expr = f"EXTRACT(YEAR FROM {_quote_identifier(date_column)})"
+        month_expr = f"EXTRACT(MONTH FROM {_quote_identifier(date_column)})"
+        subject_column = _choose_count_subject_column(raw_query_tokens | query_tokens, columns)
+        count_expression = "COUNT(*)"
+        where_clause = ""
+        if subject_column:
+            count_expression = f"COUNT({_quote_identifier(subject_column['name'])})"
+            where_clause = f"\nWHERE {_non_missing_value_predicate(subject_column)}"
+        return (
+            f"SELECT {year_expr} AS {_quote_identifier('year')}, "
+            f"{month_expr} AS {_quote_identifier('month')}, "
+            f"{count_expression} AS {_quote_identifier('record_count')}\n"
+            f"FROM {quoted_table}{where_clause}\n"
+            f"GROUP BY {year_expr}, {month_expr}\n"
+            f"ORDER BY {year_expr}, {month_expr}"
+        )
+
     implied_count_by_dimension = "failure" in query_tokens and bool(
         raw_query_tokens & {"location", "material", "technician", "tech"}
         or (board_model_intent and not rate_metric_intent)
     )
     if (
-        query_tokens & {"count", "number"}
+        raw_query_tokens & {"count", "number"}
         or failure_count_intent
         or implied_count_by_dimension
     ):
-        dimension_column = _choose_dimension_column(raw_query_tokens, columns)
-        if dimension_column:
+        dimension_columns = _choose_dimension_columns(raw_query_tokens, columns)
+        if dimension_columns:
             subject_column = _choose_count_subject_column(raw_query_tokens, columns)
             count_expression = "COUNT(*)"
             where_clause = ""
@@ -2506,14 +3052,25 @@ def generate_simple_analytics_sql(
                 count_expression = (
                     f"COUNT(DISTINCT {_quote_identifier(subject_column['name'])})"
                 )
-            elif subject_column and raw_query_tokens & {"failure", "repair", "batch"}:
+            elif subject_column and raw_query_tokens & {
+                "account",
+                "batch",
+                "failure",
+                "gl",
+                "glaccount",
+                "invoice",
+                "journal",
+                "recon",
+                "reconciliation",
+                "repair",
+            }:
                 count_expression = f"COUNT({_quote_identifier(subject_column['name'])})"
                 where_clause = f"\nWHERE {_non_missing_value_predicate(subject_column)}"
-            quoted_dimension = _quote_identifier(dimension_column)
+            quoted_dimensions = _quote_joined(dimension_columns)
             limit_clause = f"\nLIMIT {limit}" if limit else ""
             return (
-                f"SELECT {quoted_dimension}, {count_expression} AS {_quote_identifier('record_count')}\n"
-                f"FROM {quoted_table}{where_clause}\nGROUP BY {quoted_dimension}\n"
+                f"SELECT {quoted_dimensions}, {count_expression} AS {_quote_identifier('record_count')}\n"
+                f"FROM {quoted_table}{where_clause}\nGROUP BY {quoted_dimensions}\n"
                 f"ORDER BY {_quote_identifier('record_count')} DESC{limit_clause}"
             )
 
@@ -2527,6 +3084,25 @@ def generate_simple_analytics_sql(
         return (
             f"SELECT {quoted_dimension}, {aggregate_expr} AS {_quote_identifier(alias)}\n"
             f"FROM {quoted_table}\nGROUP BY {quoted_dimension}\n"
+            f"ORDER BY {_quote_identifier(alias)} {direction}{limit_clause}"
+        )
+
+    if measure_column and dimension_column and raw_query_tokens & {
+        "bottom",
+        "highest",
+        "lowest",
+        "top",
+    }:
+        aggregate, alias = _aggregate_for_measure(measure_column)
+        quoted_dimension = _quote_identifier(dimension_column)
+        aggregate_expr = f"{aggregate}({_quote_identifier(measure_column)})"
+        direction = "ASC" if raw_query_tokens & {"bottom", "lowest"} else "DESC"
+        limit_clause = f"\nLIMIT {limit}" if limit else ""
+        where_clause = _current_year_where_clause(date_column, columns, raw_query_tokens)
+        return (
+            f"SELECT {quoted_dimension}, {aggregate_expr} AS {_quote_identifier(alias)}\n"
+            f"FROM {quoted_table}{where_clause}\n"
+            f"GROUP BY {quoted_dimension}\n"
             f"ORDER BY {_quote_identifier(alias)} {direction}{limit_clause}"
         )
 
@@ -2580,8 +3156,8 @@ def generate_simple_analytics_sql(
     if (
         measure_column
         and date_column
-        and query_tokens & {"year"}
-        and not query_tokens & {"month", "monthly"}
+        and raw_query_tokens & {"year"}
+        and not raw_query_tokens & {"month", "monthly"}
     ):
         date_expr = f"EXTRACT(YEAR FROM {_quote_identifier(date_column)})"
         return (
@@ -2593,7 +3169,7 @@ def generate_simple_analytics_sql(
     if (
         measure_column
         and date_column
-        and query_tokens & {"month", "monthly", "trend", "trends"}
+        and raw_query_tokens & {"month", "monthly", "trend", "trends"}
     ):
         year_expr = f"EXTRACT(YEAR FROM {_quote_identifier(date_column)})"
         month_expr = f"EXTRACT(MONTH FROM {_quote_identifier(date_column)})"

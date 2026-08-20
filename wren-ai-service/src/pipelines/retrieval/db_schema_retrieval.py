@@ -911,7 +911,25 @@ def _augment_retrieval_query(query: str) -> str:
             "order ord number date customer product business unit division company"
         ),
         ("invoice", "invoices"): (
-            "invoice supplier customer currency amount date number"
+            "invoice supplier customer currency gross net amount date month year number status task"
+        ),
+        ("supplier", "suppliers", "vendor", "vendors"): (
+            "supplier vendor name number id email address invoice amount"
+        ),
+        ("email", "emails", "address", "addresses"): (
+            "email address mail first primary supplier contact"
+        ),
+        ("reconciliation", "reconciliations", "recon", "reconcile"): (
+            "reconciliation recon account gl status preparer reviewer group period"
+        ),
+        ("journal", "journals", "workflow", "approval", "approvals"): (
+            "journal workflow approval approver reviewer signer status date posting entry document"
+        ),
+        ("account", "accounts", "gl", "ledger"): (
+            "account gl glaccount ledger balance endbalance ending period year month"
+        ),
+        ("balance", "balances", "gross", "net"): (
+            "balance endbalance gross net amount value year month"
         ),
         ("customer", "customers"): (
             "customer account client number name identifier"

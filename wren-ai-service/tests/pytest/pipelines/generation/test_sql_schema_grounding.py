@@ -244,8 +244,10 @@ def test_repair_fallback_filters_critical_priority_and_in_progress_status():
 
     assert sql is not None
     assert 'FROM "dbo_repair_logs"' in sql
-    assert "\"status\" = 'in progress'" in sql
-    assert "\"priority\" = 'critical'" in sql
+    assert 'LOWER("status") IN' in sql
+    assert "'in progress'" in sql
+    assert "'in-progress'" in sql
+    assert 'LOWER("priority") = \'critical\'' in sql
 
 
 def test_repair_fallback_preserves_hyphenated_in_progress_status_value():
@@ -267,8 +269,10 @@ def test_repair_fallback_preserves_hyphenated_in_progress_status_value():
 
     assert sql is not None
     assert 'FROM "dbo_repair_logs"' in sql
-    assert "\"status\" = 'in-progress'" in sql
-    assert "\"priority\" = 'critical'" in sql
+    assert 'LOWER("status") IN' in sql
+    assert "'in-progress'" in sql
+    assert "'in progress'" in sql
+    assert 'LOWER("priority") = \'critical\'' in sql
 
 
 def test_repair_logs_highest_priority_orders_by_verified_priority_column():
@@ -315,7 +319,7 @@ def test_critical_priority_repairs_filter_verified_priority_column():
 
     assert sql is not None
     assert 'FROM "dbo_repair_logs"' in sql
-    assert "\"priority\" = 'critical'" in sql
+    assert 'LOWER("priority") = \'critical\'' in sql
 
 
 def test_repairs_by_status_counts_verified_repair_rows():
@@ -466,7 +470,7 @@ def test_failure_type_value_filter_uses_verified_failure_type_column():
     assert sql is not None
     assert 'FROM "dbo_report_failures"' in sql
     assert 'COUNT(*) AS "record_count"' in sql
-    assert "\"failure_type\" = 'JTAG'" in sql
+    assert "LOWER(\"failure_type\") = 'jtag'" in sql
 
 
 def test_board_models_most_failures_counts_failure_records_not_defect_rate():
@@ -577,3 +581,150 @@ def test_repairs_by_technician_requires_one_schema_object_covering_both_concepts
     assert message is not None
     assert "repair" in message
     assert "technician" in message
+
+
+def test_invoice_status_count_uses_verified_task_status_column():
+    contexts = [
+        """
+        CREATE TABLE dbo_PBI_View_Unrecorded_Liabilities_Header (
+            invoicenumber VARCHAR,
+            taskstatus VARCHAR,
+            invoicedate TIMESTAMP,
+            grossamount DECIMAL,
+            suppliername VARCHAR
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql("Show invoices grouped by task status.", contexts)
+
+    assert sql is not None
+    assert 'FROM "dbo_PBI_View_Unrecorded_Liabilities_Header"' in sql
+    assert 'SELECT "taskstatus", COUNT("invoicenumber") AS "record_count"' in sql
+    assert 'GROUP BY "taskstatus"' in sql
+
+
+def test_invoice_month_count_groups_by_verified_invoice_date():
+    contexts = [
+        """
+        CREATE TABLE dbo_PBI_View_Unrecorded_Liabilities_Header (
+            invoicenumber VARCHAR,
+            invoicedate TIMESTAMP,
+            grossamount DECIMAL,
+            suppliername VARCHAR
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql("Show invoice counts by invoice month.", contexts)
+
+    assert sql is not None
+    assert 'EXTRACT(YEAR FROM "invoicedate") AS "year"' in sql
+    assert 'EXTRACT(MONTH FROM "invoicedate") AS "month"' in sql
+    assert 'COUNT("invoicenumber") AS "record_count"' in sql
+
+
+def test_top_suppliers_by_gross_amount_uses_verified_amount_measure():
+    contexts = [
+        """
+        CREATE TABLE dbo_PBI_View_Unrecorded_Liabilities_Header (
+            suppliername VARCHAR,
+            invoicenumber VARCHAR,
+            grossamount DECIMAL
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql("List the top suppliers by total gross amount.", contexts)
+
+    assert sql is not None
+    assert 'SELECT "suppliername", SUM("grossamount") AS "total_value"' in sql
+    assert 'ORDER BY "total_value" DESC' in sql
+
+
+def test_supplier_email_missing_filter_uses_verified_email_column():
+    contexts = [
+        """
+        CREATE TABLE dbo_SupplierMaster_Email (
+            supplierid VARCHAR,
+            suppliername VARCHAR,
+            email1 VARCHAR,
+            email2 VARCHAR
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Which supplier email records are missing their first email address?",
+        contexts,
+    )
+
+    assert sql is not None
+    assert 'FROM "dbo_SupplierMaster_Email"' in sql
+    assert 'WHERE ("email1" IS NULL OR "email1" = \'\')' in sql
+
+
+def test_reconciliation_count_by_status_and_preparer_group_uses_two_dimensions():
+    contexts = [
+        """
+        CREATE TABLE dbo_PBI_View_Recon_Status (
+            transid VARCHAR,
+            status VARCHAR,
+            preparergroup VARCHAR,
+            glaccount VARCHAR
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Count reconciliations by status and preparer group.",
+        contexts,
+    )
+
+    assert sql is not None
+    assert 'FROM "dbo_PBI_View_Recon_Status"' in sql
+    assert 'SELECT "status", "preparergroup", COUNT("transid") AS "record_count"' in sql
+    assert 'GROUP BY "status", "preparergroup"' in sql
+
+
+def test_gl_accounts_highest_balance_uses_verified_balance_measure():
+    contexts = [
+        """
+        CREATE TABLE dbo_View_Global_Exposure_SAP (
+            glaccount VARCHAR,
+            year INTEGER,
+            month INTEGER,
+            endbalance DECIMAL
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show GL accounts with the highest ending balance this year.",
+        contexts,
+    )
+
+    assert sql is not None
+    assert 'FROM "dbo_View_Global_Exposure_SAP"' in sql
+    assert 'SELECT "glaccount", SUM("endbalance") AS "total_value"' in sql
+    assert 'WHERE "year" = ' in sql
+    assert 'ORDER BY "total_value" DESC' in sql
+
+
+def test_recent_journal_workflow_uses_verified_signer_date():
+    contexts = [
+        """
+        CREATE TABLE dbo_Journals_Workflow (
+            journalid VARCHAR,
+            signer VARCHAR,
+            signer_status VARCHAR,
+            signer_date TIMESTAMP
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql("List recent journal workflow approvals.", contexts)
+
+    assert sql is not None
+    assert 'FROM "dbo_Journals_Workflow"' in sql
+    assert 'ORDER BY "signer_date" DESC' in sql
