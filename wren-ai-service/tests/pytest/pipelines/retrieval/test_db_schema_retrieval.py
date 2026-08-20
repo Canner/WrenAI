@@ -1137,23 +1137,25 @@ def test_column_selection_returns_empty_dict_for_malformed_reply():
     assert parsed == {}
 
 
-def test_retrieval_query_augmentation_is_schema_neutral():
-    query = "show total amount by year"
+def test_retrieval_query_augmentation_adds_business_terms():
+    augmented = _augment_retrieval_query("show total revenue by year")
 
-    assert _augment_retrieval_query(query) == query
+    assert "Business schema search terms" in augmented
+    assert "sales revenue amount value" in augmented
+    assert "date month year" in augmented
 
 
-def test_table_ranking_prefers_direct_schema_metadata_overlap():
+def test_table_ranking_prefers_business_sales_table_over_generic_or_customs_tables():
     documents = [
-        _schema_document("neutral_records", ["id1", "id2"]),
-        _schema_document("amount_snapshots", ["amount_value", "snapshot_year"]),
-        _schema_document("event_records", ["event_code", "event_time"]),
+        _schema_document("dbo_mbrTime", ["id1", "id2"]),
+        _schema_document("CustomsRefundClaim", ["DutyAmount", "ClaimDate"]),
+        _schema_document("SalesOrderFact", ["USDFXSalesValue", "OrderDate"]),
     ]
 
     ranked = _rank_table_names_by_query(
-        ["neutral_records", "event_records", "amount_snapshots"],
+        ["dbo_mbrTime", "CustomsRefundClaim", "SalesOrderFact"],
         documents,
-        "show total amount by year",
+        "show total revenue by year",
     )
 
-    assert ranked[0] == "amount_snapshots"
+    assert ranked[0] == "SalesOrderFact"

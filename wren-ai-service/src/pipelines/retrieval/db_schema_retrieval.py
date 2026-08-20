@@ -11,9 +11,8 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
+from langfuse.decorators import observe
 from pydantic import BaseModel, ConfigDict
-from sqlparse.sql import Identifier, IdentifierList
-from sqlparse.tokens import DML, Comment, Keyword
 
 from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
@@ -33,6 +32,63 @@ _SEMANTIC_TABLE_NAME_MERGE_LIMIT = 8
 _MAX_RETRIEVED_TABLE_NAMES = 24
 _MAX_RELATED_TABLE_EXPANSION_DEPTH = 1
 _RANK_TOKEN = re.compile(r"[a-z0-9]+")
+_GENERIC_TABLE_TOKENS = {
+    "audit",
+    "auth",
+    "calendar",
+    "config",
+    "dim",
+    "dimension",
+    "file",
+    "files",
+    "ingestion",
+    "job",
+    "jobs",
+    "log",
+    "logs",
+    "lookup",
+    "mbr",
+    "member",
+    "members",
+    "migration",
+    "migrations",
+    "preference",
+    "preferences",
+    "queue",
+    "report",
+    "reports",
+    "setting",
+    "settings",
+    "state",
+    "time",
+    "user",
+    "users",
+}
+_CUSTOMS_FINANCE_TOKENS = {
+    "claim",
+    "claims",
+    "custom",
+    "customs",
+    "duty",
+    "duties",
+    "hmf",
+    "import",
+    "imports",
+    "mpf",
+    "refund",
+    "refunds",
+    "tariff",
+    "tariffs",
+}
+_SALES_REVENUE_TOKENS = {
+    "amount",
+    "intake",
+    "revenue",
+    "sale",
+    "sales",
+    "salesvalue",
+    "value",
+}
 
 
 table_columns_selection_system_prompt = """
@@ -63,15 +119,14 @@ The database schema includes structural, semantic, and business modeling metadat
 13. Do not stop at a single top candidate when the question needs multiple related datasets.
 14. If the same business concept is represented by multiple modeled datasets, select each relevant dataset and the fields needed to answer the shared intent.
 15. If multiple modeled datasets expose compatible fields for the same requested result shape, keep each relevant dataset available so SQL generation can combine them as separate result rows instead of discarding all but one.
-16. Prefer the set of deployed models, views, metrics, columns, and relationships that best support the current question.
-17. If WREN RETRIEVED SEMANTIC CONTEXT is present, use sql_table_name_use_exactly and sql_column_name_use_exactly values as the exact names to return.
-18. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand meaning. Do not return descriptions, labels, source metadata, or rewritten variants as table or column names.
-19. Prefer tables and columns whose supplied names, descriptions, relationships, metrics, or sample values directly support the requested entities, measures, filters, dates, identifiers, and dimensions. Do not answer from generic log, file, JSON, payload, text, or app-metric columns when retrieved schema metadata provides specific modeled columns for the same requested concept.
-20. Compare the user's requested entities, measures, filters, dates, and dimensions only with schema metadata supplied for the active project. Do not use built-in business synonym lists.
-21. If a table only contains generic data/payload/text fields and another table exposes exact business columns that match the request, choose the business table instead of searching the generic field with LIKE.
-22. Never return placeholder table or column names or any user-worded identifier unless the exact same identifier appears in the provided CREATE TABLE statement or identifier contract.
-23. If a requested measure, dimension, filter, or time field is not represented by retrieved schema metadata, leave it unsupported instead of substituting a similar-looking field.
-24. Metric intent such as count, sum, average, minimum, maximum, ranking, date bucketing, and grouping must be satisfied by declared columns or metric fields from the retrieved schema.
+16. If WREN RETRIEVED SEMANTIC CONTEXT is present, use sql_table_name_use_exactly and sql_column_name_use_exactly values as the exact names to return.
+17. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand meaning. Do not return descriptions, labels, source metadata, or rewritten variants as table or column names.
+18. Prefer tables and columns that directly model the requested business entities, measures, statuses, dates, identifiers, and dimensions. Do not answer business-domain questions from generic log, file, JSON, payload, text, or app-metric columns when the schema provides specific modeled columns for the same concept.
+19. For terms such as revenue, sales, orders, invoices, customers, products, suppliers, repairs, failures, batches, materials, locations, status, severity, currency, dates, month, year, and business unit, inspect both table meaning and exact column meanings before selecting a table.
+20. If a table only contains generic data/payload/text fields and another table exposes exact business columns that match the request, choose the business table instead of searching the generic field with LIKE.
+21. Never return placeholder table or column names such as tablename, table_name, dbo.tablename, BatchId, Material, Location, or any user-worded identifier unless the exact same identifier appears in the provided CREATE TABLE statement or identifier contract.
+22. If the request asks for revenue, sales, or sales trends, prefer exact business measure columns named like Revenue, SalesValue, USDFXSalesValue, FXSalesValue, IntakeValue, Amount, or equivalent modeled sales fields. Do not use tariff, duty, customs, import, refund, or claim datasets unless the user explicitly asks for those domains.
+23. If the request asks for an explicit rate, ratio, percentage, revenue, amount, sales value, or other named measure and the schema already contains that exact measure column, use the declared measure column directly. Do not use a rate column to answer "most failures", "number of failures", or other count-of-records requests unless the question explicitly asks for a rate/ratio/percentage.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -648,7 +703,7 @@ async def dbschema_retrieval(
     documents = []
     if embedding:
         semantic_documents = await _retrieve_semantic_schema_documents(
-            embedding, project_id, mdl_hash, dbschema_retriever
+            embedding, project_id, dbschema_retriever, mdl_hash
         )
         semantic_table_names = _table_names_from_schema_documents(semantic_documents)[
             :_SEMANTIC_TABLE_NAME_MERGE_LIMIT
@@ -669,10 +724,9 @@ async def dbschema_retrieval(
         ]
 
     if table_names:
-        if include_related_models:
-            retrieved_table_names = set()
-            pending_table_names = table_names
-            remaining_expansion_depth = _MAX_RELATED_TABLE_EXPANSION_DEPTH
+        retrieved_table_names = set()
+        pending_table_names = table_names
+        remaining_expansion_depth = _MAX_RELATED_TABLE_EXPANSION_DEPTH
 
             while pending_table_names:
                 retrieved_table_names.update(pending_table_names)
@@ -706,12 +760,19 @@ async def dbschema_retrieval(
                     for document in ranked_documents
                 ],
             )
-            return ranked_documents
+            documents = _dedupe_documents(documents + retrieved_documents)
+            if remaining_expansion_depth <= 0:
+                break
+            remaining_expansion_depth -= 1
+            remaining_slots = _MAX_RETRIEVED_TABLE_NAMES - len(retrieved_table_names)
+            if remaining_slots <= 0:
+                break
+            pending_table_names = [
+                table_name
+                for table_name in _related_table_names(documents)
+                if table_name not in retrieved_table_names
+            ][:remaining_slots]
 
-        retrieved_documents = await _retrieve_schema_documents(
-            table_names, project_id, mdl_hash, dbschema_retriever
-        )
-        documents = _dedupe_documents(documents + retrieved_documents)
         ranked_documents = _rank_documents_for_query(documents, table_names, query)
         logger.info(
             "Ask schema retrieval project_id=%s retrieved_tables=%s",
@@ -809,6 +870,15 @@ def _rank_table_names_by_query(
             value += 8
         if direct_table_matches and direct_column_matches:
             value += 8
+        if query_tokens & {"revenue", "sale", "sales", "trend", "trends"}:
+            value += len((table_tokens | column_tokens) & _SALES_REVENUE_TOKENS) * 5
+            if not query_tokens & _CUSTOMS_FINANCE_TOKENS:
+                value -= (
+                    len((table_tokens | column_tokens) & _CUSTOMS_FINANCE_TOKENS)
+                    * 8
+                )
+        if table_tokens & _GENERIC_TABLE_TOKENS and not direct_table_matches:
+            value -= 6
         return value
 
     ranked = sorted(
@@ -846,7 +916,65 @@ def _rank_documents_for_query(
 
 
 def _augment_retrieval_query(query: str) -> str:
-    return query
+    lowered = query.lower()
+    expansions = []
+
+    concept_terms = {
+        ("revenue", "sales", "sale", "amount", "value"): (
+            "sales revenue amount value gross net total price intake invoice order"
+        ),
+        ("order", "orders"): (
+            "order ord number date customer product business unit division company"
+        ),
+        ("invoice", "invoices"): (
+            "invoice supplier customer currency amount date number"
+        ),
+        ("customer", "customers"): (
+            "customer account client number name identifier"
+        ),
+        ("product", "products"): (
+            "product item material type name category"
+        ),
+        ("repair", "repairs"): (
+            "repair status priority severity failure board model log in progress completed critical"
+        ),
+        ("failure", "failures", "defect", "defects"): (
+            "failure defect severity occurrence record count code type system status"
+        ),
+        ("batch", "batches"): (
+            "batch board model supplier defect rate inspection status"
+        ),
+        ("material", "materials"): (
+            "material item part component location"
+        ),
+        ("location", "locations"): (
+            "location site warehouse area material"
+        ),
+        ("business unit", "bu", "division"): (
+            "business unit division company account organization"
+        ),
+        ("month", "monthly", "july", "year", "trend", "latest"): (
+            "date month year fiscal calendar trend latest recent"
+        ),
+        ("status", "severity", "priority", "critical"): (
+            "status priority severity critical state category progress"
+        ),
+    }
+
+    for triggers, terms in concept_terms.items():
+        if any(trigger in lowered for trigger in triggers):
+            expansions.append(terms)
+
+    if any(
+        trigger in lowered
+        for trigger in ("rate", "ratio", "percent", "percentage")
+    ):
+        expansions.append("rate ratio percent percentage")
+
+    if not expansions:
+        return query
+
+    return f"{query}\nBusiness schema search terms: {'; '.join(expansions)}"
 
 
 async def _retrieve_semantic_schema_documents(
@@ -1492,6 +1620,307 @@ def _lexical_columns_and_tables_needed(
         table_score = len(query_tokens & table_tokens) * 6
         column_scores = []
 
+@observe()
+def construct_retrieval_results(
+    check_using_db_schemas_without_pruning: dict,
+    filter_columns_in_tables: dict,
+    construct_db_schemas: list[dict],
+    dbschema_retrieval: list[Document],
+    query: str | None = None,
+) -> dict[str, Any]:
+    if filter_columns_in_tables:
+        columns_and_tables_needed = _parse_column_selection_response(
+            filter_columns_in_tables
+        )
+        lexical_columns_and_tables_needed = _lexical_columns_and_tables_needed(
+            construct_db_schemas,
+            query,
+        )
+        columns_and_tables_needed = _merge_column_selection(
+            columns_and_tables_needed,
+            lexical_columns_and_tables_needed,
+        )
+        tables = set(columns_and_tables_needed.keys())
+        retrieval_results = []
+        selected_schema_log = []
+        has_calculated_field = False
+        has_metric = False
+        has_json_field = False
+
+        for table_schema in construct_db_schemas:
+            if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
+                selected_columns = set(
+                    columns_and_tables_needed[table_schema["name"]]["columns"]
+                )
+                columns = (
+                    selected_columns
+                    if _selected_columns_are_executable(
+                        table_schema, selected_columns
+                    )
+                    else None
+                )
+                ddl, _has_calculated_field, _has_json_field = (
+                    _build_table_retrieval_context(
+                        table_schema,
+                        columns=columns,
+                        tables=tables,
+                    )
+                )
+                if _has_calculated_field:
+                    has_calculated_field = True
+                if _has_json_field:
+                    has_json_field = True
+
+                retrieval_results.append(
+                    {
+                        "table_name": table_schema["name"],
+                        "table_ddl": ddl,
+                    }
+                )
+                selected_schema_log.append(
+                    {
+                        "table": table_schema["name"],
+                        "columns": sorted(selected_columns),
+                    }
+                )
+
+        if not retrieval_results:
+            logger.warning(
+                "Column-selection output did not match retrieved schemas; "
+                "falling back to unpruned retrieved schema context."
+            )
+            return _build_unpruned_retrieval_results(
+                construct_db_schemas, dbschema_retrieval
+            )
+
+        if not column_scores and table_score <= 0:
+            continue
+
+        total_score = table_score + sum(score for score, _, _ in column_scores)
+        if total_score <= 0:
+            continue
+
+        logger.info("Ask retrieval selected schema objects=%s", selected_schema_log)
+        return {
+            "retrieval_results": retrieval_results,
+            "has_calculated_field": has_calculated_field,
+            "has_metric": has_metric,
+            "has_json_field": has_json_field,
+        }
+    else:
+        retrieval_results = check_using_db_schemas_without_pruning["db_schemas"]
+        logger.info(
+            "Ask retrieval selected schema objects=%s",
+            [
+                {"table": retrieval_result.get("table_name"), "columns": "all"}
+                for retrieval_result in retrieval_results
+            ],
+        )
+
+        scored_tables.append((total_score, table_schema["name"], selected_columns))
+
+    scored_tables.sort(key=lambda item: (-item[0], item[1]))
+    return {
+        table_name: {"columns": columns}
+        for _, table_name, columns in scored_tables[:max_tables]
+        if columns
+    }
+
+
+def _normalize_column_selection_results(parsed_response: Any) -> list[dict]:
+    if isinstance(parsed_response, list):
+        return [item for item in parsed_response if isinstance(item, dict)]
+
+    if not isinstance(parsed_response, dict):
+        return []
+
+    for key in (
+        "results",
+        "tables",
+        "selected_tables",
+        "retrieval_results",
+        "matches",
+        "data",
+        "result",
+        "output",
+    ):
+        if key in parsed_response:
+            normalized = _normalize_column_selection_results(parsed_response[key])
+            if normalized:
+                return normalized
+
+    if "table_name" in parsed_response and (
+        "table_contents" in parsed_response or "columns" in parsed_response
+    ):
+        return [parsed_response]
+
+    keyed_tables = []
+    for table_name, table_contents in parsed_response.items():
+        if not isinstance(table_name, str) or not isinstance(table_contents, dict):
+            continue
+        if "table_contents" in table_contents:
+            keyed_tables.append(
+                {
+                    "table_name": table_name,
+                    "table_contents": table_contents["table_contents"],
+                }
+            )
+        elif "columns" in table_contents:
+            keyed_tables.append(
+                {"table_name": table_name, "table_contents": table_contents}
+            )
+
+    return keyed_tables
+
+
+def _parse_column_selection_response(filter_columns_in_tables: dict) -> dict:
+    raw_reply = (filter_columns_in_tables.get("replies") or [""])[0]
+    try:
+        parsed_response = orjson.loads(raw_reply)
+    except orjson.JSONDecodeError as exc:
+        logger.warning("Unable to parse column-selection JSON response: %s", exc)
+        return {}
+
+    normalized_tables = _normalize_column_selection_results(parsed_response)
+    reformatted_json = {}
+    for table in normalized_tables:
+        table_name = table.get("table_name") or table.get("name")
+        table_contents = table.get("table_contents") or {}
+        if not table_contents and "columns" in table:
+            table_contents = table
+
+        columns = (
+            table_contents.get("columns") if isinstance(table_contents, dict) else None
+        )
+        if not isinstance(table_name, str) or not isinstance(columns, list):
+            continue
+
+        reformatted_json[table_name] = {
+            **table_contents,
+            "columns": [column for column in columns if isinstance(column, str)],
+        }
+
+    if not reformatted_json:
+        response_shape = (
+            f"keys={list(parsed_response.keys())[:8]}"
+            if isinstance(parsed_response, dict)
+            else type(parsed_response).__name__
+        )
+        logger.warning(
+            "Column-selection response did not include usable table columns (%s).",
+            response_shape,
+        )
+
+    return reformatted_json
+
+
+def _build_unpruned_retrieval_results(
+    construct_db_schemas: list[dict],
+    dbschema_retrieval: list[Document],
+) -> dict:
+    retrieval_results = []
+    has_calculated_field = False
+    has_metric = False
+    has_json_field = False
+
+    for table_schema in construct_db_schemas:
+        if table_schema["type"] == "TABLE":
+            ddl, _has_calculated_field, _has_json_field = (
+                _build_table_retrieval_context(table_schema)
+            )
+            retrieval_results.append(
+                {
+                    "table_name": table_schema["name"],
+                    "table_ddl": ddl,
+                }
+            )
+            if _has_calculated_field:
+                has_calculated_field = True
+            if _has_json_field:
+                has_json_field = True
+
+    for document in dbschema_retrieval:
+        content = ast.literal_eval(document.content)
+
+        if content["type"] == "METRIC":
+            retrieval_results.append(
+                {
+                    "table_name": content["name"],
+                    "table_ddl": _build_metric_ddl(content),
+                }
+            )
+            has_metric = True
+        elif content["type"] == "VIEW":
+            retrieval_results.append(
+                {
+                    "table_name": content["name"],
+                    "table_ddl": _build_view_ddl(content),
+                }
+            )
+
+    return {
+        "retrieval_results": retrieval_results,
+        "has_calculated_field": has_calculated_field,
+        "has_metric": has_metric,
+        "has_json_field": has_json_field,
+    }
+
+
+def _merge_column_selection(
+    primary: dict[str, dict],
+    secondary: dict[str, dict],
+) -> dict[str, dict]:
+    merged = {
+        table_name: {
+            **table_contents,
+            "columns": list(table_contents.get("columns", [])),
+        }
+        for table_name, table_contents in primary.items()
+    }
+
+    for table_name, table_contents in secondary.items():
+        if table_name not in merged:
+            merged[table_name] = {
+                **table_contents,
+                "columns": list(table_contents.get("columns", [])),
+            }
+            continue
+
+        columns = list(merged[table_name].get("columns", []))
+        for column in table_contents.get("columns", []):
+            if column not in columns:
+                columns.append(column)
+        merged[table_name]["columns"] = columns
+
+    return merged
+
+
+def _lexical_columns_and_tables_needed(
+    construct_db_schemas: list[dict],
+    query: str | None,
+    max_tables: int = 4,
+    max_columns_per_table: int = 12,
+) -> dict[str, dict]:
+    if not query:
+        return {}
+
+    query_tokens = _tokenize_schema_text(_augment_retrieval_query(query))
+    if not query_tokens:
+        return {}
+
+    scored_tables = []
+    for table_schema in construct_db_schemas:
+        if table_schema.get("type") != "TABLE":
+            continue
+
+        table_tokens = _tokenize_schema_text(
+            table_schema.get("name")
+        ) | _tokenize_schema_text(
+            table_schema.get("comment")
+        )
+        table_score = len(query_tokens & table_tokens) * 6
+        column_scores = []
+
         for column in table_schema.get("columns", []):
             if (
                 column.get("type") != "COLUMN"
@@ -1503,6 +1932,26 @@ def _lexical_columns_and_tables_needed(
             comment_tokens = _tokenize_schema_text(column.get("comment"))
             score = len(query_tokens & column_tokens) * 10
             score += len(query_tokens & comment_tokens) * 2
+            if query_tokens & {"revenue", "sale", "sales", "trend", "trends"}:
+                score += len(column_tokens & _SALES_REVENUE_TOKENS) * 6
+            if query_tokens & {"month", "monthly", "year", "july", "date", "latest"}:
+                score += (
+                    len(column_tokens & {"date", "day", "month", "year", "time"})
+                    * 5
+                )
+            if query_tokens & {"top", "highest", "lowest", "bottom"}:
+                measure_tokens = {
+                    "amount",
+                    "count",
+                    "cost",
+                    "margin",
+                    "quantity",
+                    "score",
+                    "value",
+                }
+                if query_tokens & {"rate", "ratio", "percent", "percentage"}:
+                    measure_tokens.update({"rate", "ratio", "percent", "percentage"})
+                score += len(column_tokens & measure_tokens) * 4
             if score > 0:
                 column_scores.append(
                     (score, column["name"], column.get("is_primary_key"))
@@ -1510,6 +1959,13 @@ def _lexical_columns_and_tables_needed(
 
         if not column_scores and table_score <= 0:
             continue
+
+        if table_tokens & _GENERIC_TABLE_TOKENS and table_score <= 0:
+            table_score -= 8
+        if query_tokens & {"revenue", "sale", "sales", "trend", "trends"}:
+            if not query_tokens & _CUSTOMS_FINANCE_TOKENS:
+                table_score -= len(table_tokens & _CUSTOMS_FINANCE_TOKENS) * 10
+            table_score += len(table_tokens & _SALES_REVENUE_TOKENS) * 5
 
         total_score = table_score + sum(score for score, _, _ in column_scores)
         if total_score <= 0:

@@ -34,20 +34,15 @@ You are a Wren SQL expert with exceptional logical thinking skills and debugging
 
 ### SQL CORRECTION INSTRUCTIONS ###
 
-1. First, use the error message only to identify which part of the failed SQL was unsupported by DATABASE SCHEMA, SQL FUNCTIONS, or USER INSTRUCTIONS.
-2. Then, generate a syntactically correct Wren SQL query from the user's intent and the current DATABASE SCHEMA.
-3. If the invalid SQL contains a table, column, function, literal value, or metadata-table query that is not supported by the current DATABASE SCHEMA or SQL FUNCTIONS, do not preserve it.
-4. Never correct an invalid SQL query by checking INFORMATION_SCHEMA or system catalogs.
-5. If a user question is provided, treat it as the source of intent and regenerate the SQL from that intent using DATABASE SCHEMA instead of repairing guessed identifiers.
-6. Treat SQL diagnosis and the invalid SQL as error context only. Do not copy placeholders, assumed table names, assumed column names, or unsupported functions from them.
-7. Do not preserve a table, column, join, filter, grouping, ordering, or function from the failed SQL unless it appears exactly in DATABASE SCHEMA or SQL FUNCTIONS.
-8. Treat physical/source/lineage names from the failed SQL, error message, reasoning, comments, aliases, descriptions, or samples as semantic context only; never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
-9. If the error is an invalid object, invalid column, unsupported function, or date/type failure, do not try a similar replacement from source metadata. Regenerate from the user's intent and current DATABASE SCHEMA. If the unsupported part is needed to answer the requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql instead of substituting non-schema identifiers.
-10. If the failed SQL used connector-specific syntax such as TOP, square-bracket identifiers, backticks, or non-Wren identifier quoting, discard that syntax and regenerate using Wren SQL syntax only.
-11. For grouped queries, repair SQL Server errors about ORDER BY columns not appearing in GROUP BY by ordering with selected grouping columns or selected aggregate aliases, or by adding the exact ordering key to both SELECT and GROUP BY when that key is declared in DATABASE SCHEMA.
-12. Do not preserve generic log, file, JSON, payload, text, or app-metric scans when DATABASE SCHEMA contains exact modeled business columns for the user's requested entity, measure, status, date, or dimension.
-13. If the failed SQL invented component fields for a metric that exists directly in DATABASE SCHEMA, replace the calculation with the exact declared metric column.
-14. For sales or revenue questions, avoid tariff, duty, customs, import, refund, or claim datasets unless the USER QUESTION explicitly asks for those domains.
+1. First, think hard about the error message, and figure out the root cause first(please use the DATABASE SCHEMA, SQL FUNCTIONS and USER INSTRUCTIONS to help you figure out the root cause).
+2. Then, generate the syntactically correct ANSI SQL query to correct the error.
+3. If the failed SQL references a table, view, column, function, alias, or placeholder that is not present in DATABASE SCHEMA or SQL FUNCTIONS, do not preserve it. Regenerate from the USER QUESTION and DATABASE SCHEMA.
+4. Treat invalid object name, dataset not found, table not found, invalid column name, and invalid identifier errors as schema-grounding failures. Use exact declared identifiers from DATABASE SCHEMA only.
+5. Do not create dummy CTEs, placeholder tables, table-existence checks, or generic replacement names to make the query executable. If the requested intent is supported by retrieved schema objects, use those exact objects; otherwise return null for sql.
+6. For grouped queries, repair SQL Server errors about ORDER BY columns not appearing in GROUP BY by ordering with selected grouping columns or selected aggregate aliases, or by adding the exact ordering key to both SELECT and GROUP BY when that key is declared in DATABASE SCHEMA.
+7. Do not preserve generic log, file, JSON, payload, text, or app-metric scans when DATABASE SCHEMA contains exact modeled business columns for the user's requested entity, measure, status, date, or dimension.
+8. If the failed SQL invented component fields for a metric that exists directly in DATABASE SCHEMA, replace the calculation with the exact declared metric column.
+9. For sales or revenue questions, avoid tariff, duty, customs, import, refund, or claim datasets unless the USER QUESTION explicitly asks for those domains.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -167,8 +162,8 @@ async def post_process(
     generate_sql_correction: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
+    documents: List[Document] | None = None,
     query: str | None = None,
-    documents: list[str] | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
     validation_contexts: list[str] | None = None,
@@ -179,7 +174,7 @@ async def post_process(
         generate_sql_correction.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
-        contexts=validation_contexts or documents,
+        contexts=documents,
         fallback_query=query,
         use_dry_plan=use_dry_plan,
         data_source=data_source,

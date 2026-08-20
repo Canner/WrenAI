@@ -163,7 +163,7 @@ async def post_process(
         generate_sql_in_followup.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
-        contexts=validation_contexts or documents,
+        contexts=documents,
         fallback_query=query,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
