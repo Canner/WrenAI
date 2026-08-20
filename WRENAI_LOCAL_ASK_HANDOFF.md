@@ -34,7 +34,8 @@ The work is pushed to the fork branch:
 - Branch: `organization/ask-schema-grounding-20260820`
 - PR: `https://github.com/hbalasubramanya-rgb/WrenAI/pull/1`
 - PR base: `organization-feature`
-- Current remote PR head: `cc55d1e05`
+- Schema implementation commit before handoff-only updates: `cc55d1e05`
+- Check PR #1 for the live head SHA because handoff-only commits may be added after the implementation commit.
 
 The PR branch was rebased onto the latest `origin/organization-feature` after GitHub initially reported conflicts against the wrong compare/base. It was then pushed with `--force-with-lease`.
 
