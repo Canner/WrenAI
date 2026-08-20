@@ -33,86 +33,6 @@ _SEMANTIC_TABLE_NAME_MERGE_LIMIT = 8
 _MAX_RETRIEVED_TABLE_NAMES = 24
 _MAX_RELATED_TABLE_EXPANSION_DEPTH = 1
 _RANK_TOKEN = re.compile(r"[a-z0-9]+")
-_GENERIC_TABLE_TOKENS = {
-    "audit",
-    "auth",
-    "calendar",
-    "config",
-    "dim",
-    "dimension",
-    "file",
-    "files",
-    "ingestion",
-    "job",
-    "jobs",
-    "log",
-    "logs",
-    "lookup",
-    "mbr",
-    "member",
-    "members",
-    "migration",
-    "migrations",
-    "preference",
-    "preferences",
-    "queue",
-    "report",
-    "reports",
-    "setting",
-    "settings",
-    "state",
-    "time",
-    "user",
-    "users",
-}
-_CUSTOMS_FINANCE_TOKENS = {
-    "claim",
-    "claims",
-    "custom",
-    "customs",
-    "duty",
-    "duties",
-    "hmf",
-    "import",
-    "imports",
-    "mpf",
-    "refund",
-    "refunds",
-    "tariff",
-    "tariffs",
-}
-_SALES_REVENUE_TOKENS = {
-    "amount",
-    "intake",
-    "revenue",
-    "sale",
-    "sales",
-    "salesvalue",
-    "value",
-}
-_TICKET_SCHEMA_TOKENS = {
-    "activity",
-    "case",
-    "issue",
-    "ticket",
-}
-_STATUS_STATE_TOKENS = {
-    "blocked",
-    "closed",
-    "completed",
-    "open",
-    "progress",
-    "stage",
-    "state",
-    "status",
-}
-_UPDATED_TIME_TOKENS = {
-    "changed",
-    "date",
-    "modified",
-    "time",
-    "updated",
-}
 
 
 table_columns_selection_system_prompt = """
@@ -146,12 +66,12 @@ The database schema includes structural, semantic, and business modeling metadat
 16. Prefer the set of deployed models, views, metrics, columns, and relationships that best support the current question.
 17. If WREN RETRIEVED SEMANTIC CONTEXT is present, use sql_table_name_use_exactly and sql_column_name_use_exactly values as the exact names to return.
 18. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand meaning. Do not return descriptions, labels, source metadata, or rewritten variants as table or column names.
-19. Prefer tables and columns that directly model the requested business entities, measures, statuses, dates, identifiers, and dimensions. Do not answer business-domain questions from generic log, file, JSON, payload, text, or app-metric columns when the schema provides specific modeled columns for the same concept.
-20. For terms such as revenue, sales, orders, invoices, customers, products, suppliers, tickets, activities, repairs, failures, batches, materials, locations, status, blocked/open/closed values, priority, severity, age, duration, average, distribution, updated/modified dates, currency, dates, month, year, and business unit, inspect both table meaning and exact column meanings before selecting a table.
+19. Prefer tables and columns whose supplied names, descriptions, relationships, metrics, or sample values directly support the requested entities, measures, filters, dates, identifiers, and dimensions. Do not answer from generic log, file, JSON, payload, text, or app-metric columns when retrieved schema metadata provides specific modeled columns for the same requested concept.
+20. Compare the user's requested entities, measures, filters, dates, and dimensions only with schema metadata supplied for the active project. Do not use built-in business synonym lists.
 21. If a table only contains generic data/payload/text fields and another table exposes exact business columns that match the request, choose the business table instead of searching the generic field with LIKE.
-22. Never return placeholder table or column names such as tablename, table_name, dbo.tablename, BatchId, Material, Location, or any user-worded identifier unless the exact same identifier appears in the provided CREATE TABLE statement or identifier contract.
-23. If the request asks for revenue, sales, or sales trends, prefer exact business measure columns named like Revenue, SalesValue, USDFXSalesValue, FXSalesValue, IntakeValue, Amount, or equivalent modeled sales fields. Do not use tariff, duty, customs, import, refund, or claim datasets unless the user explicitly asks for those domains.
-24. If the request asks for an explicit average, rate, ratio, percentage, revenue, amount, sales value, age, duration, or other named measure and the schema already contains that exact measure column, use the declared measure column directly. Do not use a rate column to answer "most failures", "number of failures", or other count-of-records requests unless the question explicitly asks for a rate/ratio/percentage. Do not use count-based columns or grouped counts to answer average requests unless the question asks for a count.
+22. Never return placeholder table or column names or any user-worded identifier unless the exact same identifier appears in the provided CREATE TABLE statement or identifier contract.
+23. If a requested measure, dimension, filter, or time field is not represented by retrieved schema metadata, leave it unsupported instead of substituting a similar-looking field.
+24. Metric intent such as count, sum, average, minimum, maximum, ranking, date bucketing, and grouping must be satisfied by declared columns or metric fields from the retrieved schema.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -877,31 +797,6 @@ def _rank_table_names_by_query(
             value += 8
         if direct_table_matches and direct_column_matches:
             value += 8
-        if query_tokens & {"revenue", "sale", "sales", "trend", "trends"}:
-            value += len((table_tokens | column_tokens) & _SALES_REVENUE_TOKENS) * 5
-            if not query_tokens & _CUSTOMS_FINANCE_TOKENS:
-                value -= (
-                    len((table_tokens | column_tokens) & _CUSTOMS_FINANCE_TOKENS)
-                    * 8
-                )
-        if query_tokens & {"ticket"}:
-            table_and_columns = table_tokens | column_tokens | comment_tokens
-            if table_and_columns & _TICKET_SCHEMA_TOKENS:
-                value += len(table_and_columns & _TICKET_SCHEMA_TOKENS) * 12
-            else:
-                value -= 40
-            if query_tokens & _STATUS_STATE_TOKENS:
-                value += len(table_and_columns & _STATUS_STATE_TOKENS) * 8
-            if query_tokens & {"updated", "modified"}:
-                value += len(table_and_columns & _UPDATED_TIME_TOKENS) * 8
-            if table_tokens & {"team", "user", "users"} and not (
-                table_and_columns & _TICKET_SCHEMA_TOKENS
-            ):
-                value -= 40
-        if query_tokens & {"updated", "modified"}:
-            value += len((table_tokens | column_tokens | comment_tokens) & _UPDATED_TIME_TOKENS) * 5
-        if table_tokens & _GENERIC_TABLE_TOKENS and not direct_table_matches:
-            value -= 6
         return value
 
     ranked = sorted(
@@ -939,102 +834,7 @@ def _rank_documents_for_query(
 
 
 def _augment_retrieval_query(query: str) -> str:
-    lowered = query.lower()
-    expansions = []
-
-    concept_terms = {
-        ("revenue", "sales", "sale", "amount", "value"): (
-            "sales revenue amount value gross net total price intake invoice order"
-        ),
-        ("order", "orders"): (
-            "order ord number date customer product business unit division company"
-        ),
-        ("invoice", "invoices"): (
-            "invoice supplier customer currency gross net amount date month year number status task"
-        ),
-        ("supplier", "suppliers", "vendor", "vendors"): (
-            "supplier vendor name number id email address invoice amount"
-        ),
-        ("email", "emails", "address", "addresses"): (
-            "email address mail first primary supplier contact"
-        ),
-        ("reconciliation", "reconciliations", "recon", "reconcile"): (
-            "reconciliation recon account gl status preparer reviewer group period"
-        ),
-        ("journal", "journals", "workflow", "approval", "approvals"): (
-            "journal workflow approval approver reviewer signer status date posting entry document"
-        ),
-        ("account", "accounts", "gl", "ledger"): (
-            "account gl glaccount ledger balance endbalance ending period year month"
-        ),
-        ("balance", "balances", "gross", "net"): (
-            "balance endbalance gross net amount value year month"
-        ),
-        ("customer", "customers"): (
-            "customer account client number name identifier"
-        ),
-        ("product", "products"): (
-            "product item material type name category"
-        ),
-        ("repair", "repairs"): (
-            "repair status priority severity failure board model log in progress completed critical age duration"
-        ),
-        ("ticket", "tickets", "issue", "case"): (
-            "ticket issue case activity log status state blocked open closed priority id number updated modified"
-        ),
-        ("failure", "failures", "defect", "defects"): (
-            "failure defect severity occurrence record count code type system status age duration"
-        ),
-        ("batch", "batches"): (
-            "batch board model supplier defect rate inspection status"
-        ),
-        ("material", "materials"): (
-            "material item part component location"
-        ),
-        ("location", "locations"): (
-            "location site warehouse area material board model"
-        ),
-        ("average", "avg", "mean"): (
-            "average avg mean numeric measure age duration elapsed days hours amount rate"
-        ),
-        ("age", "duration", "elapsed"): (
-            "age duration elapsed days hours numeric measure average"
-        ),
-        ("distribution", "breakdown"): (
-            "distribution breakdown count group status category"
-        ),
-        ("business unit", "bu", "division"): (
-            "business unit division company account organization"
-        ),
-        ("month", "monthly", "july", "year", "trend", "latest"): (
-            "date month year fiscal calendar trend latest recent"
-        ),
-        ("updated", "modified"): (
-            "updated modified changed date time timestamp month year"
-        ),
-        ("status", "severity", "priority", "critical", "blocked", "open", "closed"): (
-            "status priority severity critical blocked open closed state category progress"
-        ),
-    }
-
-    for triggers, terms in concept_terms.items():
-        if any(trigger in lowered for trigger in triggers):
-            expansions.append(terms)
-
-    if any(
-        trigger in lowered
-        for trigger in ("rate", "ratio", "percent", "percentage")
-    ):
-        expansions.append("rate ratio percent percentage")
-    if any(trigger in lowered for trigger in ("average", "avg", "mean")):
-        expansions.append("average avg mean numeric measure")
-    if any(trigger in lowered for trigger in ("distribution", "breakdown")):
-        expansions.append("distribution breakdown group count status category")
-
-    if not expansions:
-        return query
-
-    return f"{query}\nBusiness schema search terms: {'; '.join(expansions)}"
+    return query
 
 
 async def _retrieve_semantic_schema_documents(
@@ -1691,46 +1491,6 @@ def _lexical_columns_and_tables_needed(
             comment_tokens = _tokenize_schema_text(column.get("comment"))
             score = len(query_tokens & column_tokens) * 10
             score += len(query_tokens & comment_tokens) * 2
-            if query_tokens & {"revenue", "sale", "sales", "trend", "trends"}:
-                score += len(column_tokens & _SALES_REVENUE_TOKENS) * 6
-            if query_tokens & {"month", "monthly", "year", "july", "date", "latest"}:
-                score += (
-                    len(column_tokens & {"date", "day", "month", "year", "time"})
-                    * 5
-                )
-            if query_tokens & {"average", "avg", "mean", "age", "duration", "elapsed"}:
-                score += (
-                    len(
-                        column_tokens
-                        & {"age", "duration", "elapsed", "days", "hours", "amount", "rate"}
-                    )
-                    * 7
-                )
-            if query_tokens & {"distribution", "breakdown"}:
-                score += len(column_tokens & {"status", "state", "category", "type"}) * 7
-            if query_tokens & {"ticket"}:
-                score += len(column_tokens & _TICKET_SCHEMA_TOKENS) * 9
-                if query_tokens & _STATUS_STATE_TOKENS:
-                    score += len(column_tokens & _STATUS_STATE_TOKENS) * 8
-                if query_tokens & {"updated", "modified"}:
-                    score += len(column_tokens & _UPDATED_TIME_TOKENS) * 8
-                if query_tokens & {"id", "number"}:
-                    score += len(column_tokens & {"id", "no", "number", "ticket"}) * 5
-            if query_tokens & {"updated", "modified"}:
-                score += len(column_tokens & _UPDATED_TIME_TOKENS) * 6
-            if query_tokens & {"top", "highest", "lowest", "bottom"}:
-                measure_tokens = {
-                    "amount",
-                    "count",
-                    "cost",
-                    "margin",
-                    "quantity",
-                    "score",
-                    "value",
-                }
-                if query_tokens & {"rate", "ratio", "percent", "percentage"}:
-                    measure_tokens.update({"rate", "ratio", "percent", "percentage"})
-                score += len(column_tokens & measure_tokens) * 4
             if score > 0:
                 column_scores.append(
                     (score, column["name"], column.get("is_primary_key"))
@@ -1738,27 +1498,6 @@ def _lexical_columns_and_tables_needed(
 
         if not column_scores and table_score <= 0:
             continue
-
-        if table_tokens & _GENERIC_TABLE_TOKENS and table_score <= 0:
-            table_score -= 8
-        if query_tokens & {"revenue", "sale", "sales", "trend", "trends"}:
-            if not query_tokens & _CUSTOMS_FINANCE_TOKENS:
-                table_score -= len(table_tokens & _CUSTOMS_FINANCE_TOKENS) * 10
-            table_score += len(table_tokens & _SALES_REVENUE_TOKENS) * 5
-        if query_tokens & {"ticket"}:
-            table_and_columns = table_tokens | {
-                token
-                for _, column_name, _ in column_scores
-                for token in _tokenize_schema_text(column_name)
-            }
-            if table_and_columns & _TICKET_SCHEMA_TOKENS:
-                table_score += len(table_and_columns & _TICKET_SCHEMA_TOKENS) * 15
-            else:
-                table_score -= 45
-            if table_tokens & {"team", "user", "users"} and not (
-                table_and_columns & _TICKET_SCHEMA_TOKENS
-            ):
-                table_score -= 45
 
         total_score = table_score + sum(score for score, _, _ in column_scores)
         if total_score <= 0:

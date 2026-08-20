@@ -3,13 +3,14 @@ import asyncio
 from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     generate_simple_analytics_sql,
-    normalize_wren_sql_dialect,
     normalize_sql_with_schema_identifiers,
+    normalize_wren_sql_dialect,
     unsupported_schema_generation_result,
     unsupported_schema_message,
     validate_sql_against_contexts,
     validate_sql_semantic_coverage,
 )
+
 
 SCHEMA_CONTEXTS = [
     """
@@ -73,10 +74,23 @@ def test_schema_identifier_normalization_quotes_special_identifiers():
     assert 'FROM "valid-order-lines"' in sql
 
 
-def test_semantic_coverage_rejects_generic_table_for_business_concepts():
+def test_wren_sql_dialect_normalization_handles_top_and_joined_limit():
+    assert (
+        normalize_wren_sql_dialect("SELECT TOP 10 id1 FROM dbo_mbrTime")
+        == "SELECT id1 FROM dbo_mbrTime\nLIMIT 10"
+    )
+    assert (
+        normalize_wren_sql_dialect(
+            "SELECT id1 FROM dbo_mbrTime ORDER BY metric DESCLIMIT 10"
+        )
+        == "SELECT id1 FROM dbo_mbrTime ORDER BY metric DESC LIMIT 10"
+    )
+
+
+def test_semantic_coverage_rejects_unrepresented_query_terms():
     contexts = [
         """
-        CREATE TABLE dbo_mbrTime (
+        CREATE TABLE neutral_records (
             id1 INTEGER,
             id2 INTEGER
         );
@@ -85,86 +99,51 @@ def test_semantic_coverage_rejects_generic_table_for_business_concepts():
 
     error = validate_sql_semantic_coverage(
         """
-        SELECT id1, COUNT(*) AS failures
-        FROM dbo_mbrTime
+        SELECT id1, COUNT(*) AS record_count
+        FROM neutral_records
         GROUP BY id1
-        ORDER BY failures DESC
+        ORDER BY record_count DESC
         LIMIT 10
         """,
-        "Show the top 10 materials with the highest number of failures.",
+        "Show top 10 records by missing_dimension.",
         contexts,
     )
 
     assert error is not None
-    assert "failure/defect" in error
-    assert "material" in error
+    assert "missing" in error or "dimension" in error
 
 
-def test_unsupported_schema_message_requires_all_requested_concepts():
+def test_unsupported_schema_message_reports_partial_coverage():
     contexts = [
         """
-        CREATE TABLE dbo_mbrTime (
-            id1 INTEGER,
-            id2 INTEGER
+        CREATE TABLE event_records (
+            event_id VARCHAR,
+            phase VARCHAR
         );
         """
     ]
 
     message = unsupported_schema_message(
-        "Show the top 10 materials with the highest number of failures.",
+        "Show records by phase and unknown_segment.",
         contexts,
     )
 
     assert message is not None
-    assert "No retrieved table or view" in message
-    assert "failure/defect" in message
-    assert "material" in message
-
-
-def test_unsupported_schema_message_rejects_split_failure_technician_without_coverage():
-    contexts = [
-        """
-        CREATE TABLE dbo_report_failures (
-            id INTEGER,
-            failure_type VARCHAR
-        );
-        """,
-        """
-        CREATE TABLE dbo_technicians (
-            id INTEGER,
-            name VARCHAR
-        );
-        """,
-    ]
-
-    message = unsupported_schema_message(
-        "Show the number of failures by technician.",
-        contexts,
-    )
-
-    assert message is not None
-    assert "failure/defect" in message
-    assert "technician" in message
+    assert "unknown" in message or "segment" in message
 
 
 def test_unsupported_schema_generation_result_has_no_invalid_sql():
     contexts = [
         """
-        CREATE TABLE dbo_report_failures (
-            id INTEGER,
-            failure_type VARCHAR
+        CREATE TABLE event_records (
+            event_id VARCHAR,
+            phase VARCHAR
         );
-        """,
         """
-        CREATE TABLE dbo_technicians (
-            id INTEGER,
-            name VARCHAR
-        );
-        """,
     ]
 
     result = unsupported_schema_generation_result(
-        "Show the number of failures by technician.",
+        "Show records by unknown_segment.",
         contexts,
         data_source="MSSQL",
     )
@@ -175,13 +154,13 @@ def test_unsupported_schema_generation_result_has_no_invalid_sql():
     assert invalid["type"] == "NO_RELEVANT_SQL"
     assert invalid["sql"] == ""
     assert invalid["original_sql"] == ""
-    assert "technician" in invalid["error"]
+    assert "unknown" in invalid["error"] or "segment" in invalid["error"]
 
 
 def test_post_processor_clears_sql_for_unsupported_schema():
     contexts = [
         """
-        CREATE TABLE dbo_mbrTime (
+        CREATE TABLE neutral_records (
             id1 INTEGER,
             id2 INTEGER
         );
@@ -193,15 +172,15 @@ def test_post_processor_clears_sql_for_unsupported_schema():
         post_processor.run(
             [
                 """
-                SELECT id1, COUNT(*) AS failures
-                FROM dbo_mbrTime
+                SELECT id1, COUNT(*) AS record_count
+                FROM neutral_records
                 GROUP BY id1
-                ORDER BY failures DESC
+                ORDER BY record_count DESC
                 LIMIT 10
                 """
             ],
             contexts=contexts,
-            fallback_query="Show the top 10 materials with the highest number of failures.",
+            fallback_query="Show records by missing_dimension.",
             data_source="MSSQL",
         )
     )
@@ -212,823 +191,273 @@ def test_post_processor_clears_sql_for_unsupported_schema():
     assert result["invalid_generation_result"]["original_sql"] == ""
 
 
-def test_wren_sql_dialect_normalization_repairs_top_and_joined_limit():
-    assert (
-        normalize_wren_sql_dialect("SELECT TOP 10 id1 FROM dbo_mbrTime")
-        == "SELECT id1 FROM dbo_mbrTime\nLIMIT 10"
-    )
-    assert (
-        normalize_wren_sql_dialect(
-            "SELECT id1 FROM dbo_mbrTime ORDER BY failures DESCLIMIT 10"
-        )
-        == "SELECT id1 FROM dbo_mbrTime ORDER BY failures DESC LIMIT 10"
-    )
-
-
-def test_repair_fallback_filters_critical_priority_and_in_progress_status():
-    contexts = [
-        """
-        CREATE TABLE dbo_repair_logs (
-            id VARCHAR,
-            status VARCHAR,
-            priority VARCHAR,
-            created_at TIMESTAMPTZ
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show all critical-priority repairs that are currently in progress.",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_repair_logs"' in sql
-    assert 'LOWER("status") IN' in sql
-    assert "'in progress'" in sql
-    assert "'in-progress'" in sql
-    assert 'LOWER("priority") = \'critical\'' in sql
-
-
-def test_repair_fallback_preserves_hyphenated_in_progress_status_value():
-    contexts = [
-        """
-        CREATE TABLE dbo_repair_logs (
-            id VARCHAR,
-            status VARCHAR,
-            priority VARCHAR,
-            created_at TIMESTAMP
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show all repairs with a critical priority and an in-progress status.",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_repair_logs"' in sql
-    assert 'LOWER("status") IN' in sql
-    assert "'in-progress'" in sql
-    assert "'in progress'" in sql
-    assert 'LOWER("priority") = \'critical\'' in sql
-
-
-def test_repair_logs_highest_priority_orders_by_verified_priority_column():
-    contexts = [
-        """
-        CREATE TABLE dbo_repair_logs (
-            id VARCHAR,
-            board_model VARCHAR,
-            failure_code VARCHAR,
-            status VARCHAR,
-            priority VARCHAR,
-            created_at TIMESTAMP
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Which repair logs have the highest priority?",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_repair_logs"' in sql
-    assert 'ORDER BY CASE LOWER("priority")' in sql
-    assert "DESC" in sql
-
-
-def test_critical_priority_repairs_filter_verified_priority_column():
-    contexts = [
-        """
-        CREATE TABLE dbo_repair_logs (
-            id VARCHAR,
-            status VARCHAR,
-            priority VARCHAR,
-            created_at TIMESTAMP
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show all critical-priority repairs",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_repair_logs"' in sql
-    assert 'LOWER("priority") = \'critical\'' in sql
-
-
-def test_repairs_by_status_counts_verified_repair_rows():
-    contexts = [
-        """
-        CREATE TABLE dbo_repair_logs (
-            id VARCHAR,
-            status VARCHAR,
-            priority VARCHAR,
-            created_at TIMESTAMP
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show repairs by status",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'SELECT "status", COUNT("id") AS "record_count"' in sql
-    assert 'FROM "dbo_repair_logs"' in sql
-    assert 'GROUP BY "status"' in sql
-
-
-def test_latest_repair_logs_orders_by_verified_date_column():
-    contexts = [
-        """
-        CREATE TABLE dbo_repair_logs (
-            id VARCHAR,
-            status VARCHAR,
-            priority VARCHAR,
-            created_at TIMESTAMP
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show latest repair logs",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_repair_logs"' in sql
-    assert 'ORDER BY "created_at" DESC' in sql
-
-
-def test_semantic_column_alias_can_satisfy_priority_concept_with_verified_name():
+def test_schema_sample_value_filter_is_grounded_in_metadata():
     contexts = [
         """
         /*
         WREN RETRIEVED SEMANTIC CONTEXT
-        {"object_type":"model","semantic_context_not_sql_identifiers":{"description":"repair log records"},"columns":[{"sql_column_name_use_exactly":"Urgency","data_type":"VARCHAR","semantic_context_not_sql_identifier":"priority severity for a repair"}]}
+        {"object_type":"model","semantic_context_not_sql_identifiers":{"description":"work item records"},"columns":[{"sql_column_name_use_exactly":"State","data_type":"VARCHAR","sample_values":["Done","In Progress"]}]}
         WREN SQL IDENTIFIER CONTRACT
         */
-        CREATE TABLE dbo_work_items (
-            id VARCHAR,
-            Urgency VARCHAR,
+        CREATE TABLE work_items (
+            item_id VARCHAR,
+            State VARCHAR,
+            updated_at TIMESTAMP
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show all work item records with In Progress.",
+        contexts,
+    )
+
+    assert sql is not None
+    assert 'FROM "work_items"' in sql
+    assert 'LOWER("State") = \'in progress\'' in sql
+
+
+def test_unverified_filter_value_is_not_invented():
+    contexts = [
+        """
+        /*
+        WREN RETRIEVED SEMANTIC CONTEXT
+        {"object_type":"model","semantic_context_not_sql_identifiers":{"description":"work item records"},"columns":[{"sql_column_name_use_exactly":"State","data_type":"VARCHAR","sample_values":["Done"]}]}
+        WREN SQL IDENTIFIER CONTRACT
+        */
+        CREATE TABLE work_items (
+            item_id VARCHAR,
+            State VARCHAR
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show all work item records with Archived.",
+        contexts,
+    )
+    message = unsupported_schema_message(
+        "Show all work item records with Archived.",
+        contexts,
+    )
+
+    assert sql is None
+    assert message is not None
+    assert "archived" in message.lower()
+
+
+def test_grouped_count_uses_verified_dimension_only():
+    contexts = [
+        """
+        CREATE TABLE event_records (
+            event_id VARCHAR,
+            phase VARCHAR,
+            updated_at TIMESTAMP
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql("Show records by phase.", contexts)
+
+    assert sql is not None
+    assert 'SELECT "phase", COUNT(*) AS "record_count"' in sql
+    assert 'FROM "event_records"' in sql
+    assert 'GROUP BY "phase"' in sql
+
+
+def test_average_uses_verified_numeric_measure_not_count():
+    contexts = [
+        """
+        CREATE TABLE measurement_records (
+            entity_id VARCHAR,
+            model_code VARCHAR,
+            age_days DECIMAL
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql("Show average age by model.", contexts)
+
+    assert sql is not None
+    assert 'SELECT "model_code", AVG("age_days") AS "average_value"' in sql
+    assert 'GROUP BY "model_code"' in sql
+    assert "COUNT(" not in sql
+
+
+def test_average_without_verified_measure_is_unsupported():
+    contexts = [
+        """
+        CREATE TABLE measurement_records (
+            entity_id VARCHAR,
+            model_code VARCHAR
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql("Show average age by model.", contexts)
+    message = unsupported_schema_message("Show average age by model.", contexts)
+
+    assert sql is None
+    assert message is not None
+    assert "age" in message.lower()
+
+
+def test_latest_uses_verified_temporal_column():
+    contexts = [
+        """
+        CREATE TABLE event_records (
+            event_id VARCHAR,
+            event_time TIMESTAMP,
+            phase VARCHAR
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql("Show latest event records.", contexts)
+
+    assert sql is not None
+    assert 'FROM "event_records"' in sql
+    assert 'ORDER BY "event_time" DESC' in sql
+
+
+def test_monthly_count_uses_requested_temporal_column_when_verified():
+    contexts = [
+        """
+        CREATE TABLE event_records (
+            event_id VARCHAR,
+            updated_at TIMESTAMP,
             created_at TIMESTAMP
         );
         """
     ]
 
     sql = generate_simple_analytics_sql(
-        "Which repair records have the highest priority?",
+        "Show the number of event records updated each month.",
         contexts,
     )
 
     assert sql is not None
-    assert 'FROM "dbo_work_items"' in sql
-    assert '"Urgency"' in sql
-    assert '"priority"' not in sql
-
-
-def test_failure_by_technician_fallback_uses_verified_tech_column():
-    contexts = [
-        """
-        CREATE TABLE dbo_DebugEntries_Staging2 (
-            Tech VARCHAR,
-            Failed VARCHAR,
-            Material VARCHAR
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show the number of failures by technician.",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_DebugEntries_Staging2"' in sql
-    assert 'SELECT "Tech", COUNT("Failed") AS "record_count"' in sql
-    assert 'WHERE ("Failed" IS NOT NULL AND "Failed" <> \'\')' in sql
-
-
-def test_failure_by_material_fallback_uses_verified_material_column():
-    contexts = [
-        """
-        CREATE TABLE dbo_DebugEntries_Staging2 (
-            Tech VARCHAR,
-            Failed VARCHAR,
-            Material VARCHAR
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show failures by material.",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_DebugEntries_Staging2"' in sql
-    assert 'SELECT "Material", COUNT("Failed") AS "record_count"' in sql
-
-
-def test_failure_type_value_filter_uses_verified_failure_type_column():
-    contexts = [
-        """
-        CREATE TABLE dbo_DebugEntries (
-            SerialNumber VARCHAR,
-            FailedAt VARCHAR,
-            Material VARCHAR
-        );
-        """,
-        """
-        CREATE TABLE dbo_repair_logs (
-            board_model VARCHAR,
-            failure_code VARCHAR,
-            status VARCHAR
-        );
-        """,
-        """
-        CREATE TABLE dbo_report_failures (
-            failure_type VARCHAR,
-            failure_line VARCHAR,
-            test_name VARCHAR
-        );
-        """,
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show the number of units with JTAG as the failure type.",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_report_failures"' in sql
+    assert 'EXTRACT(YEAR FROM "updated_at") AS "year"' in sql
+    assert 'EXTRACT(MONTH FROM "updated_at") AS "month"' in sql
     assert 'COUNT(*) AS "record_count"' in sql
-    assert "LOWER(\"failure_type\") = 'jtag'" in sql
 
 
-def test_board_models_most_failures_counts_failure_records_not_defect_rate():
+def test_order_by_uses_verified_column_and_sample_value():
     contexts = [
         """
-        CREATE TABLE dbo_batch_records (
-            board_model VARCHAR,
-            supplier VARCHAR,
-            defect_rate DECIMAL
+        /*
+        WREN RETRIEVED SEMANTIC CONTEXT
+        {"object_type":"model","semantic_context_not_sql_identifiers":{"description":"case records"},"columns":[{"sql_column_name_use_exactly":"State","data_type":"VARCHAR","sample_values":["Open","Closed"]}]}
+        WREN SQL IDENTIFIER CONTRACT
+        */
+        CREATE TABLE case_records (
+            case_id VARCHAR,
+            State VARCHAR,
+            updated_at TIMESTAMP
         );
-        """,
         """
-        CREATE TABLE dbo_repair_logs (
-            board_model VARCHAR,
-            failure_code VARCHAR,
-            status VARCHAR,
-            priority VARCHAR
-        );
-        """,
     ]
 
     sql = generate_simple_analytics_sql(
-        "Show the top 5 board models with the most failures.",
+        "Show all case records with Open ordered by case ID.",
         contexts,
     )
 
     assert sql is not None
-    assert 'FROM "dbo_repair_logs"' in sql
-    assert 'SELECT "board_model", COUNT("failure_code") AS "record_count"' in sql
-    assert '"defect_rate"' not in sql
+    assert 'LOWER("State") = \'open\'' in sql
+    assert 'ORDER BY "case_id" ASC' in sql
+
+
+def test_top_grouped_count_is_schema_shape_based():
+    contexts = [
+        """
+        CREATE TABLE occurrence_records (
+            occurrence_id VARCHAR,
+            model_code VARCHAR,
+            reason_code VARCHAR
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show top 5 occurrence records by model.",
+        contexts,
+    )
+
+    assert sql is not None
+    assert 'SELECT "model_code", COUNT(*) AS "record_count"' in sql
+    assert 'ORDER BY "record_count" DESC' in sql
     assert "LIMIT 5" in sql
 
 
-def test_board_models_highest_defect_rate_uses_rate_metric():
+def test_sum_by_year_uses_verified_measure_and_temporal_column():
     contexts = [
         """
-        CREATE TABLE dbo_batch_records (
-            board_model VARCHAR,
-            supplier VARCHAR,
-            defect_rate DECIMAL
+        CREATE TABLE transaction_records (
+            transaction_id VARCHAR,
+            account_name VARCHAR,
+            amount_value DECIMAL,
+            posted_at TIMESTAMP
         );
-        """,
         """
-        CREATE TABLE dbo_repair_logs (
-            board_model VARCHAR,
-            failure_code VARCHAR,
-            status VARCHAR
-        );
-        """,
     ]
 
-    sql = generate_simple_analytics_sql(
-        "Show the board models with the highest defect rate.",
-        contexts,
-    )
+    sql = generate_simple_analytics_sql("Show total amount by year.", contexts)
 
     assert sql is not None
-    assert 'FROM "dbo_batch_records"' in sql
-    assert 'SELECT "board_model", AVG("defect_rate") AS "average_value"' in sql
-    assert 'ORDER BY "average_value" DESC' in sql
-
-
-def test_semantic_coverage_rejects_rate_for_failure_count_intent():
-    contexts = [
-        """
-        CREATE TABLE dbo_batch_records (
-            board_model VARCHAR,
-            defect_rate DECIMAL
-        );
-        """
-    ]
-
-    error = validate_sql_semantic_coverage(
-        """
-        SELECT board_model, defect_rate
-        FROM dbo_batch_records
-        ORDER BY defect_rate DESC
-        LIMIT 5
-        """,
-        "Show the top 5 board models with the most failures.",
-        contexts,
-    )
-
-    assert error is not None
-    assert "count of failure records" in error
-
-
-def test_repairs_by_technician_requires_one_schema_object_covering_both_concepts():
-    contexts = [
-        """
-        CREATE TABLE dbo_repair_logs (
-            id VARCHAR,
-            status VARCHAR,
-            priority VARCHAR,
-            failure_code VARCHAR
-        );
-        """,
-        """
-        CREATE TABLE dbo_DebugEntries_Staging2 (
-            Tech VARCHAR,
-            Failed VARCHAR
-        );
-        """,
-    ]
-
-    message = unsupported_schema_message("Show repairs by technician.", contexts)
-
-    assert message is not None
-    assert "repair" in message
-    assert "technician" in message
-
-
-def test_invoice_status_count_uses_verified_task_status_column():
-    contexts = [
-        """
-        CREATE TABLE dbo_PBI_View_Unrecorded_Liabilities_Header (
-            invoicenumber VARCHAR,
-            taskstatus VARCHAR,
-            invoicedate TIMESTAMP,
-            grossamount DECIMAL,
-            suppliername VARCHAR
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql("Show invoices grouped by task status.", contexts)
-
-    assert sql is not None
-    assert 'FROM "dbo_PBI_View_Unrecorded_Liabilities_Header"' in sql
-    assert 'SELECT "taskstatus", COUNT("invoicenumber") AS "record_count"' in sql
-    assert 'GROUP BY "taskstatus"' in sql
-
-
-def test_invoice_month_count_groups_by_verified_invoice_date():
-    contexts = [
-        """
-        CREATE TABLE dbo_PBI_View_Unrecorded_Liabilities_Header (
-            invoicenumber VARCHAR,
-            invoicedate TIMESTAMP,
-            grossamount DECIMAL,
-            suppliername VARCHAR
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql("Show invoice counts by invoice month.", contexts)
-
-    assert sql is not None
-    assert 'EXTRACT(YEAR FROM "invoicedate") AS "year"' in sql
-    assert 'EXTRACT(MONTH FROM "invoicedate") AS "month"' in sql
-    assert 'COUNT("invoicenumber") AS "record_count"' in sql
-
-
-def test_top_suppliers_by_gross_amount_uses_verified_amount_measure():
-    contexts = [
-        """
-        CREATE TABLE dbo_PBI_View_Unrecorded_Liabilities_Header (
-            suppliername VARCHAR,
-            invoicenumber VARCHAR,
-            grossamount DECIMAL
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql("List the top suppliers by total gross amount.", contexts)
-
-    assert sql is not None
-    assert 'SELECT "suppliername", SUM("grossamount") AS "total_value"' in sql
-    assert 'ORDER BY "total_value" DESC' in sql
-
-
-def test_supplier_email_missing_filter_uses_verified_email_column():
-    contexts = [
-        """
-        CREATE TABLE dbo_SupplierMaster_Email (
-            supplierid VARCHAR,
-            suppliername VARCHAR,
-            email1 VARCHAR,
-            email2 VARCHAR
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Which supplier email records are missing their first email address?",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_SupplierMaster_Email"' in sql
-    assert 'WHERE ("email1" IS NULL OR "email1" = \'\')' in sql
-
-
-def test_reconciliation_count_by_status_and_preparer_group_uses_two_dimensions():
-    contexts = [
-        """
-        CREATE TABLE dbo_PBI_View_Recon_Status (
-            transid VARCHAR,
-            status VARCHAR,
-            preparergroup VARCHAR,
-            glaccount VARCHAR
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Count reconciliations by status and preparer group.",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_PBI_View_Recon_Status"' in sql
-    assert 'SELECT "status", "preparergroup", COUNT("transid") AS "record_count"' in sql
-    assert 'GROUP BY "status", "preparergroup"' in sql
-
-
-def test_gl_accounts_highest_balance_uses_verified_balance_measure():
-    contexts = [
-        """
-        CREATE TABLE dbo_View_Global_Exposure_SAP (
-            glaccount VARCHAR,
-            year INTEGER,
-            month INTEGER,
-            endbalance DECIMAL
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show GL accounts with the highest ending balance this year.",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_View_Global_Exposure_SAP"' in sql
-    assert 'SELECT "glaccount", SUM("endbalance") AS "total_value"' in sql
-    assert 'WHERE "year" = ' in sql
-    assert 'ORDER BY "total_value" DESC' in sql
-
-
-def test_recent_journal_workflow_uses_verified_signer_date():
-    contexts = [
-        """
-        CREATE TABLE dbo_Journals_Workflow (
-            journalid VARCHAR,
-            signer VARCHAR,
-            signer_status VARCHAR,
-            signer_date TIMESTAMP
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql("List recent journal workflow approvals.", contexts)
-
-    assert sql is not None
-    assert 'FROM "dbo_Journals_Workflow"' in sql
-    assert 'ORDER BY "signer_date" DESC' in sql
-
-
-def test_average_failed_unit_age_by_board_model_uses_avg_age_measure():
-    contexts = [
-        """
-        CREATE TABLE dbo_unit_failures (
-            unit_id VARCHAR,
-            board_model VARCHAR,
-            failure_code VARCHAR,
-            unit_age_days DECIMAL
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show the average age of failed units for each board model.",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_unit_failures"' in sql
-    assert 'SELECT "board_model", AVG("unit_age_days") AS "average_value"' in sql
-    assert 'WHERE ("failure_code" IS NOT NULL AND "failure_code" <> \'\')' in sql
-    assert 'GROUP BY "board_model"' in sql
-    assert 'COUNT(' not in sql
-
-
-def test_average_failed_unit_age_without_age_measure_is_unsupported():
-    contexts = [
-        """
-        CREATE TABLE dbo_repair_logs (
-            unit_id VARCHAR,
-            board_model VARCHAR,
-            failure_code VARCHAR,
-            status VARCHAR
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show the average age of failed units for each board model.",
-        contexts,
-    )
-    message = unsupported_schema_message(
-        "Show the average age of failed units for each board model.",
-        contexts,
-    )
-
-    assert sql is None
-    assert message is not None
-    assert "age/duration" in message
-
-
-def test_distribution_of_repairs_across_statuses_groups_counts():
-    contexts = [
-        """
-        CREATE TABLE dbo_repair_logs (
-            id VARCHAR,
-            status VARCHAR,
-            priority VARCHAR,
-            created_at TIMESTAMP
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show the distribution of repairs across completed and in-progress statuses.",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_repair_logs"' in sql
-    assert 'SELECT "status", COUNT("id") AS "record_count"' in sql
-    assert 'LOWER("status") IN' in sql
-    assert "'completed'" in sql
-    assert "'in-progress'" in sql
-    assert "'in progress'" in sql
-    assert 'GROUP BY "status"' in sql
-    assert "SELECT *" not in sql
-
-
-def test_board_models_associated_with_locations_requires_verified_columns():
-    contexts = [
-        """
-        CREATE TABLE dbo_board_locations (
-            board_model VARCHAR,
-            location VARCHAR,
-            updated_at TIMESTAMP
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show the board models associated with each location.",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'SELECT DISTINCT "board_model", "location"' in sql
-    assert 'FROM "dbo_board_locations"' in sql
-
-
-def test_board_models_associated_with_locations_without_location_is_unsupported():
-    contexts = [
-        """
-        CREATE TABLE dbo_parts_catalog (
-            board_model VARCHAR,
-            material VARCHAR
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show the board models associated with each location.",
-        contexts,
-    )
-    message = unsupported_schema_message(
-        "Show the board models associated with each location.",
-        contexts,
-    )
-
-    assert sql is None
-    assert message is not None
-    assert "location" in message
-
-
-def test_blocked_tickets_use_verified_ticket_status_and_order_by_ticket_id():
-    contexts = [
-        """
-        CREATE TABLE dbo_ticket_records (
-            ticket_id VARCHAR,
-            status VARCHAR,
-            priority VARCHAR,
-            updated_at TIMESTAMP
-        );
-        """,
-        """
-        CREATE TABLE dbo_team_users (
-            id VARCHAR,
-            active BOOLEAN,
-            email VARCHAR
-        );
-        """,
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show all blocked tickets ordered by ticket ID.",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_ticket_records"' in sql
-    assert 'LOWER("status") = \'blocked\'' in sql
-    assert 'ORDER BY "ticket_id" ASC' in sql
-    assert 'dbo_team_users' not in sql
-
-
-def test_blocked_ticket_activity_kind_without_status_is_unsupported():
-    contexts = [
-        """
-        CREATE TABLE dbo_ticket_activity_log (
-            ticket_id VARCHAR,
-            kind VARCHAR,
-            created_at TIMESTAMP
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show all blocked tickets ordered by ticket ID.",
-        contexts,
-    )
-    message = unsupported_schema_message(
-        "Show all blocked tickets ordered by ticket ID.",
-        contexts,
-    )
-
-    assert sql is None
-    assert message is not None
-    assert "status" in message
-
-
-def test_semantic_coverage_rejects_blocked_ticket_filter_on_activity_kind():
-    contexts = [
-        """
-        CREATE TABLE dbo_ticket_activity_log (
-            ticket_id VARCHAR,
-            kind VARCHAR,
-            created_at TIMESTAMP
-        );
-        """
-    ]
-
-    error = validate_sql_semantic_coverage(
-        """
-        SELECT ticket_id, kind
-        FROM dbo_ticket_activity_log
-        WHERE LOWER(kind) = 'blocked'
-        ORDER BY ticket_id
-        """,
-        "Show all blocked tickets ordered by ticket ID.",
-        contexts,
-    )
-
-    assert error is not None
-    assert "status" in error
-
-
-def test_repair_counts_updated_each_month_use_verified_updated_timestamp():
-    contexts = [
-        """
-        CREATE TABLE dbo_repair_logs (
-            repair_id VARCHAR,
-            status VARCHAR,
-            updated_at TIMESTAMP,
-            created_at TIMESTAMP
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show the number of repairs updated each month.",
-        contexts,
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_repair_logs"' in sql
-    assert 'EXTRACT(YEAR FROM "updated_at") AS "year"' in sql
-    assert 'EXTRACT(MONTH FROM "updated_at") AS "month"' in sql
-    assert 'COUNT("repair_id") AS "record_count"' in sql
-    assert '"created_at"' not in sql
-
-
-def test_repair_counts_updated_each_month_without_updated_timestamp_is_unsupported():
-    contexts = [
-        """
-        CREATE TABLE dbo_repair_logs (
-            repair_id VARCHAR,
-            status VARCHAR,
-            created_at TIMESTAMP
-        );
-        """
-    ]
-
-    sql = generate_simple_analytics_sql(
-        "Show the number of repairs updated each month.",
-        contexts,
-    )
-
-    assert sql is None
-
-
-def test_semantic_coverage_rejects_created_timestamp_for_updated_question():
-    contexts = [
-        """
-        CREATE TABLE dbo_repair_logs (
-            repair_id VARCHAR,
-            status VARCHAR,
-            updated_at TIMESTAMP,
-            created_at TIMESTAMP
-        );
-        """
-    ]
-
-    error = validate_sql_semantic_coverage(
-        """
-        SELECT EXTRACT(YEAR FROM created_at) AS year,
-               EXTRACT(MONTH FROM created_at) AS month,
-               COUNT(repair_id) AS record_count
-        FROM dbo_repair_logs
-        GROUP BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at)
-        """,
-        "Show the number of repairs updated each month.",
-        contexts,
-    )
-
-    assert error is not None
-    assert "updated" in error
+    assert 'EXTRACT(YEAR FROM "posted_at") AS "year"' in sql
+    assert 'SUM("amount_value") AS "total_value"' in sql
 
 
 def test_semantic_coverage_rejects_count_for_average_intent():
     contexts = [
         """
-        CREATE TABLE dbo_unit_failures (
-            unit_id VARCHAR,
-            board_model VARCHAR,
-            failure_code VARCHAR,
-            unit_age_days DECIMAL
+        CREATE TABLE measurement_records (
+            entity_id VARCHAR,
+            model_code VARCHAR,
+            age_days DECIMAL
         );
         """
     ]
 
     error = validate_sql_semantic_coverage(
         """
-        SELECT board_model, COUNT(failure_code) AS record_count
-        FROM dbo_unit_failures
-        GROUP BY board_model
+        SELECT model_code, COUNT(*) AS record_count
+        FROM measurement_records
+        GROUP BY model_code
         """,
-        "Show the average age of failed units for each board model.",
+        "Show average age by model.",
         contexts,
     )
 
     assert error is not None
-    assert "average" in error
+    assert "average" in error.lower()
+
+
+def test_literal_validation_rejects_values_outside_verified_samples():
+    contexts = [
+        """
+        /*
+        WREN RETRIEVED SEMANTIC CONTEXT
+        {"object_type":"model","semantic_context_not_sql_identifiers":{"description":"case records"},"columns":[{"sql_column_name_use_exactly":"State","data_type":"VARCHAR","sample_values":["Open"]}]}
+        WREN SQL IDENTIFIER CONTRACT
+        */
+        CREATE TABLE case_records (
+            case_id VARCHAR,
+            State VARCHAR
+        );
+        """
+    ]
+
+    error = validate_sql_semantic_coverage(
+        """
+        SELECT case_id
+        FROM case_records
+        WHERE LOWER(State) = 'Closed'
+        """,
+        "Show case records with Open.",
+        contexts,
+    )
+
+    assert error is not None
+    assert "sample values" in error

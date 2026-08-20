@@ -258,136 +258,15 @@ _MONTH_NAME_TO_NUMBER = {
 }
 
 
-def _expand_fallback_token_aliases(tokens: set[str]) -> set[str]:
-    aliases = {
-        "bu": {"business", "unit"},
-        "acct": {"account"},
-        "accounting": {"account", "ledger"},
-        "accounts": {"account"},
-        "address": {"email", "mail"},
-        "addresses": {"address", "email", "mail"},
-        "approval": {"approver", "reviewer", "signer", "status"},
-        "approvals": {"approval", "approver", "reviewer", "signer", "status"},
-        "approver": {"approval", "reviewer", "signer"},
-        "approvers": {"approval", "approver", "reviewer", "signer"},
-        "avg": {"average"},
-        "averages": {"average"},
-        "balances": {"balance"},
-        "blocked": {"block", "status"},
-        "blocker": {"priority", "severity"},
-        "breakdown": {"count", "distribution", "group"},
-        "breakdowns": {"breakdown", "count", "distribution", "group"},
-        "cases": {"case", "ticket"},
-        "closed": {"status"},
-        "completed": {"status"},
-        "cust": {"customer"},
-        "customers": {"customer"},
-        "critical": {"priority", "severity"},
-        "curr": {"currency"},
-        "boards": {"board"},
-        "days": {"age", "duration"},
-        "distribution": {"count", "group"},
-        "durations": {"duration"},
-        "elapsed": {"age", "duration"},
-        "email": {"address", "mail"},
-        "email1": {"address", "email", "first", "mail", "primary"},
-        "emails": {"address", "email", "mail"},
-        "endbalance": {"balance", "end", "ending"},
-        "ending": {"end"},
-        "gl": {"account", "ledger"},
-        "glaccount": {"account", "gl", "ledger"},
-        "glaccounts": {"account", "gl", "ledger"},
-        "gross": {"amount", "value"},
-        "grossamount": {"amount", "gross", "value"},
-        "high": {"priority", "severity"},
-        "highest": {"top"},
-        "hours": {"age", "duration"},
-        "invoicedate": {"date", "invoice"},
-        "invoicemonth": {"invoice", "month"},
-        "invoicenumber": {"invoice", "number"},
-        "invoiceyear": {"invoice", "year"},
-        "journals": {"journal"},
-        "journalid": {"id", "journal"},
-        "journalnumber": {"journal", "number"},
-        "logs": {"log", "record"},
-        "log": {"record"},
-        "lows": {"low"},
-        "lowest": {"bottom"},
-        "models": {"model"},
-        "inv": {"invoice"},
-        "invoices": {"invoice"},
-        "issues": {"issue", "ticket"},
-        "net": {"amount", "value"},
-        "netamount": {"amount", "net", "value"},
-        "opened": {"created", "date", "status", "time"},
-        "open": {"status"},
-        "ord": {"order"},
-        "orders": {"order"},
-        "pending": {"status"},
-        "preparergroup": {"group", "preparer"},
-        "preparers": {"preparer"},
-        "qty": {"quantity"},
-        "num": {"number"},
-        "no": {"number"},
-        "numbers": {"number"},
-        "prod": {"product"},
-        "products": {"product"},
-        "priorities": {"priority", "severity"},
-        "priority": {"severity"},
-        "recent": {"latest"},
-        "recon": {"reconciliation", "reconcile"},
-        "reconciliations": {"reconciliation", "reconcile", "recon"},
-        "reconciliation": {"reconcile", "recon"},
-        "records": {"record"},
-        "rep": {"representative", "salesperson"},
-        "repairs": {"repair"},
-        "reviewer": {"approval", "approver", "signer"},
-        "reviewers": {"approval", "approver", "reviewer", "signer"},
-        "salesperson": {"sales", "person"},
-        "severity": {"priority"},
-        "signer": {"approval", "approver", "reviewer"},
-        "signers": {"approval", "approver", "reviewer", "signer"},
-        "supplier": {"vendor"},
-        "supplierid": {"id", "supplier", "vendor"},
-        "suppliername": {"name", "supplier", "vendor"},
-        "suppliers": {"supplier", "vendor"},
-        "taskstatus": {"status", "task"},
-        "tasks": {"status", "task"},
-        "tech": {"technician"},
-        "technician": {"tech"},
-        "ticketid": {"id", "ticket"},
-        "ticketnumber": {"number", "ticket"},
-        "tickets": {"case", "issue", "ticket"},
-        "transid": {"id", "trans", "transaction"},
-        "updated": {"date", "modified", "time", "updated"},
-        "updatedat": {"date", "time", "updated"},
-        "modified": {"date", "modified", "time", "updated"},
-        "modifiedat": {"date", "modified", "time", "updated"},
-        "vendor": {"supplier"},
-        "vendors": {"supplier", "vendor"},
-        "workflow": {"approval", "status"},
-        "workflows": {"approval", "status", "workflow"},
-        "counts": {"count"},
-        "failed": {"failure"},
-        "failures": {"failure"},
-        "defects": {"defect"},
-        "types": {"type"},
-        "units": {"unit", "serial"},
-        "urgency": {"priority", "severity"},
-        "locations": {"location"},
-        "materials": {"material"},
-        "mean": {"average"},
-        "missing": {"blank", "empty", "null"},
-    }
+def _expand_fallback_token_variants(tokens: set[str]) -> set[str]:
     expanded = set(tokens)
-    for token in list(tokens):
-        expanded.update(aliases.get(token, set()))
-    if {"business", "unit"}.issubset(expanded):
-        expanded.add("bu")
-    if "customer" in expanded and "number" in expanded:
-        expanded.update({"cust", "id", "no"})
-    if "order" in expanded and "number" in expanded:
-        expanded.update({"ord", "id", "no"})
+    for token in tokens:
+        if len(token) > 4 and token.endswith("ies"):
+            expanded.add(token[:-3] + "y")
+        if len(token) > 4 and token.endswith("es"):
+            expanded.add(token[:-2])
+        if len(token) > 3 and token.endswith("s"):
+            expanded.add(token[:-1])
     return expanded
 
 
@@ -1213,6 +1092,59 @@ def _sql_mentions_literal_value(sql: str, values: list[str]) -> bool:
     return False
 
 
+def _extract_sql_string_literals(sql: str) -> list[str]:
+    literals = []
+    for match in _SINGLE_QUOTED_LITERAL.finditer(sql):
+        literal = match.group(0)[1:-1].replace("''", "'")
+        if literal:
+            literals.append(literal)
+    return literals
+
+
+def _extract_column_filter_literals(sql: str, column_name: str) -> list[str]:
+    stripped = _strip_string_literals(sql)
+    quoted_column = re.escape(_quote_identifier(column_name))
+    bare_column = re.escape(column_name)
+    column_pattern = rf"(?:{quoted_column}|(?<![\w$\".]){bare_column}(?![\w$]))"
+    literals = []
+    for match in re.finditer(column_pattern, stripped):
+        window = sql[match.start() : match.start() + 240]
+        literals.extend(_extract_sql_string_literals(window))
+    return literals
+
+
+def _validate_literal_values_against_samples(
+    sql: str,
+    schema_details: dict[str, list[dict[str, str]]],
+    grounding: dict[str, Any],
+) -> str | None:
+    referenced_relations = {
+        relation
+        for relation in grounding["relation_references"]
+        if relation not in grounding["cte_names"]
+    }
+    for relation in referenced_relations:
+        for column in schema_details.get(relation, []):
+            sample_values = column.get("sample_values") or []
+            if not sample_values:
+                continue
+            literals = _extract_column_filter_literals(sql, column["name"])
+            if not literals:
+                continue
+            sample_tokens = _sample_value_tokens(column)
+            sample_lowers = {str(value).lower() for value in sample_values}
+            for literal in literals:
+                literal_tokens = _fallback_tokens(literal)
+                if literal.lower() in sample_lowers or literal_tokens & sample_tokens:
+                    continue
+                return (
+                    "Schema grounding failed. The generated SQL filters column "
+                    f"{column['name']} with a literal value not found in that "
+                    "column's verified sample values."
+                )
+    return None
+
+
 def _validate_unqualified_columns_for_single_relation(
     sql: str,
     schema_index: dict[str, set[str] | None],
@@ -1417,10 +1349,6 @@ def validate_sql_semantic_coverage(
         return None
 
     raw_query_tokens = _fallback_tokens(query)
-    query_tokens = _expanded_fallback_query_tokens(query)
-    concepts = _requested_business_concepts(raw_query_tokens)
-    if not concepts:
-        return None
 
     schema_details = _extract_schema_details(contexts)
     if not schema_details:
@@ -1441,144 +1369,55 @@ def validate_sql_semantic_coverage(
         if columns is not None:
             schema_tokens.update(_schema_tokens_for_table(relation, columns))
 
-    if not schema_tokens:
-        return None
+    required_tokens = _schema_derived_query_tokens(raw_query_tokens, schema_details)
+    unsupported_tokens = _unsupported_query_tokens(raw_query_tokens, schema_details)
+    if unsupported_tokens:
+        return (
+            "Schema grounding failed. The retrieved schema metadata does not "
+            "support these non-operational question term(s): "
+            f"{', '.join(sorted(unsupported_tokens))}. "
+            "Select a project with matching schema metadata or ask a supported "
+            "question."
+        )
 
-    missing_concepts = [
-        label for label, concept_tokens in concepts if not schema_tokens & concept_tokens
-    ]
-    if not missing_concepts:
-        status_filter_values = _extract_status_filter_values(query)
-        if status_filter_values:
-            supported_status_columns = []
-            for relation in referenced_relations:
-                for column in schema_details.get(relation, []):
-                    if not _sql_mentions_identifier(sql, column["name"]):
-                        continue
-                    if _column_supports_filter_values(column, status_filter_values):
-                        supported_status_columns.append(column["name"])
-            if not supported_status_columns:
-                return (
-                    "Schema grounding failed. The question asks for a status "
-                    "filter value, but the generated SQL does not filter on a "
-                    "verified status/state/blocking column that supports that "
-                    "value. Use a verified status field and value, ask a "
-                    "clarifying question, or return no SQL."
-                )
-            if not _sql_mentions_literal_value(sql, status_filter_values):
-                value_backed_by_column_name = any(
-                    _fallback_tokens(column_name)
-                    & {
-                        token
-                        for value in status_filter_values
-                        for token in _fallback_tokens(value)
-                    }
-                    for column_name in supported_status_columns
-                )
-                if not value_backed_by_column_name:
-                    return (
-                        "Schema grounding failed. The question asks for a "
-                        "specific status value, but the generated SQL does not "
-                        "apply that verified value as a filter."
-                    )
+    missing_concepts = sorted(required_tokens - schema_tokens)
+    if missing_concepts:
+        return (
+            "Schema grounding failed. The generated SQL uses verified identifiers, "
+            "but the selected table or view does not cover these schema-backed "
+            f"question tokens: {', '.join(missing_concepts)}. Use only schema "
+            "objects whose metadata supports the requested terms, or return no "
+            "SQL if the active project does not contain them."
+        )
 
-        if raw_query_tokens & {"updated", "modified"}:
-            temporal_columns = [
-                _choose_temporal_column(raw_query_tokens, schema_details.get(relation, []))
-                for relation in referenced_relations
-            ]
-            temporal_columns = [column for column in temporal_columns if column]
-            if not temporal_columns or not any(
-                _sql_mentions_identifier(sql, column) for column in temporal_columns
-            ):
-                return (
-                    "Schema grounding failed. The question asks for records "
-                    "updated or modified over time, but the generated SQL does "
-                    "not use a verified updated/modified timestamp column. Use "
-                    "that column or return no SQL if it is not available."
-                )
-
-        if _is_average_metric_intent(raw_query_tokens):
-            if not re.search(r"(?is)\bAVG\s*\(", sql):
-                return (
-                    "Schema grounding failed. The question asks for an average "
-                    "metric, but the generated SQL does not compute an AVG "
-                    "aggregate over a verified measure. Use a verified numeric "
-                    "measure for the requested average, or return no SQL if the "
-                    "active project does not contain one."
-                )
-            if raw_query_tokens & _AVERAGE_MEASURE_TOKENS:
-                average_measure_columns = []
-                for relation in referenced_relations:
-                    column = _choose_average_measure_column(
-                        raw_query_tokens,
-                        schema_details.get(relation, []),
-                    )
-                    if column:
-                        average_measure_columns.append(column["name"])
-                if average_measure_columns and not any(
-                    _sql_mentions_identifier(sql, column)
-                    for column in average_measure_columns
-                ):
-                    return (
-                        "Schema grounding failed. The question asks for an "
-                        "average of an age or duration measure, but the "
-                        "generated SQL does not use a verified age/duration "
-                        "column. Use the verified measure column or return no "
-                        "SQL if the active project does not contain one."
-                    )
-            if re.search(r"(?is)\bCOUNT\s*\(", sql) and not re.search(
-                r"(?is)\bAVG\s*\(",
-                sql,
-            ):
-                return (
-                    "Schema grounding failed. The question asks for an average "
-                    "metric, but the generated SQL computes a count. Do not "
-                    "substitute COUNT for unsupported averages."
-                )
-        if _is_distribution_metric_intent(raw_query_tokens) and (
-            raw_query_tokens & {"status", "priority", "severity"}
+    if _is_average_metric_intent(raw_query_tokens):
+        if not re.search(r"(?is)\bAVG\s*\(", sql):
+            return (
+                "Schema grounding failed. The question asks for an average "
+                "metric, but the generated SQL does not compute AVG over a "
+                "verified measure."
+            )
+        if re.search(r"(?is)\bCOUNT\s*\(", sql) and not re.search(
+            r"(?is)\bAVG\s*\(",
+            sql,
         ):
-            if not re.search(r"(?is)\bCOUNT\s*\(", sql) or not re.search(
-                r"(?is)\bGROUP\s+BY\b",
-                sql,
-            ):
-                return (
-                    "Schema grounding failed. The question asks for a "
-                    "distribution across categories, but the generated SQL does "
-                    "not compute grouped counts. Use GROUP BY on the verified "
-                    "category column with COUNT, or return no SQL."
-                )
-        if _is_failure_count_intent(raw_query_tokens, query_tokens):
-            if not re.search(r"(?is)\bCOUNT\s*\(", sql):
-                return (
-                    "Schema grounding failed. The question asks for a count of "
-                    "failure records, but the generated SQL does not compute a "
-                    "COUNT aggregate. Use a verified failure-record column/table "
-                    "and group by the requested dimension, or return no SQL if "
-                    "the active project does not contain it."
-                )
-            for relation in referenced_relations:
-                for column in schema_details.get(relation, []):
-                    if _is_rate_like_column(column) and _sql_mentions_identifier(
-                        sql, column["name"]
-                    ):
-                        return (
-                            "Schema grounding failed. The question asks for a "
-                            "count of failure records, but the generated SQL uses "
-                            f"rate-like column {column['name']}. Use COUNT over a "
-                            "verified failure occurrence field instead, or return "
-                            "no SQL if the active project does not contain one."
-                        )
-        return None
+            return (
+                "Schema grounding failed. The question asks for an average "
+                "metric, but the generated SQL computes a count."
+            )
 
-    return (
-        "Schema grounding failed. The generated SQL uses verified identifiers, "
-        "but the selected table or view does not contain verified fields for the "
-        f"requested business concept(s): {', '.join(missing_concepts)}. Use only "
-        "schema objects whose table or column names explicitly support those "
-        "concepts, or return no SQL if the active project does not contain them."
-    )
+    if _is_distribution_metric_intent(raw_query_tokens):
+        if not re.search(r"(?is)\bCOUNT\s*\(", sql) or not re.search(
+            r"(?is)\bGROUP\s+BY\b",
+            sql,
+        ):
+            return (
+                "Schema grounding failed. The question asks for a distribution "
+                "or breakdown, but the generated SQL does not compute grouped "
+                "counts."
+            )
+
+    return _validate_literal_values_against_samples(sql, schema_details, grounding)
 
 
 def unsupported_schema_message(
@@ -1588,23 +1427,35 @@ def unsupported_schema_message(
     if not query:
         return None
     query_tokens = _fallback_tokens(query)
-    concepts = _requested_business_concepts(query_tokens)
-    if not concepts:
-        return None
     schema_details = _extract_schema_details(contexts)
     if not schema_details:
         return None
-    if any(
-        _table_covers_requested_concepts(table_name, columns, query_tokens)
-        for table_name, columns in schema_details.items()
+    required_tokens = _schema_derived_query_tokens(query_tokens, schema_details)
+    unsupported_tokens = _unsupported_query_tokens(query_tokens, schema_details)
+    if unsupported_tokens:
+        return (
+            "No retrieved table or view in the active project contains verified "
+            "schema metadata for all requested non-operational term(s): "
+            f"{', '.join(sorted(unsupported_tokens))}. Select a project with "
+            "matching fields, add schema descriptions/sample values, or ask a "
+            "question supported by the selected project's schema."
+        )
+
+    table_tokens = _schema_tokens_by_table(schema_details)
+    if required_tokens and any(
+        required_tokens <= tokens for tokens in table_tokens.values()
     ):
         return None
-    concept_labels = ", ".join(label for label, _ in concepts)
+
+    if not required_tokens and not unsupported_tokens:
+        return None
+    detail_tokens = sorted(required_tokens or unsupported_tokens)
     return (
         "No retrieved table or view in the active project contains verified "
-        "fields for all requested business concept(s): "
-        f"{concept_labels}. Select a project with those fields or ask a question "
-        "supported by the selected project's schema."
+        "schema metadata for all requested non-operational term(s): "
+        f"{', '.join(detail_tokens)}. Select a project with matching fields, "
+        "add schema descriptions/sample values, or ask a question supported by "
+        "the selected project's schema."
     )
 
 
@@ -1654,7 +1505,7 @@ def _fallback_tokens(value: Any) -> set[str]:
         for token in _FALLBACK_TOKEN.findall(text.lower())
         if token not in _FALLBACK_STOPWORDS
     }
-    return _expand_fallback_token_aliases(tokens)
+    return _expand_fallback_token_variants(tokens)
 
 
 def _column_business_tokens(column: dict[str, Any]) -> set[str]:
@@ -1670,110 +1521,6 @@ def _table_business_tokens(
     tokens = _fallback_tokens(table_name)
     for column in columns:
         tokens.update(column.get("_table_semantic_tokens") or set())
-    return tokens
-
-
-def _expanded_fallback_query_tokens(query: str) -> set[str]:
-    tokens = _fallback_tokens(query)
-    if tokens & {"revenue", "sale", "sales", "trend", "trends"}:
-        tokens.update({"amount", "date", "intake", "revenue", "sales", "value"})
-    if tokens & {"order", "orders"}:
-        tokens.update({"amount", "customer", "date", "ord", "order", "value"})
-    if tokens & {"invoice", "invoices"}:
-        tokens.update(
-            {
-                "amount",
-                "currency",
-                "date",
-                "gross",
-                "invoice",
-                "month",
-                "net",
-                "number",
-                "status",
-                "supplier",
-                "task",
-                "year",
-            }
-        )
-    if tokens & {"supplier", "vendor"}:
-        tokens.update({"email", "id", "name", "number", "supplier", "vendor"})
-    if tokens & {"email", "address"}:
-        tokens.update({"address", "email", "first", "mail", "primary"})
-    if tokens & {"reconciliation", "recon", "reconcile"}:
-        tokens.update(
-            {
-                "account",
-                "gl",
-                "group",
-                "period",
-                "preparer",
-                "recon",
-                "reconciliation",
-                "reviewer",
-                "status",
-            }
-        )
-    if tokens & {"journal", "workflow", "approval", "approver", "reviewer", "signer"}:
-        tokens.update(
-            {
-                "approval",
-                "approver",
-                "date",
-                "journal",
-                "reviewer",
-                "signer",
-                "status",
-                "workflow",
-            }
-        )
-    if tokens & {"account", "accounts", "gl", "glaccount", "ledger"}:
-        tokens.update({"account", "balance", "gl", "glaccount", "ledger", "period", "year"})
-    if tokens & {"balance", "balances"}:
-        tokens.update({"amount", "balance", "end", "ending", "value", "year"})
-    if tokens & {"batch", "batches"}:
-        tokens.update({"batch", "board", "defect", "inspection", "rate", "supplier"})
-    if tokens & {"repair", "repairs"}:
-        tokens.update({"date", "failure", "log", "priority", "progress", "repair", "status"})
-    if tokens & {"ticket", "tickets"}:
-        tokens.update(
-            {
-                "activity",
-                "case",
-                "date",
-                "id",
-                "issue",
-                "log",
-                "modified",
-                "priority",
-                "state",
-                "status",
-                "ticket",
-                "updated",
-            }
-        )
-    if tokens & {"failure", "failures", "defect", "defects"}:
-        tokens.update({"code", "defect", "failure", "severity", "status", "type"})
-    if tokens & {"blocked", "closed", "completed", "escalated", "open", "pending", "resolved"}:
-        tokens.update({"progress", "state", "status"})
-    if tokens & {"updated", "modified"}:
-        tokens.update({"date", "day", "modified", "month", "time", "updated", "year"})
-    if tokens & {"age", "duration", "elapsed"}:
-        tokens.update({"age", "days", "duration", "elapsed", "hours"})
-    if tokens & {"average", "avg", "mean"}:
-        tokens.update({"average"})
-    if tokens & {"distribution", "breakdown", "across"}:
-        tokens.update({"count", "distribution", "group", "status"})
-    if tokens & {"material", "materials"}:
-        tokens.update({"item", "material", "part"})
-    if tokens & {"location", "locations"}:
-        tokens.update({"area", "location", "site"})
-    if tokens & {"month", "monthly", "july"}:
-        tokens.update({"date", "day", "month", "time", "year"})
-    elif tokens & {"latest", "trend", "trends", "year"}:
-        tokens.update({"date", "day", "time", "year"})
-    if "business" in tokens and "unit" in tokens:
-        tokens.update({"account", "bu", "business", "company", "division", "unit"})
     return tokens
 
 
@@ -1815,53 +1562,86 @@ _RATE_METRIC_TOKENS = {"rate", "ratio", "percent", "percentage"}
 _COUNT_METRIC_TOKENS = {"count", "many", "most", "number", "total"}
 _AVERAGE_METRIC_TOKENS = {"average", "avg", "mean"}
 _DISTRIBUTION_METRIC_TOKENS = {"distribution", "breakdown"}
-_AVERAGE_MEASURE_TOKENS = {
-    "age",
-    "cycle",
-    "days",
-    "duration",
-    "elapsed",
-    "hours",
-    "minutes",
+_SUM_METRIC_TOKENS = {"sum", "total"}
+_MIN_METRIC_TOKENS = {"bottom", "least", "lowest", "min", "minimum", "smallest"}
+_MAX_METRIC_TOKENS = {"greatest", "highest", "largest", "max", "maximum", "most", "top"}
+_LATEST_METRIC_TOKENS = {"latest", "newest", "recent"}
+_NULL_CHECK_TOKENS = {"blank", "empty", "missing", "null"}
+_GENERIC_SCHEMA_INTENT_TOKENS = {
+    "a",
+    "across",
+    "all",
+    "an",
+    "and",
+    "as",
+    "ascending",
+    "associated",
+    "association",
+    "average",
+    "avg",
+    "between",
+    "bottom",
+    "breakdown",
+    "bucket",
+    "buckets",
+    "by",
+    "compare",
+    "count",
+    "date",
+    "day",
+    "descending",
+    "distribution",
+    "each",
+    "for",
+    "from",
+    "group",
+    "grouped",
+    "has",
+    "have",
+    "highest",
+    "in",
+    "latest",
+    "least",
+    "list",
+    "lowest",
+    "many",
+    "max",
+    "maximum",
+    "me",
+    "mean",
+    "min",
+    "minimum",
+    "month",
+    "monthly",
+    "most",
+    "newest",
+    "number",
+    "of",
+    "ordered",
+    "per",
+    "please",
+    "quarter",
+    "recent",
+    "record",
+    "records",
+    "row",
+    "rows",
+    "show",
+    "smallest",
+    "sort",
+    "sorted",
+    "sum",
+    "the",
+    "to",
+    "top",
+    "total",
+    "week",
+    "which",
+    "with",
+    "without",
+    "year",
 }
-_PRIORITY_VALUE_ALIASES = {
-    "urgent": "urgent",
-    "critical": "critical",
-    "high": "high",
-    "medium": "medium",
-    "normal": "normal",
-    "low": "low",
-}
-_PRIORITY_ORDER = [
-    ("critical", 6),
-    ("urgent", 6),
-    ("blocker", 6),
-    ("high", 5),
-    ("major", 5),
-    ("medium", 4),
-    ("normal", 4),
-    ("minor", 3),
-    ("low", 2),
-]
-_STATUS_STATE_COLUMN_TOKENS = {
-    "progress",
-    "stage",
-    "state",
-    "status",
-    "workflow",
-}
-_BLOCKING_COLUMN_TOKENS = {"block", "blocked", "blocking", "hold", "held"}
-_STATUS_VALUE_ALIASES = {
-    "blocked": ("blocked",),
-    "closed": ("closed",),
-    "completed": ("completed", "complete"),
-    "escalated": ("escalated",),
-    "in progress": ("in progress", "in-progress"),
-    "in-progress": ("in-progress", "in progress"),
-    "open": ("open",),
-    "pending": ("pending",),
-    "resolved": ("resolved",),
-}
+_GENERIC_SCHEMA_INTENT_TOKENS.update(_MONTH_NAME_TO_NUMBER.keys())
 
 
 def _is_rate_metric_intent(raw_query_tokens: set[str]) -> bool:
@@ -1876,106 +1656,62 @@ def _is_distribution_metric_intent(raw_query_tokens: set[str]) -> bool:
     return bool(raw_query_tokens & _DISTRIBUTION_METRIC_TOKENS)
 
 
-def _is_failure_count_intent(
-    raw_query_tokens: set[str],
-    query_tokens: set[str],
-) -> bool:
-    return (
-        bool(raw_query_tokens & {"failure", "failed", "defect"})
-        and "failure" in query_tokens
-        and not _is_rate_metric_intent(raw_query_tokens)
-        and (
-            bool(raw_query_tokens & _COUNT_METRIC_TOKENS)
-            or bool(raw_query_tokens & {"top", "highest", "lowest", "bottom"})
-        )
-    )
-
-
-def _has_board_model_intent(query_tokens: set[str]) -> bool:
-    return {"board", "model"}.issubset(query_tokens)
-
-
 def _is_rate_like_column(column: dict[str, str]) -> bool:
     return bool(_fallback_tokens(column["name"]) & (_RATE_METRIC_TOKENS | {"score"}))
+
+
+def _is_identifier_like_column(column: dict[str, str]) -> bool:
+    tokens = _fallback_tokens(column["name"])
+    return bool(tokens) and tokens <= {"id", "identifier", "key", "uuid"}
 
 
 def _quote_joined(identifiers: list[str]) -> str:
     return ", ".join(_quote_identifier(identifier) for identifier in identifiers)
 
 
-def _requested_business_concepts(query_tokens: set[str]) -> list[tuple[str, set[str]]]:
-    concepts: list[tuple[str, set[str]]] = []
-    specs = [
-        (
-            "failure/defect",
-            {"failure", "failed", "defect"},
-            {"failure", "failed", "defect"},
-        ),
-        ("repair", {"repair"}, {"repair"}),
-        ("ticket", {"ticket"}, {"ticket", "case", "issue"}),
-        ("material", {"material"}, {"material", "part"}),
-        ("location", {"location"}, {"location", "site", "area"}),
-        ("age/duration", {"age", "duration", "elapsed"}, _AVERAGE_MEASURE_TOKENS),
-        (
-            "updated/modified",
-            {"modified", "updated"},
-            {"changed", "modified", "updated"},
-        ),
-        (
-            "date/time",
-            {"created", "date", "july", "latest", "month", "monthly", "recent", "year"},
-            {"created", "date", "day", "month", "time", "year"},
-        ),
-        ("customer", {"customer"}, {"customer", "cust"}),
-        ("supplier/vendor", {"supplier", "vendor"}, {"supplier", "vendor"}),
-        ("technician", {"technician", "tech"}, {"technician", "tech"}),
-        ("product", {"product"}, {"product", "prod", "item", "material"}),
-        (
-            "priority/severity",
-            {"critical", "priority", "severity"},
-            {"priority", "rank", "severity", "urgency"},
-        ),
-        ("status", {"status"}, {"progress", "stage", "state", "status"}),
-        ("order", {"order"}, {"order", "ord"}),
-        ("invoice", {"invoice"}, {"invoice", "inv"}),
-        ("email/address", {"email", "address"}, {"email", "email1", "address", "mail"}),
-        (
-            "account",
-            {"account", "gl", "glaccount", "ledger"},
-            {"account", "gl", "glaccount", "ledger"},
-        ),
-        ("balance", {"balance"}, {"balance", "endbalance"}),
-        (
-            "reconciliation",
-            {"reconciliation", "recon", "reconcile"},
-            {"reconciliation", "recon", "reconcile"},
-        ),
-        (
-            "journal/workflow",
-            {"journal", "workflow"},
-            {"journal", "workflow"},
-        ),
-        (
-            "approval",
-            {"approval", "approver", "reviewer", "signer"},
-            {"approval", "approver", "reviewer", "signer"},
-        ),
-    ]
-    for label, triggers, schema_tokens in specs:
-        if query_tokens & triggers:
-            concepts.append((label, schema_tokens))
-    if {"board", "model"}.issubset(query_tokens):
-        concepts.append(("board model", {"board", "model"}))
-    if {"business", "unit"}.issubset(query_tokens):
-        concepts.append(("business unit", {"business", "unit", "bu", "division"}))
-    return concepts
-
-
 def _schema_tokens_for_table(table_name: str, columns: list[dict[str, str]]) -> set[str]:
     tokens = _table_business_tokens(table_name, columns)
     for column in columns:
         tokens.update(_column_business_tokens(column))
+        tokens.update(_sample_value_tokens(column))
     return tokens
+
+
+def _schema_tokens_by_table(
+    schema_details: dict[str, list[dict[str, str]]],
+) -> dict[str, set[str]]:
+    return {
+        table_name: _schema_tokens_for_table(table_name, columns)
+        for table_name, columns in schema_details.items()
+    }
+
+
+def _schema_derived_query_tokens(
+    query_tokens: set[str],
+    schema_details: dict[str, list[dict[str, str]]],
+) -> set[str]:
+    schema_tokens = set().union(*_schema_tokens_by_table(schema_details).values())
+    return {
+        token
+        for token in query_tokens
+        if token not in _GENERIC_SCHEMA_INTENT_TOKENS
+        and not token.isdigit()
+        and token in schema_tokens
+    }
+
+
+def _unsupported_query_tokens(
+    query_tokens: set[str],
+    schema_details: dict[str, list[dict[str, str]]],
+) -> set[str]:
+    schema_tokens = set().union(*_schema_tokens_by_table(schema_details).values())
+    return {
+        token
+        for token in query_tokens
+        if token not in _GENERIC_SCHEMA_INTENT_TOKENS
+        and not token.isdigit()
+        and token not in schema_tokens
+    }
 
 
 def _table_covers_requested_concepts(
@@ -1983,11 +1719,15 @@ def _table_covers_requested_concepts(
     columns: list[dict[str, str]],
     concept_tokens: set[str],
 ) -> bool:
-    concepts = _requested_business_concepts(concept_tokens)
-    if not concepts:
+    required_tokens = {
+        token
+        for token in concept_tokens
+        if token not in _GENERIC_SCHEMA_INTENT_TOKENS
+    }
+    if not required_tokens:
         return True
     schema_tokens = _schema_tokens_for_table(table_name, columns)
-    return all(schema_tokens & concept_tokens for _, concept_tokens in concepts)
+    return required_tokens <= schema_tokens
 
 
 def _choose_fallback_table(
@@ -1996,337 +1736,28 @@ def _choose_fallback_table(
     concept_tokens: set[str] | None = None,
 ) -> tuple[str, list[dict[str, str]]] | None:
     concept_tokens = concept_tokens or query_tokens
-    rate_metric_intent = _is_rate_metric_intent(concept_tokens)
-    average_metric_intent = _is_average_metric_intent(concept_tokens)
-    failure_count_intent = _is_failure_count_intent(concept_tokens, query_tokens)
-    board_model_intent = _has_board_model_intent(query_tokens) or _has_board_model_intent(
-        concept_tokens
-    )
+    required_tokens = _schema_derived_query_tokens(concept_tokens, schema_details)
     scored_tables = []
     for table_name, columns in schema_details.items():
         table_tokens = _table_business_tokens(table_name, columns)
         column_token_union = set()
-        has_average_measure = False
-        has_numeric_amount_measure = False
-        has_numeric_sales_measure = False
-        has_date_capable_column = False
         score = len(query_tokens & table_tokens) * 8
         for column in columns:
             column_tokens = _column_business_tokens(column)
+            sample_tokens = _sample_value_tokens(column)
             column_token_union.update(column_tokens)
-            if _is_numeric_type(column["data_type"]) and column_tokens & {
-                "amount",
-                "balance",
-                "cost",
-                "gross",
-                "net",
-                "value",
-            }:
-                has_numeric_amount_measure = True
-            if _is_numeric_type(column["data_type"]) and column_tokens & (
-                concept_tokens & _AVERAGE_MEASURE_TOKENS
-                or _AVERAGE_MEASURE_TOKENS
-            ):
-                has_average_measure = True
-            if _is_numeric_type(column["data_type"]) and column_tokens & {
-                "amount",
-                "intake",
-                "revenue",
-                "sales",
-                "value",
-            }:
-                has_numeric_sales_measure = True
-            if _is_date_type(column["data_type"]) or column_tokens & {
-                "date",
-                "day",
-                "month",
-                "time",
-                "year",
-            }:
-                has_date_capable_column = True
+            column_token_union.update(sample_tokens)
             score += len(query_tokens & column_tokens) * 10
+            score += len(query_tokens & sample_tokens) * 6
             if _is_numeric_type(column["data_type"]):
-                score += len(
-                    query_tokens
-                    & column_tokens
-                    & {
-                        "amount",
-                        "balance",
-                        "cost",
-                        "count",
-                        "gross",
-                        "margin",
-                        "net",
-                        "quantity",
-                        "rate",
-                        "score",
-                        "value",
-                    }
-                ) * 4
+                score += len(query_tokens & column_tokens) * 2
             if _is_date_type(column["data_type"]):
-                score += (
-                    len(query_tokens & {"date", "month", "year", "july", "trend", "trends"})
-                    * 4
-                )
+                score += 2
 
-        has_date_capable_column = bool(
-            _choose_temporal_column(query_tokens | concept_tokens, columns)
-        )
-
-        if not _table_covers_requested_concepts(table_name, columns, concept_tokens):
+        table_schema_tokens = _schema_tokens_for_table(table_name, columns)
+        if required_tokens and not required_tokens <= table_schema_tokens:
             continue
-
-        if average_metric_intent:
-            if concept_tokens & _AVERAGE_MEASURE_TOKENS and not has_average_measure:
-                continue
-            if concept_tokens & _AVERAGE_MEASURE_TOKENS:
-                score += 90
-
-        if board_model_intent and rate_metric_intent and query_tokens & {
-            "defect",
-            "failure",
-        }:
-            if not {"board", "model"}.issubset(column_token_union):
-                continue
-            rate_column = _choose_column_by_tokens(
-                columns,
-                {"defect", "rate"},
-                numeric=True,
-            )
-            if not rate_column:
-                continue
-            score += 130
-
-        if query_tokens & {"revenue", "sale", "sales", "trend", "trends"}:
-            score += (
-                len(column_token_union & {"amount", "intake", "revenue", "sales", "value"})
-                * 10
-            )
-            score += len(column_token_union & {"date", "month", "time", "year"}) * 5
-            if not has_numeric_sales_measure:
-                continue
-            score += 50
-            if query_tokens & {"year", "month", "monthly", "trend", "trends"}:
-                if not has_date_capable_column:
-                    continue
-                score += 30
-            if not query_tokens & {
-                "claim",
-                "claims",
-                "customs",
-                "duty",
-                "import",
-                "refund",
-                "tariff",
-            }:
-                table_and_columns = table_tokens | column_token_union
-                customs_matches = table_and_columns & {
-                    "claim",
-                    "claims",
-                    "customs",
-                    "duty",
-                    "import",
-                    "refund",
-                    "tariff",
-                    "tariffs",
-                }
-                if customs_matches and not table_and_columns & {"revenue", "sale", "sales"}:
-                    continue
-                score -= len(customs_matches) * 40
-
-        if "customer" in query_tokens:
-            table_and_columns = table_tokens | column_token_union
-            if not table_and_columns & {"customer", "cust"}:
-                if "missing" in query_tokens:
-                    continue
-                score -= 80
-            else:
-                score += 45
-
-        if {"business", "unit"}.issubset(query_tokens):
-            if "bu" in column_token_union:
-                score += 60
-            elif {"business", "unit"} <= column_token_union:
-                score += 45
-
-        if "failure" in query_tokens and (
-            query_tokens & {"location", "material", "technician", "tech"}
-            or board_model_intent
-        ):
-            table_and_columns = table_tokens | column_token_union
-            if not table_and_columns & {"failure", "failed", "defect"}:
-                continue
-            if board_model_intent:
-                if not {"board", "model"}.issubset(column_token_union):
-                    continue
-                if failure_count_intent and not _choose_count_subject_column(
-                    {"failure"},
-                    columns,
-                ):
-                    continue
-                score += 100
-            if "location" in query_tokens:
-                if "location" not in column_token_union:
-                    continue
-                score += 90
-            if "material" in query_tokens:
-                if not column_token_union & {"material", "part"}:
-                    continue
-                score += 90
-            if query_tokens & {"technician", "tech"}:
-                if not column_token_union & {"technician", "tech"}:
-                    continue
-                score += 90
-
-        if query_tokens & {"ticket"}:
-            table_and_columns = table_tokens | column_token_union
-            if not table_and_columns & {"case", "issue", "ticket"}:
-                continue
-            score += 100
-            if concept_tokens & {"status"}:
-                has_status_or_blocking = bool(_choose_status_column(columns)) or any(
-                    _column_business_tokens(column) & _BLOCKING_COLUMN_TOKENS
-                    for column in columns
-                )
-                if not has_status_or_blocking:
-                    continue
-                score += 55
-            if concept_tokens & {"priority", "severity"}:
-                if not _choose_priority_column(columns):
-                    continue
-                score += 35
-            if concept_tokens & {"updated", "modified", "latest", "recent", "month", "monthly"}:
-                if not has_date_capable_column:
-                    continue
-                score += 35
-
-        if query_tokens & {"order", "orders"}:
-            table_and_columns = table_tokens | column_token_union
-            explicit_order_support = table_and_columns & {"ord", "order", "orders"}
-            order_support = table_and_columns & {
-                "amount",
-                "customer",
-                "intake",
-                "item",
-                "ord",
-                "order",
-                "orders",
-                "sales",
-                "value",
-            }
-            if not order_support:
-                continue
-            if explicit_order_support:
-                score += 80
-            else:
-                score -= 60
-
-        if concept_tokens & {"invoice", "invoices"}:
-            table_and_columns = table_tokens | column_token_union
-            if not table_and_columns & {"invoice", "inv"}:
-                continue
-            score += 80
-            if query_tokens & {"supplier", "vendor"}:
-                if not table_and_columns & {"supplier", "vendor"}:
-                    continue
-                score += 45
-            if concept_tokens & {"status", "task"}:
-                if not table_and_columns & {"status", "state", "task"}:
-                    continue
-                score += 40
-            if concept_tokens & {"gross", "net", "amount", "value", "top", "highest"}:
-                if not has_numeric_amount_measure:
-                    continue
-                score += 55
-            if concept_tokens & {"date", "month", "monthly", "year", "latest", "recent"}:
-                if not has_date_capable_column:
-                    continue
-                score += 35
-
-        if concept_tokens & {"supplier", "vendor"}:
-            table_and_columns = table_tokens | column_token_union
-            if not table_and_columns & {"supplier", "vendor"}:
-                if query_tokens & {"email", "address", "missing", "blank", "empty", "null"}:
-                    continue
-                score -= 45
-            else:
-                score += 35
-
-        if concept_tokens & {"email", "address"}:
-            if not column_token_union & {"email", "email1", "address", "mail"}:
-                continue
-            score += 65
-
-        if concept_tokens & {"reconciliation", "recon", "reconcile"}:
-            table_and_columns = table_tokens | column_token_union
-            if not table_and_columns & {"reconciliation", "recon", "reconcile"}:
-                continue
-            score += 90
-            if query_tokens & {"status"}:
-                if not table_and_columns & {"status", "state"}:
-                    continue
-                score += 45
-            if query_tokens & {"preparer", "group"}:
-                if not table_and_columns & {"preparer", "group"}:
-                    continue
-                score += 45
-
-        if concept_tokens & {"journal", "workflow"}:
-            table_and_columns = table_tokens | column_token_union
-            if not table_and_columns & {"journal", "workflow"}:
-                continue
-            if "journal" in concept_tokens and "journal" not in table_and_columns:
-                continue
-            if "workflow" in concept_tokens and "workflow" not in table_and_columns:
-                continue
-            score += 85
-            if concept_tokens & {"approval", "approver", "reviewer", "signer"}:
-                if not table_and_columns & {"approval", "approver", "reviewer", "signer"}:
-                    continue
-                score += 45
-            if query_tokens & {"latest", "recent"}:
-                if not has_date_capable_column:
-                    continue
-                score += 35
-
-        if concept_tokens & {"account", "gl", "glaccount", "ledger"}:
-            table_and_columns = table_tokens | column_token_union
-            if not table_and_columns & {"account", "gl", "glaccount", "ledger"}:
-                continue
-            score += 45
-            if query_tokens & {"balance", "end", "ending"}:
-                if not table_and_columns & {"balance", "endbalance"}:
-                    continue
-                if not has_numeric_amount_measure:
-                    continue
-                score += 70
-
-        if query_tokens & {"batch", "batches"} and {"defect", "rate"}.issubset(
-            column_token_union
-        ):
-            score += 40
-        if {"material", "location"}.issubset(query_tokens) and {
-            "material",
-            "location",
-        }.issubset(column_token_union):
-            score += 40
-        if (
-            query_tokens & {"repair", "repairs"}
-            and (table_tokens | column_token_union) & {"repair", "fix"}
-        ):
-            score += 55
-            if concept_tokens & {"critical", "priority", "severity"}:
-                if not _choose_priority_column(columns):
-                    continue
-                score += 55
-            if concept_tokens & {"status"}:
-                if not column_token_union & {"status", "state", "progress"}:
-                    continue
-                score += 45
-            if concept_tokens & {"latest", "recent"}:
-                if not has_date_capable_column:
-                    continue
-                score += 35
+        score += len(required_tokens & table_schema_tokens) * 20
 
         if score > 0:
             scored_tables.append((score, table_name, columns))
@@ -2379,23 +1810,6 @@ def _column_score_for_tokens(
     score = len(required_tokens & column_tokens) * 10
     if required_tokens and required_tokens.issubset(column_tokens):
         score += 30
-    if column["name"].lower() == "bu" and {"business", "unit"} & required_tokens:
-        score += 60
-    if column["name"].lower() in {"custno", "customer_id", "customerid"} and {
-        "customer",
-        "number",
-    } & required_tokens:
-        score += 30
-    if column["name"].lower() in {"custname", "customer_name", "customer"} and {
-        "customer",
-        "name",
-    } & required_tokens:
-        score += 35
-    if column["name"].lower() in {"ordno", "order_no", "order_number", "sales_order_number"} and {
-        "order",
-        "number",
-    } & required_tokens:
-        score += 35
     return score
 
 
@@ -2409,25 +1823,6 @@ def _choose_ranked_column_by_tokens(
         for column in columns
     ]
     candidates = [(score, column) for score, column in candidates if score > 0]
-    if not candidates:
-        return None
-    candidates.sort(key=lambda item: (-item[0], item[1]["name"]))
-    return candidates[0][1]
-
-
-def _choose_status_column(columns: list[dict[str, str]]) -> dict[str, str] | None:
-    candidates = []
-    for column in columns:
-        column_tokens = _column_business_tokens(column)
-        score = len(column_tokens & _STATUS_STATE_COLUMN_TOKENS) * 20
-        if "status" in column_tokens:
-            score += 30
-        if column_tokens & {"kind", "type", "category"} and not column_tokens & (
-            _STATUS_STATE_COLUMN_TOKENS
-        ):
-            score -= 20
-        if score > 0:
-            candidates.append((score, column))
     if not candidates:
         return None
     candidates.sort(key=lambda item: (-item[0], item[1]["name"]))
@@ -2459,28 +1854,6 @@ def _column_supports_filter_values(
         return True
     if value_tokens & column_tokens:
         return True
-    if value_tokens & set(_PRIORITY_VALUE_ALIASES.values()) and column_tokens & {
-        "priority",
-        "rank",
-        "severity",
-        "urgency",
-    }:
-        return True
-    if value_tokens & {
-        "blocked",
-        "closed",
-        "completed",
-        "complete",
-        "escalated",
-        "open",
-        "pending",
-        "progress",
-        "resolved",
-        "status",
-    } and column_tokens & _STATUS_STATE_COLUMN_TOKENS:
-        return True
-    if value_tokens & {"block", "blocked"} and column_tokens & _BLOCKING_COLUMN_TOKENS:
-        return True
     return False
 
 
@@ -2499,17 +1872,10 @@ def _filter_predicate_for_values(
     for value in cleaned_values:
         value_tokens.update(_fallback_tokens(value))
 
-    if (
-        _is_boolean_type(column["data_type"])
-        and value_tokens & {"block", "blocked"}
-        and column_tokens & _BLOCKING_COLUMN_TOKENS
-    ):
-        return f"{_quote_identifier(column['name'])} = TRUE"
-
     return _value_match_predicate(column, cleaned_values[0], cleaned_values[1:])
 
 
-def _choose_status_filter_column(
+def _choose_filter_column_for_values(
     columns: list[dict[str, str]],
     values: list[str],
 ) -> dict[str, str] | None:
@@ -2519,15 +1885,13 @@ def _choose_status_filter_column(
         column_tokens = _column_business_tokens(column)
         if not _column_supports_filter_values(column, values):
             continue
-        score = len(column_tokens & _STATUS_STATE_COLUMN_TOKENS) * 25
-        score += len(column_tokens & _BLOCKING_COLUMN_TOKENS) * 12
-        score += len(_sample_value_tokens(column)) * 2
-        if "status" in column_tokens:
-            score += 35
-        if column_tokens & {"kind", "type", "category"} and not column_tokens & (
-            _STATUS_STATE_COLUMN_TOKENS
-        ):
-            score -= 25
+        value_tokens = {
+            token
+            for value in values
+            for token in _fallback_tokens(value)
+        }
+        score = len(column_tokens & value_tokens) * 10
+        score += len(_sample_value_tokens(column) & value_tokens) * 20
         if score > 0:
             candidates.append((score, column))
 
@@ -2541,38 +1905,13 @@ def _choose_temporal_column(
     query_tokens: set[str],
     columns: list[dict[str, str]],
 ) -> str | None:
-    strict_token_groups: list[set[str]] = []
-    if query_tokens & {"updated", "modified"}:
-        strict_token_groups.append({"changed", "modified", "updated"})
-    if query_tokens & {"created", "opened"}:
-        strict_token_groups.append({"created", "opened"})
-
     candidates = []
     for column in columns:
         column_tokens = _column_business_tokens(column)
-        if not (
-            _is_date_type(column["data_type"])
-            or column_tokens & {"date", "day", "month", "time", "year"}
-        ):
+        if not _is_date_type(column["data_type"]):
             continue
-        if strict_token_groups and not any(
-            column_tokens & strict_tokens for strict_tokens in strict_token_groups
-        ):
-            continue
-        score = len(
-            query_tokens
-            & column_tokens
-            & {"created", "date", "day", "modified", "month", "time", "updated", "year"}
-        ) * 12
-        if _is_date_type(column["data_type"]):
-            score += 20
-        if query_tokens & {"updated", "modified"} and column_tokens & {
-            "modified",
-            "updated",
-        }:
-            score += 45
-        if query_tokens & {"created", "opened"} and column_tokens & {"created", "opened"}:
-            score += 35
+        score = len(query_tokens & column_tokens) * 12
+        score += 20
         if score > 0:
             candidates.append((score, column["name"]))
 
@@ -2601,14 +1940,6 @@ def _choose_order_by_column(
     if not order_tokens:
         return None
 
-    if order_tokens & {"id", "number", "no"} and query_tokens & {"ticket"}:
-        column = _choose_ranked_column_by_tokens(
-            columns,
-            {"id", "no", "number", "ticket"},
-        )
-        if column:
-            return column["name"]
-
     column = _choose_ranked_column_by_tokens(columns, order_tokens)
     return column["name"] if column else None
 
@@ -2626,125 +1957,67 @@ def _choose_dimension_columns(
     columns: list[dict[str, str]],
     max_columns: int = 3,
 ) -> list[str]:
-    dimension_specs = [
-        ({"board", "model"}, {"board", "model"}),
-        ({"business", "unit"}, {"business", "unit", "bu", "division", "company"}),
-        ({"customer"}, {"customer", "cust", "name"}),
-        ({"supplier"}, {"supplier", "vendor", "name"}),
-        ({"email", "address"}, {"email", "email1", "address", "mail"}),
-        ({"invoice"}, {"invoice", "inv", "number", "no", "id"}),
-        ({"product"}, {"product", "prod", "item", "material", "name"}),
-        ({"salesperson", "representative"}, {"salesperson", "sales", "person", "rep"}),
-        ({"technician", "tech"}, {"technician", "tech"}),
-        ({"ticket"}, {"ticket", "id", "number", "no"}),
-        ({"location"}, {"location", "site", "area"}),
-        ({"material"}, {"material", "part", "item"}),
-        ({"priority", "severity"}, {"priority", "severity", "urgency", "rank"}),
-        ({"status"}, {"status"}),
-        ({"preparer"}, {"preparer", "group"}),
-        ({"reviewer"}, {"reviewer", "group"}),
-        ({"approval", "approver", "signer"}, {"approval", "approver", "reviewer", "signer"}),
-        ({"account", "gl", "glaccount", "ledger"}, {"account", "gl", "glaccount", "ledger"}),
-        ({"currency"}, {"currency", "curr"}),
-        ({"country"}, {"country"}),
-        ({"order"}, {"order", "ord", "number"}),
-        ({"batch"}, {"batch", "id"}),
-    ]
-    compound_dimension_triggers = [
-        {"board", "model"},
-        {"business", "unit"},
-        {"email", "address"},
-    ]
-    selected: list[str] = []
-    for trigger_tokens, column_tokens in dimension_specs:
-        trigger_matches = (
-            trigger_tokens.issubset(query_tokens)
-            if trigger_tokens in compound_dimension_triggers
-            else bool(query_tokens & trigger_tokens)
-        )
-        if trigger_matches:
-            column = _choose_ranked_column_by_tokens(columns, column_tokens)
-            if column and column["name"] not in selected:
-                selected.append(column["name"])
-            if len(selected) >= max_columns:
-                break
-    return selected
+    candidates = []
+    filtered_query_tokens = query_tokens - _GENERIC_SCHEMA_INTENT_TOKENS
+    for index, column in enumerate(columns):
+        if _is_numeric_type(column["data_type"]):
+            continue
+        column_tokens = _column_business_tokens(column)
+        score = len(filtered_query_tokens & column_tokens) * 10
+        if score > 0:
+            candidates.append((score, index, column["name"]))
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    return [name for _, _, name in candidates[:max_columns]]
 
 
 def _choose_missing_value_column(
     query_tokens: set[str],
     columns: list[dict[str, str]],
 ) -> dict[str, str] | None:
-    missing_specs = [
-        ({"email", "address"}, {"email", "email1", "address", "mail", "first", "primary"}),
-        ({"customer"}, {"customer", "cust", "number", "id", "no"}),
-        ({"order"}, {"order", "ord", "number", "id", "no"}),
-        ({"supplier"}, {"supplier", "vendor", "number", "id", "no"}),
-        ({"product", "material"}, {"product", "prod", "material", "item", "number", "id"}),
-        ({"location"}, {"location", "site", "area"}),
-        ({"status"}, {"status"}),
-    ]
-    for trigger_tokens, column_tokens in missing_specs:
-        if query_tokens & trigger_tokens:
-            column = _choose_ranked_column_by_tokens(columns, column_tokens)
-            if column:
-                return column
-    return None
+    return _choose_ranked_column_by_tokens(
+        columns,
+        query_tokens - (_GENERIC_SCHEMA_INTENT_TOKENS | _NULL_CHECK_TOKENS),
+    )
 
 
 def _choose_count_subject_column(
     query_tokens: set[str],
     columns: list[dict[str, str]],
 ) -> dict[str, str] | None:
-    subject_specs = [
-        ({"order"}, {"order", "ord", "number", "id", "no"}),
-        ({"invoice"}, {"invoice", "inv", "number", "id", "no"}),
-        ({"customer"}, {"customer", "cust", "number", "id", "no"}),
-        ({"reconciliation", "recon"}, {"reconciliation", "recon", "trans", "id"}),
-        ({"journal"}, {"journal", "entry", "number", "id"}),
-        ({"account", "gl", "glaccount"}, {"account", "gl", "glaccount", "id"}),
-        ({"ticket"}, {"ticket", "case", "issue", "id", "number", "no"}),
-        (
-            {"failure"},
-            {"failure", "failed", "defect", "code", "line", "status", "sys", "type"},
-        ),
-        ({"repair"}, {"repair", "id", "status"}),
-        ({"batch"}, {"batch", "id"}),
-    ]
-    for trigger_tokens, column_tokens in subject_specs:
-        if query_tokens & trigger_tokens:
-            candidate_columns = columns
-            if trigger_tokens & {"failure"}:
-                candidate_columns = [
-                    column for column in columns if not _is_rate_like_column(column)
-                ]
-            column = _choose_ranked_column_by_tokens(candidate_columns, column_tokens)
-            if column:
-                return column
-    return None
+    column = _choose_ranked_column_by_tokens(
+        columns,
+        query_tokens - _GENERIC_SCHEMA_INTENT_TOKENS,
+    )
+    if column:
+        return column
+    for column in columns:
+        if not _is_numeric_type(column["data_type"]) and not _is_rate_like_column(column):
+            return column
+    return columns[0] if columns else None
 
 
 def _choose_average_measure_column(
     query_tokens: set[str],
     columns: list[dict[str, str]],
 ) -> dict[str, str] | None:
-    measure_specs = [
-        ({"age", "duration", "elapsed"}, _AVERAGE_MEASURE_TOKENS),
-        ({"rate", "ratio", "percent", "percentage"}, _RATE_METRIC_TOKENS | {"score"}),
-        ({"amount", "gross", "net", "value"}, {"amount", "gross", "net", "value"}),
-        ({"balance"}, {"balance", "end", "ending", "value"}),
-        ({"quantity", "qty"}, {"quantity", "qty"}),
+    filtered_tokens = query_tokens - _GENERIC_SCHEMA_INTENT_TOKENS
+    measure_candidates = [
+        column for column in columns if not _is_identifier_like_column(column)
     ]
-    for trigger_tokens, column_tokens in measure_specs:
-        if query_tokens & trigger_tokens:
-            column = _choose_ranked_column_by_tokens(
-                columns,
-                set(column_tokens),
-                numeric=True,
-            )
-            if column:
-                return column
-    return None
+    column = _choose_ranked_column_by_tokens(
+        measure_candidates,
+        filtered_tokens,
+        numeric=True,
+    )
+    if column:
+        return column
+    numeric_columns = [
+        column
+        for column in columns
+        if _is_numeric_type(column["data_type"])
+        and not _is_identifier_like_column(column)
+    ]
+    return numeric_columns[0] if len(numeric_columns) == 1 else None
 
 
 def _is_text_type(data_type: str) -> bool:
@@ -2792,131 +2065,6 @@ def _select_listing_columns(
             score += 35
         if name == measure_column:
             score += 12
-        if query_tokens & {"order"}:
-            score += len(tokens & {"order", "ord", "number", "customer", "cust", "item", "product"}) * 18
-            score += len(tokens & {"date", "day", "month", "year"}) * 8
-        if query_tokens & {"invoice"}:
-            score += (
-                len(
-                    tokens
-                    & {
-                        "amount",
-                        "currency",
-                        "date",
-                        "gross",
-                        "invoice",
-                        "net",
-                        "number",
-                        "status",
-                        "supplier",
-                        "task",
-                    }
-                )
-                * 18
-            )
-        if query_tokens & {"supplier", "vendor", "email", "address"}:
-            score += (
-                len(
-                    tokens
-                    & {
-                        "address",
-                        "email",
-                        "email1",
-                        "id",
-                        "mail",
-                        "name",
-                        "number",
-                        "supplier",
-                        "vendor",
-                    }
-                )
-                * 18
-            )
-        if query_tokens & {"customer"}:
-            score += len(tokens & {"customer", "cust", "name", "number", "id"}) * 18
-        if query_tokens & {"product", "material"}:
-            score += len(tokens & {"product", "prod", "material", "item", "description", "desc"}) * 18
-        if query_tokens & {"batch"}:
-            score += len(tokens & {"batch", "board", "model", "supplier", "id"}) * 18
-        if query_tokens & {"repair", "log", "record"}:
-            score += (
-                len(tokens & {"board", "code", "date", "failure", "id", "priority", "status"})
-                * 14
-            )
-        if query_tokens & {"ticket"}:
-            score += (
-                len(
-                    tokens
-                    & {
-                        "case",
-                        "created",
-                        "date",
-                        "id",
-                        "issue",
-                        "modified",
-                        "number",
-                        "priority",
-                        "state",
-                        "status",
-                        "ticket",
-                        "updated",
-                    }
-                )
-                * 16
-            )
-        if query_tokens & {"journal", "workflow", "approval", "approver", "reviewer", "signer"}:
-            score += (
-                len(
-                    tokens
-                    & {
-                        "approval",
-                        "approver",
-                        "date",
-                        "doc",
-                        "entry",
-                        "journal",
-                        "number",
-                        "reviewer",
-                        "signer",
-                        "status",
-                        "workflow",
-                    }
-                )
-                * 16
-            )
-        if query_tokens & {"reconciliation", "recon", "reconcile"}:
-            score += (
-                len(
-                    tokens
-                    & {
-                        "account",
-                        "gl",
-                        "glaccount",
-                        "group",
-                        "period",
-                        "preparer",
-                        "recon",
-                        "reviewer",
-                        "status",
-                    }
-                )
-                * 16
-            )
-        if query_tokens & {"account", "gl", "glaccount", "balance"}:
-            score += (
-                len(tokens & {"account", "balance", "endbalance", "gl", "glaccount", "month", "year"})
-                * 16
-            )
-        if tokens & {"repair", "failure", "failed", "defect"} and not query_tokens & {
-            "repair",
-            "failure",
-            "defect",
-        }:
-            score -= 40
-        if tokens & {"date", "day", "month", "year"} and not (
-            _is_date_type(column["data_type"]) or name == date_column
-        ):
-            score -= 12
         if score > 0:
             scored_columns.append((score, index, name))
 
@@ -2946,6 +2094,11 @@ def _fallback_month_filter(query: str) -> tuple[int, int] | None:
 
 
 def _grouping_phrase_tokens(query: str) -> set[str]:
+    query = re.sub(
+        r"(?is)\b(?:order(?:ed)?|sort(?:ed)?)\s+by\s+[A-Za-z0-9_ /-]+",
+        "",
+        query,
+    )
     match = re.search(
         r"(?is)\b(?:grouped\s+by|group\s+by|by)\s+(?P<value>[A-Za-z0-9_ /-]+)",
         query,
@@ -3017,134 +2170,132 @@ def _clean_filter_value(value: str | None) -> str | None:
     return value or None
 
 
-def _extract_failure_type_filter_value(query: str) -> str | None:
-    patterns = [
-        (
-            r"(?is)\bwith\s+"
-            r"(?P<value>[A-Za-z0-9][A-Za-z0-9 _./+\-]{0,80}?)"
-            r"(?:\s+(?:listed|marked|recorded|shown|set))?"
-            r"\s+as\s+(?:the\s+)?(?:failure|defect)\s+"
-            r"(?:type|code|category)\b"
-        ),
-        (
-            r"(?is)\b(?:failure|defect)\s+(?:type|code|category)\s*"
-            r"(?:=|is|equals|like|of)\s*['\"]?"
-            r"(?P<value>[A-Za-z0-9][A-Za-z0-9 _./+\-]{0,80})"
-        ),
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, query)
-        if match:
-            value = _clean_filter_value(match.group("value"))
-            if value:
-                return value
-    return None
+def _query_content_tokens(query_tokens: set[str]) -> set[str]:
+    return {
+        token
+        for token in query_tokens
+        if token not in _GENERIC_SCHEMA_INTENT_TOKENS
+        and token not in _MONTH_NAME_TO_NUMBER
+    }
 
 
-def _extract_status_filter_values(query: str) -> list[str]:
-    values: list[str] = []
-
-    def add(value: str):
-        if value not in values:
-            values.append(value)
-
-    if re.search(r"(?i)\bin-progress\b", query):
-        add("in-progress")
-        add("in progress")
-    if re.search(r"(?i)\bin\s+progress\b", query):
-        add("in progress")
-        add("in-progress")
-    for status in (
-        "blocked",
-        "closed",
-        "completed",
-        "complete",
-        "escalated",
-        "open",
-        "pending",
-        "resolved",
-    ):
-        if re.search(rf"(?i)\b{re.escape(status)}\b", query):
-            for value in _STATUS_VALUE_ALIASES.get(status, (status,)):
-                add(value)
-    return values
-
-
-def _extract_status_filter_value(query: str) -> str | None:
-    values = _extract_status_filter_values(query)
-    return values[0] if values else None
-
-
-def _extract_priority_filter_value(query: str) -> str | None:
-    for token, value in _PRIORITY_VALUE_ALIASES.items():
-        if re.search(rf"(?i)\b{re.escape(token)}(?:[-\s]+priority)?\b", query):
-            return value
-    return None
-
-
-def _choose_priority_column(columns: list[dict[str, str]]) -> dict[str, str] | None:
-    return _choose_ranked_column_by_tokens(
-        columns,
-        {"priority", "severity", "urgency", "rank"},
+def _has_grouping_intent(query: str, query_tokens: set[str]) -> bool:
+    query_without_ordering = re.sub(
+        r"(?is)\b(?:order(?:ed)?|sort(?:ed)?)\s+by\s+[A-Za-z0-9_ /-]+",
+        "",
+        query,
+    )
+    return bool(
+        _is_distribution_metric_intent(query_tokens)
+        or query_tokens & {"group", "grouped", "per"}
+        or re.search(r"(?i)\bby\s+[A-Za-z0-9_ -]+\b", query_without_ordering)
     )
 
 
-def _priority_order_expression(column: dict[str, str]) -> str:
-    quoted_column = _quote_identifier(column["name"])
-    if _is_numeric_type(column["data_type"]):
-        return quoted_column
-
-    when_clauses = " ".join(
-        f"WHEN {_quote_literal(value)} THEN {rank}" for value, rank in _PRIORITY_ORDER
-    )
-    return f"CASE LOWER({quoted_column}) {when_clauses} ELSE 0 END"
+def _has_count_intent(query_tokens: set[str]) -> bool:
+    return bool(query_tokens & _COUNT_METRIC_TOKENS)
 
 
-def _choose_failure_type_filter_column(
+def _has_sum_intent(query_tokens: set[str]) -> bool:
+    return bool(query_tokens & _SUM_METRIC_TOKENS)
+
+
+def _has_extreme_intent(query_tokens: set[str]) -> bool:
+    return bool(query_tokens & (_MAX_METRIC_TOKENS | _MIN_METRIC_TOKENS))
+
+
+def _has_latest_intent(query_tokens: set[str]) -> bool:
+    return bool(query_tokens & _LATEST_METRIC_TOKENS)
+
+
+def _has_missing_value_intent(query_tokens: set[str]) -> bool:
+    return bool(query_tokens & _NULL_CHECK_TOKENS)
+
+
+def _sort_direction_for_query(query_tokens: set[str]) -> str:
+    return "ASC" if query_tokens & _MIN_METRIC_TOKENS else "DESC"
+
+
+def _choose_numeric_measure_column(
+    query_tokens: set[str],
     columns: list[dict[str, str]],
 ) -> dict[str, str] | None:
+    content_tokens = _query_content_tokens(query_tokens)
+    measure_candidates = [
+        column for column in columns if not _is_identifier_like_column(column)
+    ]
     column = _choose_ranked_column_by_tokens(
-        [column for column in columns if not _is_rate_like_column(column)],
-        {"failure", "type"},
+        measure_candidates,
+        content_tokens,
+        numeric=True,
     )
     if column:
         return column
-    return _choose_ranked_column_by_tokens(
-        [column for column in columns if not _is_rate_like_column(column)],
-        {"failure", "defect", "code", "type", "sys"},
+
+    numeric_columns = [
+        column
+        for column in columns
+        if _is_numeric_type(column["data_type"])
+        and not _is_identifier_like_column(column)
+    ]
+    if len(numeric_columns) == 1:
+        return numeric_columns[0]
+    return None
+
+
+def _sample_value_filters(
+    query_tokens: set[str],
+    columns: list[dict[str, Any]],
+) -> list[tuple[dict[str, Any], list[str]]]:
+    filters: list[tuple[dict[str, Any], list[str]]] = []
+    consumed_tokens: set[str] = set()
+    content_tokens = _query_content_tokens(query_tokens)
+    if not content_tokens:
+        return filters
+
+    for column in columns:
+        matches: list[str] = []
+        for value in column.get("sample_values") or []:
+            cleaned_value = _clean_filter_value(str(value))
+            if not cleaned_value:
+                continue
+            value_tokens = _fallback_tokens(cleaned_value)
+            if not value_tokens or not value_tokens <= content_tokens:
+                continue
+            if value_tokens <= consumed_tokens:
+                continue
+            if cleaned_value.lower() not in {item.lower() for item in matches}:
+                matches.append(cleaned_value)
+                consumed_tokens.update(value_tokens)
+        if matches:
+            filters.append((column, matches))
+
+    return filters
+
+
+def _where_clause(predicates: list[str]) -> str:
+    return f"\nWHERE {' AND '.join(predicates)}" if predicates else ""
+
+
+def _count_expression_for_query(
+    query_tokens: set[str],
+    columns: list[dict[str, str]],
+) -> tuple[str, list[str]]:
+    subject_column = _choose_count_subject_column(query_tokens, columns)
+    if not subject_column:
+        return "COUNT(*)", []
+    return (
+        f"COUNT({_quote_identifier(subject_column['name'])})",
+        [_non_missing_value_predicate(subject_column)],
     )
 
 
-def _choose_failure_type_filter_table(
-    schema_details: dict[str, list[dict[str, str]]],
-    concept_tokens: set[str],
-) -> tuple[str, list[dict[str, str]], dict[str, str]] | None:
-    candidates = []
-    for table_name, columns in schema_details.items():
-        if not _table_covers_requested_concepts(table_name, columns, concept_tokens):
-            continue
-        column = _choose_failure_type_filter_column(columns)
-        if not column:
-            continue
-        table_tokens = _fallback_tokens(table_name)
-        column_tokens = _fallback_tokens(column["name"])
-        score = len(concept_tokens & table_tokens) * 8
-        score += len(concept_tokens & column_tokens) * 10
-        if {"failure", "type"}.issubset(column_tokens):
-            score += 100
-        elif "type" in column_tokens:
-            score += 60
-        elif "code" in column_tokens:
-            score += 30
-        if table_tokens & {"failure", "defect"}:
-            score += 25
-        candidates.append((score, table_name, columns, column))
-
-    if not candidates:
-        return None
-    candidates.sort(key=lambda item: (-item[0], item[1], item[3]["name"]))
-    _, table_name, columns, column = candidates[0]
-    return table_name, columns, column
+def _date_bucket_expressions(date_column: str) -> tuple[str, str]:
+    quoted_date = _quote_identifier(date_column)
+    return (
+        f"EXTRACT(YEAR FROM {quoted_date})",
+        f"EXTRACT(MONTH FROM {quoted_date})",
+    )
 
 
 def generate_simple_analytics_sql(
@@ -3154,133 +2305,41 @@ def generate_simple_analytics_sql(
     if not query:
         return None
 
-    raw_query_tokens = _fallback_tokens(query)
-    query_tokens = _expanded_fallback_query_tokens(query)
+    query_tokens = _fallback_tokens(query)
     if not query_tokens:
         return None
 
-    if not query_tokens & {
-        "batch",
-        "batches",
-        "account",
-        "accounts",
-        "address",
-        "age",
-        "approval",
-        "approvals",
-        "approver",
-        "average",
-        "balance",
-        "balances",
-        "blocked",
-        "board",
-        "breakdown",
-        "business",
-        "case",
-        "closed",
-        "completed",
-        "count",
-        "created",
-        "customer",
-        "defect",
-        "distribution",
-        "duration",
-        "email",
-        "failure",
-        "failures",
-        "gl",
-        "glaccount",
-        "gross",
-        "highest",
-        "invoice",
-        "invoices",
-        "journal",
-        "july",
-        "latest",
-        "ledger",
-        "log",
-        "logs",
-        "location",
-        "material",
-        "mean",
-        "missing",
-        "modified",
-        "model",
-        "monthly",
-        "most",
-        "net",
-        "number",
-        "open",
-        "order",
-        "orders",
-        "pending",
-        "preparer",
-        "priority",
-        "product",
-        "rate",
-        "recent",
-        "recon",
-        "reconciliation",
-        "reconciliations",
-        "reviewer",
-        "record",
-        "records",
-        "repair",
-        "repairs",
-        "revenue",
-        "sale",
-        "sales",
-        "severity",
-        "signer",
-        "supplier",
-        "status",
-        "task",
-        "tasks",
-        "tech",
-        "technician",
-        "ticket",
-        "tickets",
-        "top",
-        "trend",
-        "trends",
-        "type",
-        "unit",
-        "units",
-        "updated",
-        "workflow",
-        "workflows",
-        "year",
-    }:
+    schema_details = _extract_schema_details(contexts)
+    if not schema_details:
         return None
 
-    schema_details = _extract_schema_details(contexts)
-    rate_metric_intent = _is_rate_metric_intent(raw_query_tokens)
-    average_metric_intent = _is_average_metric_intent(raw_query_tokens)
-    distribution_metric_intent = _is_distribution_metric_intent(raw_query_tokens)
-    failure_count_intent = _is_failure_count_intent(raw_query_tokens, query_tokens)
-    board_model_intent = _has_board_model_intent(
-        raw_query_tokens
-    ) or _has_board_model_intent(
-        query_tokens
-    )
-    failure_type_filter_value = _extract_failure_type_filter_value(query)
-    failure_type_filter_column = None
-    failure_type_choice = None
-    if failure_type_filter_value and "failure" in query_tokens:
-        failure_type_choice = _choose_failure_type_filter_table(
-            schema_details,
-            raw_query_tokens,
+    content_tokens = _query_content_tokens(query_tokens)
+    schema_backed_tokens = _schema_derived_query_tokens(query_tokens, schema_details)
+    unsupported_tokens = _unsupported_query_tokens(query_tokens, schema_details)
+    if unsupported_tokens:
+        logger.info(
+            "Schema-derived SQL fallback skipped unsupported_tokens=%s",
+            sorted(unsupported_tokens),
         )
+        return None
+    if content_tokens and not schema_backed_tokens:
+        logger.info(
+            "Schema-derived SQL fallback skipped no_schema_backed_tokens=%s",
+            sorted(content_tokens),
+        )
+        return None
+    if not content_tokens and len(schema_details) != 1:
+        logger.info(
+            "Schema-derived SQL fallback skipped ambiguous_schema_only_request tables=%s",
+            sorted(schema_details),
+        )
+        return None
 
-    if failure_type_choice:
-        table_name, columns, failure_type_filter_column = failure_type_choice
-        chosen = (table_name, columns)
-    else:
-        chosen = _choose_fallback_table(
-            query_tokens,
-            schema_details,
-            concept_tokens=raw_query_tokens,
-        )
+    chosen = _choose_fallback_table(
+        query_tokens,
+        schema_details,
+        concept_tokens=query_tokens,
+    )
     if not chosen:
         return None
 
@@ -3288,232 +2347,186 @@ def generate_simple_analytics_sql(
     column_names = [column["name"] for column in columns]
     quoted_table = _quote_identifier(table_name)
     limit = _fallback_limit(query)
+    date_column = _choose_temporal_column(query_tokens, columns)
+    order_column = _choose_order_by_column(query, query_tokens, columns)
+    sample_filters = _sample_value_filters(query_tokens, columns)
+    sample_predicates = [
+        _filter_predicate_for_values(column, values)
+        for column, values in sample_filters
+    ]
+    selected_sample_filter_columns = [column["name"] for column, _ in sample_filters]
+    month_filter = _fallback_month_filter(query)
+    metric_intent = {
+        "average": _is_average_metric_intent(query_tokens),
+        "count": _has_count_intent(query_tokens),
+        "distribution": _is_distribution_metric_intent(query_tokens),
+        "extreme": _has_extreme_intent(query_tokens),
+        "latest": _has_latest_intent(query_tokens),
+        "missing": _has_missing_value_intent(query_tokens),
+        "rate": _is_rate_metric_intent(query_tokens),
+        "sum": _has_sum_intent(query_tokens),
+    }
     logger.info(
-        "Deterministic SQL fallback selected table=%s verified_columns=%s metric_intent=%s",
+        "Schema-derived SQL fallback selected table=%s schema_tokens=%s verified_columns=%s sample_filter_columns=%s metric_intent=%s",
         table_name,
+        sorted(schema_backed_tokens),
         column_names,
-        {
-            "failure_count": failure_count_intent,
-            "rate": rate_metric_intent,
-            "average": average_metric_intent,
-            "distribution": distribution_metric_intent,
-            "board_model": board_model_intent,
-            "failure_type_filter": bool(failure_type_filter_value),
-        },
+        selected_sample_filter_columns,
+        metric_intent,
     )
 
-    if failure_type_filter_value:
-        if not failure_type_filter_column:
-            failure_type_filter_column = _choose_failure_type_filter_column(columns)
-        if failure_type_filter_column:
-            return (
-                f"SELECT COUNT(*) AS {_quote_identifier('record_count')}\n"
-                f"FROM {quoted_table}\n"
-                f"WHERE {_value_match_predicate(failure_type_filter_column, failure_type_filter_value)}"
-            )
-
-    material_column = _choose_column_by_tokens(columns, {"material"})
-    location_column = _choose_column_by_tokens(columns, {"location"})
-    if (
-        {"material", "location"}.issubset(query_tokens)
-        and material_column
-        and location_column
-    ):
-        return (
-            f"SELECT {_quote_joined([material_column, location_column])}\n"
-            f"FROM {quoted_table}"
-        )
-
-    date_column_tokens = {"date", "day", "month", "time", "year"}
-    if raw_query_tokens & {"year"} and not raw_query_tokens & {"month", "monthly"}:
-        date_column_tokens = {"date", "day", "time", "year"}
-    date_column = _choose_temporal_column(raw_query_tokens | query_tokens, columns)
-    if not date_column and not raw_query_tokens & {"updated", "modified"}:
-        date_column = _choose_column_by_tokens(
-            columns,
-            date_column_tokens,
-            date=True,
-        )
-
-    repair_filter_intent = raw_query_tokens & {
-        "closed",
-        "completed",
-        "critical",
-        "escalated",
-        "high",
-        "low",
-        "medium",
-        "normal",
-        "open",
-        "pending",
-        "priority",
-        "progress",
-        "severity",
-        "status",
-        "urgent",
-    }
-    if distribution_metric_intent:
-        dimension_columns = _choose_dimension_columns(
-            raw_query_tokens | {"status"},
-            columns,
-            max_columns=1,
-        )
-        if dimension_columns:
-            subject_column = _choose_count_subject_column(raw_query_tokens, columns)
-            count_expression = "COUNT(*)"
-            predicates = []
-            if subject_column:
-                count_expression = f"COUNT({_quote_identifier(subject_column['name'])})"
-                predicates.append(_non_missing_value_predicate(subject_column))
-            status_filter_values = _extract_status_filter_values(query)
-            if status_filter_values:
-                status_filter_column = _choose_status_filter_column(
-                    columns,
-                    status_filter_values,
-                )
-                if not status_filter_column:
-                    return None
-                predicates.append(
-                    _filter_predicate_for_values(status_filter_column, status_filter_values)
-                )
-            where_clause = f"\nWHERE {' AND '.join(predicates)}" if predicates else ""
-            quoted_dimensions = _quote_joined(dimension_columns)
-            return (
-                f"SELECT {quoted_dimensions}, {count_expression} AS {_quote_identifier('record_count')}\n"
-                f"FROM {quoted_table}{where_clause}\nGROUP BY {quoted_dimensions}\n"
-                f"ORDER BY {_quote_identifier('record_count')} DESC"
-            )
-
-    if query_tokens & {"repair", "repairs"} and repair_filter_intent:
-        predicates = []
-        status_filter_values = _extract_status_filter_values(query)
-        if status_filter_values:
-            status_filter_column = _choose_status_filter_column(
-                columns,
-                status_filter_values,
-            )
-            if not status_filter_column:
-                return None
-            predicates.append(
-                _filter_predicate_for_values(status_filter_column, status_filter_values)
-            )
-        priority_filter_value = _extract_priority_filter_value(query)
-        if priority_filter_value:
-            priority_column = _choose_priority_column(columns)
-            if not priority_column or not _column_supports_filter_values(
-                priority_column,
-                [priority_filter_value],
-            ):
-                return None
-            predicates.append(_filter_predicate_for_values(priority_column, [priority_filter_value]))
-        if predicates:
-            return f"SELECT *\nFROM {quoted_table}\nWHERE {' AND '.join(predicates)}"
-
-    if query_tokens & {"ticket"} and not (
-        average_metric_intent
-        or distribution_metric_intent
-        or failure_count_intent
-        or raw_query_tokens & (_COUNT_METRIC_TOKENS | _RATE_METRIC_TOKENS)
-    ):
-        predicates = []
-        status_filter_values = _extract_status_filter_values(query)
-        if status_filter_values:
-            status_filter_column = _choose_status_filter_column(
-                columns,
-                status_filter_values,
-            )
-            if not status_filter_column:
-                return None
-            predicates.append(
-                _filter_predicate_for_values(status_filter_column, status_filter_values)
-            )
-
-        priority_filter_value = _extract_priority_filter_value(query)
-        if priority_filter_value:
-            priority_filter_column = _choose_priority_column(columns)
-            if not priority_filter_column or not _column_supports_filter_values(
-                priority_filter_column,
-                [priority_filter_value],
-            ):
-                return None
-            predicates.append(
-                _filter_predicate_for_values(priority_filter_column, [priority_filter_value])
-            )
-
-        order_column = _choose_order_by_column(query, raw_query_tokens, columns)
+    if _has_missing_value_intent(query_tokens):
+        missing_column = _choose_missing_value_column(query_tokens, columns)
+        if not missing_column:
+            return None
         selected_columns = _select_listing_columns(
-            raw_query_tokens | {"id", "status", "ticket"},
+            query_tokens,
             columns,
             date_column=date_column,
             max_columns=8,
         )
-        for required_column in [order_column]:
-            if required_column and required_column not in selected_columns:
-                selected_columns.insert(0, required_column)
-        if not selected_columns:
-            selected_columns = column_names[:8]
-        where_clause = f"\nWHERE {' AND '.join(predicates)}" if predicates else ""
-        order_clause = (
-            f"\nORDER BY {_quote_identifier(order_column)} ASC" if order_column else ""
-        )
+        if missing_column["name"] not in selected_columns:
+            selected_columns.insert(0, missing_column["name"])
+        predicates = [*sample_predicates, _missing_value_predicate(missing_column)]
         limit_clause = f"\nLIMIT {limit}" if limit else ""
-        if predicates or order_clause or raw_query_tokens & {"all", "list", "show"}:
-            return (
-                f"SELECT {_quote_joined(selected_columns)}\n"
-                f"FROM {quoted_table}{where_clause}{order_clause}{limit_clause}"
-            )
-
-    priority_column = _choose_priority_column(columns)
-    if average_metric_intent:
-        average_measure_column = _choose_average_measure_column(raw_query_tokens, columns)
-        if not average_measure_column:
-            return None
-        dimension_columns = _choose_dimension_columns(raw_query_tokens, columns)
-        where_predicates = []
-        if raw_query_tokens & {"failure", "failed", "defect"}:
-            subject_column = _choose_count_subject_column({"failure"}, columns)
-            if subject_column:
-                where_predicates.append(_non_missing_value_predicate(subject_column))
-        where_clause = (
-            f"\nWHERE {' AND '.join(where_predicates)}" if where_predicates else ""
+        return (
+            f"SELECT {_quote_joined(selected_columns)}\n"
+            f"FROM {quoted_table}{_where_clause(predicates)}{limit_clause}"
         )
-        aggregate_expr = f"AVG({_quote_identifier(average_measure_column['name'])})"
+
+    month_predicate = ""
+    if date_column and month_filter:
+        year, month = month_filter
+        start_date = f"{year:04d}-{month:02d}-01"
+        end_year = year + 1 if month == 12 else year
+        end_month = 1 if month == 12 else month + 1
+        end_date = f"{end_year:04d}-{end_month:02d}-01"
+        quoted_date = _quote_identifier(date_column)
+        month_predicate = (
+            f"{quoted_date} >= '{start_date}' AND {quoted_date} < '{end_date}'"
+        )
+
+    predicates = list(sample_predicates)
+    if month_predicate:
+        predicates.append(month_predicate)
+
+    if _is_average_metric_intent(query_tokens):
+        measure_column = _choose_average_measure_column(query_tokens, columns)
+        if not measure_column:
+            return None
+        grouping_tokens = _grouping_phrase_tokens(query) or query_tokens
+        dimension_columns = _choose_dimension_columns(
+            grouping_tokens,
+            columns,
+            max_columns=2,
+        )
+        aggregate_expr = f"AVG({_quote_identifier(measure_column['name'])})"
         if dimension_columns:
             quoted_dimensions = _quote_joined(dimension_columns)
             return (
                 f"SELECT {quoted_dimensions}, {aggregate_expr} AS {_quote_identifier('average_value')}\n"
-                f"FROM {quoted_table}{where_clause}\nGROUP BY {quoted_dimensions}\n"
+                f"FROM {quoted_table}{_where_clause(predicates)}\n"
+                f"GROUP BY {quoted_dimensions}\n"
                 f"ORDER BY {_quote_identifier('average_value')} DESC"
             )
         return (
             f"SELECT {aggregate_expr} AS {_quote_identifier('average_value')}\n"
-            f"FROM {quoted_table}{where_clause}"
+            f"FROM {quoted_table}{_where_clause(predicates)}"
+        )
+
+    if date_column and query_tokens & {"month", "monthly"} and _has_count_intent(query_tokens):
+        year_expr, month_expr = _date_bucket_expressions(date_column)
+        return (
+            f"SELECT {year_expr} AS {_quote_identifier('year')}, "
+            f"{month_expr} AS {_quote_identifier('month')}, "
+            f"COUNT(*) AS {_quote_identifier('record_count')}\n"
+            f"FROM {quoted_table}{_where_clause(sample_predicates)}\n"
+            f"GROUP BY {year_expr}, {month_expr}\n"
+            f"ORDER BY {year_expr}, {month_expr}"
+        )
+
+    measure_column = _choose_numeric_measure_column(query_tokens, columns)
+    if (
+        measure_column
+        and date_column
+        and query_tokens & {"month", "monthly"}
+        and (_has_sum_intent(query_tokens) or _has_grouping_intent(query, query_tokens))
+    ):
+        year_expr, month_expr = _date_bucket_expressions(date_column)
+        aggregate, alias = _aggregate_for_measure(measure_column["name"])
+        return (
+            f"SELECT {year_expr} AS {_quote_identifier('year')}, "
+            f"{month_expr} AS {_quote_identifier('month')}, "
+            f"{aggregate}({_quote_identifier(measure_column['name'])}) AS {_quote_identifier(alias)}\n"
+            f"FROM {quoted_table}{_where_clause(sample_predicates)}\n"
+            f"GROUP BY {year_expr}, {month_expr}\n"
+            f"ORDER BY {year_expr}, {month_expr}"
         )
 
     if (
-        priority_column
-        and raw_query_tokens & {"priority", "severity"}
-        and raw_query_tokens & {"bottom", "highest", "lowest", "top"}
+        measure_column
+        and date_column
+        and "year" in query_tokens
+        and "month" not in query_tokens
+        and "monthly" not in query_tokens
+        and (_has_sum_intent(query_tokens) or _has_grouping_intent(query, query_tokens))
     ):
-        selected_columns = _select_listing_columns(
-            raw_query_tokens | {"priority", "repair", "status"},
-            columns,
-            date_column=date_column,
-            max_columns=8,
-        )
-        if priority_column["name"] not in selected_columns:
-            selected_columns.insert(0, priority_column["name"])
-        direction = "ASC" if raw_query_tokens & {"bottom", "lowest"} else "DESC"
-        limit_clause = f"\nLIMIT {limit}" if limit else ""
+        year_expr = f"EXTRACT(YEAR FROM {_quote_identifier(date_column)})"
+        aggregate, alias = _aggregate_for_measure(measure_column["name"])
         return (
-            f"SELECT {_quote_joined(selected_columns)}\nFROM {quoted_table}\n"
-            f"ORDER BY {_priority_order_expression(priority_column)} {direction}"
-            f"{limit_clause}"
+            f"SELECT {year_expr} AS {_quote_identifier('year')}, "
+            f"{aggregate}({_quote_identifier(measure_column['name'])}) AS {_quote_identifier(alias)}\n"
+            f"FROM {quoted_table}{_where_clause(sample_predicates)}\n"
+            f"GROUP BY {year_expr}\nORDER BY {year_expr}"
         )
 
-    if date_column and raw_query_tokens & {"latest", "recent"}:
+    if _has_grouping_intent(query, query_tokens) or _has_count_intent(query_tokens):
+        grouping_tokens = _grouping_phrase_tokens(query) or query_tokens
+        max_dimensions = 1 if _has_extreme_intent(query_tokens) else 3
+        dimension_columns = _choose_dimension_columns(
+            grouping_tokens,
+            columns,
+            max_columns=max_dimensions,
+        )
+        if dimension_columns:
+            quoted_dimensions = _quote_joined(dimension_columns)
+            if measure_column and (_has_sum_intent(query_tokens) or _is_rate_metric_intent(query_tokens)):
+                aggregate, alias = _aggregate_for_measure(measure_column["name"])
+                aggregate_expr = f"{aggregate}({_quote_identifier(measure_column['name'])})"
+                direction = _sort_direction_for_query(query_tokens)
+                limit_clause = f"\nLIMIT {limit}" if limit else ""
+                return (
+                    f"SELECT {quoted_dimensions}, {aggregate_expr} AS {_quote_identifier(alias)}\n"
+                    f"FROM {quoted_table}{_where_clause(predicates)}\n"
+                    f"GROUP BY {quoted_dimensions}\n"
+                    f"ORDER BY {_quote_identifier(alias)} {direction}{limit_clause}"
+                )
+
+            limit_clause = f"\nLIMIT {limit}" if limit else ""
+            return (
+                f"SELECT {quoted_dimensions}, COUNT(*) AS {_quote_identifier('record_count')}\n"
+                f"FROM {quoted_table}{_where_clause(predicates)}\n"
+                f"GROUP BY {quoted_dimensions}\n"
+                f"ORDER BY {_quote_identifier('record_count')} DESC{limit_clause}"
+            )
+        if _has_count_intent(query_tokens) and not _has_grouping_intent(query, query_tokens):
+            return (
+                f"SELECT COUNT(*) AS {_quote_identifier('record_count')}\n"
+                f"FROM {quoted_table}{_where_clause(predicates)}"
+            )
+        return None
+
+    if measure_column and _has_sum_intent(query_tokens):
+        return (
+            f"SELECT SUM({_quote_identifier(measure_column['name'])}) AS {_quote_identifier('total_value')}\n"
+            f"FROM {quoted_table}{_where_clause(predicates)}"
+        )
+
+    if _has_latest_intent(query_tokens):
+        if not date_column:
+            return None
         selected_columns = _select_listing_columns(
-            raw_query_tokens | {"date", "repair", "status"},
+            query_tokens,
             columns,
             date_column=date_column,
             max_columns=8,
@@ -3522,410 +2535,98 @@ def generate_simple_analytics_sql(
             selected_columns.insert(0, date_column)
         limit_clause = f"\nLIMIT {limit}" if limit else ""
         return (
-            f"SELECT {_quote_joined(selected_columns)}\nFROM {quoted_table}\n"
+            f"SELECT {_quote_joined(selected_columns)}\n"
+            f"FROM {quoted_table}{_where_clause(predicates)}\n"
             f"ORDER BY {_quote_identifier(date_column)} DESC{limit_clause}"
         )
 
-    if (
-        query_tokens & {"repair", "repairs"}
-        and raw_query_tokens & {"priority", "severity", "status"}
-        and re.search(r"(?i)\bby\s+(?:priority|severity|status)\b", query)
-    ):
-        dimension_column = _choose_dimension_column(raw_query_tokens, columns)
-        subject_column = _choose_count_subject_column({"repair"}, columns)
-        if dimension_column:
-            count_expression = "COUNT(*)"
-            where_clause = ""
-            if subject_column:
-                count_expression = f"COUNT({_quote_identifier(subject_column['name'])})"
-                where_clause = f"\nWHERE {_non_missing_value_predicate(subject_column)}"
-            quoted_dimension = _quote_identifier(dimension_column)
-            return (
-                f"SELECT {quoted_dimension}, {count_expression} AS "
-                f"{_quote_identifier('record_count')}\n"
-                f"FROM {quoted_table}{where_clause}\nGROUP BY {quoted_dimension}\n"
-                f"ORDER BY {_quote_identifier('record_count')} DESC"
-            )
-    measure_column = None
-    if rate_metric_intent and query_tokens & {"defect", "failure"}:
-        measure_column = _choose_column_by_tokens(
-            columns,
-            {"defect", "rate"},
-            numeric=True,
-        )
-        if not measure_column:
-            measure_column = _choose_column_by_tokens(columns, {"rate"}, numeric=True)
-    if not measure_column and query_tokens & {"order", "orders"}:
-        measure_column = _choose_column_by_tokens(
-            columns,
-            {"amount", "intake", "sales", "value"},
-            numeric=True,
-        )
-    if not measure_column and query_tokens & {"invoice", "invoices"} and raw_query_tokens & {
-        "amount",
-        "bottom",
-        "gross",
-        "highest",
-        "lowest",
-        "net",
-        "top",
-        "total",
-        "value",
-    }:
-        if query_tokens & {"gross"}:
-            measure_column = _choose_column_by_tokens(
-                columns,
-                {"gross", "amount", "value"},
-                numeric=True,
-            )
-        elif query_tokens & {"net"}:
-            measure_column = _choose_column_by_tokens(
-                columns,
-                {"net", "amount", "value"},
-                numeric=True,
-            )
-        if not measure_column:
-            measure_column = _choose_column_by_tokens(
-                columns,
-                {"amount", "gross", "net", "value"},
-                numeric=True,
-            )
-    if not measure_column and query_tokens & {"revenue", "sale", "sales"}:
-        measure_column = _choose_column_by_tokens(
-            columns,
-            {"amount", "intake", "revenue", "sales", "value"},
-            numeric=True,
-        )
-    if not measure_column and query_tokens & {"balance", "balances"}:
-        measure_column = _choose_column_by_tokens(
-            columns,
-            {"balance", "end", "ending", "value"},
-            numeric=True,
-        )
-    if not measure_column and query_tokens & {"amount", "gross", "net", "value"}:
-        measure_column = _choose_column_by_tokens(
-            columns,
-            {"amount", "gross", "net", "value"},
-            numeric=True,
-        )
-    if (
-        not measure_column
-        and not failure_count_intent
-        and query_tokens & {"top", "highest", "lowest", "bottom"}
-    ):
-        measure_column = _choose_column_by_tokens(
-            columns,
-            {
-                "amount",
-                "balance",
-                "cost",
-                "count",
-                "gross",
-                "margin",
-                "net",
-                "quantity",
-                "rate",
-                "score",
-                "value",
-            },
-            numeric=True,
-        )
-
-    if raw_query_tokens & {"missing", "blank", "empty", "null"}:
-        missing_column = _choose_missing_value_column(raw_query_tokens, columns)
-        if missing_column:
-            selected_columns = [
-                column
-                for column in column_names
-                if column == missing_column["name"]
-                or _fallback_tokens(column)
-                & {
-                    "batch",
-                    "business",
-                    "bu",
-                    "customer",
-                    "cust",
-                    "date",
-                    "id",
-                    "location",
-                    "name",
-                    "number",
-                    "ord",
-                    "order",
-                    "product",
-                    "status",
-                    "supplier",
-                }
-            ][:8]
-            if missing_column["name"] not in selected_columns:
-                selected_columns.insert(0, missing_column["name"])
+    if _has_extreme_intent(query_tokens):
+        direction = _sort_direction_for_query(query_tokens)
+        if measure_column:
+            dimension_column = _choose_dimension_column(query_tokens, columns)
             limit_clause = f"\nLIMIT {limit}" if limit else ""
-            return (
-                f"SELECT {_quote_joined(selected_columns)}\nFROM {quoted_table}\n"
-                f"WHERE {_missing_value_predicate(missing_column)}{limit_clause}"
-            )
-
-    dimension_listing_intent = bool(
-        raw_query_tokens & {"associated", "association", "associations", "each", "list", "show"}
-    ) and not bool(
-        raw_query_tokens
-        & (
-            _AVERAGE_METRIC_TOKENS
-            | _COUNT_METRIC_TOKENS
-            | _RATE_METRIC_TOKENS
-            | {"highest", "latest", "lowest", "recent", "top"}
-        )
-    )
-    if dimension_listing_intent:
-        dimension_columns = _choose_dimension_columns(raw_query_tokens, columns, max_columns=3)
-        if len(dimension_columns) >= 2:
-            quoted_dimensions = _quote_joined(dimension_columns)
-            order_clause = ", ".join(_quote_identifier(column) for column in dimension_columns)
-            return (
-                f"SELECT DISTINCT {quoted_dimensions}\n"
-                f"FROM {quoted_table}\nORDER BY {order_clause}"
-            )
-
-    explicit_grouping_intent = bool(raw_query_tokens & {"group", "grouped"}) or bool(
-        re.search(r"(?i)\bby\s+[A-Za-z0-9_ -]+\b", query)
-    )
-    explicit_measure_intent = bool(
-        raw_query_tokens
-        & {
-            "amount",
-            "balance",
-            "gross",
-            "average",
-            "age",
-            "duration",
-            "margin",
-            "net",
-            "rate",
-            "revenue",
-            "sale",
-            "sales",
-            "score",
-            "value",
-        }
-    )
-    if (
-        explicit_grouping_intent
-        and not explicit_measure_intent
-        and not (
-            raw_query_tokens & {"month", "monthly"}
-            and raw_query_tokens & {"count", "number"}
-        )
-    ):
-        grouping_tokens = _grouping_phrase_tokens(query) or raw_query_tokens
-        dimension_columns = _choose_dimension_columns(grouping_tokens, columns)
-        if dimension_columns:
-            subject_column = _choose_count_subject_column(raw_query_tokens, columns)
-            count_expression = "COUNT(*)"
-            where_clause = ""
-            if subject_column:
-                count_expression = f"COUNT({_quote_identifier(subject_column['name'])})"
-                where_clause = f"\nWHERE {_non_missing_value_predicate(subject_column)}"
-            quoted_dimensions = _quote_joined(dimension_columns)
-            limit_clause = f"\nLIMIT {limit}" if limit else ""
-            return (
-                f"SELECT {quoted_dimensions}, {count_expression} AS {_quote_identifier('record_count')}\n"
-                f"FROM {quoted_table}{where_clause}\nGROUP BY {quoted_dimensions}\n"
-                f"ORDER BY {_quote_identifier('record_count')} DESC{limit_clause}"
-            )
-
-    if date_column and raw_query_tokens & {"month", "monthly"} and raw_query_tokens & {
-        "count",
-        "number",
-    }:
-        year_expr = f"EXTRACT(YEAR FROM {_quote_identifier(date_column)})"
-        month_expr = f"EXTRACT(MONTH FROM {_quote_identifier(date_column)})"
-        subject_column = _choose_count_subject_column(raw_query_tokens, columns)
-        count_expression = "COUNT(*)"
-        where_clause = ""
-        if subject_column:
-            count_expression = f"COUNT({_quote_identifier(subject_column['name'])})"
-            where_clause = f"\nWHERE {_non_missing_value_predicate(subject_column)}"
-        return (
-            f"SELECT {year_expr} AS {_quote_identifier('year')}, "
-            f"{month_expr} AS {_quote_identifier('month')}, "
-            f"{count_expression} AS {_quote_identifier('record_count')}\n"
-            f"FROM {quoted_table}{where_clause}\n"
-            f"GROUP BY {year_expr}, {month_expr}\n"
-            f"ORDER BY {year_expr}, {month_expr}"
-        )
-
-    implied_count_by_dimension = "failure" in query_tokens and bool(
-        raw_query_tokens & {"location", "material", "technician", "tech"}
-        or (board_model_intent and not rate_metric_intent)
-    )
-    if (
-        not average_metric_intent
-        and (
-            raw_query_tokens & {"count", "number"}
-            or failure_count_intent
-            or implied_count_by_dimension
-        )
-    ):
-        dimension_columns = _choose_dimension_columns(raw_query_tokens, columns)
-        if dimension_columns:
-            subject_column = _choose_count_subject_column(raw_query_tokens, columns)
-            count_expression = "COUNT(*)"
-            where_clause = ""
-            if subject_column and raw_query_tokens & {"order", "customer"}:
-                count_expression = (
-                    f"COUNT(DISTINCT {_quote_identifier(subject_column['name'])})"
+            if dimension_column:
+                aggregate, alias = _aggregate_for_measure(measure_column["name"])
+                return (
+                    f"SELECT {_quote_identifier(dimension_column)}, "
+                    f"{aggregate}({_quote_identifier(measure_column['name'])}) AS {_quote_identifier(alias)}\n"
+                    f"FROM {quoted_table}{_where_clause(predicates)}\n"
+                    f"GROUP BY {_quote_identifier(dimension_column)}\n"
+                    f"ORDER BY {_quote_identifier(alias)} {direction}{limit_clause}"
                 )
-            elif subject_column and raw_query_tokens & {
-                "account",
-                "batch",
-                "failure",
-                "gl",
-                "glaccount",
-                "invoice",
-                "journal",
-                "recon",
-                "reconciliation",
-                "repair",
-            }:
-                count_expression = f"COUNT({_quote_identifier(subject_column['name'])})"
-                where_clause = f"\nWHERE {_non_missing_value_predicate(subject_column)}"
-            quoted_dimensions = _quote_joined(dimension_columns)
+            selected_columns = _select_listing_columns(
+                query_tokens,
+                columns,
+                measure_column=measure_column["name"],
+                date_column=date_column,
+                max_columns=8,
+            )
+            if measure_column["name"] not in selected_columns:
+                selected_columns.insert(0, measure_column["name"])
+            return (
+                f"SELECT {_quote_joined(selected_columns)}\n"
+                f"FROM {quoted_table}{_where_clause(predicates)}\n"
+                f"ORDER BY {_quote_identifier(measure_column['name'])} {direction}{limit_clause}"
+            )
+        if order_column:
+            selected_columns = _select_listing_columns(
+                query_tokens,
+                columns,
+                date_column=date_column,
+                max_columns=8,
+            )
+            if order_column not in selected_columns:
+                selected_columns.insert(0, order_column)
             limit_clause = f"\nLIMIT {limit}" if limit else ""
             return (
-                f"SELECT {quoted_dimensions}, {count_expression} AS {_quote_identifier('record_count')}\n"
-                f"FROM {quoted_table}{where_clause}\nGROUP BY {quoted_dimensions}\n"
-                f"ORDER BY {_quote_identifier('record_count')} DESC{limit_clause}"
+                f"SELECT {_quote_joined(selected_columns)}\n"
+                f"FROM {quoted_table}{_where_clause(predicates)}\n"
+                f"ORDER BY {_quote_identifier(order_column)} {direction}{limit_clause}"
             )
+        return None
 
-    dimension_column = _choose_dimension_column(raw_query_tokens, columns)
-    if measure_column and dimension_column and rate_metric_intent:
-        aggregate, alias = _aggregate_for_measure(measure_column)
-        quoted_dimension = _quote_identifier(dimension_column)
-        aggregate_expr = f"{aggregate}({_quote_identifier(measure_column)})"
-        direction = "ASC" if raw_query_tokens & {"bottom", "lowest"} else "DESC"
-        limit_clause = f"\nLIMIT {limit}" if limit else ""
-        return (
-            f"SELECT {quoted_dimension}, {aggregate_expr} AS {_quote_identifier(alias)}\n"
-            f"FROM {quoted_table}\nGROUP BY {quoted_dimension}\n"
-            f"ORDER BY {_quote_identifier(alias)} {direction}{limit_clause}"
-        )
-
-    if measure_column and dimension_column and raw_query_tokens & {
-        "bottom",
-        "highest",
-        "lowest",
-        "top",
-    }:
-        aggregate, alias = _aggregate_for_measure(measure_column)
-        quoted_dimension = _quote_identifier(dimension_column)
-        aggregate_expr = f"{aggregate}({_quote_identifier(measure_column)})"
-        direction = "ASC" if raw_query_tokens & {"bottom", "lowest"} else "DESC"
-        limit_clause = f"\nLIMIT {limit}" if limit else ""
-        where_clause = _current_year_where_clause(date_column, columns, raw_query_tokens)
-        return (
-            f"SELECT {quoted_dimension}, {aggregate_expr} AS {_quote_identifier(alias)}\n"
-            f"FROM {quoted_table}{where_clause}\n"
-            f"GROUP BY {quoted_dimension}\n"
-            f"ORDER BY {_quote_identifier(alias)} {direction}{limit_clause}"
-        )
-
-    if measure_column and limit and dimension_column and raw_query_tokens & {
-        "board",
-        "business",
-        "customer",
-        "location",
-        "material",
-        "model",
-        "product",
-        "salesperson",
-        "supplier",
-        "unit",
-    }:
-        aggregate, alias = _aggregate_for_measure(measure_column)
-        quoted_dimension = _quote_identifier(dimension_column)
-        aggregate_expr = f"{aggregate}({_quote_identifier(measure_column)})"
-        return (
-            f"SELECT {quoted_dimension}, {aggregate_expr} AS {_quote_identifier(alias)}\n"
-            f"FROM {quoted_table}\nGROUP BY {quoted_dimension}\n"
-            f"ORDER BY {_quote_identifier(alias)} DESC\nLIMIT {limit}"
-        )
-
-    month_filter = _fallback_month_filter(query)
-    if date_column and month_filter:
-        year, month = month_filter
-        start = f"{year:04d}-{month:02d}-01"
-        end_year = year + 1 if month == 12 else year
-        end_month = 1 if month == 12 else month + 1
-        end = f"{end_year:04d}-{end_month:02d}-01"
+    if month_predicate and date_column:
         selected_columns = _select_listing_columns(
-            raw_query_tokens,
+            query_tokens,
             columns,
-            measure_column=measure_column,
+            measure_column=measure_column["name"] if measure_column else None,
             date_column=date_column,
-        )
-        order_clause = (
-            f"\nORDER BY {_quote_identifier(measure_column)} DESC"
-            if measure_column
-            else f"\nORDER BY {_quote_identifier(date_column)} DESC"
+            max_columns=8,
         )
         limit_clause = f"\nLIMIT {limit}" if limit else ""
         return (
-            f"SELECT {_quote_joined(selected_columns)}\nFROM {quoted_table}\n"
-            f"WHERE {_quote_identifier(date_column)} >= '{start}' "
-            f"AND {_quote_identifier(date_column)} < '{end}'"
-            f"{order_clause}{limit_clause}"
+            f"SELECT {_quote_joined(selected_columns)}\n"
+            f"FROM {quoted_table}{_where_clause(predicates)}\n"
+            f"ORDER BY {_quote_identifier(date_column)} DESC{limit_clause}"
         )
 
-    if (
-        measure_column
-        and date_column
-        and raw_query_tokens & {"year"}
-        and not raw_query_tokens & {"month", "monthly"}
-    ):
-        date_expr = f"EXTRACT(YEAR FROM {_quote_identifier(date_column)})"
+    if order_column:
+        selected_columns = _select_listing_columns(
+            query_tokens,
+            columns,
+            date_column=date_column,
+            max_columns=8,
+        )
+        if order_column not in selected_columns:
+            selected_columns.insert(0, order_column)
+        limit_clause = f"\nLIMIT {limit}" if limit else ""
         return (
-            f"SELECT {date_expr} AS {_quote_identifier('year')}, "
-            f"SUM({_quote_identifier(measure_column)}) AS {_quote_identifier('total_value')}\n"
-            f"FROM {quoted_table}\nGROUP BY {date_expr}\nORDER BY {date_expr}"
+            f"SELECT {_quote_joined(selected_columns)}\n"
+            f"FROM {quoted_table}{_where_clause(predicates)}\n"
+            f"ORDER BY {_quote_identifier(order_column)} ASC{limit_clause}"
         )
 
-    if (
-        measure_column
-        and date_column
-        and raw_query_tokens & {"month", "monthly", "trend", "trends"}
-    ):
-        year_expr = f"EXTRACT(YEAR FROM {_quote_identifier(date_column)})"
-        month_expr = f"EXTRACT(MONTH FROM {_quote_identifier(date_column)})"
-        return (
-            f"SELECT {year_expr} AS {_quote_identifier('year')}, "
-            f"{month_expr} AS {_quote_identifier('month')}, "
-            f"SUM({_quote_identifier(measure_column)}) AS {_quote_identifier('total_value')}\n"
-            f"FROM {quoted_table}\nGROUP BY {year_expr}, {month_expr}\n"
-            f"ORDER BY {year_expr}, {month_expr}"
+    if sample_predicates or query_tokens & {"all", "list"}:
+        selected_columns = _select_listing_columns(
+            query_tokens,
+            columns,
+            date_column=date_column,
+            max_columns=8,
         )
-
-    if measure_column and limit:
-        selected_columns = [
-            column
-            for column in column_names
-            if column == measure_column
-            or _fallback_tokens(column)
-            & {
-                "batch",
-                "board",
-                "customer",
-                "id",
-                "model",
-                "name",
-                "number",
-                "supplier",
-            }
-        ][:6]
-        if measure_column not in selected_columns:
-            selected_columns.append(measure_column)
+        limit_clause = f"\nLIMIT {limit}" if limit else ""
         return (
-            f"SELECT {_quote_joined(selected_columns)}\nFROM {quoted_table}\n"
-            f"ORDER BY {_quote_identifier(measure_column)} DESC\nLIMIT {limit}"
+            f"SELECT {_quote_joined(selected_columns)}\n"
+            f"FROM {quoted_table}{_where_clause(predicates)}{limit_clause}"
         )
 
     return None
@@ -4828,10 +3529,10 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - If a requested noun, output column, grouping, filter, or measure appears only in the user's wording and not in DATABASE SCHEMA, do not translate it into a generic object name. Use only schema-supported concepts and omit unsupported parts.
 - If the user's primary requested subject, output column, grouping, filter, timeframe, measure, or required relationship cannot be grounded by the retrieved DATABASE SCHEMA, return null for sql instead of producing an approximate query.
 - Do not answer by selecting a nearby table only because it was retrieved. A retrieved object is usable only when its declared table, columns, relationships, or metric fields support the user's requested intent.
-- Do not answer business-domain questions from generic log, file, JSON, payload, text, or app-metric columns when the schema contains specific modeled business columns for the requested entity, measure, status, date, or dimension.
-- Prefer exact modeled business fields over generic text search. For example, if a status/severity/date/material/location/customer/order/revenue concept is represented by an explicit declared column, use that column rather than searching a generic payload field with LIKE.
-- If the schema already exposes a measure that directly matches the requested metric, use that exact measure column instead of recomputing it from invented component fields. This applies to metrics such as defect rate, revenue, amount, sales value, count, cost, margin, and quantity.
-- For sales or revenue questions, prefer exact declared sales/revenue/value/amount fields. Do not use tariff, duty, customs, import, refund, or claim datasets unless the user explicitly asks for those domains.
+- Do not answer from generic log, file, JSON, payload, text, or app-metric columns when retrieved schema metadata contains specific modeled columns for the requested entity, measure, filter, date, or dimension.
+- Prefer exact modeled fields over generic text search. If a requested concept is represented by an explicit declared column, use that column rather than searching a generic payload field with LIKE.
+- If the schema already exposes a measure that directly matches the requested metric, use that exact measure column instead of recomputing it from invented component fields.
+- Do not prefer or exclude any business domain by built-in rules. Ground every choice in the DATABASE SCHEMA supplied for this request.
 """
 
 
@@ -4867,9 +3568,8 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
     - example 1: CAST(properties_closedate AS TIMESTAMP WITH TIME ZONE)
     - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP WITH TIME ZONE)
     - example 3: CAST(DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AS TIMESTAMP WITH TIME ZONE)
-- If the user asks for a specific date, please give the date range in SQL query
-    - example: "What is the total revenue for the month of 2024-11-01?"
-    - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
+- If the user asks for a specific date, use a date range over an exact date/time column from DATABASE SCHEMA.
+    - example: filter an exact date/time column with a start timestamp and the next boundary timestamp for the requested period.
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
 - ONLY USE table/column alias in the final SELECT clause; don't use table/columnalias in the other clauses.
