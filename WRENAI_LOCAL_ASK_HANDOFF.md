@@ -26,6 +26,8 @@ Current projects visible through `/api/v1/projects/current`:
 - id `12`, `CWPay`
 - id `13`, `CW_GL`
 
+After the final temporary PR-service validation attempt, the original scheduled AI service was restarted and health checked successfully on port `5555`.
+
 ## Source Control / PR Status
 
 The work is pushed to the fork branch:
@@ -34,7 +36,7 @@ The work is pushed to the fork branch:
 - Branch: `organization/ask-schema-grounding-20260820`
 - PR: `https://github.com/hbalasubramanya-rgb/WrenAI/pull/1`
 - PR base: `organization-feature`
-- Schema implementation commit before handoff-only updates: `cc55d1e05`
+- Latest schema implementation commit before handoff-only updates: `4a199fca1` (`Broaden Ask semantic grounding coverage`)
 - Check PR #1 for the live head SHA because handoff-only commits may be added after the implementation commit.
 
 The PR branch was rebased onto the latest `origin/organization-feature` after GitHub initially reported conflicts against the wrong compare/base. It was then pushed with `--force-with-lease`.
@@ -58,7 +60,7 @@ Do not open this work against upstream `Canner/WrenAI:main` unless that is expli
 
 ### Generic Schema Grounding
 
-Permanent source changes are now in `D:\WrenAI\wren-ai-service`, not only `.codex-tmp`.
+Permanent source changes are committed on the PR branch and present in the clean PR worktree at `D:\WrenAI-ask-e2e-fix-20260820`. The original local checkout at `D:\WrenAI` may still be on an older local commit until it is refreshed from `origin/organization/ask-schema-grounding-20260820`.
 
 Main file:
 
@@ -129,9 +131,9 @@ Relevant behavior:
 - Unsupported-schema failures now avoid showing invented SQL as something to fix.
 - Sales/Orders cleanup remains in place: UI project list shows `Orders`, not duplicate `Sales`.
 
-## Live Validation Done
+## Live Validation and Verification
 
-All live checks were run through the UI GraphQL Ask path after restarting the AI service.
+The live checks below were run through the UI GraphQL Ask path after restarting the AI service during this workstream. A later broader app regression against the updated PR source was attempted, but could not complete because the configured LLM endpoint timed out during intent classification; details are in `Final Temp PR-Service Attempt`.
 
 ### PCB_DB
 
@@ -185,6 +187,29 @@ Passed:
   - Returned `NO_RELEVANT_SQL`.
   - No SQL candidate.
   - Message clearly said the active project does not contain verified `repair` and `priority/severity` fields.
+
+### Final Temp PR-Service Attempt
+
+To verify the latest PR branch rather than the stale local checkout, the scheduled AI service was stopped and a temporary service was started from `D:\WrenAI-ask-e2e-fix-20260820\wren-ai-service` using the existing local venv and `D:\WrenAI\wren-ai-service\config.local.yaml`.
+
+Observed:
+
+- First temp start was missing the original `.env.dev` values and Ask failed with `Embedding request failed with status 401: Invalid API Key`.
+- Temp service was restarted with environment values loaded from `D:\WrenAI\wren-ai-service\.env.dev`; health check passed.
+- A broader GraphQL Ask regression began with random/generic questions across PCB_DB, Orders, CWPay, CW_GL, and an unsupported Orders repair question.
+- The run was blocked by the configured LLM endpoint timing out during intent classification:
+  - endpoint: `10.104.74.10:18002`
+  - error class: `litellm.exceptions.InternalServerError`
+  - underlying connection error: `The semaphore timeout period has expired`
+- Because this was an external LLM connectivity timeout, the final broader live app regression did not complete on the latest PR commit.
+
+Cleanup completed:
+
+- Temporary regression runner was stopped.
+- Temporary PR AI service was stopped.
+- Scheduled task `WrenAI 04 AI Service` was restarted.
+- AI health returned `{"status":"ok"}`.
+- Active project was restored to PCB_DB with project id `10`.
 
 ## Checks Run
 
@@ -309,6 +334,7 @@ There are also many local untracked runtime/data artifacts in the repository. Do
 - Tests may use representative table and prompt names; production code must not.
 - Retrieval context currently uses metadata/descriptions and some semantic context. It does not appear to carry robust sample-value lists. Status casing/value handling works for tested prompts, but richer value-aware matching would improve future accuracy.
 - On 2026-08-20, live E2E against the running local app showed the checkout at `D:\WrenAI` was older than the pushed PR branch, so some observed runtime failures were from stale local code. The PR branch now includes follow-up commit `4a199fca1` (`Broaden Ask semantic grounding coverage`), which expands generic schema grounding for invoice, supplier email, reconciliation, GL balance, and journal workflow families without hardcoding one project/table/prompt.
+- The final broader live regression against the latest PR source was blocked by LLM endpoint connectivity to `10.104.74.10:18002`, not by SQL identifier validation. Re-run this after the LLM endpoint is reachable.
 - Local live execution against CWPay/CW_GL may still fail until those SQL Server datasources are reachable; the observed error was an ODBC login/network timeout to `BRVBISQL.INT.CW.LOCAL,1433`, not a SQL identifier hallucination.
 - `enable_column_pruning` was not the focus of today's final validation.
 - Full pytest suite still needs an environment with `pytest` installed.
@@ -322,4 +348,4 @@ There are also many local untracked runtime/data artifacts in the repository. Do
 5. Install or enable pytest in `wren-ai-service\venv`, then run focused tests.
 6. Review the large `utils/sql.py` diff carefully; consider extracting fallback/grounding helpers into smaller modules after behavior is stable.
 7. Add sample-value metadata to retrieval context if available, then make value matching use that metadata instead of only text normalization.
-8. Run a broader live Ask regression across PCB_DB, Orders, CWPay, and CW_GL when their data sources are available.
+8. Re-run the broader live Ask regression across PCB_DB, Orders, CWPay, and CW_GL when the LLM endpoint and data sources are available.
