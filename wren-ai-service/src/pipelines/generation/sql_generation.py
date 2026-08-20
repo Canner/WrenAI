@@ -20,6 +20,7 @@ from src.pipelines.generation.utils.sql import (
     get_json_field_instructions,
     get_metric_instructions,
     get_sql_generation_system_prompt,
+    unsupported_schema_generation_result,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
@@ -141,7 +142,8 @@ async def post_process(
     generate_sql: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
-    documents: list[str],
+    query: str | None = None,
+    documents: list[str] | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
     validation_contexts: list[str] | None = None,
@@ -154,6 +156,7 @@ async def post_process(
         project_id=project_id,
         mdl_hash=mdl_hash,
         contexts=validation_contexts or documents,
+        fallback_query=query,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
@@ -212,7 +215,11 @@ class SQLGeneration(BasicPipeline):
         sql_knowledge: SqlKnowledge | None = None,
         validation_contexts: list[str] | None = None,
     ):
-        logger.info("SQL Generation pipeline is running...")
+        logger.info(
+            "SQL Generation pipeline is running for project_id=%s mdl_hash=%s",
+            project_id or "",
+            mdl_hash or "",
+        )
 
         if project_id or use_dry_plan:
             metadata = await retrieve_metadata(
@@ -220,6 +227,19 @@ class SQLGeneration(BasicPipeline):
             )
         else:
             metadata = {}
+        data_source = metadata.get("data_source", "local_file")
+
+        unsupported_result = unsupported_schema_generation_result(
+            query,
+            contexts=contexts,
+            data_source=data_source,
+        )
+        if unsupported_result:
+            logger.info(
+                "SQL generation skipped before LLM because selected schema does not cover requested concepts: %s",
+                unsupported_result["invalid_generation_result"]["error"],
+            )
+            return {"post_process": unsupported_result}
 
         return await self._pipe.execute(
             ["post_process"],
@@ -237,7 +257,7 @@ class SQLGeneration(BasicPipeline):
                 "sql_functions": sql_functions,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
-                "data_source": metadata.get("data_source", "local_file"),
+                "data_source": data_source,
                 "allow_data_preview": allow_data_preview,
                 "sql_knowledge": sql_knowledge,
                 "validation_contexts": validation_contexts,

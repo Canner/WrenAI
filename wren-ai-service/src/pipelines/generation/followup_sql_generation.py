@@ -21,6 +21,7 @@ from src.pipelines.generation.utils.sql import (
     get_json_field_instructions,
     get_metric_instructions,
     get_sql_generation_system_prompt,
+    unsupported_schema_generation_result,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
@@ -150,7 +151,8 @@ async def post_process(
     generate_sql_in_followup: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
-    documents: list[str],
+    query: str | None = None,
+    documents: list[str] | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
     validation_contexts: list[str] | None = None,
@@ -162,6 +164,7 @@ async def post_process(
         project_id=project_id,
         mdl_hash=mdl_hash,
         contexts=validation_contexts or documents,
+        fallback_query=query,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
@@ -227,6 +230,18 @@ class FollowUpSQLGeneration(BasicPipeline):
             )
         else:
             metadata = {}
+        data_source = metadata.get("data_source", "local_file")
+
+        unsupported_result = unsupported_schema_generation_result(
+            query,
+            contexts=contexts,
+            data_source=data_source,
+        )
+        if unsupported_result:
+            logger.info(
+                "Follow-up SQL generation skipped before LLM because selected schema does not cover requested concepts."
+            )
+            return {"post_process": unsupported_result}
 
         return await self._pipe.execute(
             ["post_process"],
@@ -245,7 +260,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "sql_functions": sql_functions,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
-                "data_source": metadata.get("data_source", "local_file"),
+                "data_source": data_source,
                 "sql_knowledge": sql_knowledge,
                 "validation_contexts": validation_contexts,
                 **self._components,

@@ -1,5 +1,6 @@
 import logging
 import re
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import aiohttp
@@ -47,6 +48,21 @@ _RELATION_REFERENCE = re.compile(
     rf"(?:\s+(?:AS\s+)?(?P<alias>{_IDENTIFIER_TOKEN}))?",
     re.IGNORECASE,
 )
+_TSQL_TOP_LIMIT = re.compile(
+    r"(?is)^(\s*)SELECT\s+TOP\s*\(?\s*(\d+)\s*\)?\s+(?!PERCENT\b)(.+?)\s*;?\s*$"
+)
+_TO_DATE_SIMPLE = re.compile(
+    r"(?is)\bTO_DATE\s*\(\s*"
+    r"(?P<expr>\"[^\"]+\"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*"
+    r"(?:\s*\.\s*(?:\"[^\"]+\"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*))?)"
+    r"\s*,\s*'[^']+'\s*\)"
+)
+_ORDER_BY_ALIAS_ITEM = re.compile(
+    r"(?is)^(?P<identifier>\"[^\"]+\"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)"
+    r"(?P<suffix>\s+(?:ASC|DESC))?$"
+)
+_JOINED_DESC_LIMIT = re.compile(r"(?i)\bDESC\s*LIMIT\b|DESCLIMIT")
+_JOINED_ASC_LIMIT = re.compile(r"(?i)\bASC\s*LIMIT\b|ASCLIMIT")
 _CTE_REFERENCE = re.compile(
     rf"(?:\bWITH|,)\s+(?P<name>{_IDENTIFIER_TOKEN})\s+AS\s*\(",
     re.IGNORECASE,
@@ -76,11 +92,18 @@ _SQL_OBJECT_ALIAS_STOP_WORDS = {
     "UNION",
     "WHERE",
 }
+_UNQUALIFIED_QUOTED_IDENTIFIER = re.compile(r'(?<!\.)"(?P<name>(?:[^"]|"")*)"')
+_UNQUALIFIED_BARE_IDENTIFIER = re.compile(
+    r"(?<![\.\"])\b(?P<name>[A-Za-z_][A-Za-z0-9_$]*)\b(?!\s*\.)"
+)
+_SINGLE_QUOTED_LITERAL = re.compile(r"'(?:''|[^'])*'")
 _SQL_RESERVED_WORDS = {
     "ALL",
     "ALTER",
     "AND",
+    "ASC",
     "AS",
+    "BETWEEN",
     "BY",
     "CASE",
     "CAST",
@@ -101,6 +124,7 @@ _SQL_RESERVED_WORDS = {
     "GROUP",
     "HAVING",
     "IN",
+    "ISNULL",
     "INNER",
     "INSERT",
     "INTERSECT",
@@ -110,6 +134,7 @@ _SQL_RESERVED_WORDS = {
     "LIKE",
     "LIMIT",
     "NATURAL",
+    "NO",
     "NOT",
     "NULL",
     "OFFSET",
@@ -125,11 +150,242 @@ _SQL_RESERVED_WORDS = {
     "TRUE",
     "UNION",
     "UPDATE",
+    "VALUES",
     "WHEN",
     "WHERE",
     "WINDOW",
     "WITH",
 }
+_SQL_FUNCTION_WORDS = {
+    "ABS",
+    "AVG",
+    "CAST",
+    "CEIL",
+    "CEILING",
+    "COALESCE",
+    "CONCAT",
+    "COUNT",
+    "COUNT_BIG",
+    "DATE_TRUNC",
+    "DAY",
+    "EXTRACT",
+    "FLOOR",
+    "LOWER",
+    "MAX",
+    "MIN",
+    "MONTH",
+    "NULLIF",
+    "ROUND",
+    "SUM",
+    "TRIM",
+    "UPPER",
+    "YEAR",
+}
+_SQL_TYPE_WORDS = {
+    "BIGINT",
+    "BOOLEAN",
+    "CHAR",
+    "DATE",
+    "DATETIME",
+    "DECIMAL",
+    "DOUBLE",
+    "FLOAT",
+    "FLOAT4",
+    "FLOAT8",
+    "INT",
+    "INT2",
+    "INT4",
+    "INT8",
+    "INTEGER",
+    "NUMERIC",
+    "REAL",
+    "SMALLINT",
+    "TEXT",
+    "TIME",
+    "TIMESTAMP",
+    "VARCHAR",
+}
+_DATE_PART_WORDS = {
+    "DAY",
+    "DOW",
+    "DOY",
+    "HOUR",
+    "MICROSECOND",
+    "MILLISECOND",
+    "MINUTE",
+    "MONTH",
+    "QUARTER",
+    "SECOND",
+    "WEEK",
+    "YEAR",
+}
+_FALLBACK_TOKEN = re.compile(r"[a-z0-9]+")
+_FALLBACK_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "by",
+    "from",
+    "in",
+    "of",
+    "show",
+    "that",
+    "the",
+    "to",
+    "with",
+}
+_MONTH_NAME_TO_NUMBER = {
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "april": 4,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "september": 9,
+    "october": 10,
+    "november": 11,
+    "december": 12,
+}
+
+
+def _expand_fallback_token_aliases(tokens: set[str]) -> set[str]:
+    aliases = {
+        "bu": {"business", "unit"},
+        "cust": {"customer"},
+        "customers": {"customer"},
+        "critical": {"priority", "severity"},
+        "boards": {"board"},
+        "high": {"priority", "severity"},
+        "highest": {"top"},
+        "logs": {"log", "record"},
+        "log": {"record"},
+        "lows": {"low"},
+        "lowest": {"bottom"},
+        "models": {"model"},
+        "inv": {"invoice"},
+        "invoices": {"invoice"},
+        "ord": {"order"},
+        "orders": {"order"},
+        "qty": {"quantity"},
+        "num": {"number"},
+        "no": {"number"},
+        "numbers": {"number"},
+        "prod": {"product"},
+        "products": {"product"},
+        "priorities": {"priority", "severity"},
+        "priority": {"severity"},
+        "recent": {"latest"},
+        "records": {"record"},
+        "rep": {"representative", "salesperson"},
+        "repairs": {"repair"},
+        "salesperson": {"sales", "person"},
+        "severity": {"priority"},
+        "supplier": {"vendor"},
+        "suppliers": {"supplier", "vendor"},
+        "tech": {"technician"},
+        "technician": {"tech"},
+        "vendor": {"supplier"},
+        "vendors": {"supplier", "vendor"},
+        "failed": {"failure"},
+        "failures": {"failure"},
+        "defects": {"defect"},
+        "types": {"type"},
+        "units": {"unit", "serial"},
+        "urgency": {"priority", "severity"},
+        "locations": {"location"},
+        "materials": {"material"},
+        "missing": {"blank", "empty", "null"},
+    }
+    expanded = set(tokens)
+    for token in list(tokens):
+        expanded.update(aliases.get(token, set()))
+    if {"business", "unit"}.issubset(expanded):
+        expanded.add("bu")
+    if "customer" in expanded and "number" in expanded:
+        expanded.update({"cust", "id", "no"})
+    if "order" in expanded and "number" in expanded:
+        expanded.update({"ord", "id", "no"})
+    return expanded
+
+
+def normalize_wren_sql_dialect(sql: str) -> str:
+    if not sql:
+        return sql
+
+    sql = _TO_DATE_SIMPLE.sub(
+        lambda match: f"CAST({match.group('expr')} AS DATE)",
+        sql,
+    )
+    sql = _JOINED_DESC_LIMIT.sub("DESC LIMIT", sql)
+    sql = _JOINED_ASC_LIMIT.sub("ASC LIMIT", sql)
+    sql = _replace_order_by_aliases_with_select_expressions(sql)
+    sql = _JOINED_DESC_LIMIT.sub("DESC LIMIT", sql)
+    sql = _JOINED_ASC_LIMIT.sub("ASC LIMIT", sql)
+
+    if re.search(r"(?i)\bLIMIT\s+\d+\b", sql):
+        return sql
+
+    match = _TSQL_TOP_LIMIT.match(sql)
+    if not match:
+        return sql
+
+    leading_space, limit, select_body = match.groups()
+    if re.search(r"(?i)\bWITH\s+TIES\b", select_body):
+        return sql
+
+    return f"{leading_space}SELECT {select_body.strip()}\nLIMIT {limit}"
+
+
+def _replace_order_by_aliases_with_select_expressions(sql: str) -> str:
+    select_clause = _extract_select_clause(sql)
+    order_by_clause = _extract_clause(sql, "ORDER BY", ("LIMIT", "OFFSET"))
+    if not select_clause or not order_by_clause:
+        return sql
+
+    alias_to_expression = {}
+    for select_item in _split_sql_tokens(select_clause):
+        expression, alias = _split_select_expression_alias(select_item)
+        if alias and expression:
+            alias_to_expression[alias] = expression
+
+    if not alias_to_expression:
+        return sql
+
+    replaced_any = False
+    rewritten_order_items = []
+    for order_item in _split_sql_tokens(order_by_clause):
+        match = _ORDER_BY_ALIAS_ITEM.match(order_item.strip())
+        if not match:
+            rewritten_order_items.append(order_item)
+            continue
+
+        alias = _unquote_identifier(match.group("identifier"))
+        expression = alias_to_expression.get(alias)
+        if not expression:
+            rewritten_order_items.append(order_item)
+            continue
+
+        rewritten_order_items.append(f"{expression}{match.group('suffix') or ''}")
+        replaced_any = True
+
+    if not replaced_any:
+        return sql
+
+    order_by_match = re.search(
+        r"(?is)\bORDER\s+BY\b\s+.*?(?=\b(?:LIMIT|OFFSET)\b|$)",
+        sql,
+    )
+    if not order_by_match:
+        return sql
+
+    suffix = sql[order_by_match.end() :]
+    if suffix and not suffix[0].isspace():
+        suffix = "\n" + suffix
+    replacement = "ORDER BY " + ", ".join(rewritten_order_items)
+    return sql[: order_by_match.start()] + replacement + suffix
 
 
 def _unquote_identifier(identifier: str) -> str:
@@ -439,6 +695,132 @@ def _extract_schema_index(contexts: list[Any] | None) -> dict[str, set[str] | No
     return schema_index
 
 
+def _semantic_tokens_from_value(value: Any) -> set[str]:
+    tokens: set[str] = set()
+    if isinstance(value, str):
+        tokens.update(_fallback_tokens(value))
+    elif isinstance(value, dict):
+        for nested_value in value.values():
+            tokens.update(_semantic_tokens_from_value(nested_value))
+    elif isinstance(value, list):
+        for nested_value in value:
+            tokens.update(_semantic_tokens_from_value(nested_value))
+    return tokens
+
+
+def _extract_semantic_context_payload(context: str) -> dict[str, Any]:
+    start_marker = "WREN RETRIEVED SEMANTIC CONTEXT"
+    end_marker = "WREN SQL IDENTIFIER CONTRACT"
+    start_index = context.upper().find(start_marker)
+    end_index = context.upper().find(end_marker, start_index)
+    if start_index < 0 or end_index < 0:
+        return {}
+    payload_text = context[start_index + len(start_marker) : end_index].strip()
+    try:
+        payload = orjson.loads(payload_text)
+    except orjson.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _extract_semantic_tokens_by_column(
+    context: str,
+) -> tuple[set[str], dict[str, set[str]]]:
+    payload = _extract_semantic_context_payload(context)
+    if not payload:
+        return set(), {}
+
+    table_tokens = _semantic_tokens_from_value(
+        payload.get("semantic_context_not_sql_identifiers")
+    )
+    table_tokens.update(_semantic_tokens_from_value(payload.get("object_type")))
+
+    column_tokens: dict[str, set[str]] = {}
+    for column in payload.get("columns", []) or []:
+        if not isinstance(column, dict):
+            continue
+        column_name = column.get("sql_column_name_use_exactly")
+        if not isinstance(column_name, str) or not column_name:
+            continue
+        tokens = _semantic_tokens_from_value(
+            column.get("semantic_context_not_sql_identifier")
+        )
+        if tokens:
+            column_tokens[column_name] = tokens
+
+    return table_tokens, column_tokens
+
+
+def _extract_schema_details(
+    contexts: list[Any] | None,
+) -> dict[str, list[dict[str, str]]]:
+    if not contexts:
+        return {}
+
+    schema_details: dict[str, list[dict[str, str]]] = {}
+
+    for context in _iter_context_texts(contexts):
+        relation_match = _DDL_RELATION.search(context)
+        if not relation_match:
+            continue
+
+        relation_name = _unquote_identifier(relation_match.group("name"))
+        table_semantic_tokens, column_semantic_tokens = (
+            _extract_semantic_tokens_by_column(context)
+        )
+        column_block_match = re.search(
+            r"\bCREATE\s+TABLE\b[^(]*\((?P<columns>.*)\)\s*;?",
+            context,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not column_block_match:
+            continue
+
+        columns = []
+        for raw_column in _split_sql_tokens(column_block_match.group("columns")):
+            line = "\n".join(
+                line.strip()
+                for line in raw_column.splitlines()
+                if line.strip()
+                and not line.strip().startswith("--")
+                and not line.strip().startswith("/*")
+            ).strip()
+            if not line:
+                continue
+            line = line.split("--", 1)[0].strip()
+            if not line or line.upper().startswith(("FOREIGN KEY", "PRIMARY KEY")):
+                continue
+
+            if line.startswith('"'):
+                end = line.find('"', 1)
+                while end != -1 and end + 1 < len(line) and line[end + 1] == '"':
+                    end = line.find('"', end + 2)
+                if end <= 0:
+                    continue
+                name = _unquote_identifier(line[: end + 1])
+                remainder = line[end + 1 :].strip()
+            else:
+                parts = line.split(None, 1)
+                if not parts:
+                    continue
+                name = _unquote_identifier(parts[0])
+                remainder = parts[1].strip() if len(parts) > 1 else ""
+
+            data_type = remainder.split(None, 1)[0].upper() if remainder else ""
+            columns.append(
+                {
+                    "name": name,
+                    "data_type": data_type,
+                    "semantic_tokens": column_semantic_tokens.get(name, set()),
+                    "_table_semantic_tokens": table_semantic_tokens,
+                }
+            )
+
+        schema_details[relation_name] = columns
+
+    return schema_details
+
+
 def _is_identifier_boundary(char: str | None) -> bool:
     return char is None or not (char.isalnum() or char in {"_", "$", '"'})
 
@@ -600,7 +982,9 @@ def _extract_sql_grounding(sql: str) -> dict[str, Any]:
     alias_to_relation = {}
 
     for match in _RELATION_REFERENCE.finditer(sql):
-        relation = _normalize_identifier(match.group("name"))
+        if _is_extract_from_clause(sql, match.start()):
+            continue
+        relation = _unquote_identifier(match.group("name"))
         if relation.upper() in {"UNNEST", "LATERAL"}:
             continue
         alias = match.group("alias")
@@ -625,6 +1009,168 @@ def _extract_sql_grounding(sql: str) -> dict[str, Any]:
         "alias_to_relation": alias_to_relation,
         "qualified_columns": qualified_columns,
     }
+
+
+def _is_extract_from_clause(sql: str, from_start: int) -> bool:
+    prefix = sql[:from_start]
+    last_open = prefix.rfind("(")
+    if last_open == -1 or prefix.rfind(")") > last_open:
+        return False
+
+    before_open = prefix[:last_open].rstrip()
+    return before_open.upper().endswith("EXTRACT")
+
+
+def _strip_string_literals(sql: str) -> str:
+    return _SINGLE_QUOTED_LITERAL.sub("''", sql)
+
+
+def _extract_clause(sql: str, clause: str, end_clauses: tuple[str, ...]) -> str:
+    end_pattern = "|".join(re.escape(end_clause) for end_clause in end_clauses)
+    pattern = re.compile(
+        rf"(?is)\b{re.escape(clause)}\b\s+(?P<body>.*?)(?=\b(?:{end_pattern})\b|$)"
+    )
+    match = pattern.search(sql)
+    return match.group("body").strip() if match else ""
+
+
+def _extract_select_clause(sql: str) -> str:
+    match = re.search(r"(?is)\bSELECT\b\s+(?P<body>.*?)(?=\bFROM\b)", sql)
+    return match.group("body").strip() if match else ""
+
+
+def _split_select_expression_alias(expression: str) -> tuple[str, str | None]:
+    as_match = re.search(
+        r"(?is)\s+AS\s+(?P<alias>\"[^\"]+\"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)\s*$",
+        expression,
+    )
+    if as_match:
+        return expression[: as_match.start()].strip(), _unquote_identifier(
+            as_match.group("alias")
+        )
+
+    return expression, None
+
+
+def _extract_output_aliases(select_clause: str) -> set[str]:
+    aliases = set()
+    for expression in _split_sql_tokens(select_clause):
+        _, alias = _split_select_expression_alias(expression)
+        if alias:
+            aliases.add(alias)
+    return aliases
+
+
+def _iter_unqualified_identifier_candidates(expression: str):
+    stripped = _strip_string_literals(expression)
+
+    for match in _UNQUALIFIED_QUOTED_IDENTIFIER.finditer(stripped):
+        yield _unquote_identifier(f'"{match.group("name")}"')
+
+    without_quoted = _UNQUALIFIED_QUOTED_IDENTIFIER.sub(" ", stripped)
+    for match in _UNQUALIFIED_BARE_IDENTIFIER.finditer(without_quoted):
+        name = match.group("name")
+        following = without_quoted[match.end() :].lstrip()
+        if following.startswith("("):
+            continue
+        yield name
+
+
+def _sql_mentions_identifier(sql: str, identifier: str) -> bool:
+    stripped = _strip_string_literals(sql)
+    quoted_identifier = re.escape(_quote_identifier(identifier))
+    bracket_identifier = re.escape(f"[{identifier}]")
+    bare_identifier = re.escape(identifier)
+    return bool(
+        re.search(rf'(?<![\w$]){quoted_identifier}(?![\w$])', stripped)
+        or re.search(rf"(?<![\w$]){bracket_identifier}(?![\w$])", stripped)
+        or re.search(rf"(?<![\w$\".]){bare_identifier}(?![\w$])", stripped)
+    )
+
+
+def _validate_unqualified_columns_for_single_relation(
+    sql: str,
+    schema_index: dict[str, set[str] | None],
+    grounding: dict[str, Any],
+) -> str | None:
+    real_relations = [
+        relation
+        for relation in grounding["relation_references"]
+        if relation not in grounding["cte_names"]
+    ]
+    if grounding["cte_names"]:
+        return None
+
+    unique_real_relations = list(dict.fromkeys(real_relations))
+    if len(unique_real_relations) != 1:
+        return None
+
+    relation = unique_real_relations[0]
+    valid_columns = schema_index.get(relation)
+    if valid_columns is None:
+        return None
+
+    select_clause = _extract_select_clause(sql)
+    output_aliases = _extract_output_aliases(select_clause)
+    ignored_identifiers = (
+        set(schema_index)
+        | set(grounding["alias_to_relation"])
+        | set(grounding["cte_names"])
+        | output_aliases
+    )
+
+    clause_expressions = []
+    for expression in _split_sql_tokens(select_clause):
+        expression, _ = _split_select_expression_alias(expression)
+        clause_expressions.append(expression)
+    clause_expressions.extend(
+        filter(
+            None,
+            [
+                _extract_clause(
+                    sql,
+                    "WHERE",
+                    ("GROUP BY", "HAVING", "ORDER BY", "LIMIT", "OFFSET"),
+                ),
+                _extract_clause(
+                    sql,
+                    "GROUP BY",
+                    ("HAVING", "ORDER BY", "LIMIT", "OFFSET"),
+                ),
+                _extract_clause(
+                    sql,
+                    "HAVING",
+                    ("ORDER BY", "LIMIT", "OFFSET"),
+                ),
+                _extract_clause(sql, "ORDER BY", ("LIMIT", "OFFSET")),
+            ],
+        )
+    )
+
+    invalid_columns = set()
+    for expression in clause_expressions:
+        for identifier in _iter_unqualified_identifier_candidates(expression):
+            upper_identifier = identifier.upper()
+            if (
+                upper_identifier in _SQL_RESERVED_WORDS
+                or upper_identifier in _SQL_FUNCTION_WORDS
+                or upper_identifier in _SQL_TYPE_WORDS
+                or upper_identifier in _DATE_PART_WORDS
+                or identifier in ignored_identifiers
+                or identifier in valid_columns
+            ):
+                continue
+            invalid_columns.add(identifier)
+
+    if not invalid_columns:
+        return None
+
+    return (
+        "Schema grounding failed. The SQL references unqualified columns that "
+        f"are not present in verified table or view {relation}: "
+        f"{', '.join(sorted(invalid_columns))}. Use only verified columns: "
+        f"{', '.join(sorted(valid_columns))}."
+    )
 
 
 def validate_sql_against_contexts(
@@ -676,6 +1222,14 @@ def validate_sql_against_contexts(
                 f"table or view {relation}. Use only verified columns: "
                 f"{', '.join(sorted(valid_columns))}."
             )
+
+    unqualified_column_error = _validate_unqualified_columns_for_single_relation(
+        sql,
+        schema_index,
+        grounding,
+    )
+    if unqualified_column_error:
+        return unqualified_column_error
 
     return None
 
@@ -729,6 +1283,126 @@ def _extract_generation_sql(generation_result: str | None) -> str | None:
     return text if _SQL_START.search(text) else None
 
 
+def validate_sql_semantic_coverage(
+    sql: str,
+    query: str | None,
+    contexts: list[Any] | None = None,
+) -> str | None:
+    if not sql or not query:
+        return None
+
+    raw_query_tokens = _fallback_tokens(query)
+    query_tokens = _expanded_fallback_query_tokens(query)
+    concepts = _requested_business_concepts(raw_query_tokens)
+    if not concepts:
+        return None
+
+    schema_details = _extract_schema_details(contexts)
+    if not schema_details:
+        return None
+
+    grounding = _extract_sql_grounding(sql)
+    referenced_relations = {
+        relation
+        for relation in grounding["relation_references"]
+        if relation not in grounding["cte_names"]
+    }
+    if not referenced_relations:
+        return None
+
+    schema_tokens = set()
+    for relation in referenced_relations:
+        columns = schema_details.get(relation)
+        if columns is not None:
+            schema_tokens.update(_schema_tokens_for_table(relation, columns))
+
+    if not schema_tokens:
+        return None
+
+    missing_concepts = [
+        label for label, concept_tokens in concepts if not schema_tokens & concept_tokens
+    ]
+    if not missing_concepts:
+        if _is_failure_count_intent(raw_query_tokens, query_tokens):
+            if not re.search(r"(?is)\bCOUNT\s*\(", sql):
+                return (
+                    "Schema grounding failed. The question asks for a count of "
+                    "failure records, but the generated SQL does not compute a "
+                    "COUNT aggregate. Use a verified failure-record column/table "
+                    "and group by the requested dimension, or return no SQL if "
+                    "the active project does not contain it."
+                )
+            for relation in referenced_relations:
+                for column in schema_details.get(relation, []):
+                    if _is_rate_like_column(column) and _sql_mentions_identifier(
+                        sql, column["name"]
+                    ):
+                        return (
+                            "Schema grounding failed. The question asks for a "
+                            "count of failure records, but the generated SQL uses "
+                            f"rate-like column {column['name']}. Use COUNT over a "
+                            "verified failure occurrence field instead, or return "
+                            "no SQL if the active project does not contain one."
+                        )
+        return None
+
+    return (
+        "Schema grounding failed. The generated SQL uses verified identifiers, "
+        "but the selected table or view does not contain verified fields for the "
+        f"requested business concept(s): {', '.join(missing_concepts)}. Use only "
+        "schema objects whose table or column names explicitly support those "
+        "concepts, or return no SQL if the active project does not contain them."
+    )
+
+
+def unsupported_schema_message(
+    query: str | None,
+    contexts: list[Any] | None = None,
+) -> str | None:
+    if not query:
+        return None
+    query_tokens = _fallback_tokens(query)
+    concepts = _requested_business_concepts(query_tokens)
+    if not concepts:
+        return None
+    schema_details = _extract_schema_details(contexts)
+    if not schema_details:
+        return None
+    if any(
+        _table_covers_requested_concepts(table_name, columns, query_tokens)
+        for table_name, columns in schema_details.items()
+    ):
+        return None
+    concept_labels = ", ".join(label for label, _ in concepts)
+    return (
+        "No retrieved table or view in the active project contains verified "
+        "fields for all requested business concept(s): "
+        f"{concept_labels}. Select a project with those fields or ask a question "
+        "supported by the selected project's schema."
+    )
+
+
+def unsupported_schema_generation_result(
+    query: str | None,
+    contexts: list[Any] | None = None,
+    data_source: str = "",
+) -> dict[str, Any] | None:
+    message = unsupported_schema_message(query, contexts=contexts)
+    if not message:
+        return None
+    return {
+        "valid_generation_result": {},
+        "invalid_generation_result": {
+            "sql": "",
+            "original_sql": "",
+            "type": "NO_RELEVANT_SQL",
+            "error": message,
+            "correlation_id": "",
+            "data_source": data_source,
+        },
+    }
+
+
 def normalize_sql_with_schema_identifiers(
     sql: str,
     contexts: list[Any] | None = None,
@@ -745,6 +1419,1219 @@ def normalize_sql_with_schema_identifiers(
     return sql
 
 
+def _fallback_tokens(value: Any) -> set[str]:
+    if value is None:
+        return set()
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(value))
+    tokens = {
+        token
+        for token in _FALLBACK_TOKEN.findall(text.lower())
+        if token not in _FALLBACK_STOPWORDS
+    }
+    return _expand_fallback_token_aliases(tokens)
+
+
+def _column_business_tokens(column: dict[str, Any]) -> set[str]:
+    tokens = _fallback_tokens(column["name"])
+    tokens.update(column.get("semantic_tokens") or set())
+    return tokens
+
+
+def _table_business_tokens(
+    table_name: str,
+    columns: list[dict[str, Any]],
+) -> set[str]:
+    tokens = _fallback_tokens(table_name)
+    for column in columns:
+        tokens.update(column.get("_table_semantic_tokens") or set())
+    return tokens
+
+
+def _expanded_fallback_query_tokens(query: str) -> set[str]:
+    tokens = _fallback_tokens(query)
+    if tokens & {"revenue", "sale", "sales", "trend", "trends"}:
+        tokens.update({"amount", "date", "intake", "revenue", "sales", "value"})
+    if tokens & {"order", "orders"}:
+        tokens.update({"amount", "customer", "date", "ord", "order", "value"})
+    if tokens & {"invoice", "invoices"}:
+        tokens.update({"amount", "currency", "date", "invoice", "supplier"})
+    if tokens & {"batch", "batches"}:
+        tokens.update({"batch", "board", "defect", "inspection", "rate", "supplier"})
+    if tokens & {"repair", "repairs"}:
+        tokens.update({"date", "failure", "log", "priority", "progress", "repair", "status"})
+    if tokens & {"failure", "failures", "defect", "defects"}:
+        tokens.update({"code", "defect", "failure", "severity", "status", "type"})
+    if tokens & {"material", "materials"}:
+        tokens.update({"item", "material", "part"})
+    if tokens & {"location", "locations"}:
+        tokens.update({"area", "location", "site"})
+    if tokens & {"month", "monthly", "july"}:
+        tokens.update({"date", "day", "month", "time", "year"})
+    elif tokens & {"latest", "trend", "trends", "year"}:
+        tokens.update({"date", "day", "time", "year"})
+    if "business" in tokens and "unit" in tokens:
+        tokens.update({"account", "bu", "business", "company", "division", "unit"})
+    return tokens
+
+
+def _is_numeric_type(data_type: str) -> bool:
+    return data_type.upper() in {
+        "BIGINT",
+        "DECIMAL",
+        "DOUBLE",
+        "FLOAT",
+        "FLOAT4",
+        "FLOAT8",
+        "INT",
+        "INT2",
+        "INT4",
+        "INT8",
+        "INTEGER",
+        "NUMERIC",
+        "REAL",
+        "SMALLINT",
+    }
+
+
+def _is_date_type(data_type: str) -> bool:
+    return data_type.upper() in {
+        "DATE",
+        "DATETIME",
+        "DATETIME2",
+        "SMALLDATETIME",
+        "TIME",
+        "TIMESTAMP",
+        "TIMESTAMPTZ",
+        "TIMESTAMP_LTZ",
+        "TIMESTAMP_NTZ",
+        "TIMESTAMP_TZ",
+    }
+
+
+_RATE_METRIC_TOKENS = {"rate", "ratio", "percent", "percentage"}
+_COUNT_METRIC_TOKENS = {"count", "many", "most", "number", "total"}
+_PRIORITY_VALUE_ALIASES = {
+    "urgent": "urgent",
+    "critical": "critical",
+    "high": "high",
+    "medium": "medium",
+    "normal": "normal",
+    "low": "low",
+}
+_PRIORITY_ORDER = [
+    ("critical", 6),
+    ("urgent", 6),
+    ("blocker", 6),
+    ("high", 5),
+    ("major", 5),
+    ("medium", 4),
+    ("normal", 4),
+    ("minor", 3),
+    ("low", 2),
+]
+
+
+def _is_rate_metric_intent(raw_query_tokens: set[str]) -> bool:
+    return bool(raw_query_tokens & _RATE_METRIC_TOKENS)
+
+
+def _is_failure_count_intent(
+    raw_query_tokens: set[str],
+    query_tokens: set[str],
+) -> bool:
+    return (
+        bool(raw_query_tokens & {"failure", "failed", "defect"})
+        and "failure" in query_tokens
+        and not _is_rate_metric_intent(raw_query_tokens)
+        and (
+            bool(raw_query_tokens & _COUNT_METRIC_TOKENS)
+            or bool(raw_query_tokens & {"top", "highest", "lowest", "bottom"})
+        )
+    )
+
+
+def _has_board_model_intent(query_tokens: set[str]) -> bool:
+    return {"board", "model"}.issubset(query_tokens)
+
+
+def _is_rate_like_column(column: dict[str, str]) -> bool:
+    return bool(_fallback_tokens(column["name"]) & (_RATE_METRIC_TOKENS | {"score"}))
+
+
+def _quote_joined(identifiers: list[str]) -> str:
+    return ", ".join(_quote_identifier(identifier) for identifier in identifiers)
+
+
+def _requested_business_concepts(query_tokens: set[str]) -> list[tuple[str, set[str]]]:
+    concepts: list[tuple[str, set[str]]] = []
+    specs = [
+        (
+            "failure/defect",
+            {"failure", "failed", "defect"},
+            {"failure", "failed", "defect"},
+        ),
+        ("repair", {"repair"}, {"repair"}),
+        ("material", {"material"}, {"material", "part"}),
+        ("location", {"location"}, {"location", "site", "area"}),
+        ("customer", {"customer"}, {"customer", "cust"}),
+        ("supplier/vendor", {"supplier", "vendor"}, {"supplier", "vendor"}),
+        ("technician", {"technician", "tech"}, {"technician", "tech"}),
+        ("product", {"product"}, {"product", "prod", "item", "material"}),
+        (
+            "priority/severity",
+            {"critical", "priority", "severity"},
+            {"priority", "severity"},
+        ),
+        ("status", {"status"}, {"status"}),
+        ("order", {"order"}, {"order", "ord"}),
+    ]
+    for label, triggers, schema_tokens in specs:
+        if query_tokens & triggers:
+            concepts.append((label, schema_tokens))
+    if {"board", "model"}.issubset(query_tokens):
+        concepts.append(("board model", {"board", "model"}))
+    if {"business", "unit"}.issubset(query_tokens):
+        concepts.append(("business unit", {"business", "unit", "bu", "division"}))
+    return concepts
+
+
+def _schema_tokens_for_table(table_name: str, columns: list[dict[str, str]]) -> set[str]:
+    tokens = _table_business_tokens(table_name, columns)
+    for column in columns:
+        tokens.update(_column_business_tokens(column))
+    return tokens
+
+
+def _table_covers_requested_concepts(
+    table_name: str,
+    columns: list[dict[str, str]],
+    concept_tokens: set[str],
+) -> bool:
+    concepts = _requested_business_concepts(concept_tokens)
+    if not concepts:
+        return True
+    schema_tokens = _schema_tokens_for_table(table_name, columns)
+    return all(schema_tokens & concept_tokens for _, concept_tokens in concepts)
+
+
+def _choose_fallback_table(
+    query_tokens: set[str],
+    schema_details: dict[str, list[dict[str, str]]],
+    concept_tokens: set[str] | None = None,
+) -> tuple[str, list[dict[str, str]]] | None:
+    concept_tokens = concept_tokens or query_tokens
+    rate_metric_intent = _is_rate_metric_intent(concept_tokens)
+    failure_count_intent = _is_failure_count_intent(concept_tokens, query_tokens)
+    board_model_intent = _has_board_model_intent(query_tokens) or _has_board_model_intent(
+        concept_tokens
+    )
+    scored_tables = []
+    for table_name, columns in schema_details.items():
+        table_tokens = _table_business_tokens(table_name, columns)
+        column_token_union = set()
+        has_numeric_sales_measure = False
+        has_date_capable_column = False
+        score = len(query_tokens & table_tokens) * 8
+        for column in columns:
+            column_tokens = _column_business_tokens(column)
+            column_token_union.update(column_tokens)
+            if _is_numeric_type(column["data_type"]) and column_tokens & {
+                "amount",
+                "intake",
+                "revenue",
+                "sales",
+                "value",
+            }:
+                has_numeric_sales_measure = True
+            if _is_date_type(column["data_type"]) or column_tokens & {
+                "date",
+                "day",
+                "month",
+                "time",
+                "year",
+            }:
+                has_date_capable_column = True
+            score += len(query_tokens & column_tokens) * 10
+            if _is_numeric_type(column["data_type"]):
+                score += len(
+                    query_tokens
+                    & column_tokens
+                    & {
+                        "amount",
+                        "cost",
+                        "count",
+                        "margin",
+                        "quantity",
+                        "rate",
+                        "score",
+                        "value",
+                    }
+                ) * 4
+            if _is_date_type(column["data_type"]):
+                score += (
+                    len(query_tokens & {"date", "month", "year", "july", "trend", "trends"})
+                    * 4
+                )
+
+        if not _table_covers_requested_concepts(table_name, columns, concept_tokens):
+            continue
+
+        if board_model_intent and rate_metric_intent and query_tokens & {
+            "defect",
+            "failure",
+        }:
+            if not {"board", "model"}.issubset(column_token_union):
+                continue
+            rate_column = _choose_column_by_tokens(
+                columns,
+                {"defect", "rate"},
+                numeric=True,
+            )
+            if not rate_column:
+                continue
+            score += 130
+
+        if query_tokens & {"revenue", "sale", "sales", "trend", "trends"}:
+            score += (
+                len(column_token_union & {"amount", "intake", "revenue", "sales", "value"})
+                * 10
+            )
+            score += len(column_token_union & {"date", "month", "time", "year"}) * 5
+            if not has_numeric_sales_measure:
+                continue
+            score += 50
+            if query_tokens & {"year", "month", "monthly", "trend", "trends"}:
+                if not has_date_capable_column:
+                    continue
+                score += 30
+            if not query_tokens & {
+                "claim",
+                "claims",
+                "customs",
+                "duty",
+                "import",
+                "refund",
+                "tariff",
+            }:
+                table_and_columns = table_tokens | column_token_union
+                customs_matches = table_and_columns & {
+                    "claim",
+                    "claims",
+                    "customs",
+                    "duty",
+                    "import",
+                    "refund",
+                    "tariff",
+                    "tariffs",
+                }
+                if customs_matches and not table_and_columns & {"revenue", "sale", "sales"}:
+                    continue
+                score -= len(customs_matches) * 40
+
+        if "customer" in query_tokens:
+            table_and_columns = table_tokens | column_token_union
+            if not table_and_columns & {"customer", "cust"}:
+                if "missing" in query_tokens:
+                    continue
+                score -= 80
+            else:
+                score += 45
+
+        if {"business", "unit"}.issubset(query_tokens):
+            if "bu" in column_token_union:
+                score += 60
+            elif {"business", "unit"} <= column_token_union:
+                score += 45
+
+        if "failure" in query_tokens and (
+            query_tokens & {"location", "material", "technician", "tech"}
+            or board_model_intent
+        ):
+            table_and_columns = table_tokens | column_token_union
+            if not table_and_columns & {"failure", "failed", "defect"}:
+                continue
+            if board_model_intent:
+                if not {"board", "model"}.issubset(column_token_union):
+                    continue
+                if failure_count_intent and not _choose_count_subject_column(
+                    {"failure"},
+                    columns,
+                ):
+                    continue
+                score += 100
+            if "location" in query_tokens:
+                if "location" not in column_token_union:
+                    continue
+                score += 90
+            if "material" in query_tokens:
+                if not column_token_union & {"material", "part"}:
+                    continue
+                score += 90
+            if query_tokens & {"technician", "tech"}:
+                if not column_token_union & {"technician", "tech"}:
+                    continue
+                score += 90
+
+        if query_tokens & {"order", "orders"}:
+            table_and_columns = table_tokens | column_token_union
+            explicit_order_support = table_and_columns & {"ord", "order", "orders"}
+            order_support = table_and_columns & {
+                "amount",
+                "customer",
+                "intake",
+                "item",
+                "ord",
+                "order",
+                "orders",
+                "sales",
+                "value",
+            }
+            if not order_support:
+                continue
+            if explicit_order_support:
+                score += 80
+            else:
+                score -= 60
+
+        if query_tokens & {"batch", "batches"} and {"defect", "rate"}.issubset(
+            column_token_union
+        ):
+            score += 40
+        if {"material", "location"}.issubset(query_tokens) and {
+            "material",
+            "location",
+        }.issubset(column_token_union):
+            score += 40
+        if (
+            query_tokens & {"repair", "repairs"}
+            and (table_tokens | column_token_union) & {"repair", "fix"}
+        ):
+            score += 55
+            if concept_tokens & {"critical", "priority", "severity"}:
+                if not _choose_priority_column(columns):
+                    continue
+                score += 55
+            if concept_tokens & {"status"}:
+                if not column_token_union & {"status", "state", "progress"}:
+                    continue
+                score += 45
+            if concept_tokens & {"latest", "recent"}:
+                if not has_date_capable_column:
+                    continue
+                score += 35
+
+        if score > 0:
+            scored_tables.append((score, table_name, columns))
+
+    if not scored_tables:
+        return None
+
+    scored_tables.sort(key=lambda item: (-item[0], item[1]))
+    return scored_tables[0][1], scored_tables[0][2]
+
+
+def _choose_column_by_tokens(
+    columns: list[dict[str, str]],
+    required_tokens: set[str],
+    numeric: bool | None = None,
+    date: bool | None = None,
+) -> str | None:
+    candidates = []
+    for column in columns:
+        column_tokens = _column_business_tokens(column)
+        if numeric is True and not _is_numeric_type(column["data_type"]):
+            continue
+        if date is True and not (
+            _is_date_type(column["data_type"])
+            or column_tokens & {"date", "day", "month", "time", "year"}
+        ):
+            continue
+        score = len(required_tokens & column_tokens) * 10
+        if date is True and _is_date_type(column["data_type"]):
+            score += 20
+        if required_tokens and required_tokens.issubset(column_tokens):
+            score += 30
+        if score > 0:
+            candidates.append((score, column["name"]))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    return candidates[0][1]
+
+
+def _column_score_for_tokens(
+    column: dict[str, str],
+    required_tokens: set[str],
+    numeric: bool | None = None,
+) -> int:
+    column_tokens = _fallback_tokens(column["name"])
+    column_tokens.update(column.get("semantic_tokens") or set())
+    if numeric is True and not _is_numeric_type(column["data_type"]):
+        return 0
+    score = len(required_tokens & column_tokens) * 10
+    if required_tokens and required_tokens.issubset(column_tokens):
+        score += 30
+    if column["name"].lower() == "bu" and {"business", "unit"} & required_tokens:
+        score += 60
+    if column["name"].lower() in {"custno", "customer_id", "customerid"} and {
+        "customer",
+        "number",
+    } & required_tokens:
+        score += 30
+    if column["name"].lower() in {"custname", "customer_name", "customer"} and {
+        "customer",
+        "name",
+    } & required_tokens:
+        score += 35
+    if column["name"].lower() in {"ordno", "order_no", "order_number", "sales_order_number"} and {
+        "order",
+        "number",
+    } & required_tokens:
+        score += 35
+    return score
+
+
+def _choose_ranked_column_by_tokens(
+    columns: list[dict[str, str]],
+    required_tokens: set[str],
+    numeric: bool | None = None,
+) -> dict[str, str] | None:
+    candidates = [
+        (_column_score_for_tokens(column, required_tokens, numeric=numeric), column)
+        for column in columns
+    ]
+    candidates = [(score, column) for score, column in candidates if score > 0]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (-item[0], item[1]["name"]))
+    return candidates[0][1]
+
+
+def _choose_dimension_column(
+    query_tokens: set[str],
+    columns: list[dict[str, str]],
+) -> str | None:
+    dimension_specs = [
+        ({"board", "model"}, {"board", "model"}),
+        ({"business", "unit"}, {"business", "unit", "bu", "division", "company"}),
+        ({"customer"}, {"customer", "cust", "name"}),
+        ({"supplier"}, {"supplier", "vendor", "name"}),
+        ({"product"}, {"product", "prod", "item", "material", "name"}),
+        ({"salesperson", "representative"}, {"salesperson", "sales", "person", "rep"}),
+        ({"technician", "tech"}, {"technician", "tech"}),
+        ({"location"}, {"location", "site", "area"}),
+        ({"material"}, {"material", "part", "item"}),
+        ({"priority", "severity"}, {"priority", "severity", "urgency", "rank"}),
+        ({"status"}, {"status"}),
+        ({"currency"}, {"currency", "curr"}),
+        ({"country"}, {"country"}),
+        ({"order"}, {"order", "ord", "number"}),
+        ({"batch"}, {"batch", "id"}),
+    ]
+    for trigger_tokens, column_tokens in dimension_specs:
+        if query_tokens & trigger_tokens:
+            column = _choose_ranked_column_by_tokens(columns, column_tokens)
+            if column:
+                return column["name"]
+    return None
+
+
+def _choose_missing_value_column(
+    query_tokens: set[str],
+    columns: list[dict[str, str]],
+) -> dict[str, str] | None:
+    missing_specs = [
+        ({"customer"}, {"customer", "cust", "number", "id", "no"}),
+        ({"order"}, {"order", "ord", "number", "id", "no"}),
+        ({"supplier"}, {"supplier", "vendor", "number", "id", "no"}),
+        ({"product", "material"}, {"product", "prod", "material", "item", "number", "id"}),
+        ({"location"}, {"location", "site", "area"}),
+        ({"status"}, {"status"}),
+    ]
+    for trigger_tokens, column_tokens in missing_specs:
+        if query_tokens & trigger_tokens:
+            column = _choose_ranked_column_by_tokens(columns, column_tokens)
+            if column:
+                return column
+    return None
+
+
+def _choose_count_subject_column(
+    query_tokens: set[str],
+    columns: list[dict[str, str]],
+) -> dict[str, str] | None:
+    subject_specs = [
+        ({"order"}, {"order", "ord", "number", "id", "no"}),
+        ({"customer"}, {"customer", "cust", "number", "id", "no"}),
+        (
+            {"failure"},
+            {"failure", "failed", "defect", "code", "line", "status", "sys", "type"},
+        ),
+        ({"repair"}, {"repair", "id", "status"}),
+        ({"batch"}, {"batch", "id"}),
+    ]
+    for trigger_tokens, column_tokens in subject_specs:
+        if query_tokens & trigger_tokens:
+            candidate_columns = columns
+            if trigger_tokens & {"failure"}:
+                candidate_columns = [
+                    column for column in columns if not _is_rate_like_column(column)
+                ]
+            column = _choose_ranked_column_by_tokens(candidate_columns, column_tokens)
+            if column:
+                return column
+    return None
+
+
+def _is_text_type(data_type: str) -> bool:
+    return data_type.upper() in {"CHAR", "NCHAR", "NVARCHAR", "STRING", "TEXT", "VARCHAR"}
+
+
+def _missing_value_predicate(column: dict[str, str]) -> str:
+    quoted_column = _quote_identifier(column["name"])
+    if _is_text_type(column["data_type"]):
+        return f"({quoted_column} IS NULL OR {quoted_column} = '')"
+    return f"{quoted_column} IS NULL"
+
+
+def _non_missing_value_predicate(column: dict[str, str]) -> str:
+    quoted_column = _quote_identifier(column["name"])
+    if _is_text_type(column["data_type"]):
+        return f"({quoted_column} IS NOT NULL AND {quoted_column} <> '')"
+    return f"{quoted_column} IS NOT NULL"
+
+
+def _aggregate_for_measure(measure_column: str) -> tuple[str, str]:
+    tokens = _fallback_tokens(measure_column)
+    if tokens & {"rate", "score", "percent", "percentage"}:
+        return "AVG", "average_value"
+    return "SUM", "total_value"
+
+
+def _select_listing_columns(
+    query_tokens: set[str],
+    columns: list[dict[str, str]],
+    measure_column: str | None = None,
+    date_column: str | None = None,
+    max_columns: int = 6,
+) -> list[str]:
+    scored_columns: list[tuple[int, int, str]] = []
+    for index, column in enumerate(columns):
+        name = column["name"]
+        tokens = _column_business_tokens(column)
+        score = len(query_tokens & tokens) * 10
+        if name == date_column:
+            score += 35
+        if name == measure_column:
+            score += 12
+        if query_tokens & {"order"}:
+            score += len(tokens & {"order", "ord", "number", "customer", "cust", "item", "product"}) * 18
+            score += len(tokens & {"date", "day", "month", "year"}) * 8
+        if query_tokens & {"customer"}:
+            score += len(tokens & {"customer", "cust", "name", "number", "id"}) * 18
+        if query_tokens & {"product", "material"}:
+            score += len(tokens & {"product", "prod", "material", "item", "description", "desc"}) * 18
+        if query_tokens & {"batch"}:
+            score += len(tokens & {"batch", "board", "model", "supplier", "id"}) * 18
+        if query_tokens & {"repair", "log", "record"}:
+            score += (
+                len(tokens & {"board", "code", "date", "failure", "id", "priority", "status"})
+                * 14
+            )
+        if tokens & {"repair", "failure", "failed", "defect"} and not query_tokens & {
+            "repair",
+            "failure",
+            "defect",
+        }:
+            score -= 40
+        if tokens & {"date", "day", "month", "year"} and not (
+            _is_date_type(column["data_type"]) or name == date_column
+        ):
+            score -= 12
+        if score > 0:
+            scored_columns.append((score, index, name))
+
+    scored_columns.sort(key=lambda item: (-item[0], item[1]))
+    selected = []
+    for _, _, name in scored_columns:
+        if name not in selected:
+            selected.append(name)
+        if len(selected) >= max_columns:
+            break
+    if not selected and columns:
+        selected = [column["name"] for column in columns[:max_columns]]
+    return selected
+
+
+def _fallback_limit(query: str) -> int | None:
+    match = re.search(r"(?i)\btop\s+(\d+)\b", query)
+    return int(match.group(1)) if match else None
+
+
+def _fallback_month_filter(query: str) -> tuple[int, int] | None:
+    tokens = _fallback_tokens(query)
+    for month_name, month_number in _MONTH_NAME_TO_NUMBER.items():
+        if month_name in tokens:
+            return datetime.now(timezone.utc).year, month_number
+    return None
+
+
+def _quote_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _clean_filter_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip(" \t\r\n'\"`.,;:()[]{}")
+    return value or None
+
+
+def _extract_failure_type_filter_value(query: str) -> str | None:
+    patterns = [
+        (
+            r"(?is)\bwith\s+"
+            r"(?P<value>[A-Za-z0-9][A-Za-z0-9 _./+\-]{0,80}?)"
+            r"\s+as\s+(?:the\s+)?(?:failure|defect)\s+"
+            r"(?:type|code|category)\b"
+        ),
+        (
+            r"(?is)\b(?:failure|defect)\s+(?:type|code|category)\s*"
+            r"(?:=|is|equals|like|of)\s*['\"]?"
+            r"(?P<value>[A-Za-z0-9][A-Za-z0-9 _./+\-]{0,80})"
+        ),
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, query)
+        if match:
+            value = _clean_filter_value(match.group("value"))
+            if value:
+                return value
+    return None
+
+
+def _extract_status_filter_value(query: str) -> str | None:
+    if re.search(r"(?i)\bin-progress\b", query):
+        return "in-progress"
+    if re.search(r"(?i)\bin\s+progress\b", query):
+        return "in progress"
+    for status in ("completed", "pending", "escalated", "open", "closed"):
+        if re.search(rf"(?i)\b{re.escape(status)}\b", query):
+            return status
+    return None
+
+
+def _extract_priority_filter_value(query: str) -> str | None:
+    for token, value in _PRIORITY_VALUE_ALIASES.items():
+        if re.search(rf"(?i)\b{re.escape(token)}(?:[-\s]+priority)?\b", query):
+            return value
+    return None
+
+
+def _choose_priority_column(columns: list[dict[str, str]]) -> dict[str, str] | None:
+    return _choose_ranked_column_by_tokens(
+        columns,
+        {"priority", "severity", "urgency", "rank"},
+    )
+
+
+def _priority_order_expression(column: dict[str, str]) -> str:
+    quoted_column = _quote_identifier(column["name"])
+    if _is_numeric_type(column["data_type"]):
+        return quoted_column
+
+    when_clauses = " ".join(
+        f"WHEN {_quote_literal(value)} THEN {rank}" for value, rank in _PRIORITY_ORDER
+    )
+    return f"CASE LOWER({quoted_column}) {when_clauses} ELSE 0 END"
+
+
+def _choose_failure_type_filter_column(
+    columns: list[dict[str, str]],
+) -> dict[str, str] | None:
+    column = _choose_ranked_column_by_tokens(
+        [column for column in columns if not _is_rate_like_column(column)],
+        {"failure", "type"},
+    )
+    if column:
+        return column
+    return _choose_ranked_column_by_tokens(
+        [column for column in columns if not _is_rate_like_column(column)],
+        {"failure", "defect", "code", "type", "sys"},
+    )
+
+
+def _choose_failure_type_filter_table(
+    schema_details: dict[str, list[dict[str, str]]],
+    concept_tokens: set[str],
+) -> tuple[str, list[dict[str, str]], dict[str, str]] | None:
+    candidates = []
+    for table_name, columns in schema_details.items():
+        if not _table_covers_requested_concepts(table_name, columns, concept_tokens):
+            continue
+        column = _choose_failure_type_filter_column(columns)
+        if not column:
+            continue
+        table_tokens = _fallback_tokens(table_name)
+        column_tokens = _fallback_tokens(column["name"])
+        score = len(concept_tokens & table_tokens) * 8
+        score += len(concept_tokens & column_tokens) * 10
+        if {"failure", "type"}.issubset(column_tokens):
+            score += 100
+        elif "type" in column_tokens:
+            score += 60
+        elif "code" in column_tokens:
+            score += 30
+        if table_tokens & {"failure", "defect"}:
+            score += 25
+        candidates.append((score, table_name, columns, column))
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (-item[0], item[1], item[3]["name"]))
+    _, table_name, columns, column = candidates[0]
+    return table_name, columns, column
+
+
+def generate_simple_analytics_sql(
+    query: str | None,
+    contexts: list[Any] | None,
+) -> str | None:
+    if not query:
+        return None
+
+    raw_query_tokens = _fallback_tokens(query)
+    query_tokens = _expanded_fallback_query_tokens(query)
+    if not query_tokens:
+        return None
+
+    if not query_tokens & {
+        "batch",
+        "batches",
+        "board",
+        "business",
+        "count",
+        "customer",
+        "defect",
+        "failure",
+        "failures",
+        "highest",
+        "july",
+        "latest",
+        "log",
+        "logs",
+        "location",
+        "material",
+        "missing",
+        "model",
+        "monthly",
+        "most",
+        "number",
+        "order",
+        "orders",
+        "priority",
+        "product",
+        "rate",
+        "recent",
+        "record",
+        "records",
+        "repair",
+        "repairs",
+        "revenue",
+        "sale",
+        "sales",
+        "severity",
+        "supplier",
+        "status",
+        "tech",
+        "technician",
+        "top",
+        "trend",
+        "trends",
+        "type",
+        "unit",
+        "units",
+        "year",
+    }:
+        return None
+
+    schema_details = _extract_schema_details(contexts)
+    rate_metric_intent = _is_rate_metric_intent(raw_query_tokens)
+    failure_count_intent = _is_failure_count_intent(raw_query_tokens, query_tokens)
+    board_model_intent = _has_board_model_intent(
+        raw_query_tokens
+    ) or _has_board_model_intent(
+        query_tokens
+    )
+    failure_type_filter_value = _extract_failure_type_filter_value(query)
+    failure_type_filter_column = None
+    failure_type_choice = None
+    if failure_type_filter_value and "failure" in query_tokens:
+        failure_type_choice = _choose_failure_type_filter_table(
+            schema_details,
+            raw_query_tokens,
+        )
+
+    if failure_type_choice:
+        table_name, columns, failure_type_filter_column = failure_type_choice
+        chosen = (table_name, columns)
+    else:
+        chosen = _choose_fallback_table(
+            query_tokens,
+            schema_details,
+            concept_tokens=raw_query_tokens,
+        )
+    if not chosen:
+        return None
+
+    table_name, columns = chosen
+    column_names = [column["name"] for column in columns]
+    quoted_table = _quote_identifier(table_name)
+    limit = _fallback_limit(query)
+    logger.info(
+        "Deterministic SQL fallback selected table=%s verified_columns=%s metric_intent=%s",
+        table_name,
+        column_names,
+        {
+            "failure_count": failure_count_intent,
+            "rate": rate_metric_intent,
+            "board_model": board_model_intent,
+            "failure_type_filter": bool(failure_type_filter_value),
+        },
+    )
+
+    if failure_type_filter_value:
+        if not failure_type_filter_column:
+            failure_type_filter_column = _choose_failure_type_filter_column(columns)
+        if failure_type_filter_column:
+            return (
+                f"SELECT COUNT(*) AS {_quote_identifier('record_count')}\n"
+                f"FROM {quoted_table}\n"
+                f"WHERE {_quote_identifier(failure_type_filter_column['name'])} = "
+                f"{_quote_literal(failure_type_filter_value)}"
+            )
+
+    material_column = _choose_column_by_tokens(columns, {"material"})
+    location_column = _choose_column_by_tokens(columns, {"location"})
+    if (
+        {"material", "location"}.issubset(query_tokens)
+        and material_column
+        and location_column
+    ):
+        return (
+            f"SELECT {_quote_joined([material_column, location_column])}\n"
+            f"FROM {quoted_table}"
+        )
+
+    status_column = _choose_column_by_tokens(columns, {"status"})
+    repair_filter_intent = raw_query_tokens & {
+        "closed",
+        "completed",
+        "critical",
+        "escalated",
+        "high",
+        "low",
+        "medium",
+        "normal",
+        "open",
+        "pending",
+        "priority",
+        "progress",
+        "severity",
+        "status",
+        "urgent",
+    }
+    if query_tokens & {"repair", "repairs"} and repair_filter_intent:
+        predicates = []
+        status_filter_value = _extract_status_filter_value(query)
+        if status_column and status_filter_value:
+            predicates.append(
+                f"{_quote_identifier(status_column)} = {_quote_literal(status_filter_value)}"
+            )
+        priority_filter_value = _extract_priority_filter_value(query)
+        if priority_filter_value:
+            priority_column = _choose_priority_column(columns)
+            if priority_column:
+                predicates.append(
+                    f"{_quote_identifier(priority_column['name'])} = "
+                    f"{_quote_literal(priority_filter_value)}"
+                )
+        if predicates:
+            return f"SELECT *\nFROM {quoted_table}\nWHERE {' AND '.join(predicates)}"
+
+    date_column = _choose_column_by_tokens(
+        columns,
+        {"date", "day", "month", "time", "year"},
+        date=True,
+    )
+
+    priority_column = _choose_priority_column(columns)
+    if (
+        priority_column
+        and raw_query_tokens & {"priority", "severity"}
+        and raw_query_tokens & {"bottom", "highest", "lowest", "top"}
+    ):
+        selected_columns = _select_listing_columns(
+            raw_query_tokens | {"priority", "repair", "status"},
+            columns,
+            date_column=date_column,
+            max_columns=8,
+        )
+        if priority_column["name"] not in selected_columns:
+            selected_columns.insert(0, priority_column["name"])
+        direction = "ASC" if raw_query_tokens & {"bottom", "lowest"} else "DESC"
+        limit_clause = f"\nLIMIT {limit}" if limit else ""
+        return (
+            f"SELECT {_quote_joined(selected_columns)}\nFROM {quoted_table}\n"
+            f"ORDER BY {_priority_order_expression(priority_column)} {direction}"
+            f"{limit_clause}"
+        )
+
+    if date_column and raw_query_tokens & {"latest", "recent"}:
+        selected_columns = _select_listing_columns(
+            raw_query_tokens | {"date", "repair", "status"},
+            columns,
+            date_column=date_column,
+            max_columns=8,
+        )
+        if date_column not in selected_columns:
+            selected_columns.insert(0, date_column)
+        limit_clause = f"\nLIMIT {limit}" if limit else ""
+        return (
+            f"SELECT {_quote_joined(selected_columns)}\nFROM {quoted_table}\n"
+            f"ORDER BY {_quote_identifier(date_column)} DESC{limit_clause}"
+        )
+
+    if (
+        query_tokens & {"repair", "repairs"}
+        and raw_query_tokens & {"priority", "severity", "status"}
+        and re.search(r"(?i)\bby\s+(?:priority|severity|status)\b", query)
+    ):
+        dimension_column = _choose_dimension_column(raw_query_tokens, columns)
+        subject_column = _choose_count_subject_column({"repair"}, columns)
+        if dimension_column:
+            count_expression = "COUNT(*)"
+            where_clause = ""
+            if subject_column:
+                count_expression = f"COUNT({_quote_identifier(subject_column['name'])})"
+                where_clause = f"\nWHERE {_non_missing_value_predicate(subject_column)}"
+            quoted_dimension = _quote_identifier(dimension_column)
+            return (
+                f"SELECT {quoted_dimension}, {count_expression} AS "
+                f"{_quote_identifier('record_count')}\n"
+                f"FROM {quoted_table}{where_clause}\nGROUP BY {quoted_dimension}\n"
+                f"ORDER BY {_quote_identifier('record_count')} DESC"
+            )
+    measure_column = None
+    if rate_metric_intent and query_tokens & {"defect", "failure"}:
+        measure_column = _choose_column_by_tokens(
+            columns,
+            {"defect", "rate"},
+            numeric=True,
+        )
+        if not measure_column:
+            measure_column = _choose_column_by_tokens(columns, {"rate"}, numeric=True)
+    if not measure_column and query_tokens & {"order", "orders"}:
+        measure_column = _choose_column_by_tokens(
+            columns,
+            {"amount", "intake", "sales", "value"},
+            numeric=True,
+        )
+    if not measure_column and query_tokens & {"revenue", "sale", "sales"}:
+        measure_column = _choose_column_by_tokens(
+            columns,
+            {"amount", "intake", "revenue", "sales", "value"},
+            numeric=True,
+        )
+    if (
+        not measure_column
+        and not failure_count_intent
+        and query_tokens & {"top", "highest", "lowest", "bottom"}
+    ):
+        measure_column = _choose_column_by_tokens(
+            columns,
+            {"amount", "cost", "count", "margin", "quantity", "rate", "score", "value"},
+            numeric=True,
+        )
+
+    if raw_query_tokens & {"missing", "blank", "empty", "null"}:
+        missing_column = _choose_missing_value_column(raw_query_tokens, columns)
+        if missing_column:
+            selected_columns = [
+                column
+                for column in column_names
+                if column == missing_column["name"]
+                or _fallback_tokens(column)
+                & {
+                    "batch",
+                    "business",
+                    "bu",
+                    "customer",
+                    "cust",
+                    "date",
+                    "id",
+                    "location",
+                    "name",
+                    "number",
+                    "ord",
+                    "order",
+                    "product",
+                    "status",
+                    "supplier",
+                }
+            ][:8]
+            if missing_column["name"] not in selected_columns:
+                selected_columns.insert(0, missing_column["name"])
+            limit_clause = f"\nLIMIT {limit}" if limit else ""
+            return (
+                f"SELECT {_quote_joined(selected_columns)}\nFROM {quoted_table}\n"
+                f"WHERE {_missing_value_predicate(missing_column)}{limit_clause}"
+            )
+
+    implied_count_by_dimension = "failure" in query_tokens and bool(
+        raw_query_tokens & {"location", "material", "technician", "tech"}
+        or (board_model_intent and not rate_metric_intent)
+    )
+    if (
+        query_tokens & {"count", "number"}
+        or failure_count_intent
+        or implied_count_by_dimension
+    ):
+        dimension_column = _choose_dimension_column(raw_query_tokens, columns)
+        if dimension_column:
+            subject_column = _choose_count_subject_column(raw_query_tokens, columns)
+            count_expression = "COUNT(*)"
+            where_clause = ""
+            if subject_column and raw_query_tokens & {"order", "customer"}:
+                count_expression = (
+                    f"COUNT(DISTINCT {_quote_identifier(subject_column['name'])})"
+                )
+            elif subject_column and raw_query_tokens & {"failure", "repair", "batch"}:
+                count_expression = f"COUNT({_quote_identifier(subject_column['name'])})"
+                where_clause = f"\nWHERE {_non_missing_value_predicate(subject_column)}"
+            quoted_dimension = _quote_identifier(dimension_column)
+            limit_clause = f"\nLIMIT {limit}" if limit else ""
+            return (
+                f"SELECT {quoted_dimension}, {count_expression} AS {_quote_identifier('record_count')}\n"
+                f"FROM {quoted_table}{where_clause}\nGROUP BY {quoted_dimension}\n"
+                f"ORDER BY {_quote_identifier('record_count')} DESC{limit_clause}"
+            )
+
+    dimension_column = _choose_dimension_column(raw_query_tokens, columns)
+    if measure_column and dimension_column and rate_metric_intent:
+        aggregate, alias = _aggregate_for_measure(measure_column)
+        quoted_dimension = _quote_identifier(dimension_column)
+        aggregate_expr = f"{aggregate}({_quote_identifier(measure_column)})"
+        direction = "ASC" if raw_query_tokens & {"bottom", "lowest"} else "DESC"
+        limit_clause = f"\nLIMIT {limit}" if limit else ""
+        return (
+            f"SELECT {quoted_dimension}, {aggregate_expr} AS {_quote_identifier(alias)}\n"
+            f"FROM {quoted_table}\nGROUP BY {quoted_dimension}\n"
+            f"ORDER BY {_quote_identifier(alias)} {direction}{limit_clause}"
+        )
+
+    if measure_column and limit and dimension_column and raw_query_tokens & {
+        "board",
+        "business",
+        "customer",
+        "location",
+        "material",
+        "model",
+        "product",
+        "salesperson",
+        "supplier",
+        "unit",
+    }:
+        aggregate, alias = _aggregate_for_measure(measure_column)
+        quoted_dimension = _quote_identifier(dimension_column)
+        aggregate_expr = f"{aggregate}({_quote_identifier(measure_column)})"
+        return (
+            f"SELECT {quoted_dimension}, {aggregate_expr} AS {_quote_identifier(alias)}\n"
+            f"FROM {quoted_table}\nGROUP BY {quoted_dimension}\n"
+            f"ORDER BY {_quote_identifier(alias)} DESC\nLIMIT {limit}"
+        )
+
+    month_filter = _fallback_month_filter(query)
+    if date_column and month_filter:
+        year, month = month_filter
+        start = f"{year:04d}-{month:02d}-01"
+        end_year = year + 1 if month == 12 else year
+        end_month = 1 if month == 12 else month + 1
+        end = f"{end_year:04d}-{end_month:02d}-01"
+        selected_columns = _select_listing_columns(
+            raw_query_tokens,
+            columns,
+            measure_column=measure_column,
+            date_column=date_column,
+        )
+        order_clause = (
+            f"\nORDER BY {_quote_identifier(measure_column)} DESC"
+            if measure_column
+            else f"\nORDER BY {_quote_identifier(date_column)} DESC"
+        )
+        limit_clause = f"\nLIMIT {limit}" if limit else ""
+        return (
+            f"SELECT {_quote_joined(selected_columns)}\nFROM {quoted_table}\n"
+            f"WHERE {_quote_identifier(date_column)} >= '{start}' "
+            f"AND {_quote_identifier(date_column)} < '{end}'"
+            f"{order_clause}{limit_clause}"
+        )
+
+    if (
+        measure_column
+        and date_column
+        and query_tokens & {"year"}
+        and not query_tokens & {"month", "monthly"}
+    ):
+        date_expr = f"EXTRACT(YEAR FROM {_quote_identifier(date_column)})"
+        return (
+            f"SELECT {date_expr} AS {_quote_identifier('year')}, "
+            f"SUM({_quote_identifier(measure_column)}) AS {_quote_identifier('total_value')}\n"
+            f"FROM {quoted_table}\nGROUP BY {date_expr}\nORDER BY {date_expr}"
+        )
+
+    if (
+        measure_column
+        and date_column
+        and query_tokens & {"month", "monthly", "trend", "trends"}
+    ):
+        year_expr = f"EXTRACT(YEAR FROM {_quote_identifier(date_column)})"
+        month_expr = f"EXTRACT(MONTH FROM {_quote_identifier(date_column)})"
+        return (
+            f"SELECT {year_expr} AS {_quote_identifier('year')}, "
+            f"{month_expr} AS {_quote_identifier('month')}, "
+            f"SUM({_quote_identifier(measure_column)}) AS {_quote_identifier('total_value')}\n"
+            f"FROM {quoted_table}\nGROUP BY {year_expr}, {month_expr}\n"
+            f"ORDER BY {year_expr}, {month_expr}"
+        )
+
+    if measure_column and limit:
+        selected_columns = [
+            column
+            for column in column_names
+            if column == measure_column
+            or _fallback_tokens(column)
+            & {
+                "batch",
+                "board",
+                "customer",
+                "id",
+                "model",
+                "name",
+                "number",
+                "supplier",
+            }
+        ][:6]
+        if measure_column not in selected_columns:
+            selected_columns.append(measure_column)
+        return (
+            f"SELECT {_quote_joined(selected_columns)}\nFROM {quoted_table}\n"
+            f"ORDER BY {_quote_identifier(measure_column)} DESC\nLIMIT {limit}"
+        )
+
+    return None
+
+
 @component
 class SQLGenPostProcessor:
     def __init__(self, engine: Engine):
@@ -759,17 +2646,154 @@ class SQLGenPostProcessor:
         replies: List[str] | List[List[str]],
         project_id: str | None = None,
         mdl_hash: str | None = None,
+        contexts: list[Any] | None = None,
+        fallback_query: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
-        contexts: list[str] | None = None,
     ) -> dict:
         try:
             cleaned_generation_result, extraction_error = _extract_sql_response(
                 clean_generation_result(replies[0])
             )
-            if extraction_error:
+            grounding_invalid_generation_result = None
+
+            def validate_candidate_sql(candidate_sql: str) -> str | None:
+                schema_catalog = _SchemaCatalog.from_contexts(contexts or [])
+                grounding_error = schema_catalog.validate_sql(candidate_sql)
+                if not grounding_error:
+                    grounding_error = validate_sql_against_contexts(
+                        candidate_sql,
+                        contexts=contexts,
+                    )
+                if not grounding_error:
+                    grounding_error = validate_sql_semantic_coverage(
+                        candidate_sql,
+                        fallback_query,
+                        contexts=contexts,
+                    )
+                return grounding_error
+
+            if cleaned_generation_result:
+                cleaned_generation_result = normalize_sql_with_schema_identifiers(
+                    cleaned_generation_result,
+                    contexts=contexts,
+                )
+                cleaned_generation_result = normalize_wren_sql_dialect(
+                    cleaned_generation_result
+                )
+                grounding_error = validate_candidate_sql(cleaned_generation_result)
+                if grounding_error:
+                    logger.info(
+                        "Generated SQL validation result project_id=%s status=rejected reason=%s sql=%s",
+                        project_id or "",
+                        grounding_error,
+                        cleaned_generation_result,
+                    )
+                    grounding_invalid_generation_result = {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "SCHEMA_GROUNDING",
+                        "error": grounding_error,
+                        "correlation_id": "",
+                        "data_source": data_source,
+                    }
+                else:
+                    logger.info(
+                        "Generated SQL validation result project_id=%s status=grounded sql=%s",
+                        project_id or "",
+                        cleaned_generation_result,
+                    )
+            elif extraction_error:
+                logger.info(
+                    "Generated SQL extraction result project_id=%s status=rejected reason=%s",
+                    project_id or "",
+                    extraction_error,
+                )
+
+            fallback_generation_result = generate_simple_analytics_sql(
+                fallback_query,
+                contexts,
+            )
+            if fallback_generation_result:
+                logger.info(
+                    "Deterministic SQL fallback generated project_id=%s sql=%s",
+                    project_id or "",
+                    fallback_generation_result,
+                )
+                fallback_generation_result = normalize_sql_with_schema_identifiers(
+                    fallback_generation_result,
+                    contexts=contexts,
+                )
+                fallback_generation_result = normalize_wren_sql_dialect(
+                    fallback_generation_result
+                )
+                fallback_grounding_error = validate_candidate_sql(
+                    fallback_generation_result
+                )
+                logger.info(
+                    "Deterministic SQL fallback validation result project_id=%s status=%s%s",
+                    project_id or "",
+                    "grounded" if not fallback_grounding_error else "rejected",
+                    ""
+                    if not fallback_grounding_error
+                    else f" reason={fallback_grounding_error}",
+                )
+                if not fallback_grounding_error:
+                    (
+                        fallback_valid_generation_result,
+                        fallback_invalid_generation_result,
+                    ) = await self._classify_generation_result(
+                        fallback_generation_result,
+                        project_id=project_id,
+                        mdl_hash=mdl_hash,
+                        use_dry_plan=use_dry_plan,
+                        allow_dry_plan_fallback=allow_dry_plan_fallback,
+                        data_source=data_source,
+                        allow_data_preview=allow_data_preview,
+                    )
+                    if fallback_valid_generation_result:
+                        logger.info(
+                            "Using deterministic schema-grounded SQL fallback for query."
+                        )
+                        return {
+                            "valid_generation_result": fallback_valid_generation_result,
+                            "invalid_generation_result": {},
+                        }
+                    logger.info(
+                        "Deterministic SQL fallback did not validate: %s",
+                        fallback_invalid_generation_result.get("error"),
+                    )
+
+            if grounding_invalid_generation_result:
+                unsupported_result = unsupported_schema_generation_result(
+                    fallback_query,
+                    contexts=contexts,
+                    data_source=data_source,
+                )
+                if unsupported_result:
+                    unsupported_message = unsupported_result[
+                        "invalid_generation_result"
+                    ]["error"]
+                    grounding_invalid_generation_result["type"] = "NO_RELEVANT_SQL"
+                    grounding_invalid_generation_result["error"] = unsupported_message
+                    grounding_invalid_generation_result["sql"] = ""
+                    grounding_invalid_generation_result["original_sql"] = ""
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": grounding_invalid_generation_result,
+                }
+
+            unsupported_result = unsupported_schema_generation_result(
+                fallback_query,
+                contexts=contexts,
+                data_source=data_source,
+            )
+            if not cleaned_generation_result and unsupported_result:
+                return unsupported_result
+
+            if not cleaned_generation_result and extraction_error:
                 return {
                     "valid_generation_result": {},
                     "invalid_generation_result": {
@@ -780,27 +2804,6 @@ class SQLGenPostProcessor:
                         "correlation_id": "",
                         "data_source": data_source,
                     },
-                }
-
-            if cleaned_generation_result:
-                cleaned_generation_result = normalize_sql_with_schema_identifiers(
-                    cleaned_generation_result,
-                    contexts=contexts,
-                )
-
-            schema_catalog = _SchemaCatalog.from_contexts(contexts or [])
-            grounding_error = schema_catalog.validate_sql(cleaned_generation_result)
-            if grounding_error:
-                return {
-                    "valid_generation_result": {},
-                    "invalid_generation_result": {
-                        "sql": cleaned_generation_result or "",
-                        "original_sql": cleaned_generation_result or "",
-                        "type": "SCHEMA_GROUNDING",
-                        "error": grounding_error,
-                        "correlation_id": "",
-                        "data_source": data_source,
-                    }
                 }
 
             (
@@ -1520,11 +3523,16 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Treat reasoning plans, correction notes, and error messages as non-executable context. Never copy SQL fragments, inferred identifiers, placeholder names, template markers, literal values, or unsupported functions from them.
 - If a column comment, alias, display label, or description names a business concept, first locate the exact declared source column for that concept in DATABASE SCHEMA. If no exact declared source column exists, omit that concept.
 - For aggregate sorting, select the aggregate with an alias and order by that alias instead of ordering directly by an aggregate expression.
+- In grouped queries, every non-aggregate ORDER BY expression must be a selected grouping column, a selected ordering helper column that is also present in GROUP BY, or a selected aggregate alias. Do not order grouped SQL by a hidden column.
 - Before returning the final SQL, silently check that each identifier and function in the SQL is grounded in DATABASE SCHEMA or SQL FUNCTIONS. If any identifier or function is ungrounded, remove that part. If the ungrounded part is needed to answer the user's requested intent, return null for sql.
 - If the retrieved DATABASE SCHEMA does not contain a table, column, relationship, or supported function needed for part of the user's request, leave that part out instead of inventing a replacement.
 - If a requested noun, output column, grouping, filter, or measure appears only in the user's wording and not in DATABASE SCHEMA, do not translate it into a generic object name. Use only schema-supported concepts and omit unsupported parts.
 - If the user's primary requested subject, output column, grouping, filter, timeframe, measure, or required relationship cannot be grounded by the retrieved DATABASE SCHEMA, return null for sql instead of producing an approximate query.
 - Do not answer by selecting a nearby table only because it was retrieved. A retrieved object is usable only when its declared table, columns, relationships, or metric fields support the user's requested intent.
+- Do not answer business-domain questions from generic log, file, JSON, payload, text, or app-metric columns when the schema contains specific modeled business columns for the requested entity, measure, status, date, or dimension.
+- Prefer exact modeled business fields over generic text search. For example, if a status/severity/date/material/location/customer/order/revenue concept is represented by an explicit declared column, use that column rather than searching a generic payload field with LIKE.
+- If the schema already exposes a measure that directly matches the requested metric, use that exact measure column instead of recomputing it from invented component fields. This applies to metrics such as defect rate, revenue, amount, sales value, count, cost, margin, and quantity.
+- For sales or revenue questions, prefer exact declared sales/revenue/value/amount fields. Do not use tariff, duty, customs, import, refund, or claim datasets unless the user explicitly asks for those domains.
 """
 
 
@@ -1576,8 +3584,10 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
 - You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
 - Do not use SELECT TOP n, FETCH FIRST, OFFSET/FETCH, square-bracket quoting, or backtick quoting. Use Wren SQL syntax with ORDER BY and a final LIMIT n clause for limited or top-N results.
-- For the ranking problem, you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
-- For the ranking problem, you must add the ranking column to the final SELECT clause.
+- For top, bottom, highest, lowest, first, or last requests, sort by an exact selected column or aggregate alias and use LIMIT unless the user explicitly asks for rank values.
+- For explicit ranking requests, use the ranking function `DENSE_RANK()`, add the ranking column to the final SELECT clause, and filter rank values with WHERE.
+- For grouped trend queries, include any non-aggregate ordering key in both SELECT and GROUP BY, or order by selected grouping columns/aggregate aliases only.
+- Reuse exact metric/measure columns when present. Do not invent component columns in order to calculate a requested metric that already exists in DATABASE SCHEMA.
 """
 
 

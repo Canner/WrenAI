@@ -4,7 +4,10 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.pipelines.common import build_table_ddl
 from src.pipelines.retrieval.db_schema_retrieval import (
+    _augment_retrieval_query,
     _build_view_ddl,
+    _parse_column_selection_response,
+    _rank_table_names_by_query,
     check_using_db_schemas_without_pruning,
     construct_db_schemas,
     construct_retrieval_results,
@@ -1084,3 +1087,75 @@ def test_build_table_ddl_preserves_join_columns_when_pruned():
     assert "parent_id INTEGER" in ddl
     assert "amount DOUBLE" in ddl
     assert "FOREIGN KEY (parent_id) REFERENCES parent(parent_id)" in ddl
+
+
+def _schema_document(name: str, columns: list[str]) -> Document:
+    return Document(
+        content=str(
+            {
+                "name": name,
+                "type": "TABLE",
+                "columns": [
+                    {"name": column, "type": "COLUMN", "data_type": "VARCHAR"}
+                    for column in columns
+                ],
+            }
+        ),
+        meta={"name": name, "type": "TABLE"},
+    )
+
+
+def test_column_selection_accepts_alternate_results_shape():
+    parsed = _parse_column_selection_response(
+        {
+            "replies": [
+                """
+                {
+                  "tables": [
+                    {
+                      "table_name": "SalesOrderFact",
+                      "columns": ["USDFXSalesValue", "OrderDate"]
+                    }
+                  ]
+                }
+                """
+            ]
+        }
+    )
+
+    assert parsed == {
+        "SalesOrderFact": {
+            "table_name": "SalesOrderFact",
+            "columns": ["USDFXSalesValue", "OrderDate"],
+        }
+    }
+
+
+def test_column_selection_returns_empty_dict_for_malformed_reply():
+    parsed = _parse_column_selection_response({"replies": ["not-json"]})
+
+    assert parsed == {}
+
+
+def test_retrieval_query_augmentation_adds_business_terms():
+    augmented = _augment_retrieval_query("show total revenue by year")
+
+    assert "Business schema search terms" in augmented
+    assert "sales revenue amount value" in augmented
+    assert "date month year" in augmented
+
+
+def test_table_ranking_prefers_business_sales_table_over_generic_or_customs_tables():
+    documents = [
+        _schema_document("dbo_mbrTime", ["id1", "id2"]),
+        _schema_document("CustomsRefundClaim", ["DutyAmount", "ClaimDate"]),
+        _schema_document("SalesOrderFact", ["USDFXSalesValue", "OrderDate"]),
+    ]
+
+    ranked = _rank_table_names_by_query(
+        ["dbo_mbrTime", "CustomsRefundClaim", "SalesOrderFact"],
+        documents,
+        "show total revenue by year",
+    )
+
+    assert ranked[0] == "SalesOrderFact"

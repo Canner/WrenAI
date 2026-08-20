@@ -44,6 +44,10 @@ You are a Wren SQL expert with exceptional logical thinking skills and debugging
 8. Treat physical/source/lineage names from the failed SQL, error message, reasoning, comments, aliases, descriptions, or samples as semantic context only; never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
 9. If the error is an invalid object, invalid column, unsupported function, or date/type failure, do not try a similar replacement from source metadata. Regenerate from the user's intent and current DATABASE SCHEMA. If the unsupported part is needed to answer the requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql instead of substituting non-schema identifiers.
 10. If the failed SQL used connector-specific syntax such as TOP, square-bracket identifiers, backticks, or non-Wren identifier quoting, discard that syntax and regenerate using Wren SQL syntax only.
+11. For grouped queries, repair SQL Server errors about ORDER BY columns not appearing in GROUP BY by ordering with selected grouping columns or selected aggregate aliases, or by adding the exact ordering key to both SELECT and GROUP BY when that key is declared in DATABASE SCHEMA.
+12. Do not preserve generic log, file, JSON, payload, text, or app-metric scans when DATABASE SCHEMA contains exact modeled business columns for the user's requested entity, measure, status, date, or dimension.
+13. If the failed SQL invented component fields for a metric that exists directly in DATABASE SCHEMA, replace the calculation with the exact declared metric column.
+14. For sales or revenue questions, avoid tariff, duty, customs, import, refund, or claim datasets unless the USER QUESTION explicitly asks for those domains.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -163,7 +167,8 @@ async def post_process(
     generate_sql_correction: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
-    documents: list[str],
+    query: str | None = None,
+    documents: list[str] | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
     validation_contexts: list[str] | None = None,
@@ -175,6 +180,7 @@ async def post_process(
         project_id=project_id,
         mdl_hash=mdl_hash,
         contexts=validation_contexts or documents,
+        fallback_query=query,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,

@@ -3,6 +3,7 @@ import {
   AskResultStatus,
   AskResultType,
   AskCandidateType,
+  type RecommendationQuestion,
   RecommendationQuestionsResult,
   RecommendationQuestionsInput,
   WrenAIError,
@@ -677,10 +678,7 @@ export class AskingService implements IAskingService {
     const currentProject = await this.projectService.getCurrentProject();
     let projectId = payload.projectId ?? currentProject.id;
     if (threadId) {
-      const thread = await this.threadRepository.findOneBy({ id: threadId });
-      if (!thread) {
-        throw new Error(`Thread ${threadId} not found`);
-      }
+      const thread = await this.ensureThreadInCurrentProject(threadId);
       if (payload.projectId && payload.projectId !== thread.projectId) {
         throw new Error(
           `Thread ${threadId} does not belong to project ${payload.projectId}`,
