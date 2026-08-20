@@ -235,6 +235,13 @@ Coverage added for:
 - Board models with most failures uses count, not defect rate.
 - Highest defect rate uses rate metric.
 - Repairs by technician requires one schema object or relationship coverage.
+- Follow-up generic business families:
+  - Invoice counts by task status and invoice month.
+  - Top suppliers by gross amount.
+  - Missing supplier email fields.
+  - Reconciliation counts by status and preparer group.
+  - GL accounts by highest ending balance for the current year.
+  - Recent journal workflow approvals.
 
 Retrieval test file:
 
@@ -301,6 +308,8 @@ There are also many local untracked runtime/data artifacts in the repository. Do
 - Runtime source code should remain generic. Do not add checks for exact prompts such as `Which repair logs have the highest priority?`.
 - Tests may use representative table and prompt names; production code must not.
 - Retrieval context currently uses metadata/descriptions and some semantic context. It does not appear to carry robust sample-value lists. Status casing/value handling works for tested prompts, but richer value-aware matching would improve future accuracy.
+- On 2026-08-20, live E2E against the running local app showed the checkout at `D:\WrenAI` was older than the pushed PR branch, so some observed runtime failures were from stale local code. The PR branch now includes follow-up commit `4a199fca1` (`Broaden Ask semantic grounding coverage`), which expands generic schema grounding for invoice, supplier email, reconciliation, GL balance, and journal workflow families without hardcoding one project/table/prompt.
+- Local live execution against CWPay/CW_GL may still fail until those SQL Server datasources are reachable; the observed error was an ODBC login/network timeout to `BRVBISQL.INT.CW.LOCAL,1433`, not a SQL identifier hallucination.
 - `enable_column_pruning` was not the focus of today's final validation.
 - Full pytest suite still needs an environment with `pytest` installed.
 
