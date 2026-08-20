@@ -202,7 +202,13 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     // start the state as understanding when user submit question
     askProcessState.transitionTo(PROCESS_STATE.UNDERSTANDING);
     setShowResult(true);
-    onSubmit && (await onSubmit(value));
+    try {
+      onSubmit && (await onSubmit(value));
+    } catch (error) {
+      console.error(error);
+      setShowResult(false);
+      askProcessState.resetState();
+    }
   };
 
   useImperativeHandle(

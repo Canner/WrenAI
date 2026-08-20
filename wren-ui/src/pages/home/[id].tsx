@@ -410,27 +410,28 @@ export default function HomeThread() {
 
   const handleUnfinishedTasks = useCallback(
     (responses: ThreadResponse[]) => {
+      const latestResponse = [...(responses || [])].sort(
+        (a, b) => Number(b?.id || 0) - Number(a?.id || 0),
+      )[0];
+      if (!latestResponse) return;
+
       // unfinished asking task
-      const unfinishedAskingResponse = (responses || []).find(
-        (response) =>
-          response?.askingTask && !getIsFinished(response?.askingTask?.status),
-      );
-      const unfinishedTaskId = unfinishedAskingResponse?.askingTask?.queryId;
-      if (unfinishedAskingResponse && unfinishedTaskId) {
+      const unfinishedTaskId =
+        latestResponse?.askingTask &&
+        !getIsFinished(latestResponse.askingTask.status)
+          ? latestResponse.askingTask.queryId
+          : null;
+      if (unfinishedTaskId) {
         askPrompt.onFetching(unfinishedTaskId);
         return;
       }
 
       // unfinished thread response
-      const unfinishedThreadResponse = (responses || []).find(
-        (response) => !getThreadResponseIsFinished(response),
-      );
-
       if (
-        canFetchThreadResponse(unfinishedThreadResponse?.askingTask) &&
-        unfinishedThreadResponse
+        !getThreadResponseIsFinished(latestResponse) &&
+        canFetchThreadResponse(latestResponse?.askingTask)
       ) {
-        startThreadResponsePolling(unfinishedThreadResponse.id);
+        startThreadResponsePolling(latestResponse.id);
       }
     },
     [askPrompt, startThreadResponsePolling],

@@ -677,6 +677,7 @@ export class AskingService implements IAskingService {
     const { threadId, language } = payload;
     const currentProject = await this.projectService.getCurrentProject();
     let projectId = payload.projectId ?? currentProject.id;
+    let previousTaskState = null;
     if (threadId) {
       const thread = await this.ensureThreadInCurrentProject(threadId);
       if (payload.projectId && payload.projectId !== thread.projectId) {
@@ -685,6 +686,7 @@ export class AskingService implements IAskingService {
         );
       }
       projectId = thread.projectId;
+      previousTaskState = await this.getLatestThreadTaskState(threadId);
     } else if (projectId !== currentProject.id) {
       throw new Error(`Project ${projectId} is not the active project`);
     }
@@ -696,19 +698,52 @@ export class AskingService implements IAskingService {
     const histories = threadId && isContextualFollowUpQuestion(input.question)
       ? await this.getAskingHistory(threadId, threadResponseId)
       : null;
-    const response = await this.askingTaskTracker.createAskingTask({
-      query: input.question,
-      histories,
+    const logContext = {
+      threadId: threadId ?? null,
+      projectId,
+      currentProjectId: currentProject.id,
       deployId,
-      projectId: projectId.toString(),
-      configurations: { language },
-      rerunFromCancelled,
-      previousTaskId,
-      threadResponseId,
-    });
-    return {
-      id: response.queryId,
+      previousTaskState,
+      historyCount: histories?.length ?? 0,
+      rerunFromCancelled: !!rerunFromCancelled,
+      previousTaskId: previousTaskId ?? null,
+      threadResponseId: threadResponseId ?? null,
     };
+    logger.info(
+      `Creating asking task: ${JSON.stringify({
+        ...logContext,
+        question: input.question,
+      })}`,
+    );
+
+    try {
+      const response = await this.askingTaskTracker.createAskingTask({
+        query: input.question,
+        histories,
+        deployId,
+        projectId: projectId.toString(),
+        configurations: { language },
+        rerunFromCancelled,
+        previousTaskId,
+        threadResponseId,
+      });
+      logger.info(
+        `Created asking task: ${JSON.stringify({
+          ...logContext,
+          queryId: response.queryId,
+        })}`,
+      );
+      return {
+        id: response.queryId,
+      };
+    } catch (err: any) {
+      logger.error(
+        `Failed to create asking task: ${JSON.stringify(logContext)} reason=${
+          err?.stack || err?.message || err
+        }`,
+      );
+      throw err;
+    }
   }
 
   public async rerunAskingTask(
@@ -1496,6 +1531,39 @@ export class AskingService implements IAskingService {
         language: WrenAILanguage[project.language] || WrenAILanguage.EN,
       },
     };
+  }
+
+  private async getLatestThreadTaskState(threadId: number) {
+    try {
+      const [latestResponse] =
+        await this.threadResponseRepository.getResponsesWithThread(threadId, 1);
+      if (!latestResponse) {
+        return null;
+      }
+
+      const task = latestResponse.askingTaskId
+        ? await this.askingTaskRepository.findOneBy({
+            id: latestResponse.askingTaskId,
+          })
+        : null;
+      const detail = task?.detail as any;
+
+      return {
+        threadResponseId: latestResponse.id,
+        askingTaskId: latestResponse.askingTaskId ?? null,
+        queryId: task?.queryId ?? null,
+        status: detail?.status ?? null,
+        type: detail?.type ?? null,
+        hasSql: !!latestResponse.sql,
+      };
+    } catch (err: any) {
+      logger.warn(
+        `Failed to inspect latest thread task state for thread ${threadId}: ${
+          err?.message || err
+        }`,
+      );
+      return null;
+    }
   }
 
   private async ensureThreadInCurrentProject(threadId: number): Promise<Thread> {

@@ -728,3 +728,153 @@ def test_recent_journal_workflow_uses_verified_signer_date():
     assert sql is not None
     assert 'FROM "dbo_Journals_Workflow"' in sql
     assert 'ORDER BY "signer_date" DESC' in sql
+
+
+def test_average_failed_unit_age_by_board_model_uses_avg_age_measure():
+    contexts = [
+        """
+        CREATE TABLE dbo_unit_failures (
+            unit_id VARCHAR,
+            board_model VARCHAR,
+            failure_code VARCHAR,
+            unit_age_days DECIMAL
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show the average age of failed units for each board model.",
+        contexts,
+    )
+
+    assert sql is not None
+    assert 'FROM "dbo_unit_failures"' in sql
+    assert 'SELECT "board_model", AVG("unit_age_days") AS "average_value"' in sql
+    assert 'WHERE ("failure_code" IS NOT NULL AND "failure_code" <> \'\')' in sql
+    assert 'GROUP BY "board_model"' in sql
+    assert 'COUNT(' not in sql
+
+
+def test_average_failed_unit_age_without_age_measure_is_unsupported():
+    contexts = [
+        """
+        CREATE TABLE dbo_repair_logs (
+            unit_id VARCHAR,
+            board_model VARCHAR,
+            failure_code VARCHAR,
+            status VARCHAR
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show the average age of failed units for each board model.",
+        contexts,
+    )
+    message = unsupported_schema_message(
+        "Show the average age of failed units for each board model.",
+        contexts,
+    )
+
+    assert sql is None
+    assert message is not None
+    assert "age/duration" in message
+
+
+def test_distribution_of_repairs_across_statuses_groups_counts():
+    contexts = [
+        """
+        CREATE TABLE dbo_repair_logs (
+            id VARCHAR,
+            status VARCHAR,
+            priority VARCHAR,
+            created_at TIMESTAMP
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show the distribution of repairs across completed and in-progress statuses.",
+        contexts,
+    )
+
+    assert sql is not None
+    assert 'FROM "dbo_repair_logs"' in sql
+    assert 'SELECT "status", COUNT("id") AS "record_count"' in sql
+    assert 'LOWER("status") IN' in sql
+    assert "'completed'" in sql
+    assert "'in-progress'" in sql
+    assert "'in progress'" in sql
+    assert 'GROUP BY "status"' in sql
+    assert "SELECT *" not in sql
+
+
+def test_board_models_associated_with_locations_requires_verified_columns():
+    contexts = [
+        """
+        CREATE TABLE dbo_board_locations (
+            board_model VARCHAR,
+            location VARCHAR,
+            updated_at TIMESTAMP
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show the board models associated with each location.",
+        contexts,
+    )
+
+    assert sql is not None
+    assert 'SELECT DISTINCT "board_model", "location"' in sql
+    assert 'FROM "dbo_board_locations"' in sql
+
+
+def test_board_models_associated_with_locations_without_location_is_unsupported():
+    contexts = [
+        """
+        CREATE TABLE dbo_parts_catalog (
+            board_model VARCHAR,
+            material VARCHAR
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show the board models associated with each location.",
+        contexts,
+    )
+    message = unsupported_schema_message(
+        "Show the board models associated with each location.",
+        contexts,
+    )
+
+    assert sql is None
+    assert message is not None
+    assert "location" in message
+
+
+def test_semantic_coverage_rejects_count_for_average_intent():
+    contexts = [
+        """
+        CREATE TABLE dbo_unit_failures (
+            unit_id VARCHAR,
+            board_model VARCHAR,
+            failure_code VARCHAR,
+            unit_age_days DECIMAL
+        );
+        """
+    ]
+
+    error = validate_sql_semantic_coverage(
+        """
+        SELECT board_model, COUNT(failure_code) AS record_count
+        FROM dbo_unit_failures
+        GROUP BY board_model
+        """,
+        "Show the average age of failed units for each board model.",
+        contexts,
+    )
+
+    assert error is not None
+    assert "average" in error

@@ -128,7 +128,9 @@ export class ThreadResponseRepository
       .leftJoin('thread', 'thread.id', 'thread_response.thread_id');
 
     if (limit) {
-      query.orderBy('created_at', 'desc').limit(limit);
+      query.orderBy('thread_response.id', 'desc').limit(limit);
+    } else {
+      query.orderBy('thread_response.id', 'asc');
     }
 
     return (await query)

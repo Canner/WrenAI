@@ -124,11 +124,11 @@ The database schema includes structural, semantic, and business modeling metadat
 17. If WREN RETRIEVED SEMANTIC CONTEXT is present, use sql_table_name_use_exactly and sql_column_name_use_exactly values as the exact names to return.
 18. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand meaning. Do not return descriptions, labels, source metadata, or rewritten variants as table or column names.
 19. Prefer tables and columns that directly model the requested business entities, measures, statuses, dates, identifiers, and dimensions. Do not answer business-domain questions from generic log, file, JSON, payload, text, or app-metric columns when the schema provides specific modeled columns for the same concept.
-20. For terms such as revenue, sales, orders, invoices, customers, products, suppliers, repairs, failures, batches, materials, locations, status, severity, currency, dates, month, year, and business unit, inspect both table meaning and exact column meanings before selecting a table.
+20. For terms such as revenue, sales, orders, invoices, customers, products, suppliers, repairs, failures, batches, materials, locations, status, severity, age, duration, average, distribution, currency, dates, month, year, and business unit, inspect both table meaning and exact column meanings before selecting a table.
 21. If a table only contains generic data/payload/text fields and another table exposes exact business columns that match the request, choose the business table instead of searching the generic field with LIKE.
 22. Never return placeholder table or column names such as tablename, table_name, dbo.tablename, BatchId, Material, Location, or any user-worded identifier unless the exact same identifier appears in the provided CREATE TABLE statement or identifier contract.
 23. If the request asks for revenue, sales, or sales trends, prefer exact business measure columns named like Revenue, SalesValue, USDFXSalesValue, FXSalesValue, IntakeValue, Amount, or equivalent modeled sales fields. Do not use tariff, duty, customs, import, refund, or claim datasets unless the user explicitly asks for those domains.
-24. If the request asks for an explicit rate, ratio, percentage, revenue, amount, sales value, or other named measure and the schema already contains that exact measure column, use the declared measure column directly. Do not use a rate column to answer "most failures", "number of failures", or other count-of-records requests unless the question explicitly asks for a rate/ratio/percentage.
+24. If the request asks for an explicit average, rate, ratio, percentage, revenue, amount, sales value, age, duration, or other named measure and the schema already contains that exact measure column, use the declared measure column directly. Do not use a rate column to answer "most failures", "number of failures", or other count-of-records requests unless the question explicitly asks for a rate/ratio/percentage. Do not use count-based columns or grouped counts to answer average requests unless the question asks for a count.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -938,10 +938,10 @@ def _augment_retrieval_query(query: str) -> str:
             "product item material type name category"
         ),
         ("repair", "repairs"): (
-            "repair status priority severity failure board model log in progress completed critical"
+            "repair status priority severity failure board model log in progress completed critical age duration"
         ),
         ("failure", "failures", "defect", "defects"): (
-            "failure defect severity occurrence record count code type system status"
+            "failure defect severity occurrence record count code type system status age duration"
         ),
         ("batch", "batches"): (
             "batch board model supplier defect rate inspection status"
@@ -950,7 +950,16 @@ def _augment_retrieval_query(query: str) -> str:
             "material item part component location"
         ),
         ("location", "locations"): (
-            "location site warehouse area material"
+            "location site warehouse area material board model"
+        ),
+        ("average", "avg", "mean"): (
+            "average avg mean numeric measure age duration elapsed days hours amount rate"
+        ),
+        ("age", "duration", "elapsed"): (
+            "age duration elapsed days hours numeric measure average"
+        ),
+        ("distribution", "breakdown"): (
+            "distribution breakdown count group status category"
         ),
         ("business unit", "bu", "division"): (
             "business unit division company account organization"
@@ -972,6 +981,10 @@ def _augment_retrieval_query(query: str) -> str:
         for trigger in ("rate", "ratio", "percent", "percentage")
     ):
         expansions.append("rate ratio percent percentage")
+    if any(trigger in lowered for trigger in ("average", "avg", "mean")):
+        expansions.append("average avg mean numeric measure")
+    if any(trigger in lowered for trigger in ("distribution", "breakdown")):
+        expansions.append("distribution breakdown group count status category")
 
     if not expansions:
         return query
@@ -1640,6 +1653,16 @@ def _lexical_columns_and_tables_needed(
                     len(column_tokens & {"date", "day", "month", "year", "time"})
                     * 5
                 )
+            if query_tokens & {"average", "avg", "mean", "age", "duration", "elapsed"}:
+                score += (
+                    len(
+                        column_tokens
+                        & {"age", "duration", "elapsed", "days", "hours", "amount", "rate"}
+                    )
+                    * 7
+                )
+            if query_tokens & {"distribution", "breakdown"}:
+                score += len(column_tokens & {"status", "state", "category", "type"}) * 7
             if query_tokens & {"top", "highest", "lowest", "bottom"}:
                 measure_tokens = {
                     "amount",

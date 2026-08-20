@@ -270,12 +270,20 @@ def _expand_fallback_token_aliases(tokens: set[str]) -> set[str]:
         "approvals": {"approval", "approver", "reviewer", "signer", "status"},
         "approver": {"approval", "reviewer", "signer"},
         "approvers": {"approval", "approver", "reviewer", "signer"},
+        "avg": {"average"},
+        "averages": {"average"},
         "balances": {"balance"},
+        "breakdown": {"count", "distribution", "group"},
+        "breakdowns": {"breakdown", "count", "distribution", "group"},
         "cust": {"customer"},
         "customers": {"customer"},
         "critical": {"priority", "severity"},
         "curr": {"currency"},
         "boards": {"board"},
+        "days": {"age", "duration"},
+        "distribution": {"count", "group"},
+        "durations": {"duration"},
+        "elapsed": {"age", "duration"},
         "email": {"address", "mail"},
         "email1": {"address", "email", "first", "mail", "primary"},
         "emails": {"address", "email", "mail"},
@@ -288,6 +296,7 @@ def _expand_fallback_token_aliases(tokens: set[str]) -> set[str]:
         "grossamount": {"amount", "gross", "value"},
         "high": {"priority", "severity"},
         "highest": {"top"},
+        "hours": {"age", "duration"},
         "invoicedate": {"date", "invoice"},
         "invoicemonth": {"invoice", "month"},
         "invoicenumber": {"invoice", "number"},
@@ -351,6 +360,7 @@ def _expand_fallback_token_aliases(tokens: set[str]) -> set[str]:
         "urgency": {"priority", "severity"},
         "locations": {"location"},
         "materials": {"material"},
+        "mean": {"average"},
         "missing": {"blank", "empty", "null"},
     }
     expanded = set(tokens)
@@ -1377,6 +1387,57 @@ def validate_sql_semantic_coverage(
         label for label, concept_tokens in concepts if not schema_tokens & concept_tokens
     ]
     if not missing_concepts:
+        if _is_average_metric_intent(raw_query_tokens):
+            if not re.search(r"(?is)\bAVG\s*\(", sql):
+                return (
+                    "Schema grounding failed. The question asks for an average "
+                    "metric, but the generated SQL does not compute an AVG "
+                    "aggregate over a verified measure. Use a verified numeric "
+                    "measure for the requested average, or return no SQL if the "
+                    "active project does not contain one."
+                )
+            if raw_query_tokens & _AVERAGE_MEASURE_TOKENS:
+                average_measure_columns = []
+                for relation in referenced_relations:
+                    column = _choose_average_measure_column(
+                        raw_query_tokens,
+                        schema_details.get(relation, []),
+                    )
+                    if column:
+                        average_measure_columns.append(column["name"])
+                if average_measure_columns and not any(
+                    _sql_mentions_identifier(sql, column)
+                    for column in average_measure_columns
+                ):
+                    return (
+                        "Schema grounding failed. The question asks for an "
+                        "average of an age or duration measure, but the "
+                        "generated SQL does not use a verified age/duration "
+                        "column. Use the verified measure column or return no "
+                        "SQL if the active project does not contain one."
+                    )
+            if re.search(r"(?is)\bCOUNT\s*\(", sql) and not re.search(
+                r"(?is)\bAVG\s*\(",
+                sql,
+            ):
+                return (
+                    "Schema grounding failed. The question asks for an average "
+                    "metric, but the generated SQL computes a count. Do not "
+                    "substitute COUNT for unsupported averages."
+                )
+        if _is_distribution_metric_intent(raw_query_tokens) and (
+            raw_query_tokens & {"status", "priority", "severity"}
+        ):
+            if not re.search(r"(?is)\bCOUNT\s*\(", sql) or not re.search(
+                r"(?is)\bGROUP\s+BY\b",
+                sql,
+            ):
+                return (
+                    "Schema grounding failed. The question asks for a "
+                    "distribution across categories, but the generated SQL does "
+                    "not compute grouped counts. Use GROUP BY on the verified "
+                    "category column with COUNT, or return no SQL."
+                )
         if _is_failure_count_intent(raw_query_tokens, query_tokens):
             if not re.search(r"(?is)\bCOUNT\s*\(", sql):
                 return (
@@ -1565,6 +1626,12 @@ def _expanded_fallback_query_tokens(query: str) -> set[str]:
         tokens.update({"date", "failure", "log", "priority", "progress", "repair", "status"})
     if tokens & {"failure", "failures", "defect", "defects"}:
         tokens.update({"code", "defect", "failure", "severity", "status", "type"})
+    if tokens & {"age", "duration", "elapsed"}:
+        tokens.update({"age", "days", "duration", "elapsed", "hours"})
+    if tokens & {"average", "avg", "mean"}:
+        tokens.update({"average"})
+    if tokens & {"distribution", "breakdown", "across"}:
+        tokens.update({"count", "distribution", "group", "status"})
     if tokens & {"material", "materials"}:
         tokens.update({"item", "material", "part"})
     if tokens & {"location", "locations"}:
@@ -1614,6 +1681,17 @@ def _is_date_type(data_type: str) -> bool:
 
 _RATE_METRIC_TOKENS = {"rate", "ratio", "percent", "percentage"}
 _COUNT_METRIC_TOKENS = {"count", "many", "most", "number", "total"}
+_AVERAGE_METRIC_TOKENS = {"average", "avg", "mean"}
+_DISTRIBUTION_METRIC_TOKENS = {"distribution", "breakdown"}
+_AVERAGE_MEASURE_TOKENS = {
+    "age",
+    "cycle",
+    "days",
+    "duration",
+    "elapsed",
+    "hours",
+    "minutes",
+}
 _PRIORITY_VALUE_ALIASES = {
     "urgent": "urgent",
     "critical": "critical",
@@ -1637,6 +1715,14 @@ _PRIORITY_ORDER = [
 
 def _is_rate_metric_intent(raw_query_tokens: set[str]) -> bool:
     return bool(raw_query_tokens & _RATE_METRIC_TOKENS)
+
+
+def _is_average_metric_intent(raw_query_tokens: set[str]) -> bool:
+    return bool(raw_query_tokens & _AVERAGE_METRIC_TOKENS)
+
+
+def _is_distribution_metric_intent(raw_query_tokens: set[str]) -> bool:
+    return bool(raw_query_tokens & _DISTRIBUTION_METRIC_TOKENS)
 
 
 def _is_failure_count_intent(
@@ -1677,6 +1763,7 @@ def _requested_business_concepts(query_tokens: set[str]) -> list[tuple[str, set[
         ("repair", {"repair"}, {"repair"}),
         ("material", {"material"}, {"material", "part"}),
         ("location", {"location"}, {"location", "site", "area"}),
+        ("age/duration", {"age", "duration", "elapsed"}, _AVERAGE_MEASURE_TOKENS),
         ("customer", {"customer"}, {"customer", "cust"}),
         ("supplier/vendor", {"supplier", "vendor"}, {"supplier", "vendor"}),
         ("technician", {"technician", "tech"}, {"technician", "tech"}),
@@ -1748,6 +1835,7 @@ def _choose_fallback_table(
 ) -> tuple[str, list[dict[str, str]]] | None:
     concept_tokens = concept_tokens or query_tokens
     rate_metric_intent = _is_rate_metric_intent(concept_tokens)
+    average_metric_intent = _is_average_metric_intent(concept_tokens)
     failure_count_intent = _is_failure_count_intent(concept_tokens, query_tokens)
     board_model_intent = _has_board_model_intent(query_tokens) or _has_board_model_intent(
         concept_tokens
@@ -1756,6 +1844,7 @@ def _choose_fallback_table(
     for table_name, columns in schema_details.items():
         table_tokens = _table_business_tokens(table_name, columns)
         column_token_union = set()
+        has_average_measure = False
         has_numeric_amount_measure = False
         has_numeric_sales_measure = False
         has_date_capable_column = False
@@ -1772,6 +1861,11 @@ def _choose_fallback_table(
                 "value",
             }:
                 has_numeric_amount_measure = True
+            if _is_numeric_type(column["data_type"]) and column_tokens & (
+                concept_tokens & _AVERAGE_MEASURE_TOKENS
+                or _AVERAGE_MEASURE_TOKENS
+            ):
+                has_average_measure = True
             if _is_numeric_type(column["data_type"]) and column_tokens & {
                 "amount",
                 "intake",
@@ -1815,6 +1909,12 @@ def _choose_fallback_table(
 
         if not _table_covers_requested_concepts(table_name, columns, concept_tokens):
             continue
+
+        if average_metric_intent:
+            if concept_tokens & _AVERAGE_MEASURE_TOKENS and not has_average_measure:
+                continue
+            if concept_tokens & _AVERAGE_MEASURE_TOKENS:
+                score += 90
 
         if board_model_intent and rate_metric_intent and query_tokens & {
             "defect",
@@ -2163,9 +2263,19 @@ def _choose_dimension_columns(
         ({"order"}, {"order", "ord", "number"}),
         ({"batch"}, {"batch", "id"}),
     ]
+    compound_dimension_triggers = [
+        {"board", "model"},
+        {"business", "unit"},
+        {"email", "address"},
+    ]
     selected: list[str] = []
     for trigger_tokens, column_tokens in dimension_specs:
-        if query_tokens & trigger_tokens:
+        trigger_matches = (
+            trigger_tokens.issubset(query_tokens)
+            if trigger_tokens in compound_dimension_triggers
+            else bool(query_tokens & trigger_tokens)
+        )
+        if trigger_matches:
             column = _choose_ranked_column_by_tokens(columns, column_tokens)
             if column and column["name"] not in selected:
                 selected.append(column["name"])
@@ -2221,6 +2331,29 @@ def _choose_count_subject_column(
                     column for column in columns if not _is_rate_like_column(column)
                 ]
             column = _choose_ranked_column_by_tokens(candidate_columns, column_tokens)
+            if column:
+                return column
+    return None
+
+
+def _choose_average_measure_column(
+    query_tokens: set[str],
+    columns: list[dict[str, str]],
+) -> dict[str, str] | None:
+    measure_specs = [
+        ({"age", "duration", "elapsed"}, _AVERAGE_MEASURE_TOKENS),
+        ({"rate", "ratio", "percent", "percentage"}, _RATE_METRIC_TOKENS | {"score"}),
+        ({"amount", "gross", "net", "value"}, {"amount", "gross", "net", "value"}),
+        ({"balance"}, {"balance", "end", "ending", "value"}),
+        ({"quantity", "qty"}, {"quantity", "qty"}),
+    ]
+    for trigger_tokens, column_tokens in measure_specs:
+        if query_tokens & trigger_tokens:
+            column = _choose_ranked_column_by_tokens(
+                columns,
+                set(column_tokens),
+                numeric=True,
+            )
             if column:
                 return column
     return None
@@ -2609,16 +2742,21 @@ def generate_simple_analytics_sql(
         "account",
         "accounts",
         "address",
+        "age",
         "approval",
         "approvals",
         "approver",
+        "average",
         "balance",
         "balances",
         "board",
+        "breakdown",
         "business",
         "count",
         "customer",
         "defect",
+        "distribution",
+        "duration",
         "email",
         "failure",
         "failures",
@@ -2636,6 +2774,7 @@ def generate_simple_analytics_sql(
         "logs",
         "location",
         "material",
+        "mean",
         "missing",
         "model",
         "monthly",
@@ -2682,6 +2821,8 @@ def generate_simple_analytics_sql(
 
     schema_details = _extract_schema_details(contexts)
     rate_metric_intent = _is_rate_metric_intent(raw_query_tokens)
+    average_metric_intent = _is_average_metric_intent(raw_query_tokens)
+    distribution_metric_intent = _is_distribution_metric_intent(raw_query_tokens)
     failure_count_intent = _is_failure_count_intent(raw_query_tokens, query_tokens)
     board_model_intent = _has_board_model_intent(
         raw_query_tokens
@@ -2720,6 +2861,8 @@ def generate_simple_analytics_sql(
         {
             "failure_count": failure_count_intent,
             "rate": rate_metric_intent,
+            "average": average_metric_intent,
+            "distribution": distribution_metric_intent,
             "board_model": board_model_intent,
             "failure_type_filter": bool(failure_type_filter_value),
         },
@@ -2765,6 +2908,36 @@ def generate_simple_analytics_sql(
         "status",
         "urgent",
     }
+    if distribution_metric_intent:
+        dimension_columns = _choose_dimension_columns(
+            raw_query_tokens | {"status"},
+            columns,
+            max_columns=1,
+        )
+        if dimension_columns:
+            subject_column = _choose_count_subject_column(raw_query_tokens, columns)
+            count_expression = "COUNT(*)"
+            predicates = []
+            if subject_column:
+                count_expression = f"COUNT({_quote_identifier(subject_column['name'])})"
+                predicates.append(_non_missing_value_predicate(subject_column))
+            status_filter_values = _extract_status_filter_values(query)
+            if status_column and status_filter_values:
+                predicates.append(
+                    _value_match_predicate(
+                        status_column,
+                        status_filter_values[0],
+                        status_filter_values[1:],
+                    )
+                )
+            where_clause = f"\nWHERE {' AND '.join(predicates)}" if predicates else ""
+            quoted_dimensions = _quote_joined(dimension_columns)
+            return (
+                f"SELECT {quoted_dimensions}, {count_expression} AS {_quote_identifier('record_count')}\n"
+                f"FROM {quoted_table}{where_clause}\nGROUP BY {quoted_dimensions}\n"
+                f"ORDER BY {_quote_identifier('record_count')} DESC"
+            )
+
     if query_tokens & {"repair", "repairs"} and repair_filter_intent:
         predicates = []
         status_filter_values = _extract_status_filter_values(query)
@@ -2794,6 +2967,32 @@ def generate_simple_analytics_sql(
     )
 
     priority_column = _choose_priority_column(columns)
+    if average_metric_intent:
+        average_measure_column = _choose_average_measure_column(raw_query_tokens, columns)
+        if not average_measure_column:
+            return None
+        dimension_columns = _choose_dimension_columns(raw_query_tokens, columns)
+        where_predicates = []
+        if raw_query_tokens & {"failure", "failed", "defect"}:
+            subject_column = _choose_count_subject_column({"failure"}, columns)
+            if subject_column:
+                where_predicates.append(_non_missing_value_predicate(subject_column))
+        where_clause = (
+            f"\nWHERE {' AND '.join(where_predicates)}" if where_predicates else ""
+        )
+        aggregate_expr = f"AVG({_quote_identifier(average_measure_column['name'])})"
+        if dimension_columns:
+            quoted_dimensions = _quote_joined(dimension_columns)
+            return (
+                f"SELECT {quoted_dimensions}, {aggregate_expr} AS {_quote_identifier('average_value')}\n"
+                f"FROM {quoted_table}{where_clause}\nGROUP BY {quoted_dimensions}\n"
+                f"ORDER BY {_quote_identifier('average_value')} DESC"
+            )
+        return (
+            f"SELECT {aggregate_expr} AS {_quote_identifier('average_value')}\n"
+            f"FROM {quoted_table}{where_clause}"
+        )
+
     if (
         priority_column
         and raw_query_tokens & {"priority", "severity"}
@@ -2969,6 +3168,27 @@ def generate_simple_analytics_sql(
                 f"WHERE {_missing_value_predicate(missing_column)}{limit_clause}"
             )
 
+    dimension_listing_intent = bool(
+        raw_query_tokens & {"associated", "association", "associations", "each", "list", "show"}
+    ) and not bool(
+        raw_query_tokens
+        & (
+            _AVERAGE_METRIC_TOKENS
+            | _COUNT_METRIC_TOKENS
+            | _RATE_METRIC_TOKENS
+            | {"highest", "latest", "lowest", "recent", "top"}
+        )
+    )
+    if dimension_listing_intent:
+        dimension_columns = _choose_dimension_columns(raw_query_tokens, columns, max_columns=3)
+        if len(dimension_columns) >= 2:
+            quoted_dimensions = _quote_joined(dimension_columns)
+            order_clause = ", ".join(_quote_identifier(column) for column in dimension_columns)
+            return (
+                f"SELECT DISTINCT {quoted_dimensions}\n"
+                f"FROM {quoted_table}\nORDER BY {order_clause}"
+            )
+
     explicit_grouping_intent = bool(raw_query_tokens & {"group", "grouped"}) or bool(
         re.search(r"(?i)\bby\s+[A-Za-z0-9_ -]+\b", query)
     )
@@ -2978,6 +3198,9 @@ def generate_simple_analytics_sql(
             "amount",
             "balance",
             "gross",
+            "average",
+            "age",
+            "duration",
             "margin",
             "net",
             "rate",
@@ -3039,9 +3262,12 @@ def generate_simple_analytics_sql(
         or (board_model_intent and not rate_metric_intent)
     )
     if (
-        raw_query_tokens & {"count", "number"}
-        or failure_count_intent
-        or implied_count_by_dimension
+        not average_metric_intent
+        and (
+            raw_query_tokens & {"count", "number"}
+            or failure_count_intent
+            or implied_count_by_dimension
+        )
     ):
         dimension_columns = _choose_dimension_columns(raw_query_tokens, columns)
         if dimension_columns:

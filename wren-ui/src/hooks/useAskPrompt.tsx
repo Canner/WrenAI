@@ -203,10 +203,23 @@ export default function useAskPrompt(threadId?: number) {
   const lastRecommendedFingerprintRef = useRef<string | null>(null);
   const recommendedCreationKeyRef = useRef<string | null>(null);
   const recommendedCreationRequestRef = useRef<Promise<void> | null>(null);
+  const [activeAskingTaskId, setActiveAskingTaskId] = useState<string | null>(
+    null,
+  );
 
   const askingTask = useMemo(
-    () => askingTaskResult.data?.askingTask || null,
-    [askingTaskResult.data],
+    () => {
+      const task = askingTaskResult.data?.askingTask || null;
+      if (
+        activeAskingTaskId &&
+        task?.queryId &&
+        task.queryId !== activeAskingTaskId
+      ) {
+        return null;
+      }
+      return task;
+    },
+    [activeAskingTaskId, askingTaskResult.data],
   );
   const askingTaskType = useMemo(() => askingTask?.type, [askingTask?.type]);
   const askingStreamTask = askingStreamTaskResult.data;
@@ -252,6 +265,7 @@ export default function useAskPrompt(threadId?: number) {
       }
 
       stopAskingTaskPolling();
+      setActiveAskingTaskId(taskId);
       askingTaskPollingTargetRef.current = taskId;
       const pollingSessionId = askingTaskPollingSessionRef.current;
 
@@ -549,11 +563,15 @@ export default function useAskPrompt(threadId?: number) {
         variables: { data: { question: value, threadId } },
       });
       const taskId = response.data?.createAskingTask?.id;
-      if (!taskId) return;
+      if (!taskId) {
+        throw new Error('CreateAskingTask returned no task id');
+      }
 
       await startAskingTaskPolling(taskId);
     } catch (error) {
       console.error(error);
+      stopAskingTaskPolling();
+      throw error;
     }
   };
 

@@ -338,6 +338,66 @@ There are also many local untracked runtime/data artifacts in the repository. Do
 - Local live execution against CWPay/CW_GL may still fail until those SQL Server datasources are reachable; the observed error was an ODBC login/network timeout to `BRVBISQL.INT.CW.LOCAL,1433`, not a SQL identifier hallucination.
 - `enable_column_pruning` was not the focus of today's final validation.
 - Full pytest suite still needs an environment with `pytest` installed.
+- UI `check-types`/Jest could not be run in the clean PR worktree because `node_modules` and the Yarn node_modules state file were absent. `corepack yarn` is available; run `corepack yarn install --immutable` in an environment where dependency install is allowed, then `corepack yarn check-types`.
+
+## Follow-up Fix: Same-thread Ask Reliability
+
+Additional generic fixes were added for the issue where an existing thread could show `Failed to create asking task` while a new thread worked better.
+
+Changed:
+
+- `wren-ui/src/apollo/server/repositories/threadResponseRepository.ts`
+  - Thread responses now have deterministic ordering.
+  - Limited history uses newest response ids first.
+- `wren-ui/src/pages/home/[id].tsx`
+  - Same-thread resume logic now considers only the latest thread response for unfinished asking/thread-response polling.
+  - Older stale unfinished responses no longer take over the prompt state for the current thread.
+- `wren-ui/src/hooks/useAskPrompt.tsx`
+  - Asking-task polling is scoped to the active task id so late results from older tasks do not drive the current prompt.
+  - Failed task creation now stops polling and propagates the error to the prompt.
+- `wren-ui/src/components/pages/home/prompt/index.tsx`
+  - Prompt UI resets out of `Understanding question` if asking-task creation fails.
+- `wren-ui/src/apollo/server/services/askingService.ts`
+  - Added logs for thread id, project id, deploy id, previous latest task state, history count, task id/query id, and failure reason.
+- `wren-ui/src/apollo/server/services/askingTaskTracker.ts`
+  - Added logs for task creation request, project/deploy id, histories, created local task id, query id, and creation failure reason.
+
+Root cause addressed:
+
+- Existing-thread pages could resume or keep polling an older unfinished response instead of the latest response, especially when previous failed/stale task state remained in the thread. New threads did not have that stale state, which is why they behaved better.
+
+## Follow-up Fix: Average / Distribution / Location Grounding
+
+Additional generic schema-first SQL fixes were added for metric intent and dimension grounding:
+
+- Average intent now requires `AVG(...)` over a verified numeric measure such as age/duration/elapsed fields.
+- Average requests no longer fall back to `COUNT(...)`.
+- If a requested average measure is not available in the active project schema, the flow returns unsupported schema instead of a wrong count.
+- Distribution/breakdown intent now uses grouped counts over verified category/status fields.
+- Repair-status distributions can filter verified status values such as completed and in-progress while still grouping by status.
+- Dimension-pair listing, such as board model by location, uses `SELECT DISTINCT` only when one verified schema object exposes all requested dimensions.
+- If board model and location are not covered by verified schema, the flow returns unsupported schema instead of inventing `Location`.
+- Retrieval expansion and column ranking now include average, age, duration, elapsed, distribution, and breakdown concepts.
+- Semantic validation now rejects valid-but-wrong SQL that answers average requests with counts or distribution requests without grouped counts.
+
+Focused validation passed:
+
+```text
+py_compile:
+- wren-ai-service/src/pipelines/generation/utils/sql.py
+- wren-ai-service/src/pipelines/retrieval/db_schema_retrieval.py
+- wren-ai-service/tests/pytest/pipelines/generation/test_sql_schema_grounding.py
+
+Direct Python test-function harness:
+- ran=37 failures=0
+
+Direct SQL smoke:
+- average age of failed units by board model -> AVG verified age measure grouped by board_model
+- average age without age/duration field -> unsupported schema
+- repair status distribution -> grouped counts by verified status with completed/in-progress filters
+- board model associated with location -> SELECT DISTINCT only when both verified columns exist
+- board model/location without location field -> unsupported schema
+```
 
 ## Recommended Next Steps
 

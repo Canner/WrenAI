@@ -101,6 +101,18 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     input: CreateAskingTaskInput,
   ): Promise<{ queryId: string }> {
     try {
+      logger.info(
+        `Creating asking task request: ${JSON.stringify({
+          projectId: input.projectId ?? null,
+          deployId: input.deployId ?? null,
+          hasHistories: !!input.histories?.length,
+          historyCount: input.histories?.length ?? 0,
+          rerunFromCancelled: !!input.rerunFromCancelled,
+          previousTaskId: input.previousTaskId ?? null,
+          threadResponseId: input.threadResponseId ?? null,
+          question: input.query,
+        })}`,
+      );
       // Call the AI service to create a task
       const response = await this.wrenAIAdaptor.ask(input);
       const queryId = response.queryId;
@@ -168,10 +180,20 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         this.trackedTasksById.set(createdTask.id, task);
       }
 
-      logger.info(`Created asking task with queryId: ${queryId}`);
+      logger.info(
+        `Created asking task with queryId: ${queryId}, taskId: ${
+          task.taskId ?? input.previousTaskId ?? 'unbound'
+        }, projectId: ${input.projectId ?? 'unknown'}`,
+      );
       return { queryId };
-    } catch (err) {
-      logger.error(`Failed to create asking task: ${err}`);
+    } catch (err: any) {
+      logger.error(
+        `Failed to create asking task for projectId=${
+          input.projectId ?? 'unknown'
+        }, deployId=${input.deployId ?? 'unknown'}: ${
+          err?.stack || err?.message || err
+        }`,
+      );
       throw err;
     }
   }
