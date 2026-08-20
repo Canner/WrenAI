@@ -315,6 +315,27 @@ def test_user_values_are_allowed_for_single_verified_text_column():
     assert 'GROUP BY "state_name"' in sql
 
 
+def test_column_value_label_is_not_treated_as_literal_filter_value():
+    contexts = [
+        """
+        CREATE TABLE work_update_log (
+            item_id VARCHAR,
+            state_name VARCHAR(255),
+            updated_at TIMESTAMP
+        );
+        """
+    ]
+
+    query = "Show the distribution of work updates across state name values."
+    sql = generate_simple_analytics_sql(query, contexts)
+
+    assert unsupported_schema_message(query, contexts) is None
+    assert sql is not None
+    assert 'FROM "work_update_log"' in sql
+    assert 'GROUP BY "state_name"' in sql
+    assert "WHERE" not in sql
+
+
 def test_unverified_filter_value_is_not_invented():
     contexts = [
         """
@@ -488,6 +509,91 @@ def test_top_grouped_count_is_schema_shape_based():
     assert "LIMIT 5" in sql
 
 
+def test_single_grouping_dimension_does_not_over_split_results():
+    contexts = [
+        """
+        CREATE TABLE account_events (
+            event_id VARCHAR,
+            account_name VARCHAR,
+            account_reference VARCHAR
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql("Show number of events by account.", contexts)
+
+    assert sql is not None
+    assert 'GROUP BY "account_name"' in sql
+    assert "account_reference" not in sql
+
+
+def test_missing_value_intent_uses_verified_plural_name_column():
+    contexts = [
+        """
+        CREATE TABLE account_events (
+            event_id VARCHAR,
+            account_name VARCHAR,
+            event_time TIMESTAMP
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql(
+        "Show events with missing account names.",
+        contexts,
+    )
+
+    assert sql is not None
+    assert 'FROM "account_events"' in sql
+    assert '"account_name" IS NULL' in sql
+
+
+def test_semantic_validation_rejects_weaker_null_check_column():
+    contexts = [
+        """
+        CREATE TABLE account_events (
+            event_id VARCHAR,
+            account_name VARCHAR,
+            account_reference VARCHAR
+        );
+        """
+    ]
+
+    error = validate_sql_semantic_coverage(
+        """
+        SELECT account_name, account_reference
+        FROM account_events
+        WHERE account_reference IS NULL
+        """,
+        "Show events with missing account names.",
+        contexts,
+    )
+
+    assert error is not None
+    assert "weaker matching column" in error
+
+
+def test_top_records_are_listed_without_implicit_grouped_aggregate():
+    contexts = [
+        """
+        CREATE TABLE scored_events (
+            event_id VARCHAR,
+            score_value DECIMAL,
+            event_date TIMESTAMP,
+            category_name VARCHAR
+        );
+        """
+    ]
+
+    sql = generate_simple_analytics_sql("Show top 10 scored events from July.", contexts)
+
+    assert sql is not None
+    assert 'FROM "scored_events"' in sql
+    assert "GROUP BY" not in sql
+    assert 'ORDER BY "score_value" DESC' in sql
+    assert "LIMIT 10" in sql
+
+
 def test_sum_by_year_uses_verified_measure_and_temporal_column():
     contexts = [
         """
@@ -559,3 +665,56 @@ def test_literal_validation_rejects_values_outside_verified_samples():
 
     assert error is not None
     assert "sample values" in error
+
+
+def test_semantic_validation_rejects_multi_group_for_single_dimension():
+    contexts = [
+        """
+        CREATE TABLE account_events (
+            event_id VARCHAR,
+            account_name VARCHAR,
+            account_reference VARCHAR
+        );
+        """
+    ]
+
+    error = validate_sql_semantic_coverage(
+        """
+        SELECT account_name, account_reference, COUNT(*) AS record_count
+        FROM account_events
+        GROUP BY account_name, account_reference
+        """,
+        "Show number of events by account.",
+        contexts,
+    )
+
+    assert error is not None
+    assert "one grouping dimension" in error
+
+
+def test_semantic_validation_rejects_top_record_grouped_aggregate():
+    contexts = [
+        """
+        CREATE TABLE scored_events (
+            event_id VARCHAR,
+            score_value DECIMAL,
+            event_date TIMESTAMP,
+            category_name VARCHAR
+        );
+        """
+    ]
+
+    error = validate_sql_semantic_coverage(
+        """
+        SELECT category_name, SUM(score_value) AS total_value
+        FROM scored_events
+        GROUP BY category_name
+        ORDER BY total_value DESC
+        LIMIT 10
+        """,
+        "Show top 10 scored events from July.",
+        contexts,
+    )
+
+    assert error is not None
+    assert "grouped aggregate" in error

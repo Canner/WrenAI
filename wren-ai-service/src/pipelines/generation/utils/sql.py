@@ -270,7 +270,10 @@ def _fallback_token_variants(token: str) -> set[str]:
     if len(token) > 4 and token.endswith("ies"):
         variants.add(token[:-3] + "y")
     elif len(token) > 4 and token.endswith("es"):
-        variants.add(token[:-2])
+        if token.endswith(("ches", "shes", "sses", "uses", "xes", "zes")):
+            variants.add(token[:-2])
+        else:
+            variants.add(token[:-1])
     elif len(token) > 3 and token.endswith("s"):
         variants.add(token[:-1])
     if len(token) > 4 and token.endswith("ed"):
@@ -1367,6 +1370,70 @@ def _extract_generation_sql(generation_result: str | None) -> str | None:
     return text if _SQL_START.search(text) else None
 
 
+def _sql_has_aggregate_function(sql: str) -> bool:
+    return bool(re.search(r"(?is)\b(?:AVG|COUNT|MAX|MIN|SUM)\s*\(", sql))
+
+
+def _group_by_source_columns(sql: str) -> set[str]:
+    group_by_clause = _extract_clause(
+        sql,
+        "GROUP BY",
+        ("HAVING", "ORDER BY", "LIMIT", "OFFSET"),
+    )
+    if not group_by_clause:
+        return set()
+
+    columns: set[str] = set()
+    for expression in _split_sql_tokens(group_by_clause):
+        for identifier in _iter_unqualified_identifier_candidates(expression):
+            upper_identifier = identifier.upper()
+            if (
+                upper_identifier in _SQL_RESERVED_WORDS
+                or upper_identifier in _SQL_FUNCTION_WORDS
+                or upper_identifier in _SQL_TYPE_WORDS
+                or upper_identifier in _DATE_PART_WORDS
+            ):
+                continue
+            columns.add(identifier)
+    return columns
+
+
+def _query_allows_grouped_aggregate(query: str, query_tokens: set[str]) -> bool:
+    return bool(
+        _has_grouping_intent(query, query_tokens)
+        or _has_count_intent(query_tokens)
+        or _has_sum_intent(query_tokens)
+        or _is_rate_metric_intent(query_tokens)
+        or _is_distribution_metric_intent(query_tokens)
+    )
+
+
+def _missing_value_target_tokens(query: str, query_tokens: set[str]) -> set[str]:
+    match = re.search(
+        r"(?is)\b(?:blank|empty|missing|null)\s+(?P<value>[A-Za-z0-9_ /-]+)",
+        query,
+    )
+    if match:
+        tokens = _fallback_tokens(match.group("value"))
+    else:
+        tokens = set(query_tokens)
+    return tokens - _GENERIC_SCHEMA_INTENT_TOKENS - _NULL_CHECK_TOKENS
+
+
+def _sql_null_checked_columns(sql: str, columns: list[dict[str, str]]) -> set[str]:
+    checked_columns: set[str] = set()
+    stripped = _strip_string_literals(sql)
+    for column in columns:
+        quoted_column = re.escape(_quote_identifier(column["name"]))
+        bare_column = re.escape(column["name"])
+        column_pattern = rf"(?:{quoted_column}|(?<![\w$\".]){bare_column}(?![\w$]))"
+        if re.search(rf"(?is){column_pattern}\s+IS\s+NULL\b", stripped):
+            checked_columns.add(column["name"])
+        if re.search(rf"(?is){column_pattern}\s*=\s*''", sql):
+            checked_columns.add(column["name"])
+    return checked_columns
+
+
 def validate_sql_semantic_coverage(
     sql: str,
     query: str | None,
@@ -1447,6 +1514,60 @@ def validate_sql_semantic_coverage(
                 "or breakdown, but the generated SQL does not compute grouped "
                 "counts."
             )
+
+    if (
+        _has_extreme_intent(raw_query_tokens)
+        and re.search(r"(?is)\bGROUP\s+BY\b", sql)
+        and _sql_has_aggregate_function(sql)
+        and not _query_allows_grouped_aggregate(query, raw_query_tokens)
+    ):
+        return (
+            "Schema grounding failed. The question asks for top or bottom "
+            "records, but the generated SQL returns a grouped aggregate. Use "
+            "a row-level ordering unless the question asks for grouping, count, "
+            "sum, rate, or distribution."
+        )
+
+    if (
+        _grouping_phrase_tokens(query)
+        and not _grouping_phrase_has_multiple_dimensions(query)
+    ):
+        group_columns = _group_by_source_columns(sql)
+        if len(group_columns) > 1:
+            return (
+                "Schema grounding failed. The question asks for one grouping "
+                "dimension, but the generated SQL groups by multiple source "
+                "columns."
+            )
+
+    if _has_missing_value_intent(raw_query_tokens):
+        target_tokens = _missing_value_target_tokens(query, raw_query_tokens)
+        for relation in referenced_relations:
+            columns = schema_details.get(relation) or []
+            if not columns or not target_tokens:
+                continue
+            checked_columns = _sql_null_checked_columns(sql, columns)
+            if not checked_columns:
+                continue
+            scored_columns = [
+                (_column_score_for_tokens(column, target_tokens), column["name"])
+                for column in columns
+            ]
+            best_score = max((score for score, _ in scored_columns), default=0)
+            checked_best_score = max(
+                (
+                    score
+                    for score, name in scored_columns
+                    if name in checked_columns
+                ),
+                default=0,
+            )
+            if best_score > checked_best_score:
+                return (
+                    "Schema grounding failed. The question asks for missing "
+                    "values on a specific schema concept, but the generated SQL "
+                    "checks a weaker matching column for null or blank values."
+                )
 
     return _validate_literal_values_against_samples(sql, schema_details, grounding)
 
@@ -1680,6 +1801,7 @@ _GENERIC_SCHEMA_INTENT_TOKENS = {
     "without",
     "year",
 }
+_GENERIC_SCHEMA_INTENT_TOKENS.update(_NULL_CHECK_TOKENS)
 _GENERIC_SCHEMA_INTENT_TOKENS.update(_MONTH_NAME_TO_NUMBER.keys())
 
 
@@ -1738,12 +1860,61 @@ def _schema_derived_query_tokens(
     return supported_tokens
 
 
+def _schema_adjacent_dimension_descriptor_tokens(
+    query: str | None,
+    query_tokens: set[str],
+    schema_tokens: set[str],
+) -> set[str]:
+    if not query:
+        return set()
+    dimension_intent_tokens = _DISTRIBUTION_METRIC_TOKENS | {
+        "across",
+        "by",
+        "each",
+        "group",
+        "grouped",
+        "per",
+    }
+    if not (
+        query_tokens
+        & dimension_intent_tokens
+    ):
+        return set()
+
+    descriptor_tokens: set[str] = set()
+    matches = list(_QUERY_VALUE_TOKEN.finditer(query))
+    for index, match in enumerate(matches):
+        if index == 0:
+            continue
+        previous_tokens = _fallback_tokens(
+            matches[index - 1].group(0).replace("_", " ")
+        )
+        value_tokens = _fallback_tokens(match.group(0).replace("_", " "))
+        explicitly_quoted = match.start() > 0 and query[match.start() - 1] in {
+            "'",
+            '"',
+        }
+        if (
+            previous_tokens & schema_tokens
+            and value_tokens
+            and not (value_tokens & schema_tokens)
+            and not explicitly_quoted
+        ):
+            descriptor_tokens.update(value_tokens)
+    return descriptor_tokens
+
+
 def _unsupported_query_tokens(
     query_tokens: set[str],
     schema_details: dict[str, list[dict[str, str]]],
     query: str | None = None,
 ) -> set[str]:
     schema_tokens = set().union(*_schema_tokens_by_table(schema_details).values())
+    descriptor_tokens = _schema_adjacent_dimension_descriptor_tokens(
+        query,
+        query_tokens,
+        schema_tokens,
+    )
     user_value_tokens = _schema_driven_user_value_tokens(
         query,
         query_tokens,
@@ -1755,6 +1926,7 @@ def _unsupported_query_tokens(
         if token not in _GENERIC_SCHEMA_INTENT_TOKENS
         and not token.isdigit()
         and not (_fallback_token_variants(token) & schema_tokens)
+        and token not in descriptor_tokens
         and token not in user_value_tokens
     }
 
@@ -2025,9 +2197,14 @@ def _choose_dimension_columns(
 
 
 def _choose_missing_value_column(
+    query: str,
     query_tokens: set[str],
     columns: list[dict[str, str]],
 ) -> dict[str, str] | None:
+    target_tokens = _missing_value_target_tokens(query, query_tokens)
+    column = _choose_ranked_column_by_tokens(columns, target_tokens)
+    if column:
+        return column
     return _choose_ranked_column_by_tokens(
         columns,
         query_tokens - (_GENERIC_SCHEMA_INTENT_TOKENS | _NULL_CHECK_TOKENS),
@@ -2166,18 +2343,28 @@ def _fallback_month_filter(query: str) -> tuple[int, int] | None:
 
 
 def _grouping_phrase_tokens(query: str) -> set[str]:
+    phrase = _grouping_phrase_text(query)
+    return _fallback_tokens(phrase) if phrase else set()
+
+
+def _grouping_phrase_has_multiple_dimensions(query: str) -> bool:
+    phrase = _grouping_phrase_text(query)
+    return bool(phrase and re.search(r"(?i)(?:,|/|\band\b|\bor\b)", phrase))
+
+
+def _grouping_phrase_text(query: str) -> str | None:
     query = re.sub(
         r"(?is)\b(?:order(?:ed)?|sort(?:ed)?)\s+by\s+[A-Za-z0-9_ /-]+",
         "",
         query,
     )
     match = re.search(
-        r"(?is)\b(?:grouped\s+by|group\s+by|by)\s+(?P<value>[A-Za-z0-9_ /-]+)",
+        r"(?is)\b(?:grouped\s+by|group\s+by|by|across|per)\s+(?P<value>[A-Za-z0-9_ /-]+)",
         query,
     )
     if not match:
-        return set()
-    return _fallback_tokens(match.group("value"))
+        return None
+    return match.group("value")
 
 
 def _current_year_where_clause(
@@ -2380,10 +2567,22 @@ def _query_schema_value_terms(
         return []
 
     values: list[str] = []
-    for match in _QUERY_VALUE_TOKEN.finditer(query):
+    matches = list(_QUERY_VALUE_TOKEN.finditer(query))
+    for index, match in enumerate(matches):
         raw_value = match.group(0).replace("_", " ")
         value_tokens = _fallback_tokens(raw_value)
         if not value_tokens:
+            continue
+        previous_tokens = (
+            _fallback_tokens(matches[index - 1].group(0).replace("_", " "))
+            if index > 0
+            else set()
+        )
+        explicitly_quoted = match.start() > 0 and query[match.start() - 1] in {
+            "'",
+            '"',
+        }
+        if previous_tokens & schema_tokens and not explicitly_quoted:
             continue
         if value_tokens & _GENERIC_SCHEMA_INTENT_TOKENS:
             continue
@@ -2586,7 +2785,7 @@ def generate_simple_analytics_sql(
     )
 
     if _has_missing_value_intent(query_tokens):
-        missing_column = _choose_missing_value_column(query_tokens, columns)
+        missing_column = _choose_missing_value_column(query, query_tokens, columns)
         if not missing_column:
             return None
         selected_columns = _select_listing_columns(
@@ -2691,8 +2890,11 @@ def generate_simple_analytics_sql(
         )
 
     if _has_grouping_intent(query, query_tokens) or _has_count_intent(query_tokens):
-        grouping_tokens = _grouping_phrase_tokens(query) or query_tokens
+        explicit_grouping_tokens = _grouping_phrase_tokens(query)
+        grouping_tokens = explicit_grouping_tokens or query_tokens
         max_dimensions = 1 if _has_extreme_intent(query_tokens) else 3
+        if explicit_grouping_tokens and not _grouping_phrase_has_multiple_dimensions(query):
+            max_dimensions = 1
         dimension_columns = _choose_dimension_columns(
             grouping_tokens,
             columns,
@@ -2753,8 +2955,11 @@ def generate_simple_analytics_sql(
     if _has_extreme_intent(query_tokens):
         direction = _sort_direction_for_query(query_tokens)
         if measure_column:
-            dimension_column = _choose_dimension_column(query_tokens, columns)
             limit_clause = f"\nLIMIT {limit}" if limit else ""
+            if _query_allows_grouped_aggregate(query, query_tokens):
+                dimension_column = _choose_dimension_column(query_tokens, columns)
+            else:
+                dimension_column = None
             if dimension_column:
                 aggregate, alias = _aggregate_for_measure(measure_column["name"])
                 return (
