@@ -314,6 +314,14 @@ class PostgresConnector(ConnectorABC):
         Rolling back is a no-op when the transaction is still healthy, so it runs
         on every failure path rather than guessing which errors came from the
         backend. A rollback failure must not mask the original error.
+
+        Like every other statement on this connector, this call assumes the
+        connection is not used concurrently: psycopg forbids sharing one
+        connection across threads, and nothing here serialises access. That is
+        the same single-flight assumption the pre-existing sharing already
+        relied on — ``WrenEngine._get_connector`` caches one connector and the
+        MCP server's ``ServeContext`` hands one engine to every tool handler.
+        Adding a lock or a per-request connection is tracked separately.
         """
         try:
             self.connection.rollback()
