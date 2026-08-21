@@ -39,7 +39,11 @@ from wren.model.error import (
     ErrorPhase,
     WrenError,
 )
-from wren.policy import resolve_model_name, validate_sql_policy
+from wren.policy import (
+    resolve_model_name,
+    validate_planned_sql,
+    validate_sql_policy,
+)
 
 
 class WrenEngine:
@@ -175,10 +179,13 @@ class WrenEngine:
         if properties:
             processed = frozenset(properties.items())
 
+        # Hoisted out of the try below so it is still in scope for the planned-SQL
+        # check at the end, which runs whether or not manifest scoping succeeded.
+        dialect = get_sqlglot_dialect(self.data_source)
+
         try:
             # Extract minimal manifest scoped to tables referenced in the SQL.
             # Use sqlglot (not DataFusion parser) since input is target dialect.
-            dialect = get_sqlglot_dialect(self.data_source)
             ast = parse_one(sql, dialect=dialect)
 
             manifest_json = json.loads(base64.b64decode(self.manifest_str))
@@ -189,9 +196,11 @@ class WrenEngine:
             # ``extract_by`` scopes the view (and the models it joins) in.
             queryable_names = model_names | view_names
 
-            # Policy validation: check tables and functions before execution.
-            if self._config.strict_mode or self._config.denied_functions:
-                validate_sql_policy(ast, queryable_names, self._config)
+            # Policy validation before execution. Always called: the read-only
+            # statement check inside it is not gated on strict mode, which
+            # governs which tables may be named rather than what may be done to
+            # them.
+            validate_sql_policy(ast, queryable_names, self._config)
 
             # Resolve table refs to canonical manifest names so that
             # ``extract_by`` (case-sensitive in Rust) finds them under SQL's
@@ -235,7 +244,13 @@ class WrenEngine:
                 self.data_source,
                 fallback=self._fallback,
             )
-            return rewriter.rewrite(sql)
+            dialect_sql = rewriter.rewrite(sql)
+            # Planning inlines MDL view statements and model ``ref_sql``, so the
+            # output can carry a mutating statement the input never did.
+            validate_planned_sql(dialect_sql, dialect)
+            return dialect_sql
+        except WrenError:
+            raise
         except Exception as e:
             raise WrenError(
                 ErrorCode.INVALID_SQL,
