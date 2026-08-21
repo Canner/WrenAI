@@ -664,9 +664,15 @@ def _report_malformed_cube_members(
     errors: list[ValidationError], src_path: str, raw: dict
 ) -> None:
     """Report non-list containers and non-mapping member entries."""
-    cube_label = raw.get("name") if isinstance(raw.get("name"), str) else src_path
+    # Prefer cube name; bare path twice reads poorly when name is missing.
+    if isinstance(raw.get("name"), str) and raw["name"]:
+        cube_label = raw["name"]
+    else:
+        cube_label = "cube"
     for key in ("measures", "dimensions", "time_dimensions"):
         val = raw.get(key)
+        # Bare `dimensions:` parses to None and means "no members" (loader
+        # normalises to []). Only non-list non-null values are malformed.
         if val is None:
             continue
         if not isinstance(val, list):
@@ -687,20 +693,32 @@ def _report_malformed_cube_members(
                         f"{key[:-1]} entry must be a mapping, got {type(item).__name__}",
                     )
                 )
+                continue
+            if not isinstance(item.get("name"), str):
+                errors.append(
+                    ValidationError(
+                        "error",
+                        f"{src_path} > {cube_label} > {key}[{i}]",
+                        f"{key[:-1]} entry must have a string 'name'",
+                    )
+                )
 
 
 def _normalise_cube_member_lists(cube: dict) -> dict:
     """Drop non-mapping measure/dimension/time_dimension entries.
+
+    Explicit null keys (YAML ``dimensions:``) become empty lists so the
+    build artifact never carries null member containers into the CLI.
 
     ``validate_project`` re-reads the raw YAML so hand-edited mistakes are
     still reported rather than vanishing quietly (same pattern as views /
     relationships in #2604 / #2613).
     """
     for key in ("measures", "dimensions", "time_dimensions"):
-        raw = cube.get(key)
-        if raw is None:
+        if key not in cube:
             continue
-        if not isinstance(raw, list):
+        raw = cube[key]
+        if raw is None or not isinstance(raw, list):
             cube[key] = []
             continue
         cube[key] = [item for item in raw if isinstance(item, dict)]

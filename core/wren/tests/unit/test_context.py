@@ -1232,6 +1232,41 @@ def test_load_cubes_drops_non_dict_member_entries(tmp_path):
     assert cubes[0]["dimensions"] == []
 
 
+
+def test_normalise_cube_null_member_lists():
+    """YAML `dimensions:` (null) must become [] so mdl.json never carries null."""
+    from wren.context import _normalise_cube_member_lists
+
+    cube = {
+        "name": "order_metrics",
+        "base_object": "orders",
+        "measures": None,
+        "dimensions": None,
+        "time_dimensions": [{"name": "d", "expression": "x"}],
+    }
+    out = _normalise_cube_member_lists(cube)
+    assert out["measures"] == []
+    assert out["dimensions"] == []
+    assert out["time_dimensions"] == [{"name": "d", "expression": "x"}]
+
+
+def test_validate_project_reports_member_without_name(tmp_path):
+    """Nameless measures must fail validate (not only cube list after build)."""
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "om",
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - expression: SUM(o_totalprice)\n"
+        "    type: double\n",
+    )
+    errors = validate_project(tmp_path)
+    msgs = [e.message for e in errors]
+    assert any("must have a string 'name'" in m for m in msgs)
+
+
 def test_validate_project_reports_malformed_cube_members(tmp_path):
     _make_v2_cube_project(tmp_path)
     _write_cube(

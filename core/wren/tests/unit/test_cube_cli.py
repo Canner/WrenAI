@@ -445,3 +445,32 @@ def test_cube_query_missing_required(tmp_path):
     )
     assert result.exit_code == 1
     assert "required" in result.output.lower()
+
+
+def test_cube_list_null_member_list_fails_loud(tmp_path):
+    """Present-but-null dimensions must not TypeError in list join."""
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    mdl_file.write_text(
+        json.dumps(
+            {
+                "catalog": "c",
+                "schema": "s",
+                "cubes": [
+                    {
+                        "name": "orders",
+                        "baseObject": "orders",
+                        "measures": [],
+                        "dimensions": None,
+                        "timeDimensions": [],
+                    }
+                ],
+            }
+        )
+    )
+    result = runner.invoke(app, ["cube", "list", "--mdl", str(mdl_file)])
+    assert result.exit_code == 1
+    assert "malformed cubes" in result.output
+    assert "dimensions is null" in result.output
+    assert "cubes/*/metadata.yml" in result.output

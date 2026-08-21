@@ -171,6 +171,10 @@ def _require_cubes_list(manifest: dict) -> list:
             err=True,
         )
         raise typer.Exit(1)
+    member_hint = (
+        "  Hint: fix the cube definition in cubes/*/metadata.yml, "
+        "then re-run `wren context build`."
+    )
     for i, cube in enumerate(cubes):
         if not isinstance(cube, dict):
             typer.echo(
@@ -180,14 +184,18 @@ def _require_cubes_list(manifest: dict) -> list:
             )
             raise typer.Exit(1)
         for key in ("measures", "dimensions", "timeDimensions"):
-            members = cube.get(key)
-            if members is None:
+            # Explicit null must not slip through: list_cubes joins members
+            # with cube.get(key, []), which still returns None when the key
+            # is present and null — bare TypeError two frames later.
+            if key not in cube:
                 continue
-            if not isinstance(members, list):
+            members = cube[key]
+            if members is None or not isinstance(members, list):
                 name = cube.get("name", f"entry {i}")
+                kind = "null" if members is None else f"not a list (got {type(members).__name__})"
                 typer.echo(
-                    f"Error: malformed cubes in mdl.json ({name!r} {key} is not a list).\n"
-                    "  Hint: re-run `wren context build`.",
+                    f"Error: malformed cubes in mdl.json ({name!r} {key} is {kind}).\n"
+                    f"{member_hint}",
                     err=True,
                 )
                 raise typer.Exit(1)
@@ -196,7 +204,7 @@ def _require_cubes_list(manifest: dict) -> list:
                     name = cube.get("name", f"entry {i}")
                     typer.echo(
                         f"Error: malformed cubes in mdl.json ({name!r} {key}[{j}] is not an object).\n"
-                        "  Hint: re-run `wren context build`.",
+                        f"{member_hint}",
                         err=True,
                     )
                     raise typer.Exit(1)
@@ -204,7 +212,7 @@ def _require_cubes_list(manifest: dict) -> list:
                     name = cube.get("name", f"entry {i}")
                     typer.echo(
                         f"Error: malformed cubes in mdl.json ({name!r} {key}[{j}].name is not a string).\n"
-                        "  Hint: re-run `wren context build`.",
+                        f"{member_hint}",
                         err=True,
                     )
                     raise typer.Exit(1)
