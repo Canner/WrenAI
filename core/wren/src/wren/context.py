@@ -1705,10 +1705,10 @@ def _reject_malformed_v1_views(project_path: Path) -> None:
     if not views_file.exists():
         return
 
-    raw = yaml.safe_load(views_file.read_text(encoding="utf-8")) or {}
+    raw = yaml.safe_load(views_file.read_text(encoding="utf-8"))
     problems: list[str] = []
 
-    if raw and not isinstance(raw, dict):
+    if raw is not None and not isinstance(raw, dict):
         problems.append(
             f"views.yml: must be a mapping with a 'views' key, got {type(raw).__name__}"
         )

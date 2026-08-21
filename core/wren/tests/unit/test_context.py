@@ -1608,6 +1608,35 @@ def test_validate_project_reports_non_list_v1_views_container(
     _assert_v1_sources_unchanged(tmp_path, source_contents)
 
 
+@pytest.mark.parametrize("views_yml", ["[]\n", "false\n", "0\n", '""\n'])
+def test_plan_upgrade_v1_to_v2_rejects_falsey_non_mapping_views_root(
+    tmp_path, views_yml
+):
+    """Falsey YAML roots are still malformed unless the document is empty."""
+    _make_v1_project(tmp_path)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text(views_yml, encoding="utf-8")
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="malformed views"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+def test_plan_upgrade_v1_to_v2_allows_empty_views_document(tmp_path):
+    """An empty YAML document has no views to lose and remains upgradeable."""
+    _make_v1_project(tmp_path)
+    (tmp_path / "views.yml").write_text("", encoding="utf-8")
+
+    plan = plan_upgrade(tmp_path, target_version=2)
+
+    assert "views.yml" in plan.files_deleted
+    assert not [f for f in plan.files_created if f.startswith("views/")]
+
+
 def test_plan_upgrade_v1_to_v2_rejects_nameless_view_without_data_loss(tmp_path):
     _make_v1_project(tmp_path)
     views_file = tmp_path / "views.yml"
