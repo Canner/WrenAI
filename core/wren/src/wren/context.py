@@ -1705,7 +1705,22 @@ def _reject_malformed_v1_views(project_path: Path) -> None:
     if not views_file.exists():
         return
 
-    raw = yaml.safe_load(views_file.read_text(encoding="utf-8"))
+    class _UniqueKeySafeLoader(yaml.SafeLoader):
+        """SafeLoader variant that rejects explicit duplicate mapping keys."""
+
+        def construct_mapping(self, node, deep=False):
+            """Reject duplicate keys before normal SafeLoader construction."""
+            seen = set()
+            for key_node, _ in node.value:
+                key = self.construct_object(key_node, deep=deep)
+                if key in seen:
+                    raise UpgradeError(
+                        f"Cannot upgrade: views.yml contains duplicate YAML key {key!r}"
+                    )
+                seen.add(key)
+            return super().construct_mapping(node, deep=deep)
+
+    raw = yaml.load(views_file.read_text(encoding="utf-8"), Loader=_UniqueKeySafeLoader)
     problems: list[str] = []
 
     if raw is not None and not isinstance(raw, dict):
