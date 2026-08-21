@@ -1,0 +1,78 @@
+{{- $secretName := include "wren-ai.secretName" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wren-ai.fullname" . }}-engine
+  labels:
+    {{- include "wren-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: engine
+spec:
+  replicas: {{ default 1 .Values.engine.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "wren-ai.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: engine
+  template:
+    metadata:
+      labels:
+        {{- include "wren-ai.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: engine
+    spec:
+      {{- with .Values.engine.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.engine.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.engine.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: wren-data
+          persistentVolumeClaim:
+            claimName: {{ include "wren-ai.fullname" . }}-data-pvc
+      initContainers:
+        - name: bootstrap
+          image: "{{ .Values.engine.bootstrap.image.repository }}:{{ .Values.engine.bootstrap.image.tag | default .Values.global.versions.engineBootstrap }}"
+          imagePullPolicy: {{ .Values.engine.bootstrap.image.pullPolicy }}
+          env:
+            - name: DATA_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "wren-ai.fullname" . }}-config
+                  key: WREN_ENGINE_DATA_PATH
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: PG_PASSWORD
+            - name: PG_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: PG_USERNAME
+          volumeMounts:
+            - name: wren-data
+              mountPath: /app/data
+          command: ["/bin/sh", "/app/init.sh"]
+      containers:
+        - name: wren-engine
+          image: "{{ .Values.engine.image.repository }}:{{ .Values.engine.image.tag | default .Values.global.versions.engine }}"
+          imagePullPolicy: {{ .Values.engine.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.engine.service.ports.engine }}
+              protocol: TCP
+            - name: sql
+              containerPort: {{ .Values.engine.service.ports.sql }}
+              protocol: TCP
+          volumeMounts:
+            - name: wren-data
+              mountPath: /usr/src/app/etc
+          {{- with .Values.engine.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
