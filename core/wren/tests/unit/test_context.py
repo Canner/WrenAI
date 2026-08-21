@@ -1249,6 +1249,28 @@ def test_normalise_cube_null_member_lists():
     assert out["time_dimensions"] == [{"name": "d", "expression": "x"}]
 
 
+def test_load_cubes_normalises_empty_member_keys(tmp_path):
+    """v2 empty YAML keys must reach [] via load_cubes (not only the helper)."""
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "om",
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: total\n"
+        "    expression: SUM(o_totalprice)\n"
+        "    type: double\n"
+        "dimensions:\n"
+        "time_dimensions:\n",
+    )
+    cubes = load_cubes(tmp_path)
+    assert len(cubes) == 1
+    assert cubes[0]["dimensions"] == []
+    assert cubes[0]["time_dimensions"] == []
+    assert [m["name"] for m in cubes[0]["measures"]] == ["total"]
+
+
 def test_validate_project_reports_member_without_name(tmp_path):
     """Nameless measures must fail validate (not only cube list after build)."""
     _make_v2_cube_project(tmp_path)
@@ -1308,6 +1330,15 @@ def test_validate_project_reports_invalid_cube_yaml(tmp_path):
     cubes_dir = tmp_path / "cubes"
     cubes_dir.mkdir()
     (cubes_dir / "broken.yml").write_text("name: [unterminated\n")
+    errors = validate_project(tmp_path)
+    assert any("invalid YAML" in e.message for e in errors)
+    assert load_cubes(tmp_path) == []
+
+
+def test_validate_project_reports_invalid_v2_cube_yaml(tmp_path):
+    """Directory layout metadata.yml parse errors must report invalid YAML too."""
+    _make_v2_cube_project(tmp_path)
+    _write_cube(tmp_path, "om", "name: [unterminated\n")
     errors = validate_project(tmp_path)
     assert any("invalid YAML" in e.message for e in errors)
     assert load_cubes(tmp_path) == []
