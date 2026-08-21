@@ -1713,7 +1713,16 @@ def _reject_malformed_v1_views(project_path: Path) -> None:
             f"views.yml: must be a mapping with a 'views' key, got {type(raw).__name__}"
         )
     else:
-        raw_views = raw.get("views") if isinstance(raw, dict) else None
+        raw_views = None
+        if isinstance(raw, dict):
+            unexpected_keys = set(raw) - {"views"}
+            if unexpected_keys:
+                problems.append(
+                    "views.yml: unsupported root keys would be discarded: "
+                    + ", ".join(sorted(str(key) for key in unexpected_keys))
+                )
+            raw_views = raw.get("views")
+
         if raw_views is not None and not isinstance(raw_views, list):
             problems.append(
                 f"views.yml > views: must be a list, got {type(raw_views).__name__}"

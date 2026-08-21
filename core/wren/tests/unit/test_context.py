@@ -1637,6 +1637,30 @@ def test_plan_upgrade_v1_to_v2_allows_empty_views_document(tmp_path):
     assert not [f for f in plan.files_created if f.startswith("views/")]
 
 
+@pytest.mark.parametrize(
+    "views_yml",
+    [
+        "legacy_setting: value\n",
+        "views: []\nlegacy_setting: value\n",
+    ],
+)
+def test_plan_upgrade_v1_to_v2_rejects_unpreserved_views_root_keys(
+    tmp_path, views_yml
+):
+    """Root fields migration cannot carry forward must block source deletion."""
+    _make_v1_project(tmp_path)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text(views_yml, encoding="utf-8")
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="unsupported root keys"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
 def test_plan_upgrade_v1_to_v2_rejects_nameless_view_without_data_loss(tmp_path):
     _make_v1_project(tmp_path)
     views_file = tmp_path / "views.yml"
