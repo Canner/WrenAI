@@ -1720,7 +1720,13 @@ def _reject_malformed_v1_views(project_path: Path) -> None:
                 seen.add(key)
             return super().construct_mapping(node, deep=deep)
 
-    raw = yaml.load(views_file.read_text(encoding="utf-8"), Loader=_UniqueKeySafeLoader)
+    try:
+        raw = yaml.load(
+            views_file.read_text(encoding="utf-8"), Loader=_UniqueKeySafeLoader
+        )
+    except (TypeError, yaml.YAMLError) as exc:
+        raise UpgradeError(f"Cannot upgrade: invalid views.yml: {exc}") from exc
+
     problems: list[str] = []
 
     if raw is not None and not isinstance(raw, dict):

@@ -1704,6 +1704,46 @@ def test_apply_upgrade_v1_to_v2_rechecks_duplicate_yaml_keys_before_writing(tmp_
     _assert_v1_sources_unchanged(tmp_path, source_contents)
 
 
+@pytest.mark.parametrize(
+    "views_yml",
+    [
+        "views: [\n",
+        "views:\n  - ? [name]\n    : value\n",
+    ],
+)
+def test_plan_upgrade_v1_to_v2_wraps_yaml_loader_errors_without_data_loss(
+    tmp_path, views_yml
+):
+    """Malformed YAML must fail as UpgradeError without changing source files."""
+    _make_v1_project(tmp_path)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text(views_yml, encoding="utf-8")
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="invalid views.yml"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+def test_apply_upgrade_v1_to_v2_rechecks_yaml_loader_errors_before_writing(tmp_path):
+    """Malformed YAML introduced after planning must block all writes."""
+    _make_v1_project(tmp_path)
+    plan = plan_upgrade(tmp_path, target_version=2)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text("views: [\n", encoding="utf-8")
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="invalid views.yml"):
+        apply_upgrade(tmp_path, plan)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
 def test_plan_upgrade_v1_to_v2_rejects_nameless_view_without_data_loss(tmp_path):
     _make_v1_project(tmp_path)
     views_file = tmp_path / "views.yml"
