@@ -1594,13 +1594,41 @@ def test_validate_project_reports_non_list_v1_views_container(
     # Not additionally reported once per character/key of the container.
     assert not [e for e in hard if "must be a mapping" in e.message]
 
-    # Every consumer degrades to "no views" rather than raising.
+    # Runtime/build consumers still normalise to "no views". Migration is
+    # stricter because deleting the source after normalisation would lose data.
     assert build_manifest(tmp_path)["views"] == []
     assert build_json(tmp_path)["views"] == []
-    plan = plan_upgrade(tmp_path, target_version=2)
-    assert not [f for f in plan.files_created if f.startswith("views/")]
-    apply_upgrade(tmp_path, plan)
-    assert not (tmp_path / "views").exists()
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="malformed views"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+def test_plan_upgrade_v1_to_v2_rejects_nameless_view_without_data_loss(tmp_path):
+    _make_v1_project(tmp_path)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text(
+        "views:\n"
+        "  - name: kept\n"
+        "    statement: SELECT 1\n"
+        "  - statement: SELECT id FROM orders\n"
+        "  - just_a_bare_string\n",
+        encoding="utf-8",
+    )
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="malformed views"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+    assert "SELECT id FROM orders" in views_file.read_text(encoding="utf-8")
+    assert "just_a_bare_string" in views_file.read_text(encoding="utf-8")
 
 
 # ── Regression: model columns non-list / non-dict entries ─────────────────
@@ -1845,23 +1873,31 @@ def test_build_json_does_not_crash_on_v1_views_yml_non_mapping_entries(tmp_path)
     assert [v["name"] for v in manifest["views"]] == ["summary"]
 
 
-def test_plan_upgrade_v1_to_v2_does_not_crash_on_non_mapping_view(tmp_path):
+def test_plan_upgrade_v1_to_v2_rejects_non_mapping_view(tmp_path):
     _make_v1_project(tmp_path)
     _corrupt_v1_views_yml(tmp_path)
-    result = plan_upgrade(tmp_path, target_version=2)
-    view_files = [f for f in result.files_created if f.startswith("views/")]
-    assert view_files == ["views/summary/metadata.yml"]
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="malformed views"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
 
 
-def test_apply_upgrade_v1_to_v2_does_not_crash_on_non_mapping_view(tmp_path):
+def test_apply_upgrade_v1_to_v2_rechecks_non_mapping_view_before_writing(tmp_path):
     _make_v1_project(tmp_path)
-    _corrupt_v1_views_yml(tmp_path)
     result = plan_upgrade(tmp_path, target_version=2)
-    apply_upgrade(tmp_path, result)
-    assert (tmp_path / "views" / "summary" / "metadata.yml").exists()
-    assert not (tmp_path / "views.yml").exists()
-    # Only the well-formed view became a directory — no junk siblings.
-    assert [d.name for d in (tmp_path / "views").iterdir()] == ["summary"]
+    _corrupt_v1_views_yml(tmp_path)
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="malformed views"):
+        apply_upgrade(tmp_path, result)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
 
 
 @pytest.mark.parametrize("entity", ["model", "view", "cube"])

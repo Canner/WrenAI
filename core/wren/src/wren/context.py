@@ -1693,6 +1693,48 @@ def _reject_malformed_v1_model_columns(project_path: Path) -> None:
         )
 
 
+def _reject_malformed_v1_views(project_path: Path) -> None:
+    """Abort v1→v2 upgrade if ``views.yml`` contains content the loader drops.
+
+    Loader normalisation is correct for validation/runtime, but migration
+    deletes ``views.yml`` after writing only the surviving entries. Inspect
+    the raw source before migration so malformed or nameless views are never
+    silently discarded.
+    """
+    views_file = project_path / "views.yml"
+    if not views_file.exists():
+        return
+
+    raw = yaml.safe_load(views_file.read_text(encoding="utf-8")) or {}
+    problems: list[str] = []
+
+    if raw and not isinstance(raw, dict):
+        problems.append(
+            f"views.yml: must be a mapping with a 'views' key, got {type(raw).__name__}"
+        )
+    else:
+        raw_views = raw.get("views") if isinstance(raw, dict) else None
+        if raw_views is not None and not isinstance(raw_views, list):
+            problems.append(
+                f"views.yml > views: must be a list, got {type(raw_views).__name__}"
+            )
+        elif isinstance(raw_views, list):
+            for i, view in enumerate(raw_views):
+                if not isinstance(view, dict):
+                    problems.append(
+                        f"views.yml > views[{i}]: view entry must be a mapping, "
+                        f"got {type(view).__name__}"
+                    )
+                elif not view.get("name"):
+                    problems.append(f"views.yml > views[{i}]: view missing 'name'")
+
+    if problems:
+        detail = "; ".join(problems)
+        raise UpgradeError(
+            "Cannot upgrade: malformed views would be discarded — " + detail
+        )
+
+
 def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
     """Plan the v1→v2 file restructuring. Returns (files_created, files_deleted)."""
     created: list[str] = []
@@ -1703,6 +1745,7 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
     # (drops non-list / non-dict entries), and _apply_v1_to_v2 then unlinks the
     # v1 source. Abort in preflight so upgrade cannot silently discard data.
     _reject_malformed_v1_model_columns(project_path)
+    _reject_malformed_v1_views(project_path)
 
     # Models: flat files → directories
     models = _load_models_v1(project_path)
