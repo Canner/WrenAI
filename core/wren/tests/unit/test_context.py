@@ -2239,6 +2239,47 @@ def test_validate_project_reports_relationships_bare_root(tmp_path: Path) -> Non
     )
 
 
+def _extract_fenced_yaml(markdown: str, heading: str) -> str:
+    """Pull the first ```yaml fenced block under a markdown heading."""
+    after_heading = markdown[markdown.index(heading) :]
+    start = after_heading.index("```yaml") + len("```yaml")
+    end = after_heading.index("```", start)
+    return after_heading[start:end]
+
+
+def test_generate_mdl_skill_step3_example_round_trips(tmp_path: Path) -> None:
+    """The generate-mdl skill's own Step 2/Step 3 examples, fed to the real
+    loader/validator, must produce a clean project. Regression for #2672: Step 3
+    used to ship a bare top-level list, which load_relationships silently drops
+    and validate_project rejects."""
+    from wren.skills_delivery import get_skill  # noqa: PLC0415
+
+    skill = get_skill("generate-mdl")
+    models_yaml = _extract_fenced_yaml(skill, "### Step 2 — Write model files")
+    relationships_yaml = _extract_fenced_yaml(skill, "### Step 3 — Write relationships")
+
+    _make_v2_project(tmp_path)
+    (tmp_path / "models" / "orders").mkdir(parents=True)
+    (tmp_path / "models" / "orders" / "metadata.yml").write_text(
+        models_yaml, encoding="utf-8"
+    )
+    (tmp_path / "models" / "customers").mkdir(parents=True)
+    (tmp_path / "models" / "customers" / "metadata.yml").write_text(
+        "name: customers\n"
+        "table_reference:\n  table: customers\n"
+        "primary_key: customer_id\n"
+        "columns:\n  - name: customer_id\n    type: INTEGER\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "relationships.yml").write_text(relationships_yaml, encoding="utf-8")
+
+    rels = load_relationships(tmp_path)
+    assert len(rels) == 1
+    assert rels[0]["name"] == "orders_customers"
+
+    assert validate_project(tmp_path) == []
+
+
 def test_validate_project_relationship_indices_match_file(tmp_path: Path) -> None:
     """Junk at [0] must not renumber a later unnamed relationship's warnings."""
     (tmp_path / "wren_project.yml").write_text("schema_version: 1\n", encoding="utf-8")
