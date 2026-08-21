@@ -302,12 +302,20 @@ def _register_context_tools(mcp: FastMCP, ctx: ServeContext) -> None:
                 {
                     "name": cube.get("name"),
                     "base_object": cube.get("base_object"),
-                    "measures": [m.get("name") for m in cube.get("measures", []) or []],
+                    "measures": [
+                        m.get("name")
+                        for m in cube.get("measures", []) or []
+                        if isinstance(m, dict) and isinstance(m.get("name"), str)
+                    ],
                     "dimensions": [
-                        d.get("name") for d in cube.get("dimensions", []) or []
+                        d.get("name")
+                        for d in cube.get("dimensions", []) or []
+                        if isinstance(d, dict) and isinstance(d.get("name"), str)
                     ],
                     "time_dimensions": [
-                        td.get("name") for td in cube.get("time_dimensions", []) or []
+                        td.get("name")
+                        for td in cube.get("time_dimensions", []) or []
+                        if isinstance(td, dict) and isinstance(td.get("name"), str)
                     ],
                 }
             )

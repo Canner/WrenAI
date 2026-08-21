@@ -358,6 +358,83 @@ def test_cube_list_bad_mdl_json(tmp_path):
     assert "invalid MDL JSON" in result.output
 
 
+def test_cube_list_malformed_cubes_scalar_fails_loud(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    mdl_file.write_text(json.dumps({"catalog": "c", "schema": "s", "cubes": "abc"}))
+    result = runner.invoke(app, ["cube", "list", "--mdl", str(mdl_file)])
+    assert result.exit_code == 1
+    assert "malformed cubes" in result.output
+    assert "wren context build" in result.output
+    assert result.output.strip() != ""
+
+
+def test_cube_list_malformed_cubes_object_fails_loud(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    mdl_file.write_text(
+        json.dumps({"catalog": "c", "schema": "s", "cubes": {"name": "orders"}})
+    )
+    result = runner.invoke(app, ["cube", "list", "--mdl", str(mdl_file)])
+    assert result.exit_code == 1
+    assert "malformed cubes" in result.output
+
+
+def test_cube_list_non_object_entry_fails_loud(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    mdl_file.write_text(
+        json.dumps(
+            {
+                "catalog": "c",
+                "schema": "s",
+                "cubes": ["bad", {"name": "orders", "measures": []}],
+            }
+        )
+    )
+    result = runner.invoke(app, ["cube", "list", "--mdl", str(mdl_file)])
+    assert result.exit_code == 1
+    assert "entry 0 is not an object" in result.output
+    assert "wren context build" in result.output
+
+
+def test_cube_describe_malformed_cubes_fails_loud(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    mdl_file.write_text(json.dumps({"catalog": "c", "schema": "s", "cubes": "abc"}))
+    result = runner.invoke(app, ["cube", "describe", "orders", "--mdl", str(mdl_file)])
+    assert result.exit_code == 1
+    assert "malformed cubes" in result.output
+
+
+def test_cube_list_non_string_member_names_fail_loud(tmp_path):
+    """Numeric member names must fail loud (not TypeError in join)."""
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    for key in ("measures", "dimensions", "timeDimensions"):
+        cube = {
+            "name": "orders",
+            "baseObject": "orders",
+            "measures": [],
+            "dimensions": [],
+            "timeDimensions": [],
+        }
+        cube[key] = [{"name": 1, "type": "VARCHAR"}]
+        mdl_file.write_text(
+            json.dumps({"catalog": "c", "schema": "s", "cubes": [cube]})
+        )
+        result = runner.invoke(app, ["cube", "list", "--mdl", str(mdl_file)])
+        assert result.exit_code == 1, key
+        assert "malformed cubes" in result.output, key
+        assert "name is not a string" in result.output, key
+        assert "wren context build" in result.output, key
+
+
 def test_cube_query_missing_required(tmp_path):
     mdl = _make_mdl(tmp_path)
     result = runner.invoke(
@@ -366,3 +443,32 @@ def test_cube_query_missing_required(tmp_path):
     )
     assert result.exit_code == 1
     assert "required" in result.output.lower()
+
+
+def test_cube_list_null_member_list_fails_loud(tmp_path):
+    """Present-but-null dimensions must not TypeError in list join."""
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    mdl_file.write_text(
+        json.dumps(
+            {
+                "catalog": "c",
+                "schema": "s",
+                "cubes": [
+                    {
+                        "name": "orders",
+                        "baseObject": "orders",
+                        "measures": [],
+                        "dimensions": None,
+                        "timeDimensions": [],
+                    }
+                ],
+            }
+        )
+    )
+    result = runner.invoke(app, ["cube", "list", "--mdl", str(mdl_file)])
+    assert result.exit_code == 1
+    assert "malformed cubes" in result.output
+    assert "dimensions is null" in result.output
+    assert "cubes/*/metadata.yml" in result.output

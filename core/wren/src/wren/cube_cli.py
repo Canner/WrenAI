@@ -150,7 +150,77 @@ def _load_manifest_dict(mdl: str | None) -> dict:
     if not isinstance(manifest, dict):
         typer.echo("Error: MDL JSON must be an object.", err=True)
         raise typer.Exit(1)
+    _require_cubes_list(manifest)
     return manifest
+
+
+def _require_cubes_list(manifest: dict) -> list:
+    """mdl.json is a build artifact: fail loud on malformed cubes.
+
+    Project YAML is normalised in load_cubes + reported by validate_project.
+    The CLI reads target/mdl.json from `wren context build`. Skipping bad
+    rows here would hide a producer bug and look like an empty listing.
+    """
+    if "cubes" not in manifest or manifest["cubes"] is None:
+        return []
+    cubes = manifest["cubes"]
+    if not isinstance(cubes, list):
+        typer.echo(
+            f"Error: malformed cubes in mdl.json (cubes is not a list, got {type(cubes).__name__}).\n"
+            "  Hint: re-run `wren context build`.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    member_hint = (
+        "  Hint: fix the cube definition in cubes/*/metadata.yml, "
+        "then re-run `wren context build`."
+    )
+    for i, cube in enumerate(cubes):
+        if not isinstance(cube, dict):
+            typer.echo(
+                f"Error: malformed cubes in mdl.json (entry {i} is not an object).\n"
+                "  Hint: re-run `wren context build`.",
+                err=True,
+            )
+            raise typer.Exit(1)
+        for key in ("measures", "dimensions", "timeDimensions"):
+            # Explicit null must not slip through: list_cubes joins members
+            # with cube.get(key, []), which still returns None when the key
+            # is present and null — bare TypeError two frames later.
+            if key not in cube:
+                continue
+            members = cube[key]
+            if members is None or not isinstance(members, list):
+                name = cube.get("name", f"entry {i}")
+                kind = (
+                    "null"
+                    if members is None
+                    else f"not a list (got {type(members).__name__})"
+                )
+                typer.echo(
+                    f"Error: malformed cubes in mdl.json ({name!r} {key} is {kind}).\n"
+                    f"{member_hint}",
+                    err=True,
+                )
+                raise typer.Exit(1)
+            for j, item in enumerate(members):
+                if not isinstance(item, dict):
+                    name = cube.get("name", f"entry {i}")
+                    typer.echo(
+                        f"Error: malformed cubes in mdl.json ({name!r} {key}[{j}] is not an object).\n"
+                        f"{member_hint}",
+                        err=True,
+                    )
+                    raise typer.Exit(1)
+                if not isinstance(item.get("name"), str):
+                    name = cube.get("name", f"entry {i}")
+                    typer.echo(
+                        f"Error: malformed cubes in mdl.json ({name!r} {key}[{j}].name is not a string).\n"
+                        f"{member_hint}",
+                        err=True,
+                    )
+                    raise typer.Exit(1)
+    return cubes
 
 
 # ── wren cube list ─────────────────────────────────────────────────────────
@@ -160,7 +230,7 @@ def _load_manifest_dict(mdl: str | None) -> dict:
 def list_cubes(mdl: _MdlOpt = None) -> None:
     """List all cubes defined in the project."""
     manifest = _load_manifest_dict(mdl)
-    cubes = manifest.get("cubes", []) or []
+    cubes = manifest.get("cubes") or []
     if not cubes:
         typer.echo("No cubes defined.")
         return
