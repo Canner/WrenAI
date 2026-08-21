@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/Canner/WrenAI/compare/wren-core-base-v0.3.1...wren-core-base-v0.3.2) (2026-08-21)
+
+
+### Miscellaneous Chores
+
+* **wren-core-base:** Synchronize wren-rust-core versions
+
 ## [0.3.1](https://github.com/Canner/WrenAI/compare/wren-core-base-v0.3.0...wren-core-base-v0.3.1) (2026-08-10)
 
 
