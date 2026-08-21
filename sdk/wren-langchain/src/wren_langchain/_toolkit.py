@@ -58,24 +58,42 @@ class WrenToolkit:
 
     # ── Direct Python API ──────────────────────────────────────────────────
 
-    def query(self, sql: str, limit: int | None = None) -> pa.Table:
-        """Execute SQL through the Wren context layer. Returns a pyarrow Table."""
+    def query(
+        self,
+        sql: str,
+        limit: int | None = None,
+        properties: dict[str, Any] | None = None,
+    ) -> pa.Table:
+        """Execute SQL through the Wren context layer. Returns a pyarrow Table.
+
+        ``properties`` carries MDL session properties and is forwarded to the
+        engine's planning path. A model guarded by row-level access control
+        needs the value its rule declares required, so without it planning
+        fails and the model cannot be read through this method at all.
+        """
         engine = self._build_engine()
         try:
-            result = engine.query(sql, limit=limit)
+            result = engine.query(sql, limit=limit, properties=properties)
         finally:
             self._connector_cache = engine._connector
         return result
 
-    def dry_plan(self, sql: str) -> str:
-        """Plan SQL through MDL and return the expanded SQL in target dialect."""
-        return self._build_engine().dry_plan(sql)
+    def dry_plan(self, sql: str, properties: dict[str, Any] | None = None) -> str:
+        """Plan SQL through MDL and return the expanded SQL in target dialect.
 
-    def dry_run(self, sql: str) -> None:
-        """Validate SQL by planning and asking the DB to plan it without executing."""
+        ``properties`` carries MDL session properties (see :meth:`query`); RLAC
+        predicates are injected during planning, so they apply here too.
+        """
+        return self._build_engine().dry_plan(sql, properties=properties)
+
+    def dry_run(self, sql: str, properties: dict[str, Any] | None = None) -> None:
+        """Validate SQL by planning and asking the DB to plan it without executing.
+
+        ``properties`` carries MDL session properties (see :meth:`query`).
+        """
         engine = self._build_engine()
         try:
-            engine.dry_run(sql)
+            engine.dry_run(sql, properties=properties)
         finally:
             self._connector_cache = engine._connector
 
