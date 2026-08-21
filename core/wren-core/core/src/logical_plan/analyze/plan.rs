@@ -1084,14 +1084,14 @@ impl ModelSourceNode {
                     }
                     // Prune columns the caller cannot access under column-level
                     // security instead of denying. This is an *implicit* all-columns
-                    // expansion (a `count(*)`, or the throwaway inner plan built for
-                    // a model scan referenced with a table alias, whose required
-                    // columns are keyed by the alias so the model is wildcard-
-                    // expanded). A protected column the query never explicitly
-                    // selected must be dropped here — matching `SELECT *` semantics —
-                    // not turned into a hard permission error. Explicit references
-                    // still deny, because they arrive as named required fields (the
-                    // non-wildcard branch / ModelPlanNodeBuilder::build), not here.
+                    // expansion: the scan reached `ModelPlanNodeBuilder` with no
+                    // required fields (a `count(*)`-shaped query), so a wildcard was
+                    // substituted for them. A protected column the query never
+                    // explicitly selected must be dropped here — matching `SELECT *`
+                    // semantics — not turned into a hard permission error. Explicit
+                    // references still deny, because they arrive as named required
+                    // fields (the non-wildcard branch / ModelPlanNodeBuilder::build),
+                    // not here.
                     let (is_valid, _) = validate_clac_rule(
                         model.name(),
                         &column,
