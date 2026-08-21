@@ -406,9 +406,7 @@ def test_cube_describe_malformed_cubes_fails_loud(tmp_path):
     target.mkdir(parents=True)
     mdl_file = target / "mdl.json"
     mdl_file.write_text(json.dumps({"catalog": "c", "schema": "s", "cubes": "abc"}))
-    result = runner.invoke(
-        app, ["cube", "describe", "orders", "--mdl", str(mdl_file)]
-    )
+    result = runner.invoke(app, ["cube", "describe", "orders", "--mdl", str(mdl_file)])
     assert result.exit_code == 1
     assert "malformed cubes" in result.output
 

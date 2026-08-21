@@ -192,7 +192,11 @@ def _require_cubes_list(manifest: dict) -> list:
             members = cube[key]
             if members is None or not isinstance(members, list):
                 name = cube.get("name", f"entry {i}")
-                kind = "null" if members is None else f"not a list (got {type(members).__name__})"
+                kind = (
+                    "null"
+                    if members is None
+                    else f"not a list (got {type(members).__name__})"
+                )
                 typer.echo(
                     f"Error: malformed cubes in mdl.json ({name!r} {key} is {kind}).\n"
                     f"{member_hint}",

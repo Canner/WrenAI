@@ -1232,7 +1232,6 @@ def test_load_cubes_drops_non_dict_member_entries(tmp_path):
     assert cubes[0]["dimensions"] == []
 
 
-
 def test_normalise_cube_null_member_lists():
     """YAML `dimensions:` (null) must become [] so mdl.json never carries null."""
     from wren.context import _normalise_cube_member_lists
@@ -1272,9 +1271,7 @@ def test_validate_project_reports_malformed_cube_members(tmp_path):
     _write_cube(
         tmp_path,
         "om",
-        "name: order_metrics\n"
-        "base_object: orders\n"
-        "measures: nope\n",
+        "name: order_metrics\nbase_object: orders\nmeasures: nope\n",
     )
     errors = validate_project(tmp_path)
     msgs = [e.message for e in errors]
@@ -1862,7 +1859,9 @@ def test_validate_project_reports_non_dict_relationship_entries(tmp_path: Path) 
 
 def test_validate_project_reports_relationships_not_list(tmp_path: Path) -> None:
     (tmp_path / "wren_project.yml").write_text("schema_version: 1\n", encoding="utf-8")
-    (tmp_path / "relationships.yml").write_text("relationships: nope\n", encoding="utf-8")
+    (tmp_path / "relationships.yml").write_text(
+        "relationships: nope\n", encoding="utf-8"
+    )
     errors = validate_project(tmp_path)
     msgs = [e.message for e in errors]
     assert any("'relationships' must be a list, got str" in m for m in msgs)
@@ -1886,16 +1885,11 @@ def test_validate_project_relationship_indices_match_file(tmp_path: Path) -> Non
     """Junk at [0] must not renumber a later unnamed relationship's warnings."""
     (tmp_path / "wren_project.yml").write_text("schema_version: 1\n", encoding="utf-8")
     (tmp_path / "relationships.yml").write_text(
-        "relationships:\n"
-        "  - 42\n"
-        "  - models: [a, b]\n"
-        "    condition: a.id = b.id\n",
+        "relationships:\n  - 42\n  - models: [a, b]\n    condition: a.id = b.id\n",
         encoding="utf-8",
     )
     errors = validate_project(tmp_path)
-    diagnostics = [
-        f"{getattr(e, 'path', '')} {e.message}" for e in errors
-    ]
+    diagnostics = [f"{getattr(e, 'path', '')} {e.message}" for e in errors]
     assert any("got int" in diagnostic for diagnostic in diagnostics)
     assert any(
         "relationships[1]" in diagnostic and "join_type" in diagnostic
