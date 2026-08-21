@@ -18,6 +18,7 @@ from wren.connector.mysql import (
     _build_mysql_connect_kwargs,
     _mysql_blob_codes,
     _mysql_decimal_codes,
+    _mysql_decimal_type_for_values,
     _mysql_field_type_map,
     _mysql_string_codes,
     _mysql_unsigned_variant_map,
@@ -180,9 +181,7 @@ def test_decimal_type_passthrough() -> None:
     # DECIMAL(12, 4) signed → MySQLdb description length = 12 + 1 (sign) + 1
     # (decimal point) = 14.
     t = _arrow_decimal_from_mysql_field(14, 4, is_unsigned=False)
-    assert pa.types.is_decimal(t)
-    assert t.precision == 12
-    assert t.scale == 4
+    assert t == pa.decimal128(12, 4)
 
 
 def test_decimal_type_unsigned_recovers_precision() -> None:
@@ -204,16 +203,28 @@ def test_decimal_type_high_scale() -> None:
     precision >= 30."""
     # DECIMAL(38, 30) signed → length = 38 + 1 + 1 = 40.
     t = _arrow_decimal_from_mysql_field(40, 30, is_unsigned=False)
-    assert t.precision == 38
-    assert t.scale == 30
+    assert t == pa.decimal128(38, 30)
 
 
-def test_decimal_type_clamps_above_arrow_max_precision() -> None:
-    """MySQL precision tops at 65; Arrow decimal128 tops at 38. We clamp."""
+def test_decimal_type_precision_39_starts_decimal256() -> None:
+    # DECIMAL(39, 30) signed → length = 39 + 1 + 1 = 41.
+    t = _arrow_decimal_from_mysql_field(41, 30, is_unsigned=False)
+    assert t == pa.decimal256(39, 30)
+
+
+def test_decimal_type_above_decimal128_uses_decimal256() -> None:
     # DECIMAL(65, 30) signed → length = 65 + 1 + 1 = 67.
     t = _arrow_decimal_from_mysql_field(67, 30, is_unsigned=False)
-    assert t.precision == 38
-    assert t.scale == 30
+    assert t == pa.decimal256(65, 30)
+
+
+def test_decimal_type_preserves_doris_decimal256_maximum() -> None:
+    # Doris DECIMAL(76, 76) signed → length = 76 + 1 + 1 = 78.
+    t = _arrow_decimal_from_mysql_field(78, 76, is_unsigned=False)
+    value_decimal = "0." + "9" * 76
+
+    assert t == pa.decimal256(76, 76)
+    assert str(_build_mysql_column([value_decimal], t)[0].as_py()) == value_decimal
 
 
 def test_decimal_type_none_uses_fallback() -> None:
@@ -227,6 +238,106 @@ def test_decimal_type_scale_not_greater_than_precision() -> None:
     # Result must keep scale <= precision so PyArrow accepts the type.
     t = _arrow_decimal_from_mysql_field(7, 30, is_unsigned=False)
     assert t.scale <= t.precision
+
+
+# ── value-aware DECIMAL conversion ────────────────────────────────
+
+
+def test_decimal_column_widens_for_concrete_integer_digits() -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    value = Decimal("1" + "0" * 65)
+    arrow_type = _mysql_decimal_type_for_values(66, 0, False, [value])
+    column = _build_mysql_column([value], arrow_type)
+
+    assert arrow_type == pa.decimal256(66, 0)
+    assert column.to_pylist() == [value]
+
+
+def test_decimal_column_widens_scale_without_losing_integer_capacity() -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    value = Decimal("12345678.1234")
+    # Signed DECIMAL(10, 2): 10 digits + sign + decimal point.
+    arrow_type = _mysql_decimal_type_for_values(12, 2, False, [value])
+    column = _build_mysql_column([value], arrow_type)
+
+    assert arrow_type == pa.decimal128(12, 4)
+    assert column.to_pylist() == [value]
+
+
+def test_decimal_column_rebalances_metadata_scale_for_observed_integer_digits() -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    value = Decimal("12")
+    # Signed DECIMAL(76, 75) reserves one integer digit. The observed value
+    # needs two, so retain the maximum scale that still fits Decimal256.
+    arrow_type = _mysql_decimal_type_for_values(78, 75, False, [value])
+    column = _build_mysql_column([value], arrow_type)
+
+    assert arrow_type == pa.decimal256(76, 74)
+    assert column.to_pylist() == [value]
+
+
+def test_decimal_column_rebalances_integer_capacity_for_observed_scale() -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    value = Decimal("0.12")
+    # Signed DECIMAL(76, 1) reserves 75 integer digits. The observed value
+    # needs scale 2, so release unused integer capacity to preserve it exactly.
+    arrow_type = _mysql_decimal_type_for_values(78, 1, False, [value])
+    column = _build_mysql_column([value], arrow_type)
+
+    assert arrow_type == pa.decimal256(76, 2)
+    assert column.to_pylist() == [value]
+
+
+def test_decimal_column_above_arrow_limit_uses_exact_strings() -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    values = [Decimal("9" * 77), None, Decimal("9" * 80)]
+    arrow_type = _mysql_decimal_type_for_values(66, 0, False, values)
+    column = _build_mysql_column(values, arrow_type)
+
+    assert arrow_type == pa.string()
+    assert column.to_pylist() == [
+        "9" * 77,
+        None,
+        "9" * 80,
+    ]
+
+
+def test_decimal_unparseable_value_uses_exact_strings() -> None:
+    values = [b"1.5"]
+    arrow_type = _mysql_decimal_type_for_values(4, 1, False, values)
+    column = _build_mysql_column(values, arrow_type)
+
+    assert arrow_type == pa.string()
+    assert column.to_pylist() == ["1.5"]
+
+
+def test_decimal_metadata_above_arrow_limit_with_fitting_value_stays_numeric() -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    value = Decimal("9" * 65)
+    # Signed precision 89 is not representable in Arrow Decimal256.
+    arrow_type = _mysql_decimal_type_for_values(90, 0, False, [value])
+    column = _build_mysql_column([value], arrow_type)
+
+    assert arrow_type == pa.decimal256(76, 0)
+    assert column.to_pylist() == [value]
+
+
+@pytest.mark.parametrize("rows", [[], [(None,)]], ids=["empty", "all_null"])
+def test_decimal_metadata_above_arrow_limit_without_values_stays_numeric(
+    rows: list[tuple],
+) -> None:
+    values = [row[0] for row in rows]
+    arrow_type = _mysql_decimal_type_for_values(90, 0, False, values)
+    column = _build_mysql_column(values, arrow_type)
+
+    assert arrow_type == pa.decimal256(76, 0)
+    assert column.to_pylist() == values
 
 
 # ── TIME → duration round-trip ────────────────────────────────────────────

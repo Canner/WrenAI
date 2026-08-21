@@ -118,6 +118,72 @@ def test_decimal_large_scale(connector: MySqlConnector) -> None:
     assert tbl.column("a").to_pylist()[0] == Decimal("12345.123456789012345")
 
 
+def test_decimal_above_decimal128_uses_decimal256(connector: MySqlConnector) -> None:
+    value = Decimal(
+        "12345678901234567890123456789012345.123456789012345678901234567890"
+    )
+
+    _exec(connector, "DROP TABLE IF EXISTS t_dec_wide")
+    _exec(connector, "CREATE TABLE t_dec_wide (a DECIMAL(65, 30))")
+    with closing(connector.connection.cursor()) as cursor:
+        cursor.execute("INSERT INTO t_dec_wide VALUES (%s)", (value,))
+
+    tbl = connector.query("SELECT a FROM t_dec_wide")
+
+    assert tbl.schema.field("a").type == pa.decimal256(65, 30)
+    assert tbl.column("a").to_pylist() == [value]
+
+
+def test_decimal_addition_widens_for_concrete_66_digit_value(
+    connector: MySqlConnector,
+) -> None:
+    left = Decimal("9" * 65)
+    expected = left + 1
+
+    tbl = connector.query(
+        f"SELECT CAST('{left}' AS DECIMAL(65, 0)) + CAST('1' AS DECIMAL(1, 0)) AS total"
+    )
+
+    assert tbl.schema.field("total").type == pa.decimal256(66, 0)
+    assert tbl.column("total").to_pylist() == [expected]
+
+
+@pytest.mark.parametrize("left_digits,right_digits", [(65, 12), (40, 40)])
+def test_decimal_multiplication_above_arrow_limit_uses_exact_string(
+    connector: MySqlConnector,
+    left_digits: int,
+    right_digits: int,
+) -> None:
+    left = Decimal("9" * left_digits)
+    right = Decimal("9" * right_digits)
+    expected = str(int(left) * int(right))
+
+    tbl = connector.query(
+        f"SELECT CAST('{left}' AS DECIMAL({left_digits}, 0)) "
+        f"* CAST('{right}' AS DECIMAL({right_digits}, 0)) AS product"
+    )
+
+    assert len(expected) in {77, 80}
+    assert tbl.schema.field("product").type == pa.string()
+    assert tbl.column("product").to_pylist() == [expected]
+
+
+def test_decimal_wide_sum_metadata_with_fitting_value_stays_numeric(
+    connector: MySqlConnector,
+) -> None:
+    value = Decimal("9" * 65)
+
+    tbl = connector.query(
+        "SELECT SUM(value) AS total FROM "
+        f"(SELECT CAST('{value}' AS DECIMAL(65, 0)) AS value) AS values_"
+    )
+
+    # MySQL reports precision 88 for SUM(DECIMAL(65, 0)). The concrete value
+    # fits Decimal256, so retain a numeric schema at Arrow's precision limit.
+    assert tbl.schema.field("total").type == pa.decimal256(76, 0)
+    assert tbl.column("total").to_pylist() == [value]
+
+
 def test_float_and_double(connector: MySqlConnector) -> None:
     _exec(connector, "DROP TABLE IF EXISTS t_real")
     _exec(connector, "CREATE TABLE t_real (a FLOAT, b DOUBLE)")
