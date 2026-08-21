@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.13.4](https://github.com/Canner/WrenAI/compare/wren-v0.13.3...wren-v0.13.4) (2026-08-21)
+
+
+### Bug Fixes
+
+* **context:** normalise model columns in load_models ([#2614](https://github.com/Canner/WrenAI/issues/2614)) ([d48498f](https://github.com/Canner/WrenAI/commit/d48498fd553e0aa6fd6066f127ff7732335f6d37))
+* **memory:** validate imported query pair field types ([#2656](https://github.com/Canner/WrenAI/issues/2656)) ([2e87902](https://github.com/Canner/WrenAI/commit/2e87902ed6911c67bf9520478b594d56957923a5))
+* **wren:** accept only read-only SELECT statements in the query path ([#2679](https://github.com/Canner/WrenAI/issues/2679)) ([ce9513d](https://github.com/Canner/WrenAI/commit/ce9513d68ae73887ce858940d58fe26b4dda12b7))
+
 ## [0.13.3](https://github.com/Canner/WrenAI/compare/wren-v0.13.2...wren-v0.13.3) (2026-08-18)
 
 
