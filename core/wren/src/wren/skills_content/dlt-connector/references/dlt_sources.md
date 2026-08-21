@@ -16,8 +16,27 @@
 | Zendesk | Email + API Token | 2 fields | `SOURCES__ZENDESK__SUBDOMAIN`, `__EMAIL`, `__PASSWORD` |
 | Shopify | Admin API Access Token | token string | `SOURCES__SHOPIFY__PRIVATE_APP_PASSWORD` |
 | Airtable | Personal Access Token | `pat...` | `SOURCES__AIRTABLE__ACCESS_TOKEN` |
+| Xquik | API Key | `xq_...` | `XQUIK_API_KEY` |
 
 ## Pipeline Script Templates
+
+### Xquik
+
+Use the bundled loader to put public X search results into DuckDB:
+
+```bash
+export XQUIK_API_KEY="your-key"
+wren skills get dlt-connector --script load_xquik > load_xquik.py
+python load_xquik.py --query 'from:Anthropic Claude' --limit 100
+```
+
+The loader sends the API key in the `x-api-key` header. It requests the
+`2026-04-29` response contract and follows `next_cursor`. It applies `--limit`
+to both the Xquik request and dlt extraction. It merges posts on their `id`, so
+rerunning the same search updates existing rows instead of duplicating them.
+
+The default pipeline creates `xquik.duckdb` with a `tweets` table. Run the
+bundled `introspect_dlt` script against that file to generate the Wren project.
 
 ### HubSpot
 
