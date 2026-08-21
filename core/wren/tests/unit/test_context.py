@@ -1391,9 +1391,7 @@ def test_plan_upgrade_v1_to_v2_requires_portable_path_component(tmp_path, entity
 
 
 @pytest.mark.parametrize("statement", [42, 0])
-def test_plan_upgrade_v1_to_v2_rejects_non_string_view_statement(
-    tmp_path, statement
-):
+def test_plan_upgrade_v1_to_v2_rejects_non_string_view_statement(tmp_path, statement):
     _make_v1_project(tmp_path)
     _set_v1_view_statement(tmp_path, statement)
     source_contents = _snapshot_v1_sources(tmp_path)
@@ -1603,6 +1601,234 @@ def test_validate_project_reports_non_list_v1_views_container(
     assert not [f for f in plan.files_created if f.startswith("views/")]
     apply_upgrade(tmp_path, plan)
     assert not (tmp_path / "views").exists()
+
+
+# ── Regression: model columns non-list / non-dict entries ─────────────────
+
+
+def test_load_models_v2_normalises_non_list_columns(tmp_path):
+    """columns: scalar is dropped to [] by the loader."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\ntable_reference:\n  table: orders\ncolumns: id, customer_id\n"
+    )
+    models = load_models(tmp_path)
+    assert len(models) == 1
+    assert models[0]["columns"] == []
+
+
+def test_load_models_v2_omits_missing_columns_key(tmp_path):
+    """Absent columns key stays absent (no empty list injection)."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text("name: orders\ntable_reference:\n  table: orders\n")
+    models = load_models(tmp_path)
+    assert len(models) == 1
+    assert "columns" not in models[0]
+
+
+def test_load_models_v2_drops_non_dict_column_entries(tmp_path):
+    """Bare string / junk column entries are not coerced to column names."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "customers"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: customers\n"
+        "table_reference:\n  table: customers\n"
+        "columns:\n"
+        "  - name: id\n    type: INTEGER\n"
+        "  - bare\n"
+        "  - 3\n"
+    )
+    models = load_models(tmp_path)
+    assert len(models) == 1
+    assert models[0]["columns"] == [{"name": "id", "type": "INTEGER"}]
+
+
+def test_validate_project_reports_non_list_model_columns(tmp_path):
+    """validate_project reports hand-edited non-list columns (loader already empty)."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\ntable_reference:\n  table: orders\ncolumns: id, customer_id\n"
+    )
+    errors = validate_project(tmp_path)
+    msgs = [f"{e.path}: {e.message}" for e in errors]
+    assert any("must be a list, got str" in m for m in msgs), msgs
+    assert any("models/orders/metadata.yml > orders > columns" in m for m in msgs), msgs
+
+
+def test_validate_project_reports_null_model_columns(tmp_path):
+    """Explicit `columns:` (YAML null) is present and non-list — report it."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\ntable_reference:\n  table: orders\ncolumns:\n"
+    )
+    errors = validate_project(tmp_path)
+    msgs = [f"{e.path}: {e.message}" for e in errors]
+    assert any("columns" in m and "must be a list, got NoneType" in m for m in msgs), (
+        msgs
+    )
+
+
+def test_validate_project_reports_non_dict_column_entries(tmp_path):
+    """Bare-string column entries must error, not vanish silently."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n"
+        "  - name: id\n    type: INTEGER\n"
+        "  - bare_column\n"
+    )
+    errors = validate_project(tmp_path)
+    msgs = [f"{e.path}: {e.message}" for e in errors]
+    assert any(
+        "columns[1]" in m and "column entry must be an object" in m for m in msgs
+    ), msgs
+
+
+def test_validate_project_duplicate_model_names_do_not_crosswire_columns(tmp_path):
+    """Duplicate model names must not share/steal each other's raw column lists."""
+    _make_v2_project(tmp_path)
+    for dirname, columns_yaml, clean in (
+        (
+            "a",
+            "  - bare_junk\n  - type: INTEGER\n  - name: ok\n    type: INT\n",
+            False,
+        ),
+        (
+            "b",
+            "  - name: only\n    type: INT\n",
+            True,
+        ),
+    ):
+        d = tmp_path / "models" / dirname
+        d.mkdir(parents=True)
+        (d / "metadata.yml").write_text(
+            f"name: orders\ntable_reference:\n  table: orders\ncolumns:\n{columns_yaml}"
+        )
+    errors = validate_project(tmp_path)
+    diagnostics = [f"{e.path}: {e.message}" for e in errors]
+    assert any("duplicate model name" in d for d in diagnostics), diagnostics
+    # Real errors on a/ must remain.
+    assert any(
+        "models/a/metadata.yml" in d
+        and "columns[0]" in d
+        and "column entry must be an object" in d
+        for d in diagnostics
+    ), diagnostics
+    assert any(
+        "models/a/metadata.yml" in d
+        and "columns[1]" in d
+        and "column missing 'name'" in d
+        for d in diagnostics
+    ), diagnostics
+    # No phantom column errors against clean b/.
+    b_col_errs = [
+        d
+        for d in diagnostics
+        if "models/b/metadata.yml" in d
+        and ("column entry must be an object" in d or "column missing 'name'" in d)
+    ]
+    assert b_col_errs == [], b_col_errs
+
+
+def test_plan_upgrade_v1_to_v2_rejects_malformed_model_columns(tmp_path):
+    """v1→v2 must abort before discarding non-list / non-object columns."""
+    _make_v1_project(tmp_path)
+    models_dir = tmp_path / "models"
+    (models_dir / "orders.yml").write_text(
+        "name: orders\ntable_reference:\n  table: orders\ncolumns: id, customer_id\n",
+        encoding="utf-8",
+    )
+    (models_dir / "items.yml").write_text(
+        "name: items\n"
+        "table_reference:\n  table: items\n"
+        "columns:\n"
+        "  - name: id\n    type: INTEGER\n"
+        "  - bare_column\n",
+        encoding="utf-8",
+    )
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="malformed model columns"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+    # Source content still intact (not normalised away).
+    assert "id, customer_id" in (models_dir / "orders.yml").read_text(encoding="utf-8")
+    assert "bare_column" in (models_dir / "items.yml").read_text(encoding="utf-8")
+
+
+def test_validate_project_column_indices_match_file(tmp_path):
+    """Junk at [0] must not renumber a later unnamed column's error."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n"
+        "  - bare_junk\n"
+        "  - type: INTEGER\n"
+        "  - name: amt\n    type: DOUBLE\n"
+    )
+    errors = validate_project(tmp_path)
+    diagnostics = [f"{e.path}: {e.message}" for e in errors]
+    assert any(
+        "columns[0]" in d and "column entry must be an object" in d for d in diagnostics
+    ), diagnostics
+    assert any(
+        "columns[1]" in d and "column missing 'name'" in d for d in diagnostics
+    ), diagnostics
+    # Must not report missing-name against the renumbered filtered index 0.
+    missing_name_paths = [d for d in diagnostics if "column missing 'name'" in d]
+    assert all("columns[0]" not in d for d in missing_name_paths), missing_name_paths
+
+
+def test_validate_project_v1_model_paths_use_flat_yml(tmp_path):
+    """v1 errors should label models/<stem>.yml, not models/<stem>/metadata.yml."""
+    (tmp_path / "wren_project.yml").write_text("schema_version: 1\n", encoding="utf-8")
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    (models_dir / "orders.yml").write_text(
+        "name: orders\ncolumns: id, customer_id\n",
+        encoding="utf-8",
+    )
+    errors = validate_project(tmp_path)
+    diagnostics = [f"{e.path} {e.message}" for e in errors]
+    assert any(
+        "models/orders.yml > orders > columns" in d and "must be a list" in d
+        for d in diagnostics
+    ), diagnostics
+    assert not any("models/orders/metadata.yml" in d for d in diagnostics), diagnostics
+
+
+def test_validate_project_uses_dir_name_when_model_name_missing(tmp_path):
+    """v2 error path should use models/<dir>, not stem 'metadata'."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "table_reference:\n  table: orders\ncolumns: not-a-list\n"
+    )
+    errors = validate_project(tmp_path)
+    msgs = [f"{e.path}: {e.message}" for e in errors]
+    assert any(
+        "models/orders/metadata.yml > orders > columns" in m and "must be a list" in m
+        for m in msgs
+    ), msgs
 
 
 def test_build_manifest_drops_v1_views_yml_non_mapping_entries(tmp_path):
@@ -1991,7 +2217,9 @@ def test_validate_project_reports_non_dict_relationship_entries(tmp_path: Path) 
 
 def test_validate_project_reports_relationships_not_list(tmp_path: Path) -> None:
     (tmp_path / "wren_project.yml").write_text("schema_version: 1\n", encoding="utf-8")
-    (tmp_path / "relationships.yml").write_text("relationships: nope\n", encoding="utf-8")
+    (tmp_path / "relationships.yml").write_text(
+        "relationships: nope\n", encoding="utf-8"
+    )
     errors = validate_project(tmp_path)
     msgs = [e.message for e in errors]
     assert any("'relationships' must be a list, got str" in m for m in msgs)
@@ -2015,16 +2243,11 @@ def test_validate_project_relationship_indices_match_file(tmp_path: Path) -> Non
     """Junk at [0] must not renumber a later unnamed relationship's warnings."""
     (tmp_path / "wren_project.yml").write_text("schema_version: 1\n", encoding="utf-8")
     (tmp_path / "relationships.yml").write_text(
-        "relationships:\n"
-        "  - 42\n"
-        "  - models: [a, b]\n"
-        "    condition: a.id = b.id\n",
+        "relationships:\n  - 42\n  - models: [a, b]\n    condition: a.id = b.id\n",
         encoding="utf-8",
     )
     errors = validate_project(tmp_path)
-    diagnostics = [
-        f"{getattr(e, 'path', '')} {e.message}" for e in errors
-    ]
+    diagnostics = [f"{getattr(e, 'path', '')} {e.message}" for e in errors]
     assert any("got int" in diagnostic for diagnostic in diagnostics)
     assert any(
         "relationships[1]" in diagnostic and "join_type" in diagnostic

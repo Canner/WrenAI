@@ -94,6 +94,33 @@ def test_build_includes_model_inventory(tmp_path: Path) -> None:
     assert "duckdb" in result.output
 
 
+def test_format_inventory_stringifies_non_string_column_names() -> None:
+    """Non-string column names (YAML ``name: 3``) must not crash join."""
+    from wren.genbi.composer import _format_model_inventory
+
+    models = [{"name": "customers", "columns": [{"name": 3}, {"name": "id"}]}]
+    assert _format_model_inventory(models) == "- **customers**: 3, id"
+
+
+def test_build_inventory_stringifies_non_string_column_names(tmp_path: Path) -> None:
+    """compose_build_instruction survives non-string column names."""
+    from wren.genbi.composer import compose_build_instruction
+
+    models = [
+        {"name": "customers", "columns": [{"name": 3}, {"name": "id"}]},
+    ]
+    text = compose_build_instruction(
+        app_name="demo",
+        data_mode="snapshot",
+        user_prompt="hi",
+        mdl_path=tmp_path / "mdl.json",
+        app_dir=tmp_path / "app",
+        models=models,
+        data_source="duckdb",
+    )
+    assert "- **customers**: 3, id" in text
+
+
 def test_build_includes_wasm_wiring_and_final_steps(tmp_path: Path) -> None:
     project = _make_project(tmp_path)
 

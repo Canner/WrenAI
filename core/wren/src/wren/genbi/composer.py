@@ -52,12 +52,19 @@ def _data_mode_guidance(data_mode: str) -> str:
 
 
 def _format_model_inventory(models: list[dict]) -> str:
-    """One markdown bullet per model with its column names."""
+    """One markdown bullet per model with its column names.
+
+    Callers pass models from ``load_models`` (``columns`` already
+    ``list[dict]``). Coerce each ``name`` with ``str(...)`` so a non-string
+    YAML name (e.g. ``name: 3``) cannot crash ``", ".join``.
+    """
     if not models:
         return "- (no models found — run `wren context build` first)"
     lines = []
     for model in models:
-        cols = ", ".join(c.get("name", "?") for c in model.get("columns", []))
+        raw_cols = model.get("columns") or []
+        names = [str(c.get("name", "?")) for c in raw_cols]
+        cols = ", ".join(names)
         lines.append(f"- **{model.get('name', '?')}**: {cols}")
     return "\n".join(lines)
 
