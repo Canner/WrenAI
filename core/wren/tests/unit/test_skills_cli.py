@@ -14,6 +14,7 @@ runner = CliRunner()
 
 
 def _load_script_namespace(name):
+    """Load one bundled Skill script without invoking its CLI entry point."""
     source = skills_delivery.get_script("dlt-connector", name)
     namespace = {"__name__": f"{name}_test"}
     exec(compile(source, f"{name}.py", "exec"), namespace)
@@ -118,6 +119,7 @@ def test_full_does_not_inline_scripts():
 
 
 def test_get_script_returns_source():
+    """Return an executable bundled script by Skill and script name."""
     src = skills_delivery.get_script("dlt-connector", "introspect_dlt")
     assert src.startswith("#!/usr/bin/env python3")
     assert "introspect" in src
@@ -125,12 +127,14 @@ def test_get_script_returns_source():
 
 @pytest.mark.parametrize("name", ["introspect_dlt", "load_xquik"])
 def test_get_script_via_cli(name):
+    """Return each bundled dlt connector script through the CLI."""
     result = runner.invoke(app, ["skills", "get", "dlt-connector", "--script", name])
     assert result.exit_code == 0
     assert "#!/usr/bin/env python3" in result.output
 
 
 def test_xquik_loader_builds_bounded_search_config():
+    """Configure bounded, authenticated Xquik cursor pagination."""
     namespace = _load_script_namespace("load_xquik")
     config = namespace["build_xquik_config"]("from:wrenai", "xq_test", 25)
     client = config["client"]
@@ -162,6 +166,7 @@ def test_xquik_loader_builds_bounded_search_config():
     [("", "xq_test", 1), ("x", "", 1), ("x", "xq_test", 0), ("x", "xq_test", 10_001)],
 )
 def test_xquik_loader_rejects_invalid_inputs(query, api_key, limit):
+    """Reject empty credentials, empty queries, and unsafe result limits."""
     namespace = _load_script_namespace("load_xquik")
     with pytest.raises(ValueError):
         namespace["build_xquik_config"](query, api_key, limit)
@@ -175,6 +180,7 @@ def test_get_unknown_script_errors():
 
 
 def test_list_reports_references_and_scripts():
+    """List every bundled reference and executable Skill script."""
     by_name = {s.name: s for s in skills_delivery.list_skills()}
     assert set(by_name["enrich-context"].references) == {
         "cube_proposals",
