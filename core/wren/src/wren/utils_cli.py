@@ -16,6 +16,7 @@ utils_app = typer.Typer(name="utils", help="Utility commands")
 # report the total but stop naming each one, mirroring context_cli's
 # _WARNING_SUMMARY_THRESHOLD so large batches don't flood stderr.
 _SKIP_REPORT_LIMIT = 10
+_REPR_LIMIT = 120
 
 
 def _skipped_rows(data: object) -> list[tuple[int, object]]:
@@ -53,7 +54,10 @@ def _report_skipped(skipped: list[tuple[int, object]]) -> None:
             err=True,
         )
         for i, v in corrupt[:_SKIP_REPORT_LIMIT]:
-            typer.echo(f"  [{i}] {type(v).__name__}: {v!r:.120}", err=True)
+            value_repr = repr(v)
+            if len(value_repr) > _REPR_LIMIT:
+                value_repr = f"{value_repr[:_REPR_LIMIT]}… ({len(value_repr)} chars)"
+            typer.echo(f"  [{i}] {type(v).__name__}: {value_repr}", err=True)
         remaining = len(corrupt) - _SKIP_REPORT_LIMIT
         if remaining > 0:
             typer.echo(f"  ... and {remaining} more", err=True)
