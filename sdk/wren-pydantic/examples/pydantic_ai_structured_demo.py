@@ -15,8 +15,22 @@ from pathlib import Path
 
 from pydantic import BaseModel
 from pydantic_ai import Agent
+from pydantic_ai.models.openai import OpenAIChatModel
 
 from wren_pydantic import WrenToolkit
+from wren_pydantic.orcarouter import create_orcarouter_model
+
+
+def build_model() -> OpenAIChatModel:
+    """Return an OpenAIChatModel, routed through OrcaRouter when ``ORCAROUTER_API_KEY`` is set.
+
+    OrcaRouter (https://www.orcarouter.ai) is an OpenAI-compatible gateway, so the
+    Pydantic AI ``OpenAIChatModel`` endpoint works. When no OrcaRouter key is present
+    the demo falls back to the default OpenAI model.
+    """
+    if os.environ.get("ORCAROUTER_API_KEY"):
+        return create_orcarouter_model()
+    return OpenAIChatModel("gpt-4o")
 
 
 class TopCustomers(BaseModel):
@@ -33,9 +47,12 @@ def main() -> None:
         print(f"PROJECT_PATH={project_path} not a Wren project", file=sys.stderr)
         sys.exit(1)
 
+    if not (os.environ.get("OPENAI_API_KEY") or os.environ.get("ORCAROUTER_API_KEY")):
+        sys.exit("OPENAI_API_KEY (or ORCAROUTER_API_KEY) is required.")
+
     toolkit = WrenToolkit.from_project(project_path)
     agent = Agent(
-        "openai:gpt-4o",
+        build_model(),
         instructions=toolkit.instructions(),
         toolsets=[toolkit.toolset()],
         output_type=TopCustomers,

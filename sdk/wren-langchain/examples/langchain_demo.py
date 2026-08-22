@@ -18,12 +18,17 @@ Prerequisites
     for a one-shot DuckDB-backed demo project.
   - ``langchain-openai`` installed in the active venv:
         uv pip install langchain-openai
-  - ``OPENAI_API_KEY`` set in the environment.
+  - ``OPENAI_API_KEY`` (OpenAI) **or** ``ORCAROUTER_API_KEY``
+    (OrcaRouter, https://www.orcarouter.ai) set in the environment.
 
 Usage
 =====
     export OPENAI_API_KEY=sk-...
     export PROJECT_PATH=/path/to/your-wren-project
+    python examples/langchain_demo.py
+
+    # Route the agent through the OrcaRouter gateway instead of OpenAI:
+    export ORCAROUTER_API_KEY=sk-orca-...
     python examples/langchain_demo.py
 
     # Custom question:
@@ -63,6 +68,19 @@ except ImportError:
     )
 
 from wren_langchain import WrenToolkit
+from wren_langchain.orcarouter import create_orcarouter_chat_model
+
+
+def build_chat_model() -> ChatOpenAI:
+    """Return a ChatOpenAI, routed through OrcaRouter when ``ORCAROUTER_API_KEY`` is set.
+
+    OrcaRouter (https://www.orcarouter.ai) is an OpenAI-compatible gateway, so any
+    LangChain ``ChatOpenAI`` endpoint works. When no OrcaRouter key is present the
+    demo falls back to the default OpenAI model.
+    """
+    if os.environ.get("ORCAROUTER_API_KEY"):
+        return create_orcarouter_chat_model()
+    return ChatOpenAI(model="gpt-4o", temperature=0)
 
 
 def main() -> None:
@@ -72,8 +90,8 @@ def main() -> None:
             "PROJECT_PATH is required. Example:\n"
             "  PROJECT_PATH=/Users/you/my-wren-project python examples/langchain_demo.py"
         )
-    if not os.environ.get("OPENAI_API_KEY"):
-        sys.exit("OPENAI_API_KEY is required.")
+    if not (os.environ.get("OPENAI_API_KEY") or os.environ.get("ORCAROUTER_API_KEY")):
+        sys.exit("OPENAI_API_KEY (or ORCAROUTER_API_KEY) is required.")
 
     question = os.environ.get(
         "QUESTION",
@@ -96,7 +114,7 @@ def main() -> None:
 
     # 2) Build the agent. Any LangChain-compatible chat model works here.
     agent = create_agent(
-        model=ChatOpenAI(model="gpt-4o", temperature=0),
+        model=build_chat_model(),
         tools=tools,
         system_prompt=prompt,
     )

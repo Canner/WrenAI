@@ -84,6 +84,8 @@ dev = [
   "ruff>=0.4",
   # Tests run real DuckDB + LanceDB integrations, so memory deps are required.
   "wrenai[memory]>=0.13.1",
+  # OrcaRouter gateway factory is tested directly; requires langchain-openai.
+  "langchain-openai>=0.1",
 ]
 
 [project.urls]
