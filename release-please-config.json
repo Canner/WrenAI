@@ -56,19 +56,7 @@
     "core/wren-core-base/manifest-macro": {
       "component": "wren-manifest-macro",
       "release-type": "rust",
-      "bump-minor-pre-major": true,
-      "extra-files": [
-        {
-          "path": "/core/wren-core-py/Cargo.lock",
-          "type": "toml",
-          "jsonpath": "$.package[?(@.name.value=='wren-manifest-macro')].version"
-        },
-        {
-          "path": "/core/wren-core-wasm/Cargo.lock",
-          "type": "toml",
-          "jsonpath": "$.package[?(@.name.value=='wren-manifest-macro')].version"
-        }
-      ]
+      "bump-minor-pre-major": true
     },
     "core/wren-core-base": {
       "component": "wren-core-base",
@@ -79,16 +67,6 @@
           "path": "Cargo.toml",
           "type": "toml",
           "jsonpath": "$.dependencies.wren-manifest-macro.version"
-        },
-        {
-          "path": "/core/wren-core-py/Cargo.lock",
-          "type": "toml",
-          "jsonpath": "$.package[?(@.name.value=='wren-core-base')].version"
-        },
-        {
-          "path": "/core/wren-core-wasm/Cargo.lock",
-          "type": "toml",
-          "jsonpath": "$.package[?(@.name.value=='wren-core-base')].version"
         }
       ]
     },
@@ -111,16 +89,6 @@
           "path": "/core/wren-core-py/Cargo.toml",
           "type": "toml",
           "jsonpath": "$.dependencies.wren-core.version"
-        },
-        {
-          "path": "/core/wren-core-py/Cargo.lock",
-          "type": "toml",
-          "jsonpath": "$.package[?(@.name.value=='wren-semantic-core')].version"
-        },
-        {
-          "path": "/core/wren-core-wasm/Cargo.lock",
-          "type": "toml",
-          "jsonpath": "$.package[?(@.name.value=='wren-semantic-core')].version"
         }
       ]
     }
