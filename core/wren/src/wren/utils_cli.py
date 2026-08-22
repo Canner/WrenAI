@@ -17,6 +17,22 @@ utils_app = typer.Typer(name="utils", help="Utility commands")
 # _WARNING_SUMMARY_THRESHOLD so large batches don't flood stderr.
 _SKIP_REPORT_LIMIT = 10
 
+# Cap on the rendered length of a single listed value. Past this the repr is
+# cut and marked, so a fragment is never mistaken for a complete value.
+_VALUE_REPR_LIMIT = 120
+
+
+def _format_corrupt_value(value: object) -> str:
+    """Render ``value``'s repr, marking it when the length cap cuts it.
+
+    An unmarked cut reads exactly like a short value that happens to end
+    there, so a cut repr also reports the full length it was cut from.
+    """
+    rendered = repr(value)
+    if len(rendered) <= _VALUE_REPR_LIMIT:
+        return rendered
+    return f"{rendered[:_VALUE_REPR_LIMIT]}... ({len(rendered)} chars total)"
+
 
 def _skipped_rows(data: object) -> list[tuple[int, object]]:
     """Return (index, value) for entries parse_types/translate_types will drop.
@@ -53,7 +69,9 @@ def _report_skipped(skipped: list[tuple[int, object]]) -> None:
             err=True,
         )
         for i, v in corrupt[:_SKIP_REPORT_LIMIT]:
-            typer.echo(f"  [{i}] {type(v).__name__}: {v!r:.120}", err=True)
+            typer.echo(
+                f"  [{i}] {type(v).__name__}: {_format_corrupt_value(v)}", err=True
+            )
         remaining = len(corrupt) - _SKIP_REPORT_LIMIT
         if remaining > 0:
             typer.echo(f"  ... and {remaining} more", err=True)
