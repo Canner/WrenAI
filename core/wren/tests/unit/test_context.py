@@ -1461,6 +1461,35 @@ def test_plan_upgrade_v1_to_v2_rejects_duplicate_cube_targets(tmp_path):
         plan_upgrade(tmp_path, target_version=2)
 
 
+def test_plan_upgrade_v1_to_v2_rejects_duplicate_view_names(tmp_path):
+    _make_v1_project(tmp_path)
+    source_contents = _snapshot_v1_sources(tmp_path)
+    (tmp_path / "views.yml").write_text(
+        "views:\n"
+        "  - name: summary\n"
+        "    statement: SELECT 1\n"
+        "  - name: summary\n"
+        "    statement: SELECT 2\n"
+    )
+
+    # Use fresh import to avoid stale class reference after importlib.reload in earlier tests.
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="multiple legacy views"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    assert get_schema_version(tmp_path) == 1
+    assert (tmp_path / "views.yml").exists()
+    for relative_path in (
+        "models/orders.yml",
+        "models/revenue.yml",
+        "cubes/order_metrics.yml",
+    ):
+        assert (tmp_path / relative_path).read_text(
+            encoding="utf-8"
+        ) == source_contents[relative_path]
+
+
 def test_plan_upgrade_v2_to_v3(tmp_path):
     _make_v2_project(tmp_path)
     result = plan_upgrade(tmp_path, target_version=3)

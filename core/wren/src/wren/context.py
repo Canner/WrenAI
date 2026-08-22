@@ -1723,6 +1723,7 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
             deleted.append(f"models/{source_dir}.yml")
 
     # Views: single file → directories
+    seen_view_targets: set[str] = set()
     views = _load_views_v1(project_path)
     for view in views:
         name = view.get("name")
@@ -1736,7 +1737,14 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
             created.append(sql_file.relative_to(project_root).as_posix())
 
         metadata_file = _resolve_upgrade_file(view_dir, "metadata.yml")
-        created.append(metadata_file.relative_to(project_root).as_posix())
+        target = metadata_file.relative_to(project_root).as_posix()
+        if target in seen_view_targets:
+            raise UpgradeError(
+                f"Cannot upgrade: multiple legacy views map to '{target}'"
+            )
+        seen_view_targets.add(target)
+
+        created.append(target)
 
     views_file = project_path / "views.yml"
     if views_file.exists():
