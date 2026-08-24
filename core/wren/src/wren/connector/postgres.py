@@ -287,6 +287,16 @@ class PostgresConnector(ConnectorABC):
                 "use PostgresConnectionInfo instead",
             )
         kwargs = dict(connection_info.kwargs) if connection_info.kwargs else {}
+        # psycopg opens an implicit transaction per statement, so without this a
+        # failed statement leaves the session ``idle in transaction (aborted)``
+        # and every later statement fails with "current transaction is aborted".
+        # A successful statement is no better: the session stays ``idle in
+        # transaction`` for the connector's whole life, holding a snapshot open.
+        # This connector is long-lived and process-shared (``WrenEngine`` caches
+        # it; the MCP server hands one engine to every tool handler), and it only
+        # ever reads, so there is no multi-statement transaction to preserve.
+        # ``setdefault`` keeps an explicit caller-supplied value winning.
+        kwargs.setdefault("autocommit", True)
         self.connection = psycopg.connect(
             host=connection_info.host,
             port=int(connection_info.port),
@@ -301,33 +311,6 @@ class PostgresConnector(ConnectorABC):
         )
         self._closed = False
 
-    def _rollback_after_failure(self) -> None:
-        """Clear the aborted transaction left behind by a failed statement.
-
-        psycopg opens an implicit transaction per statement, so a statement that
-        fails on the backend leaves the session ``idle in transaction (aborted)``
-        and every later statement returns "current transaction is aborted".
-        This connector is long-lived — ``WrenEngine._get_connector`` caches it and
-        the MCP server shares one engine across the process — so the caller has no
-        way to reach this connection and reset it.
-
-        Rolling back is a no-op when the transaction is still healthy, so it runs
-        on every failure path rather than guessing which errors came from the
-        backend. A rollback failure must not mask the original error.
-
-        Like every other statement on this connector, this call assumes the
-        connection is not used concurrently: psycopg forbids sharing one
-        connection across threads, and nothing here serialises access. That is
-        the same single-flight assumption the pre-existing sharing already
-        relied on — ``WrenEngine._get_connector`` caches one connector and the
-        MCP server's ``ServeContext`` hands one engine to every tool handler.
-        Adding a lock or a per-request connection is tracked separately.
-        """
-        try:
-            self.connection.rollback()
-        except Exception as e:
-            logger.warning(f"Error rolling back postgres transaction: {e}")
-
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         limit = coerce_limit(limit)
         # Strip terminating ``;`` even when no LIMIT wrapper is applied so
@@ -341,13 +324,10 @@ class PostgresConnector(ConnectorABC):
                 cursor.execute(sql)
                 return _build_pg_arrow_table(cursor)
         except psycopg.errors.QueryCanceled:
-            self._rollback_after_failure()
             raise
         except (WrenError, TimeoutError):
-            self._rollback_after_failure()
             raise
         except Exception as e:
-            self._rollback_after_failure()
             raise WrenError(
                 ErrorCode.GENERIC_USER_ERROR,
                 str(e),
@@ -361,13 +341,10 @@ class PostgresConnector(ConnectorABC):
             with self.connection.cursor() as cursor:
                 cursor.execute(wrapped)
         except psycopg.errors.QueryCanceled:
-            self._rollback_after_failure()
             raise
         except (WrenError, TimeoutError):
-            self._rollback_after_failure()
             raise
         except Exception as e:
-            self._rollback_after_failure()
             raise WrenError(
                 ErrorCode.GENERIC_USER_ERROR,
                 str(e),
