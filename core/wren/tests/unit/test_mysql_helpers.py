@@ -10,6 +10,7 @@ from __future__ import annotations
 import pyarrow as pa
 import pytest
 
+import wren.connector.mysql as mysql_connector
 from wren.connector.base import coerce_limit
 from wren.connector.mysql import (
     _apply_limit,
@@ -40,6 +41,15 @@ class _FakeConnInfoFromUrl:
     def __init__(self, url: str, kwargs: dict[str, str] | None = None) -> None:
         self.connection_url = _FakeConnUrl(url)
         self.kwargs = kwargs
+
+
+class _FakeCursor:
+    def __init__(self, description: list[tuple], rows: list[tuple]) -> None:
+        self.description = description
+        self._rows = rows
+
+    def fetchall(self) -> list[tuple]:
+        return self._rows
 
 
 # ── coerce_limit (shared base helper; mysql private removed) ─────────────
@@ -266,6 +276,19 @@ def test_decimal_column_widens_scale_without_losing_integer_capacity() -> None:
     assert column.to_pylist() == [value]
 
 
+def test_decimal_column_reuses_decimal128_when_observed_value_fits() -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    value = Decimal("1.234567")
+    # Signed DECIMAL(38, 4) has spare integer capacity that can be reassigned
+    # to the observed scale without escalating to Decimal256.
+    arrow_type = _mysql_decimal_type_for_values(40, 4, False, [value])
+    column = _build_mysql_column([value], arrow_type)
+
+    assert arrow_type == pa.decimal128(38, 6)
+    assert column.to_pylist() == [value]
+
+
 def test_decimal_column_rebalances_metadata_scale_for_observed_integer_digits() -> None:
     from decimal import Decimal  # noqa: PLC0415
 
@@ -307,6 +330,26 @@ def test_decimal_column_above_arrow_limit_uses_exact_strings() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    ("digits", "expected_type"),
+    [(76, pa.decimal256(76, 0)), (77, pa.string())],
+)
+def test_negative_decimal_values_follow_arrow_precision_limit(
+    digits: int,
+    expected_type: pa.DataType,
+) -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    value = Decimal("-" + "9" * digits)
+    arrow_type = _mysql_decimal_type_for_values(66, 0, False, [value])
+    column = _build_mysql_column([value], arrow_type)
+
+    assert arrow_type == expected_type
+    assert column.to_pylist() == (
+        [str(value)] if pa.types.is_string(arrow_type) else [value]
+    )
+
+
 def test_decimal_unparseable_value_uses_exact_strings() -> None:
     values = [b"1.5"]
     arrow_type = _mysql_decimal_type_for_values(4, 1, False, values)
@@ -338,6 +381,91 @@ def test_decimal_metadata_above_arrow_limit_without_values_stays_numeric(
 
     assert arrow_type == pa.decimal256(76, 0)
     assert column.to_pylist() == values
+
+
+def test_decimal_table_uses_metadata_type_before_scanning_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    values_seen = []
+
+    def get_arrow_type(
+        type_code: int,
+        flags: int = 0,
+        precision: int | None = None,
+        scale: int | None = None,
+        values: list | None = None,
+    ) -> pa.DataType:
+        values_seen.append(values)
+        return pa.decimal128(3, 2)
+
+    monkeypatch.setattr(mysql_connector, "_mysql_field_arrow_type", get_arrow_type)
+    cursor = _FakeCursor(
+        [("amount", 0, None, None, 5, 2, True)],
+        [(Decimal("1.23"),)],
+    )
+
+    table = mysql_connector._build_mysql_arrow_table(cursor)
+
+    assert values_seen == [None]
+    assert table.schema.field("amount").type == pa.decimal128(3, 2)
+    assert table.column("amount").to_pylist() == [Decimal("1.23")]
+
+
+@pytest.mark.parametrize(
+    ("value", "display_length", "scale", "expected"),
+    [
+        pytest.param(None, 66, 0, "9" * 77, id="above-arrow-limit"),
+        pytest.param(b"1.5", 4, 1, "1.5", id="unparseable"),
+        pytest.param("NaN", 4, 1, "NaN", id="non-finite"),
+    ],
+)
+def test_decimal_table_warns_when_falling_back_to_exact_strings(
+    monkeypatch: pytest.MonkeyPatch,
+    value,
+    display_length: int,
+    scale: int,
+    expected: str,
+) -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    value = Decimal(expected) if value is None else value
+    warnings = []
+
+    class _WarningRecorder:
+        def warning(self, message: str, *args) -> None:
+            warnings.append(message.format(*args))
+
+    def get_arrow_type(
+        type_code: int,
+        flags: int = 0,
+        precision: int | None = None,
+        scale: int | None = None,
+        values: list | None = None,
+    ) -> pa.DataType:
+        if values is not None:
+            return _mysql_decimal_type_for_values(
+                precision,
+                scale,
+                is_unsigned=False,
+                values=values,
+            )
+        return mysql_connector._arrow_decimal_from_mysql_field(precision, scale)
+
+    monkeypatch.setattr(mysql_connector, "logger", _WarningRecorder())
+    monkeypatch.setattr(mysql_connector, "_mysql_field_arrow_type", get_arrow_type)
+    cursor = _FakeCursor(
+        [("product", 0, None, None, display_length, scale, True)],
+        [(value,)],
+    )
+
+    table = mysql_connector._build_mysql_arrow_table(cursor)
+
+    assert table.schema.field("product").type == pa.string()
+    assert table.column("product").to_pylist() == [expected]
+    assert len(warnings) == 1
+    assert "product" in warnings[0]
 
 
 # ── TIME → duration round-trip ────────────────────────────────────────────

@@ -148,11 +148,15 @@ def test_decimal_addition_widens_for_concrete_66_digit_value(
     assert tbl.column("total").to_pylist() == [expected]
 
 
-@pytest.mark.parametrize("left_digits,right_digits", [(65, 12), (40, 40)])
+@pytest.mark.parametrize(
+    ("left_digits", "right_digits", "expected_digits"),
+    [(65, 12, 77), (40, 40, 80)],
+)
 def test_decimal_multiplication_above_arrow_limit_uses_exact_string(
     connector: MySqlConnector,
     left_digits: int,
     right_digits: int,
+    expected_digits: int,
 ) -> None:
     left = Decimal("9" * left_digits)
     right = Decimal("9" * right_digits)
@@ -163,7 +167,7 @@ def test_decimal_multiplication_above_arrow_limit_uses_exact_string(
         f"* CAST('{right}' AS DECIMAL({right_digits}, 0)) AS product"
     )
 
-    assert len(expected) in {77, 80}
+    assert len(expected) == expected_digits
     assert tbl.schema.field("product").type == pa.string()
     assert tbl.column("product").to_pylist() == [expected]
 
