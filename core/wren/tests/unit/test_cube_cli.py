@@ -94,6 +94,29 @@ def test_cube_list_empty(tmp_path):
     assert "No cubes defined" in result.output
 
 
+def test_cube_list_missing_cubes_key_is_empty(tmp_path):
+    """Absent cubes field is the serde default (empty list), not malformed."""
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    mdl_file.write_text(json.dumps({"catalog": "c", "schema": "s"}))
+    result = runner.invoke(app, ["cube", "list", "--mdl", str(mdl_file)])
+    assert result.exit_code == 0
+    assert "No cubes defined" in result.output
+
+
+def test_cube_list_null_cubes_fails_loud(tmp_path):
+    """Explicit cubes: null is invalid (Rust Vec rejects null; missing is empty)."""
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    mdl_file = target / "mdl.json"
+    mdl_file.write_text(json.dumps({"catalog": "c", "schema": "s", "cubes": None}))
+    result = runner.invoke(app, ["cube", "list", "--mdl", str(mdl_file)])
+    assert result.exit_code == 1
+    assert "malformed cubes" in result.output
+    assert "null" in result.output
+
+
 # ── describe ────────────────────────────────────────────────────────────────
 
 

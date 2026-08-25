@@ -161,12 +161,13 @@ def _require_cubes_list(manifest: dict) -> list:
     The CLI reads target/mdl.json from `wren context build`. Skipping bad
     rows here would hide a producer bug and look like an empty listing.
     """
-    if "cubes" not in manifest or manifest["cubes"] is None:
+    if "cubes" not in manifest:
         return []
     cubes = manifest["cubes"]
-    if not isinstance(cubes, list):
+    if cubes is None or not isinstance(cubes, list):
+        kind = "null" if cubes is None else f"not a list (got {type(cubes).__name__})"
         typer.echo(
-            f"Error: malformed cubes in mdl.json (cubes is not a list, got {type(cubes).__name__}).\n"
+            f"Error: malformed cubes in mdl.json (cubes is {kind}).\n"
             "  Hint: re-run `wren context build`.",
             err=True,
         )
