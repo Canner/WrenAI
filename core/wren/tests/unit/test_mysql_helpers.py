@@ -289,6 +289,19 @@ def test_decimal_column_reuses_decimal128_when_observed_value_fits() -> None:
     assert column.to_pylist() == [value]
 
 
+def test_decimal_column_rebalances_scale_to_stay_decimal128() -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    value = Decimal("12")
+    # Signed DECIMAL(38, 37) reserves one integer digit. The observed value
+    # needs two, so release one unused scale digit without using Decimal256.
+    arrow_type = _mysql_decimal_type_for_values(40, 37, False, [value])
+    column = _build_mysql_column([value], arrow_type)
+
+    assert arrow_type == pa.decimal128(38, 36)
+    assert column.to_pylist() == [value]
+
+
 def test_decimal_column_rebalances_metadata_scale_for_observed_integer_digits() -> None:
     from decimal import Decimal  # noqa: PLC0415
 

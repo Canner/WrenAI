@@ -365,8 +365,19 @@ def _mysql_decimal_type_for_values(
     if integer_digits + value_scale > _ARROW_DECIMAL256_MAX_PRECISION:
         return pa.string()
 
-    # Preserve as much metadata scale as possible, but release unused declared
-    # integer capacity before escalating from Decimal128 to Decimal256.
+    # Release unused metadata scale before crossing the Decimal128 boundary.
+    if (
+        precision <= _ARROW_DECIMAL128_MAX_PRECISION
+        and integer_digits + value_scale <= _ARROW_DECIMAL128_MAX_PRECISION
+    ):
+        target_scale = max(
+            value_scale,
+            min(scale, _ARROW_DECIMAL128_MAX_PRECISION - integer_digits),
+        )
+        target_precision = max(precision, integer_digits + target_scale)
+        return pa.decimal128(target_precision, target_scale)
+
+    # Apply the same rebalancing at the Decimal256 boundary.
     target_scale = max(
         value_scale,
         min(scale, _ARROW_DECIMAL256_MAX_PRECISION - integer_digits),
