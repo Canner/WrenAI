@@ -213,12 +213,13 @@ From foreign key constraints discovered in Phase 2:
 
 ```yaml
 # relationships.yml
-- name: orders_customers
-  models:
-    - orders
-    - customers
-  join_type: many_to_one
-  condition: "orders.customer_id = customers.customer_id"
+relationships:
+  - name: orders_customers
+    models:
+      - orders
+      - customers
+    join_type: many_to_one
+    condition: "orders.customer_id = customers.customer_id"
 ```
 
 Join type mapping:
