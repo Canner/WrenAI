@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from contextlib import closing
 from decimal import Decimal as PyDecimal
+from decimal import InvalidOperation
 from functools import cache
 
 import pyarrow as pa
@@ -133,13 +134,12 @@ def create_connector(data_source: DataSource, connection_info) -> MySqlConnector
 # Arrow conversion helpers
 # ---------------------------------------------------------------------------
 
-# MySQL ``DECIMAL(M, D)`` allows ``M`` up to 65 and ``D`` up to 30, while
-# PyArrow's ``decimal128`` only supports precision up to 38. We clamp the
-# precision derived from ``cursor.description`` to ``38`` and the scale to
-# ``min(precision, 30)`` so PyArrow can still represent the value. A future
-# change could switch to ``decimal256`` when MySQL exceeds 38 digits.
+# MySQL ``DECIMAL(M, D)`` allows ``M`` up to 65 and ``D`` up to 30. Doris uses
+# the same protocol and supports precision and scale up to 76 when Decimal256 is
+# enabled. Use Arrow's full Decimal256 range so the shared conversion preserves
+# both data sources.
 _ARROW_DECIMAL128_MAX_PRECISION = 38
-_MYSQL_DECIMAL_MAX_SCALE = 30
+_ARROW_DECIMAL256_MAX_PRECISION = 76
 # Fallback used when ``cursor.description`` does not carry precision/scale
 # (e.g. for the legacy ``FIELD_TYPE.DECIMAL`` code or non-MySQLdb cursors).
 _MYSQL_DECIMAL_FALLBACK_PRECISION = 38
@@ -268,7 +268,7 @@ def _arrow_decimal_from_mysql_field(
     scale: int | None,
     is_unsigned: bool = False,
 ) -> pa.DataType:
-    """Derive a ``pa.decimal128`` type from a MySQLdb ``cursor.description`` entry.
+    """Derive an Arrow decimal type from a MySQLdb cursor description entry.
 
     MySQLdb populates ``description[4]`` (PEP 249 ``precision``) with the
     ``MYSQL_FIELD.length`` — i.e. the *display length*, which includes one
@@ -276,14 +276,28 @@ def _arrow_decimal_from_mysql_field(
     when the column is signed. The declared ``DECIMAL(M, D)`` precision ``M``
     is recovered as::
 
-        M = length - (1 if unsigned else 0) - (1 if D > 0 else 0)
+        M = length - (0 if unsigned else 1) - (1 if D > 0 else 0)
 
-    MySQL allows precision up to 65 and scale up to 30, but Arrow
-    ``decimal128`` caps precision at 38. We clamp precision to 38 and clamp
-    scale to ``min(scale, precision, 30)`` so any value MySQL accepts (within
-    the 38-digit Arrow ceiling) round-trips correctly. The previous
+    MySQL allows precision up to 65 and scale up to 30. Doris uses the same
+    protocol and supports precision and scale up to 76 when Decimal256 is
+    enabled. Arrow ``decimal128`` covers precision up to 38, while
+    ``decimal256`` covers both data sources' wider decimals. The previous
     hard-coded ``decimal128(38, 9)`` would silently lose digits when ``D > 9``.
     """
+    precision, scale = _mysql_decimal_precision_scale(
+        display_length, scale, is_unsigned
+    )
+    precision = min(precision, _ARROW_DECIMAL256_MAX_PRECISION)
+    scale = min(scale, precision)
+    return _arrow_decimal_type(precision, scale)
+
+
+def _mysql_decimal_precision_scale(
+    display_length: int | None,
+    scale: int | None,
+    is_unsigned: bool,
+) -> tuple[int, int]:
+    """Return raw MySQL decimal precision and scale without Arrow clamping."""
     if display_length is None or display_length <= 0:
         precision = _MYSQL_DECIMAL_FALLBACK_PRECISION
     else:
@@ -295,9 +309,84 @@ def _arrow_decimal_from_mysql_field(
             precision = _MYSQL_DECIMAL_FALLBACK_PRECISION
     if scale is None or scale < 0:
         scale = _MYSQL_DECIMAL_FALLBACK_SCALE
-    precision = min(int(precision), _ARROW_DECIMAL128_MAX_PRECISION)
-    scale = min(int(scale), _MYSQL_DECIMAL_MAX_SCALE, precision)
-    return pa.decimal128(precision, scale)
+    precision = int(precision)
+    scale = min(int(scale), precision)
+    return precision, scale
+
+
+def _arrow_decimal_type(precision: int, scale: int) -> pa.DataType:
+    if precision <= _ARROW_DECIMAL128_MAX_PRECISION:
+        return pa.decimal128(precision, scale)
+    return pa.decimal256(precision, scale)
+
+
+def _mysql_decimal_value_shape(value) -> tuple[int, int] | None:
+    """Return integer digits and scale needed to preserve one decimal value."""
+    try:
+        value = value if isinstance(value, PyDecimal) else PyDecimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if not value.is_finite():
+        return None
+    _, digits, exponent = value.as_tuple()
+    if exponent >= 0:
+        return len(digits) + exponent, 0
+    value_scale = -exponent
+    return max(len(digits) - value_scale, 0), value_scale
+
+
+def _mysql_decimal_type_for_values(
+    display_length: int | None,
+    scale: int | None,
+    is_unsigned: bool,
+    values: list,
+) -> pa.DataType:
+    """Choose an exact Arrow type for one result set's concrete values.
+
+    The returned type may differ between result sets when expression metadata
+    understates the fetched values. Values beyond Arrow Decimal256, invalid
+    values, and non-finite values use exact strings instead of losing data.
+    """
+    precision, scale = _mysql_decimal_precision_scale(
+        display_length, scale, is_unsigned
+    )
+    shapes = [
+        _mysql_decimal_value_shape(value) for value in values if value is not None
+    ]
+    if not shapes:
+        precision = min(precision, _ARROW_DECIMAL256_MAX_PRECISION)
+        scale = min(scale, precision)
+        return _arrow_decimal_type(precision, scale)
+    if any(shape is None for shape in shapes):
+        return pa.string()
+
+    integer_digits = max(shape[0] for shape in shapes if shape is not None)
+    value_scale = max(shape[1] for shape in shapes if shape is not None)
+    if integer_digits + value_scale > _ARROW_DECIMAL256_MAX_PRECISION:
+        return pa.string()
+
+    # Release unused metadata scale before crossing the Decimal128 boundary.
+    if (
+        precision <= _ARROW_DECIMAL128_MAX_PRECISION
+        and integer_digits + value_scale <= _ARROW_DECIMAL128_MAX_PRECISION
+    ):
+        target_scale = max(
+            value_scale,
+            min(scale, _ARROW_DECIMAL128_MAX_PRECISION - integer_digits),
+        )
+        target_precision = max(precision, integer_digits + target_scale)
+        return pa.decimal128(target_precision, target_scale)
+
+    # Apply the same rebalancing at the Decimal256 boundary.
+    target_scale = max(
+        value_scale,
+        min(scale, _ARROW_DECIMAL256_MAX_PRECISION - integer_digits),
+    )
+    target_precision = max(
+        min(precision, _ARROW_DECIMAL256_MAX_PRECISION),
+        integer_digits + target_scale,
+    )
+    return _arrow_decimal_type(target_precision, target_scale)
 
 
 def _mysql_field_arrow_type(
@@ -305,6 +394,7 @@ def _mysql_field_arrow_type(
     flags: int = 0,
     precision: int | None = None,
     scale: int | None = None,
+    values: list | None = None,
 ) -> pa.DataType:
     from MySQLdb.constants import FLAG  # noqa: PLC0415
 
@@ -324,6 +414,13 @@ def _mysql_field_arrow_type(
     # — the previous hard-coded ``decimal128(38, 9)`` would lose digits when
     # ``D > 9``.
     if type_code in decimal_codes:
+        if values is not None:
+            return _mysql_decimal_type_for_values(
+                precision,
+                scale,
+                is_unsigned=bool(flags & FLAG.UNSIGNED),
+                values=values,
+            )
         return _arrow_decimal_from_mysql_field(
             precision, scale, is_unsigned=bool(flags & FLAG.UNSIGNED)
         )
@@ -341,8 +438,47 @@ def _mysql_field_arrow_type(
     return base
 
 
+def _build_mysql_result_column(
+    name: str,
+    type_code: int,
+    flags: int,
+    precision: int | None,
+    scale: int | None,
+    values: list,
+    arrow_type: pa.DataType,
+) -> tuple[pa.Array, pa.DataType]:
+    """Build one result column, scanning decimal values only after failure."""
+    if not values:
+        return pa.array([], type=arrow_type), arrow_type
+    if not pa.types.is_decimal(arrow_type):
+        return _build_mysql_column(values, arrow_type), arrow_type
+
+    try:
+        return _build_mysql_column(values, arrow_type), arrow_type
+    except (InvalidOperation, pa.ArrowInvalid):
+        arrow_type = _mysql_field_arrow_type(
+            type_code,
+            flags,
+            precision=precision,
+            scale=scale,
+            values=values,
+        )
+        if pa.types.is_string(arrow_type):
+            logger.warning(
+                "MySQL decimal column {!r} cannot be safely converted to an "
+                "Arrow decimal; returning exact strings for this result set",
+                name,
+            )
+        return _build_mysql_column(values, arrow_type), arrow_type
+
+
 def _build_mysql_arrow_table(cursor) -> pa.Table:
-    """Convert a MySQLdb cursor result to a PyArrow table."""
+    """Convert a MySQLdb cursor result to a PyArrow table.
+
+    Decimal columns optimistically use their metadata type. If concrete values
+    do not fit, their type is derived from that result set and may fall back to
+    exact strings; that fallback emits a warning naming the affected column.
+    """
     if cursor.description is None:
         return pa.table({})
 
@@ -357,7 +493,9 @@ def _build_mysql_arrow_table(cursor) -> pa.Table:
     flag_list = (flag_list + [0] * len(cursor.description))[: len(cursor.description)]
 
     rows = cursor.fetchall()
+    columns = [[row[i] for row in rows] for i in range(len(cursor.description))]
     fields = []
+    arrays = []
     for i, col in enumerate(cursor.description):
         # PEP 249 ``description`` tuple:
         #   (name, type_code, display_size, internal_size, precision, scale, null_ok)
@@ -366,19 +504,20 @@ def _build_mysql_arrow_table(cursor) -> pa.Table:
         # a hard-coded ``decimal128(38, 9)``.
         precision = col[4] if len(col) > 4 else None
         scale = col[5] if len(col) > 5 else None
+        flags = flag_list[i] or 0
         arrow_type = _mysql_field_arrow_type(
-            col[1], flag_list[i] or 0, precision=precision, scale=scale
+            col[1],
+            flags,
+            precision=precision,
+            scale=scale,
+        )
+        array, arrow_type = _build_mysql_result_column(
+            col[0], col[1], flags, precision, scale, columns[i], arrow_type
         )
         fields.append(pa.field(col[0], arrow_type, nullable=True))
+        arrays.append(array)
     schema = pa.schema(fields)
 
-    if not rows:
-        arrays = [pa.array([], type=field.type) for field in schema]
-    else:
-        arrays = [
-            _build_mysql_column([row[i] for row in rows], schema.field(i).type)
-            for i in range(len(fields))
-        ]
     # ``pa.table(dict(...), schema=...)`` silently drops a column when two
     # fields share the same name (the dict collapses the duplicate). Use
     # ``pa.Table.from_arrays`` so a query like
@@ -415,7 +554,7 @@ def _build_mysql_column(values: list, arrow_type: pa.DataType) -> pa.Array:
             else (v if isinstance(v, PyDecimal) else PyDecimal(str(v)))
             for v in values
         ]
-        return pa.array(processed, type=arrow_type, from_pandas=True)
+        return pa.array(processed, type=arrow_type, from_pandas=False)
 
     if pa.types.is_timestamp(arrow_type):
         return pa.array(values, type=arrow_type, from_pandas=True)
