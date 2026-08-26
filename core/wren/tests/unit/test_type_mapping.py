@@ -14,6 +14,7 @@ from wren.type_mapping import (
     translate_type,
     translate_types,
 )
+from wren.utils_cli import _VALUE_REPR_LIMIT
 
 # ── parse_type unit tests ──────────────────────────────────────────────────
 
@@ -452,18 +453,49 @@ def test_cli_parse_types_skip_report_truncates_past_limit() -> None:
     assert "Warning: skipped 12 non-mapping row(s)" in result.stderr
     assert "[1] int: 0" in result.stderr
     assert "... and 2 more" in result.stderr
+    # The trailing count is derived from _SKIP_REPORT_LIMIT, so it reads
+    # correctly even if the per-row listing was never capped. Pin the cap
+    # itself: row 11 is the first past the limit and must not be listed.
+    assert "[11] int: 10" not in result.stderr
+
+
+def test_value_repr_limit_is_the_documented_cap() -> None:
+    # The cap is a display knob, but moving it changes user-visible output, so
+    # it should take a deliberate edit rather than drift silently. The
+    # rendering tests below derive their expectations from the constant, so
+    # this is the one place the value itself is pinned.
+    assert _VALUE_REPR_LIMIT == 120
 
 
 def test_cli_parse_types_corrupt_value_repr_is_bounded() -> None:
     # A few large corrupt values must not flood stderr just because there are
-    # fewer of them than _SKIP_REPORT_LIMIT.
-    columns = [{"column": "id", "raw_type": "int8"}, "x" * 5000]
+    # fewer of them than _SKIP_REPORT_LIMIT. The cut must also be visible, so a
+    # fragment is never read as the whole value.
+    raw = "x" * 5000
+    columns = [{"column": "id", "raw_type": "int8"}, raw]
     result = _run_wren(
         "utils", "parse-types", "--dialect", "postgres", stdin=json.dumps(columns)
     )
     _assert_success(result)
     line = next(ln for ln in result.stderr.splitlines() if ln.startswith("  [1]"))
-    assert len(line) < 200
+    rendered = repr(raw)
+    assert line == (
+        f"  [1] str: {rendered[:_VALUE_REPR_LIMIT]}... ({len(rendered)} chars total)"
+    )
+
+
+def test_cli_parse_types_corrupt_value_repr_under_limit_is_unmarked() -> None:
+    # A value that fits the cap must render exactly as its repr, with no
+    # truncation marker to imply something was withheld.
+    raw = "short-but-wrong"
+    columns = [{"column": "id", "raw_type": "int8"}, raw]
+    result = _run_wren(
+        "utils", "parse-types", "--dialect", "postgres", stdin=json.dumps(columns)
+    )
+    _assert_success(result)
+    line = next(ln for ln in result.stderr.splitlines() if ln.startswith("  [1]"))
+    assert line == f"  [1] str: {raw!r}"
+    assert "chars total" not in line
 
 
 def test_cli_translate_types_strict_exits_nonzero_on_corrupt_row() -> None:
@@ -533,4 +565,22 @@ def test_cli_translate_types_rejects_non_list_object_payload() -> None:
     )
     assert result.returncode == 1
     assert "Error: input must be a JSON array (got dict)" in result.stderr
+    assert "AssertionError" not in result.stderr
+
+
+def test_cli_translate_types_rejects_non_list_string_payload() -> None:
+    # Mirrors the parse-types string-payload regression; both commands go
+    # through the same _require_list guard.
+    result = _run_wren(
+        "utils",
+        "translate-types",
+        "--source",
+        "postgres",
+        "--target",
+        "bigquery",
+        stdin=json.dumps("not-a-list"),
+    )
+    assert result.returncode == 1
+    assert "Error: input must be a JSON array (got str)" in result.stderr
+    assert "Traceback (most recent call last)" not in result.stderr
     assert "AssertionError" not in result.stderr
