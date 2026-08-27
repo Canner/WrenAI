@@ -475,14 +475,26 @@ def status(
 @memory_app.command()
 def reset(
     path: PathOpt = None,
-    force: Annotated[
-        bool, typer.Option("--force", "-f", help="Skip confirmation")
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            "--force",
+            "-f",
+            help="Skip confirmation. `--force`/`-f` are deprecated aliases.",
+        ),
     ] = False,
 ) -> None:
     """Drop the derived memory index. knowledge/sql/*.md is preserved.
 
     The LanceDB index is a derived artifact — after reset, run `wren memory
     index` to rebuild it from the markdown source of truth.
+
+    ``--force`` still works but is deprecated: elsewhere in this CLI
+    ``--force`` means "overwrite files" (``wren context init --force``) or
+    "run non-interactively" (``wren memory forget --force``), so the flag
+    that only skips a confirmation is spelled ``--yes``.
     """
     from wren.context import discover_project_path  # noqa: PLC0415
     from wren.memory.index_backend import get_index  # noqa: PLC0415
@@ -496,7 +508,7 @@ def reset(
     if idx.name == "grep":
         typer.echo("grep backend has no derived index — knowledge/sql/ is the source.")
         return
-    if not force:
+    if not yes:
         confirm = typer.confirm(
             "This drops the derived memory index. Your knowledge/sql/*.md "
             "source files are kept. Continue?"
@@ -837,7 +849,16 @@ def forget(
     ] = None,
     force: Annotated[
         bool,
-        typer.Option("--force", "-f", help="Skip interactive UI / confirmation"),
+        typer.Option(
+            "--force",
+            "-f",
+            "--yes",
+            "-y",
+            help=(
+                "Run non-interactively: skip the checkbox UI and any "
+                "confirmation. Required with --source to delete in bulk."
+            ),
+        ),
     ] = False,
     limit: Annotated[
         int,
@@ -849,6 +870,12 @@ def forget(
 
     Default: interactive checkbox UI.
     With --id or --force: non-interactive mode for scripts and agents.
+
+    Unlike ``wren memory reset``, this flag keeps the name ``--force``: it
+    does not merely answer a prompt, it selects a different mode — the
+    checkbox UI is skipped, and ``--source`` only deletes in bulk when it is
+    given. ``--yes``/``-y`` are accepted as aliases so the vocabulary is the
+    same across the CLI.
     """
     mem_store = _get_store(path)
 
