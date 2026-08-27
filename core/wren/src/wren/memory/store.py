@@ -648,6 +648,14 @@ class MemoryStore:
 
         Returns ``{"loaded": N, "skipped": M, "updated": U, "forgotten": F}``.
         """
+        existing_rows, _ = self.list_queries(limit=1_000_000)
+        protected_nls = {
+            row["nl_query"]
+            for row in existing_rows
+            if _tag_source(row.get("tags")) in _NON_MARKDOWN_SOURCES
+        }
+        pairs = [p for p in pairs if p["nl"] not in protected_nls]
+
         result = self.load_queries(pairs, upsert=True)
         current_nls = {p["nl"] for p in pairs}
         rows, _ = self.list_queries(limit=1_000_000)

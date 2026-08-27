@@ -1516,6 +1516,33 @@ class TestMarkdownSourcedIndex:
         after, _ = memory_store.list_queries(limit=100, source="seed")
         assert len(after) == len(before)  # seeds untouched by the markdown sync
 
+    def test_sync_preserves_seed_row_whose_nl_collides_with_markdown_pair(
+        self, memory_store, tmp_path
+    ):
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        memory_store.store_query(
+            nl_query="Total revenue",
+            sql_query="SELECT SUM(o_totalprice) FROM orders",
+            tags="source:seed",
+        )
+        before, _ = memory_store.list_queries(limit=100, source="seed")
+        assert len(before) == 1
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        result = memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+
+        after, _ = memory_store.list_queries(limit=100, source="seed")
+        assert len(after) == 1
+        assert after[0]["sql_query"] == "SELECT SUM(o_totalprice) FROM orders"
+        # the colliding markdown pair is skipped, not loaded as a second row
+        _, total = memory_store.list_queries(limit=100)
+        assert total == 1
+        assert result["loaded"] == 0
+
     def test_sync_with_no_markdown_pairs_forgets_all_user_pairs(
         self, memory_store, tmp_path
     ):
