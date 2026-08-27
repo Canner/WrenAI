@@ -1,6 +1,6 @@
 ---
 name: dlt-connector
-description: "Connect SaaS data (HubSpot, Stripe, Salesforce, GitHub, Slack, etc.) to Wren Engine for SQL analysis. Guides the user through the full flow: install dlt, pick a SaaS source, set up credentials, run the data pipeline into DuckDB, then auto-generate a Wren semantic project from the loaded data. Use this skill whenever the user mentions: connecting SaaS data, importing data from an API, dlt pipelines, loading HubSpot/Stripe/Salesforce/GitHub/Slack data, querying SaaS data with SQL, or setting up a new data source from a REST API. Also trigger when the user already has a dlt-produced DuckDB file and wants to create a Wren project from it."
+description: "Connect SaaS and public X data (HubSpot, Stripe, Salesforce, GitHub, Slack, Xquik, etc.) to Wren Engine for SQL analysis. Guides the user through the full flow: install dlt, pick a source, set up credentials, run the data pipeline into DuckDB, then auto-generate a Wren semantic project from the loaded data. Use this skill whenever the user mentions: connecting SaaS data, importing data from an API, dlt pipelines, loading HubSpot/Stripe/Salesforce/GitHub/Slack data, loading Xquik public X search results, querying SaaS data with SQL, or setting up a new data source from a REST API. Also trigger when the user already has a dlt-produced DuckDB file and wants to create a Wren project from it."
 license: Apache-2.0
 metadata:
   author: wrenai
@@ -8,7 +8,7 @@ metadata:
 
 # wren-dlt-connector
 
-> Reference docs (`dlt_sources`) and the `introspect_dlt` script are bundled. Pull references with `wren skills get dlt-connector --full`; fetch a script with `wren skills get dlt-connector --script <name>`.
+> Reference docs (`dlt_sources`) and the `introspect_dlt` and `load_xquik` scripts are bundled. Pull references with `wren skills get dlt-connector --full`; fetch a script with `wren skills get dlt-connector --script <name>`.
 
 Connect SaaS data to Wren Engine for SQL analysis — from zero to a verified, queryable project in one conversation.
 
@@ -60,6 +60,14 @@ pip install "dlt[duckdb]" --break-system-packages
 ```
 
 ### Step 3: Write the pipeline script
+
+For Xquik public X search data, fetch the bundled loader:
+
+```bash
+wren skills get dlt-connector --script load_xquik > load_xquik.py
+```
+
+The `dlt_sources` reference documents its API key and command options.
 
 Create a Python script that:
 1. Imports the dlt source function for the chosen SaaS
