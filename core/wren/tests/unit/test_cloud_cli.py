@@ -1,11 +1,12 @@
 """Tests for the `wren cloud` Typer sub-app: option wiring and the
 git-credential helper's CLI-level stdin/stdout wrapping.
 
-The seven required live checks (real login against a running Wren Cloud
-stack, real git clone/push, real nested-directory refusal, ...) are
-exercised manually — mocking `wren.cloud.login`/`link` here only proves the
-CLI passes options through correctly, not that the underlying git/HTTP
-behavior is correct.
+The required live checks (real login against a running Wren Cloud stack,
+real git clone/push, real nested-directory refusal, ...) are exercised
+manually — mocking `wren.cloud.login`/`link`/`unlink`/`logout` here only
+proves the CLI passes options through correctly and prompts when it should,
+not that the underlying git/HTTP behavior is correct. The guard and
+unbind behaviour itself is covered against real git in ``test_cloud.py``.
 """
 
 from __future__ import annotations
@@ -532,3 +533,211 @@ def test_git_credential_erase_produces_no_output(monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert result.output == ""
+
+
+# ── unlink ───────────────────────────────────────────────────────────────
+
+
+def _unlink_outcome(**overrides):
+    defaults = {
+        "remote_url": "https://cloud.getwren.ai/git/org/2/16/shared-data.git",
+        "git_host": "https://cloud.getwren.ai",
+        "project_id": "16",
+        "key_forgotten": False,
+        "helper_removed": False,
+    }
+    defaults.update(overrides)
+    return cloud.UnlinkOutcome(**defaults)
+
+
+def test_unlink_defaults_to_keeping_the_key(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_unlink(directory, *, forget_key):
+        captured.update(directory=directory, forget_key=forget_key)
+        return _unlink_outcome()
+
+    monkeypatch.setattr(cloud, "unlink", fake_unlink)
+    result = runner.invoke(app, ["cloud", "unlink", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert captured["forget_key"] is False, (
+        "unbinding one directory must not revoke a key another may still use"
+    )
+    assert "project 16" in result.output
+
+
+def test_unlink_forget_key_confirms_before_dropping_the_key(monkeypatch, tmp_path):
+    calls = {"n": 0}
+
+    def fake_unlink(directory, *, forget_key):
+        calls["n"] += 1
+        return _unlink_outcome(key_forgotten=True)
+
+    monkeypatch.setattr(cloud, "unlink", fake_unlink)
+    declined = runner.invoke(
+        app, ["cloud", "unlink", str(tmp_path), "--forget-key"], input="n\n"
+    )
+    assert declined.exit_code != 0
+    assert calls["n"] == 0, "declining the prompt must not drop anything"
+
+    accepted = runner.invoke(
+        app, ["cloud", "unlink", str(tmp_path), "--forget-key"], input="y\n"
+    )
+    assert accepted.exit_code == 0, accepted.output
+    assert calls["n"] == 1
+
+
+def test_unlink_force_skips_the_confirmation(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        cloud, "unlink", lambda d, *, forget_key: _unlink_outcome(key_forgotten=True)
+    )
+    result = runner.invoke(
+        app, ["cloud", "unlink", str(tmp_path), "--forget-key", "--force"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Dropped the stored API key" in result.output
+
+
+def test_unlink_reports_a_removed_helper(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        cloud,
+        "unlink",
+        lambda d, *, forget_key: _unlink_outcome(
+            key_forgotten=True, helper_removed=True
+        ),
+    )
+    result = runner.invoke(
+        app, ["cloud", "unlink", str(tmp_path), "--forget-key", "--force"]
+    )
+    assert "credential helper" in result.output
+
+
+def test_unlink_reports_a_non_wren_remote_without_naming_a_project(
+    monkeypatch, tmp_path
+):
+    """`origin` pointing at GitHub is still removed — the directory is
+    unbound either way — but naming a project would be a fiction."""
+    monkeypatch.setattr(
+        cloud,
+        "unlink",
+        lambda d, *, forget_key: _unlink_outcome(
+            remote_url="https://github.com/acme/analytics.git",
+            git_host=None,
+            project_id=None,
+        ),
+    )
+    result = runner.invoke(app, ["cloud", "unlink", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "github.com/acme/analytics.git" in result.output
+    assert "project" not in result.output.split("origin")[-1].lower()
+
+
+def test_unlink_surfaces_a_cloud_error(monkeypatch, tmp_path):
+    def fake_unlink(directory, *, forget_key):
+        raise cloud.CloudError("not bound to a Wren Cloud project")
+
+    monkeypatch.setattr(cloud, "unlink", fake_unlink)
+    result = runner.invoke(app, ["cloud", "unlink", str(tmp_path)])
+    assert result.exit_code != 0
+    assert "not bound" in result.output
+
+
+# ── logout ───────────────────────────────────────────────────────────────
+
+
+def test_logout_drops_the_only_stored_login(monkeypatch):
+    entry = {
+        "api_host": "https://cloud.getwren.ai",
+        "org_id": "2",
+        "repo": "org/2/16/shared-data.git",
+        "api_key": "sk-x",
+    }
+    monkeypatch.setattr(
+        cloud, "list_logins", lambda: [("https://cloud.getwren.ai", "16", entry)]
+    )
+    captured = {}
+
+    def fake_logout(git_host, project_id):
+        captured.update(git_host=git_host, project_id=project_id)
+        return True, False
+
+    monkeypatch.setattr(cloud, "logout", fake_logout)
+    result = runner.invoke(app, ["cloud", "logout", "--force"])
+
+    assert result.exit_code == 0, result.output
+    assert captured == {"git_host": "https://cloud.getwren.ai", "project_id": "16"}
+    assert "Logged out of project 16" in result.output
+
+
+def test_logout_errors_when_no_login_is_stored(monkeypatch):
+    monkeypatch.setattr(cloud, "list_logins", lambda: [])
+    result = runner.invoke(app, ["cloud", "logout", "--force"])
+    assert result.exit_code != 0
+    assert "no stored Wren Cloud login" in result.output
+
+
+def test_logout_disambiguates_multiple_stored_logins(monkeypatch):
+    monkeypatch.setattr(
+        cloud,
+        "list_logins",
+        lambda: [
+            ("https://a.example.com", "16", {"api_host": "https://a.example.com"}),
+            ("https://b.example.com", "17", {"api_host": "https://b.example.com"}),
+        ],
+    )
+    result = runner.invoke(app, ["cloud", "logout", "--force"])
+    assert result.exit_code != 0
+    assert "disambiguate" in result.output.lower()
+
+
+def test_logout_host_filters_on_api_host_not_git_host(monkeypatch):
+    """Same contract as `link --host`: the value the user typed at `login`
+    (`api_host`) must reach the right login even when it was stored under a
+    differing `git_host`."""
+    entry = {
+        "api_host": "https://cloud.getwren.ai",
+        "org_id": "2",
+        "repo": "org/2/16/shared-data.git",
+        "api_key": "sk-x",
+    }
+    monkeypatch.setattr(
+        cloud,
+        "list_logins",
+        lambda: [("https://internal-git.example.com", "16", entry)],
+    )
+    captured = {}
+    monkeypatch.setattr(
+        cloud,
+        "logout",
+        lambda git_host, project_id: (
+            captured.update(git_host=git_host) or (True, False)
+        ),
+    )
+    result = runner.invoke(
+        app, ["cloud", "logout", "--host", "https://cloud.getwren.ai", "--force"]
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["git_host"] == "https://internal-git.example.com"
+
+
+def test_logout_confirms_by_default(monkeypatch):
+    entry = {
+        "api_host": "https://cloud.getwren.ai",
+        "org_id": "2",
+        "repo": "org/2/16/shared-data.git",
+        "api_key": "sk-x",
+    }
+    monkeypatch.setattr(
+        cloud, "list_logins", lambda: [("https://cloud.getwren.ai", "16", entry)]
+    )
+    calls = {"n": 0}
+
+    def fake_logout(git_host, project_id):
+        calls["n"] += 1
+        return True, False
+
+    monkeypatch.setattr(cloud, "logout", fake_logout)
+    result = runner.invoke(app, ["cloud", "logout"], input="n\n")
+    assert result.exit_code != 0
+    assert calls["n"] == 0, "declining the prompt must not drop the key"

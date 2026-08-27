@@ -7,6 +7,24 @@ into a local directory via plain git, once. After that, ordinary
 security depends on going through this CLI again, and ``git pull`` (not a
 repeated ``link``) is how you get updates. ``wren cloud git-credential`` is
 the helper `login` wires into git; it is not meant to be invoked by hand.
+
+``wren cloud unlink`` and ``wren cloud logout`` undo those two, and the
+asymmetry between them follows from where the state lives:
+
+- **The binding is the git remote.** Nothing on this machine records which
+  project a directory belongs to; the credential helper reads it back out of
+  the path git hands it. So ``unlink`` removes ``origin`` and that is the
+  entire unbind — no server call, and the project is untouched.
+- **The API key is per host + project**, so ``logout`` drops one and touches
+  no directory. ``unlink`` leaves it alone by default, because another
+  directory may still be bound to the same project.
+- **The git credential-helper entry is per host**, shared by every project
+  on it. Both commands remove it only once no stored login uses that host.
+
+To move a directory to a *different* project, unbind it and bind a clean
+directory. A directory's history belongs to the project it was acquired
+from, and ``link`` refuses to merge one project's history into another
+rather than silently combining two projects' content.
 """
 
 from __future__ import annotations
@@ -128,6 +146,13 @@ def link(
 
     Refuses if ``directory`` sits inside another git repository, to avoid
     pushing that repository's own files into the project's remote.
+
+    Refuses, too, when ``directory`` is already bound somewhere else — an
+    existing ``origin`` pointing at a different project, or a history that
+    came from one. The remote is the binding, so it is never silently
+    repointed, and merging a different project's history in would combine
+    two projects' content and publish the result on the next push. Run
+    ``wren cloud unlink`` and bind a clean directory instead.
 
     Safe to re-run if a previous attempt failed partway through — that
     recovers cleanly. If the directory is already fully linked, re-running
@@ -292,8 +317,14 @@ def create(  # noqa: PLR0913
 
     Refuses up front — before creating anything on the server — if
     `directory` sits inside another git repository (the same check `link`
-    uses), or if the `wren` on PATH cannot serve the git credential helper
-    (the same check `login` uses).
+    uses), if the `wren` on PATH cannot serve the git credential helper
+    (the same check `login` uses), or if `directory` is already bound to a
+    project or holds a history acquired from one.
+
+    That last check has to happen here, not just inside the bind step: a new
+    project and its key are created before any git work begins, so a refusal
+    discovered later would leave them behind referenced by nothing. Every
+    refusal above happens with the server untouched.
     """
     from wren import cloud  # noqa: PLC0415
 
@@ -399,6 +430,165 @@ def create(  # noqa: PLR0913
         typer.echo(f"{directory} is already linked to project {project.id}.")
     else:
         typer.echo(f"Linked project {project.id} into {directory}.")
+
+
+@cloud_app.command()
+def unlink(
+    directory: Annotated[
+        Path, typer.Argument(help="Local directory to unbind.")
+    ] = Path("."),
+    forget_key: Annotated[
+        bool,
+        typer.Option(
+            "--forget-key",
+            help=(
+                "Also drop this project's stored API key. Separate from "
+                "unbinding, because another directory may still be bound to "
+                "the same project and need that key."
+            ),
+        ),
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Skip the confirmation prompt."),
+    ] = False,
+) -> None:
+    """Unbind ``directory`` from the Wren Cloud project it is bound to.
+
+    The binding *is* the git remote, so this removes ``origin`` and that is
+    the whole unbind — there is nothing to tell the server, which never knew
+    about the binding, and the project itself is untouched. Re-binding later
+    with ``wren cloud link`` works and reports ``already linked``.
+
+    Your stored API key is kept by default: unbinding one directory should
+    not revoke a credential another directory may still be using. Pass
+    ``--forget-key`` to drop it as well, which additionally removes this
+    host's git credential-helper entry — but only once no stored login uses
+    that host any more, since that entry is shared by every project on it.
+
+    To move a directory to a *different* project, unbind it and start from a
+    clean directory. This directory's history belongs to the project it came
+    from, and ``link`` refuses to merge one project's history into another.
+    """
+    from wren import cloud  # noqa: PLC0415
+
+    if forget_key and not force:
+        confirm = typer.confirm(
+            f"Drop the stored API key for the project {directory} is bound to?"
+        )
+        if not confirm:
+            raise typer.Abort()
+
+    try:
+        outcome = cloud.unlink(directory, forget_key=forget_key)
+    except cloud.CloudError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1)
+
+    if outcome.project_id is not None:
+        typer.echo(f"Unlinked {directory} from project {outcome.project_id}.")
+    else:
+        # `origin` was not a Wren Cloud URL. Still removed — the directory is
+        # unbound either way — but naming a project would be a fiction.
+        typer.echo(
+            f"Removed the `origin` remote ({outcome.remote_url}) from {directory}."
+        )
+    if outcome.key_forgotten:
+        typer.echo("Dropped the stored API key for that project.")
+    if outcome.helper_removed:
+        typer.echo(
+            f"Removed the git credential helper for {outcome.git_host} — "
+            "no stored logins use that host any more."
+        )
+
+
+@cloud_app.command()
+def logout(
+    host: Annotated[
+        Optional[str],
+        typer.Option(
+            "--host",
+            help="Wren Cloud host used at login, if you have more than one.",
+        ),
+    ] = None,
+    project: Annotated[
+        Optional[str],
+        typer.Option(
+            "--project",
+            help="Project id, if you have logins for more than one project.",
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Skip the confirmation prompt."),
+    ] = False,
+) -> None:
+    """Drop a stored Wren Cloud login, without touching any directory.
+
+    This is the counterpart to ``login``. It removes the stored API key, and
+    — once that was the last login for its host — that host's git
+    credential-helper entry too.
+
+    No working tree is modified. A directory bound to that project keeps its
+    git remote and simply stops being able to authenticate, which is the
+    honest consequence of discarding the key. Use ``wren cloud unlink`` if
+    you want to unbind a directory as well.
+
+    Distinct from ``wren cloud git-credential erase``, which git calls when
+    a credential is rejected: that drops only the short-lived token and
+    deliberately leaves your API key in place.
+    """
+    from wren import cloud  # noqa: PLC0415
+
+    logins = cloud.list_logins()
+    if project is not None:
+        logins = [entry for entry in logins if entry[1] == str(project)]
+    if host is not None:
+        # Same field as `link` filters on, for the same reason: `api_host` is
+        # what the user typed at `login` and what the candidates below print.
+        logins = [entry for entry in logins if entry[2]["api_host"] == host]
+
+    if not logins:
+        typer.echo(
+            "Error: no stored Wren Cloud login found"
+            + (f" for project {project}" if project else "")
+            + ".",
+            err=True,
+        )
+        raise typer.Exit(1)
+    if len(logins) > 1:
+        typer.echo(
+            "Error: more than one stored login matches; disambiguate with "
+            "--host and/or --project. Candidates:",
+            err=True,
+        )
+        for _git_host, project_id, entry in logins:
+            typer.echo(f"  --host {entry['api_host']} --project {project_id}", err=True)
+        raise typer.Exit(1)
+
+    git_host, project_id, entry = logins[0]
+
+    if not force:
+        confirm = typer.confirm(
+            f"Drop the stored API key for project {project_id} on {entry['api_host']}?"
+        )
+        if not confirm:
+            raise typer.Abort()
+
+    login_removed, helper_removed = cloud.logout(git_host, project_id)
+    if not login_removed:
+        typer.echo(
+            f"Error: no stored login for project {project_id} on {git_host}.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    typer.echo(f"Logged out of project {project_id} on {entry['api_host']}.")
+    if helper_removed:
+        typer.echo(
+            f"Removed the git credential helper for {git_host} — no stored "
+            "logins use that host any more."
+        )
 
 
 @git_credential_app.command("get")

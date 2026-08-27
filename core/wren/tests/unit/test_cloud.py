@@ -1,10 +1,17 @@
-"""Unit tests for ``wren.cloud`` — path parsing, config writing, and the
-git credential helper's stdin/stdout protocol.
+"""Unit tests for ``wren.cloud`` — path parsing, config writing, the git
+credential helper's stdin/stdout protocol, and the binding lifecycle.
 
-These cover the pure-logic paths only. The seven live checks against a real
-Wren Cloud stack (login+clone, push, wrong-key messaging, host-scoping,
-fresh-dir link, existing-dir link, nested-repo refusal) are exercised
-manually, not here — a mocked HTTP/git layer cannot stand in for them.
+Two kinds of test live here. Most cover pure-logic paths with HTTP mocked.
+The ``link`` / ``unlink`` / guard sections instead drive **real git**, with a
+local filesystem path standing in for the project's remote — those failure
+modes (an `origin` that points somewhere else, a history acquired from
+another project) only exist in git's behaviour, so a mock could not detect
+them.
+
+Still exercised manually against a real Wren Cloud stack, not here, because
+a mocked HTTP layer cannot stand in for them: login+clone, push, wrong-key
+messaging, host-scoping of the credential helper, and the nested-repo
+refusal against a real nested layout.
 """
 
 from __future__ import annotations
@@ -1159,3 +1166,471 @@ def test_link_leaves_an_existing_upstream_alone(tmp_path):
         ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], cwd=target
     ).stdout.strip()
     assert upstream == "origin/other", "a deliberate upstream must not be re-pointed"
+
+
+# ── Reading the binding back out of a directory ────────────────────────────
+#
+# The binding is the git remote and nothing else, so these are the only way
+# to answer "what is this directory bound to?". They drive real git.
+
+
+def _seed_hooked_remote(remote_dir, *, marker="a"):
+    """A seeded remote that also carries `.hooks/deploy-modeling.yaml`.
+
+    The real server seeds that file when a project is created, and it is the
+    marker `head_has_seeded_hooks` keys off. `_seed_remote` above deliberately
+    does not write it, so tests that need "this history came from a project"
+    ask for it explicitly rather than every existing link test acquiring one.
+
+    `marker` must differ between two remotes standing in for two different
+    projects. Without it both seed commits get identical content, message and
+    author within the same second, so git assigns them the *same SHA* — and
+    each then looks like an ancestor of the other, which silently turns an
+    unrelated-history test into a no-op fast-forward.
+    """
+    remote_dir.mkdir(parents=True)
+    cloud.run_git(["init"], cwd=remote_dir)
+    (remote_dir / ".hooks").mkdir()
+    (remote_dir / ".hooks" / "deploy-modeling.yaml").write_text(
+        f"version: '1'\n# project {marker}\n"
+    )
+    cloud.run_git(["add", "-A"], cwd=remote_dir)
+    cloud.run_git(["commit", "-m", f"Initialize hooks ({marker})"], cwd=remote_dir)
+
+
+def test_current_remote_url_is_none_without_an_origin(tmp_path):
+    target = tmp_path / "proj"
+    target.mkdir()
+    cloud.run_git(["init"], cwd=target)
+    assert cloud.current_remote_url(target) is None
+
+
+def test_current_remote_url_returns_the_origin_it_was_given(tmp_path):
+    target = tmp_path / "proj"
+    target.mkdir()
+    cloud.run_git(["init"], cwd=target)
+    cloud.run_git(
+        [
+            "remote",
+            "add",
+            "origin",
+            "https://wren.example/git/org/2/16/shared-data.git",
+        ],
+        cwd=target,
+    )
+    assert (
+        cloud.current_remote_url(target)
+        == "https://wren.example/git/org/2/16/shared-data.git"
+    )
+
+
+def test_binding_from_remote_url_parses_a_wren_remote():
+    assert cloud.binding_from_remote_url(
+        "https://wren.example/git/org/2/16/shared-data.git"
+    ) == ("https://wren.example", "2", "16", "shared-data.git")
+
+
+def test_binding_from_remote_url_keeps_a_port_in_the_host():
+    # git_host must round-trip to the same string `credentials` is keyed by,
+    # which for a local setup includes the port.
+    assert cloud.binding_from_remote_url(
+        "http://localhost:8081/git/org/2/16/shared-data.git"
+    ) == ("http://localhost:8081", "2", "16", "shared-data.git")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/acme/analytics.git",
+        "git@github.com:acme/analytics.git",
+        "https://wren.example/not/a/project/path",
+        "",
+    ],
+)
+def test_binding_from_remote_url_is_none_for_a_non_wren_remote(url):
+    # A directory pointing at GitHub is bound to something, just not to us;
+    # callers must be able to tell that apart from "bound to project X".
+    assert cloud.binding_from_remote_url(url) is None
+
+
+def test_head_has_seeded_hooks_is_false_for_a_local_only_history(tmp_path):
+    target = tmp_path / "proj"
+    target.mkdir()
+    cloud.run_git(["init"], cwd=target)
+    (target / "model.yml").write_text("name: orders\n")
+    cloud.run_git(["add", "-A"], cwd=target)
+    cloud.run_git(["commit", "-m", "local"], cwd=target)
+    assert cloud.head_has_seeded_hooks(target) is False
+
+
+def test_head_has_seeded_hooks_is_true_after_acquiring_a_project(tmp_path):
+    git_host = str(tmp_path / "host")
+    _seed_hooked_remote(tmp_path / "host" / "git" / "shared-data.git")
+    target = tmp_path / "proj"
+    _link(target, git_host=git_host)
+    assert cloud.head_has_seeded_hooks(target) is True
+
+
+# ── remove_login ───────────────────────────────────────────────────────────
+
+
+def _store(git_host, project_id, *, api_host="https://api.example"):
+    cloud.store_login(
+        git_host=git_host,
+        api_host=api_host,
+        project_id=project_id,
+        org_id="2",
+        repo=f"org/2/{project_id}/shared-data.git",
+        api_key=f"sk-{project_id}",
+    )
+
+
+def test_remove_login_drops_the_entry_and_prunes_the_emptied_host():
+    _store("https://wren.example", "16")
+    assert cloud.remove_login("https://wren.example", "16") is True
+    assert cloud.list_logins() == []
+    # The host key must go too, or "does any login still use this host?" —
+    # which gates removing the shared credential-helper entry — answers wrongly.
+    assert "https://wren.example" not in cloud._load_store()["credentials"]
+
+
+def test_remove_login_keeps_other_projects_on_the_same_host():
+    _store("https://wren.example", "16")
+    _store("https://wren.example", "17")
+    cloud.remove_login("https://wren.example", "16")
+    remaining = [(host, pid) for host, pid, _entry in cloud.list_logins()]
+    assert remaining == [("https://wren.example", "17")]
+
+
+def test_remove_login_accepts_an_int_project_id():
+    # store_login coerces with str(); a delete that did not would silently
+    # fail to match its own entry.
+    _store("https://wren.example", "16")
+    assert cloud.remove_login("https://wren.example", 16) is True
+
+
+def test_remove_login_returns_false_when_nothing_matches():
+    _store("https://wren.example", "16")
+    assert cloud.remove_login("https://wren.example", "999") is False
+    assert cloud.remove_login("https://other.example", "16") is False
+    assert len(cloud.list_logins()) == 1, "a miss must not remove anything"
+
+
+# ── link and create: the binding-lifecycle guards ──────────────────────────
+#
+# `link` used to only ever *add* `origin`, never check an existing one, so a
+# directory bound to project A could be handed project B and silently stay on
+# A while the caller reported success for B. Via `create` that also left B
+# orphaned server-side.
+
+
+def test_link_refuses_when_origin_points_at_a_different_project(tmp_path):
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "shared-data.git")
+    target = tmp_path / "proj"
+    target.mkdir()
+    cloud.run_git(["init"], cwd=target)
+    cloud.run_git(
+        ["remote", "add", "origin", f"{git_host}/git/org/2/99/other.git"], cwd=target
+    )
+
+    with pytest.raises(cloud.CloudError) as exc:
+        _link(target, git_host=git_host)
+
+    message = str(exc.value)
+    assert "99" in message, "must name the project the directory is actually on"
+    assert "unlink" in message, "must say how to proceed"
+    # And the remote must be left exactly as it was, not half-repointed.
+    assert cloud.current_remote_url(target) == f"{git_host}/git/org/2/99/other.git"
+
+
+def test_link_accepts_an_existing_origin_that_already_matches(tmp_path):
+    # The re-bind-to-the-same-project path must keep working: this is how a
+    # user recovers a directory whose upstream was never set.
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "shared-data.git")
+    target = tmp_path / "proj"
+    assert _link(target, git_host=git_host) is cloud.LinkOutcome.LINKED
+    assert _link(target, git_host=git_host) is cloud.LinkOutcome.ALREADY_LINKED
+
+
+def test_link_refuses_to_merge_a_history_acquired_from_another_project(tmp_path):
+    """The F2 path: even with `origin` correctly removed first, the local
+    history still belongs to the old project, and merging would combine two
+    projects' content and publish it on the next push."""
+    git_host = str(tmp_path / "host")
+    _seed_hooked_remote(tmp_path / "host" / "git" / "shared-data.git", marker="16")
+    _seed_hooked_remote(
+        tmp_path / "host" / "git" / "org" / "2" / "99" / "other.git", marker="99"
+    )
+
+    target = tmp_path / "proj"
+    _link(target, git_host=git_host)
+    # Unbind by hand, exactly as a user would before re-binding elsewhere.
+    cloud.run_git(["remote", "remove", "origin"], cwd=target)
+
+    with pytest.raises(cloud.CloudError) as exc:
+        _link(target, git_host=git_host, repo="org/2/99/other.git")
+
+    message = str(exc.value)
+    assert "clean directory" in message
+    # No merge may have happened.
+    assert cloud.run_git(["log", "--oneline"], cwd=target).stdout.count("\n") == 1
+
+
+def test_link_still_adopts_a_pristine_local_project(tmp_path):
+    """The negative case for the guard above — the whole reason `link`
+    exists is adopting a local project, and that must be unaffected."""
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "shared-data.git")
+    target = tmp_path / "proj"
+    target.mkdir()
+    (target / "model.yml").write_text("name: orders\n")
+
+    assert _link(target, git_host=git_host) is cloud.LinkOutcome.LINKED
+    assert (target / "model.yml").exists(), "the user's own files must survive"
+    assert (target / "seed.txt").exists(), "the remote's content must arrive"
+
+
+def test_create_refuses_a_bound_directory_without_creating_anything(
+    tmp_path, monkeypatch, _helper_check_passes
+):
+    """AC: the refusal must happen before the server is touched. This is the
+    defect that produced a real orphaned project on staging."""
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError(
+            "create_project must not be reached: the guard exists precisely so "
+            "that a refusal leaves no project behind"
+        )
+
+    monkeypatch.setattr(cloud, "create_project", fail_if_called)
+    monkeypatch.setattr(cloud, "mint_project_key", fail_if_called)
+
+    target = tmp_path / "proj"
+    target.mkdir()
+    cloud.run_git(["init"], cwd=target)
+    cloud.run_git(
+        [
+            "remote",
+            "add",
+            "origin",
+            "https://wren.example/git/org/2/16/shared-data.git",
+        ],
+        cwd=target,
+    )
+
+    with pytest.raises(cloud.CloudError) as exc:
+        cloud.create(
+            target,
+            host="https://wren.example",
+            org_id="2",
+            org_key="osk-key",
+            display_name="proj",
+        )
+
+    message = str(exc.value)
+    assert "16" in message, "must name the project the directory is bound to"
+    assert "Nothing has been created on the server." in message
+
+
+def test_create_refuses_a_directory_whose_history_came_from_a_project(
+    tmp_path, monkeypatch, _helper_check_passes
+):
+    """The `origin`-removed variant. Without this check, `create` would build
+    the project and only fail later inside `link` — orphaning it again."""
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("create_project must not be reached")
+
+    monkeypatch.setattr(cloud, "create_project", fail_if_called)
+    monkeypatch.setattr(cloud, "mint_project_key", fail_if_called)
+
+    git_host = str(tmp_path / "host")
+    _seed_hooked_remote(tmp_path / "host" / "git" / "shared-data.git")
+    target = tmp_path / "proj"
+    _link(target, git_host=git_host)
+    cloud.run_git(["remote", "remove", "origin"], cwd=target)
+
+    with pytest.raises(cloud.CloudError) as exc:
+        cloud.create(
+            target,
+            host="https://wren.example",
+            org_id="2",
+            org_key="osk-key",
+            display_name="proj",
+        )
+    assert "Nothing has been created on the server." in str(exc.value)
+
+
+# ── unlink / logout ────────────────────────────────────────────────────────
+
+
+def _helper_section_exists(git_host):
+    return (
+        cloud.run_git(
+            ["config", "--global", "--get-all", f"credential.{git_host}.helper"],
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
+def test_unlink_removes_the_remote_and_names_the_project(tmp_path):
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "org" / "2" / "16" / "shared-data.git")
+    target = tmp_path / "proj"
+    _link(target, git_host=git_host, repo="org/2/16/shared-data.git")
+
+    outcome = cloud.unlink(target)
+
+    assert outcome.project_id == "16"
+    assert cloud.current_remote_url(target) is None, "the binding must be gone"
+
+
+def test_unlink_keeps_the_stored_key_by_default(tmp_path):
+    """Another directory may still be bound to the same project, so
+    unbinding one must not revoke the credential."""
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "org" / "2" / "16" / "shared-data.git")
+    _store(git_host, "16")
+    target = tmp_path / "proj"
+    _link(target, git_host=git_host, repo="org/2/16/shared-data.git")
+
+    outcome = cloud.unlink(target)
+
+    assert outcome.key_forgotten is False
+    assert len(cloud.list_logins()) == 1
+
+
+def test_unlink_forget_key_drops_the_key_and_the_last_helper(tmp_path):
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "org" / "2" / "16" / "shared-data.git")
+    _store(git_host, "16")
+    cloud.configure_git_credential_helper(git_host)
+    assert _helper_section_exists(git_host), "precondition: helper configured"
+    target = tmp_path / "proj"
+    _link(target, git_host=git_host, repo="org/2/16/shared-data.git")
+
+    outcome = cloud.unlink(target, forget_key=True)
+
+    assert outcome.key_forgotten is True
+    assert outcome.helper_removed is True
+    assert cloud.list_logins() == []
+    assert not _helper_section_exists(git_host)
+
+
+def test_unlink_forget_key_keeps_the_helper_while_the_host_is_still_used(tmp_path):
+    """The helper entry is host-scoped, so removing it while another project
+    on the same host is still bound would break that project's auth too."""
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "org" / "2" / "16" / "shared-data.git")
+    _store(git_host, "16")
+    _store(git_host, "17")
+    cloud.configure_git_credential_helper(git_host)
+    target = tmp_path / "proj"
+    _link(target, git_host=git_host, repo="org/2/16/shared-data.git")
+
+    outcome = cloud.unlink(target, forget_key=True)
+
+    assert outcome.key_forgotten is True
+    assert outcome.helper_removed is False
+    assert _helper_section_exists(git_host), "project 17 still needs this helper"
+
+
+def test_unlink_refuses_a_directory_that_is_not_bound(tmp_path):
+    target = tmp_path / "proj"
+    target.mkdir()
+    cloud.run_git(["init"], cwd=target)
+    with pytest.raises(cloud.CloudError, match="not bound"):
+        cloud.unlink(target)
+
+
+def test_unlink_then_link_rebinds_the_same_project_cleanly(tmp_path):
+    """Unbind/re-bind must round-trip, or the guards would leave users stuck."""
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "shared-data.git")
+    target = tmp_path / "proj"
+    _link(target, git_host=git_host)
+
+    cloud.unlink(target)
+    assert _link(target, git_host=git_host) is cloud.LinkOutcome.ALREADY_LINKED
+    assert cloud._has_upstream(target), "upstream must be restored"
+
+
+def test_logout_drops_the_login_and_leaves_the_directory_bound(tmp_path):
+    """`logout` is not `unlink`: it discards the credential, and a bound
+    directory keeps its remote and simply stops being able to authenticate."""
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "org" / "2" / "16" / "shared-data.git")
+    _store(git_host, "16")
+    cloud.configure_git_credential_helper(git_host)
+    target = tmp_path / "proj"
+    _link(target, git_host=git_host, repo="org/2/16/shared-data.git")
+
+    login_removed, helper_removed = cloud.logout(git_host, "16")
+
+    assert (login_removed, helper_removed) == (True, True)
+    assert cloud.list_logins() == []
+    assert cloud.current_remote_url(target) is not None, "no directory is touched"
+
+
+def test_logout_keeps_the_helper_while_another_login_uses_the_host():
+    git_host = "https://wren.example"
+    _store(git_host, "16")
+    _store(git_host, "17")
+    cloud.configure_git_credential_helper(git_host)
+
+    login_removed, helper_removed = cloud.logout(git_host, "16")
+
+    assert login_removed is True
+    assert helper_removed is False
+    assert _helper_section_exists(git_host)
+
+
+def test_link_rebinds_the_same_project_when_the_local_copy_is_behind(tmp_path):
+    """Regression: the foreign-history guard must not fire on a re-bind to
+    the same project.
+
+    Found by live testing, not by the test above it: "origin/<branch> is not
+    an ancestor of HEAD" is false both for unrelated histories *and* for a
+    clone that is simply behind. Keying the refusal off that alone refused
+    the ordinary unlink/re-bind recovery path, which is the one thing the
+    guard had to leave working.
+    """
+    git_host = str(tmp_path / "host")
+    remote = tmp_path / "host" / "git" / "shared-data.git"
+    _seed_hooked_remote(remote, marker="16")
+
+    target = tmp_path / "proj"
+    _link(target, git_host=git_host)
+
+    # The remote moves on, so the local copy is now strictly behind it.
+    (remote / "models.yml").write_text("name: orders\n")
+    cloud.run_git(["add", "-A"], cwd=remote)
+    cloud.run_git(["commit", "-m", "server-side change"], cwd=remote)
+
+    cloud.unlink(target)
+    assert _link(target, git_host=git_host) is cloud.LinkOutcome.LINKED
+    assert (target / "models.yml").exists(), "the newer remote content arrived"
+
+
+def test_link_leaves_no_origin_behind_when_it_refuses_a_foreign_history(tmp_path):
+    """A refusal must not strand the directory pointing at a project it was
+    never bound to — the module's contract is that refusals leave nothing to
+    undo."""
+    git_host = str(tmp_path / "host")
+    _seed_hooked_remote(tmp_path / "host" / "git" / "shared-data.git", marker="16")
+    _seed_hooked_remote(
+        tmp_path / "host" / "git" / "org" / "2" / "99" / "other.git", marker="99"
+    )
+    target = tmp_path / "proj"
+    _link(target, git_host=git_host)
+    cloud.run_git(["remote", "remove", "origin"], cwd=target)
+
+    with pytest.raises(cloud.CloudError):
+        _link(target, git_host=git_host, repo="org/2/99/other.git")
+
+    assert cloud.current_remote_url(target) is None, (
+        "the origin added during the attempt must be rolled back"
+    )

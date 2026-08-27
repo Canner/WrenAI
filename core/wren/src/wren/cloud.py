@@ -285,6 +285,29 @@ def list_logins() -> list[tuple[str, str, dict]]:
     return out
 
 
+def remove_login(git_host: str, project_id: str) -> bool:
+    """Drop one stored login. Returns False when there was nothing to drop.
+
+    Coerces `project_id` with `str()` to match how `store_login` writes it —
+    an int-ish id would otherwise never match its own entry.
+
+    Prunes the `git_host` key once its last project is gone. Without that,
+    `list_logins` would keep skipping an empty mapping that no longer
+    corresponds to anything, and "are there any logins left on this host?"
+    — which is what decides whether the host's credential-helper section may
+    be removed — would answer wrongly.
+    """
+    data = _load_store()
+    projects = data["credentials"].get(git_host)
+    if not projects or str(project_id) not in projects:
+        return False
+    del projects[str(project_id)]
+    if not projects:
+        del data["credentials"][git_host]
+    _save_store(data)
+    return True
+
+
 # ── Parsing the project out of a git path ───────────────────────────────────
 
 
@@ -436,6 +459,26 @@ def configure_git_credential_helper(git_host: str) -> None:
     _git_config_set_global(f"{section}.helper", "")
     _git_config_add_global(f"{section}.helper", HELPER_COMMAND)
     _git_config_set_global(f"{section}.useHttpPath", "true")
+
+
+def remove_git_credential_helper(git_host: str) -> None:
+    """Undo `configure_git_credential_helper` for one host.
+
+    Removes the whole section rather than unsetting our own `helper` line.
+    That function writes *three* things, and the first is an empty `helper`
+    whose only job is to reset the inherited chain for this host. Removing
+    just our entry would leave that reset in place — a section that still
+    suppresses the user's own helper (on macOS, the `osxkeychain` one git
+    ships in the Command Line Tools' gitconfig) with nothing put back in its
+    place, so git would have no credential source for the host at all.
+
+    Best-effort: `--remove-section` exits non-zero when the section is not
+    there, which is the normal state for a host that was never logged in to.
+    """
+    run_git(
+        ["config", "--global", "--remove-section", f"credential.{git_host}"],
+        check=False,
+    )
 
 
 def login(
@@ -641,6 +684,122 @@ def check_not_nested(target: Path) -> None:
         raise NestedRepoError(target, found)
 
 
+# ── Reading the binding back out of a directory ─────────────────────────────
+#
+# The binding is the git remote and nothing else is stored (see the module
+# docstring), so every question of the form "what is this directory bound
+# to?" has to be answered by asking git, at the time it is asked. These are
+# the inverse of the `remote_url` construction in `link`.
+
+
+def current_remote_url(target: Path) -> str | None:
+    """Return `target`'s `origin` URL, or `None` when it has no `origin`."""
+    result = run_git(["remote", "get-url", "origin"], cwd=target, check=False)
+    if result.returncode != 0:
+        return None
+    url = result.stdout.strip()
+    return url or None
+
+
+def binding_from_remote_url(url: str) -> tuple[str, str, str, str] | None:
+    """Split a remote URL into `(git_host, org_id, project_id, repo_name)`.
+
+    Returns `None` when the URL is not a Wren Cloud repo — a directory whose
+    `origin` points at GitHub is bound to something, just not to us, and
+    callers need to tell those two cases apart to say anything useful.
+
+    Split at the `/git/` routing prefix rather than by URL structure, so
+    this is a true inverse of the `f"{git_host}/git/{repo}"` that `link`
+    writes — for whatever `git_host` was passed, including a scheme-less
+    one. `git_host` therefore comes back as exactly the string `credentials`
+    is keyed by, which is what makes a stored login findable from a
+    directory.
+    """
+    marker = "/git/"
+    index = url.rfind(marker)
+    if index == -1:
+        return None
+    git_host = url[:index]
+    if not git_host:
+        return None
+    try:
+        org_id, project_id, repo_name = parse_repo_path(url[index + 1 :])
+    except CloudError:
+        return None
+    return git_host, org_id, project_id, repo_name
+
+
+def check_not_already_bound(target: Path) -> None:
+    """Refuse a directory that is already bound to, or came from, a project.
+
+    `create` is always making a *new* project, so any existing binding is
+    wrong by construction. It has to be checked here rather than left to
+    `link`, and specifically *before* the server is touched: `link` runs
+    after the project and its key already exist, so a refusal there orphans
+    them — which is exactly what happened before this guard existed.
+
+    Two distinct states both mean "not a clean directory":
+
+    - an `origin` remote — the binding itself;
+    - a HEAD carrying a seeded hook commit — no `origin` (perhaps removed by
+      hand), but the history still belongs to the project it came from, so
+      `link` would later refuse to merge it anyway.
+    """
+    existing = current_remote_url(target)
+    if existing is not None:
+        bound = binding_from_remote_url(existing)
+        where = f"project {bound[2]}" if bound else existing
+        raise CloudError(
+            f"{target} is already bound to {where}, so a new project cannot "
+            "be created for it.\n"
+            f"  origin: {existing}\n"
+            "Run `wren cloud unlink` here first, or run `create` in a "
+            "directory that is not bound to anything. Nothing has been "
+            "created on the server."
+        )
+    if head_has_seeded_hooks(target):
+        raise CloudError(
+            f"{target} has no `origin`, but its history came from a Wren "
+            "Cloud project — its commits carry the "
+            "`.hooks/deploy-modeling.yaml` that project creation seeds.\n"
+            "Creating a new project for it would produce a directory holding "
+            "two projects' content. Use a clean directory, or remove this "
+            "one's `.git` if you no longer need its history. Nothing has "
+            "been created on the server."
+        )
+
+
+def _same_remote(a: str | None, b: str | None) -> bool:
+    """Whether two remote URLs address the same repo.
+
+    Only normalises a trailing slash. Anything cleverer (case, default
+    ports, credentials in the URL) would risk calling two genuinely
+    different projects equal, and the safe direction here is to refuse.
+    """
+    if a is None or b is None:
+        return False
+    return a.rstrip("/") == b.rstrip("/")
+
+
+def head_has_seeded_hooks(target: Path) -> bool:
+    """Whether `target`'s HEAD already carries a project's seeded hook file.
+
+    Project creation seeds `.hooks/deploy-modeling.yaml`, so a local history
+    containing it was acquired from *some* Wren Cloud project. A local
+    project that has only ever existed on this machine does not have one.
+    That is what makes this usable as "this directory already belongs to a
+    project" without storing any per-directory state.
+    """
+    return (
+        run_git(
+            ["cat-file", "-e", "HEAD:.hooks/deploy-modeling.yaml"],
+            cwd=target,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
 # ── link: bind a directory to a cloud project, exactly once ─────────────────
 
 
@@ -733,9 +892,35 @@ def link(
         run_git(["add", "-A"], cwd=target)
         run_git(["commit", "-m", "Existing local project", "--allow-empty"], cwd=target)
 
+    # An `origin` that already exists is NOT assumed to be the right one.
+    # This function used to only ever *add* the remote, never check it, which
+    # meant a directory bound to project A could be handed project B's repo
+    # and silently stay on A — while the caller reported success for B. Via
+    # `create` that also left B orphaned server-side: created, keyed, and
+    # referenced by nothing.
+    added_origin = False
     remotes = run_git(["remote"], cwd=target).stdout.split()
-    if "origin" not in remotes:
+    if "origin" in remotes:
+        existing = current_remote_url(target)
+        if not _same_remote(existing, remote_url):
+            bound = binding_from_remote_url(existing or "")
+            bound_desc = (
+                f"project {bound[2]}" if bound else f"{existing or 'an unknown remote'}"
+            )
+            raise CloudError(
+                f"{target} already has an `origin` pointing at {bound_desc}, "
+                f"so it cannot be bound to this one.\n"
+                f"  origin:    {existing}\n"
+                f"  requested: {remote_url}\n"
+                "The git remote *is* the binding, so binding elsewhere means "
+                "replacing it. Run `wren cloud unlink` here first if you meant "
+                "to move this directory to another project — and note that "
+                "switching projects wants a clean directory, because this "
+                "directory's history belongs to the project it came from."
+            )
+    else:
         run_git(["remote", "add", "origin", remote_url], cwd=target)
+        added_origin = True
 
     run_git(["fetch", "origin"], cwd=target)
 
@@ -772,6 +957,40 @@ def link(
         if not _has_upstream(target):
             _set_upstream(target, branch)
         return LinkOutcome.ALREADY_LINKED
+
+    # Merging a *different* project's history into this one would combine two
+    # projects' content, and the next `git push` would publish the result.
+    # Refuse rather than offering a flag: no directory wants two projects at
+    # once, and the damage only becomes visible once it is published.
+    #
+    # "Not an ancestor" (above) is NOT sufficient to detect that: it is also
+    # false when the local clone is merely behind, or has diverged from, the
+    # *same* project's remote — which is the ordinary re-bind-after-unlink
+    # case and must keep working. Ask git whether the histories share any
+    # ancestor at all; `merge-base` without `--is-ancestor` fails exactly
+    # when they do not.
+    unrelated = (
+        run_git(
+            ["merge-base", f"origin/{branch}", "HEAD"], cwd=target, check=False
+        ).returncode
+        != 0
+    )
+    if unrelated and head_has_seeded_hooks(target):
+        if added_origin:
+            # Leave nothing behind: this refusal must not strand the target
+            # pointing at a project it was never bound to.
+            run_git(["remote", "remove", "origin"], cwd=target, check=False)
+        raise CloudError(
+            f"{target} already contains a Wren Cloud project's history — its "
+            "commits carry the `.hooks/deploy-modeling.yaml` that project "
+            "creation seeds — and it shares no history with the project you "
+            "are binding it to, so this would merge one project's content "
+            "into the other.\n"
+            "Bind a clean directory instead: either clone into a new one, or "
+            "remove this directory's `.git` if you no longer need its history. "
+            "Re-binding to the *same* project is fine, including when your "
+            "copy is behind — that does not reach this point."
+        )
 
     merge = run_git(
         [
@@ -829,6 +1048,98 @@ def _set_upstream(target: Path, branch: str) -> None:
         cwd=target,
         check=False,
     )
+
+
+# ── unlink / logout: undoing what link and login did ───────────────────────
+
+
+@dataclass
+class UnlinkOutcome:
+    """What `unlink` actually removed, for the CLI to report accurately."""
+
+    remote_url: str
+    """The `origin` that was removed."""
+
+    git_host: str | None
+    """`None` when `origin` was not a Wren Cloud URL."""
+
+    project_id: str | None
+    """`None` when `origin` was not a Wren Cloud URL."""
+
+    key_forgotten: bool
+    """Whether a stored login was dropped (only ever with `forget_key`)."""
+
+    helper_removed: bool
+    """Whether this host's credential-helper section was removed with it."""
+
+
+def unlink(target: Path, *, forget_key: bool = False) -> UnlinkOutcome:
+    """Unbind `target` from its project by removing its `origin`.
+
+    The binding is the git remote, so removing it *is* the unbind — there is
+    no server call to make (the server never knew about the binding) and
+    nothing else to undo for the directory itself.
+
+    `forget_key` additionally drops the stored login for that project, and
+    only then, only if no other stored login still uses the same git host,
+    removes that host's credential-helper section. That ordering is the
+    point: the helper entry is host-scoped, so removing it while another
+    project on the same host is still bound would break authentication for
+    that project too.
+    """
+    target = target.resolve()
+
+    remote_url = current_remote_url(target)
+    if remote_url is None:
+        raise CloudError(
+            f"{target} is not bound to a Wren Cloud project — it has no "
+            "`origin` remote. Nothing to unlink."
+        )
+
+    bound = binding_from_remote_url(remote_url)
+    git_host = bound[0] if bound else None
+    project_id = bound[2] if bound else None
+
+    run_git(["remote", "remove", "origin"], cwd=target)
+
+    key_forgotten = False
+    helper_removed = False
+    if forget_key and git_host is not None and project_id is not None:
+        key_forgotten = remove_login(git_host, project_id)
+        if not any(host == git_host for host, _pid, _entry in list_logins()):
+            remove_git_credential_helper(git_host)
+            helper_removed = True
+
+    return UnlinkOutcome(
+        remote_url=remote_url,
+        git_host=git_host,
+        project_id=project_id,
+        key_forgotten=key_forgotten,
+        helper_removed=helper_removed,
+    )
+
+
+def logout(git_host: str, project_id: str) -> tuple[bool, bool]:
+    """Drop a stored login. Returns `(login_removed, helper_removed)`.
+
+    Touches no directory: a bound working tree keeps its remote and simply
+    stops being able to authenticate, which is the honest outcome of
+    discarding the key it was authenticating with.
+
+    This is deliberately not built on `git_credential_erase`. That function
+    drops only a cached token and leaves the API key alone on purpose —
+    `erase` means "that credential failed", not "log out" — and a test
+    pins that behaviour.
+
+    Removes the host's credential-helper section only once this was its last
+    stored login, for the same host-scoping reason as `unlink`.
+    """
+    login_removed = remove_login(git_host, project_id)
+    helper_removed = False
+    if not any(host == git_host for host, _pid, _entry in list_logins()):
+        remove_git_credential_helper(git_host)
+        helper_removed = True
+    return login_removed, helper_removed
 
 
 # ── create: make a new project and bind it, in one step ─────────────────────
@@ -1033,13 +1344,20 @@ def create(
 ) -> tuple[CreatedProject, LinkOutcome]:
     """Create a new agent-mode project on `host` and bind `target` to it.
 
-    Checks `target` is not nested inside a foreign git repository, and that
-    the git credential helper is serviceable, *before* creating anything
-    server-side — so a refusal here (unlike a refusal partway through) never
-    leaves an orphaned project behind. The helper check is repeated inside
-    `login` below, which is where it belongs for a bare `login`; running it
-    up front too is what keeps this command's failure free of side effects,
-    since by the time `login` runs, a project and a key already exist.
+    Checks `target` is not nested inside a foreign git repository, that the
+    git credential helper is serviceable, and that `target` is not already
+    bound to (or carrying the history of) another project — all *before*
+    creating anything server-side, so a refusal here (unlike a refusal
+    partway through) never leaves an orphaned project behind. The helper
+    check is repeated inside `login` below, which is where it belongs for a
+    bare `login`; running it up front too is what keeps this command's
+    failure free of side effects, since by the time `login` runs, a project
+    and a key already exist.
+
+    `check_not_already_bound` is here for exactly that reason and not left
+    to `link`. `link` runs last, after the project and its key exist, so the
+    same refusal raised from there produced a real project that nothing
+    referenced — which is the defect this guard closes.
 
     Ends in exactly the state `login` + `link` leave a directory in: a
     stored project key, a configured git credential helper, and a bound
@@ -1063,6 +1381,7 @@ def create(
     target = target.resolve()
     check_not_nested(target)
     check_helper_command_serviceable()
+    check_not_already_bound(target)
 
     api_host = host.rstrip("/")
     resolved_git_host = (git_host or host).rstrip("/")
