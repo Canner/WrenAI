@@ -3,7 +3,7 @@
 Two credentials, two lifetimes:
 
 - The **project API key** is the durable credential. It is prompted for once
-  by ``login``, stored locally (0600, keyed by git host + project id), and
+  by ``auth add``, stored locally (0600, keyed by git host + project id), and
   never leaves this machine except in the ``Authorization`` header of the
   git-token request below.
 - The **git token** is a short-TTL JWT minted from the API key on every git
@@ -12,9 +12,10 @@ Two credentials, two lifetimes:
   which is also what makes an expired token a non-event: nothing on this
   machine ever holds one long enough to present it after it has expired.
 
-``login`` writes a URL-scoped credential helper entry (plus ``useHttpPath``)
-into the user's *global* git config, not local config — at login time there
-is no clone yet, so there is no local config to write into. Because the
+``auth add`` writes a URL-scoped credential helper entry (plus
+``useHttpPath``) into the user's *global* git config, not local config —
+when the credential is added there is no clone yet, so there is no local
+config to write into. Because the
 helper resolves which project's token to mint from the path git hands it
 (``useHttpPath``), no local-directory-to-project binding is stored anywhere;
 the binding is the git remote itself, which git already tracks.
@@ -215,7 +216,7 @@ def _load_store() -> dict:
     except yaml.YAMLError as exc:
         raise CloudError(
             f"{_CLOUD_FILE} is not valid YAML: {exc}\n"
-            f"Fix or remove {_CLOUD_FILE} and run `wren cloud login` again."
+            f"Fix or remove {_CLOUD_FILE} and run `wren cloud auth add` again."
         ) from exc
     if data is None:
         return {"credentials": {}}
@@ -347,7 +348,7 @@ def check_helper_command_serviceable() -> None:
     config. The error the user sees comes from git, talks about credentials,
     and names neither `wren` nor a version, so there is no path from the
     symptom back to the cause — and `login` would have reported success,
-    because at login time the CLI *is* the capable one and the breakage only
+    because when the credential is added the CLI *is* the capable one and the breakage only
     appears later, in a different tool.
 
     Probing the resolved executable turns that into an immediate refusal that
@@ -450,7 +451,7 @@ def configure_git_credential_helper(git_host: str) -> None:
     want. That `!` is also what makes `wren` PATH-resolved at git-invocation
     time, which is what `check_helper_command_serviceable` exists to guard.
 
-    Re-running this (e.g. a second `wren cloud login`) stays idempotent:
+    Re-running this (e.g. a second `wren cloud auth add`) stays idempotent:
     `--replace-all` first collapses the `helper` key back down to the single
     empty value before `--add` appends our helper again, so the section
     never accumulates duplicate entries across repeated logins.
@@ -560,7 +561,7 @@ def git_credential_get(input_data: dict[str, str]) -> str:
     if not path:
         raise CloudError(
             "git did not send a project path — is `useHttpPath` set for this "
-            "host? Run `wren cloud login` again to fix the git configuration."
+            "host? Run `wren cloud auth add` again to fix the git configuration."
         )
     org_id, project_id, _repo_name = parse_repo_path(path)
     git_host = f"{protocol}://{host}" if protocol and host else host
@@ -569,7 +570,7 @@ def git_credential_get(input_data: dict[str, str]) -> str:
     if entry is None or entry.get("org_id") != org_id:
         raise CloudError(
             f"No stored Wren Cloud login for project {project_id} on "
-            f"{git_host}. Run `wren cloud login` first."
+            f"{git_host}. Run `wren cloud auth add` first."
         )
 
     token = mint_git_token(entry["api_host"], project_id, entry["api_key"])
@@ -599,7 +600,7 @@ def helper_failure_note(message: str) -> str:
     return (
         f"wren cloud git-credential (wrenai {__version__}, {ran_as}): "
         f"{message}\n"
-        "This is the git credential helper that `wren cloud login` "
+        "This is the git credential helper that `wren cloud auth add` "
         "configured for this host. git will report a credential failure of "
         "its own next; the cause is the line above."
     )
@@ -1377,13 +1378,13 @@ def create(
     as a clear, specific error — not as a bare 404 — while `target` is left
     untouched: `check_not_nested` already ran, but git has not been touched
     yet. The freshly minted project key is included in the error so the
-    project is not orphaned key-less; recover with `wren cloud login` using
+    project is not orphaned key-less; recover with `wren cloud auth add` using
     that key once the AGENTIC opt-in issue is resolved (e.g. by deleting the
     project and re-running `create`).
 
     If the project is created and confirmed AGENTIC but the local `link`
     step then fails (e.g. a merge conflict), the same recovery applies:
-    `wren cloud login` followed by `wren cloud link` completes the bind by
+    `wren cloud auth add` followed by `wren cloud link` completes the bind by
     hand — nothing about the project itself needs to be redone.
     """
     target = target.resolve()
@@ -1410,7 +1411,7 @@ def create(
     project_key = mint_project_key(api_host, project.id, org_key)
 
     def _recovery_hint() -> str:
-        hint = f"  wren cloud login --host {host} --project {project.id}"
+        hint = f"  wren cloud auth add --host {host} --project {project.id}"
         if git_host:
             hint += f" --git-host {git_host}"
         return (

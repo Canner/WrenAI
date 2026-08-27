@@ -3,7 +3,7 @@ git-credential helper's CLI-level stdin/stdout wrapping.
 
 The required live checks (real login against a running Wren Cloud stack,
 real git clone/push, real nested-directory refusal, ...) are exercised
-manually — mocking `wren.cloud.login`/`link`/`unlink`/`logout` here only
+manually — mocking the `wren.cloud` functions here only
 proves the CLI passes options through correctly and prompts when it should,
 not that the underlying git/HTTP behavior is correct. The guard and
 unbind behaviour itself is covered against real git in ``test_cloud.py``.
@@ -43,7 +43,15 @@ def test_login_prompts_for_key_and_never_takes_it_as_an_argument(monkeypatch):
 
     result = runner.invoke(
         app,
-        ["cloud", "login", "--host", "https://cloud.getwren.ai", "--project", "16"],
+        [
+            "cloud",
+            "auth",
+            "add",
+            "--host",
+            "https://cloud.getwren.ai",
+            "--project",
+            "16",
+        ],
         input="sk-secret\n",
     )
     assert result.exit_code == 0, result.output
@@ -67,7 +75,8 @@ def test_login_passes_through_git_host_override(monkeypatch):
         app,
         [
             "cloud",
-            "login",
+            "auth",
+            "add",
             "--host",
             "https://api.example.com",
             "--project",
@@ -84,7 +93,15 @@ def test_login_passes_through_git_host_override(monkeypatch):
 def test_login_rejects_empty_key(monkeypatch):
     result = runner.invoke(
         app,
-        ["cloud", "login", "--host", "https://cloud.getwren.ai", "--project", "16"],
+        [
+            "cloud",
+            "auth",
+            "add",
+            "--host",
+            "https://cloud.getwren.ai",
+            "--project",
+            "16",
+        ],
         input="\n",
     )
     assert result.exit_code != 0
@@ -97,7 +114,15 @@ def test_login_reports_cloud_error_without_traceback(monkeypatch):
     monkeypatch.setattr(cloud, "login", fake_login)
     result = runner.invoke(
         app,
-        ["cloud", "login", "--host", "https://cloud.getwren.ai", "--project", "16"],
+        [
+            "cloud",
+            "auth",
+            "add",
+            "--host",
+            "https://cloud.getwren.ai",
+            "--project",
+            "16",
+        ],
         input="sk-wrong\n",
     )
     assert result.exit_code != 0
@@ -111,7 +136,7 @@ def test_link_errors_when_no_login_is_stored(monkeypatch, tmp_path):
     monkeypatch.setattr(cloud, "list_logins", lambda: [])
     result = runner.invoke(app, ["cloud", "link", str(tmp_path)])
     assert result.exit_code != 0
-    assert "wren cloud login" in result.output
+    assert "wren cloud auth add" in result.output
 
 
 def test_link_disambiguates_multiple_stored_logins(monkeypatch, tmp_path):
@@ -663,7 +688,7 @@ def test_logout_drops_the_only_stored_login(monkeypatch):
         return True, False
 
     monkeypatch.setattr(cloud, "logout", fake_logout)
-    result = runner.invoke(app, ["cloud", "logout", "--yes"])
+    result = runner.invoke(app, ["cloud", "auth", "remove", "--yes"])
 
     assert result.exit_code == 0, result.output
     assert captured == {"git_host": "https://cloud.getwren.ai", "project_id": "16"}
@@ -672,7 +697,7 @@ def test_logout_drops_the_only_stored_login(monkeypatch):
 
 def test_logout_errors_when_no_login_is_stored(monkeypatch):
     monkeypatch.setattr(cloud, "list_logins", lambda: [])
-    result = runner.invoke(app, ["cloud", "logout", "--yes"])
+    result = runner.invoke(app, ["cloud", "auth", "remove", "--yes"])
     assert result.exit_code != 0
     assert "no stored Wren Cloud login" in result.output
 
@@ -686,7 +711,7 @@ def test_logout_disambiguates_multiple_stored_logins(monkeypatch):
             ("https://b.example.com", "17", {"api_host": "https://b.example.com"}),
         ],
     )
-    result = runner.invoke(app, ["cloud", "logout", "--yes"])
+    result = runner.invoke(app, ["cloud", "auth", "remove", "--yes"])
     assert result.exit_code != 0
     assert "disambiguate" in result.output.lower()
 
@@ -715,7 +740,7 @@ def test_logout_host_filters_on_api_host_not_git_host(monkeypatch):
         ),
     )
     result = runner.invoke(
-        app, ["cloud", "logout", "--host", "https://cloud.getwren.ai", "--yes"]
+        app, ["cloud", "auth", "remove", "--host", "https://cloud.getwren.ai", "--yes"]
     )
     assert result.exit_code == 0, result.output
     assert captured["git_host"] == "https://internal-git.example.com"
@@ -738,6 +763,6 @@ def test_logout_confirms_by_default(monkeypatch):
         return True, False
 
     monkeypatch.setattr(cloud, "logout", fake_logout)
-    result = runner.invoke(app, ["cloud", "logout"], input="n\n")
+    result = runner.invoke(app, ["cloud", "auth", "remove"], input="n\n")
     assert result.exit_code != 0
     assert calls["n"] == 0, "declining the prompt must not drop the key"

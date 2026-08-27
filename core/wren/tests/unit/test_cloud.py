@@ -9,7 +9,8 @@ another project) only exist in git's behaviour, so a mock could not detect
 them.
 
 Still exercised manually against a real Wren Cloud stack, not here, because
-a mocked HTTP layer cannot stand in for them: login+clone, push, wrong-key
+a mocked HTTP layer cannot stand in for them: auth add + clone, push,
+wrong-key
 messaging, host-scoping of the credential helper, and the nested-repo
 refusal against a real nested layout.
 """
@@ -82,7 +83,7 @@ def _isolated_git_global_config(tmp_path, monkeypatch):
 
 @pytest.fixture
 def _helper_check_passes(monkeypatch):
-    """Let `login`/`create` past the credential-helper pre-flight check.
+    """Let `auth add`/`create` past the credential-helper pre-flight check.
 
     The check shells out to whatever `wren` is on PATH, which is a property
     of the machine rather than of the code under test. It has its own tests
@@ -818,7 +819,7 @@ def test_create_reports_not_agentic_actionably_and_includes_the_project_key(
     message = str(excinfo.value)
     assert "not an agent-mode" in message
     assert "sk-fresh-project-key" in message
-    assert "wren cloud login" in message
+    assert "wren cloud auth add" in message
     # Nothing was touched locally — this is a pure server-side outcome.
     assert not (target / ".git").exists()
 
@@ -871,7 +872,7 @@ def test_create_degrades_to_generic_bind_failure_on_an_unrecognized_git_token_er
     assert "not an agent-mode" not in message
     assert "binding this directory to it failed" in message
     assert "sk-fresh-project-key" in message
-    assert "wren cloud login" in message
+    assert "wren cloud auth add" in message
     assert not (target / ".git").exists()
 
 
@@ -900,7 +901,7 @@ def test_create_reports_bind_failure_with_recovery_hint(
     message = str(excinfo.value)
     assert "network blip" in message
     assert "sk-fresh-project-key" in message
-    assert "wren cloud login" in message
+    assert "wren cloud auth add" in message
     assert "wren cloud link" in message
 
 

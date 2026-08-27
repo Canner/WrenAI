@@ -1,21 +1,28 @@
 """Typer sub-app for ``wren cloud`` commands.
 
-``wren cloud login`` connects a local directory to a Wren Cloud project's
-git remote; ``wren cloud link`` then binds (or adopts) that project's files
-into a local directory via plain git, once. After that, ordinary
-``git push`` / ``git pull`` / ``git diff`` are the commands — none of the
-security depends on going through this CLI again, and ``git pull`` (not a
-repeated ``link``) is how you get updates. ``wren cloud git-credential`` is
-the helper `login` wires into git; it is not meant to be invoked by hand.
+``wren cloud auth add`` stores a project's API key and configures git to
+authenticate with it — it touches no directory. ``wren cloud link`` then
+binds (or adopts) that project's files into a local directory via plain git,
+once. After that, ordinary ``git push`` / ``git pull`` / ``git diff`` are the
+commands — none of the security depends on going through this CLI again, and
+``git pull`` (not a repeated ``link``) is how you get updates.
+``wren cloud git-credential`` is the helper ``auth add`` wires into git; it
+is not meant to be invoked by hand.
 
-``wren cloud unlink`` and ``wren cloud logout`` undo those two, and the
+The two are separate because authentication and binding have different
+scopes: a credential covers a project on a host, while a binding covers one
+directory. That is what makes ``auth add`` on its own useful — configure
+authentication, then drive ``git clone`` yourself, in CI or with whatever
+flags you want, with no ``wren`` command in the git path.
+
+``wren cloud unlink`` and ``wren cloud auth remove`` undo those two, and the
 asymmetry between them follows from where the state lives:
 
 - **The binding is the git remote.** Nothing on this machine records which
   project a directory belongs to; the credential helper reads it back out of
   the path git hands it. So ``unlink`` removes ``origin`` and that is the
   entire unbind — no server call, and the project is untouched.
-- **The API key is per host + project**, so ``logout`` drops one and touches
+- **The API key is per host + project**, so ``auth remove`` drops one and touches
   no directory. ``unlink`` leaves it alone by default, because another
   directory may still be bound to the same project.
 - **The git credential-helper entry is per host**, shared by every project
@@ -41,6 +48,12 @@ cloud_app = typer.Typer(
     help="Connect a local project to Wren Cloud's git remote.",
 )
 
+auth_app = typer.Typer(
+    name="auth",
+    help="Manage the stored credentials git authenticates to Wren Cloud with.",
+)
+cloud_app.add_typer(auth_app)
+
 git_credential_app = typer.Typer(
     name="git-credential",
     help="Git credential helper invoked by git itself — not for direct use.",
@@ -48,8 +61,8 @@ git_credential_app = typer.Typer(
 cloud_app.add_typer(git_credential_app)
 
 
-@cloud_app.command()
-def login(
+@auth_app.command("add")
+def auth_add(
     host: Annotated[
         str,
         typer.Option("--host", help="Wren Cloud host, e.g. https://cloud.getwren.ai"),
@@ -100,7 +113,7 @@ def login(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"Logged in to project {project} on {host}.")
+    typer.echo(f"Added credentials for project {project} on {host}.")
     typer.echo(f"Remote repo: {token.repo}")
     typer.echo(
         "git is now configured to authenticate to this project automatically. "
@@ -119,9 +132,9 @@ def link(
         typer.Option(
             "--host",
             help=(
-                "Wren Cloud host used at login, if you logged in to more "
-                "than one host. Defaults to the only stored login, or the "
-                "one matching --project."
+                "Wren Cloud host the credential was added for, if you added "
+                "credentials for more than one host. Defaults to the only "
+                "stored one, or the one matching --project."
             ),
         ),
     ] = None,
@@ -159,7 +172,7 @@ def link(
     reports that and does not merge again; use ``git pull`` for updates
     instead.
 
-    Requires having run ``wren cloud login`` for the target project first.
+    Requires having run ``wren cloud auth add`` for the target project first.
     """
     from wren import cloud  # noqa: PLC0415
 
@@ -169,7 +182,7 @@ def link(
     if host is not None:
         # Filtered on the same field the help text promises and the
         # disambiguation candidates below print: `api_host` — the host the
-        # user passed to `login --host`, not the (possibly different)
+        # user passed to `auth add --host`, not the (possibly different)
         # `--git-host`. Filtering on `git_host` here while displaying
         # `api_host` would silently reject the exact value a user would
         # naturally reach for: the host they logged in with.
@@ -179,7 +192,7 @@ def link(
         typer.echo(
             "Error: no stored Wren Cloud login found"
             + (f" for project {project}" if project else "")
-            + ". Run `wren cloud login` first.",
+            + ". Run `wren cloud auth add` first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -243,7 +256,7 @@ def create(  # noqa: PLR0913
             "--git-host",
             help=(
                 "Host git should talk to for this project's repo, if it "
-                "differs from --host. See `wren cloud login --help` for "
+                "differs from --host. See `wren cloud auth add --help` for "
                 "when to pass this; defaults to --host."
             ),
         ),
@@ -307,7 +320,7 @@ def create(  # noqa: PLR0913
     authority valid for every project in the org — unlike a project key, it
     is never written to disk. It is used only to create the project and to
     mint that project's own key; from then on this command (and everything
-    after it) uses the project key, exactly like `wren cloud login` would.
+    after it) uses the project key, exactly like `wren cloud auth add` would.
 
     Always requests agent mode for the new project — a project created any
     other way has no git repository at all, so there would be nothing here
@@ -495,13 +508,13 @@ def unlink(
         )
 
 
-@cloud_app.command()
-def logout(
+@auth_app.command("remove")
+def auth_remove(
     host: Annotated[
         Optional[str],
         typer.Option(
             "--host",
-            help="Wren Cloud host used at login, if you have more than one.",
+            help="Wren Cloud host the credential was added for, if more than one.",
         ),
     ] = None,
     project: Annotated[
@@ -516,9 +529,10 @@ def logout(
         typer.Option("--yes", "-y", help="Skip the confirmation prompt."),
     ] = False,
 ) -> None:
-    """Drop a stored Wren Cloud login, without touching any directory.
+    """Remove a stored Wren Cloud credential, without touching any directory.
 
-    This is the counterpart to ``login``. It removes the stored API key, and
+    This is the counterpart to ``auth add``. It removes the stored API key,
+    and
     — once that was the last login for its host — that host's git
     credential-helper entry too.
 
