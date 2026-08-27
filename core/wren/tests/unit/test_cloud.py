@@ -10,9 +10,8 @@ them.
 
 Still exercised manually against a real Wren Cloud stack, not here, because
 a mocked HTTP layer cannot stand in for them: auth add + clone, push,
-wrong-key
-messaging, host-scoping of the credential helper, and the nested-repo
-refusal against a real nested layout.
+wrong-key messaging, host-scoping of the credential helper, and the
+nested-repo refusal against a real nested layout.
 """
 
 from __future__ import annotations
@@ -1188,12 +1187,18 @@ def _seed_hooked_remote(remote_dir, *, marker="a"):
     author within the same second, so git assigns them the *same SHA* — and
     each then looks like an ancestor of the other, which silently turns an
     unrelated-history test into a no-op fast-forward.
+
+    It varies only the commit *message*, deliberately. The real server seeds
+    a hook file with no project-specific content, so two projects' hook files
+    are byte-identical — and a duplicate merge therefore has nothing to
+    conflict over. Putting the marker in the file instead would manufacture a
+    conflict that real projects never produce.
     """
     remote_dir.mkdir(parents=True)
     cloud.run_git(["init"], cwd=remote_dir)
     (remote_dir / ".hooks").mkdir()
     (remote_dir / ".hooks" / "deploy-modeling.yaml").write_text(
-        f"version: '1'\n# project {marker}\n"
+        "version: '1'\nactions:\n  - name: deploy-modeling\n"
     )
     cloud.run_git(["add", "-A"], cwd=remote_dir)
     cloud.run_git(["commit", "-m", f"Initialize hooks ({marker})"], cwd=remote_dir)
@@ -1435,33 +1440,57 @@ def test_create_refuses_a_bound_directory_without_creating_anything(
     assert "Nothing has been created on the server." in message
 
 
-def test_create_refuses_a_directory_whose_history_came_from_a_project(
+def test_create_duplicates_a_project_from_a_directory_that_came_from_one(
     tmp_path, monkeypatch, _helper_check_passes
 ):
-    """The `origin`-removed variant. Without this check, `create` would build
-    the project and only fail later inside `link` — orphaning it again."""
+    """Unlink then create is how a project gets duplicated, so a history that
+    came from another project must NOT be refused here.
 
-    def fail_if_called(*args, **kwargs):
-        raise AssertionError("create_project must not be reached")
-
-    monkeypatch.setattr(cloud, "create_project", fail_if_called)
-    monkeypatch.setattr(cloud, "mint_project_key", fail_if_called)
-
+    The refusal that does exist protects a remote which already has content
+    from being merged with an unrelated history. A project created moments
+    ago holds only its seed commit, so there is nothing to protect — and
+    refusing would also do it *after* the project exists, orphaning it.
+    """
     git_host = str(tmp_path / "host")
-    _seed_hooked_remote(tmp_path / "host" / "git" / "shared-data.git")
-    target = tmp_path / "proj"
+    # The directory's history comes from project 16...
+    _seed_hooked_remote(tmp_path / "host" / "git" / "shared-data.git", marker="16")
+    target = tmp_path / "project"
     _link(target, git_host=git_host)
-    cloud.run_git(["remote", "remove", "origin"], cwd=target)
+    (target / "mine.txt").write_text("content worth duplicating")
+    cloud.run_git(["add", "-A"], cwd=target)
+    cloud.run_git(["commit", "-m", "my work"], cwd=target)
+    assert cloud.head_has_seeded_hooks(target), "precondition: history from a project"
 
-    with pytest.raises(cloud.CloudError) as exc:
-        cloud.create(
-            target,
-            host="https://wren.example",
-            org_id="2",
-            org_key="osk-key",
-            display_name="proj",
-        )
-    assert "Nothing has been created on the server." in str(exc.value)
+    # ...the user unlinks, then creates project 99 to duplicate it into.
+    cloud.unlink(target)
+    _seed_hooked_remote(
+        tmp_path / "host" / "git" / "org" / "2" / "99" / "shared-data.git", marker="99"
+    )
+    created, calls = _patch_create_http(monkeypatch)
+    monkeypatch.setattr(
+        cloud,
+        "mint_git_token",
+        lambda *a, **k: cloud.GitToken(
+            repo="org/2/99/shared-data.git",
+            token="t",
+            expires_in=600,
+            expires_at="",
+        ),
+    )
+
+    project, outcome = cloud.create(
+        target,
+        host=git_host,
+        org_id="2",
+        org_key="osk-key",
+        display_name="dup",
+        git_host=git_host,
+    )
+
+    assert outcome is cloud.LinkOutcome.LINKED
+    assert calls["create_project"] == 1, "the project must actually be created"
+    assert (target / "mine.txt").exists(), "the content being duplicated survives"
+    assert cloud.current_remote_url(target).endswith("org/2/99/shared-data.git")
 
 
 # ── unlink / logout ────────────────────────────────────────────────────────
@@ -1664,3 +1693,63 @@ def test_create_project_rejection_names_what_is_actually_known(monkeypatch):
     assert "not a project key" not in message
     assert "190" in message, "must name the org it was rejected for"
     assert "--org-key" in message, "must say how to supply a different key"
+
+
+def test_create_refuses_without_a_git_identity_before_creating_anything(
+    tmp_path, monkeypatch, _helper_check_passes
+):
+    """Found by live testing, not by this suite: on a machine with no git
+    identity, `create` built the project and then failed inside the merge,
+    leaving it orphaned. The identity is needed because binding a directory
+    with files records commits, so it belongs in the pre-flight."""
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError(
+            "create_project must not be reached: a missing git identity has to "
+            "be caught before anything exists server-side"
+        )
+
+    monkeypatch.setattr(cloud, "create_project", fail_if_called)
+    monkeypatch.setattr(cloud, "mint_project_key", fail_if_called)
+    # The autouse fixture sets an identity via env vars; strip it so git has
+    # none from any source.
+    for var in (
+        "GIT_AUTHOR_NAME",
+        "GIT_AUTHOR_EMAIL",
+        "GIT_COMMITTER_NAME",
+        "GIT_COMMITTER_EMAIL",
+        "EMAIL",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+    target = tmp_path / "proj"
+    target.mkdir()
+    (target / "model.yml").write_text("name: orders\n")
+
+    with pytest.raises(cloud.CloudError) as exc:
+        cloud.create(
+            target,
+            host="https://wren.example",
+            org_id="2",
+            org_key="osk-key",
+            display_name="proj",
+        )
+    assert "identity" in str(exc.value)
+    assert "user.email" in str(exc.value), "must say how to fix it"
+
+
+def test_git_identity_check_exempts_an_empty_directory(tmp_path, monkeypatch):
+    """An empty target is cloned, and a clone records no commit — requiring an
+    identity there would refuse a case that works fine."""
+    for var in (
+        "GIT_AUTHOR_NAME",
+        "GIT_AUTHOR_EMAIL",
+        "GIT_COMMITTER_NAME",
+        "GIT_COMMITTER_EMAIL",
+        "EMAIL",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    cloud.check_git_identity_usable(empty)  # must not raise
+    cloud.check_git_identity_usable(tmp_path / "does-not-exist")  # nor here

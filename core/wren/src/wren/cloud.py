@@ -15,10 +15,10 @@ Two credentials, two lifetimes:
 ``auth add`` writes a URL-scoped credential helper entry (plus
 ``useHttpPath``) into the user's *global* git config, not local config —
 when the credential is added there is no clone yet, so there is no local
-config to write into. Because the
-helper resolves which project's token to mint from the path git hands it
-(``useHttpPath``), no local-directory-to-project binding is stored anywhere;
-the binding is the git remote itself, which git already tracks.
+config to write into. Because the helper resolves which project's token to
+mint from the path git hands it (``useHttpPath``), no local-directory-to-
+project binding is stored anywhere; the binding is the git remote itself,
+which git already tracks.
 
 Do not reuse ``context.convert_mdl_to_project()`` from this module's callers
 — it never reads the manifest's ``cubes``, so anything built on it silently
@@ -730,21 +730,53 @@ def binding_from_remote_url(url: str) -> tuple[str, str, str, str] | None:
     return git_host, org_id, project_id, repo_name
 
 
+def check_git_identity_usable(target: Path) -> None:
+    """Refuse when git could not record a commit in `target`.
+
+    Binding a directory that already has files makes git commits — one for
+    the existing files, then the reconciling merge — and git refuses to
+    commit without `user.name`/`user.email`, with a message about
+    auto-detecting an email address that says nothing about Wren.
+
+    Checked up front because of *where* it would otherwise fail: for
+    `create`, the merge happens after the project and its key exist, so the
+    raw git failure leaves a real project that nothing references. Observed
+    exactly that way — a machine with no git identity produced an orphaned
+    project.
+
+    An empty target is exempt: that path is a plain clone, which records no
+    commit and therefore needs no identity.
+    """
+    if not target.exists() or not any(target.iterdir()):
+        return
+    probe = run_git(["var", "GIT_COMMITTER_IDENT"], cwd=target, check=False)
+    if probe.returncode == 0:
+        return
+    raise CloudError(
+        f"git has no identity configured, so it cannot record the commit "
+        f"binding {target} needs.\n"
+        "Set one and try again:\n"
+        '  git config --global user.name "Your Name"\n'
+        "  git config --global user.email you@example.com"
+    )
+
+
 def check_not_already_bound(target: Path) -> None:
-    """Refuse a directory that is already bound to, or came from, a project.
+    """Refuse a directory that is still bound to another project.
 
-    `create` is always making a *new* project, so any existing binding is
-    wrong by construction. It has to be checked here rather than left to
-    `link`, and specifically *before* the server is touched: `link` runs
-    after the project and its key already exist, so a refusal there orphans
-    them — which is exactly what happened before this guard existed.
+    `create` is always making a *new* project, so an existing `origin` is
+    wrong by construction — the remote is the binding, and `link` will not
+    silently repoint it. Checked here rather than left to `link`, and
+    specifically *before* the server is touched: `link` runs after the
+    project and its key already exist, so a refusal raised there leaves a
+    real project that nothing references.
 
-    Two distinct states both mean "not a clean directory":
-
-    - an `origin` remote — the binding itself;
-    - a HEAD carrying a seeded hook commit — no `origin` (perhaps removed by
-      hand), but the history still belongs to the project it came from, so
-      `link` would later refuse to merge it anyway.
+    A history that *came from* a project is deliberately allowed. Once
+    `origin` is gone the directory is unbound, and "unlink, then create" is
+    how a project is duplicated: the local content becomes the new project's
+    starting point. The new remote holds nothing but its seed commit, so
+    there is no other project's content for the merge to mix in — which is
+    why `link` takes `remote_is_fresh` rather than refusing here.
     """
     existing = current_remote_url(target)
     if existing is not None:
@@ -754,19 +786,9 @@ def check_not_already_bound(target: Path) -> None:
             f"{target} is already bound to {where}, so a new project cannot "
             "be created for it.\n"
             f"  origin: {existing}\n"
-            "Run `wren cloud unlink` here first, or run `create` in a "
-            "directory that is not bound to anything. Nothing has been "
-            "created on the server."
-        )
-    if head_has_seeded_hooks(target):
-        raise CloudError(
-            f"{target} has no `origin`, but its history came from a Wren "
-            "Cloud project — its commits carry the "
-            "`.hooks/deploy-modeling.yaml` that project creation seeds.\n"
-            "Creating a new project for it would produce a directory holding "
-            "two projects' content. Use a clean directory, or remove this "
-            "one's `.git` if you no longer need its history. Nothing has "
-            "been created on the server."
+            "Run `wren cloud unlink` here first — that also leaves the "
+            "directory ready to be duplicated into a new project. Nothing "
+            "has been created on the server."
         )
 
 
@@ -835,6 +857,7 @@ def link(
     project_id: str,  # noqa: ARG001
     org_id: str,  # noqa: ARG001
     repo: str,
+    remote_is_fresh: bool = False,
 ) -> LinkOutcome:
     """Bind `target` to `repo`, handling both shapes, and do the reconciling
     merge at most once.
@@ -970,13 +993,21 @@ def link(
     # case and must keep working. Ask git whether the histories share any
     # ancestor at all; `merge-base` without `--is-ancestor` fails exactly
     # when they do not.
+    #
+    # `remote_is_fresh` exempts one case, and only one: the caller just created
+    # this project, so the remote holds nothing but its own seed commit. There
+    # is no other project's content for a merge to mix in, and the merge is
+    # how "duplicate this project into a new one" works — unlink, then create,
+    # and the local history becomes the new project's starting content. The
+    # refusal below is about protecting a remote that has content; a remote
+    # that has none does not need protecting.
     unrelated = (
         run_git(
             ["merge-base", f"origin/{branch}", "HEAD"], cwd=target, check=False
         ).returncode
         != 0
     )
-    if unrelated and head_has_seeded_hooks(target):
+    if unrelated and not remote_is_fresh and head_has_seeded_hooks(target):
         if added_origin:
             # Leave nothing behind: this refusal must not strand the target
             # pointing at a project it was never bound to.
@@ -1391,6 +1422,7 @@ def create(
     check_not_nested(target)
     check_helper_command_serviceable()
     check_not_already_bound(target)
+    check_git_identity_usable(target)
 
     api_host = host.rstrip("/")
     resolved_git_host = (git_host or host).rstrip("/")
@@ -1454,5 +1486,11 @@ def create(
         project_id=project.id,
         org_id=project.org_id,
         repo=token.repo,
+        # This project was created moments ago, so its remote holds only the
+        # seed commit. Without this, `link`'s foreign-history refusal would
+        # fire on a directory carrying another project's history — blocking
+        # "duplicate a project" and, worse, doing it *after* the project
+        # exists, which is exactly the orphan this command guards against.
+        remote_is_fresh=True,
     )
     return project, outcome
