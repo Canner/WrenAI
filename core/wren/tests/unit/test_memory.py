@@ -1477,6 +1477,136 @@ class TestMarkdownSourcedIndex:
         second, _ = memory_store.list_queries(limit=100)
         assert len(first) == len(second) == 2
 
+    def test_sync_forgets_pair_deleted_from_markdown(self, memory_store, tmp_path):
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        write_query_markdown(tmp_path, "Count orders", "SELECT COUNT(*) FROM o")
+        memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+
+        (tmp_path / "knowledge" / "sql" / "count-orders.md").unlink()
+        result = memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+
+        assert result["forgotten"] == 1
+        remaining, total = memory_store.list_queries(limit=100)
+        assert total == 1
+        assert remaining[0]["nl_query"] == "Total revenue"
+        # the deleted example must no longer surface in recall either
+        hits = memory_store.recall_queries("count orders", limit=5)
+        assert all(h["nl_query"] != "Count orders" for h in hits)
+
+    def test_sync_preserves_seed_queries_absent_from_markdown(
+        self, memory_store, tmp_path
+    ):
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        memory_store.index_schema(_MANIFEST)  # generates seed queries
+        before, _ = memory_store.list_queries(limit=100, source="seed")
+        assert before  # sanity: seeds exist
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+
+        after, _ = memory_store.list_queries(limit=100, source="seed")
+        assert len(after) == len(before)  # seeds untouched by the markdown sync
+
+    def test_sync_with_no_markdown_pairs_forgets_all_user_pairs(
+        self, memory_store, tmp_path
+    ):
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+        (tmp_path / "knowledge" / "sql" / "total-revenue.md").unlink()
+
+        result = memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+        assert result["forgotten"] == 1
+        _, total = memory_store.list_queries(limit=100)
+        assert total == 0
+
+    def test_cli_index_lancedb_forgets_deleted_pair(self, tmp_path, monkeypatch):
+        """`wren memory index` on the lancedb backend must actually forget a
+        pair deleted from knowledge/sql/*.md, not just report it as stale."""
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.cli import app  # noqa: PLC0415
+        from wren.memory.markdown import write_query_markdown  # noqa: PLC0415
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
+        (tmp_path / "target").mkdir()
+        (tmp_path / "target" / "mdl.json").write_text("{}", encoding="utf-8")
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        write_query_markdown(tmp_path, "Count orders", "SELECT COUNT(*) FROM o")
+
+        cli = CliRunner()
+        first = cli.invoke(app, ["memory", "index"])
+        assert first.exit_code == 0, first.output
+
+        (tmp_path / "knowledge" / "sql" / "count-orders.md").unlink()
+        second = cli.invoke(app, ["memory", "index"])
+        assert second.exit_code == 0, second.output
+        assert "Forgot 1 stale pair" in second.output
+
+        store = MemoryStore(path=str(tmp_path / ".wren" / "memory"))
+        rows, total = store.list_queries(limit=100)
+        assert total == 1
+        assert rows[0]["nl_query"] == "Total revenue"
+
+    def test_cli_watch_reindex_on_start_lancedb_forgets_deleted_pair(
+        self, tmp_path, monkeypatch
+    ):
+        """`wren memory watch` calls the same reindex path as `index`, so a
+        deletion must clear on its next forced reindex too."""
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.cli import app  # noqa: PLC0415
+        from wren.memory.markdown import write_query_markdown  # noqa: PLC0415
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
+        (tmp_path / "wren_project.yml").write_text("name: t\n", encoding="utf-8")
+        (tmp_path / "target").mkdir()
+        (tmp_path / "target" / "mdl.json").write_text("{}", encoding="utf-8")
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        write_query_markdown(tmp_path, "Count orders", "SELECT COUNT(*) FROM o")
+
+        cli = CliRunner()
+        first = cli.invoke(
+            app, ["memory", "watch", "--reindex-on-start", "--max-polls", "1"]
+        )
+        assert first.exit_code == 0, first.output
+
+        (tmp_path / "knowledge" / "sql" / "count-orders.md").unlink()
+        second = cli.invoke(
+            app, ["memory", "watch", "--reindex-on-start", "--max-polls", "1"]
+        )
+        assert second.exit_code == 0, second.output
+
+        store = MemoryStore(path=str(tmp_path / ".wren" / "memory"))
+        rows, total = store.list_queries(limit=100)
+        assert total == 1
+        assert rows[0]["nl_query"] == "Total revenue"
+
     def test_reset_then_reindex_restores_from_markdown(self, memory_store, tmp_path):
         from wren.memory.markdown import (  # noqa: PLC0415
             load_query_pairs,

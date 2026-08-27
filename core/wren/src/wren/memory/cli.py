@@ -241,12 +241,16 @@ def index(
             project_path = discover_project_path(explicit=None)
 
             md_pairs = load_query_pairs(project_path)
-            if md_pairs:
-                # upsert → re-running index converges on the markdown content.
-                res = mem_store.load_queries(md_pairs, upsert=True)
+            res = mem_store.sync_markdown_queries(md_pairs)
+            if res["loaded"] or res["updated"] or res["forgotten"]:
                 typer.echo(
                     f"Indexed {res['loaded'] + res['updated']} pair(s) from "
-                    f"knowledge/sql/.",
+                    f"knowledge/sql/."
+                    + (
+                        f" Forgot {res['forgotten']} stale pair(s)."
+                        if res["forgotten"]
+                        else ""
+                    ),
                     err=True,
                 )
 
@@ -647,13 +651,12 @@ def watch(
         from wren.memory.markdown import load_query_pairs  # noqa: PLC0415
 
         md_pairs = load_query_pairs(project_path)
-        loaded = 0
-        if md_pairs:
-            res = mem_store.load_queries(md_pairs, upsert=True)
-            loaded = res["loaded"] + res["updated"]
+        res = mem_store.sync_markdown_queries(md_pairs)
+        loaded = res["loaded"] + res["updated"]
         typer.echo(
             f"Reindexed {result['schema_items']} schema item(s)"
             + (f", {loaded} pair(s)" if loaded else "")
+            + (f", forgot {res['forgotten']} stale pair(s)" if res["forgotten"] else "")
             + "."
         )
 

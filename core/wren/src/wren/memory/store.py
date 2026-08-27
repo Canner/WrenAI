@@ -26,10 +26,22 @@ _WREN_MEMORY_DIR = Path.home() / ".wren" / "memory"
 _SCHEMA_TABLE = "schema_items"
 _QUERY_TABLE = "query_history"
 
+# query_history sources that are derived from the manifest, not from
+# knowledge/sql/*.md, so a markdown sync must never forget them.
+_NON_MARKDOWN_SOURCES = frozenset({"seed", "view"})
+
 
 def _esc(value: str) -> str:
     """Escape single quotes for LanceDB where-clause literals."""
     return value.replace("'", "''")
+
+
+def _tag_source(tags: str | None) -> str:
+    """Extract the ``source:`` value from a query_history tags string."""
+    for part in (tags or "").split():
+        if part.startswith("source:"):
+            return part[len("source:") :]
+    return "user"
 
 
 def _schema_items_arrow_schema(dim: int = _DEFAULT_DIM) -> pa.Schema:
@@ -623,6 +635,30 @@ class MemoryStore:
             )
 
         return {"loaded": loaded, "skipped": skipped, "updated": 0}
+
+    def sync_markdown_queries(self, pairs: list[dict]) -> dict[str, int]:
+        """Upsert *pairs* and forget any indexed pair absent from them.
+
+        *pairs* must be the complete current ``knowledge/sql/*.md`` set (the
+        source of truth). Mirrors the "stale" definition the ``check`` command
+        already reports (any source other than seed/view whose ``nl_query``
+        is no longer in the markdown) and acts on it, so a deletion or rename
+        actually clears out of the index instead of lingering and still being
+        recalled.
+
+        Returns ``{"loaded": N, "skipped": M, "updated": U, "forgotten": F}``.
+        """
+        result = self.load_queries(pairs, upsert=True)
+        current_nls = {p["nl"] for p in pairs}
+        rows, _ = self.list_queries(limit=1_000_000)
+        stale_ids = [
+            row["_row_id"]
+            for row in rows
+            if _tag_source(row.get("tags")) not in _NON_MARKDOWN_SOURCES
+            and row["nl_query"] not in current_nls
+        ]
+        forgotten = self.forget_queries_by_ids(stale_ids) if stale_ids else 0
+        return {**result, "forgotten": forgotten}
 
     # ── Housekeeping ──────────────────────────────────────────────────────
 
