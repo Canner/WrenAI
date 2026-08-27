@@ -49,6 +49,24 @@ import typer
 # defaulting a filter would hide a credential the user does have.
 DEFAULT_HOST = "https://cloud.getwren.ai"
 
+
+def _shown(directory: Path) -> Path:
+    """Render a directory for a message, never as a bare dot.
+
+    Every one of these commands defaults its directory argument to ``.``, and
+    every message that names it ends in a full stop — so the default renders
+    as ``into ..``, which reads as the *parent* directory. Resolving gives an
+    unambiguous absolute path. Display only: the commands themselves keep
+    using the path as given.
+    """
+    try:
+        return directory.resolve()
+    except OSError:
+        # A path that cannot be resolved is still worth naming; the operation
+        # that follows will report the real problem.
+        return directory
+
+
 cloud_app = typer.Typer(
     name="cloud",
     help="Connect a local project to Wren Cloud's git remote.",
@@ -239,11 +257,11 @@ def link(
 
     if outcome is cloud.LinkOutcome.ALREADY_LINKED:
         typer.echo(
-            f"{directory} is already linked to project {project_id}. "
+            f"{_shown(directory)} is already linked to project {project_id}. "
             "Run `git pull` to fetch updates."
         )
     else:
-        typer.echo(f"Linked project {project_id} into {directory}.")
+        typer.echo(f"Linked project {project_id} into {_shown(directory)}.")
 
 
 @cloud_app.command()
@@ -460,9 +478,9 @@ def create(  # noqa: PLR0913
             )
 
     if outcome is cloud.LinkOutcome.ALREADY_LINKED:
-        typer.echo(f"{directory} is already linked to project {project.id}.")
+        typer.echo(f"{_shown(directory)} is already linked to project {project.id}.")
     else:
-        typer.echo(f"Linked project {project.id} into {directory}.")
+        typer.echo(f"Linked project {project.id} into {_shown(directory)}.")
 
 
 @cloud_app.command()
@@ -507,7 +525,7 @@ def unlink(
 
     if forget_key and not yes:
         confirm = typer.confirm(
-            f"Drop the stored API key for the project {directory} is bound to?"
+            f"Drop the stored API key for the project {_shown(directory)} is bound to?"
         )
         if not confirm:
             raise typer.Abort()
@@ -519,12 +537,12 @@ def unlink(
         raise typer.Exit(1)
 
     if outcome.project_id is not None:
-        typer.echo(f"Unlinked {directory} from project {outcome.project_id}.")
+        typer.echo(f"Unlinked {_shown(directory)} from project {outcome.project_id}.")
     else:
         # `origin` was not a Wren Cloud URL. Still removed — the directory is
         # unbound either way — but naming a project would be a fiction.
         typer.echo(
-            f"Removed the `origin` remote ({outcome.remote_url}) from {directory}."
+            f"Removed the `origin` remote ({outcome.remote_url}) from {_shown(directory)}."
         )
     if outcome.key_forgotten:
         typer.echo("Dropped the stored API key for that project.")

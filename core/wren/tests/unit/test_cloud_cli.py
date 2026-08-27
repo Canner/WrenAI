@@ -250,6 +250,38 @@ def test_link_invokes_cloud_link_with_the_single_stored_login(monkeypatch, tmp_p
     assert "Linked project 16" in result.output
 
 
+def test_link_names_a_real_path_when_the_directory_argument_is_defaulted(
+    monkeypatch, tmp_path
+):
+    """The directory argument defaults to `.` and every message naming it ends
+    in a full stop, so an unresolved default renders as `into ..` — which reads
+    as the parent directory. Observed live against staging."""
+
+    entry = {
+        "api_host": "https://cloud.getwren.ai",
+        "org_id": "2",
+        "repo": "org/2/16/shared-data.git",
+        "api_key": "sk-x",
+    }
+    monkeypatch.setattr(
+        cloud, "list_logins", lambda: [("https://cloud.getwren.ai", "16", entry)]
+    )
+    monkeypatch.setattr(
+        cloud, "link", lambda *a, **k: cloud.LinkOutcome.LINKED
+    )
+    monkeypatch.chdir(tmp_path)
+
+    # No directory argument: exercises the `Path(".")` default.
+    result = runner.invoke(app, ["cloud", "link"])
+
+    assert result.exit_code == 0, result.output
+    assert "into .." not in result.output, (
+        "the defaulted directory must not render as a bare dot before the "
+        f"sentence's full stop: {result.output!r}"
+    )
+    assert str(tmp_path.resolve()) in result.output
+
+
 def test_link_reports_already_linked_without_implying_a_fresh_merge(
     monkeypatch, tmp_path
 ):
