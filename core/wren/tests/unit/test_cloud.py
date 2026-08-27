@@ -1753,3 +1753,23 @@ def test_git_identity_check_exempts_an_empty_directory(tmp_path, monkeypatch):
     empty.mkdir()
     cloud.check_git_identity_usable(empty)  # must not raise
     cloud.check_git_identity_usable(tmp_path / "does-not-exist")  # nor here
+
+
+# ── normalize_host ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [
+        ("cloud.getwren.ai", "https://cloud.getwren.ai"),
+        ("cloud.getwren.ai/", "https://cloud.getwren.ai"),
+        ("  cloud.getwren.ai  ", "https://cloud.getwren.ai"),
+        ("https://cloud.getwren.ai", "https://cloud.getwren.ai"),
+        # An explicit scheme is never overridden — a local stack is plain http
+        # and must stay reachable.
+        ("http://localhost:3000", "http://localhost:3000"),
+        ("http://localhost:3000/", "http://localhost:3000"),
+    ],
+)
+def test_normalize_host(given, expected):
+    assert cloud.normalize_host(given) == expected

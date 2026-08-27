@@ -312,6 +312,23 @@ def remove_login(git_host: str, project_id: str) -> bool:
 # ── Parsing the project out of a git path ───────────────────────────────────
 
 
+def normalize_host(host: str) -> str:
+    """Give a bare hostname a scheme, and drop a trailing slash.
+
+    A host is a hostname in ordinary speech, so `--host cloud.getwren.ai` is
+    what people type. Without a scheme it reaches `requests` as a relative
+    URL and comes back as "Invalid URL ... No scheme supplied", which reads
+    like a bug in the tool rather than a correctable typo. Assume https:
+    plain http against a credential-bearing endpoint is not a default worth
+    offering, and `--host http://localhost:3000` still works because a scheme
+    that is already there is left alone.
+    """
+    host = host.strip().rstrip("/")
+    if "://" not in host:
+        host = f"https://{host}"
+    return host
+
+
 def parse_repo_path(path: str) -> tuple[str, str, str]:
     """Parse a repo path into `(org_id, project_id, repo_name)`.
 

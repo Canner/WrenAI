@@ -766,3 +766,84 @@ def test_logout_confirms_by_default(monkeypatch):
     result = runner.invoke(app, ["cloud", "auth", "remove"], input="n\n")
     assert result.exit_code != 0
     assert calls["n"] == 0, "declining the prompt must not drop the key"
+
+
+# ── --host default and normalization ──────────────────────────────────────
+
+
+def _fake_created():
+    return cloud.CreatedProject(
+        id="16", org_id="190", display_name="proj", status="succeeded", errors=[]
+    )
+
+
+def test_auth_add_defaults_to_the_managed_host(monkeypatch):
+    captured = {}
+
+    def fake_login(*, host, project_id, api_key, git_host):
+        captured.update(host=host)
+        return cloud.GitToken(
+            repo="org/2/16/x.git", token="t", expires_in=1, expires_at=""
+        )
+
+    monkeypatch.setattr(cloud, "login", fake_login)
+    result = runner.invoke(
+        app, ["cloud", "auth", "add", "--project", "16"], input="sk-x\n"
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["host"] == "https://cloud.getwren.ai"
+
+
+def test_auth_add_gives_a_bare_hostname_a_scheme(monkeypatch):
+    """`--host` reads as a hostname, so people type one. Without a scheme it
+    reaches requests as a relative URL and fails in a way that looks like a
+    bug in the tool."""
+    captured = {}
+
+    def fake_login(*, host, project_id, api_key, git_host):
+        captured.update(host=host)
+        return cloud.GitToken(
+            repo="org/2/16/x.git", token="t", expires_in=1, expires_at=""
+        )
+
+    monkeypatch.setattr(cloud, "login", fake_login)
+    result = runner.invoke(
+        app,
+        ["cloud", "auth", "add", "--project", "16", "--host", "self.example.com"],
+        input="sk-x\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["host"] == "https://self.example.com"
+
+
+def test_auth_add_names_the_host_in_the_key_prompt(monkeypatch):
+    """The only place a defaulted --host is visible before anything happens,
+    which matters now that omitting it targets the managed service."""
+    monkeypatch.setattr(
+        cloud,
+        "login",
+        lambda **kwargs: cloud.GitToken(
+            repo="org/2/16/x.git", token="t", expires_in=1, expires_at=""
+        ),
+    )
+    result = runner.invoke(
+        app, ["cloud", "auth", "add", "--project", "16"], input="sk-x\n"
+    )
+    assert "https://cloud.getwren.ai" in result.output
+
+
+def test_create_defaults_to_the_managed_host(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_create(directory, **kwargs):
+        captured.update(host=kwargs["host"])
+        return _fake_created(), cloud.LinkOutcome.LINKED
+
+    monkeypatch.setattr(cloud, "create", fake_create)
+    result = runner.invoke(
+        app,
+        ["cloud", "create", str(tmp_path), "--org", "190"],
+        input="osk-x\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["host"] == "https://cloud.getwren.ai"

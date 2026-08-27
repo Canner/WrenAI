@@ -43,6 +43,12 @@ from typing import Annotated, Optional
 
 import typer
 
+# The managed SaaS deployment, used as the default wherever `--host` names the
+# *target* of a command. Commands where `--host` instead selects among stored
+# credentials (``link``, ``auth remove``) deliberately have no default:
+# defaulting a filter would hide a credential the user does have.
+DEFAULT_HOST = "https://cloud.getwren.ai"
+
 cloud_app = typer.Typer(
     name="cloud",
     help="Connect a local project to Wren Cloud's git remote.",
@@ -63,11 +69,18 @@ cloud_app.add_typer(git_credential_app)
 
 @auth_app.command("add")
 def auth_add(
+    project: Annotated[str, typer.Option("--project", help="Project id")],
     host: Annotated[
         str,
-        typer.Option("--host", help="Wren Cloud host, e.g. https://cloud.getwren.ai"),
-    ],
-    project: Annotated[str, typer.Option("--project", help="Project id")],
+        typer.Option(
+            "--host",
+            help=(
+                "Wren Cloud host. Defaults to the managed service; pass a "
+                "hostname or a full URL for a self-hosted one. https is "
+                "assumed when no scheme is given."
+            ),
+        ),
+    ] = DEFAULT_HOST,
     git_host: Annotated[
         Optional[str],
         typer.Option(
@@ -100,7 +113,11 @@ def auth_add(
     """
     from wren import cloud  # noqa: PLC0415
 
-    api_key = typer.prompt("Wren Cloud API key", hide_input=True)
+    host = cloud.normalize_host(host)
+    # Naming the host in the prompt is the one place a defaulted `--host`
+    # becomes visible before anything happens — worth it now that omitting the
+    # flag targets the managed service rather than erroring.
+    api_key = typer.prompt(f"Wren Cloud API key for {host}", hide_input=True)
     if not api_key.strip():
         typer.echo("Error: an API key is required.", err=True)
         raise typer.Exit(1)
@@ -231,14 +248,21 @@ def link(
 
 @cloud_app.command()
 def create(  # noqa: PLR0913
-    host: Annotated[
-        str,
-        typer.Option("--host", help="Wren Cloud host, e.g. https://cloud.getwren.ai"),
-    ],
     org: Annotated[
         str,
         typer.Option("--org", help="Organization id the new project belongs to."),
     ],
+    host: Annotated[
+        str,
+        typer.Option(
+            "--host",
+            help=(
+                "Wren Cloud host. Defaults to the managed service; pass a "
+                "hostname or a full URL for a self-hosted one. https is "
+                "assumed when no scheme is given."
+            ),
+        ),
+    ] = DEFAULT_HOST,
     directory: Annotated[
         Path,
         typer.Argument(help="Local directory to create the project into."),
@@ -341,6 +365,8 @@ def create(  # noqa: PLR0913
     """
     from wren import cloud  # noqa: PLC0415
 
+    host = cloud.normalize_host(host)
+
     if connection_info and connection_info_file:
         typer.echo(
             "Error: pass at most one of --connection-info / --connection-info-file.",
@@ -392,7 +418,8 @@ def create(  # noqa: PLR0913
     resolved_org_key = (org_key or os.environ.get("WREN_CLOUD_ORG_KEY") or "").strip()
     if not resolved_org_key:
         resolved_org_key = typer.prompt(
-            "Wren Cloud organization API key", hide_input=True
+            f"Wren Cloud organization API key for org {org} on {host}",
+            hide_input=True,
         ).strip()
     if not resolved_org_key:
         typer.echo("Error: an organization API key is required.", err=True)
