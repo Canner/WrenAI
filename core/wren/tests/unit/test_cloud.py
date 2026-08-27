@@ -1773,3 +1773,53 @@ def test_git_identity_check_exempts_an_empty_directory(tmp_path, monkeypatch):
 )
 def test_normalize_host(given, expected):
     assert cloud.normalize_host(given) == expected
+
+
+def test_create_names_the_project_when_the_bind_fails(
+    tmp_path, monkeypatch, _helper_check_passes
+):
+    """A bind failure after creation must not surface as a bare git error.
+
+    Observed live: a transient fetch failure against a just-created repo
+    produced `git fetch origin failed: ...` and nothing else, leaving a real
+    project in the org with no indication it had been created, what its id
+    was, or how to finish. The pre-flight checks cannot cover every way git
+    can fail, so this path has to report rather than be prevented.
+    """
+    _patch_create_http(monkeypatch)
+    monkeypatch.setattr(
+        cloud,
+        "mint_git_token",
+        lambda *a, **k: cloud.GitToken(
+            repo="org/2/16/shared-data.git", token="t", expires_in=600, expires_at=""
+        ),
+    )
+    monkeypatch.setattr(cloud, "configure_git_credential_helper", lambda git_host: None)
+
+    def fake_link(*args, **kwargs):
+        raise cloud.GitCommandError(
+            "git fetch origin failed:\nfatal: protocol error: bad line "
+            "length character: PACK"
+        )
+
+    monkeypatch.setattr(cloud, "link", fake_link)
+
+    target = tmp_path / "proj"
+    target.mkdir()
+    (target / "model.yml").write_text("name: orders\n")
+
+    with pytest.raises(cloud.CloudError) as exc:
+        cloud.create(
+            target,
+            host="https://wren.example",
+            org_id="2",
+            org_key="osk-key",
+            display_name="proj",
+        )
+
+    message = str(exc.value)
+    assert "16" in message, "must name the project that now exists"
+    assert "wren cloud link" in message, "must say what completes the bind"
+    assert "bad line length character: PACK" in message, (
+        "the underlying git error must still be visible"
+    )

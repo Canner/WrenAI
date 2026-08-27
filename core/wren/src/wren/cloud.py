@@ -1496,18 +1496,37 @@ def create(
             f"this directory to it failed: {exc}\n{_recovery_hint()}"
         ) from exc
 
-    outcome = link(
-        target,
-        git_host=resolved_git_host,
-        api_host=api_host,
-        project_id=project.id,
-        org_id=project.org_id,
-        repo=token.repo,
-        # This project was created moments ago, so its remote holds only the
-        # seed commit. Without this, `link`'s foreign-history refusal would
-        # fire on a directory carrying another project's history — blocking
-        # "duplicate a project" and, worse, doing it *after* the project
-        # exists, which is exactly the orphan this command guards against.
-        remote_is_fresh=True,
-    )
+    try:
+        outcome = link(
+            target,
+            git_host=resolved_git_host,
+            api_host=api_host,
+            project_id=project.id,
+            org_id=project.org_id,
+            repo=token.repo,
+            # This project was created moments ago, so its remote holds only
+            # the seed commit. Without this, `link`'s foreign-history refusal
+            # would fire on a directory carrying another project's history —
+            # blocking "duplicate a project" and, worse, doing it *after* the
+            # project exists, which is exactly the orphan this command guards
+            # against.
+            remote_is_fresh=True,
+        )
+    except CloudError as exc:
+        # The pre-flight checks cannot catch everything that can go wrong in
+        # git — a transient fetch failure against a just-created repo, for
+        # instance. Whatever it was, a project now exists and the raw git
+        # error says nothing about it, which leaves the user with an
+        # unexplained project in their org and no idea it is theirs. Name it,
+        # and say what completes the job: the key is already stored by the
+        # `login` above, so only the bind is left.
+        raise CloudError(
+            f"Project {project.id} was created on {api_host} and its key is "
+            f"stored, but binding {target} to it failed:\n{exc}\n"
+            "The project is fine — only the local bind is missing. Retry "
+            "with:\n"
+            f"  wren cloud link {target}\n"
+            f"Or, if you no longer want it, delete project {project.id} so it "
+            "does not linger unused."
+        ) from exc
     return project, outcome
