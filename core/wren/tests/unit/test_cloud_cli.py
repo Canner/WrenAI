@@ -588,12 +588,12 @@ def test_unlink_forget_key_confirms_before_dropping_the_key(monkeypatch, tmp_pat
     assert calls["n"] == 1
 
 
-def test_unlink_force_skips_the_confirmation(monkeypatch, tmp_path):
+def test_unlink_yes_skips_the_confirmation(monkeypatch, tmp_path):
     monkeypatch.setattr(
         cloud, "unlink", lambda d, *, forget_key: _unlink_outcome(key_forgotten=True)
     )
     result = runner.invoke(
-        app, ["cloud", "unlink", str(tmp_path), "--forget-key", "--force"]
+        app, ["cloud", "unlink", str(tmp_path), "--forget-key", "--yes"]
     )
     assert result.exit_code == 0, result.output
     assert "Dropped the stored API key" in result.output
@@ -608,7 +608,7 @@ def test_unlink_reports_a_removed_helper(monkeypatch, tmp_path):
         ),
     )
     result = runner.invoke(
-        app, ["cloud", "unlink", str(tmp_path), "--forget-key", "--force"]
+        app, ["cloud", "unlink", str(tmp_path), "--forget-key", "--yes"]
     )
     assert "credential helper" in result.output
 
@@ -663,7 +663,7 @@ def test_logout_drops_the_only_stored_login(monkeypatch):
         return True, False
 
     monkeypatch.setattr(cloud, "logout", fake_logout)
-    result = runner.invoke(app, ["cloud", "logout", "--force"])
+    result = runner.invoke(app, ["cloud", "logout", "--yes"])
 
     assert result.exit_code == 0, result.output
     assert captured == {"git_host": "https://cloud.getwren.ai", "project_id": "16"}
@@ -672,7 +672,7 @@ def test_logout_drops_the_only_stored_login(monkeypatch):
 
 def test_logout_errors_when_no_login_is_stored(monkeypatch):
     monkeypatch.setattr(cloud, "list_logins", lambda: [])
-    result = runner.invoke(app, ["cloud", "logout", "--force"])
+    result = runner.invoke(app, ["cloud", "logout", "--yes"])
     assert result.exit_code != 0
     assert "no stored Wren Cloud login" in result.output
 
@@ -686,7 +686,7 @@ def test_logout_disambiguates_multiple_stored_logins(monkeypatch):
             ("https://b.example.com", "17", {"api_host": "https://b.example.com"}),
         ],
     )
-    result = runner.invoke(app, ["cloud", "logout", "--force"])
+    result = runner.invoke(app, ["cloud", "logout", "--yes"])
     assert result.exit_code != 0
     assert "disambiguate" in result.output.lower()
 
@@ -715,7 +715,7 @@ def test_logout_host_filters_on_api_host_not_git_host(monkeypatch):
         ),
     )
     result = runner.invoke(
-        app, ["cloud", "logout", "--host", "https://cloud.getwren.ai", "--force"]
+        app, ["cloud", "logout", "--host", "https://cloud.getwren.ai", "--yes"]
     )
     assert result.exit_code == 0, result.output
     assert captured["git_host"] == "https://internal-git.example.com"

@@ -448,9 +448,9 @@ def unlink(
             ),
         ),
     ] = False,
-    force: Annotated[
+    yes: Annotated[
         bool,
-        typer.Option("--force", "-f", help="Skip the confirmation prompt."),
+        typer.Option("--yes", "-y", help="Skip the confirmation prompt."),
     ] = False,
 ) -> None:
     """Unbind ``directory`` from the Wren Cloud project it is bound to.
@@ -472,7 +472,7 @@ def unlink(
     """
     from wren import cloud  # noqa: PLC0415
 
-    if forget_key and not force:
+    if forget_key and not yes:
         confirm = typer.confirm(
             f"Drop the stored API key for the project {directory} is bound to?"
         )
@@ -518,9 +518,9 @@ def logout(
             help="Project id, if you have logins for more than one project.",
         ),
     ] = None,
-    force: Annotated[
+    yes: Annotated[
         bool,
-        typer.Option("--force", "-f", help="Skip the confirmation prompt."),
+        typer.Option("--yes", "-y", help="Skip the confirmation prompt."),
     ] = False,
 ) -> None:
     """Drop a stored Wren Cloud login, without touching any directory.
@@ -568,7 +568,7 @@ def logout(
 
     git_host, project_id, entry = logins[0]
 
-    if not force:
+    if not yes:
         confirm = typer.confirm(
             f"Drop the stored API key for project {project_id} on {entry['api_host']}?"
         )

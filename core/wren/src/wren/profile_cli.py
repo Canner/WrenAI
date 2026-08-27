@@ -487,14 +487,26 @@ def _interactive_add(default_ds: str | None) -> dict:
 @profile_app.command()
 def rm(
     name: Annotated[str, typer.Argument(help="Profile name to remove")],
-    force: Annotated[
-        bool, typer.Option("--force", "-f", help="Skip confirmation")
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            "--force",
+            "-f",
+            help="Skip confirmation. `--force`/`-f` are deprecated aliases.",
+        ),
     ] = False,
 ) -> None:
-    """Remove a profile."""
+    """Remove a profile.
+
+    ``--force`` still works but is deprecated: elsewhere in this CLI
+    ``--force`` means "overwrite files" (see ``wren context init --force``),
+    so the confirmation-skipping flag is spelled ``--yes``.
+    """
     from wren.profile import remove_profile  # noqa: PLC0415
 
-    if not force:
+    if not yes:
         confirm = typer.confirm(f"Remove profile '{name}'?")
         if not confirm:
             raise typer.Abort()
