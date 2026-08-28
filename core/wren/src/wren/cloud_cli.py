@@ -132,6 +132,13 @@ def auth_add(
     from wren import cloud  # noqa: PLC0415
 
     host = cloud.normalize_host(host)
+    # Same treatment as --host, and for a sharper reason: this value
+    # becomes the git-config section name AND the helper's lookup key. A
+    # scheme-less value writes a section git never matches while the
+    # helper looks under the scheme-ful form, so both halves silently
+    # miss and the command still reports success.
+    if git_host is not None:
+        git_host = cloud.normalize_host(git_host)
     # Naming the host in the prompt is the one place a defaulted `--host`
     # becomes visible before anything happens — worth it now that omitting the
     # flag targets the managed service rather than erroring.
@@ -389,6 +396,13 @@ def create(  # noqa: PLR0913
     from wren import cloud  # noqa: PLC0415
 
     host = cloud.normalize_host(host)
+    # Same treatment as --host, and for a sharper reason: this value
+    # becomes the git-config section name AND the helper's lookup key. A
+    # scheme-less value writes a section git never matches while the
+    # helper looks under the scheme-ful form, so both halves silently
+    # miss and the command still reports success.
+    if git_host is not None:
+        git_host = cloud.normalize_host(git_host)
 
     if connection_info and connection_info_file:
         typer.echo(

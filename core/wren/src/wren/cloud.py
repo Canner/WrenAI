@@ -657,6 +657,12 @@ def run_git(
     manual `git` commands take, so there is only one implementation of git
     behavior to keep correct.
     """
+    if cwd is not None and not Path(cwd).is_dir():
+        # `subprocess` raises FileNotFoundError for a missing cwd, which the
+        # CLI does not catch — so `wren cloud link /no/such/dir` printed a
+        # traceback where every other refusal prints a message. Reported as a
+        # CloudError so it reads like the rest of them.
+        raise CloudError(f"{cwd} does not exist.")
     result = subprocess.run(
         ["git", *args],
         cwd=cwd,
@@ -966,6 +972,10 @@ def link(
     run_git(["fetch", "origin"], cwd=target)
 
     branch = _default_branch(remote_url)
+    # Before any of the comparisons below: they all speak in terms of
+    # `origin/<branch>` and the current branch, and a name mismatch makes
+    # every one of them describe a state the user cannot then act on.
+    _align_branch_name(target, branch)
 
     # If `origin/<branch>` is already an ancestor of HEAD, merging it would
     # add nothing: either a previous `link` already did the reconciling
@@ -1079,6 +1089,52 @@ def _has_upstream(target: Path) -> bool:
         ).returncode
         == 0
     )
+
+
+def _align_branch_name(target: Path, branch: str) -> None:
+    """Rename the local branch to the remote's default branch name.
+
+    A plain `git clone` names the local branch after the remote's; `git init`
+    plus a merge does not, and it keeps whatever `init.defaultBranch` produced.
+    When those differ — a remote on `main`, a client whose git still defaults
+    to `master` — everything downstream looks like it worked and none of it
+    did: upstream points at `origin/main` while the branch is `master`, so
+    `git push origin HEAD` exits 0 having created a *second* remote branch
+    that the project's deploy hook never watches, and the plain `git push`
+    this design promises fails with "the upstream branch of your current
+    branch does not match the name of your current branch".
+
+    Leaves a branch that already has an upstream alone: that is a deliberate
+    choice by the user, and the same rule the already-linked path follows.
+    """
+    if _has_upstream(target):
+        return
+
+    unborn = (
+        run_git(["rev-parse", "--verify", "HEAD"], cwd=target, check=False).returncode
+        != 0
+    )
+    if unborn:
+        # `git branch -m` has nothing to rename before the first commit.
+        run_git(["symbolic-ref", "HEAD", f"refs/heads/{branch}"], cwd=target)
+        return
+
+    current = run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=target).stdout.strip()
+    if current == branch:
+        return
+
+    rename = run_git(["branch", "-m", branch], cwd=target, check=False)
+    if rename.returncode != 0:
+        # The usual cause is a local branch of that name already existing.
+        # Continuing would leave the mismatch this function exists to remove,
+        # and the damage only shows up after a push that reports success.
+        raise CloudError(
+            f"{target} is on branch `{current}`, but this project's default "
+            f"branch is `{branch}`, and renaming failed:\n"
+            f"{(rename.stderr or rename.stdout).strip()}\n"
+            f"Plain `git push` cannot work while the two differ. Rename or "
+            f"remove the local `{branch}` branch, then run `link` again."
+        )
 
 
 def _set_upstream(target: Path, branch: str) -> None:

@@ -954,3 +954,51 @@ def test_create_help_names_a_type_the_server_accepts(monkeypatch):
     rendered = " ".join(result.output.split())
     assert "BIG_QUERY" in rendered
     assert "BIGQUERY," not in rendered and "BIGQUERY." not in rendered
+
+
+@pytest.mark.parametrize(
+    "command,extra",
+    [
+        pytest.param("auth_add", [], id="auth_add"),
+        pytest.param("create", ["--org", "2", *["--type", "BIG_QUERY"], "--connection-info", '{"projectId": "p"}'], id="create"),
+    ],
+)
+def test_git_host_is_normalized_like_host(command, extra, monkeypatch, tmp_path):
+    """`--git-host` becomes both the git-config section name and the helper's
+    lookup key. Left scheme-less, git never matches the section it wrote and
+    the helper looks under a different key — while the command still reports
+    success. `--host` was already normalized; this is the same treatment."""
+
+    captured = {}
+
+    def fake_login(*, host, project_id, api_key, git_host=None):
+        captured["git_host"] = git_host
+        return cloud.GitToken(
+            repo="org/2/16/shared-data.git", token="t", expires_in=600, expires_at=""
+        )
+
+    def fake_create(directory, **kwargs):
+        captured["git_host"] = kwargs.get("git_host")
+        return (
+            cloud.CreatedProject(
+                id="16", org_id="2", display_name="p", status="succeeded", errors=[]
+            ),
+            cloud.LinkOutcome.LINKED,
+        )
+
+    monkeypatch.setattr(cloud, "login", fake_login)
+    monkeypatch.setattr(cloud, "create", fake_create)
+
+    args = ["cloud"]
+    args += ["auth", "add"] if command == "auth_add" else ["create", str(tmp_path)]
+    args += ["--host", "https://cloud.getwren.ai", "--git-host", "git.example.com"]
+    if command == "auth_add":
+        args += ["--project", "16"]
+    args += extra
+
+    result = runner.invoke(app, args, input="osk-x\n")
+
+    assert result.exit_code == 0, result.output
+    assert captured["git_host"] == "https://git.example.com", (
+        "a scheme-less --git-host must not reach the credential store raw"
+    )

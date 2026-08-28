@@ -279,9 +279,15 @@ def test_check_not_nested_refuses_when_ancestor_is_a_git_repo(tmp_path):
 
 
 def test_find_git_root_returns_none_when_absent(tmp_path):
-    assert cloud.find_git_root(tmp_path / "nope" / "deeper") is None or True
-    # tmp_path itself has no .git, but parents might in exotic CI setups;
-    # what matters is it never raises.
+    """`tmp_path` itself has no `.git`, but a parent might on some CI layouts,
+    so the assertion is scoped to the part that is knowable: whatever it finds
+    is never inside `tmp_path`, and it does not raise on a path that is not
+    there. (The previous form, `... is None or True`, could not fail.)"""
+
+    found = cloud.find_git_root(tmp_path / "nope" / "deeper")
+
+    assert found is None or tmp_path not in found.parents
+    assert found != tmp_path
 
 
 # ── retry-after parsing ──────────────────────────────────────────────────────
@@ -369,7 +375,7 @@ def _seed_remote(remote_dir):
     commit — like a freshly created Wren Cloud project seeding its own
     `.hooks/deploy-modeling.yaml` before the user ever links to it."""
     remote_dir.mkdir(parents=True)
-    cloud.run_git(["init"], cwd=remote_dir)
+    cloud.run_git(["init", "-b", "main"], cwd=remote_dir)
     (remote_dir / "seed.txt").write_text("seeded by project creation")
     cloud.run_git(["add", "-A"], cwd=remote_dir)
     cloud.run_git(["commit", "-m", "seed"], cwd=remote_dir)
@@ -1222,7 +1228,7 @@ def _seed_hooked_remote(remote_dir, *, marker="a"):
     conflict that real projects never produce.
     """
     remote_dir.mkdir(parents=True)
-    cloud.run_git(["init"], cwd=remote_dir)
+    cloud.run_git(["init", "-b", "main"], cwd=remote_dir)
     # Same reason as `_seed_remote`: `create` pushes, and a non-bare stand-in
     # would refuse the push into its checked-out branch.
     cloud.run_git(
@@ -2020,3 +2026,78 @@ def test_create_reports_a_push_failure_without_claiming_the_bind_failed(
     assert "16" in message, "must name the project that now exists"
     assert "bound to it" in message, "the bind succeeded — do not imply otherwise"
     assert "git push" in message, "must say what finishes the job"
+
+
+# ── The local branch must match the remote's default ───────────────────────
+#
+# Wren Cloud seeds `main`. A client whose git still defaults to `master`
+# (upstream git's builtin; this machine's is patched to `main`, which is why
+# neither the suite nor live testing saw this) ended up with the branch and
+# its upstream disagreeing — and every symptom of that looked like success.
+
+
+def test_link_renames_the_local_branch_to_the_remotes_default(tmp_path):
+    """Forces the mismatch with `git init -b master`, since the ambient
+    default cannot be relied on to produce one."""
+
+    git_host = str(tmp_path / "host")
+    remote = tmp_path / "host" / "git" / "shared-data.git"
+    _seed_remote(remote)
+
+    target = tmp_path / "proj"
+    target.mkdir()
+    cloud.run_git(["init", "-b", "master"], cwd=target)
+    (target / "mine.txt").write_text("mine")
+
+    outcome = _link(target, git_host=git_host)
+    assert outcome is cloud.LinkOutcome.LINKED
+
+    branch = cloud.run_git(
+        ["rev-parse", "--abbrev-ref", "HEAD"], cwd=target
+    ).stdout.strip()
+    upstream = cloud.run_git(
+        ["rev-parse", "--abbrev-ref", "@{upstream}"], cwd=target
+    ).stdout.strip()
+    assert branch == "main", "the local branch must take the remote's name"
+    assert upstream == "origin/main"
+
+    # The point of the rename: `git push` with no arguments has to work, and
+    # has to land on the branch the remote already has rather than opening a
+    # second one. Asserting on the branch name alone would miss both.
+    push = cloud.run_git(["push"], cwd=target, check=False)
+    assert push.returncode == 0, (push.stderr or push.stdout)
+    remote_branches = cloud.run_git(
+        ["branch", "--format=%(refname:short)"], cwd=remote
+    ).stdout.split()
+    assert remote_branches == ["main"], f"a second branch was created: {remote_branches}"
+
+
+def test_link_leaves_a_deliberate_upstream_and_its_branch_name_alone(tmp_path):
+    """The rename must not override a user who pointed the branch elsewhere —
+    the same rule the already-linked path follows for upstreams."""
+
+    git_host = str(tmp_path / "host")
+    remote = tmp_path / "host" / "git" / "shared-data.git"
+    _seed_remote(remote)
+    cloud.run_git(["branch", "other"], cwd=remote)
+
+    target = tmp_path / "proj"
+    cloud.run_git(["clone", f"{git_host}/git/shared-data.git", str(target)])
+    cloud.run_git(["branch", "-m", "mine"], cwd=target)
+    cloud.run_git(["branch", "--set-upstream-to=origin/other"], cwd=target)
+
+    _link(target, git_host=git_host)
+
+    branch = cloud.run_git(
+        ["rev-parse", "--abbrev-ref", "HEAD"], cwd=target
+    ).stdout.strip()
+    assert branch == "mine", "a deliberate upstream keeps its branch name too"
+
+
+def test_run_git_reports_a_missing_directory_as_a_cloud_error(tmp_path):
+    """`subprocess` raises FileNotFoundError for a missing cwd, which the CLI
+    does not catch — so this surfaced as a traceback."""
+
+    with pytest.raises(cloud.CloudError) as exc:
+        cloud.run_git(["status"], cwd=tmp_path / "nope")
+    assert "does not exist" in str(exc.value)
