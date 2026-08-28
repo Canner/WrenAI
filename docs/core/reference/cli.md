@@ -673,8 +673,14 @@ The organization key comes from `--org-key`, the `WREN_CLOUD_ORG_KEY`
 environment variable, or a prompt. It is used only to create the project and
 mint that project's own key, and is **never** written to disk.
 
-`--type` is case-insensitive. Data-source names are the API's, e.g. `BIG_QUERY`,
-`POSTGRES`, `MYSQL`, `SNOWFLAKE`, `TRINO`.
+`--type` is case-insensitive, and the names are the API's own — note the
+underscore in `BIG_QUERY`. `--connection-info` is passed through unchanged, so
+its fields are the API's too, and they differ per data source.
+
+**For the accepted types and a worked `connectionInfo` example for each, see
+[Create a project → Database connectionInfo examples](https://wrenai.readme.io/reference/post_projects#database-connectioninfo-examples).**
+That page is the source of truth; this CLI does not keep its own copy of the
+list, so a data source added there works here without a CLI release.
 
 Requirements, all checked **before** anything is created, so a refusal leaves no
 half-made project behind:

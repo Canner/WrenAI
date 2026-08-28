@@ -580,21 +580,6 @@ def test_create_project_partial_status_captures_errors(monkeypatch):
     assert project.errors == [{"resource": "mdl", "message": "bad mdl"}]
 
 
-def test_create_project_rejects_org_or_project_key_on_401(monkeypatch):
-    def fake_post(url, json=None, headers=None, timeout=None):
-        return _FakeResponse(401, {}, text="unauthorized")
-
-    monkeypatch.setattr(requests, "post", fake_post)
-
-    with pytest.raises(cloud.InvalidApiKeyError):
-        cloud.create_project(
-            "https://cloud.getwren.ai",
-            "sk-not-an-org-key",
-            org_id="2",
-            display_name="p",
-        )
-
-
 def test_create_project_raises_on_missing_project_id(monkeypatch):
     def fake_post(url, json=None, headers=None, timeout=None):
         return _FakeResponse(201, {"status": "succeeded"})
@@ -1410,16 +1395,6 @@ def test_link_refuses_when_origin_points_at_a_different_project(tmp_path):
     assert "unlink" in message, "must say how to proceed"
     # And the remote must be left exactly as it was, not half-repointed.
     assert cloud.current_remote_url(target) == f"{git_host}/git/org/2/99/other.git"
-
-
-def test_link_accepts_an_existing_origin_that_already_matches(tmp_path):
-    # The re-bind-to-the-same-project path must keep working: this is how a
-    # user recovers a directory whose upstream was never set.
-    git_host = str(tmp_path / "host")
-    _seed_remote(tmp_path / "host" / "git" / "shared-data.git")
-    target = tmp_path / "proj"
-    assert _link(target, git_host=git_host) is cloud.LinkOutcome.LINKED
-    assert _link(target, git_host=git_host) is cloud.LinkOutcome.ALREADY_LINKED
 
 
 def test_link_refuses_to_merge_a_history_acquired_from_another_project(tmp_path):

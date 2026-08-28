@@ -556,6 +556,12 @@ def test_git_credential_get_writes_credentials_to_stdout(monkeypatch):
 
 
 def test_git_credential_get_error_goes_to_stderr_not_stdout(monkeypatch):
+    """`get`'s stdout is parsed by git as credential fields, so an error
+    written there is fed to git as credential data. The assertion has to
+    separate the streams: `result.output` combines them, so checking it
+    proves the message exists somewhere, not that it stayed off stdout.
+    """
+
     def raise_it(input_data):
         raise cloud.CloudError("No stored Wren Cloud login for project 16.")
 
@@ -566,7 +572,11 @@ def test_git_credential_get_error_goes_to_stderr_not_stdout(monkeypatch):
         input="protocol=http\nhost=localhost:8081\npath=git/org/2/16/x.git\n\n",
     )
     assert result.exit_code != 0
-    assert "No stored Wren Cloud login" in result.output
+    assert "No stored Wren Cloud login" in result.stderr
+    assert "No stored Wren Cloud login" not in result.stdout
+    # Nothing at all on stdout: git reads it as `key=value` lines, so even
+    # unrelated output there is a malformed credential reply.
+    assert result.stdout == ""
 
 
 def test_git_credential_get_error_says_which_tool_produced_it(monkeypatch):
@@ -707,7 +717,12 @@ def test_unlink_reports_a_non_wren_remote_without_naming_a_project(
     result = runner.invoke(app, ["cloud", "unlink", str(tmp_path)])
     assert result.exit_code == 0, result.output
     assert "github.com/acme/analytics.git" in result.output
-    assert "project" not in result.output.split("origin")[-1].lower()
+    # `origin` was not a Wren Cloud URL, so there is no project to name and
+    # naming one would be a fiction. Asserts on the concrete strings a
+    # regression would produce, rather than slicing the message on a word it
+    # happens to contain.
+    assert "project 16" not in result.output
+    assert "project None" not in result.output
 
 
 def test_unlink_surfaces_a_cloud_error(monkeypatch, tmp_path):
