@@ -228,7 +228,15 @@ def link(
         # `--git-host`. Filtering on `git_host` here while displaying
         # `api_host` would silently reject the exact value a user would
         # naturally reach for: the host they logged in with.
-        logins = [entry for entry in logins if entry[2]["api_host"] == host]
+        # Normalized before comparing: `auth add` stores the normalized form,
+        # so a scheme-less `--host cloud.getwren.ai` here matched nothing and
+        # reported "no stored login" for a login that exists. Same defect as
+        # the one just fixed on the writing side, on the reading side.
+        logins = [
+            entry
+            for entry in logins
+            if entry[2]["api_host"] == cloud.normalize_host(host)
+        ]
 
     if not logins:
         typer.echo(
@@ -636,7 +644,15 @@ def auth_remove(
     if host is not None:
         # Same field as `link` filters on, for the same reason: `api_host` is
         # what the user typed at `login` and what the candidates below print.
-        logins = [entry for entry in logins if entry[2]["api_host"] == host]
+        # Normalized before comparing: `auth add` stores the normalized form,
+        # so a scheme-less `--host cloud.getwren.ai` here matched nothing and
+        # reported "no stored login" for a login that exists. Same defect as
+        # the one just fixed on the writing side, on the reading side.
+        logins = [
+            entry
+            for entry in logins
+            if entry[2]["api_host"] == cloud.normalize_host(host)
+        ]
 
     if not logins:
         typer.echo(

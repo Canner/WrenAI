@@ -1002,3 +1002,38 @@ def test_git_host_is_normalized_like_host(command, extra, monkeypatch, tmp_path)
     assert captured["git_host"] == "https://git.example.com", (
         "a scheme-less --git-host must not reach the credential store raw"
     )
+
+
+@pytest.mark.parametrize("command", ["link", "auth_remove"])
+def test_host_filter_matches_a_scheme_less_value(command, monkeypatch, tmp_path):
+    """`auth add` stores the normalized host, so comparing the raw `--host`
+    against it made a scheme-less value match nothing — reporting "no stored
+    login" for a login that exists. The mirror of the writing-side defect."""
+
+    entry = {
+        "api_host": "https://cloud.getwren.ai",
+        "org_id": "2",
+        "repo": "org/2/16/shared-data.git",
+        "api_key": "sk-x",
+    }
+    monkeypatch.setattr(
+        cloud, "list_logins", lambda: [("https://cloud.getwren.ai", "16", entry)]
+    )
+    monkeypatch.setattr(cloud, "resolve_repo", lambda *a, **k: entry["repo"])
+    monkeypatch.setattr(cloud, "link", lambda *a, **k: cloud.LinkOutcome.LINKED)
+    monkeypatch.setattr(cloud, "logout", lambda *a, **k: (True, False))
+
+    args = (
+        ["cloud", "link", str(tmp_path)]
+        if command == "link"
+        else ["cloud", "auth", "remove"]
+    )
+    # No scheme — what a person types when asked for a host.
+    args += ["--host", "cloud.getwren.ai", "--project", "16"]
+    if command == "auth_remove":
+        args += ["--yes"]
+
+    result = runner.invoke(app, args)
+
+    assert result.exit_code == 0, result.output
+    assert "no stored login" not in result.output

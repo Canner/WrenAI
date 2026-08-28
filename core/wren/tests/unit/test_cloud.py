@@ -2179,3 +2179,74 @@ def test_resolve_repo_does_not_call_the_api_when_the_repo_is_known(monkeypatch):
         cloud.resolve_repo("https://cloud.getwren.ai", "16", entry)
         == "org/2/16/shared-data.git"
     )
+
+
+def test_create_configures_git_even_when_the_key_cannot_be_validated(
+    tmp_path, monkeypatch, _helper_check_passes
+):
+    """The recovery hint promises `wren cloud link` finishes the job. `login`
+    writes the credential helper only after the git-token call succeeds — the
+    call that failed — so storing the key alone left that promise undeliverable:
+    link would fetch over HTTPS with no helper and git would prompt."""
+
+    _patch_create_http(monkeypatch)
+
+    def failing_mint(*args, **kwargs):
+        raise cloud.CloudError("network blip")
+
+    monkeypatch.setattr(cloud, "mint_git_token", failing_mint)
+
+    target = _make_wren_project(tmp_path / "project")
+
+    with pytest.raises(cloud.CloudError):
+        cloud.create(
+            target,
+            host="https://cloud.getwren.ai",
+            org_id="2",
+            org_key="osk-x",
+            display_name="proj",
+        )
+
+    # Assert on git's own view, not on our config file: what matters is that
+    # git resolves a helper for the host the hinted command will talk to.
+    configured = cloud.run_git(
+        [
+            "config",
+            "--global",
+            "--get-urlmatch",
+            "credential.helper",
+            "https://cloud.getwren.ai",
+        ],
+        check=False,
+    )
+    assert configured.returncode == 0, (
+        "git must resolve a credential helper for the host, or the recovery "
+        "the error message promises cannot authenticate"
+    )
+    assert cloud.HELPER_COMMAND in configured.stdout
+
+
+def test_link_removes_an_origin_it_added_when_the_rename_refuses(tmp_path):
+    """A refusal must not leave the directory pointing at a project it was
+    never bound to — the next attempt would refuse "already bound" for a bind
+    that never happened. Same rule the foreign-history refusal follows."""
+
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "shared-data.git")
+
+    target = tmp_path / "proj"
+    target.mkdir()
+    cloud.run_git(["init", "-b", "master"], cwd=target)
+    (target / "mine.txt").write_text("mine")
+    cloud.run_git(["add", "-A"], cwd=target)
+    cloud.run_git(["commit", "-m", "mine"], cwd=target)
+    # A stray local `main` makes the rename collide.
+    cloud.run_git(["branch", "main"], cwd=target)
+
+    with pytest.raises(cloud.CloudError) as exc:
+        _link(target, git_host=git_host)
+    assert "main" in str(exc.value)
+
+    assert cloud.current_remote_url(target) is None, (
+        "the origin this call added must be rolled back"
+    )

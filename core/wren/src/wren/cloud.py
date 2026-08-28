@@ -1023,7 +1023,16 @@ def link(
     # Before any of the comparisons below: they all speak in terms of
     # `origin/<branch>` and the current branch, and a name mismatch makes
     # every one of them describe a state the user cannot then act on.
-    _align_branch_name(target, branch)
+    try:
+        _align_branch_name(target, branch)
+    except CloudError:
+        if added_origin:
+            # Same rule as the foreign-history refusal below: a refusal must
+            # not leave the directory pointing at a project it was never
+            # bound to, or the next attempt refuses "already bound" for a
+            # bind that never happened.
+            run_git(["remote", "remove", "origin"], cwd=target, check=False)
+        raise
 
     # If `origin/<branch>` is already an ancestor of HEAD, merging it would
     # add nothing: either a previous `link` already did the reconciling
@@ -1158,18 +1167,17 @@ def _align_branch_name(target: Path, branch: str) -> None:
     if _has_upstream(target):
         return
 
-    unborn = (
-        run_git(["rev-parse", "--verify", "HEAD"], cwd=target, check=False).returncode
-        != 0
-    )
-    if unborn:
-        # `git branch -m` has nothing to rename before the first commit.
-        run_git(["symbolic-ref", "HEAD", f"refs/heads/{branch}"], cwd=target)
-        return
-
+    # HEAD is always born by here: `link` commits any existing files before
+    # calling this, precisely so the merge below has a history to reconcile.
     current = run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=target).stdout.strip()
     if current == branch:
         return
+    if current == "HEAD":
+        raise CloudError(
+            f"{target} has a detached HEAD, so there is no branch to bind. "
+            f"Check out a branch first — `git switch -c {branch}` — then run "
+            "`link` again."
+        )
 
     rename = run_git(["branch", "-m", branch], cwd=target, check=False)
     if rename.returncode != 0:
@@ -1628,6 +1636,14 @@ def create(
         org_id=project.org_id,
         api_key=project_key,
     )
+    # And configure git, for the same reason. `login` writes the helper only
+    # after the git-token call succeeds — which is the call that can fail here
+    # — so storing the key alone left the recovery this hint promises unable to
+    # authenticate: `link` would fetch over HTTPS with no helper for the host
+    # and git would prompt for a username. Serviceability was checked in the
+    # pre-flight above and the write is idempotent, so doing it here costs
+    # nothing and makes the hint true.
+    configure_git_credential_helper(resolved_git_host)
 
     def _recovery_hint() -> str:
         return (
