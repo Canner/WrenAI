@@ -745,6 +745,18 @@ class TestMemoryStore:
         info = memory_store.status()
         assert info["tables"]["schema_items"] == 11
 
+    def test_status_reports_the_live_embedding_backend(self, memory_store):
+        # Two backends write these vectors and only one of them pulls torch,
+        # so status has to say which one is actually resolved — not merely
+        # which extras happen to be importable.
+        from wren.memory.embeddings import (  # noqa: PLC0415
+            resolve_embedding_backend,
+        )
+
+        info = memory_store.status()
+        assert info["embedding_backend"] == resolve_embedding_backend()
+        assert info["model"]
+
     def test_reset(self, memory_store):
         memory_store.index_schema(_MANIFEST)
         memory_store.reset()

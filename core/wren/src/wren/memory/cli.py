@@ -464,6 +464,11 @@ def status(
     if info["backend"] == "grep":
         typer.echo(f"  knowledge/sql: {info['pairs']} pair(s)")
         return
+    # Two backends produce these vectors and only one of them pulls torch, so
+    # which one is live is the first thing to check when an install is bigger
+    # or slower than expected.
+    if info.get("embedding_backend"):
+        typer.echo(f"  embeddings: {info['embedding_backend']} ({info['model']})")
     tables = info.get("tables", {})
     if not tables:
         typer.echo("No tables indexed yet.")
