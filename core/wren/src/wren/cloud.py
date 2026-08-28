@@ -175,7 +175,14 @@ def _json_object(resp, *, what: str) -> dict:
 def _required(data: dict, key: str, *, what: str):
     value = data.get(key)
     if value is None:
-        raise CloudError(f"{what} response is missing `{key}`: {data!r}")
+        # Names the keys, never the values: this runs on the git-token
+        # response, so a body carrying `token` but not `repo` would otherwise
+        # put a live credential into an error message — and errors reach CI
+        # logs and pasted bug reports.
+        present = ", ".join(sorted(data)) or "none"
+        raise CloudError(
+            f"{what} response is missing `{key}` (keys present: {present})."
+        )
     return value
 
 
@@ -1454,8 +1461,14 @@ def create_project(
             f"on {api_host}: {resp.text[:300]}"
         )
 
-    data = _json_object(resp, what=f"Creating a project in org {org_id}")
+    what = f"Creating a project in org {org_id}"
+    data = _json_object(resp, what=what)
     project = data.get("project") or {}
+    if not isinstance(project, dict):
+        raise CloudError(
+            f"{what} returned a `project` that is not an object "
+            f"({type(project).__name__})."
+        )
     project_id = project.get("id")
     if project_id is None:
         raise CloudError(

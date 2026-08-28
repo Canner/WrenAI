@@ -2355,3 +2355,51 @@ def test_create_project_reports_a_non_numeric_org_id(monkeypatch):
             "https://wren.example", "osk-x", org_id="acme", display_name="p"
         )
     assert "numeric organization id" in str(exc.value)
+
+
+def test_a_missing_field_error_never_carries_the_response_values(monkeypatch):
+    """This runs on the git-token response, so a body with `token` but no
+    `repo` would put a live credential into an error message — and errors
+    reach CI logs and bug reports pasted verbatim. Introduced by the fix for
+    unguarded success responses, caught in review."""
+
+    class _Resp:
+        status_code = 200
+        headers: dict = {}
+        text = "{}"
+
+        def json(self):
+            return {"token": "sk-live-token-value", "expiresIn": 600}
+
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _Resp())
+
+    with pytest.raises(cloud.CloudError) as exc:
+        cloud.mint_git_token("https://wren.example", "16", "sk-x")
+
+    message = str(exc.value)
+    assert "sk-live-token-value" not in message
+    # Still has to be diagnosable: names the missing key and what was present.
+    assert "missing `repo`" in message
+    assert "token" in message, "the key names are the useful part"
+
+
+def test_create_project_rejects_a_non_object_project_value(monkeypatch):
+    """`data.get("project") or {}` let a truthy non-dict through to `.get()`,
+    raising AttributeError — which is not a CloudError, so it bypassed the
+    CLI's handler."""
+
+    class _Resp:
+        status_code = 201
+        headers: dict = {}
+        text = "{}"
+
+        def json(self):
+            return {"project": "invalid"}
+
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _Resp())
+
+    with pytest.raises(cloud.CloudError) as exc:
+        cloud.create_project(
+            "https://wren.example", "osk-x", org_id="2", display_name="p"
+        )
+    assert "not an object" in str(exc.value)
