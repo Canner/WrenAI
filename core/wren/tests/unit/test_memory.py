@@ -1612,6 +1612,26 @@ class TestEmbeddingBackendResolution:
         )
         assert chosen == "onnx"
 
+    def test_unhonored_request_warns(self, monkeypatch, caplog):
+        # Someone who sets onnx specifically to avoid torch should not have to
+        # infer from a slow cold start that the fallback kicked in.
+        with caplog.at_level("WARNING"):
+            chosen = self._resolve(monkeypatch, onnx=False, st=True, env="onnx")
+        assert chosen == "sentence-transformers"
+        assert "memory-onnx" in caplog.text
+
+    def test_honored_request_does_not_warn(self, monkeypatch, caplog):
+        with caplog.at_level("WARNING"):
+            self._resolve(monkeypatch, onnx=True, st=True, env="onnx")
+        assert caplog.text == ""
+
+    def test_unrecognized_value_does_not_warn(self, monkeypatch, caplog):
+        # Only a request for a real backend that could not be honored is worth
+        # a warning; an empty or bogus value just means "auto-detect".
+        with caplog.at_level("WARNING"):
+            self._resolve(monkeypatch, onnx=False, st=True, env="nonsense")
+        assert caplog.text == ""
+
     def test_unrecognized_value_auto_detects(self, monkeypatch):
         chosen = self._resolve(monkeypatch, onnx=False, st=True, env="nonsense")
         assert chosen == "sentence-transformers"

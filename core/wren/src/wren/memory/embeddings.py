@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import threading
 from importlib.util import find_spec
@@ -130,8 +131,20 @@ def resolve_embedding_backend(env: str | None = None) -> str:
         return SENTENCE_TRANSFORMERS_BACKEND
     if choice == ONNX_BACKEND and _onnx_available():
         return ONNX_BACKEND
-    # Empty or unrecognized value, or the requested extra is not installed.
-    return ONNX_BACKEND if _onnx_available() else SENTENCE_TRANSFORMERS_BACKEND
+
+    resolved = ONNX_BACKEND if _onnx_available() else SENTENCE_TRANSFORMERS_BACKEND
+    if choice in (ONNX_BACKEND, SENTENCE_TRANSFORMERS_BACKEND):
+        # Falling back keeps the process running, but someone who asked for
+        # onnx specifically to avoid torch should not have to infer from a
+        # slow cold start that they did not get it.
+        logging.getLogger(__name__).warning(
+            "WREN_EMBEDDING_BACKEND=%s was requested but its extra is not "
+            "installed; using %s instead. Install wren[%s] to get it.",
+            choice,
+            resolved,
+            "memory-onnx" if choice == ONNX_BACKEND else "memory",
+        )
+    return resolved
 
 
 def _resolve_repo_id(model_name: str) -> str:
