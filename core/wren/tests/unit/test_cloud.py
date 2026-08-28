@@ -382,7 +382,9 @@ def _seed_remote(remote_dir):
     # `create` pushes, and git refuses to push into the checked-out branch of
     # a non-bare repo. A real remote is bare; this makes the stand-in behave
     # like one without losing the seeded worktree the link tests read.
-    cloud.run_git(["config", "receive.denyCurrentBranch", "updateInstead"], cwd=remote_dir)
+    cloud.run_git(
+        ["config", "receive.denyCurrentBranch", "updateInstead"], cwd=remote_dir
+    )
 
 
 def _link(target, *, git_host, repo="shared-data.git"):
@@ -1976,9 +1978,7 @@ def test_create_pushes_so_the_models_deploy(
 
     # Read the model back out of the *remote*: asserting on the local branch
     # would pass even if nothing had been pushed.
-    listed = cloud.run_git(
-        ["ls-tree", "-r", "--name-only", "HEAD"], cwd=remote
-    ).stdout
+    listed = cloud.run_git(["ls-tree", "-r", "--name-only", "HEAD"], cwd=remote).stdout
     assert "models/t/metadata.yml" in listed
     assert "wren_project.yml" in listed
 
@@ -2064,11 +2064,13 @@ def test_link_renames_the_local_branch_to_the_remotes_default(tmp_path):
     # has to land on the branch the remote already has rather than opening a
     # second one. Asserting on the branch name alone would miss both.
     push = cloud.run_git(["push"], cwd=target, check=False)
-    assert push.returncode == 0, (push.stderr or push.stdout)
+    assert push.returncode == 0, push.stderr or push.stdout
     remote_branches = cloud.run_git(
         ["branch", "--format=%(refname:short)"], cwd=remote
     ).stdout.split()
-    assert remote_branches == ["main"], f"a second branch was created: {remote_branches}"
+    assert remote_branches == ["main"], (
+        f"a second branch was created: {remote_branches}"
+    )
 
 
 def test_link_leaves_a_deliberate_upstream_and_its_branch_name_alone(tmp_path):
@@ -2261,3 +2263,95 @@ def test_create_names_the_project_when_configuring_git_fails(
     assert "sk-fresh-project-key" not in message
     stored = [entry for _host, pid, entry in cloud.list_logins() if pid == "16"]
     assert stored and stored[0]["api_key"] == "sk-fresh-project-key"
+
+
+# ── Malformed success responses ────────────────────────────────────────────
+#
+# The error paths already tolerate an unexpected body (`_parse_error_code`
+# returns None rather than raising). These pin the same for the success paths:
+# a 200 carrying an HTML error page — what an ingress in front of the API can
+# produce — must not surface as a ValueError or KeyError traceback, because
+# that bypasses both the CLI's handler and the credential helper's.
+
+
+def _not_json_response(status: int):
+    """A success status whose body is not JSON. The status has to match what
+    each call treats as success — `create_project` accepts 201/207 and rejects
+    a 200 before it ever parses, so reusing one status would test the wrong
+    branch for it."""
+
+    class _Resp:
+        status_code = status
+        text = "<html><body>502 Bad Gateway</body></html>"
+        headers: dict = {}
+
+        def json(self):
+            raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+    return _Resp()
+
+
+@pytest.mark.parametrize(
+    "status,call",
+    [
+        pytest.param(
+            200,
+            lambda: cloud.mint_git_token("https://wren.example", "16", "sk-x"),
+            id="mint_git_token",
+        ),
+        pytest.param(
+            201,
+            lambda: cloud.create_project(
+                "https://wren.example", "osk-x", org_id="2", display_name="p"
+            ),
+            id="create_project",
+        ),
+        pytest.param(
+            201,
+            lambda: cloud.mint_project_key("https://wren.example", "16", "osk-x"),
+            id="mint_project_key",
+        ),
+    ],
+)
+def test_a_success_status_with_a_non_json_body_is_a_cloud_error(
+    status, call, monkeypatch
+):
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _not_json_response(status))
+
+    with pytest.raises(cloud.CloudError) as exc:
+        call()
+    assert "not JSON" in str(exc.value)
+
+
+def test_mint_git_token_reports_a_response_missing_its_fields(monkeypatch):
+    """Direct indexing raised KeyError here, which is not a CloudError."""
+
+    class _Resp:
+        status_code = 200
+        headers: dict = {}
+        text = "{}"
+
+        def json(self):
+            return {"token": "t"}  # no `repo`
+
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _Resp())
+
+    with pytest.raises(cloud.CloudError) as exc:
+        cloud.mint_git_token("https://wren.example", "16", "sk-x")
+    assert "missing `repo`" in str(exc.value)
+
+
+def test_create_project_reports_a_non_numeric_org_id(monkeypatch):
+    """`--org acme` reached `int()` and printed a ValueError traceback; the CLI
+    catches CloudError only."""
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("must refuse before any request")
+
+    monkeypatch.setattr(requests, "post", fail_if_called)
+
+    with pytest.raises(cloud.CloudError) as exc:
+        cloud.create_project(
+            "https://wren.example", "osk-x", org_id="acme", display_name="p"
+        )
+    assert "numeric organization id" in str(exc.value)

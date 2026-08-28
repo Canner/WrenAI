@@ -150,6 +150,35 @@ def _parse_error_code(resp) -> str | None:
     return code if isinstance(code, str) else None
 
 
+def _json_object(resp, *, what: str) -> dict:
+    """Parse a successful response body as a JSON object, or raise CloudError.
+
+    The error paths already tolerate a body that is not what they expect
+    (`_parse_error_code` returns None rather than raising); the success paths
+    did not, so a 200 carrying an HTML error page — which an ingress or proxy
+    in front of the API can produce — surfaced as a `ValueError` or `KeyError`
+    traceback instead of a message, bypassing both the CLI's handler and the
+    credential helper's.
+    """
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise CloudError(
+            f"{what} returned a success status with a body that is not JSON: "
+            f"{resp.text[:200]!r}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise CloudError(f"{what} returned {type(data).__name__}, expected an object.")
+    return data
+
+
+def _required(data: dict, key: str, *, what: str):
+    value = data.get(key)
+    if value is None:
+        raise CloudError(f"{what} response is missing `{key}`: {data!r}")
+    return value
+
+
 def mint_git_token(
     api_host: str,
     project_id: str,
@@ -181,10 +210,11 @@ def mint_git_token(
             raise CloudError(f"Could not reach {api_host}: {exc}") from exc
 
         if resp.status_code == 200:
-            data = resp.json()
+            what = f"Minting a git token for project {project_id}"
+            data = _json_object(resp, what=what)
             return GitToken(
-                repo=data["repo"],
-                token=data["token"],
+                repo=_required(data, "repo", what=what),
+                token=_required(data, "token", what=what),
                 expires_in=data.get("expiresIn", 0),
                 expires_at=data.get("expiresAt", ""),
             )
@@ -1369,8 +1399,18 @@ def create_project(
 
     url = f"{api_host.rstrip('/')}{_PROJECTS_PATH}"
     headers = {"Authorization": f"Bearer {org_key}"}
+    try:
+        numeric_org_id = int(org_id)
+    except (TypeError, ValueError) as exc:
+        # Reached with `--org acme`: the CLI catches CloudError only, so a
+        # ValueError here printed a traceback where every other refusal in
+        # this command prints a message.
+        raise CloudError(
+            f"`--org` must be a numeric organization id; got {org_id!r}."
+        ) from exc
+
     body: dict = {
-        "orgId": int(org_id),
+        "orgId": numeric_org_id,
         "displayName": display_name,
         "projectType": "AGENTIC",
     }
@@ -1394,11 +1434,13 @@ def create_project(
 
     if resp.status_code not in (201, 207):
         if resp.status_code in (401, 403):
-            # Deliberately does not claim the key was a project key. The CLI
-            # already refuses a non-`osk-` key before this call, so that is
-            # not a reachable cause here — and since the key may have come
-            # from storage rather than from something just typed, guessing
-            # wrongly sends the user looking for a key they already have.
+            # Deliberately does not claim the key was a project key. A 401
+            # here has several possible causes — wrong level, revoked, or
+            # belonging to another org or host — and nothing distinguishes
+            # them from this side, so naming one sends the user looking for
+            # a key they may already have. (An earlier version of this
+            # comment justified itself with a CLI-side `osk-` prefix check;
+            # no such check exists, and the reasoning does not need it.)
             raise InvalidApiKeyError(
                 f"This key was rejected creating a project in org "
                 f"{org_id} on {api_host}.\n"
@@ -1412,7 +1454,7 @@ def create_project(
             f"on {api_host}: {resp.text[:300]}"
         )
 
-    data = resp.json()
+    data = _json_object(resp, what=f"Creating a project in org {org_id}")
     project = data.get("project") or {}
     project_id = project.get("id")
     if project_id is None:
@@ -1487,7 +1529,9 @@ def mint_project_key(
             f"key for project {project_id} on {api_host}: {resp.text[:300]}"
         )
 
-    secret = resp.json().get("secret")
+    secret = _json_object(resp, what=f"Minting a key for project {project_id}").get(
+        "secret"
+    )
     if not secret:
         raise CloudError(
             "Wren Cloud API did not return a key secret for project "

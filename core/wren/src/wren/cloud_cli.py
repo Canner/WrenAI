@@ -681,7 +681,16 @@ def auth_remove(
         if not confirm:
             raise typer.Abort()
 
-    login_removed, helper_removed = cloud.logout(git_host, project_id)
+    try:
+        login_removed, helper_removed = cloud.logout(git_host, project_id)
+    except cloud.CloudError as exc:
+        # `logout` removes the host's credential-helper entry via
+        # `git config --global`, which can fail — the same "could not lock
+        # config file" case `create` handles. The sibling commands all wrap
+        # their `cloud` call; this one did not, so that surfaced as a
+        # traceback.
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from exc
     if not login_removed:
         typer.echo(
             f"Error: no stored login for project {project_id} on {git_host}.",

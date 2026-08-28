@@ -633,8 +633,12 @@ Two credentials, two lifetimes:
   disk, so an expired token is a non-event — nothing ever holds one long enough
   to present it late.
 
-`--host` defaults to `https://cloud.getwren.ai`; pass a URL for a self-hosted
-deployment. `https` is assumed when no scheme is given.
+`--host` means different things in different commands, and only defaults where
+it names a target. On `auth add` and `create` it defaults to
+`https://cloud.getwren.ai` — pass a URL for a self-hosted deployment. On `link`
+and `auth remove` it *selects* among stored credentials and has **no** default,
+deliberately: defaulting a filter would hide a credential you do have. Either
+way, `https` is assumed when no scheme is given.
 
 `--git-host` is only for deployments where the API and the git server are on
 different hosts — a self-hosted setup with no single ingress in front of both.
