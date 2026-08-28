@@ -1643,7 +1643,6 @@ def create(
     # and git would prompt for a username. Serviceability was checked in the
     # pre-flight above and the write is idempotent, so doing it here costs
     # nothing and makes the hint true.
-    configure_git_credential_helper(resolved_git_host)
 
     def _recovery_hint() -> str:
         return (
@@ -1654,6 +1653,21 @@ def create(
             f"`wren cloud auth remove --host {host} --project {project.id}` "
             f"drops the stored key."
         )
+
+    try:
+        configure_git_credential_helper(resolved_git_host)
+    except CloudError as exc:
+        # This is past the point of no return, so it owes the same naming as
+        # every other post-creation failure. Reachable: `git config --global`
+        # fails with "could not lock config file" when the global config's
+        # directory is not writable — and a read-only home still *reads*, so
+        # the git-identity pre-flight passes and this is the first write to
+        # fail. A malformed global config fails earlier, at that pre-flight.
+        raise CloudError(
+            f"Project {project.id} was created on {api_host}, but configuring "
+            f"git to authenticate to it failed:\n{exc}\n"
+            f"{_recovery_hint()}"
+        ) from exc
 
     try:
         token = login(

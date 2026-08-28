@@ -2250,3 +2250,39 @@ def test_link_removes_an_origin_it_added_when_the_rename_refuses(tmp_path):
     assert cloud.current_remote_url(target) is None, (
         "the origin this call added must be rolled back"
     )
+
+
+def test_create_names_the_project_when_configuring_git_fails(
+    tmp_path, monkeypatch, _helper_check_passes
+):
+    """Past the point of no return, so it owes the same naming as every other
+    post-creation failure. Reachable: `git config --global` fails with "could
+    not lock config file" when the global config's directory is not writable,
+    and a read-only home still reads — so the git-identity pre-flight passes
+    and this is the first write to fail."""
+
+    _patch_create_http(monkeypatch)
+
+    def failing_configure(git_host):
+        raise cloud.GitCommandError("git config --global ... failed: could not lock")
+
+    monkeypatch.setattr(cloud, "configure_git_credential_helper", failing_configure)
+
+    target = _make_wren_project(tmp_path / "project")
+
+    with pytest.raises(cloud.CloudError) as excinfo:
+        cloud.create(
+            target,
+            host="https://cloud.getwren.ai",
+            org_id="2",
+            org_key="osk-x",
+            display_name="proj",
+        )
+
+    message = str(excinfo.value)
+    assert "16" in message, "must name the project that now exists"
+    assert "could not lock" in message, "must keep the underlying git error"
+    assert "already stored" in message, "must say the key is not lost"
+    assert "sk-fresh-project-key" not in message
+    stored = [entry for _host, pid, entry in cloud.list_logins() if pid == "16"]
+    assert stored and stored[0]["api_key"] == "sk-fresh-project-key"
