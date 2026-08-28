@@ -613,3 +613,122 @@ wren genbi deploy sales-overview --provider vercel --prod
   logged-out visitors by default. To make the URL public, disable it at
   Project → Settings → Deployment Protection. The deploy itself succeeded;
   the URL is just gated.
+
+---
+
+## `wren cloud` — Connect a Project to Wren Cloud
+
+Binds a local Wren project to a Wren Cloud project's git repository. **The
+binding *is* the git remote** — nothing on your machine records which project a
+directory belongs to. After binding, plain `git push` / `git pull` / `git diff`
+are the commands; none of the security depends on going through this CLI again.
+
+Two credentials, two lifetimes:
+
+- The **project API key** is durable. It is prompted for once, stored under
+  `~/.wren/cloud.yml` (mode `0600`, keyed by git host + project id), and never
+  leaves the machine except as an `Authorization` header.
+- A **git token** is a short-TTL JWT minted from that key on *every* git
+  operation, by a credential helper git invokes itself. It is never written to
+  disk, so an expired token is a non-event — nothing ever holds one long enough
+  to present it late.
+
+`--host` defaults to `https://cloud.getwren.ai`; pass a URL for a self-hosted
+deployment. `https` is assumed when no scheme is given.
+
+`--git-host` is only for deployments where the API and the git server are on
+different hosts — a self-hosted setup with no single ingress in front of both.
+On the managed service, leave it out.
+
+### `wren cloud auth add`
+
+Store the credential git will authenticate with, and configure git to use it.
+Touches no directory, so it works before any clone exists.
+
+```bash
+wren cloud auth add --project 1234
+wren cloud auth add --project 1234 --host https://wren.internal.example.com
+```
+
+Writes a URL-scoped credential-helper entry into your **global** git config
+(there is no clone yet to write a local one into). Because the helper resolves
+which project's token to mint from the path git hands it, one entry per host
+serves every project on it.
+
+Refuses up front if the `wren` on `PATH` cannot serve the helper — a stored
+credential that git cannot use is worse than none.
+
+### `wren cloud create`
+
+Turn a Wren project you already have into a Wren Cloud project: create it,
+connect its data source, bind this directory, and push — the push is what
+deploys the models.
+
+```bash
+wren cloud create --org 42 --type BIG_QUERY --connection-info-file ./conn.json
+wren cloud create --org 42 --type POSTGRES --connection-info '{"host":"db","port":"5432","user":"u","password":"p","database":"d"}' --test-connection
+```
+
+The organization key comes from `--org-key`, the `WREN_CLOUD_ORG_KEY`
+environment variable, or a prompt. It is used only to create the project and
+mint that project's own key, and is **never** written to disk.
+
+`--type` is case-insensitive. Data-source names are the API's, e.g. `BIG_QUERY`,
+`POSTGRES`, `MYSQL`, `SNOWFLAKE`, `TRINO`.
+
+Requirements, all checked **before** anything is created, so a refusal leaves no
+half-made project behind:
+
+- The directory is a Wren project (`wren_project.yml`) whose YAML compiles. To
+  start a brand-new project instead, create it in the Wren Cloud web UI.
+- `--type` and a connection info are both given. A project without a data source
+  is reported as still needing setup, and this CLI cannot attach one afterwards.
+- The directory is not already bound, does not sit inside another git
+  repository, and git has an identity configured.
+
+Models travel by git, not by the API: the manifest is built to validate the
+project and then discarded, and the push fires the repository's deploy hook.
+
+### `wren cloud link`
+
+Bind a directory to a project you have already run `auth add` for. Use this to
+clone a project onto a second machine, or to re-bind after `unlink`.
+
+```bash
+wren cloud link                       # current directory
+wren cloud link ./my-project --project 1234
+```
+
+Safe to re-run if a previous attempt failed partway. If the directory is
+already fully linked it says so and does not merge again — `git pull` is how you
+get updates.
+
+Names the local branch after the remote's default branch, so plain `git push`
+works afterwards. Refuses to merge one project's history into another.
+
+### `wren cloud unlink`
+
+Remove the `origin` remote. That is the entire unbind — no server call, and the
+project is untouched.
+
+```bash
+wren cloud unlink
+wren cloud unlink ./my-project --forget-key --yes
+```
+
+Your stored key is kept by default, since another directory may still be bound
+to the same project. `--forget-key` drops it too, and removes that host's
+credential-helper entry — but only once no stored login uses that host, because
+the entry is shared by every project on it.
+
+### `wren cloud auth remove`
+
+Drop a stored credential. Touches no directory.
+
+```bash
+wren cloud auth remove --project 1234 --yes
+```
+
+### `wren cloud git-credential`
+
+The credential helper `auth add` wires into git. Git invokes it; you do not.
