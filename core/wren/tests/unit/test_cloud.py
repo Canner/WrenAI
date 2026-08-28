@@ -855,8 +855,16 @@ def test_create_reports_not_agentic_actionably_and_includes_the_project_key(
 
     message = str(excinfo.value)
     assert "not an agent-mode" in message
-    assert "sk-fresh-project-key" in message
-    assert "wren cloud auth add" in message
+    assert "sk-fresh-project-key" not in message, (
+        "a live credential must not reach stderr — it lands in CI logs and in "
+        "bug reports pasted verbatim"
+    )
+    assert "already stored" in message
+    # The key was the one thing that could not be fetched again, which is why
+    # it used to be printed. Asserting only its absence would pass just as
+    # well if it had been dropped.
+    stored = [entry for _host, pid, entry in cloud.list_logins() if pid == "16"]
+    assert stored and stored[0]["api_key"] == "sk-fresh-project-key"
     # Nothing was touched locally — this is a pure server-side outcome.
     assert not (target / ".git").exists()
 
@@ -907,8 +915,16 @@ def test_create_degrades_to_generic_bind_failure_on_an_unrecognized_git_token_er
     message = str(excinfo.value)
     assert "not an agent-mode" not in message
     assert "binding this directory to it failed" in message
-    assert "sk-fresh-project-key" in message
-    assert "wren cloud auth add" in message
+    assert "sk-fresh-project-key" not in message, (
+        "a live credential must not reach stderr — it lands in CI logs and in "
+        "bug reports pasted verbatim"
+    )
+    assert "already stored" in message
+    # The key was the one thing that could not be fetched again, which is why
+    # it used to be printed. Asserting only its absence would pass just as
+    # well if it had been dropped.
+    stored = [entry for _host, pid, entry in cloud.list_logins() if pid == "16"]
+    assert stored and stored[0]["api_key"] == "sk-fresh-project-key"
     assert not (target / ".git").exists()
 
 
@@ -935,8 +951,16 @@ def test_create_reports_bind_failure_with_recovery_hint(
 
     message = str(excinfo.value)
     assert "network blip" in message
-    assert "sk-fresh-project-key" in message
-    assert "wren cloud auth add" in message
+    assert "sk-fresh-project-key" not in message, (
+        "a live credential must not reach stderr — it lands in CI logs and in "
+        "bug reports pasted verbatim"
+    )
+    assert "already stored" in message
+    # The key was the one thing that could not be fetched again, which is why
+    # it used to be printed. Asserting only its absence would pass just as
+    # well if it had been dropped.
+    stored = [entry for _host, pid, entry in cloud.list_logins() if pid == "16"]
+    assert stored and stored[0]["api_key"] == "sk-fresh-project-key"
     assert "wren cloud link" in message
 
 
@@ -2101,3 +2125,57 @@ def test_run_git_reports_a_missing_directory_as_a_cloud_error(tmp_path):
     with pytest.raises(cloud.CloudError) as exc:
         cloud.run_git(["status"], cwd=tmp_path / "nope")
     assert "does not exist" in str(exc.value)
+
+
+def test_link_fills_in_a_repo_that_was_stored_before_it_was_known(
+    tmp_path, monkeypatch, _helper_check_passes
+):
+    """`create` stores the key before it can know the repo path — only the
+    git-token call returns that, and it is the call that can fail. The next
+    use has to complete the record rather than build a broken remote URL from
+    an empty repo."""
+
+    cloud.store_key_pending_repo(
+        git_host="https://cloud.getwren.ai",
+        api_host="https://cloud.getwren.ai",
+        project_id="16",
+        org_id="2",
+        api_key="sk-x",
+    )
+    entry = cloud.get_login("https://cloud.getwren.ai", "16")
+    assert entry["repo"] == "", "precondition: the repo is not known yet"
+
+    monkeypatch.setattr(
+        cloud,
+        "mint_git_token",
+        lambda *a, **k: cloud.GitToken(
+            repo="org/2/16/shared-data.git", token="t", expires_in=600, expires_at=""
+        ),
+    )
+
+    resolved = cloud.resolve_repo("https://cloud.getwren.ai", "16", entry)
+
+    assert resolved == "org/2/16/shared-data.git"
+    # Written back, so the discovery happens once rather than on every use.
+    assert (
+        cloud.get_login("https://cloud.getwren.ai", "16")["repo"]
+        == "org/2/16/shared-data.git"
+    )
+
+
+def test_resolve_repo_does_not_call_the_api_when_the_repo_is_known(monkeypatch):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("a complete record must not trigger an API call")
+
+    monkeypatch.setattr(cloud, "mint_git_token", fail_if_called)
+
+    entry = {
+        "api_host": "https://cloud.getwren.ai",
+        "org_id": "2",
+        "repo": "org/2/16/shared-data.git",
+        "api_key": "sk-x",
+    }
+    assert (
+        cloud.resolve_repo("https://cloud.getwren.ai", "16", entry)
+        == "org/2/16/shared-data.git"
+    )

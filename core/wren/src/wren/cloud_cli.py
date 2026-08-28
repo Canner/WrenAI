@@ -256,7 +256,9 @@ def link(
             api_host=entry["api_host"],
             project_id=project_id,
             org_id=entry["org_id"],
-            repo=entry["repo"],
+            # May have been stored before the repo path was known (see
+            # `store_key_pending_repo`); this fills it in on first use.
+            repo=cloud.resolve_repo(git_host, project_id, entry),
         )
     except cloud.CloudError as exc:
         typer.echo(f"Error: {exc}", err=True)

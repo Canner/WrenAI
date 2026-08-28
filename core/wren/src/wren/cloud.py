@@ -541,6 +541,54 @@ def login(
     return token
 
 
+def store_key_pending_repo(
+    *, git_host: str, api_host: str, project_id: str, org_id: str, api_key: str
+) -> None:
+    """Store a key before the repo path is known.
+
+    `create` mints a project key, then validates it by minting a git token —
+    and only that second call returns the repo path a complete record needs.
+    When it fails, the key is still the thing worth keeping: without it the
+    project is unreachable and the user has no way to get it back. Storing it
+    with an empty `repo` keeps it, and `resolve_repo` fills the gap on the
+    next use, so nothing has to guess the server's repo naming.
+
+    The credential helper never reads `repo` — it derives the repo from the
+    path git hands it — so an entry stored this way authenticates correctly
+    the moment it exists.
+    """
+    store_login(
+        git_host=git_host,
+        api_host=api_host,
+        project_id=str(project_id),
+        org_id=str(org_id),
+        repo="",
+        api_key=api_key,
+    )
+
+
+def resolve_repo(git_host: str, project_id: str, entry: dict) -> str:
+    """Return the entry's repo path, discovering it if it was never stored.
+
+    Complements `store_key_pending_repo`: the repo is recoverable from the
+    API at any time, by the same call the credential helper makes on every
+    git operation, so a record missing it is incomplete rather than broken.
+    """
+    repo = entry.get("repo") or ""
+    if repo:
+        return repo
+    token = mint_git_token(entry["api_host"], project_id, entry["api_key"])
+    store_login(
+        git_host=git_host,
+        api_host=entry["api_host"],
+        project_id=project_id,
+        org_id=entry["org_id"],
+        repo=token.repo,
+        api_key=entry["api_key"],
+    )
+    return token.repo
+
+
 # ── The credential helper itself: get / store / erase ───────────────────────
 
 
@@ -1567,15 +1615,28 @@ def create(
 
     project_key = mint_project_key(api_host, project.id, org_key)
 
+    # Store the key before validating it. The validation below is the only
+    # remaining step that can fail, and when it does the key is the one thing
+    # that cannot be obtained again — so printing it into the error was the
+    # earlier way of not losing it. stderr routinely reaches CI logs and
+    # bug reports pasted verbatim, which is not somewhere a live credential
+    # should end up; storing it first means the message never has to carry it.
+    store_key_pending_repo(
+        git_host=resolved_git_host,
+        api_host=api_host,
+        project_id=project.id,
+        org_id=project.org_id,
+        api_key=project_key,
+    )
+
     def _recovery_hint() -> str:
-        hint = f"  wren cloud auth add --host {host} --project {project.id}"
-        if git_host:
-            hint += f" --git-host {git_host}"
         return (
-            f"The project's key is: {project_key}\n"
-            "Recover with:\n"
-            f"{hint}\n"
-            "then `wren cloud link` in this directory."
+            f"The project's key is already stored, so nothing needs to be "
+            f"re-entered. Finish with:\n"
+            f"  wren cloud link {target}\n"
+            f"Or, if you no longer want it, delete project {project.id} — "
+            f"`wren cloud auth remove --host {host} --project {project.id}` "
+            f"drops the stored key."
         )
 
     try:
