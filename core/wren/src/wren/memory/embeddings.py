@@ -72,6 +72,7 @@ def _get_local_first_embedding_class():
             """Sentence-transformers embedding function with local-first loading."""
 
             def get_embedding_model(self):
+                """Load from the HF cache first, then fall back online."""
                 global _model_cache
                 key = (self.name, self.device, self.trust_remote_code)
 
@@ -102,10 +103,12 @@ def _get_local_first_embedding_class():
 
 
 def _onnx_available() -> bool:
+    """True when the ``memory-onnx`` extra is importable."""
     return bool(find_spec("onnxruntime")) and bool(find_spec("tokenizers"))
 
 
 def _sentence_transformers_available() -> bool:
+    """True when the ``memory`` extra is importable."""
     return bool(find_spec("sentence_transformers"))
 
 
@@ -176,6 +179,7 @@ def _read_json(repo_id: str, filename: str) -> dict | None:
 
 
 def _max_seq_length(repo_id: str) -> int:
+    """Read the model's truncation length, falling back to the ST default."""
     config = _read_json(repo_id, "sentence_bert_config.json") or {}
     value = config.get("max_seq_length")
     return value if isinstance(value, int) and value > 0 else _DEFAULT_MAX_SEQ_LENGTH
@@ -218,6 +222,7 @@ class OnnxEmbeddings:
     """
 
     def __init__(self, name: str = _DEFAULT_MODEL):
+        """Record the model name; the session is built lazily on first encode."""
         self.name = name
         self._repo_id = _resolve_repo_id(name)
 
@@ -254,6 +259,7 @@ class OnnxEmbeddings:
             return runtime
 
     def _encode(self, texts: list[str]) -> list:
+        """Tokenize, run the encoder, mean-pool under the mask, L2 normalize."""
         import numpy as np  # noqa: PLC0415
 
         if not texts:
@@ -283,9 +289,11 @@ class OnnxEmbeddings:
         return list(pooled.astype(np.float32))
 
     def compute_source_embeddings(self, texts) -> list:
+        """Embed documents for indexing."""
         return self._encode(list(texts))
 
     def compute_query_embeddings(self, query) -> list:
+        """Embed one query string, or a batch of them."""
         return self._encode([query] if isinstance(query, str) else list(query))
 
 
