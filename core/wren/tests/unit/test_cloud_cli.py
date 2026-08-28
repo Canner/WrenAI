@@ -328,6 +328,12 @@ def test_link_reports_cloud_error_without_traceback(monkeypatch, tmp_path):
 # ── create ───────────────────────────────────────────────────────────────
 
 
+# `create` requires a type and a connection info, so every invocation carries
+# them. Kept in one place: they are a precondition of the command, not the
+# subject of most of these tests.
+CONN_ARGS = ["--type", "BIG_QUERY", "--connection-info", '{"projectId": "p"}']
+
+
 def test_create_reads_org_key_from_env_and_passes_options_through(
     monkeypatch, tmp_path
 ):
@@ -355,6 +361,7 @@ def test_create_reads_org_key_from_env_and_passes_options_through(
             "https://cloud.getwren.ai",
             "--org",
             "2",
+            *CONN_ARGS,
         ],
     )
     assert result.exit_code == 0, result.output
@@ -381,7 +388,7 @@ def test_create_prompts_for_org_key_when_not_given(monkeypatch, tmp_path):
 
     result = runner.invoke(
         app,
-        ["cloud", "create", str(tmp_path), "--host", "h", "--org", "2"],
+        ["cloud", "create", str(tmp_path), "--host", "h", "--org", "2", *CONN_ARGS],
         input="osk-typed-in\n",
     )
     assert result.exit_code == 0, result.output
@@ -391,7 +398,7 @@ def test_create_prompts_for_org_key_when_not_given(monkeypatch, tmp_path):
 def test_create_rejects_a_project_key_instead_of_an_org_key(tmp_path):
     result = runner.invoke(
         app,
-        ["cloud", "create", str(tmp_path), "--host", "h", "--org", "2"],
+        ["cloud", "create", str(tmp_path), "--host", "h", "--org", "2", *CONN_ARGS],
         input="sk-project-key\n",
     )
     assert result.exit_code != 0
@@ -419,24 +426,37 @@ def test_create_rejects_both_connection_info_flags_together(tmp_path):
     assert "at most one of" in result.output
 
 
-def test_create_requires_type_when_connection_info_is_given(tmp_path):
+@pytest.mark.parametrize(
+    "args,expected",
+    [
+        pytest.param([], ["--type", "--connection-info"], id="neither"),
+        pytest.param(
+            ["--connection-info", '{"host": "db"}'], ["--type"], id="no_type"
+        ),
+        pytest.param(["--type", "POSTGRES"], ["--connection-info"], id="no_conn"),
+    ],
+)
+def test_create_requires_both_a_type_and_a_connection_info(
+    args, expected, monkeypatch, tmp_path
+):
+    """A project created without a data source is reported by Wren Cloud as
+    still needing setup, and this CLI cannot attach one afterwards — so the
+    command refuses rather than producing one that cannot be used."""
+
+    def fail_if_called(*a, **k):
+        raise AssertionError("nothing may be created without a data source")
+
+    monkeypatch.setattr(cloud, "create", fail_if_called)
+
     result = runner.invoke(
         app,
-        [
-            "cloud",
-            "create",
-            str(tmp_path),
-            "--host",
-            "h",
-            "--org",
-            "2",
-            "--connection-info",
-            '{"host": "db"}',
-        ],
+        ["cloud", "create", str(tmp_path), "--host", "h", "--org", "2", *args],
         input="osk-x\n",
     )
+
     assert result.exit_code != 0
-    assert "--type is required" in result.output
+    for flag in expected:
+        assert flag in result.output, f"{flag} must be named as missing"
 
 
 def test_create_passes_parsed_connection_info_and_type_through(monkeypatch, tmp_path):
@@ -494,7 +514,7 @@ def test_create_reports_partial_status_errors_but_still_succeeds(monkeypatch, tm
 
     result = runner.invoke(
         app,
-        ["cloud", "create", str(tmp_path), "--host", "h", "--org", "2"],
+        ["cloud", "create", str(tmp_path), "--host", "h", "--org", "2", *CONN_ARGS],
         input="osk-x\n",
     )
     assert result.exit_code == 0, result.output
@@ -510,7 +530,7 @@ def test_create_reports_cloud_error_without_traceback(monkeypatch, tmp_path):
 
     result = runner.invoke(
         app,
-        ["cloud", "create", str(tmp_path), "--host", "h", "--org", "2"],
+        ["cloud", "create", str(tmp_path), "--host", "h", "--org", "2", *CONN_ARGS],
         input="osk-x\n",
     )
     assert result.exit_code != 0
@@ -874,7 +894,7 @@ def test_create_defaults_to_the_managed_host(monkeypatch, tmp_path):
     monkeypatch.setattr(cloud, "create", fake_create)
     result = runner.invoke(
         app,
-        ["cloud", "create", str(tmp_path), "--org", "190"],
+        ["cloud", "create", str(tmp_path), "--org", "190", *CONN_ARGS],
         input="osk-x\n",
     )
     assert result.exit_code == 0, result.output

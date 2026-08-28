@@ -369,11 +369,17 @@ def create(  # noqa: PLR0913
     fails with a specific error rather than a bare HTTP error, and reports
     how to recover the project's key.
 
-    Refuses up front — before creating anything on the server — if
-    `directory` sits inside another git repository (the same check `link`
-    uses), if the `wren` on PATH cannot serve the git credential helper
-    (the same check `login` uses), or if `directory` is already bound to a
-    project or holds a history acquired from one.
+    `--type` and a connection info are both required. The command connects
+    the data source as it creates the project, because a project without one
+    is reported by Wren Cloud as still needing setup and nothing here can
+    attach one afterwards — the only routes are a REST call or the web UI.
+
+    Refuses up front — before creating anything on the server — if either of
+    those is missing, if `directory` is not a Wren project or its YAML does
+    not compile, if `directory` sits inside another git repository (the same
+    check `link` uses), if the `wren` on PATH cannot serve the git credential
+    helper (the same check `login` uses), or if `directory` is already bound
+    to a project or holds a history acquired from one.
 
     That last check has to happen here, not just inside the bind step: a new
     project and its key are created before any git work begins, so a refusal
@@ -426,9 +432,27 @@ def create(  # noqa: PLR0913
     if type_ is not None:
         type_ = type_.strip().upper()
 
-    if parsed_connection_info is not None and not type_:
+    # Both are required, not merely consistent with each other. A project with
+    # no data source is reported by Wren Cloud as still needing setup, and
+    # nothing in this CLI can finish it: the only way to attach a connection
+    # afterwards is a REST call or the web UI. `create` converts a project you
+    # already have into a usable Wren Cloud project, so it refuses rather than
+    # producing one that cannot be used — before anything is created.
+    missing = []
+    if not type_:
+        missing.append("--type")
+    if parsed_connection_info is None:
+        missing.append("--connection-info / --connection-info-file")
+    if missing:
         typer.echo(
-            "Error: --type is required when a connection info is given.", err=True
+            f"Error: {' and '.join(missing)} required.\n"
+            "`create` connects the project's data source as it creates it; a "
+            "project without one is created but unusable, and this CLI cannot "
+            "attach one afterwards.\n"
+            "See `wren cloud create --help` for the accepted types, or create "
+            "the project in the Wren Cloud web UI if you want to pick its data "
+            "source there.",
+            err=True,
         )
         raise typer.Exit(1)
 
