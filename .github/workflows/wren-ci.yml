@@ -266,6 +266,35 @@ jobs:
           WREN_EMBEDDING_MODEL: paraphrase-MiniLM-L3-v2
         run: uv run --no-sync pytest tests/unit/test_memory.py -v
 
+  test-embedding-parity:
+    name: embedding backend parity
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: core/wren
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Install both embedding extras
+        # Each of the two jobs above installs one backend, so the parity test
+        # importorskips out of both. It is the assertion existing stores
+        # depend on — a store written by one backend has to stay readable by
+        # the other — so it needs a job where both are present.
+        run: uv sync --locked --extra memory --extra memory-onnx
+      - name: Cache models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-parity-paraphrase-MiniLM-L3-v2
+      - name: Compare backends
+        env:
+          WREN_EMBEDDING_MODEL: paraphrase-MiniLM-L3-v2
+        run: uv run --no-sync pytest tests/unit/test_memory.py -v -k TestOnnxVectorParity
+
   test-mcp:
     name: mcp tests
     runs-on: ubuntu-latest
