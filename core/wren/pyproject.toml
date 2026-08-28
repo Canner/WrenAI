@@ -61,6 +61,15 @@ spark = ["pyspark>=3.5"]
 athena = ["pyathena[pandas]>=3"]
 oracle = ["oracledb>=2"]
 memory = ["lancedb>=0.6", "sentence-transformers>=3.0.0"]
+# Alternative to `memory`, not an addition: same vectors, no torch. Deliberately
+# excluded from `all`, which installs the sentence-transformers backend.
+memory-onnx = [
+  "lancedb>=0.6",
+  "onnxruntime>=1.17",
+  "tokenizers>=0.15",
+  "huggingface-hub>=0.23",
+  "numpy>=1.24",
+]
 interactive = ["InquirerPy>=0.3.4"]
 ui = ["starlette>=1.3.1", "uvicorn>=0.29", "jinja2>=3.1", "python-multipart>=0.0.31"]
 mcp = ["mcp[cli]>=1.19"]
