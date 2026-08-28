@@ -20,6 +20,7 @@ import io
 import socket
 import subprocess
 import time
+from pathlib import Path
 
 import pytest
 import requests
@@ -332,6 +333,37 @@ def _git_identity(monkeypatch):
     monkeypatch.setenv("GIT_COMMITTER_EMAIL", "test@example.com")
 
 
+def _make_wren_project(path: Path, *, model: str = "t") -> Path:
+    """Turn `path` into the smallest Wren project that compiles.
+
+    `create` converts an existing local project, so every test that drives it
+    needs one here. `schema_version: 5` is required: without it the loader
+    uses the legacy layout and finds no models, which would make these tests
+    pass for the wrong reason.
+    """
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "wren_project.yml").write_text(
+        "schema_version: 5\n"
+        "name: proj\n"
+        'version: "1.0"\n'
+        "catalog: wren\n"
+        "schema: public\n"
+        "data_source: bigquery\n"
+    )
+    model_dir = path / "models" / model
+    model_dir.mkdir(parents=True, exist_ok=True)
+    (model_dir / "metadata.yml").write_text(
+        f"name: {model}\n"
+        "table_reference:\n"
+        "  schema: public\n"
+        f"  table: {model}\n"
+        "columns:\n"
+        "  - name: id\n"
+        "    type: INTEGER\n"
+    )
+    return path
+
+
 def _seed_remote(remote_dir):
     """A real local git repo standing in for the project's remote, with one
     commit — like a freshly created Wren Cloud project seeding its own
@@ -341,6 +373,10 @@ def _seed_remote(remote_dir):
     (remote_dir / "seed.txt").write_text("seeded by project creation")
     cloud.run_git(["add", "-A"], cwd=remote_dir)
     cloud.run_git(["commit", "-m", "seed"], cwd=remote_dir)
+    # `create` pushes, and git refuses to push into the checked-out branch of
+    # a non-bare repo. A real remote is bare; this makes the stand-in behave
+    # like one without losing the seeded worktree the link tests read.
+    cloud.run_git(["config", "receive.denyCurrentBranch", "updateInstead"], cwd=remote_dir)
 
 
 def _link(target, *, git_host, repo="shared-data.git"):
@@ -358,8 +394,7 @@ def test_link_recovers_when_a_previous_attempt_left_head_unborn(tmp_path):
     git_host = str(tmp_path / "host")
     _seed_remote(tmp_path / "host" / "git" / "shared-data.git")
 
-    target = tmp_path / "project"
-    target.mkdir()
+    target = _make_wren_project(tmp_path / "project")
     (target / "mine.txt").write_text("my existing file")
     # Simulate a previous `link` that got as far as `git init` and then
     # died before committing (e.g. no git identity): `.git` exists but
@@ -705,8 +740,7 @@ def test_create_end_to_end_binds_and_stores_only_the_project_key(
 
     monkeypatch.setattr(cloud, "mint_git_token", fake_mint_git_token)
 
-    target = tmp_path / "project"
-    target.mkdir()
+    target = _make_wren_project(tmp_path / "project")
     (target / "mine.txt").write_text("my existing file")
 
     project, outcome = cloud.create(
@@ -766,8 +800,7 @@ def test_create_failed_project_creation_leaves_nothing_to_clean_up(
 
     monkeypatch.setattr(cloud, "create_project", fake_create_project)
 
-    target = tmp_path / "project"
-    target.mkdir()
+    target = _make_wren_project(tmp_path / "project")
 
     with pytest.raises(cloud.CloudError, match="boom"):
         cloud.create(
@@ -803,8 +836,7 @@ def test_create_reports_not_agentic_actionably_and_includes_the_project_key(
 
     monkeypatch.setattr(requests, "post", fake_post)
 
-    target = tmp_path / "project"
-    target.mkdir()
+    target = _make_wren_project(tmp_path / "project")
 
     with pytest.raises(cloud.CloudError) as excinfo:
         cloud.create(
@@ -855,8 +887,7 @@ def test_create_degrades_to_generic_bind_failure_on_an_unrecognized_git_token_er
 
     monkeypatch.setattr(requests, "post", fake_post)
 
-    target = tmp_path / "project"
-    target.mkdir()
+    target = _make_wren_project(tmp_path / "project")
 
     with pytest.raises(cloud.CloudError) as excinfo:
         cloud.create(
@@ -885,8 +916,7 @@ def test_create_reports_bind_failure_with_recovery_hint(
 
     monkeypatch.setattr(cloud, "login", fake_login)
 
-    target = tmp_path / "project"
-    target.mkdir()
+    target = _make_wren_project(tmp_path / "project")
 
     with pytest.raises(cloud.CloudError) as excinfo:
         cloud.create(
@@ -908,8 +938,7 @@ def test_link_reports_already_linked_on_rerun_with_nothing_new(tmp_path):
     git_host = str(tmp_path / "host")
     _seed_remote(tmp_path / "host" / "git" / "shared-data.git")
 
-    target = tmp_path / "project"
-    target.mkdir()
+    target = _make_wren_project(tmp_path / "project")
     (target / "mine.txt").write_text("my existing file")
 
     first = _link(target, git_host=git_host)
@@ -1072,8 +1101,7 @@ def test_create_refuses_before_any_server_call_when_the_helper_is_unserviceable(
     monkeypatch.setattr(cloud, "create_project", fail_if_called)
     monkeypatch.setattr(cloud, "mint_project_key", fail_if_called)
 
-    target = tmp_path / "project"
-    target.mkdir()
+    target = _make_wren_project(tmp_path / "project")
 
     with pytest.raises(cloud.CloudError):
         cloud.create(
@@ -1114,8 +1142,7 @@ def test_link_sets_upstream_when_already_linked_but_tracking_was_never_set(tmp_p
     remote = tmp_path / "host" / "git" / "shared-data.git"
     _seed_remote(remote)
 
-    target = tmp_path / "project"
-    target.mkdir()
+    target = _make_wren_project(tmp_path / "project")
     (target / "mine.txt").write_text("my existing file")
 
     # Reproduce the aftermath by hand rather than through link(), so the
@@ -1196,6 +1223,11 @@ def _seed_hooked_remote(remote_dir, *, marker="a"):
     """
     remote_dir.mkdir(parents=True)
     cloud.run_git(["init"], cwd=remote_dir)
+    # Same reason as `_seed_remote`: `create` pushes, and a non-bare stand-in
+    # would refuse the push into its checked-out branch.
+    cloud.run_git(
+        ["config", "receive.denyCurrentBranch", "updateInstead"], cwd=remote_dir
+    )
     (remote_dir / ".hooks").mkdir()
     (remote_dir / ".hooks" / "deploy-modeling.yaml").write_text(
         "version: '1'\nactions:\n  - name: deploy-modeling\n"
@@ -1457,6 +1489,8 @@ def test_create_duplicates_a_project_from_a_directory_that_came_from_one(
     target = tmp_path / "project"
     _link(target, git_host=git_host)
     (target / "mine.txt").write_text("content worth duplicating")
+    # The duplicate is still a Wren project being converted, so it carries one.
+    _make_wren_project(target)
     cloud.run_git(["add", "-A"], cwd=target)
     cloud.run_git(["commit", "-m", "my work"], cwd=target)
     assert cloud.head_has_seeded_hooks(target), "precondition: history from a project"
@@ -1804,8 +1838,7 @@ def test_create_names_the_project_when_the_bind_fails(
 
     monkeypatch.setattr(cloud, "link", fake_link)
 
-    target = tmp_path / "proj"
-    target.mkdir()
+    target = _make_wren_project(tmp_path / "proj")
     (target / "model.yml").write_text("name: orders\n")
 
     with pytest.raises(cloud.CloudError) as exc:
@@ -1823,3 +1856,167 @@ def test_create_names_the_project_when_the_bind_fails(
     assert "bad line length character: PACK" in message, (
         "the underlying git error must still be visible"
     )
+
+
+# ── `create` converts a local project, so there must be one ────────────────
+#
+# These pin the half of `create` that changed when it stopped being "make an
+# empty cloud project" and became "convert the project in this directory".
+
+
+def test_create_refuses_a_directory_that_is_not_a_wren_project(
+    tmp_path, monkeypatch, _helper_check_passes
+):
+    target = tmp_path / "just-a-folder"
+    target.mkdir()
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("nothing may be created for a non-project directory")
+
+    monkeypatch.setattr(cloud, "create_project", fail_if_called)
+
+    with pytest.raises(cloud.CloudError) as exc:
+        cloud.create(
+            target,
+            host="https://cloud.getwren.ai",
+            org_id="2",
+            org_key="osk-x",
+            display_name="proj",
+        )
+
+    message = str(exc.value)
+    assert "wren_project.yml" in message
+    assert "wren context init" in message, "must say how to get one"
+
+
+def test_create_refuses_a_project_that_does_not_compile(
+    tmp_path, monkeypatch, _helper_check_passes
+):
+    target = _make_wren_project(tmp_path / "proj")
+    # Malformed YAML. Chosen after checking what actually fails: the loader
+    # deliberately skips non-mapping entries and tolerates a missing `name`,
+    # so those inputs would leave the build green and this test passing for
+    # no reason.
+    (target / "models" / "t" / "metadata.yml").write_text("name: [unclosed\n")
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("a project that will not deploy must not be created")
+
+    monkeypatch.setattr(cloud, "create_project", fail_if_called)
+
+    with pytest.raises(cloud.CloudError) as exc:
+        cloud.create(
+            target,
+            host="https://cloud.getwren.ai",
+            org_id="2",
+            org_key="osk-x",
+            display_name="proj",
+        )
+    assert "Nothing was created" in str(exc.value)
+
+
+def test_check_project_builds_leaves_no_build_artifact(tmp_path):
+    """`target/mdl.json` is not ignored by the scaffold, so writing it here
+    would push a build artifact into the project's repository."""
+    target = _make_wren_project(tmp_path / "proj")
+
+    cloud.check_project_builds(target)
+
+    assert not (target / "target").exists()
+
+
+def test_check_project_builds_does_not_adopt_an_ancestors_project(tmp_path):
+    """`context.discover_project_path()` walks up from the cwd. Using it here
+    would let a bare subdirectory convert its parent's models into a new cloud
+    project — someone else's manifest, silently."""
+    _make_wren_project(tmp_path / "outer")
+    target = tmp_path / "outer" / "inner"
+    target.mkdir()
+
+    with pytest.raises(cloud.CloudError) as exc:
+        cloud.check_project_builds(target)
+    assert "wren_project.yml" in str(exc.value)
+
+
+def test_create_pushes_so_the_models_deploy(
+    tmp_path, monkeypatch, _helper_check_passes
+):
+    """The models reach the cloud through git. Without the push the project
+    exists, is bound, and is empty — the state this command exists to avoid."""
+    git_host = str(tmp_path / "host")
+    remote = tmp_path / "host" / "git" / "org" / "2" / "16" / "shared-data.git"
+    _seed_remote(remote)
+    _patch_create_http(monkeypatch)
+    monkeypatch.setattr(
+        cloud,
+        "mint_git_token",
+        lambda *a, **k: cloud.GitToken(
+            repo="org/2/16/shared-data.git",
+            token="t",
+            expires_in=600,
+            expires_at="",
+        ),
+    )
+
+    target = _make_wren_project(tmp_path / "project")
+
+    cloud.create(
+        target,
+        host=git_host,
+        org_id="2",
+        org_key="osk-x",
+        display_name="proj",
+        git_host=git_host,
+    )
+
+    # Read the model back out of the *remote*: asserting on the local branch
+    # would pass even if nothing had been pushed.
+    listed = cloud.run_git(
+        ["ls-tree", "-r", "--name-only", "HEAD"], cwd=remote
+    ).stdout
+    assert "models/t/metadata.yml" in listed
+    assert "wren_project.yml" in listed
+
+
+def test_create_reports_a_push_failure_without_claiming_the_bind_failed(
+    tmp_path, monkeypatch, _helper_check_passes
+):
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "org" / "2" / "16" / "shared-data.git")
+    _patch_create_http(monkeypatch)
+    monkeypatch.setattr(
+        cloud,
+        "mint_git_token",
+        lambda *a, **k: cloud.GitToken(
+            repo="org/2/16/shared-data.git",
+            token="t",
+            expires_in=600,
+            expires_at="",
+        ),
+    )
+
+    real_run_git = cloud.run_git
+
+    def fail_only_push(args, **kwargs):
+        if args[:1] == ["push"]:
+            return subprocess.CompletedProcess(args, 1, "", "remote rejected")
+        return real_run_git(args, **kwargs)
+
+    monkeypatch.setattr(cloud, "run_git", fail_only_push)
+
+    target = _make_wren_project(tmp_path / "project")
+
+    with pytest.raises(cloud.CloudError) as exc:
+        cloud.create(
+            target,
+            host=git_host,
+            org_id="2",
+            org_key="osk-x",
+            display_name="proj",
+            git_host=git_host,
+        )
+
+    message = str(exc.value)
+    assert "16" in message, "must name the project that now exists"
+    assert "bound to it" in message, "the bind succeeded — do not imply otherwise"
+    assert "git push" in message, "must say what finishes the job"

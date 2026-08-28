@@ -1384,6 +1384,56 @@ def mint_project_key(
     return secret
 
 
+_PROJECT_FILE = "wren_project.yml"
+
+
+def check_project_builds(target: Path) -> None:
+    """Refuse unless this directory is a Wren project that compiles.
+
+    `create` turns an existing local Wren project into a Wren Cloud project,
+    so a directory with no project, or one whose YAML does not compile, has
+    nothing to convert. Checked here rather than after creation because every
+    refusal in `create` must leave no server-side state behind.
+
+    The manifest is built and thrown away: the models reach the cloud through
+    git, not through this call. Uploading it as well would put the same files
+    in the repository twice — the server materializes an uploaded MDL back
+    into `models/*/metadata.yml`, in its own normalized rendering, which then
+    collides with the local YAML on bind. Building anyway is what makes the
+    refusal honest: a project that cannot compile locally will not deploy
+    once pushed either, and finding that out before the project exists is
+    the whole point.
+
+    Deliberately checks *this* directory rather than calling
+    `context.discover_project_path()`, which walks up from the cwd: a
+    directory that merely sits inside a project elsewhere is not itself the
+    project being converted.
+    """
+    from wren import context  # noqa: PLC0415
+
+    if not (target / _PROJECT_FILE).is_file():
+        raise CloudError(
+            f"{target} is not a Wren project — no `{_PROJECT_FILE}`.\n"
+            "`create` turns a project you already have into a Wren Cloud "
+            "project, so there has to be one here first:\n"
+            "  wren context init\n"
+            "then define your models and run `create` again. To start a "
+            "brand-new project instead, create it in the Wren Cloud web UI."
+        )
+
+    try:
+        # In memory on purpose: `save_target` would write `target/mdl.json`,
+        # and the scaffold does not ignore it, so the bind below would push a
+        # build artifact into the project's repository.
+        context.build_json(target)
+    except Exception as exc:  # noqa: BLE001 - any build failure is the user's
+        raise CloudError(
+            f"Building the MDL in {target} failed:\n{exc}\n"
+            "Fix the project (`wren context validate` reports more), then run "
+            "`create` again. Nothing was created."
+        ) from exc
+
+
 def create(
     target: Path,
     *,
@@ -1395,7 +1445,6 @@ def create(
     connection_type: str | None = None,
     connection_info: dict | None = None,
     test_connection: bool = False,
-    mdl: dict | None = None,
     language: str | None = None,
     timezone: str | None = None,
 ) -> tuple[CreatedProject, LinkOutcome]:
@@ -1440,6 +1489,10 @@ def create(
     check_helper_command_serviceable()
     check_not_already_bound(target)
     check_git_identity_usable(target)
+    # Built before anything is created, so a project that does not compile
+    # costs nothing: every refusal above this line leaves no server-side state,
+    # and this one must not either.
+    check_project_builds(target)
 
     api_host = host.rstrip("/")
     resolved_git_host = (git_host or host).rstrip("/")
@@ -1452,7 +1505,6 @@ def create(
         connection_type=connection_type,
         connection_info=connection_info,
         test_connection=test_connection,
-        mdl=mdl,
         language=language,
         timezone=timezone,
     )
@@ -1529,4 +1581,21 @@ def create(
             f"Or, if you no longer want it, delete project {project.id} so it "
             "does not linger unused."
         ) from exc
+
+    # The models reach the cloud here, and only here. `link` has committed the
+    # project's files and set the upstream; pushing them is what fires the
+    # repository's `.hooks/deploy-modeling.yaml` and turns them into the
+    # project's models. Without this the project would exist, be bound, and
+    # have nothing in it — which is the state this command exists to avoid.
+    push = run_git(["push", "origin", "HEAD"], cwd=target, check=False)
+    if push.returncode != 0:
+        raise CloudError(
+            f"Project {project.id} was created on {api_host} and {target} is "
+            f"bound to it, but pushing your project failed:\n"
+            f"{(push.stderr or push.stdout).strip()}\n"
+            "The project and the bind are both fine — only the models are "
+            "still local. Finish with:\n"
+            "  git push\n"
+            "which is also what deploys them."
+        )
     return project, outcome

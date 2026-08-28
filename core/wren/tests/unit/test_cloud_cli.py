@@ -879,3 +879,58 @@ def test_create_defaults_to_the_managed_host(monkeypatch, tmp_path):
     )
     assert result.exit_code == 0, result.output
     assert captured["host"] == "https://cloud.getwren.ai"
+
+
+def test_create_upper_cases_the_data_source_type(monkeypatch, tmp_path):
+    """`--type big_query` reached the server verbatim and came back as a 207
+    with a project that had no data source: the server looks the type up in
+    its enum by exact key and does not validate it on this endpoint, so a
+    lowercase value silently produced a half-created project."""
+
+    captured = {}
+
+    def fake_create(directory, **kwargs):
+        captured.update(kwargs)
+        return (
+            cloud.CreatedProject(
+                id="16", org_id="2", display_name="p", status="succeeded", errors=[]
+            ),
+            cloud.LinkOutcome.LINKED,
+        )
+
+    monkeypatch.setattr(cloud, "create", fake_create)
+    conn = tmp_path / "conn.json"
+    conn.write_text('{"projectId": "p", "datasetId": "d"}')
+
+    result = runner.invoke(
+        app,
+        [
+            "cloud",
+            "create",
+            str(tmp_path),
+            "--host",
+            "https://cloud.getwren.ai",
+            "--org",
+            "2",
+            "--org-key",
+            "osk-x",
+            "--type",
+            "big_query",
+            "--connection-info-file",
+            str(conn),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["connection_type"] == "BIG_QUERY"
+
+
+def test_create_help_names_a_type_the_server_accepts(monkeypatch):
+    """The help used to say `BIGQUERY`, which is not in the server's enum —
+    following it produced the same half-created project as the lowercase case."""
+
+    result = runner.invoke(app, ["cloud", "create", "--help"])
+    assert result.exit_code == 0
+    rendered = " ".join(result.output.split())
+    assert "BIG_QUERY" in rendered
+    assert "BIGQUERY," not in rendered and "BIGQUERY." not in rendered

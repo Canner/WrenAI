@@ -307,7 +307,10 @@ def create(  # noqa: PLR0913
         Optional[str],
         typer.Option(
             "--type",
-            help="Data source type for the connection, e.g. POSTGRES, BIGQUERY.",
+            help=(
+                "Data source type for the connection, e.g. BIG_QUERY, "
+                "POSTGRES, SNOWFLAKE. Case-insensitive."
+            ),
         ),
     ] = None,
     connection_info: Annotated[
@@ -331,10 +334,6 @@ def create(  # noqa: PLR0913
             help="Ask the server to test the connection before creating the project.",
         ),
     ] = False,
-    mdl_file: Annotated[
-        Optional[Path],
-        typer.Option("--mdl-file", help="Path to a JSON file with an initial MDL."),
-    ] = None,
     language: Annotated[Optional[str], typer.Option("--language")] = None,
     timezone: Annotated[Optional[str], typer.Option("--timezone")] = None,
     org_key: Annotated[
@@ -418,20 +417,20 @@ def create(  # noqa: PLR0913
             connection_info, source="--connection-info"
         )
 
+    # The server matches the type against its enum by exact key lookup, and
+    # `POST /api/v1/projects` does not validate it up front: an unrecognized
+    # value strips the connection info to `{}` and surfaces as a 207 with a
+    # project that exists but has no data source. Case is the one part of that
+    # a client can fix without mirroring the server's enum here, and `big_query`
+    # for `BIG_QUERY` is the mistake it actually costs people.
+    if type_ is not None:
+        type_ = type_.strip().upper()
+
     if parsed_connection_info is not None and not type_:
         typer.echo(
             "Error: --type is required when a connection info is given.", err=True
         )
         raise typer.Exit(1)
-
-    parsed_mdl: Optional[dict] = None
-    if mdl_file is not None:
-        try:
-            raw = mdl_file.read_text(encoding="utf-8")
-        except OSError as exc:
-            typer.echo(f"Error: could not read {mdl_file}: {exc}", err=True)
-            raise typer.Exit(1) from exc
-        parsed_mdl = _read_json_option(raw, source="--mdl-file")
 
     resolved_org_key = (org_key or os.environ.get("WREN_CLOUD_ORG_KEY") or "").strip()
     if not resolved_org_key:
@@ -456,7 +455,6 @@ def create(  # noqa: PLR0913
             connection_type=type_,
             connection_info=parsed_connection_info,
             test_connection=test_connection,
-            mdl=parsed_mdl,
             language=language,
             timezone=timezone,
         )
