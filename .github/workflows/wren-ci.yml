@@ -249,11 +249,18 @@ jobs:
           uv pip install --reinstall --no-index --find-links ../wren-core-py/target/wheels/ wren-core-py
       - name: Assert the install is torch-free
         # The whole point of this extra: on linux-x86_64 the sentence-transformers
-        # path resolves the CUDA build of torch. If torch reappears here, the
-        # extra has regressed.
+        # path resolves the CUDA build of torch plus triton and sixteen nvidia-*
+        # packages. Checking torch alone would miss a resolution that drops
+        # torch but keeps the CUDA payload, which is where the gigabytes are.
         run: |
           if uv run --no-sync python -c "import importlib.util as u; raise SystemExit(0 if u.find_spec('torch') else 1)"; then
             echo "::error::torch was installed by the memory-onnx extra"
+            exit 1
+          fi
+          cuda=$(uv pip list --format=freeze | grep -iE '^(nvidia-|triton==)' || true)
+          if [ -n "$cuda" ]; then
+            echo "::error::CUDA packages were installed by the memory-onnx extra"
+            echo "$cuda"
             exit 1
           fi
       - name: Cache ONNX model
