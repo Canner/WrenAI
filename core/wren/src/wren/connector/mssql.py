@@ -469,7 +469,9 @@ def _connect_mssql_pyodbc(
     for key, value in connect_kwargs.items():
         connection_parts.append(f"{key}={_escape_odbc_value(str(value))}")
 
-    connection = pyodbc.connect(";".join(connection_parts))
+    # pyodbc defaults to autocommit=False, which would leave this cached,
+    # long-lived connection in one never-committed transaction.
+    connection = pyodbc.connect(";".join(connection_parts), autocommit=True)
     _register_mssql_output_converters(connection)
 
     if statement_timeout is not None:

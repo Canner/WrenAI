@@ -228,6 +228,27 @@ def test_mssql_both_credentials_emits_uid_and_pwd() -> None:
     assert "Trusted_Connection" not in parts
 
 
+def test_mssql_connects_with_autocommit() -> None:
+    """pyodbc defaults to autocommit=False, so every statement on this
+    long-lived, process-cached connection would otherwise run inside a
+    transaction that is never committed. Mirrors the other connectors
+    (redshift.py, canner.py, mysql.py) that already turn autocommit on."""
+    fake = _FakePyodbc()
+    with patch("wren.connector.mssql.pyodbc", fake):
+        _connect_mssql_pyodbc(
+            host="h",
+            port="1433",
+            database="db",
+            user="alice",
+            password="secret",
+            driver="ODBC Driver 18 for SQL Server",
+        )
+
+    fake.connect.assert_called_once()
+    _args, kwargs = fake.connect.call_args
+    assert kwargs.get("autocommit") is True
+
+
 # ---------------------------------------------------------------------------
 # 3. statement_timeout validated before connect()
 # ---------------------------------------------------------------------------
