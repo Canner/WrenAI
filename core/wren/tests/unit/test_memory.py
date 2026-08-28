@@ -478,18 +478,28 @@ def _make_fake_model_class(calls: list, raise_on=None):
 
 @pytest.mark.unit
 class TestLocalFirstEmbeddings:
-    def _adapter(self, name: str):
+    @pytest.fixture(autouse=True)
+    def _require_sentence_transformers(self):
+        # Must run before the test body: these tests monkeypatch
+        # "sentence_transformers.SentenceTransformer" by string, which imports
+        # the module, so an importorskip inside _adapter comes too late under
+        # the memory-onnx extra.
         pytest.importorskip(
             "sentence_transformers", reason="wren[memory] extras not installed"
         )
-        from wren.memory.embeddings import get_embedding_function  # noqa: PLC0415
+
+    def _adapter(self, name: str):
+        from wren.memory.embeddings import (  # noqa: PLC0415
+            _get_local_first_embedding_class,
+        )
 
         # The adapter class is built function-locally (no top-level lancedb
-        # import); get_embedding_function is the public factory that returns
-        # an instance of it. The constructed model is cached module-wide,
-        # keyed by (name, device, trust_remote_code), so each test must use
-        # a distinct *name* — otherwise two tests would share one cache slot.
-        return get_embedding_function(model_name=name)
+        # import). Build it directly rather than through
+        # get_embedding_function, which dispatches to onnx when both extras
+        # are installed. The constructed model is cached module-wide, keyed by
+        # (name, device, trust_remote_code), so each test must use a distinct
+        # *name* — otherwise two tests would share one cache slot.
+        return _get_local_first_embedding_class().create(name=name)
 
     def test_first_construction_is_local_files_only(self, monkeypatch):
         calls: list[dict] = []
@@ -617,10 +627,11 @@ class TestLocalFirstEmbeddingsConcurrency:
                 return np.zeros((len(texts), 3), dtype="float32")
 
         monkeypatch.setattr("sentence_transformers.SentenceTransformer", _FakeModel)
-        adapters = [
-            embeddings_module.get_embedding_function(model_name="concurrent-model")
-            for _ in range(5)
-        ]
+        # Build the adapter directly: get_embedding_function dispatches to onnx
+        # when both extras are installed, and this test is about the
+        # sentence-transformers single-flight cache.
+        adapter_cls = embeddings_module._get_local_first_embedding_class()
+        adapters = [adapter_cls.create(name="concurrent-model") for _ in range(5)]
 
         def _compute(adapter):
             barrier.wait()
@@ -640,13 +651,23 @@ class TestLocalFirstEmbeddingsConcurrency:
 # These require lancedb + sentence-transformers (wren[memory] extra).
 
 
+def _require_memory_extra() -> None:
+    """Skip unless LanceDB and some embedding backend are importable.
+
+    Gating on sentence-transformers specifically would skip this whole suite
+    under the memory-onnx extra, where running it is the point.
+    """
+    pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+    from wren.memory.embeddings import embedding_backend_available  # noqa: PLC0415
+
+    if not embedding_backend_available():
+        pytest.skip("no embedding backend: install wren[memory] or wren[memory-onnx]")
+
+
 @pytest.fixture
 def memory_store(tmp_path):
     """Create a MemoryStore backed by a temp directory."""
-    pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
-    pytest.importorskip(
-        "sentence_transformers", reason="wren[memory] extras not installed"
-    )
+    _require_memory_extra()
 
     from wren.memory.store import MemoryStore  # noqa: PLC0415
 
@@ -989,10 +1010,7 @@ class TestMemoryStoreLazyModelLoad:
 @pytest.fixture
 def wren_memory(tmp_path):
     """Create a WrenMemory instance backed by a temp directory."""
-    pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
-    pytest.importorskip(
-        "sentence_transformers", reason="wren[memory] extras not installed"
-    )
+    _require_memory_extra()
 
     from wren.memory import WrenMemory  # noqa: PLC0415
 
@@ -1498,10 +1516,7 @@ class TestMarkdownSourcedIndex:
 
     def test_lancedb_backend_via_get_index(self, tmp_path, monkeypatch):
         """With the extra, get_index resolves to LanceDBIndex and recalls semantically."""
-        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
-        pytest.importorskip(
-            "sentence_transformers", reason="wren[memory] extras not installed"
-        )
+        _require_memory_extra()
         monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
         from wren.memory.index_backend import get_index  # noqa: PLC0415
         from wren.memory.markdown import write_query_markdown  # noqa: PLC0415
@@ -1515,10 +1530,7 @@ class TestMarkdownSourcedIndex:
 
     def test_cli_export_migrates_query_history_to_markdown(self, tmp_path, monkeypatch):
         """`wren memory export` writes existing LanceDB pairs to knowledge/sql/."""
-        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
-        pytest.importorskip(
-            "sentence_transformers", reason="wren[memory] extras not installed"
-        )
+        _require_memory_extra()
         from typer.testing import CliRunner  # noqa: PLC0415
 
         from wren.cli import app  # noqa: PLC0415
@@ -1543,3 +1555,256 @@ class TestMarkdownSourcedIndex:
         fm = parse_query_markdown(user_md)
         assert fm["source"] == "user"
         assert "created_at" in fm  # timestamp preserved
+
+
+# ── ONNX embedding backend ────────────────────────────────────────────────
+
+
+class _FakeEncoding:
+    def __init__(self, ids: list[int], attention_mask: list[int]):
+        self.ids = ids
+        self.attention_mask = attention_mask
+
+
+class _FakeTokenizer:
+    def __init__(self, encodings: list[_FakeEncoding]):
+        self._encodings = encodings
+
+    def encode_batch(self, texts):
+        return self._encodings[: len(texts)]
+
+
+class _FakeSession:
+    """Returns a canned last_hidden_state and records the feeds it got."""
+
+    def __init__(self, hidden):
+        self._hidden = hidden
+        self.feeds: dict | None = None
+
+    def run(self, _outputs, feeds):
+        self.feeds = feeds
+        return [self._hidden]
+
+
+@pytest.mark.unit
+class TestEmbeddingBackendResolution:
+    def _resolve(self, monkeypatch, *, onnx: bool, st: bool, env: str | None = None):
+        from wren.memory import embeddings  # noqa: PLC0415
+
+        monkeypatch.setattr(embeddings, "_onnx_available", lambda: onnx)
+        monkeypatch.setattr(embeddings, "_sentence_transformers_available", lambda: st)
+        return embeddings.resolve_embedding_backend(env)
+
+    def test_prefers_onnx_when_both_installed(self, monkeypatch):
+        assert self._resolve(monkeypatch, onnx=True, st=True, env="") == "onnx"
+
+    def test_explicit_sentence_transformers_is_honored(self, monkeypatch):
+        chosen = self._resolve(
+            monkeypatch, onnx=True, st=True, env="sentence-transformers"
+        )
+        assert chosen == "sentence-transformers"
+
+    def test_explicit_choice_falls_back_when_extra_missing(self, monkeypatch):
+        # Both backends emit the same vectors, so falling back keeps an
+        # existing store readable instead of failing the process.
+        chosen = self._resolve(
+            monkeypatch, onnx=True, st=False, env="sentence-transformers"
+        )
+        assert chosen == "onnx"
+
+    def test_unrecognized_value_auto_detects(self, monkeypatch):
+        chosen = self._resolve(monkeypatch, onnx=False, st=True, env="nonsense")
+        assert chosen == "sentence-transformers"
+
+    def test_availability_helper_reports_either_backend(self, monkeypatch):
+        from wren.memory import embeddings  # noqa: PLC0415
+
+        monkeypatch.setattr(embeddings, "_onnx_available", lambda: True)
+        monkeypatch.setattr(
+            embeddings, "_sentence_transformers_available", lambda: False
+        )
+        assert embeddings.embedding_backend_available() is True
+
+
+@pytest.mark.unit
+class TestOnnxEmbeddings:
+    def _embedder(self, monkeypatch, hidden, encodings, input_names):
+        import numpy as np  # noqa: PLC0415
+
+        from wren.memory.embeddings import OnnxEmbeddings  # noqa: PLC0415
+
+        session = _FakeSession(np.array(hidden, dtype="float32"))
+        monkeypatch.setattr(
+            OnnxEmbeddings,
+            "_runtime",
+            lambda _self: (session, _FakeTokenizer(encodings), input_names),
+        )
+        return OnnxEmbeddings("fake-model"), session
+
+    def test_mean_pooling_ignores_padded_positions(self, monkeypatch):
+        import numpy as np  # noqa: PLC0415
+
+        # Row 0 attends to two tokens, row 1 to one. The masked-out vectors
+        # are large on purpose: if they leaked in, the means would not match.
+        embedder, _ = self._embedder(
+            monkeypatch,
+            hidden=[
+                [[1.0, 1.0], [3.0, 3.0], [999.0, 999.0]],
+                [[5.0, 5.0], [777.0, 777.0], [888.0, 888.0]],
+            ],
+            encodings=[
+                _FakeEncoding([1, 2, 0], [1, 1, 0]),
+                _FakeEncoding([3, 0, 0], [1, 0, 0]),
+            ],
+            input_names={"input_ids", "attention_mask"},
+        )
+        vectors = np.array(embedder.compute_source_embeddings(["a", "b"]))
+        # Means are [2, 2] and [5, 5]; output is L2-normalized, so both
+        # collapse onto the same unit vector.
+        unit = 1 / np.sqrt(2)
+        np.testing.assert_allclose(vectors, [[unit, unit], [unit, unit]], atol=1e-6)
+
+    def test_output_is_l2_normalized(self, monkeypatch):
+        import numpy as np  # noqa: PLC0415
+
+        # LanceDB's sentence-transformers adapter defaults to normalize=True,
+        # so vectors already in a store are unit length. Emitting unnormalized
+        # vectors would put old and new rows on different scales.
+        embedder, _ = self._embedder(
+            monkeypatch,
+            hidden=[[[3.0, 4.0]]],
+            encodings=[_FakeEncoding([1], [1])],
+            input_names={"input_ids", "attention_mask"},
+        )
+        vector = np.array(embedder.compute_source_embeddings(["a"])[0])
+        np.testing.assert_allclose(vector, [0.6, 0.8], atol=1e-6)
+        assert np.isclose(np.linalg.norm(vector), 1.0, atol=1e-6)
+
+    def test_token_type_ids_only_sent_when_the_model_declares_it(self, monkeypatch):
+        encodings = [_FakeEncoding([1, 2], [1, 1])]
+        hidden = [[[1.0], [1.0]]]
+
+        embedder, session = self._embedder(
+            monkeypatch, hidden, encodings, {"input_ids", "attention_mask"}
+        )
+        embedder.compute_source_embeddings(["a"])
+        assert "token_type_ids" not in session.feeds
+
+        embedder, session = self._embedder(
+            monkeypatch,
+            hidden,
+            encodings,
+            {"input_ids", "attention_mask", "token_type_ids"},
+        )
+        embedder.compute_source_embeddings(["a"])
+        assert session.feeds["token_type_ids"].tolist() == [[0, 0]]
+
+    def test_query_embeddings_accept_a_bare_string(self, monkeypatch):
+        import numpy as np  # noqa: PLC0415
+
+        embedder, _ = self._embedder(
+            monkeypatch,
+            hidden=[[[3.0, 4.0]]],
+            encodings=[_FakeEncoding([1], [1])],
+            input_names={"input_ids", "attention_mask"},
+        )
+        vectors = embedder.compute_query_embeddings("a")
+        assert len(vectors) == 1
+        np.testing.assert_allclose(np.array(vectors[0]), [0.6, 0.8], atol=1e-6)
+
+    def test_empty_input_short_circuits_before_the_model(self, monkeypatch):
+        from wren.memory.embeddings import OnnxEmbeddings  # noqa: PLC0415
+
+        def _explode(_self):
+            raise AssertionError("the model must not be loaded for empty input")
+
+        monkeypatch.setattr(OnnxEmbeddings, "_runtime", _explode)
+        assert OnnxEmbeddings("fake-model").compute_source_embeddings([]) == []
+
+    def test_non_mean_pooled_model_is_rejected(self, monkeypatch):
+        # A CLS-pooled model still yields a 384-vector, so without this guard
+        # it would be indexed with quietly wrong vectors.
+        from wren.memory import embeddings  # noqa: PLC0415
+
+        monkeypatch.setattr(
+            embeddings,
+            "_read_json",
+            lambda _repo, _name: {
+                "pooling_mode_mean_tokens": False,
+                "pooling_mode_cls_token": True,
+            },
+        )
+        with pytest.raises(ValueError, match="mean pooling"):
+            embeddings._require_mean_pooling("some/model")
+
+    def test_bare_model_name_expands_to_the_sentence_transformers_repo(self):
+        from wren.memory.embeddings import _resolve_repo_id  # noqa: PLC0415
+
+        assert (
+            _resolve_repo_id("paraphrase-multilingual-MiniLM-L12-v2")
+            == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        )
+        assert _resolve_repo_id("acme/custom-model") == "acme/custom-model"
+
+
+@pytest.mark.unit
+class TestLanceDBExtraDetection:
+    def test_onnx_only_install_still_selects_lancedb(self, monkeypatch):
+        # Pinning detection to sentence-transformers would silently downgrade
+        # a memory-onnx install to the Grep backend.
+        from wren.memory import embeddings, index_backend  # noqa: PLC0415
+
+        monkeypatch.setattr(index_backend, "find_spec", lambda _name: object())
+        monkeypatch.setattr(embeddings, "_onnx_available", lambda: True)
+        monkeypatch.setattr(
+            embeddings, "_sentence_transformers_available", lambda: False
+        )
+        assert index_backend.resolve_backend("") == "lancedb"
+
+    def test_no_embedding_backend_downgrades_to_grep(self, monkeypatch):
+        from wren.memory import embeddings, index_backend  # noqa: PLC0415
+
+        monkeypatch.setattr(index_backend, "find_spec", lambda _name: object())
+        monkeypatch.setattr(embeddings, "_onnx_available", lambda: False)
+        monkeypatch.setattr(
+            embeddings, "_sentence_transformers_available", lambda: False
+        )
+        assert index_backend.resolve_backend("") == "grep"
+
+
+@pytest.mark.slow
+@pytest.mark.unit
+class TestOnnxVectorParity:
+    def test_onnx_matches_sentence_transformers(self):
+        """Both backends must emit the same vectors for the default model.
+
+        Existing LanceDB tables are typed with a fixed-size 384 vector and
+        hold sentence-transformers output, so a switch to onnx has to be
+        readable without a reindex. Slow lane: downloads both models.
+        """
+        pytest.importorskip("onnxruntime", reason="wren[memory-onnx] not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        import numpy as np  # noqa: PLC0415
+
+        from wren.memory.embeddings import (  # noqa: PLC0415
+            _DEFAULT_MODEL,
+            OnnxEmbeddings,
+            _get_local_first_embedding_class,
+        )
+
+        # Build the sentence-transformers adapter directly: going through
+        # get_embedding_function() would dispatch to onnx and compare it
+        # against itself.
+        texts = ["revenue by customer", "台北的營收是多少", "월별 매출 추이"]
+        onnx_vecs = np.array(
+            OnnxEmbeddings(_DEFAULT_MODEL).compute_source_embeddings(texts)
+        )
+        st_vecs = np.array(
+            _get_local_first_embedding_class()
+            .create(name=_DEFAULT_MODEL)
+            .compute_source_embeddings(texts)
+        )
+        assert onnx_vecs.shape == st_vecs.shape == (len(texts), 384)
+        np.testing.assert_allclose(onnx_vecs, st_vecs, atol=1e-5)
