@@ -1233,10 +1233,18 @@ def create_project(
 
     if resp.status_code not in (201, 207):
         if resp.status_code in (401, 403):
+            # Deliberately does not claim the key was a project key. The CLI
+            # already refuses a non-`osk-` key before this call, so that is
+            # not a reachable cause here — and since the key may have come
+            # from storage rather than from something just typed, guessing
+            # wrongly sends the user looking for a key they already have.
             raise InvalidApiKeyError(
-                f"This org key was rejected creating a project on {api_host}. "
-                "`wren cloud create` needs an org API key (starts with "
-                "`osk-`), not a project key."
+                f"This key was rejected creating a project in org "
+                f"{org_id} on {api_host}.\n"
+                "Creating a project needs an organization key. This one may "
+                "not be one, or may be revoked, or belong to a different "
+                "organization or host. Pass `--org-key` to use a different "
+                "one."
             )
         raise CloudError(
             f"Wren Cloud API returned {resp.status_code} creating a project "

@@ -384,13 +384,6 @@ def create(  # noqa: PLR0913
     if not resolved_org_key:
         typer.echo("Error: an organization API key is required.", err=True)
         raise typer.Exit(1)
-    if not resolved_org_key.startswith("osk-"):
-        typer.echo(
-            "Error: `wren cloud create` needs an organization API key "
-            "(starts with `osk-`), not a project key.",
-            err=True,
-        )
-        raise typer.Exit(1)
 
     resolved_display_name = display_name or directory.resolve().name
 

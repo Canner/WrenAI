@@ -1634,3 +1634,32 @@ def test_link_leaves_no_origin_behind_when_it_refuses_a_foreign_history(tmp_path
     assert cloud.current_remote_url(target) is None, (
         "the origin added during the attempt must be rolled back"
     )
+
+
+def test_create_project_rejection_names_what_is_actually_known(monkeypatch):
+    """A 401 here has several possible causes — a key of the wrong level, a
+    revoked one, or one belonging to another org or host. The message must
+    not assert one of them, and in particular must not tell the user they
+    passed a project key when they may not have."""
+
+    class _Resp:
+        status_code = 401
+        text = "unauthorized"
+
+        def json(self):
+            return {}
+
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _Resp())
+
+    with pytest.raises(cloud.InvalidApiKeyError) as exc:
+        cloud.create_project(
+            "https://wren.example",
+            "osk-revoked",
+            org_id="190",
+            display_name="proj",
+        )
+
+    message = str(exc.value)
+    assert "not a project key" not in message
+    assert "190" in message, "must name the org it was rejected for"
+    assert "--org-key" in message, "must say how to supply a different key"
