@@ -1471,6 +1471,7 @@ def test_plan_upgrade_v1_to_v2_rejects_duplicate_view_names(tmp_path):
         "  - name: summary\n"
         "    statement: SELECT 2\n"
     )
+    duplicate_views_contents = (tmp_path / "views.yml").read_text(encoding="utf-8")
 
     # Use fresh import to avoid stale class reference after importlib.reload in earlier tests.
     from wren.context import UpgradeError as _UE  # noqa: PLC0415
@@ -1480,6 +1481,10 @@ def test_plan_upgrade_v1_to_v2_rejects_duplicate_view_names(tmp_path):
 
     assert get_schema_version(tmp_path) == 1
     assert (tmp_path / "views.yml").exists()
+    assert (tmp_path / "views.yml").read_text(
+        encoding="utf-8"
+    ) == duplicate_views_contents
+    assert not (tmp_path / "views").exists()
     for relative_path in (
         "models/orders.yml",
         "models/revenue.yml",
