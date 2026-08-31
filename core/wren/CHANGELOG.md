@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.13.4](https://github.com/Canner/WrenAI/compare/wren-v0.13.3...wren-v0.13.4) (2026-08-31)
+
+
+### Bug Fixes
+
+* **context:** normalise model columns in load_models ([#2614](https://github.com/Canner/WrenAI/issues/2614)) ([d48498f](https://github.com/Canner/WrenAI/commit/d48498fd553e0aa6fd6066f127ff7732335f6d37))
+* **cube:** load/validate like views; fail loud on mdl.json ([#2668](https://github.com/Canner/WrenAI/issues/2668)) ([5cf36cd](https://github.com/Canner/WrenAI/commit/5cf36cd7aad1caff2dba8e10252585026be48ef6))
+* **memory:** validate imported query pair field types ([#2656](https://github.com/Canner/WrenAI/issues/2656)) ([2e87902](https://github.com/Canner/WrenAI/commit/2e87902ed6911c67bf9520478b594d56957923a5))
+* **skills:** wrap generate-mdl SKILL.md's relationships.yml example under the required key ([#2676](https://github.com/Canner/WrenAI/issues/2676)) ([a8e8d04](https://github.com/Canner/WrenAI/commit/a8e8d04013ae64e3794aec0d4533e85c45f93fea))
+* **wren:** accept only read-only SELECT statements in the query path ([#2679](https://github.com/Canner/WrenAI/issues/2679)) ([ce9513d](https://github.com/Canner/WrenAI/commit/ce9513d68ae73887ce858940d58fe26b4dda12b7))
+* **wren:** connect with autocommit so a failed statement cannot poison the connection ([#2683](https://github.com/Canner/WrenAI/issues/2683)) ([5e01777](https://github.com/Canner/WrenAI/commit/5e01777e7cd7f025466b958d82494882cdc14eb2))
+* **wren:** mark truncated values in the skipped-row report ([#2675](https://github.com/Canner/WrenAI/issues/2675)) ([11184dc](https://github.com/Canner/WrenAI/commit/11184dc69d4a9f72a6ee8db2263f82231b8f14ac))
+* **wren:** preserve wide MySQL and Doris decimals ([#2657](https://github.com/Canner/WrenAI/issues/2657)) ([7ca6c77](https://github.com/Canner/WrenAI/commit/7ca6c77118dd87ba29ccbc973c756e5bdd5f0bf0))
+* **wren:** report a validation error for non-scalar model/view names ([#2681](https://github.com/Canner/WrenAI/issues/2681)) ([56e007d](https://github.com/Canner/WrenAI/commit/56e007da9b70f4554c32c0831576410a8b811b32))
+
 ## [0.13.3](https://github.com/Canner/WrenAI/compare/wren-v0.13.2...wren-v0.13.3) (2026-08-18)
 
 
