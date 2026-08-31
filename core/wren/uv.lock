@@ -3531,14 +3531,14 @@ wheels = [
 
 [[package]]
 name = "wren-core-py"
-version = "0.7.5"
+version = "0.7.6"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8d/05/43add76ef792f29396be457a145deb4078ce573c09976e9c2dcd42ae6e3e/wren_core_py-0.7.5.tar.gz", hash = "sha256:a1e42efc4a8eb6ed60ce04c76fd08466169d346de3f530873b913a78fadc10e9", size = 223288, upload-time = "2026-08-18T02:43:23.326Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/4b/8c1424e86666d6923c30c6a3974701a188fba59ea9764b5640797a364225/wren_core_py-0.7.6.tar.gz", hash = "sha256:cc12c7526ca0c5f9991a4fb942d410b16bec1289db900f4804b1a3478bb2deac", size = 225362, upload-time = "2026-08-31T03:15:01.411Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2e/6f/157ad227c3e94f9853fb0b8caefb3ab2f05e929390219ad1d40c5c8bbf69/wren_core_py-0.7.5-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:1bd3c616a15c79f62376b8b8998b62cb38ce2d23f91be79df0ece3e99ba25144", size = 43402120, upload-time = "2026-08-18T02:43:09.496Z" },
-    { url = "https://files.pythonhosted.org/packages/bb/1e/e63d7abbda38a7c380a06bc87d68d145d26befd1d83ab787974ef339dd38/wren_core_py-0.7.5-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:0bf427671e10df08e12fd70654f8b5d071b5a55aed16d83b13f7a3d3a887185e", size = 41597974, upload-time = "2026-08-18T02:43:13.299Z" },
-    { url = "https://files.pythonhosted.org/packages/5c/c3/7c160c35b6337a3269deb8292b1c491a823125dd405a192a71a4be281d82/wren_core_py-0.7.5-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:04bf5c5f9a52cf458e09eaaf49c939b36961be7d648129cd525d9c5579437877", size = 46389938, upload-time = "2026-08-18T02:43:16.909Z" },
-    { url = "https://files.pythonhosted.org/packages/ef/26/386d02b53b5e0c12e483f6c9ae4ecda70225ce073c71df171525c3c94e7a/wren_core_py-0.7.5-cp311-abi3-win_amd64.whl", hash = "sha256:1f4be094465bc324c63967d3696c2f7d2f2353afa12d0551310823c1a8734bf6", size = 41448498, upload-time = "2026-08-18T02:43:20.468Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/93/b0c1cab6e30e3d0eefd316659df420f62036155c3f20e21e1a95e9f478ad/wren_core_py-0.7.6-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:7164de0c8ab7f3572863d17d8188878631c7fa325e66d2446c5c3a5a7386174b", size = 43439938, upload-time = "2026-08-31T03:14:48.641Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/38/6cb500f650c71c822c48765bdbfad638607f28464e72ec5251b8ced80dea/wren_core_py-0.7.6-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:c7900188267f87608cdf91b8ee4db9e6de96cdb3c139730f593154558dc592fd", size = 41611312, upload-time = "2026-08-31T03:14:52.049Z" },
+    { url = "https://files.pythonhosted.org/packages/f1/f3/7db7a18a2afbbab324c8924146d2ed29caa39477ca95289b131686d0b167/wren_core_py-0.7.6-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c561fa1dd693764e443792a5720ebaa1f8fabd7752939a569198de07b4f05576", size = 46482589, upload-time = "2026-08-31T03:14:55.51Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/40/ab34f8b97ce21c11e9180dde63069f86f3c294fb6d875de9a22d77b8b966/wren_core_py-0.7.6-cp311-abi3-win_amd64.whl", hash = "sha256:3c4adfa1658666dcefc48422e791755eda7d8b0582b0ec63e5f87e929da020b4", size = 41537341, upload-time = "2026-08-31T03:14:59.318Z" },
 ]
 
 [[package]]
@@ -3708,7 +3708,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12" },
     { name = "urllib3", specifier = ">=2.7.0" },
     { name = "uvicorn", marker = "extra == 'ui'", specifier = ">=0.29" },
-    { name = "wren-core-py", specifier = ">=0.7.5" },
+    { name = "wren-core-py", specifier = ">=0.7.6" },
     { name = "wrenai", extras = ["interactive", "ui"], marker = "extra == 'main'" },
     { name = "wrenai", extras = ["postgres", "mysql", "bigquery", "snowflake", "clickhouse", "trino", "mssql", "databricks", "redshift", "athena", "oracle", "spark", "main", "memory", "mcp"], marker = "extra == 'all'" },
 ]
