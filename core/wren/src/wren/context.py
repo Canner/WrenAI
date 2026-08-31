@@ -1705,6 +1705,7 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
     _reject_malformed_v1_model_columns(project_path)
 
     # Models: flat files → directories
+    seen_model_targets: set[str] = set()
     models = _load_models_v1(project_path)
     for model in models:
         source_dir = model.pop("_source_dir", None)
@@ -1717,7 +1718,17 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
             created.append(ref_sql_file.relative_to(project_root).as_posix())
 
         metadata_file = _resolve_upgrade_file(model_dir, "metadata.yml")
-        created.append(metadata_file.relative_to(project_root).as_posix())
+        target = metadata_file.relative_to(project_root).as_posix()
+        # Case-folded: two names differing only in case resolve to the same
+        # directory on a case-insensitive filesystem (macOS APFS default,
+        # Windows), so treat them as the same target everywhere, not just on
+        # a literal string match.
+        if target.casefold() in seen_model_targets:
+            raise UpgradeError(
+                f"Cannot upgrade: multiple legacy models map to '{target}'"
+            )
+        seen_model_targets.add(target.casefold())
+        created.append(target)
 
         if source_dir:
             deleted.append(f"models/{source_dir}.yml")
@@ -1738,11 +1749,12 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
 
         metadata_file = _resolve_upgrade_file(view_dir, "metadata.yml")
         target = metadata_file.relative_to(project_root).as_posix()
-        if target in seen_view_targets:
+        # Case-folded for the same reason as the model guard above.
+        if target.casefold() in seen_view_targets:
             raise UpgradeError(
                 f"Cannot upgrade: multiple legacy views map to '{target}'"
             )
-        seen_view_targets.add(target)
+        seen_view_targets.add(target.casefold())
 
         created.append(target)
 
