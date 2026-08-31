@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.3.1...wren-semantic-core-v0.3.2) (2026-08-31)
+
+
+### Bug Fixes
+
+* **wren-core:** resolve relationship handles by the model they point at ([#2661](https://github.com/Canner/WrenAI/issues/2661)) ([a8a0778](https://github.com/Canner/WrenAI/commit/a8a07788a569c01df0dda391e7ecd1b6fc6316e1))
+
 ## [0.3.1](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.3.0...wren-semantic-core-v0.3.1) (2026-08-10)
 
 

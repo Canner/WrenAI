@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/Canner/WrenAI/compare/wren-manifest-macro-v0.3.1...wren-manifest-macro-v0.3.2) (2026-08-31)
+
+
+### Miscellaneous Chores
+
+* **wren-manifest-macro:** Synchronize wren-rust-core versions
+
 ## [0.3.1](https://github.com/Canner/WrenAI/compare/wren-manifest-macro-v0.3.0...wren-manifest-macro-v0.3.1) (2026-08-10)
 
 
