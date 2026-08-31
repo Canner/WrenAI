@@ -103,17 +103,19 @@ checkout next to this repo is no longer picked up implicitly — it now requires
 Warble development against this app.
 
 **This does not change the attested live-BFF flow below.** The launch gate's
-attestation still records "this exact Warble git checkout, at this exact
-commit and tree hash, built this exact binary" — a claim only a checkout can
-make. A pinned npm package has no equivalent to attest today: `npm install`
-verifies package integrity (and, since publish, an npm provenance attestation
-tying the tarball to its build), but neither says anything about which Warble
-*source commit* produced it in the way the gate's `warble.rootDigest` /
-`warble.commit` fields do. Until the gate's validated shape is extended to
-accept a package-mode claim (a decision explicitly out of scope for this
-change), **live BFF launches still need the checkout-based flow below** —
-the package dependency above only lightens local dev/test/tooling, not the
-attested path.
+attestation records only `warble.binarySha256` — the content hash of the
+resolved binary — not which commit or checkout produced it: the claim is
+"this is the binary that was verified," not "this binary was built from this
+commit, from this tree." A pinned npm package satisfies that claim exactly as
+well as a checkout does, since both resolve to a binary that gets hashed the
+same way. What the gate does not yet do is *resolve* `--warble-root` /
+`--warble-bin` from a package install in the first place: `verify-local-launch.mjs`
+still requires an explicit git checkout as that input (a separate, unrelated
+constraint on how the binary is located, not on what gets attested about it —
+extending that resolution mode is out of scope for this change). So **live BFF
+launches still need the checkout-based flow below** to produce the input the
+gate can hash; the package dependency above only lightens local dev/test/tooling
+that call the resolvers directly, not the attested path.
 
 Because pnpm silently accepts (and exits 0 on) an unmet peer-dependency range
 between these packages — e.g. an `@warble/codex-local` built against a
@@ -126,7 +128,7 @@ pnpm run check:warble-peers   # pnpm peers check — reads the lockfile, exits n
 ```
 
 The GenBI launch gate needs more than a standalone binary, package or
-otherwise: it verifies the Warble source identity and hashes the exact
+otherwise: it verifies the Warble checkout is clean and hashes the exact
 profiles, IR files, binary, and Claude Agent SDK dispatcher used by the BFF.
 For that attested flow, clone a clean checkout you have access to and build
 those inputs in place:

@@ -394,12 +394,11 @@ function writeAttestation(result) {
       treeIdentity: result.ui.git.treeIdentity,
       runtimeInputs: result.profiles.runtimeInputs,
     },
-    warble: {
-      rootDigest: result.warble.git.rootDigest,
-      commit: result.warble.git.commit,
-      treeIdentity: result.warble.git.treeIdentity,
-      binarySha256: result.warble.binarySha256,
-    },
+    // Identified by content hash alone: a pinned npm package has no commit or tree to
+    // name. `result.warble.git` is still computed (see verifyLocalLaunch) for the
+    // dirty-checkout and provenance-path safety checks on the selected --warble-root;
+    // its commit/rootDigest/treeIdentity fields just aren't part of this claim anymore.
+    warble: { binarySha256: result.warble.binarySha256 },
     runtime: result.runtimeBinding.runtime,
     bff: { entrySha256: result.bff.build.entrySha256, closureSha256: result.bff.build.closureSha256 },
     ui: { rootDigest: result.ui.git.rootDigest, commit: result.ui.git.commit, treeIdentity: result.ui.git.treeIdentity },

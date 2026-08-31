@@ -82,8 +82,12 @@ if (a.genbi?.commit !== genbi.commit || a.genbi?.rootDigest !== genbi.rootDigest
 if (!process.env.WREN_HARNESS_WORKSPACE_ROOT) fail("BFF mode/root does not match local launch attestation");
 const modeInput = canonicalBootstrapRoot(process.env.WREN_HARNESS_WORKSPACE_ROOT);
 if (a.mode !== "bootstrap" || modeInput !== a?.local?.modeInput) fail("BFF mode/root does not match local launch attestation");
+// Warble is identified by content hash alone (see binarySha256 check below); the
+// attestation carries no commit/rootDigest/treeIdentity for it. cleanGitRoot is still
+// used here for the worktree-root and dirty-checkout safety properties it provides on
+// the --warble-root the gate selected, independent of what gets attested publicly.
 const warble = cleanGitRoot(a?.local?.warbleRoot, "Warble");
-if (warble.root !== a?.local?.warbleRoot || a?.warble?.commit !== warble.commit || a?.warble?.rootDigest !== warble.rootDigest || a?.warble?.treeIdentity !== warble.treeIdentity) fail("BFF Warble source provenance does not match local launch attestation");
+if (warble.root !== a?.local?.warbleRoot) fail("BFF Warble checkout does not match local launch attestation");
 const inputs = {};
 for (const [env, key, kind, containerRoot] of [
   ["WREN_HARNESS_WARBLE_BIN", "warbleBin", "file", warble.root],

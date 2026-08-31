@@ -13,10 +13,8 @@ export interface LaunchAttestationPublic {
     /** Profiles and their committed IRs live in this package, so their identity is attested here. */
     readonly runtimeInputs: { readonly profileTreeSha256: string; readonly setupIrSha256: string; readonly enrichIrSha256: string; readonly analysisIrSha256: string };
   };
+  /** Identified by content hash alone: a pinned npm package has no commit or tree to name. */
   readonly warble: {
-    readonly rootDigest: string;
-    readonly commit: string;
-    readonly treeIdentity: string;
     readonly binarySha256: string;
   };
   readonly runtime:
@@ -53,7 +51,7 @@ export function projectPublicLaunchAttestation(value: unknown, expectedMode?: "b
     : ["version", "mode", "genbi", "warble", "runtime", "bff", "ui"])) throw new Error("local launch attestation public shape is invalid");
   if (value.version !== "genbi-launch-attestation/v1" || value.mode !== "bootstrap" || (expectedMode !== undefined && value.mode !== expectedMode)) throw new Error("local launch attestation public shape is invalid");
   if (!record(value.genbi) || !exactKeys(value.genbi, ["rootDigest", "commit", "treeIdentity", "runtimeInputs"]) || !digest(value.genbi.rootDigest) || !commit(value.genbi.commit) || !digest(value.genbi.treeIdentity) || !record(value.genbi.runtimeInputs) || !exactKeys(value.genbi.runtimeInputs, ["profileTreeSha256", "setupIrSha256", "enrichIrSha256", "analysisIrSha256"]) || !digest(value.genbi.runtimeInputs.profileTreeSha256) || !digest(value.genbi.runtimeInputs.setupIrSha256) || !digest(value.genbi.runtimeInputs.enrichIrSha256) || !digest(value.genbi.runtimeInputs.analysisIrSha256)) throw new Error("local launch attestation public shape is invalid");
-  if (!record(value.warble) || !exactKeys(value.warble, ["rootDigest", "commit", "treeIdentity", "binarySha256"]) || !digest(value.warble.rootDigest) || !commit(value.warble.commit) || !digest(value.warble.treeIdentity) || !digest(value.warble.binarySha256)) throw new Error("local launch attestation public shape is invalid");
+  if (!record(value.warble) || !exactKeys(value.warble, ["binarySha256"]) || !digest(value.warble.binarySha256)) throw new Error("local launch attestation public shape is invalid");
   if (!record(value.runtime) || value.runtime.mode !== "subscription") throw new Error("local launch attestation public shape is invalid");
   const claudeRuntime = exactKeys(value.runtime, ["mode", "provider", "dispatcher", "agentSdkSha256"])
     && value.runtime.provider === "claude" && value.runtime.dispatcher === "claude-agent-sdk" && digest(value.runtime.agentSdkSha256);
@@ -68,7 +66,7 @@ export function projectPublicLaunchAttestation(value: unknown, expectedMode?: "b
     version: value.version,
     mode: value.mode,
     genbi: { rootDigest: value.genbi.rootDigest, commit: value.genbi.commit, treeIdentity: value.genbi.treeIdentity, runtimeInputs: { profileTreeSha256: value.genbi.runtimeInputs.profileTreeSha256, setupIrSha256: value.genbi.runtimeInputs.setupIrSha256, enrichIrSha256: value.genbi.runtimeInputs.enrichIrSha256, analysisIrSha256: value.genbi.runtimeInputs.analysisIrSha256 } },
-    warble: { rootDigest: value.warble.rootDigest, commit: value.warble.commit, treeIdentity: value.warble.treeIdentity, binarySha256: value.warble.binarySha256 },
+    warble: { binarySha256: value.warble.binarySha256 },
     runtime: claudeRuntime
       ? { mode: "subscription", provider: "claude", dispatcher: "claude-agent-sdk", agentSdkSha256: value.runtime.agentSdkSha256 as string }
       : { mode: "subscription", provider: "codex", dispatcher: "codex-local", codexLocalSha256: value.runtime.codexLocalSha256 as string, source: value.runtime.source as "standalone" | "npm:@openai/codex", executablePathDigest: value.runtime.executablePathDigest as string, sourceClosureSha256: value.runtime.sourceClosureSha256 as string, version: value.runtime.version as string, executableSha256: value.runtime.executableSha256 as string },
