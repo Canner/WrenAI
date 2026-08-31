@@ -287,6 +287,16 @@ class PostgresConnector(ConnectorABC):
                 "use PostgresConnectionInfo instead",
             )
         kwargs = dict(connection_info.kwargs) if connection_info.kwargs else {}
+        # psycopg opens an implicit transaction per statement, so without this a
+        # failed statement leaves the session ``idle in transaction (aborted)``
+        # and every later statement fails with "current transaction is aborted".
+        # A successful statement is no better: the session stays ``idle in
+        # transaction`` for the connector's whole life, holding a snapshot open.
+        # This connector is long-lived and process-shared (``WrenEngine`` caches
+        # it; the MCP server hands one engine to every tool handler), and it only
+        # ever reads, so there is no multi-statement transaction to preserve.
+        # ``setdefault`` keeps an explicit caller-supplied value winning.
+        kwargs.setdefault("autocommit", True)
         self.connection = psycopg.connect(
             host=connection_info.host,
             port=int(connection_info.port),
