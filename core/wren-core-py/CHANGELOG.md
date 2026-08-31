@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.6](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.5...wren-core-py-v0.7.6) (2026-08-31)
+
+
+### Bug Fixes
+
+* **bindings:** build against wren-core 0.3.2 ([#2708](https://github.com/Canner/WrenAI/issues/2708)) ([2b0543d](https://github.com/Canner/WrenAI/commit/2b0543d586d9a0d2ab23236ac8f93aaa325ea911))
+
 ## [0.7.5](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.4...wren-core-py-v0.7.5) (2026-08-17)
 
 

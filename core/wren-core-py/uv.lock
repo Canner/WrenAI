@@ -155,7 +155,7 @@ wheels = [
 
 [[package]]
 name = "wren-core-py"
-version = "0.7.5"
+version = "0.7.6"
 source = { editable = "." }
 
 [package.dev-dependencies]
