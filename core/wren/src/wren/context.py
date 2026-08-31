@@ -1493,6 +1493,86 @@ class UpgradeError(Exception):
     """Raised when a project upgrade cannot proceed."""
 
 
+class _UniqueKeySafeLoader(yaml.SafeLoader):
+    """SafeLoader variant that rejects explicit duplicate mapping keys."""
+
+    def construct_mapping(self, node, deep=False):
+        """Reject explicit duplicates without breaking YAML merge-key semantics."""
+        seen = set()
+        for key_node, _ in node.value:
+            # SafeConstructor.flatten_mapping() handles << later. Checking the
+            # merge node itself here would try to construct the special merge
+            # tag too early and reject YAML that yaml.safe_load() accepts.
+            if key_node.tag == "tag:yaml.org,2002:merge":
+                continue
+            key = self.construct_object(key_node, deep=deep)
+            try:
+                if key in seen:
+                    raise yaml.constructor.ConstructorError(
+                        "while constructing a mapping",
+                        node.start_mark,
+                        f"found duplicate YAML key {key!r}",
+                        key_node.start_mark,
+                    )
+                seen.add(key)
+            except TypeError as exc:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    f"found unhashable YAML key {key!r}",
+                    key_node.start_mark,
+                ) from exc
+        return super().construct_mapping(node, deep=deep)
+
+
+def _collect_yaml_node_ids(node, seen=None) -> set[int]:
+    """Collect node identities below a composed YAML node, guarding cycles."""
+    if seen is None:
+        seen = set()
+    node_id = id(node)
+    if node_id in seen:
+        return seen
+    seen.add(node_id)
+
+    if isinstance(node, yaml.nodes.MappingNode):
+        for key_node, value_node in node.value:
+            _collect_yaml_node_ids(key_node, seen)
+            _collect_yaml_node_ids(value_node, seen)
+    elif isinstance(node, yaml.nodes.SequenceNode):
+        for item in node.value:
+            _collect_yaml_node_ids(item, seen)
+    return seen
+
+
+def _v1_views_anchor_root_keys(text: str) -> set[str]:
+    """Return extra root keys whose value node is aliased inside views."""
+    root = yaml.compose(text, Loader=yaml.SafeLoader)
+    if not isinstance(root, yaml.nodes.MappingNode):
+        return set()
+
+    views_node = None
+    for key_node, value_node in root.value:
+        if (
+            isinstance(key_node, yaml.nodes.ScalarNode)
+            and key_node.value == "views"
+        ):
+            views_node = value_node
+            break
+    if views_node is None:
+        return set()
+
+    referenced_ids = _collect_yaml_node_ids(views_node)
+    anchor_keys: set[str] = set()
+    for key_node, value_node in root.value:
+        if (
+            isinstance(key_node, yaml.nodes.ScalarNode)
+            and key_node.value != "views"
+            and id(value_node) in referenced_ids
+        ):
+            anchor_keys.add(key_node.value)
+    return anchor_keys
+
+
 def _resolve_upgrade_directory(
     project_path: Path,
     collection: str,
@@ -1555,6 +1635,19 @@ def _resolve_upgrade_file(target_directory: Path, filename: str) -> Path:
         ) from exc
     return resolved_file
 
+
+def _record_unique_upgrade_target(
+    seen: dict[str, str], target: str, source_kind: str
+) -> None:
+    """Reject exact and case-insensitive v1→v2 destination collisions."""
+    key = target.casefold()
+    previous = seen.get(key)
+    if previous is not None:
+        detail = f"'{target}'" if previous == target else f"'{previous}' and '{target}'"
+        raise UpgradeError(
+            f"Cannot upgrade: multiple legacy {source_kind} map to {detail}"
+        )
+    seen[key] = target
 
 def _validate_upgrade_view_statement(name: str, statement: Any) -> str | None:
     """Reject malformed legacy view statements before migration."""
@@ -1705,25 +1798,10 @@ def _reject_malformed_v1_views(project_path: Path) -> None:
     if not views_file.exists():
         return
 
-    class _UniqueKeySafeLoader(yaml.SafeLoader):
-        """SafeLoader variant that rejects explicit duplicate mapping keys."""
-
-        def construct_mapping(self, node, deep=False):
-            """Reject duplicate keys before normal SafeLoader construction."""
-            seen = set()
-            for key_node, _ in node.value:
-                key = self.construct_object(key_node, deep=deep)
-                if key in seen:
-                    raise UpgradeError(
-                        f"Cannot upgrade: views.yml contains duplicate YAML key {key!r}"
-                    )
-                seen.add(key)
-            return super().construct_mapping(node, deep=deep)
-
+    source_text = views_file.read_text(encoding="utf-8")
     try:
-        raw = yaml.load(
-            views_file.read_text(encoding="utf-8"), Loader=_UniqueKeySafeLoader
-        )
+        anchor_root_keys = _v1_views_anchor_root_keys(source_text)
+        raw = yaml.load(source_text, Loader=_UniqueKeySafeLoader)
     except (TypeError, yaml.YAMLError) as exc:
         raise UpgradeError(f"Cannot upgrade: invalid views.yml: {exc}") from exc
 
@@ -1736,10 +1814,10 @@ def _reject_malformed_v1_views(project_path: Path) -> None:
     else:
         raw_views = None
         if isinstance(raw, dict):
-            unexpected_keys = set(raw) - {"views"}
+            unexpected_keys = set(raw) - {"views"} - anchor_root_keys
             if unexpected_keys:
                 problems.append(
-                    "views.yml: unsupported root keys would be discarded: "
+                    "views.yml: unsupported root keys are not preserved by migration: "
                     + ", ".join(sorted(str(key) for key in unexpected_keys))
                 )
             raw_views = raw.get("views")
@@ -1778,6 +1856,7 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
     _reject_malformed_v1_views(project_path)
 
     # Models: flat files → directories
+    seen_model_targets: dict[str, str] = {}
     models = _load_models_v1(project_path)
     for model in models:
         source_dir = model.pop("_source_dir", None)
@@ -1790,12 +1869,17 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
             created.append(ref_sql_file.relative_to(project_root).as_posix())
 
         metadata_file = _resolve_upgrade_file(model_dir, "metadata.yml")
-        created.append(metadata_file.relative_to(project_root).as_posix())
+        metadata_target = metadata_file.relative_to(project_root).as_posix()
+        _record_unique_upgrade_target(
+            seen_model_targets, metadata_target, "model files"
+        )
+        created.append(metadata_target)
 
         if source_dir:
             deleted.append(f"models/{source_dir}.yml")
 
     # Views: single file → directories
+    seen_view_targets: dict[str, str] = {}
     views = _load_views_v1(project_path)
     for view in views:
         name = view.get("name")
@@ -1809,14 +1893,16 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
             created.append(sql_file.relative_to(project_root).as_posix())
 
         metadata_file = _resolve_upgrade_file(view_dir, "metadata.yml")
-        created.append(metadata_file.relative_to(project_root).as_posix())
+        metadata_target = metadata_file.relative_to(project_root).as_posix()
+        _record_unique_upgrade_target(seen_view_targets, metadata_target, "views")
+        created.append(metadata_target)
 
     views_file = project_path / "views.yml"
     if views_file.exists():
         deleted.append("views.yml")
 
     # Cubes: flat files → directories
-    seen_cube_targets: set[str] = set()
+    seen_cube_targets: dict[str, str] = {}
     cubes = _load_cubes_v1(project_path)
     for cube in cubes:
         source_file = cube.pop("_source_file", None)
@@ -1824,11 +1910,9 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
         cube_dir = _resolve_upgrade_directory(project_path, "cubes", "cube", name)
         metadata_file = _resolve_upgrade_file(cube_dir, "metadata.yml")
         target = metadata_file.relative_to(project_root).as_posix()
-        if target in seen_cube_targets:
-            raise UpgradeError(
-                f"Cannot upgrade: multiple legacy cube files map to '{target}'"
-            )
-        seen_cube_targets.add(target)
+        _record_unique_upgrade_target(
+            seen_cube_targets, target, "cube files"
+        )
 
         created.append(target)
 
