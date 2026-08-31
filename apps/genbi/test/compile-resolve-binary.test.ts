@@ -27,6 +27,30 @@ describe("resolveWarbleBinary", () => {
     // comment on resolveWarbleBinary for the resolution order).
     await expect(resolveWarbleBinary()).resolves.toEqual(expect.any(String));
   });
+
+  it("resolves via the pinned @warble/cli package, not PATH, when no explicit arg is given", async () => {
+    // This workspace has @warble/cli installed (a pinned dependency of apps/genbi), so tier 2
+    // must win: the resolved path must point into this package's own node_modules, never a bare
+    // "warble" name (which would mean a PATH probe or an unqualified sibling checkout answered
+    // instead).
+    const resolved = await resolveWarbleBinary();
+    expect(resolved).not.toBe("warble");
+    expect(resolved).toContain("@warble+cli");
+  });
+
+  it("does not fall through to the sibling checkout tier when WREN_HARNESS_ALLOW_WARBLE_SIBLING_CHECKOUT is unset", async () => {
+    const prior = process.env.WREN_HARNESS_ALLOW_WARBLE_SIBLING_CHECKOUT;
+    delete process.env.WREN_HARNESS_ALLOW_WARBLE_SIBLING_CHECKOUT;
+    try {
+      const resolved = await resolveWarbleBinary();
+      // Regardless of whether a sibling `warble` checkout happens to exist next to this repo on
+      // this machine, the installed package must answer first — a sibling checkout's
+      // target/release/warble path must never appear here by default.
+      expect(resolved).not.toMatch(/\/warble\/target\/release\/warble$/);
+    } finally {
+      if (prior !== undefined) process.env.WREN_HARNESS_ALLOW_WARBLE_SIBLING_CHECKOUT = prior;
+    }
+  });
 });
 
 describe("resolveHubDir", () => {

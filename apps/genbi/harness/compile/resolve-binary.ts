@@ -3,25 +3,32 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { WarbleBinaryNotFoundError } from "./errors.js";
+import { isWarbleSiblingCheckoutDevModeEnabled, resolveInstalledPackageBin } from "../npm-package-resolve.js";
 
 /**
- * Resolves the `warble` binary in three tiers, in order:
+ * Resolves the `warble` binary in four tiers, in order:
  *
  * 1. `explicit` — if given, it must exist on disk (no PATH lookup, no fallback).
- * 2. `PATH` — a bare `"warble"` that `warble --help` succeeds against. NOT `--version`: the warble
+ * 2. The pinned `@warble/cli` npm package this workspace depends on (see
+ *    `resolveInstalledPackageBin`) — deterministic regardless of `PATH` contents or how the
+ *    process was launched, so the reviewable version in `package.json` always wins.
+ * 3. `PATH` — a bare `"warble"` that `warble --help` succeeds against. NOT `--version`: the warble
  *    CLI has no `--version` flag (clap rejects it with exit 2 — the same fact
  *    `test/compile-warble-identity.test.ts` notes for a different reason), so probing with it made
- *    this tier fail for a binary that was on `PATH` and working, silently pushing every caller into
- *    tier 3. `warble --help` exits 0 and is what the sibling `warble-agent-sdk` probe already uses.
- * 3. A sibling `warble` repo's release build — this walks up from this package's own install
+ *    this tier fail for a binary that was on `PATH` and working, silently pushing every caller past
+ *    it. `warble --help` exits 0 and is what the sibling `warble-agent-sdk` probe already uses.
+ *    Kept as a fallback for a standalone install (e.g. `cargo install warble-cli`) on a machine
+ *    that hasn't run `pnpm install` against this package's pinned dependency.
+ * 4. A sibling `warble` repo's release build, gated behind the explicit
+ *    `WREN_HARNESS_ALLOW_WARBLE_SIBLING_CHECKOUT=1` development-mode opt-in (see
+ *    `isWarbleSiblingCheckoutDevModeEnabled`) — this walks up from this package's own install
  *    location looking for a `warble/target/release/warble` next to an ancestor directory, so it
  *    works whether the caller runs from the main checkout or from a git worktree nested several
- *    levels under it. This tier only ever resolves in a local development layout that happens to
- *    have a `warble` checkout with a built release binary next to this repo — a plain clone of
- *    this repo on its own has no such sibling, so tier 3 always falls through for it and callers
- *    are limited to tier 1 (an explicit path) or tier 2 (`warble` on `PATH`).
+ *    levels under it. Off by default: now that the pinned `@warble/cli` package is tier 2, this
+ *    tier exists only for someone deliberately developing GenBI against an unreleased, uninstalled
+ *    Warble checkout, and must not silently win over the pinned package.
  *
- * Throws {@link WarbleBinaryNotFoundError} (loud-fail, no silent degrade) if none of the three work.
+ * Throws {@link WarbleBinaryNotFoundError} (loud-fail, no silent degrade) if none of the four work.
  */
 export async function resolveWarbleBinary(explicit?: string): Promise<string> {
   if (explicit !== undefined) {
@@ -33,19 +40,31 @@ export async function resolveWarbleBinary(explicit?: string): Promise<string> {
 
   const attempts: string[] = [];
 
+  const packageBin = resolveInstalledPackageBin("@warble/cli", "warble");
+  if (packageBin !== undefined) {
+    return packageBin;
+  }
+  attempts.push(`"@warble/cli" is not installed (or declares no "warble" bin) in this workspace`);
+
   if (await isExecutableOnPath("warble")) {
     return "warble";
   }
   attempts.push(`not found on PATH (tried running "warble --help")`);
 
-  const sibling = findSiblingReleaseBuild();
-  if (sibling !== undefined) {
-    return sibling;
+  if (isWarbleSiblingCheckoutDevModeEnabled()) {
+    const sibling = findSiblingReleaseBuild();
+    if (sibling !== undefined) {
+      return sibling;
+    }
+    attempts.push(
+      `no sibling "warble" repo release build found (searched ancestors of this package for ` +
+        `"<ancestor's parent>/warble/target/release/warble")`,
+    );
+  } else {
+    attempts.push(
+      `sibling "warble" checkout dev mode is disabled (set WREN_HARNESS_ALLOW_WARBLE_SIBLING_CHECKOUT=1 to enable it)`,
+    );
   }
-  attempts.push(
-    `no sibling "warble" repo release build found (searched ancestors of this package for ` +
-      `"<ancestor's parent>/warble/target/release/warble")`,
-  );
 
   throw new WarbleBinaryNotFoundError(attempts);
 }

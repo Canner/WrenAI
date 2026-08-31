@@ -22,11 +22,18 @@ PWA stays a thin increment.
 - Python 3.11+ for the separately installed `wren` CLI.
 - The separately installed `wren` CLI on `PATH`. Live questions and context
   inspection shell out to it; the app does not install it for you.
-- For a live BFF, a clean checkout of
+- `pnpm install` already pulls in the pinned `@warble/cli`,
+  `@warble/claude-agent-sdk`, `@warble/codex-local`, and `@warble/ir-spec`
+  packages, which is enough for tests, builds, and any tooling that resolves
+  a `warble` binary or dispatcher CLI without an explicit override — see
+  [Package-based Warble dependency](#package-based-warble-dependency) below.
+- For a live, attested BFF, a clean checkout of
   [Canner/Warble](https://github.com/Canner/Warble), a Rust toolchain, and
-  [`just`](https://github.com/casey/just). The mandatory launch gate binds the
-  BFF to that checkout's profiles, IR fixtures, release binary, and dispatcher,
-  so a standalone global `warble` install is not enough for live GenBI development.
+  [`just`](https://github.com/casey/just), in addition to the packages above.
+  The mandatory launch gate binds the BFF to that checkout's profiles, IR
+  fixtures, release binary, and dispatcher — the pinned packages don't
+  currently satisfy it, so a standalone package or global `warble` install is
+  not enough for live GenBI development.
 - A logged-in Claude CLI subscription. The currently supported attested local
   launch flow is explicitly `subscription:claude`; API-key, local, gateway,
   and Codex runtime code are not accepted by the current launch gate.
@@ -82,10 +89,47 @@ cargo install warble-cli --version 0.2.0 --locked
 warble --version
 ```
 
-The GenBI launch gate needs more than that standalone binary: it verifies the
-Warble source identity and hashes the exact profiles, IR files, binary, and
-Claude Agent SDK dispatcher used by the BFF. Clone a clean checkout you have
-access to and build those inputs in place:
+### Package-based Warble dependency
+
+This package pins `@warble/cli`, `@warble/claude-agent-sdk`, `@warble/codex-local`,
+and `@warble/ir-spec` as ordinary npm dependencies (see `package.json`), so
+`pnpm install` from the repo root already gives every resolver
+(`resolveWarbleBinary`, `resolveAgentSdkCli`, `resolveCodexLocalCli`) a working
+binary with no extra setup: tests, `pnpm build`/`pnpm preview`, and any tooling
+that calls those resolvers without an explicit override run against the pinned
+package version by default. A previously-supported sibling `warble` git
+checkout next to this repo is no longer picked up implicitly — it now requires
+`WREN_HARNESS_ALLOW_WARBLE_SIBLING_CHECKOUT=1`, an explicit opt-in for local
+Warble development against this app.
+
+**This does not change the attested live-BFF flow below.** The launch gate's
+attestation still records "this exact Warble git checkout, at this exact
+commit and tree hash, built this exact binary" — a claim only a checkout can
+make. A pinned npm package has no equivalent to attest today: `npm install`
+verifies package integrity (and, since publish, an npm provenance attestation
+tying the tarball to its build), but neither says anything about which Warble
+*source commit* produced it in the way the gate's `warble.rootDigest` /
+`warble.commit` fields do. Until the gate's validated shape is extended to
+accept a package-mode claim (a decision explicitly out of scope for this
+change), **live BFF launches still need the checkout-based flow below** —
+the package dependency above only lightens local dev/test/tooling, not the
+attested path.
+
+Because pnpm silently accepts (and exits 0 on) an unmet peer-dependency range
+between these packages — e.g. an `@warble/codex-local` built against a
+different `@warble/ir-spec` minor than the one this workspace has installed —
+run this after any Warble package version bump, in CI or locally, rather than
+trusting a clean `pnpm install` alone:
+
+```bash
+pnpm run check:warble-peers   # pnpm peers check — reads the lockfile, exits non-zero on a real conflict
+```
+
+The GenBI launch gate needs more than a standalone binary, package or
+otherwise: it verifies the Warble source identity and hashes the exact
+profiles, IR files, binary, and Claude Agent SDK dispatcher used by the BFF.
+For that attested flow, clone a clean checkout you have access to and build
+those inputs in place:
 
 ```bash
 git clone https://github.com/Canner/Warble.git Warble

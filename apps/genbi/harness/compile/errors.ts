@@ -1,15 +1,16 @@
 /**
  * Thrown by {@link resolveWarbleBinary} (see `./resolve-binary.js`) when no `warble` binary can be
- * found via any of its three resolution tiers (explicit arg, `PATH`, sibling repo release build).
- * Deliberately loud — this pipeline never silently degrades to "skip compiling".
+ * found via any of its four resolution tiers (explicit arg, installed `@warble/cli` package,
+ * `PATH`, opt-in sibling repo release build). Deliberately loud — this pipeline never silently
+ * degrades to "skip compiling".
  */
 export class WarbleBinaryNotFoundError extends Error {
   constructor(attempts: readonly string[]) {
     super(
       `could not resolve a "warble" binary:\n` +
         attempts.map((attempt) => `  - ${attempt}`).join("\n") +
-        `\nfix: pass "warbleBin" explicitly, put "warble" on PATH, or build it ` +
-        `("cargo build --release --bin warble" in the warble repo).`,
+        `\nfix: pass "warbleBin" explicitly, run "pnpm install" so "@warble/cli" is installed, or ` +
+        `put "warble" on PATH.`,
     );
     this.name = "WarbleBinaryNotFoundError";
   }
