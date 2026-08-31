@@ -1347,6 +1347,15 @@ def _assert_v1_sources_unchanged(
     assert get_schema_version(project_path) == 1
 
 
+def _assert_no_v2_entity_directories(project_path: Path) -> None:
+    """Failed v1→v2 apply must not leave any migrated entity directories."""
+    for collection in ("models", "views", "cubes"):
+        root = project_path / collection
+        if not root.is_dir():
+            continue
+        assert not [entry for entry in root.iterdir() if entry.is_dir()]
+
+
 def test_plan_upgrade_v1_to_v2(tmp_path):
     _make_v1_project(tmp_path)
     result = plan_upgrade(tmp_path, target_version=2)
@@ -1661,6 +1670,131 @@ def test_plan_upgrade_v1_to_v2_rejects_unpreserved_views_root_keys(
     _assert_v1_sources_unchanged(tmp_path, source_contents)
 
 
+def test_plan_upgrade_v1_to_v2_allows_anchor_root_used_by_merge_key(tmp_path):
+    """A root anchor consumed by a view is preserved through YAML expansion."""
+    _make_v1_project(tmp_path)
+    (tmp_path / "views.yml").write_text(
+        "base: &base\n"
+        "  statement: SELECT 1\n"
+        "views:\n"
+        "  - name: anchored\n"
+        "    <<: *base\n",
+        encoding="utf-8",
+    )
+
+    plan = plan_upgrade(tmp_path, target_version=2)
+
+    assert "views/anchored/metadata.yml" in plan.files_created
+    assert "views.yml" in plan.files_deleted
+
+
+def test_apply_upgrade_v1_to_v2_preserves_merge_override(tmp_path):
+    """Explicit keys may override merged defaults without looking duplicated."""
+    _make_v1_project(tmp_path)
+    (tmp_path / "views.yml").write_text(
+        "base: &base\n"
+        "  statement: SELECT 1\n"
+        "views:\n"
+        "  - <<: *base\n"
+        "    name: anchored\n"
+        "    statement: SELECT 2\n",
+        encoding="utf-8",
+    )
+    plan = plan_upgrade(tmp_path, target_version=2)
+
+    apply_upgrade(tmp_path, plan)
+
+    migrated = yaml.safe_load(
+        (tmp_path / "views" / "anchored" / "metadata.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert migrated["name"] == "anchored"
+    assert migrated["statement"] == "SELECT 2"
+    assert not (tmp_path / "views.yml").exists()
+
+
+@pytest.mark.parametrize(
+    ("first_name", "second_name"),
+    [
+        ("revenue", "revenue"),
+        ("Revenue", "revenue"),
+    ],
+)
+def test_plan_upgrade_v1_to_v2_rejects_colliding_view_targets(
+    tmp_path, first_name, second_name
+):
+    """Legacy views must map to distinct portable v2 target directories."""
+    _make_v1_project(tmp_path)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text(
+        "views:\n"
+        f"  - name: {first_name}\n"
+        "    statement: SELECT 1\n"
+        f"  - name: {second_name}\n"
+        "    statement: SELECT 2\n",
+        encoding="utf-8",
+    )
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="multiple legacy views map"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+    _assert_no_v2_entity_directories(tmp_path)
+
+
+def test_apply_upgrade_v1_to_v2_rechecks_view_target_collisions_before_writing(
+    tmp_path,
+):
+    """A collision introduced after planning must abort before any v2 write."""
+    _make_v1_project(tmp_path)
+    plan = plan_upgrade(tmp_path, target_version=2)
+    (tmp_path / "views.yml").write_text(
+        "views:\n"
+        "  - name: Revenue\n"
+        "    statement: SELECT 1\n"
+        "  - name: revenue\n"
+        "    statement: SELECT 2\n",
+        encoding="utf-8",
+    )
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="multiple legacy views map"):
+        apply_upgrade(tmp_path, plan)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+    _assert_no_v2_entity_directories(tmp_path)
+
+
+@pytest.mark.parametrize("second_name", ["orders", "Orders"])
+def test_plan_upgrade_v1_to_v2_rejects_colliding_model_targets(
+    tmp_path, second_name
+):
+    """Different legacy model files cannot collapse into one v2 directory."""
+    _make_v1_project(tmp_path)
+    revenue_file = tmp_path / "models" / "revenue.yml"
+    revenue_file.write_text(
+        revenue_file.read_text(encoding="utf-8").replace(
+            "name: revenue\n", f"name: {second_name}\n", 1
+        ),
+        encoding="utf-8",
+    )
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="multiple legacy model files map"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+    _assert_no_v2_entity_directories(tmp_path)
+
+
 @pytest.mark.parametrize(
     "views_yml",
     [
@@ -1702,6 +1836,7 @@ def test_apply_upgrade_v1_to_v2_rechecks_duplicate_yaml_keys_before_writing(tmp_
         apply_upgrade(tmp_path, plan)
 
     _assert_v1_sources_unchanged(tmp_path, source_contents)
+    _assert_no_v2_entity_directories(tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -1742,6 +1877,7 @@ def test_apply_upgrade_v1_to_v2_rechecks_yaml_loader_errors_before_writing(tmp_p
         apply_upgrade(tmp_path, plan)
 
     _assert_v1_sources_unchanged(tmp_path, source_contents)
+    _assert_no_v2_entity_directories(tmp_path)
 
 
 def test_plan_upgrade_v1_to_v2_rejects_nameless_view_without_data_loss(tmp_path):
