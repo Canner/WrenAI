@@ -2403,3 +2403,42 @@ def test_create_project_rejects_a_non_object_project_value(monkeypatch):
             "https://wren.example", "osk-x", org_id="2", display_name="p"
         )
     assert "not an object" in str(exc.value)
+
+
+def test_scaffold_ignores_the_build_artifact(tmp_path, monkeypatch):
+    """`wren context build` writes target/mdl.json, and `wren cloud create`
+    pushes the directory — so without this the project's own repository ends
+    up carrying its compiled output. Observed on a real create."""
+    from typer.testing import CliRunner
+
+    from wren import context_cli
+
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(context_cli.context_app, ["init", "--empty"])
+    assert result.exit_code == 0, result.output
+
+    ignored = (tmp_path / ".gitignore").read_text()
+    assert "target/" in ignored
+
+    # Assert through git, not on the file's text: what matters is that git
+    # actually ignores the artifact.
+    (tmp_path / "target").mkdir()
+    (tmp_path / "target" / "mdl.json").write_text("{}")
+    cloud.run_git(["init"], cwd=tmp_path)
+    cloud.run_git(["add", "-A"], cwd=tmp_path)
+    tracked = cloud.run_git(["ls-files"], cwd=tmp_path).stdout
+    assert "target/mdl.json" not in tracked
+
+
+def test_scaffold_keeps_an_existing_gitignore(tmp_path, monkeypatch):
+    """A project that already has one keeps whatever it says."""
+    from typer.testing import CliRunner
+
+    from wren import context_cli
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".gitignore").write_text("mine\n")
+
+    CliRunner().invoke(context_cli.context_app, ["init", "--empty"])
+
+    assert (tmp_path / ".gitignore").read_text() == "mine\n"
