@@ -24,7 +24,7 @@ Options:
   --api-key <key>         api-key mode: API key (omit to rely on the adapter's own env var lookup)
   --model <name>          api-key/local mode: model name
   --endpoint <url>        local/gateway mode: endpoint URL
-  --warble-bin <path>     Explicit warble binary (default: PATH, then sibling repos/warble/target/release/warble)
+  --warble-bin <path>     Explicit warble binary (default: the installed @warble/cli, then PATH)
   --agent-sdk-bin <path>  Explicit warble-agent-sdk CLI (subscription mode only)
   --out <dir>             subscription mode: run output directory
   --deployment <ctx>      personal | hosted (default: personal). "hosted" means multi-tenant,

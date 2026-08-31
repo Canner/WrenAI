@@ -99,8 +99,15 @@ binary with no extra setup: tests, `pnpm build`/`pnpm preview`, and any tooling
 that calls those resolvers without an explicit override run against the pinned
 package version by default. A previously-supported sibling `warble` git
 checkout next to this repo is no longer picked up implicitly — it now requires
-`WREN_HARNESS_ALLOW_WARBLE_SIBLING_CHECKOUT=1`, an explicit opt-in for local
-Warble development against this app.
+`WREN_HARNESS_ALLOW_WARBLE_SIBLING_CHECKOUT=1`, an explicit opt-in.
+
+**That flag alone will not give you your checkout.** The sibling tier sits below
+the installed package, deliberately, so that a reviewable pinned version always
+beats whatever happens to be next door — which means once `pnpm install` has run
+here, the package wins and the flag never gets a turn. The flag matters only when
+the packages are absent. **To develop GenBI against an in-progress Warble build,
+pass `--warble-bin` (or `warbleBin`) explicitly**; that is tier 1 and beats
+everything.
 
 **This does not change the attested live-BFF flow below.** The launch gate's
 attestation records only `warble.binarySha256` — the content hash of the
@@ -126,6 +133,13 @@ trusting a clean `pnpm install` alone:
 ```bash
 pnpm run check:warble-peers   # pnpm peers check — reads the lockfile, exits non-zero on a real conflict
 ```
+
+Measured, so you know what it covers: a version conflict between registry packages —
+a consumer wanting `@warble/ir-spec` `0.5.x` against an installed `0.6.0`, which is what
+a Warble IR bump looks like — is reported and exits 1. A peer satisfied by a `file:` or
+`link:` dependency is **not** checked, and passes silently. Plain `pnpm install` reports
+neither: it warns and exits 0 even on a real conflict, and `strictPeerDependencies` does
+not change that, so this separate step is the gate rather than the install itself.
 
 The GenBI launch gate needs more than a standalone binary, package or
 otherwise: it verifies the Warble checkout is clean and hashes the exact
