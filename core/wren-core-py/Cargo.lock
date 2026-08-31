@@ -3576,7 +3576,7 @@ dependencies = [
 
 [[package]]
 name = "wren-core-base"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "pyo3",
  "serde",
@@ -3609,7 +3609,7 @@ dependencies = [
 
 [[package]]
 name = "wren-manifest-macro"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "quote",
  "syn",
@@ -3617,7 +3617,7 @@ dependencies = [
 
 [[package]]
 name = "wren-semantic-core"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "async-trait",
  "csv",
