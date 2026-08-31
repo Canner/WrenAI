@@ -618,10 +618,17 @@ describe("local GenBI launch gate", () => {
     const other = path.join(root, "other"); mkdirSync(other); for (const args of [["init"], ["config", "user.email", "f@e.test"], ["config", "user.name", "f"], ["commit", "--allow-empty", "-m", "copy"]]) spawnSync("git", args, { cwd: other });
     expect(spawnSync(process.execPath, [bffVerifier], { cwd: other, encoding: "utf8", env: baseEnv }).status).toBe(1);
     const replacement = path.join(warble, "replacement"); writeFileSync(replacement, "different"); chmodSync(replacement, 0o700);
+    // WREN_HARNESS_PROJECT is deliberately absent from this list: it is rejected by the BFF
+    // entrypoint (server/bin.ts), not by this standalone verifier script, so it is not one of
+    // this script's swapped-runtime-input cases. It used to sit in this list and "pass" only
+    // because the now-removed Warble dirty-checkout check failed first on every single call
+    // here (the fixture's Warble checkout is uncommitted on purpose), masking whichever
+    // override was actually under test. Once that check was removed for content-hash identity,
+    // this line was exposed as never having exercised anything about WREN_HARNESS_PROJECT at all.
     for (const override of [
       { WREN_HARNESS_WARBLE_BIN: replacement }, { WREN_HARNESS_PROFILE: path.join(profiles, "genbi-setup") },
       { WREN_HARNESS_SETUP_IR: path.join(profiles, "genbi-enrich-context", "ir.golden.json") }, { WREN_HARNESS_ENRICH_IR: path.join(profiles, "genbi-setup", "ir.golden.json") },
-      { WREN_HARNESS_ANALYSIS_IR: path.join(profiles, "genbi-setup", "ir.golden.json") }, { WREN_HARNESS_PROJECT: workspace },
+      { WREN_HARNESS_ANALYSIS_IR: path.join(profiles, "genbi-setup", "ir.golden.json") },
       { WREN_HARNESS_AGENT_SDK_BIN: staleAgentSdk }, { WREN_HARNESS_MODE: "api-key" }, { WREN_HARNESS_PROVIDER: "codex" },
     ]) expect(spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env: { ...baseEnv, ...override } }).status).toBe(1);
   });
