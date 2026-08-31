@@ -82,15 +82,16 @@ if (a.genbi?.commit !== genbi.commit || a.genbi?.rootDigest !== genbi.rootDigest
 if (!process.env.WREN_HARNESS_WORKSPACE_ROOT) fail("BFF mode/root does not match local launch attestation");
 const modeInput = canonicalBootstrapRoot(process.env.WREN_HARNESS_WORKSPACE_ROOT);
 if (a.mode !== "bootstrap" || modeInput !== a?.local?.modeInput) fail("BFF mode/root does not match local launch attestation");
-// Warble is identified by content hash alone (see binarySha256 check below); the
-// attestation carries no commit/rootDigest/treeIdentity for it. cleanGitRoot is still
-// used here for the worktree-root and dirty-checkout safety properties it provides on
-// the --warble-root the gate selected, independent of what gets attested publicly.
-const warble = cleanGitRoot(a?.local?.warbleRoot, "Warble");
-if (warble.root !== a?.local?.warbleRoot) fail("BFF Warble checkout does not match local launch attestation");
+// Warble and its dispatcher binaries are identified by content hash alone (see the
+// binarySha256/agentSdkSha256/codexLocalSha256 checks below), not by living inside a
+// required checkout root: a pinned npm package install has no working tree to be dirty,
+// and its hash is its identity. There is nothing to run cleanGitRoot against for it
+// any more — an exact-path match against the local attestation plus a content hash is
+// the same standard already applied to codexBin below, which was never containment- or
+// git-checked either.
 const inputs = {};
 for (const [env, key, kind, containerRoot] of [
-  ["WREN_HARNESS_WARBLE_BIN", "warbleBin", "file", warble.root],
+  ["WREN_HARNESS_WARBLE_BIN", "warbleBin", "file", undefined],
   ["WREN_HARNESS_PROFILE", "profile", "directory", genbi.root],
   ["WREN_HARNESS_SETUP_IR", "setupIr", "file", genbi.root],
   ["WREN_HARNESS_ENRICH_IR", "enrichIr", "file", genbi.root],
@@ -98,7 +99,7 @@ for (const [env, key, kind, containerRoot] of [
 ]) {
   if (!process.env[env]) fail(`BFF ${env} does not match local launch attestation`);
   const canonical = kind === "directory" ? directory(process.env[env], env) : regularFile(process.env[env], env);
-  if (!contained(containerRoot, canonical) || canonical !== a?.local?.[key]) fail(`BFF ${env} does not match local launch attestation`);
+  if ((containerRoot !== undefined && !contained(containerRoot, canonical)) || canonical !== a?.local?.[key]) fail(`BFF ${env} does not match local launch attestation`);
   inputs[key] = canonical;
 }
 if (sha256(inputs.warbleBin) !== a?.warble?.binarySha256) fail("BFF Warble binary does not match local launch attestation");
@@ -108,12 +109,12 @@ if (a?.runtime?.mode !== "subscription" || process.env.WREN_HARNESS_MODE !== "su
 if (a.runtime.provider === "claude") {
   if (a.runtime.dispatcher !== "claude-agent-sdk" || !process.env.WREN_HARNESS_AGENT_SDK_BIN || process.env.WREN_HARNESS_CODEX_LOCAL_BIN || process.env.WREN_HARNESS_CODEX_BIN) fail("BFF Claude runtime does not match local launch attestation");
   const agentSdkBin = regularFile(process.env.WREN_HARNESS_AGENT_SDK_BIN, "WREN_HARNESS_AGENT_SDK_BIN");
-  if (!contained(warble.root, agentSdkBin) || agentSdkBin !== a?.local?.agentSdkBin || sha256(agentSdkBin) !== a.runtime.agentSdkSha256) fail("BFF WREN_HARNESS_AGENT_SDK_BIN does not match local launch attestation");
+  if (agentSdkBin !== a?.local?.agentSdkBin || sha256(agentSdkBin) !== a.runtime.agentSdkSha256) fail("BFF WREN_HARNESS_AGENT_SDK_BIN does not match local launch attestation");
 } else if (a.runtime.provider === "codex") {
   if (a.runtime.dispatcher !== "codex-local" || process.env.WREN_HARNESS_AGENT_SDK_BIN || !process.env.WREN_HARNESS_CODEX_LOCAL_BIN || !process.env.WREN_HARNESS_CODEX_BIN) fail("BFF Codex runtime does not match local launch attestation");
   const codexLocalBin = regularFile(process.env.WREN_HARNESS_CODEX_LOCAL_BIN, "WREN_HARNESS_CODEX_LOCAL_BIN");
   const codexBin = regularFile(process.env.WREN_HARNESS_CODEX_BIN, "WREN_HARNESS_CODEX_BIN");
-  if (!contained(warble.root, codexLocalBin) || codexLocalBin !== a?.local?.codexLocalBin || sha256(codexLocalBin) !== a.runtime.codexLocalSha256) fail("BFF WREN_HARNESS_CODEX_LOCAL_BIN does not match local launch attestation");
+  if (codexLocalBin !== a?.local?.codexLocalBin || sha256(codexLocalBin) !== a.runtime.codexLocalSha256) fail("BFF WREN_HARNESS_CODEX_LOCAL_BIN does not match local launch attestation");
   const codexSource = codexSourceIdentity(codexBin);
   if (codexBin !== a?.local?.codexBin || pathDigest(codexBin) !== a.runtime.executablePathDigest || sha256(codexBin) !== a.runtime.executableSha256
     || codexSource.sourceRoot !== a?.local?.codexSourceRoot || codexSource.source !== a.runtime.source || codexSource.sourceClosureSha256 !== a.runtime.sourceClosureSha256

@@ -109,20 +109,19 @@ the packages are absent. **To develop GenBI against an in-progress Warble build,
 pass `--warble-bin` (or `warbleBin`) explicitly**; that is tier 1 and beats
 everything.
 
-**This does not change the attested live-BFF flow below.** The launch gate's
-attestation records only `warble.binarySha256` — the content hash of the
-resolved binary — not which commit or checkout produced it: the claim is
-"this is the binary that was verified," not "this binary was built from this
-commit, from this tree." A pinned npm package satisfies that claim exactly as
-well as a checkout does, since both resolve to a binary that gets hashed the
-same way. What the gate does not yet do is *resolve* `--warble-root` /
-`--warble-bin` from a package install in the first place: `verify-local-launch.mjs`
-still requires an explicit git checkout as that input (a separate, unrelated
-constraint on how the binary is located, not on what gets attested about it —
-extending that resolution mode is out of scope for this change). So **live BFF
-launches still need the checkout-based flow below** to produce the input the
-gate can hash; the package dependency above only lightens local dev/test/tooling
-that call the resolvers directly, not the attested path.
+**This is also how the attested live-BFF flow below identifies Warble.** The
+launch gate's attestation records only `warble.binarySha256` — the content
+hash of the resolved binary — not which commit or checkout produced it: the
+claim is "this is the binary that was verified," not "this binary was built
+from this commit, from this tree." `--warble-bin` accepts either the pinned
+package's binary or one from a Warble checkout with no difference in how it's
+verified: both resolve to a binary that gets hashed the same way, and the gate
+no longer requires a `--warble-root` git checkout to hold it. A binary that
+does live inside a checkout still works exactly as before — that's how you
+attest against your own in-progress Warble build (see the next section) — but
+it isn't a requirement any more. What the gate defends against — a binary
+swapped after it was attested — is caught by rehashing the same binary path
+every time the BFF boots, not by where the binary lives on disk.
 
 Because pnpm silently accepts (and exits 0 on) an unmet peer-dependency range
 between these packages — e.g. an `@warble/codex-local` built against a
@@ -141,11 +140,12 @@ a Warble IR bump looks like — is reported and exits 1. A peer satisfied by a `
 neither: it warns and exits 0 even on a real conflict, and `strictPeerDependencies` does
 not change that, so this separate step is the gate rather than the install itself.
 
-The GenBI launch gate needs more than a standalone binary, package or
-otherwise: it verifies the Warble checkout is clean and hashes the exact
-profiles, IR files, binary, and Claude Agent SDK dispatcher used by the BFF.
-For that attested flow, clone a clean checkout you have access to and build
-those inputs in place:
+The GenBI launch gate needs more than a standalone binary: it hashes the exact
+profiles, IR files, Warble binary, and Claude Agent SDK dispatcher used by the
+BFF. The installed `@warble/cli` / `@warble/claude-agent-sdk` packages already
+satisfy this (see above) — the steps below are for attesting against your own
+Warble checkout instead, e.g. while developing Warble itself. Clone a clean
+checkout you have access to and build those inputs in place:
 
 ```bash
 git clone https://github.com/Canner/Warble.git Warble
@@ -190,14 +190,14 @@ project with `wren context build` before using bound mode. Do not set both.
 pnpm run verify:launch -- --mode bootstrap \
   --workspace-root /absolute/path/to/fresh-bootstrap-workspace \
   --runtime subscription:claude \
-  --warble-root "$WARBLE_ROOT" --warble-bin "$WARBLE_BIN" \
+  --warble-bin "$WARBLE_BIN" \
   --agent-sdk-bin "$AGENT_SDK_BIN"
 
 # Or bound mode
 pnpm run verify:launch -- --mode bound \
   --project /absolute/path/to/built-wren-project \
   --runtime subscription:claude \
-  --warble-root "$WARBLE_ROOT" --warble-bin "$WARBLE_BIN" \
+  --warble-bin "$WARBLE_BIN" \
   --agent-sdk-bin "$AGENT_SDK_BIN"
 ```
 
@@ -278,7 +278,7 @@ Finally, rerun the same launch-gate command with the live endpoints appended:
 pnpm run verify:launch -- --mode bootstrap \
   --workspace-root /absolute/path/to/fresh-bootstrap-workspace \
   --runtime subscription:claude \
-  --warble-root "$WARBLE_ROOT" --warble-bin "$WARBLE_BIN" \
+  --warble-bin "$WARBLE_BIN" \
   --agent-sdk-bin "$AGENT_SDK_BIN" \
   --live --bff-url http://localhost:4787 --ui-url http://localhost:5273
 ```

@@ -41,9 +41,11 @@ const nativeVendors = ["claude", "codex"];
 function usage(message) {
   const text = [
     message ? `error: ${message}` : undefined,
-    "Usage: pnpm run verify:launch -- --workspace-root <directory> --runtime subscription:claude|subscription:codex --warble-root <checkout> --warble-bin <binary> [runtime inputs]",
+    "Usage: pnpm run verify:launch -- --workspace-root <directory> --runtime subscription:claude|subscription:codex --warble-bin <binary> [runtime inputs]",
     "  Claude runtime: --agent-sdk-bin <binary>",
     "  Codex runtime:  --codex-local-bin <binary> --codex-bin <exact-codex-executable>",
+    "  Warble and its dispatcher binaries are identified by content hash, not by where they",
+    "  live: a pinned npm package install and a Warble checkout both work — see verifyLocalLaunch.",
     "  An existing project is adopted through the running app, not selected here.",
     "Optional: --profile <dir> --setup-ir <file> --enrich-ir <file> --analysis-ir <file>",
     "  Profiles and their committed IRs live in this package's own profiles/ tree, not the Warble checkout.",
@@ -80,7 +82,14 @@ function parseArgs(argv) {
   // gating a bootstrap launch instead would attest a tuple they never asked for.
   if (options.project !== undefined) usage("--project is no longer supported — an existing project is adopted through the running app");
   if (options.mode !== undefined) usage("--mode is no longer supported — the BFF has a single boot mode");
-  for (const required of ["workspaceRoot", "runtime", "warbleRoot", "warbleBin"]) if (!options[required]) usage(`--${required.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required`);
+  // Warble is identified by content hash (see writeAttestation), not by living inside a
+  // required checkout: a pinned npm package has no worktree to name. Rejecting the flag by
+  // name (same pattern as --project/--mode above) instead of silently ignoring it matters
+  // because a caller still passing it believes it is constraining or validating the
+  // binary's source, and a silently-ignored flag would attest a binary whose provenance was
+  // never actually checked the way the caller expects.
+  if (options.warbleRoot !== undefined) usage("--warble-root is no longer supported — the Warble binary is identified by content hash, not by a required checkout root");
+  for (const required of ["workspaceRoot", "runtime", "warbleBin"]) if (!options[required]) usage(`--${required.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required`);
   if (options.runtime !== "subscription:claude" && options.runtime !== "subscription:codex") usage("--runtime must be subscription:claude or subscription:codex");
   if (options.runtime === "subscription:claude") {
     if (!options.agentSdkBin) usage("--agent-sdk-bin is required for subscription:claude");
@@ -147,7 +156,7 @@ function execFileSyncResult(command, args, cwd) {
   return { code: result.status ?? (result.error ? 1 : 0), stdout: result.stdout ?? "", stderr: result.stderr ?? "", error: result.error };
 }
 
-function assertInside(root, value, label, rootLabel = "Warble checkout") {
+function assertInside(root, value, label, rootLabel) {
   if (!contained(root, value)) throw new GateError("provenance", `${label} must be inside the selected ${rootLabel}`);
 }
 
@@ -394,10 +403,14 @@ function writeAttestation(result) {
       treeIdentity: result.ui.git.treeIdentity,
       runtimeInputs: result.profiles.runtimeInputs,
     },
-    // Identified by content hash alone: a pinned npm package has no commit or tree to
-    // name. `result.warble.git` is still computed (see verifyLocalLaunch) for the
-    // dirty-checkout and provenance-path safety checks on the selected --warble-root;
-    // its commit/rootDigest/treeIdentity fields just aren't part of this claim anymore.
+    // Identified by content hash alone, not by source: a Warble binary can come from a
+    // pinned npm package (no commit or tree to name) or a developer's own checkout, and
+    // the two are treated identically here. What used to be a dirty-checkout /
+    // containment check against a required --warble-root is now just this hash, taken at
+    // write time and re-verified against the same binary path at every BFF boot
+    // (verify-bff-attestation.mjs) — a binary swapped after this attestation was written
+    // is caught there. What is no longer detected: a package binary's own supply chain
+    // (e.g. npm provenance) isn't verified here — see decision on the attestation shape.
     warble: { binarySha256: result.warble.binarySha256 },
     runtime: result.runtimeBinding.runtime,
     bff: { entrySha256: result.bff.build.entrySha256, closureSha256: result.bff.build.closureSha256 },
@@ -406,7 +419,6 @@ function writeAttestation(result) {
   const file = path.join(packageRoot, "dist-server", "local-launch-attestation.json");
   const full = { ...publicAttestation, local: {
     genbiRoot: result.ui.git.root,
-    warbleRoot: result.warble.root,
     warbleBin: result.warble.binary,
     ...(result.agentSdk ? { agentSdkBin: result.agentSdk.binary } : {}),
     ...(result.codexLocal ? { codexLocalBin: result.codexLocal.binary, codexBin: result.codex.binary, codexSourceRoot: result.codex.sourceRoot } : {}),
@@ -423,22 +435,26 @@ function writeAttestation(result) {
 export async function verifyLocalLaunch(options) {
   const mode = validateMode(options);
   const genbi = git(packageRoot, "GenBI package");
-  const warbleRoot = directory(options.warbleRoot, "Warble checkout");
-  const warble = git(warbleRoot, "Warble checkout");
-  if (warble.root !== warbleRoot) throw new GateError("provenance", "--warble-root must be the selected Warble git worktree root");
+  // Warble and its dispatcher binaries are identified by content hash alone, not by where
+  // they live on disk (see `warble` in the result below and writeAttestation's comment).
+  // There is no required checkout root to validate them against and no dirty-checkout
+  // check to run: a pinned npm package install has no working tree to be dirty, and its
+  // hash *is* its identity. What that used to buy — evidence the binary belongs to the
+  // attested source, and that it wasn't swapped after verification — is now provided by
+  // rehashing the same binary path at every BFF boot (verify-bff-attestation.mjs), which
+  // fails closed when the content differs (exercised by the mutation test in
+  // test/local-launch-gate.test.ts). A binary that happens to live inside a Warble
+  // checkout (local Warble development) still works: it is just a binary like any other.
   const warbleBin = regularFile(options.warbleBin, "Warble binary");
-  assertInside(warbleRoot, warbleBin, "Warble binary");
   try { accessSync(warbleBin, constants.X_OK); } catch { throw new GateError("provenance", "Warble binary is not executable"); }
   let agentSdkBin;
   let codexLocalBin;
   let codexBin;
   if (options.runtime === "subscription:claude") {
     agentSdkBin = regularFile(options.agentSdkBin, "agent-sdk dispatcher binary");
-    assertInside(warbleRoot, agentSdkBin, "agent-sdk dispatcher binary");
     try { accessSync(agentSdkBin, constants.X_OK); } catch { throw new GateError("provenance", "agent-sdk dispatcher binary is not executable"); }
   } else {
     codexLocalBin = regularFile(options.codexLocalBin, "codex-local dispatcher binary");
-    assertInside(warbleRoot, codexLocalBin, "codex-local dispatcher binary");
     codexBin = regularFile(options.codexBin, "Codex executable");
     try { accessSync(codexLocalBin, constants.X_OK); } catch { throw new GateError("provenance", "codex-local dispatcher binary is not executable"); }
     try { accessSync(codexBin, constants.X_OK); } catch { throw new GateError("provenance", "Codex executable is not executable"); }
@@ -474,7 +490,7 @@ export async function verifyLocalLaunch(options) {
     mode: "bootstrap",
     ui: { packageRoot, git: genbi, launchCommand: "pnpm dev" },
     bff: { packageRoot, git: genbi, entry: dist.entry, build: dist, launchCommand: "pnpm run start:bff" },
-    warble: { root: warbleRoot, git: warble, binary: warbleBin, binarySha256: hash(warbleBin) },
+    warble: { binary: warbleBin, binarySha256: hash(warbleBin) },
     profiles: { root: profiles, runtimeInputs, profile, setupIr, enrichIr, analysisIr },
     ...(agentSdkBin ? { agentSdk: { binary: agentSdkBin, binarySha256: hash(agentSdkBin) } } : {}),
     ...(codexLocalBin && codexBin ? {
