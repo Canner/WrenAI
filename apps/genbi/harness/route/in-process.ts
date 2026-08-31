@@ -10,7 +10,7 @@ import { createWrenNativeToolRegistry, resolveWrenBinary } from "../tools/index.
 import { deriveAdapterSpec } from "./adapter-spec.js";
 import { describeBundle } from "./describe.js";
 import { buildHybridTierBinding, buildUniformTierBinding } from "./tier-binding.js";
-import type { ModeAOptions } from "./types.js";
+import type { InProcessOptions } from "./types.js";
 
 const ANSWER_QUERY_AGENT_ID = "answer_query";
 
@@ -32,11 +32,11 @@ export function filterTierBindingForAgent(
 /**
  * Resolves the `rootDir` the native `write_artifact` tool's
  * `createLocalExecutionEnv` scope is rooted at. Precedence: an explicit
- * `outDir` (per-call override, e.g. `ModeAOptions.outDir` /
+ * `outDir` (per-call override, e.g. `InProcessOptions.outDir` /
  * `WREN_HARNESS_OUT`) > the `WREN_HARNESS_ARTIFACTS_DIR` env var
  * (operator-wide override) > a fixed `os.tmpdir()` subdirectory.
  * Deliberately NEVER `process.cwd()` — that was the bug this fixes:
- * `runModeADefault` used to call `createLocalExecutionEnv()` with no
+ * `runInProcessDefault` used to call `createLocalExecutionEnv()` with no
  * `rootDir` at all, which defaults to `process.cwd()` (`harness/exec/local.ts`)
  * — for a live BFF process that's wherever this package's server process
  * happens to be launched from, so every `write_artifact` call (from
@@ -54,7 +54,7 @@ export function resolveArtifactsDir(outDir: string | undefined): string {
 }
 
 /**
- * Mode A ("api-key" | "local" | "gateway"): compile the profile to a vercel
+ * In-process ("api-key" | "local" | "gateway"): compile the profile to a vercel
  * bundle (unless `options.bundle` overrides it, for tests), resolve which
  * compiled agent to run (`options.agentId`, defaulting to
  * `ANSWER_QUERY_AGENT_ID` — intent routing picks this upstream in
@@ -66,7 +66,7 @@ export function resolveArtifactsDir(outDir: string | undefined): string {
  * `options.mcpServers` overrides it, for tests), and run it in-process via
  * `runAgent`.
  */
-export async function runModeADefault(options: ModeAOptions): Promise<RunAgentResult> {
+export async function runInProcessDefault(options: InProcessOptions): Promise<RunAgentResult> {
   const bundle = options.bundle ?? (await describeBundle(options));
   // Intent routing (server/turn.ts) picks the agent id when present; falls back to answer_query,
   // the original default from before intent routing existed.

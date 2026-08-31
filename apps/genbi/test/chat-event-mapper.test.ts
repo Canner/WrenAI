@@ -231,7 +231,7 @@ describe("mapChatEventToAgentEvent", () => {
   });
 });
 
-describe("mapped AgentEvents feeding LiveWorkLog produce a correct, expandable ToolStep[] (Mode B <-> Mode A parity at the fold layer)", () => {
+describe("mapped AgentEvents feeding LiveWorkLog produce a correct, expandable ToolStep[] (dispatched <-> in-process parity at the fold layer)", () => {
   it("a full step_start -> tool_call -> tool_result -> step_finish sequence folds to one step + one nested tool", () => {
     const state = createChatEventMapperState();
     const log = new LiveWorkLog();

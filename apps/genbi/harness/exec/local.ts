@@ -24,7 +24,7 @@ export interface LocalExecutionEnvOptions {
   readonly fetchImpl?: FetchImpl;
   /** Overridable for hermetic tests; defaults to spawning `cmd.command` with `cmd.args` (no shell). */
   readonly execImpl?: (cmd: ExecCommand) => Promise<ExecResult>;
-  /** Overridable for hermetic tests; defaults to 32 MiB (matches compile/pipeline.ts + route/mode-b.ts). */
+  /** Overridable for hermetic tests; defaults to 32 MiB (matches compile/pipeline.ts + route/dispatched.ts). */
   readonly maxBufferBytes?: number;
 }
 

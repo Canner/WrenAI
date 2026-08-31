@@ -5,11 +5,11 @@ import { describe, expect, it } from "vitest";
 
 /**
  * Guards `scripts/copy-providers.js` (wired into `pnpm run build`): without
- * it, `dist-server/providers/` is never created, and `ModeASetupRunner`'s
+ * it, `dist-server/providers/` is never created, and `InProcessSetupRunner`'s
  * `DEFAULT_SETUP_PROVIDER_PATH` / `compileProfile`'s `DEFAULT_WREN_PROVIDER_PATH`
  * — both resolved relative to their own compiled file location — point at a
  * file that doesn't exist. `pnpm run start:bff` then fails the moment setup
- * or Mode A dispatch reads its bundled provider fragment.
+ * or in-process dispatch reads its bundled provider fragment.
  *
  * This deliberately imports the COMPILED `dist-server/harness/**\/*.js`
  * modules (not the `harness/**\/*.ts` source) and checks the exact path
@@ -47,7 +47,7 @@ it.skipIf(!distServerBuilt)(
 );
 
 describe.skipIf(!distServerBuilt)("bundled provider fragments resolve from the BUILT dist-server layout", () => {
-  it("ModeASetupRunner's default setup provider path exists after a real build", async () => {
+  it("InProcessSetupRunner's default setup provider path exists after a real build", async () => {
     const runnerModulePath = path.join(distServerDir, "harness", "setup", "runner.js");
     expect(existsSync(runnerModulePath)).toBe(true);
 

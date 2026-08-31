@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { loadBundle } from "../harness/bundle/loader.js";
 import { MOCK_ADAPTER_ID } from "../harness/providers/index.js";
 import { buildHybridTierBinding } from "../harness/route/index.js";
-import { filterTierBindingForAgent } from "../harness/route/mode-a.js";
+import { filterTierBindingForAgent } from "../harness/route/in-process.js";
 import { route } from "../harness/route/index.js";
 import type { AuthChoice } from "../harness/auth/index.js";
 import { mockWrenServerConfig } from "./mock-mcp-server.js";
@@ -98,7 +98,7 @@ describe("buildHybridTierBinding", () => {
   });
 });
 
-describe("hybrid Mode A: route() with a non-uniform tierBinding", () => {
+describe("hybrid in-process: route() with a non-uniform tierBinding", () => {
   it("routes each step to its own bound adapter — cheap and strong hit distinctly scripted mocks", async () => {
     const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
 
@@ -125,7 +125,7 @@ describe("hybrid Mode A: route() with a non-uniform tierBinding", () => {
       },
     });
 
-    if (result.backend !== "agent") throw new Error("expected the agent backend (Mode A)");
+    if (result.backend !== "agent") throw new Error("expected the agent backend (in-process)");
     expect(result.kind).toBe("answer");
     // resolve_intent (cheap) only ever hit the cheap mock, never the strong one.
     expect(cheapCalls).toHaveLength(1);

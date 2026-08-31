@@ -1,0 +1,302 @@
+{
+  "components": [
+    {
+      "borrowed_actions": [],
+      "context_binding": {
+        "binding_mode": "pinned",
+        "project": "../../../../examples/v5-jaffle"
+      },
+      "context_precondition": [
+        {
+          "predicate": "wren_project_exists"
+        }
+      ],
+      "context_requirements": [
+        "an existing pinned Wren project whose semantic layer parses and has a successful build proof"
+      ],
+      "effect": {
+        "outcome": {
+          "kind": "none"
+        },
+        "render_blocks": []
+      },
+      "eval": {
+        "metrics": [
+          "enrichment_gap_coverage"
+        ],
+        "template_ref": "eval/"
+      },
+      "eval_ref": "inspect_context.eval",
+      "guardrails": [
+        {
+          "locked": true,
+          "name": "read_only_execution"
+        }
+      ],
+      "id": "inspect_context",
+      "llm_calls": [
+        {
+          "conditional": false,
+          "consumes": [],
+          "name": "inspect",
+          "produces": "enrichment_gaps",
+          "prompt": "Inspect the already bound project without changing it.\n\n- Read the current MDL, cube names and definitions, business rules, NL-to-SQL pairs, and available\n  raw material. Do not read or expose credential values, and do not put raw excerpts in the output.\n- Classify gaps as structural coverage, raw-vs-current claim difference, or inference. Emit only\n  opaque evidence ids/locators, confidence, the proposed sink, and whether a conflict or ambiguous\n  sink exists.\n- In grill mode, live database probes are allowed only after the host records the user's one-time\n  consent; in autopilot they are forbidden. Probe results remain local to the executor.\n- Do not write files, create a gaps/state artifact, invoke validation/build, or make a decision.\n\nProduce `enrichment_gaps` as the input to the strong drafting step. It is an inventory, not a\nproposal and not authorization to apply a change.",
+          "tier": "cheap",
+          "when": null
+        }
+      ],
+      "params": [],
+      "precondition_result": {
+        "checks": [
+          {
+            "outcome": "pass",
+            "predicate": "wren_project_exists"
+          }
+        ],
+        "status": "pass"
+      },
+      "prompt_fragment": "## inspect\n\nInspect the already bound project without changing it.\n\n- Read the current MDL, cube names and definitions, business rules, NL-to-SQL pairs, and available\n  raw material. Do not read or expose credential values, and do not put raw excerpts in the output.\n- Classify gaps as structural coverage, raw-vs-current claim difference, or inference. Emit only\n  opaque evidence ids/locators, confidence, the proposed sink, and whether a conflict or ambiguous\n  sink exists.\n- In grill mode, live database probes are allowed only after the host records the user's one-time\n  consent; in autopilot they are forbidden. Probe results remain local to the executor.\n- Do not write files, create a gaps/state artifact, invoke validation/build, or make a decision.\n\nProduce `enrichment_gaps` as the input to the strong drafting step. It is an inventory, not a\nproposal and not authorization to apply a change.",
+      "realization_kind": "skill",
+      "required_capabilities": [
+        "semantic_introspection",
+        "raw_material_read",
+        "llm:cheap"
+      ],
+      "trigger": {
+        "kind": "one_shot"
+      },
+      "type": "analytical",
+      "verb": "inspect_context"
+    },
+    {
+      "borrowed_actions": [],
+      "context_binding": {
+        "binding_mode": "pinned",
+        "project": "../../../../examples/v5-jaffle"
+      },
+      "context_precondition": [
+        {
+          "predicate": "wren_project_exists"
+        }
+      ],
+      "context_requirements": [
+        "an existing pinned Wren project whose semantic layer parses and has a successful build proof"
+      ],
+      "effect": {
+        "outcome": {
+          "kind": "none"
+        },
+        "render_blocks": [
+          {
+            "fields": {},
+            "type": "diff"
+          }
+        ]
+      },
+      "eval": {
+        "metrics": [
+          "enrichment_proposal_soundness",
+          "enrichment_sink_routing"
+        ],
+        "template_ref": "eval/"
+      },
+      "eval_ref": "draft_enrichment.eval",
+      "guardrails": [
+        {
+          "locked": true,
+          "name": "read_only_execution"
+        }
+      ],
+      "id": "draft_enrichment",
+      "llm_calls": [
+        {
+          "conditional": false,
+          "consumes": [],
+          "name": "draft",
+          "produces": "enrichment_proposal",
+          "prompt": "Turn the read-only gap inventory into concrete, minimal, append-only proposals. Do not apply them.\n\n- Treat the pinned project revision as input, not something to infer. Return canonicalizable draft\n  material and evidence locators, but do not invent or claim authoritative proposal hashes or content\n  digests. The host validates the sink and revision, canonicalizes the payload, and computes both.\n- Each proposed operation has exactly one allowed relative sink. Existing text, MDL fields, cubes,\n  and relationships are never overwritten.\n- A cube proposal must target `cubes/<name>/metadata.yml` and use Wren's cube schema: `name`,\n  `base_object`, `measures`, optional `dimensions` / `time_dimensions`, and `properties`. Measures and\n  dimensions may reference only columns that actually exist on the chosen base object. Never invent\n  columns, use model-MDL keys such as `columns` / `metrics` / `relationships`, or hide a required join\n  inside a cube expression. If one append-only operation cannot implement the gap, emit a paused\n  decision explaining the missing prerequisite instead of fabricating a payload.\n- For a cube, put the file body in `recommended_yaml` and follow this exact field grammar:\n  `measures: [{name, expression, type}]`, `dimensions: [{name, expression, type}]`, and\n  `time_dimensions: [{name, expression, type}]`. Use SQL aggregate expressions such as\n  `SUM(units_on_hand)` and Wren scalar types such as `BIGINT`, `INTEGER`, and `DATE`. Do not emit\n  `sql`, `model`, `columns`, `metrics`, or aggregation names such as `type: sum`.\n- Grill mode emits one decision request at a time with a concrete recommended draft and accepts only\n  accept, edit, or skip for that operation. Skip is final for this run.\n- Autopilot may mark only append-only low-risk model/column descriptions, knowledge rules, and\n  NL-to-SQL pairs as eligible to apply. It must pause for raw-vs-current conflicts, ambiguous sink\n  selection, and every new cube, view, relationship, MDL metric, or calculated column.\n- Mark all inference and partial-raw evidence with confidence. Do not include raw text, credentials,\n  local paths, provider-session ids, or SDK internals in the host-facing proposal.\n- A new cube is high impact, always requires approval, and is never autopilot-eligible.\n\nProduce `enrichment_proposal`; approval, canonical hashes/digests, and application are deterministic\nhost responsibilities. Your FINAL message must be one JSON object only. Do not include prose or\nMarkdown fences. The top level is `{ \"enrichment_proposal\": { ... } }`; for Grill it contains the\nsupplied `project_revision`, exactly one operation with `relative_sink` and `recommended_yaml`,\nconfidence/evidence locators, `impact: \"high\"`, `requires_approval: true`,\n`autopilot_eligible: false`, and one decision whose allowed responses are exactly\n`[\"accept\", \"edit\", \"skip\"]`.",
+          "tier": "strong",
+          "when": null
+        }
+      ],
+      "params": [],
+      "precondition_result": {
+        "checks": [
+          {
+            "outcome": "pass",
+            "predicate": "wren_project_exists"
+          }
+        ],
+        "status": "pass"
+      },
+      "prompt_fragment": "## draft\n\nTurn the read-only gap inventory into concrete, minimal, append-only proposals. Do not apply them.\n\n- Treat the pinned project revision as input, not something to infer. Return canonicalizable draft\n  material and evidence locators, but do not invent or claim authoritative proposal hashes or content\n  digests. The host validates the sink and revision, canonicalizes the payload, and computes both.\n- Each proposed operation has exactly one allowed relative sink. Existing text, MDL fields, cubes,\n  and relationships are never overwritten.\n- A cube proposal must target `cubes/<name>/metadata.yml` and use Wren's cube schema: `name`,\n  `base_object`, `measures`, optional `dimensions` / `time_dimensions`, and `properties`. Measures and\n  dimensions may reference only columns that actually exist on the chosen base object. Never invent\n  columns, use model-MDL keys such as `columns` / `metrics` / `relationships`, or hide a required join\n  inside a cube expression. If one append-only operation cannot implement the gap, emit a paused\n  decision explaining the missing prerequisite instead of fabricating a payload.\n- For a cube, put the file body in `recommended_yaml` and follow this exact field grammar:\n  `measures: [{name, expression, type}]`, `dimensions: [{name, expression, type}]`, and\n  `time_dimensions: [{name, expression, type}]`. Use SQL aggregate expressions such as\n  `SUM(units_on_hand)` and Wren scalar types such as `BIGINT`, `INTEGER`, and `DATE`. Do not emit\n  `sql`, `model`, `columns`, `metrics`, or aggregation names such as `type: sum`.\n- Grill mode emits one decision request at a time with a concrete recommended draft and accepts only\n  accept, edit, or skip for that operation. Skip is final for this run.\n- Autopilot may mark only append-only low-risk model/column descriptions, knowledge rules, and\n  NL-to-SQL pairs as eligible to apply. It must pause for raw-vs-current conflicts, ambiguous sink\n  selection, and every new cube, view, relationship, MDL metric, or calculated column.\n- Mark all inference and partial-raw evidence with confidence. Do not include raw text, credentials,\n  local paths, provider-session ids, or SDK internals in the host-facing proposal.\n- A new cube is high impact, always requires approval, and is never autopilot-eligible.\n\nProduce `enrichment_proposal`; approval, canonical hashes/digests, and application are deterministic\nhost responsibilities. Your FINAL message must be one JSON object only. Do not include prose or\nMarkdown fences. The top level is `{ \"enrichment_proposal\": { ... } }`; for Grill it contains the\nsupplied `project_revision`, exactly one operation with `relative_sink` and `recommended_yaml`,\nconfidence/evidence locators, `impact: \"high\"`, `requires_approval: true`,\n`autopilot_eligible: false`, and one decision whose allowed responses are exactly\n`[\"accept\", \"edit\", \"skip\"]`.",
+      "realization_kind": "skill",
+      "required_capabilities": [
+        "semantic_introspection",
+        "llm:strong"
+      ],
+      "trigger": {
+        "kind": "one_shot"
+      },
+      "type": "analytical",
+      "verb": "draft_enrichment"
+    },
+    {
+      "borrowed_actions": [],
+      "context_binding": {
+        "binding_mode": "pinned",
+        "project": "../../../../examples/v5-jaffle"
+      },
+      "context_precondition": [
+        {
+          "predicate": "wren_project_exists"
+        }
+      ],
+      "context_requirements": [
+        "an existing pinned Wren project whose semantic layer parses and has a successful build proof"
+      ],
+      "effect": {
+        "outcome": {
+          "change_type": "context_enrichment",
+          "kind": "mutation",
+          "target": "context"
+        },
+        "render_blocks": [
+          {
+            "fields": {},
+            "type": "diff"
+          },
+          {
+            "fields": {},
+            "type": "status"
+          }
+        ]
+      },
+      "eval": {
+        "metrics": [
+          "enrichment_apply_safety",
+          "compliance"
+        ],
+        "template_ref": "eval/"
+      },
+      "eval_ref": "apply_enrichment.eval",
+      "guardrails": [
+        {
+          "locked": true,
+          "name": "must_dry_run"
+        },
+        {
+          "locked": true,
+          "name": "human_approval"
+        },
+        {
+          "locked": true,
+          "name": "no_silent_overwrite"
+        },
+        {
+          "locked": true,
+          "name": "context_write_authz",
+          "scope": "enrichment-sinks"
+        },
+        {
+          "locked": true,
+          "name": "rollback_available"
+        }
+      ],
+      "id": "apply_enrichment",
+      "llm_calls": [],
+      "params": [],
+      "precondition_result": {
+        "checks": [
+          {
+            "outcome": "pass",
+            "predicate": "wren_project_exists"
+          }
+        ],
+        "status": "pass"
+      },
+      "prompt_fragment": "",
+      "realization_kind": "gated-tool",
+      "required_capabilities": [
+        "context_write_authz",
+        "context_validate",
+        "context_build",
+        "version_control",
+        "human_approval",
+        "enrichment_apply:deterministic"
+      ],
+      "trigger": {
+        "kind": "one_shot"
+      },
+      "type": "constitutive",
+      "verb": "apply_enrichment"
+    }
+  ],
+  "config": {},
+  "context_binding": {
+    "binding_mode": "pinned",
+    "project": "../../../../examples/v5-jaffle",
+    "resolved": {
+      "dimensions": [
+        {
+          "name": "customer_id",
+          "temporal": false
+        },
+        {
+          "name": "name",
+          "temporal": false
+        },
+        {
+          "name": "order_date",
+          "temporal": true
+        }
+      ],
+      "lineage": {
+        "consumers": {
+          "dashboards": 0,
+          "queries": 1
+        },
+        "edges": 7,
+        "nodes": 8,
+        "resolvable": true
+      },
+      "metrics": [
+        {
+          "additivity": "additive",
+          "declared": true,
+          "name": "total_revenue"
+        },
+        {
+          "additivity": "additive",
+          "declared": true,
+          "name": "order_count"
+        },
+        {
+          "declared": false,
+          "name": "id"
+        },
+        {
+          "declared": false,
+          "name": "id"
+        },
+        {
+          "declared": false,
+          "name": "customer_id"
+        },
+        {
+          "declared": false,
+          "name": "amount"
+        }
+      ],
+      "models": [
+        "customers",
+        "orders"
+      ],
+      "time_dimensions": [
+        "order_date"
+      ]
+    }
+  },
+  "profile": "genbi-enrich-context",
+  "warble_ir_version": "0.6"
+}

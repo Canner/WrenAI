@@ -1,9 +1,9 @@
 /**
  * Which back-end a compiled IR is realized for.
  *
- * - `"agnostic"` — Mode A: the compiled IR is additionally dispatched to a **vercel bundle**
+ * - `"agnostic"` — in-process: the compiled IR is additionally dispatched to a **vercel bundle**
  *   (`warble dispatch --target vercel`), the format this package's `runAgent()` consumes.
- * - `"native"` — Mode B: IR only. Dispatching to a file-based target (`claude-code:*`) produces
+ * - `"native"` — dispatched: IR only. Dispatching to a file-based target (`claude-code:*`) produces
  *   agent files on disk, not something this harness loads/runs — out of scope for this package.
  */
 export type CompileMode = "agnostic" | "native";
@@ -27,6 +27,13 @@ export interface CompileCacheKey {
    * compiled, instead of silently serving an artifact built by a now-stale `warble`.
    */
   readonly warbleIdentity: string;
+  /**
+   * The Hub component-library root passed to `warble compile --hub-dir` (see `resolveHubDir`), or
+   * `undefined` when none could be derived and the compile therefore ran against warble's own
+   * compiled-in default. Two compiles that differ only by Hub root read different component
+   * libraries and must not share a cached artifact — the same reason `warbleIdentity` is here.
+   */
+  readonly hubDir: string | undefined;
 }
 
 export interface CompileCacheEntry {
@@ -54,7 +61,7 @@ export interface CompileProfileOptions {
   /** Explicit path to the `warble` binary. See `resolveWarbleBinary` for the full resolution order when omitted. */
   readonly warbleBin?: string;
   /**
-   * `--provider` fragment paths for the Mode A vercel dispatch (ignored in `"native"` mode).
+   * `--provider` fragment paths for the in-process vercel dispatch (ignored in `"native"` mode).
    * Defaults to this package's bundled `providers/wren.provider.yaml` (the wren capability-provider
    * fragment already used to produce `fixtures/genbi-default.native.bundle.json`). Pass `[]`
    * explicitly to dispatch with no provider fragments at all.
@@ -72,6 +79,15 @@ export interface CompileProfileOptions {
    * hit skip touching the binary at all.
    */
   readonly warbleIdentity?: string;
+  /**
+   * Explicit Hub component-library root for `warble compile --hub-dir`. When omitted it is derived
+   * from the resolved `warble` binary (see `resolveHubDir`) so the compiler and its Hub always come
+   * from the same warble version — prefer that over setting this. Like `warbleIdentity`, this also
+   * doubles as an escape hatch: because the derived value is a cache-key input, computing the key
+   * without it has to resolve the binary even for what would otherwise be a cache hit. Pass both to
+   * make a hit touch the binary not at all.
+   */
+  readonly hubDir?: string;
 }
 
 /**

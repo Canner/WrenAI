@@ -13,10 +13,10 @@ export type ArtifactContentUnavailableReason = "missing" | "unreadable" | "outsi
  * `location` is read back and classified into exactly one of these forms —
  * never a fabricated fourth shape:
  * - `envelope`: the file parses as JSON and is envelope-shaped (has a
- *   `blocks` array) — this is what Mode B (`generate_dashboard`/report/chart
+ *   `blocks` array) — this is what dispatched (`generate_dashboard`/report/chart
  *   agents) always persists.
  * - `text`: the file exists and is readable but isn't envelope-shaped JSON —
- *   this is the common case for Mode A's `write_artifact` tool, which lets
+ *   this is the common case for in-process's `write_artifact` tool, which lets
  *   the model write arbitrary content (HTML, markdown, plain JSON, ...).
  * - `unavailable`: nothing could be read back; `reason` says why. Every
  *   `unavailable` is a caller-visible degrade to metadata-only, never a
@@ -30,11 +30,11 @@ export type ArtifactContentDto =
 
 /**
  * Resolves an `ArtifactRow.location` back to its on-disk content, scoped to
- * `artifactsRoot` (the same root `resolveArtifactsDir` computes for Mode A/B
- * writes — see `mode-a.ts` and `turn.ts`'s `maybeCreateModeBArtifact`).
- * `location` may be relative (Mode A, written under the model's chosen
+ * `artifactsRoot` (the same root `resolveArtifactsDir` computes for in-process/B
+ * writes — see `in-process.ts` and `turn.ts`'s `maybeCreateDispatchedArtifact`).
+ * `location` may be relative (in-process, written under the model's chosen
  * `write_artifact` path, itself scoped to `artifactsRoot` at write time — see
- * `resolveWithinScope` in `exec/local.ts`) or absolute (Mode B always writes
+ * `resolveWithinScope` in `exec/local.ts`) or absolute (dispatched always writes
  * an absolute `location`).
  *
  * Containment is checked twice, mirroring `resolveWithinScope`'s

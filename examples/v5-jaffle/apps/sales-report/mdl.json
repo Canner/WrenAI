@@ -54,6 +54,13 @@
           "properties": {}
         },
         {
+          "name": "order_date",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        },
+        {
           "name": "amount",
           "type": "DOUBLE",
           "isCalculated": false,
@@ -63,7 +70,7 @@
       ],
       "primaryKey": "id",
       "cached": false,
-      "refSql": "SELECT id, customer_id, amount FROM public.raw_orders"
+      "refSql": "SELECT id, customer_id, order_date, amount FROM public.raw_orders"
     }
   ],
   "relationships": [

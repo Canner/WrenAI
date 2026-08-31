@@ -1,0 +1,51 @@
+# connect_source — onboard a NEW data source into a wren project. First half of the genbi-setup
+# flow (see ../../profile.yml): scaffolds a project and writes an EMPTY .env credential template, but
+# never fills in, reads, or echoes a credential value itself -- that is a human hand-off, enforced
+# both in steps/connect.md and by the setup_execution guardrail below.
+#
+# Deliberately `type: analytical` + `realization_kind: skill` + `outcome.kind: none` -- NOT
+# `constitutive`/`gated-tool`. Dispatch keys on (realization_kind, outcome.kind, trigger.kind), never
+# on id/verb (see .claude/CLAUDE.md invariant #1), so this is a legitimate skill-family component like
+# answer_query, just guarded by `setup_execution` instead of `read_only_execution`. Modeling this as
+# constitutive/gated-tool would pull in the `human_approval` guardrail, which resolves `fail`
+# (safety-critical, no approval channel) on a headless target and loud-fails compilation/dispatch --
+# onboarding must run headless, so it stays on the skill + guarded-Bash lifecycle instead.
+
+id: connect_source
+verb: connect_source
+type: analytical
+realization_kind: skill
+
+binding_mode: runtime_selected
+context_requirements:
+  - "no pre-existing wren project required -- this component scaffolds one from a new data source"
+# No context_precondition: unlike every MDL-consuming component, there is nothing to probe about an
+# existing semantic layer at connect time -- that absence is the entire reason this profile exists.
+
+params: []
+
+llm_steps:
+  # Single strong step: avoids requiring llm:per_step_tier (there is exactly one tier in play, same
+  # shape as build_context's single step).
+  - { name: connect, tier: strong, prompt_ref: steps/connect.md, produces: connection_summary }
+trigger: { kind: one_shot }
+guardrails:
+  # setup_execution (the 5th enforcement point): scoped to the project root ("."). Broadens Bash
+  # beyond `wren` (connector CLIs like `dlt`) and allows Write/Edit inside this scope instead of
+  # denying outright -- both still bounded to the scope and still subject to the destructive/
+  # redirection denylist, which is never relaxed. See
+  # the Claude Agent SDK dispatcher's guardrail config (GuardConfig.setupScope).
+  - { name: setup_execution, locked: true, scope: "." }
+required_capabilities:
+  - source_connect
+  - llm:strong
+borrowed_actions: []
+
+effect:
+  render_blocks: []
+  outcome:
+    kind: none
+
+eval:
+  template_ref: eval/
+  metrics: [connect_success]

@@ -23,6 +23,7 @@ const KEY: CompileCacheKey = {
   mode: "agnostic",
   providerFragmentHash: "providers-a",
   warbleIdentity: "warble-a",
+  hubDir: "/hub-a/components",
 };
 const OTHER_KEY: CompileCacheKey = { ...KEY, profileHash: "hash-b" };
 
@@ -54,6 +55,13 @@ describe("createInMemoryCompileCache", () => {
     const cache = createInMemoryCompileCache();
     await cache.set(KEY, { irPath: "/tmp/ir.json" });
     expect(await cache.get({ ...KEY, warbleIdentity: "warble-b" })).toBeUndefined();
+  });
+
+  it("misses when only the Hub root differs, and an absent Hub root is its own slot rather than an alias for one", async () => {
+    const cache = createInMemoryCompileCache();
+    await cache.set(KEY, { irPath: "/tmp/ir.json" });
+    expect(await cache.get({ ...KEY, hubDir: "/hub-b/components" })).toBeUndefined();
+    expect(await cache.get({ ...KEY, hubDir: undefined })).toBeUndefined();
   });
 });
 

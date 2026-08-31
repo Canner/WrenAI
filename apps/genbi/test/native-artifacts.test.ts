@@ -248,6 +248,66 @@ describe("native-session artifact service", () => {
     fixture.store.close();
   });
 
+  it("selects the latest retained answer within the active session without recomputing", async () => {
+    const fixture = createFixture();
+    const descriptor = fixture.issue();
+    const queryRoute = vi.fn(async (_options: RouteOptions): Promise<RouteResult> => ({ backend: "agent", warnings: [], kind: "answer", envelope: { blocks: [] }, trace: { steps: [] } }));
+    const app = createApp({ ...depsFor(fixture.store, fixture.outDir, fixture.service), route: queryRoute });
+    fixture.service.persistAnswer(descriptor.credential, structuredAnswerPayload({
+      idempotency_key: "answer-latest-0001",
+      envelope: { verified: true, blocks: [{ type: "table", columns: ["month", "orders"], rows: [["Jan", 42]] }] },
+    }));
+    const latest = fixture.service.persistAnswer(descriptor.credential, structuredAnswerPayload({
+      idempotency_key: "answer-latest-0002",
+      envelope: { verified: true, blocks: [{ type: "table", columns: ["month", "orders"], rows: [["Feb", 7]] }] },
+    }));
+
+    const response = await app.request("/api/native-sessions/mcp", mcpCall(descriptor.credential, {
+      version: "1", name: "Latest exact answer", answer_selection: "latest", idempotency_key: "latest-save-0001",
+    }));
+    expect(response.status).toBe(200);
+    expect(queryRoute).toHaveBeenCalledTimes(0);
+    const saved = (await response.json() as { result: { structuredContent: { artifact_id: string } } }).result.structuredContent;
+    const artifact = fixture.store.getArtifact(saved.artifact_id)!;
+    const stored = fixture.store.getNativeStructuredAnswer(latest.answer_ref)!;
+    expect(artifact).toMatchObject({ sourceAnswerId: latest.answer_ref, contentDigest: latest.digest });
+    expect(readFileSync(path.join(resolveArtifactsDir(fixture.outDir), artifact.location), "utf8")).toBe(stored.envelopeJson);
+    fixture.store.close();
+  });
+
+  it("keeps latest-answer selection session-scoped and fails closed when none exists", () => {
+    const fixture = createFixture();
+    const descriptor = fixture.issue();
+    const other = fixture.store.createNativeSession({ id: "native-other-latest", purpose: "analysis", vendor: "codex", agent: "genbi-analysis", scopeKind: "bound_project", scopeId: "scope-other-latest", projectIdentity: fixture.binding.identity, bindingGeneration: fixture.binding.generation, projectRevision: fixture.binding.revision });
+    fixture.store.transitionNativeSession(other.id, "running", { started: true });
+    const otherCredential = fixture.service.issue(fixture.store.getNativeSession(other.id)!, fixture.binding);
+    fixture.service.persistAnswer(otherCredential.credential, structuredAnswerPayload({ idempotency_key: "other-latest-0001" }));
+
+    expect(() => fixture.service.save(descriptor.credential, {
+      version: "1", name: "No cross-session fallback", answer_selection: "latest", idempotency_key: "latest-save-0002",
+    })).toThrow(new NativeArtifactError("no persisted answer is available for this native session", 404));
+    expect(fixture.store.listArtifacts()).toHaveLength(0);
+    fixture.store.close();
+  });
+
+  it("resolves latest-answer selection before honoring an idempotent retry", () => {
+    const fixture = createFixture();
+    const descriptor = fixture.issue();
+    fixture.service.persistAnswer(descriptor.credential, structuredAnswerPayload({ idempotency_key: "latest-fence-answer-0001" }));
+    fixture.service.save(descriptor.credential, {
+      version: "1", name: "Latest answer", answer_selection: "latest", idempotency_key: "latest-fence-save-0001",
+    });
+    fixture.service.persistAnswer(descriptor.credential, structuredAnswerPayload({
+      idempotency_key: "latest-fence-answer-0002",
+      envelope: { verified: true, blocks: [{ type: "table", columns: ["month", "orders"], rows: [["Mar", 9]] }] },
+    }));
+
+    expect(() => fixture.service.save(descriptor.credential, {
+      version: "1", name: "Latest answer", answer_selection: "latest", idempotency_key: "latest-fence-save-0001",
+    })).toThrow(new NativeArtifactError("artifact idempotency key is already bound to a different save request", 409));
+    fixture.store.close();
+  });
+
   it("accepts table-only and table-plus-definition answers but rejects third render shapes", () => {
     const fixture = createFixture();
     const descriptor = fixture.issue();
@@ -298,7 +358,13 @@ describe("native-session artifact service", () => {
 
     expect(() => fixture.service.save(descriptor.credential, {
       version: "1", name: "First answer", idempotency_key: "reference-fence-0001",
-    })).toThrow("invalid Save to Artifacts payload: provide exactly one of envelope or answer_ref");
+    })).toThrow("invalid Save to Artifacts payload: provide exactly one of envelope, answer_ref, or answer_selection");
+    expect(() => fixture.service.save(descriptor.credential, {
+      version: "1", name: "Mixed source", answer_ref: first.answer_ref, answer_selection: "latest", idempotency_key: "reference-fence-0001",
+    })).toThrow("invalid Save to Artifacts payload: provide exactly one of envelope, answer_ref, or answer_selection");
+    expect(() => fixture.service.save(descriptor.credential, {
+      version: "1", name: "Invalid selection", answer_selection: "oldest", idempotency_key: "reference-fence-0001",
+    })).toThrow("invalid Save to Artifacts payload: answer_selection must be latest");
     expect(() => fixture.service.save(descriptor.credential, {
       version: "1", name: "First answer", answer_ref: "answer-00000000-0000-4000-8000-000000000000", idempotency_key: "reference-fence-0001",
     })).toThrow(new NativeArtifactError("persisted answer reference was not found", 404));
@@ -449,6 +515,7 @@ describe("native-session artifact service", () => {
       expect(persistedBlockTypes).toEqual(["table", "definition"]);
       const advertisedSchema = listedSchemas[1]!.inputSchema;
       expect(advertisedSchema).toEqual(NATIVE_SAVE_DASHBOARD_CONTRACT.inputSchema);
+      expect(advertisedSchema.properties.answer_selection).toMatchObject({ const: "latest" });
       const variants = advertisedSchema.properties.envelope.properties.blocks.items.oneOf;
       expect(variants.map((variant) => variant.properties.type.const)).toEqual(["kpi_card", "table", "chart", "definition", "narrative"]);
       expect(advertisedSchema.properties.name.pattern).toBe("\\S");

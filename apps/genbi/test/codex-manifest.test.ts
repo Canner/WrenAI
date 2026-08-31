@@ -95,7 +95,7 @@ describe("Codex manifest adapter", () => {
 const dashboard = component === "generate_dashboard";
 console.log(JSON.stringify({
   manifest_version: "0.1",
-  compat: { min_ir_version: "0.5", max_ir_version: "0.5" },
+  compat: { min_ir_version: "0.6", max_ir_version: "0.6" },
   profile: "genbi-default",
   target: "codex:local",
   agents: [{

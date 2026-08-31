@@ -1,14 +1,18 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ComplianceError } from "../harness/compliance/index.js";
 import { compileProfile } from "../harness/compile/pipeline.js";
 import { resolveWarbleBinary } from "../harness/compile/resolve-binary.js";
-import { buildAgentSdkChatArgs, runModeBDefault } from "../harness/route/index.js";
+import { buildAgentSdkChatArgs, runDispatchedDefault } from "../harness/route/index.js";
 import type { ResolvedCli } from "../harness/route/index.js";
 import { WARBLE_REPO } from "./warble-checkout.js";
 
-const PROFILE_SOURCE = path.join(WARBLE_REPO, "genbi-default");
+/** This package's own `profiles/` tree — the GenBI profiles now live here, not in a Warble checkout. */
+const PROFILES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "profiles");
+
+const PROFILE_SOURCE = path.join(PROFILES_DIR, "genbi-default");
 const JAFFLE_WREN = path.join(WARBLE_REPO, "examples", "jaffle-wren");
 
 async function isWarbleAvailable(): Promise<boolean> {
@@ -42,7 +46,7 @@ describe.skipIf(!canRun)(
         irPath: compiled.irPath,
         userProject: JAFFLE_WREN,
         question: "who is our top customer?",
-        outDir: "/tmp/wren-harness-mode-b-test-run",
+        outDir: "/tmp/wren-harness-dispatched-test-run",
         warbleBin,
       });
 
@@ -55,7 +59,7 @@ describe.skipIf(!canRun)(
         "--component",
         "answer_query",
         "--out",
-        "/tmp/wren-harness-mode-b-test-run",
+        "/tmp/wren-harness-dispatched-test-run",
         "--warble-bin",
         warbleBin,
         "--stream-json",
@@ -220,10 +224,10 @@ describe("buildAgentSdkChatArgs (pure, no environment dependency)", () => {
   });
 });
 
-describe("runModeBDefault (provider guard, pure — throws before compiling/spawning)", () => {
+describe("runDispatchedDefault (provider guard, pure — throws before compiling/spawning)", () => {
   it("loud-fails when authChoice.provider is \"codex\" instead of silently routing to the Claude dispatcher", async () => {
     await expect(
-      runModeBDefault({
+      runDispatchedDefault({
         authChoice: { mode: "subscription", provider: "codex" },
         profileSource: "/nonexistent/profile",
         userProject: "/nonexistent/project",
@@ -233,10 +237,10 @@ describe("runModeBDefault (provider guard, pure — throws before compiling/spaw
   });
 });
 
-describe("runModeBDefault (belt: re-runs enforceCompliance itself, independent of route())", () => {
+describe("runDispatchedDefault (belt: re-runs enforceCompliance itself, independent of route())", () => {
   it("throws ComplianceError on subscription + deployment: hosted even when called directly, before compiling/spawning", async () => {
     await expect(
-      runModeBDefault({
+      runDispatchedDefault({
         authChoice: { mode: "subscription", provider: "claude" },
         profileSource: "/nonexistent/profile",
         userProject: "/nonexistent/project",
@@ -251,7 +255,7 @@ describe("runModeBDefault (belt: re-runs enforceCompliance itself, independent o
     // rejects, but on the provider guard, not ComplianceError — proving the belt gate itself let
     // "personal" through.
     await expect(
-      runModeBDefault({
+      runDispatchedDefault({
         authChoice: { mode: "subscription", provider: "codex" },
         profileSource: "/nonexistent/profile",
         userProject: "/nonexistent/project",

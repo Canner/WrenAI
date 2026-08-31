@@ -49,7 +49,7 @@ describe('EnvelopeView', () => {
 
   it('renders table cells for object rows keyed by column name', () => {
     // Some agent outputs emit rows as objects keyed by column name rather
-    // than positional arrays (e.g. Mode B `wren -q -o json`).
+    // than positional arrays (e.g. Dispatched `wren -q -o json`).
     const envelope: RenderEnvelope = {
       verified: true,
       blocks: [

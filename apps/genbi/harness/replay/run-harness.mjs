@@ -33,7 +33,7 @@
  * case and reports it as the expected outcome given the current (empty) cassette directory,
  * rather than as a bug in the harness. It still proves real, valuable things in that state: the
  * BFF boots in bootstrap mode, `POST /api/setup/connect` accepts the request and dispatches a
- * real turn through the real `ModeBSetupRunner` → real spawn → the real
+ * real turn through the real `DispatchedSetupRunner` → real spawn → the real
  * `WREN_HARNESS_AGENT_SDK_BIN` executable, and the SSE stream reports the resulting failure
  * instead of hanging silently. What it does NOT prove without a real cassette: that the recorded
  * bytes correctly drive `server/fold.ts` and the setup terminal gate to an `ok` outcome — that
@@ -51,7 +51,7 @@ import { fileURLToPath } from "node:url";
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 // `--component connect_source` is CONNECT_SOURCE_AGENT_ID (harness/setup/runner.ts); `"chat"` is
-// the Mode B subcommand literal (harness/route/mode-b.ts's buildAgentSdkChatArgs). See
+// the dispatched subcommand literal (harness/route/dispatched.ts's buildAgentSdkChatArgs). See
 // cassette-key.mjs's doc comment for the full keying rule.
 const CONNECT_CASSETTE_KEY = "chat__connect_source__default";
 const READY_TIMEOUT_MS = 15000;
@@ -77,7 +77,6 @@ async function main() {
   process.stdout.write(`run-harness: temp workspace ${tmpRoot}\n`);
 
   const env = { ...process.env };
-  delete env.WREN_HARNESS_PROJECT; // force bootstrap mode regardless of the caller's own shell env
   Object.assign(env, {
     PORT: String(port),
     WREN_BFF_DB_PATH: dbPath,

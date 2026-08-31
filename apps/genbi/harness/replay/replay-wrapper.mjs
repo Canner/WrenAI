@@ -36,7 +36,7 @@
  * This wrapper does not validate that a cassette's lines still match the current dispatcher
  * protocol — it doesn't parse them at all, just re-emits the bytes. That validation happens for
  * free, downstream, in the real code this harness is exercising: `harness/route/chat-event-
- * mapper.ts`'s `parseWarbleChatEventLine` (Mode B) / the Codex event mapper drop any line that
+ * mapper.ts`'s `parseWarbleChatEventLine` (dispatched) / the Codex event mapper drop any line that
  * doesn't structurally match their current vocabulary, silently for a single malformed line but
  * visibly (a stalled or errored turn, an empty work log) if a whole cassette has gone stale
  * against a changed protocol. A cassette recorded against an old wire shape does not cause a
@@ -59,7 +59,7 @@ async function main() {
   }
 
   // Drain and discard stdin unconditionally: a real caller may write a question/prompt and close
-  // stdin (Mode B) or write nothing at all (Codex, which never touches this wrapper's stdin). This
+  // stdin (dispatched) or write nothing at all (Codex, which never touches this wrapper's stdin). This
   // wrapper never reads stdin content — a cassette is a canned reply keyed on argv, not on the
   // request text — but it must not let an un-drained pipe hang the caller waiting on `stdin.end()`
   // to flush.

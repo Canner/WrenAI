@@ -1,3 +1,4 @@
+import { buildNativeLaunchSpec } from "./native-launch-spec.js";
 import { chmodSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -5,7 +6,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Store } from "../server/db.js";
 import { createApp } from "../server/app.js";
-import { NATIVE_SESSION_IDLE_TTL_MS, NATIVE_SESSION_INITIAL_ATTACHMENT_GRACE_MS, NATIVE_SESSION_POST_CLAIM_DETACH_GRACE_MS, NATIVE_SETUP_BOOTSTRAP_ROOT_ENV_VAR, NativeSessionService, nativeSessionLaunchFailure, nativeSessionLifecycle, readNativeLaunchSpec } from "../server/native-sessions.js";
+import { NATIVE_SESSION_IDLE_TTL_MS, NATIVE_SESSION_INITIAL_ATTACHMENT_GRACE_MS, NATIVE_SESSION_POST_CLAIM_DETACH_GRACE_MS, NATIVE_SETUP_BOOTSTRAP_ROOT_ENV_VAR, NativeSessionService, nativeSessionLaunchFailure, nativeSessionLifecycle, readNativeLaunchSpec, resolvePinnedCodexExecutable } from "../server/native-sessions.js";
 import { createNativeSessionWorkspace, initializeNativeSessionStateBase } from "../server/native-session-workspace.js";
 import { sealNativeClaudeResumeHandle, sealNativeResumeHandle, unsealNativeClaudeResumeHandle, unsealNativeResumeHandle } from "../server/native-session-resume.js";
 import type { NativeSessionServiceOptions } from "../server/native-sessions.js";
@@ -22,10 +23,11 @@ function welcomeFor(purpose: "analysis" | "setup" | "context_enrichment") {
       ? "Help me analyze this data. Ask me what question I want to answer about the server-bound project."
       : "Help me inspect this project's context and draft a read-only enrichment proposal. Do not apply changes; ask what context I want to review.";
 }
-// Independent fixture copy of Warble's reviewed `NativePurpose::claude_agent()` mapping. Do not
-// derive this from production `claudeScopeEntry`: these fixtures must fail if the validator drifts
-// back to accepting a profile-wide scope entry for a driver-only native purpose.
-const PINNED_CLAUDE_PURPOSES: readonly ("analysis" | "setup" | "context_enrichment")[] = ["analysis", "setup", "context_enrichment"];
+// Independent fixture copy of which purposes pin one component. Do not derive this from production
+// `claudeScopeEntry`: it is a second key, so a production edit alone cannot quietly re-point every
+// fixture in this file at whatever the validator now happens to accept. Changing an entry form is
+// meant to require editing both, and to fail loudly here until it does.
+const PINNED_CLAUDE_PURPOSES: readonly ("analysis" | "setup" | "context_enrichment")[] = ["setup", "context_enrichment"];
 function claudeScopeEntry(purpose: "analysis" | "setup" | "context_enrichment", vendor: "claude" | "codex") {
   return vendor === "claude" && !PINNED_CLAUDE_PURPOSES.includes(purpose);
 }
@@ -42,12 +44,9 @@ function fixture(purpose: "analysis" | "setup" | "context_enrichment", vendor: "
   const agent = purpose === "analysis" ? "answer_query" : purpose === "setup" ? "connect_source" : "draft_enrichment";
   const target = vendor === "claude" ? "claude-code:interactive" : "codex:interactive";
   const scopeEntry = claudeScopeEntry(purpose, vendor);
-  writeFileSync(path.join(dir, ".warble", "interactive-launch.json"), JSON.stringify({
-    version: "2", target, purpose, executable: vendor === "claude" ? "claude" : "codex",
-    argv: scopeEntry ? [] : vendor === "claude" ? ["--agent", agent] : [],
-    agent: scopeEntry ? { kind: "claude_scope", name: profileFor(purpose) } : vendor === "claude" ? { kind: "claude_agent", name: agent } : { kind: "codex_skill", name: `genbi-${purpose === "context_enrichment" ? "enrich-context" : purpose}` },
-    scope, cwd: dir, artifact_root: dir, handoff_path: path.join(dir, "RUN.md"),
-  }));
+  writeFileSync(path.join(dir, ".warble", "interactive-launch.json"), JSON.stringify(buildNativeLaunchSpec({
+    version: "2", target, purpose, out: dir, scope, entryVerb: agent, scopeEntry, profile: profileFor(purpose),
+  })));
   return { dir, binding };
 }
 
@@ -60,18 +59,24 @@ function writeNativeLaunchSpec(cwd: string, purpose: "analysis" | "setup" | "con
   const agent = purpose === "analysis" ? "answer_query" : purpose === "setup" ? "connect_source" : "draft_enrichment";
   const target = vendor === "claude" ? "claude-code:interactive" : "codex:interactive";
   const scopeEntry = claudeScopeEntry(purpose, vendor);
-  const { cwd: _cwd, version: _version, ...launchScope } = scope;
+  // Warble's launch_value() echoes only these four fields, so the fixture must too. This used to
+  // strip by omission, which meant every new scope field leaked into the echoed spec and failed the
+  // host's exact-key check somewhere unrelated — name what is echoed instead.
+  const launchScope = {
+    kind: scope.kind,
+    scope_id: scope.scope_id,
+    bootstrap_root: scope.bootstrap_root,
+    binding: scope.binding,
+  };
   mkdirSync(path.join(cwd, ".warble"), { recursive: true });
   writeFileSync(path.join(cwd, "RUN.md"), "handoff");
-  writeFileSync(path.join(cwd, ".warble", "interactive-launch.json"), JSON.stringify({
-    version: v4 ? "4" : "2", target, purpose, executable: vendor === "claude" ? "claude" : "codex",
-    argv: scopeEntry
-      ? (v4 ? [welcomeFor(purpose)] : [])
-      : v4 ? (vendor === "claude" ? ["--agent", agent, welcomeFor(purpose)] : [welcomeFor(purpose)]) : (vendor === "claude" ? ["--agent", agent] : []),
-    agent: scopeEntry ? { kind: "claude_scope", name: profileFor(purpose) } : vendor === "claude" ? { kind: "claude_agent", name: agent } : { kind: "codex_skill", name: `genbi-${purpose === "context_enrichment" ? "enrich-context" : purpose}` },
-    ...(v4 ? { mcp: { server_name: "genbi_session", credential_env_var: NATIVE_MCP_CREDENTIAL_ENV_VAR }, ...(purpose === "setup" ? { bootstrap_root: scope.bootstrap_root } : {}) } : { scope: { ...launchScope, bootstrap_root: launchScope.bootstrap_root ?? null, binding: launchScope.binding ?? null } }),
-    cwd, artifact_root: cwd, handoff_path: path.join(cwd, "RUN.md"),
-  }));
+  writeFileSync(path.join(cwd, ".warble", "interactive-launch.json"), JSON.stringify(buildNativeLaunchSpec({
+    version: v4 ? "4" : "2", target, purpose, out: cwd, entryVerb: agent, welcome: welcomeFor(purpose),
+    scopeEntry, profile: profileFor(purpose),
+    scope: v4
+      ? scope
+      : { ...launchScope, bootstrap_root: launchScope.bootstrap_root ?? null, binding: launchScope.binding ?? null },
+  })));
   if (v4 && vendor === "codex") {
     mkdirSync(path.join(cwd, ".codex"), { recursive: true });
     writeFileSync(path.join(cwd, ".codex", "config.toml"), [
@@ -115,8 +120,8 @@ const scopeKeys = sorted(scope);
 const mcpKeys = sorted(mcp);
 const preflightBound = String(scope.scope_id).startsWith("preflight-") && purpose !== "setup";
 const expectedScopeKeys = target === "codex:interactive"
-  ? (String(scope.scope_id).startsWith("preflight-") && !preflightBound ? ["cwd", "kind", "scope_id", "version", "wren_runtime"] : ["binding", "cwd", "kind", "scope_id", "version", "wren_runtime"])
-  : (String(scope.scope_id).startsWith("preflight-") && !preflightBound ? ["cwd", "kind", "scope_id", "version"] : ["binding", "cwd", "kind", "scope_id", "version"]);
+  ? (String(scope.scope_id).startsWith("preflight-") && !preflightBound ? ["cwd", "entry", "kind", "scope_id", "version", "wren_runtime"] : ["binding", "cwd", "entry", "kind", "scope_id", "version", "wren_runtime"])
+  : (String(scope.scope_id).startsWith("preflight-") && !preflightBound ? ["cwd", "entry", "kind", "scope_id", "version"] : ["binding", "cwd", "entry", "kind", "scope_id", "version"]);
 const scopeExact = JSON.stringify(scopeKeys) === JSON.stringify(expectedScopeKeys);
 const mcpExact = JSON.stringify(mcpKeys) === JSON.stringify(["credential", "url", "version"]);
 const scopeMode = statSync(scopePath).mode & 0o777;
@@ -125,7 +130,7 @@ const descriptorExact = mcp.version === "1" && typeof mcp.url === "string" && mc
 if (!scopeExact || !mcpExact || !descriptorExact || scopeMode !== 0o600 || mcpMode !== 0o600 || Object.hasOwn(scope, "mcp")) process.exit(92);
 const agent = purpose === "analysis" ? "answer_query" : purpose === "setup" ? "connect_source" : "draft_enrichment";
 const profile = purpose === "analysis" ? "genbi-default" : purpose === "setup" ? "genbi-setup" : "genbi-enrich-context";
-const scopeEntry = false;
+const scopeEntry = target === "claude-code:interactive" && purpose === "analysis";
 const welcome = purpose === "setup"
   ? "Help me set up this GenBI project. Start by explaining the next setup step and ask what data source I want to connect."
   : purpose === "analysis"
@@ -133,6 +138,8 @@ const welcome = purpose === "setup"
     : "Help me inspect this project's context and draft a read-only enrichment proposal. Do not apply changes; ask what context I want to review.";
 mkdirSync(path.join(out, ".warble"), { recursive: true });
 writeFileSync(path.join(out, "RUN.md"), "handoff");
+// This is a standalone subprocess written to disk: it cannot import buildNativeLaunchSpec, so
+// this copy stays inline. native-launch-spec-contract.test.ts is what keeps the shape honest.
 writeFileSync(path.join(out, ".warble", "interactive-launch.json"), JSON.stringify({
   version: "4", target, purpose, executable: target === "claude-code:interactive" ? "claude" : "codex",
   argv: scopeEntry ? [welcome] : target === "claude-code:interactive" ? ["--agent", agent, welcome] : [welcome],
@@ -155,9 +162,59 @@ if (purpose === "context_enrichment" && !String(scope.scope_id).startsWith("pref
   chmodSync(executable, 0o700);
   return executable;
 }
+
+function fakeCodexAttestation(): Pick<NativeSessionServiceOptions, "codexBin" | "codexBinSha256" | "codexSource" | "codexSourceClosureSha256" | "codexVersion"> {
+  const root = mkdtempSync(path.join(tmpdir(), "genbi-native-codex-source-")); dirs.push(root);
+  const binDirectory = path.join(root, "bin"); mkdirSync(binDirectory);
+  const codexBin = path.join(binDirectory, "codex");
+  writeFileSync(codexBin, "#!/bin/sh\necho codex-cli 0.146.0\n"); chmodSync(codexBin, 0o700);
+  writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "@openai/codex", version: "0.146.0" }));
+  const closure = createHash("sha256");
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const candidate = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(candidate);
+      else if (entry.isFile()) { closure.update(path.relative(root, candidate)); closure.update("\0"); closure.update(readFileSync(candidate)); }
+    }
+  };
+  visit(root);
+  return {
+    codexBin,
+    codexBinSha256: createHash("sha256").update(readFileSync(codexBin)).digest("hex"),
+    codexSource: "npm:@openai/codex",
+    codexSourceClosureSha256: closure.digest("hex"),
+    codexVersion: "0.146.0",
+  };
+}
 afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
 
 describe("native session persistence", () => {
+  it("re-hashes the host-attested Codex executable and rejects same-path substitution", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "genbi-codex-pin-")); dirs.push(dir);
+    const bin = path.join(dir, "codex"); writeFileSync(bin, "#!/bin/sh\necho codex-cli 0.146.0\n"); chmodSync(bin, 0o700);
+    const digest = createHash("sha256").update(readFileSync(bin)).digest("hex");
+    expect(resolvePinnedCodexExecutable(bin, digest)).toBe(realpathSync(bin));
+    writeFileSync(bin, "#!/bin/sh\necho substituted\n"); chmodSync(bin, 0o700);
+    expect(() => resolvePinnedCodexExecutable(bin, digest)).toThrow("attested Codex executable is unavailable or has changed");
+    expect(() => resolvePinnedCodexExecutable("codex", digest)).toThrow("attested Codex executable is unavailable or has changed");
+  });
+
+  it("re-hashes the npm Codex source closure immediately before native launch", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "genbi-codex-npm-pin-")); dirs.push(root);
+    const binDirectory = path.join(root, "bin"); mkdirSync(binDirectory);
+    const bin = path.join(binDirectory, "codex"); writeFileSync(bin, "#!/bin/sh\necho codex-cli 0.146.0\n"); chmodSync(bin, 0o700);
+    const packageFile = path.join(root, "package.json"); writeFileSync(packageFile, JSON.stringify({ name: "@openai/codex", version: "0.146.0" }));
+    const executableSha256 = createHash("sha256").update(readFileSync(bin)).digest("hex");
+    const closure = createHash("sha256");
+    for (const file of [bin, packageFile]) {
+      closure.update(path.relative(root, file)); closure.update("\0"); closure.update(readFileSync(file));
+    }
+    const sourcePin = { source: "npm:@openai/codex" as const, closureSha256: closure.digest("hex"), version: "0.146.0" };
+    expect(resolvePinnedCodexExecutable(bin, executableSha256, sourcePin)).toBe(realpathSync(bin));
+    writeFileSync(packageFile, JSON.stringify({ name: "@openai/codex", version: "0.146.0", substituted: true }));
+    expect(() => resolvePinnedCodexExecutable(bin, executableSha256, sourcePin)).toThrow("attested Codex executable is unavailable or has changed");
+  });
+
   it.each([
     ["setup", "claude"], ["setup", "codex"],
     ["analysis", "claude"], ["analysis", "codex"],
@@ -183,7 +240,12 @@ describe("native session persistence", () => {
       warbleBin: "unused", producerAvailable: () => true, executableAvailable: () => true, artifactService: artifacts,
       dispatch: async ({ cwd, scope }) => {
         writeNativeLaunchSpec(cwd, purpose, vendor, scope, true);
-        expect(scope).toMatchObject({ version: "2", cwd: expect.stringContaining(`${path.sep}.genbi-native-state-`), ...(purpose === "setup" ? { bootstrap_root: realpathSync(dir) } : {}) });
+        // The version is deliberately not asserted here: this file writes it, so restating it
+        // proves nothing. Warble's preflight rejects an unsupported scope version, and
+        // native-launch-spec-contract.test.ts checks the shape against the real binary.
+        expect(scope).toMatchObject({ cwd: expect.stringContaining(`${path.sep}.genbi-native-state-`), entry: claudeScopeEntry(purpose, vendor)
+          ? { kind: "scope", prompt: expect.any(String) }
+          : { verb: expect.any(String), prompt: expect.any(String) }, ...(purpose === "setup" ? { bootstrap_root: realpathSync(dir) } : {}) });
       },
     });
     const readiness = await service.readiness();
@@ -475,8 +537,10 @@ describe("native session persistence", () => {
       workspaceRoot: workspace, irPaths: { analysis: undefined, setup: path.join(template.dir, "setup.json"), context_enrichment: undefined }, warbleBin: "unused", producerAvailable: () => true, executableAvailable: () => true,
       dispatch: async ({ cwd, scope }) => {
         mkdirSync(path.join(cwd, ".warble"), { recursive: true }); writeFileSync(path.join(cwd, "RUN.md"), "handoff");
-        const { version: _version, cwd: _scopeCwd, ...launchScope } = scope;
-        writeFileSync(path.join(cwd, ".warble", "interactive-launch.json"), JSON.stringify({ version: "2", target: "claude-code:interactive", purpose: "setup", executable: "claude", argv: ["--agent", "connect_source"], agent: { kind: "claude_agent", name: "connect_source" }, scope: { ...launchScope, binding: null }, cwd, artifact_root: cwd, handoff_path: path.join(cwd, "RUN.md") }));
+        // Warble's launch_value() echoes only these four fields. Stripping by omission let every
+        // new scope field leak into the echoed spec and fail the host's exact-key check.
+        const launchScope = { kind: scope.kind, scope_id: scope.scope_id, bootstrap_root: scope.bootstrap_root, binding: scope.binding };
+        writeFileSync(path.join(cwd, ".warble", "interactive-launch.json"), JSON.stringify(buildNativeLaunchSpec({ version: "2", target: "claude-code:interactive", purpose: "setup", out: cwd, entryVerb: "connect_source", scope: { ...launchScope, binding: null } })));
       },
     });
     await expect(service.readiness()).resolves.toMatchObject({ setup: { available: true, vendors: { claude: { available: true }, codex: { available: true } } } });
@@ -516,6 +580,29 @@ describe("native session persistence", () => {
 
   it("sanitizes unexpected launch failures", () => {
     expect(nativeSessionLaunchFailure(new Error("spawn /private/secret --token=abc"))).toBe("native session launch failed");
+  });
+
+  it("logs only the server-side launch phase when an unexpected boundary fails", async () => {
+    const { dir, binding } = fixture("analysis", "codex");
+    const store = new Store(":memory:");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const service = new NativeSessionService({
+      store,
+      terminalManager: async () => { throw new Error("spawn /private/secret --token=abc"); },
+      getBinding: () => binding,
+      workspaceRoot: undefined,
+      irPaths: { analysis: path.join(dir, "analysis.json"), setup: undefined, context_enrichment: undefined },
+      warbleBin: "unused",
+      dispatch: async ({ cwd, scope }) => writeNativeLaunchSpec(cwd, "analysis", "codex", scope),
+    });
+
+    await expect(service.create({ purpose: "analysis", vendor: "codex" })).rejects.toThrow("spawn /private/secret --token=abc");
+    expect(log).toHaveBeenCalledWith("[native-sessions] launch failed purpose=analysis vendor=codex phase=terminal_manager category=unexpected");
+    expect(log.mock.calls.flat().join(" ")).not.toMatch(/private|secret|token|abc/);
+    expect(store.listNativeSessions()).toEqual([expect.objectContaining({ status: "failed", failure: "native session launch failed" })]);
+
+    log.mockRestore();
+    store.close();
   });
 
   it("persists only a closed Setup recovery projection and fences restart actions", async () => {
@@ -832,14 +919,14 @@ describe("native session persistence", () => {
       dispatch: async ({ cwd, scope }) => writeNativeLaunchSpec(cwd, "analysis", "claude", scope),
     });
     const first = await service.create({ purpose: "analysis", vendor: "claude" });
-    const sessionId = spawned[0]![3]!;
-    expect(spawned[0]).toEqual(["--agent", "answer_query", "--session-id", expect.stringMatching(/^[0-9a-f-]{36}$/)]);
+    const sessionId = spawned[0]![spawned[0]!.indexOf("--session-id") + 1]!;
+    expect(spawned[0]).toEqual(["--session-id", expect.stringMatching(/^[0-9a-f-]{36}$/)]);
     exit({ exitCode: 0 });
     expect(nativeSessionLifecycle(store.getNativeSession(first.row.id)!, service.resumeAvailability(store.getNativeSession(first.row.id)!))).toMatchObject({ liveAction: "resume", resumeAvailable: true });
 
     const resumed = await service.resume({ id: first.row.id, idempotencyKey: "00000000-0000-4000-8000-000000000120" });
     expect(resumed.row.id).not.toBe(first.row.id);
-    expect(spawned[1]).toEqual(["--agent", "answer_query", "--resume", sessionId]);
+    expect(spawned[1]).toEqual(["--resume", sessionId]);
     expect(store.hasAvailableNativeSessionResume(first.row.id, "claude")).toBe(false);
     expect(store.hasAvailableNativeSessionResume(resumed.row.id, "claude")).toBe(true);
     expect(JSON.stringify(store.listNativeSessions())).not.toContain(sessionId);
@@ -913,7 +1000,7 @@ describe("native session persistence", () => {
       dispatch: async ({ cwd, scope }) => writeNativeLaunchSpec(cwd, "analysis", "claude", scope),
     });
     await resumedService.resume({ id: created.row.id, idempotencyKey: "00000000-0000-4000-8000-000000000124" });
-    expect(resumedArgs[0]).toEqual(["--agent", "answer_query", "--resume", expect.stringMatching(/^[0-9a-f-]{36}$/)]);
+    expect(resumedArgs[0]).toEqual(["--resume", expect.stringMatching(/^[0-9a-f-]{36}$/)]);
     restartedStore.close();
   });
 
@@ -976,7 +1063,7 @@ describe("native session persistence", () => {
     const [recovered, replayed] = await Promise.all([recoveredLaunch, replayLaunch]);
     expect(recovered).toMatchObject({ row: { id: childId, status: "running" }, capability: expect.any(String) });
     expect(replayed).toEqual(recovered);
-    expect(resumedArgs).toEqual([["--agent", "answer_query", "--resume", plaintextHandle, welcomeFor("analysis")]]);
+    expect(resumedArgs).toEqual([["--resume", plaintextHandle, welcomeFor("analysis")]]);
     const resumedCredential = (resumedIssue.mock.results[0]?.value as { credential: string }).credential;
     expect(resumedCredential).not.toBe(sourceCredential);
     expect(resumedArtifacts.hasCredential(sourceCredential)).toBe(false);
@@ -1004,14 +1091,14 @@ describe("native session persistence", () => {
         dispatch: async ({ cwd, scope }) => writeNativeLaunchSpec(cwd, "analysis", "claude", scope),
       });
       const first = await service.create({ purpose: "analysis", vendor: "claude" });
-      const providerId = spawned[0]![3]!;
+      const providerId = spawned[0]![spawned[0]!.indexOf("--session-id") + 1]!;
       expect(service.attach(first.row.id, first.capability!)).toBeDefined();
       service.detach(first.row.id);
       vi.advanceTimersByTime(NATIVE_SESSION_IDLE_TTL_MS);
       expect(store.getNativeSession(first.row.id)).toMatchObject({ status: "stopped", failure: "native session idle TTL expired" });
       const resumed = await service.resume({ id: first.row.id, idempotencyKey: "00000000-0000-4000-8000-000000000198" });
       expect(resumed.capability).toEqual(expect.any(String));
-      expect(spawned[1]).toEqual(["--agent", "answer_query", "--resume", providerId]);
+      expect(spawned[1]).toEqual(["--resume", providerId]);
       expect(exit).toEqual(expect.any(Function));
       store.close();
     } finally { vi.useRealTimers(); }
@@ -1304,7 +1391,7 @@ describe("native session persistence", () => {
     const spawnOptions = spawn.mock.calls[0]?.[2] as { env?: NodeJS.ProcessEnv };
     expect(spawn.mock.calls[0]?.[1]).toEqual(vendor === "codex"
       ? ["--dangerously-bypass-hook-trust", welcomeFor("analysis")]
-      : ["--agent", "answer_query", "--session-id", expect.stringMatching(/^[0-9a-f-]{36}$/), welcomeFor("analysis")]);
+      : ["--session-id", expect.stringMatching(/^[0-9a-f-]{36}$/), welcomeFor("analysis")]);
     expect(spawnOptions.env?.[NATIVE_MCP_CREDENTIAL_ENV_VAR]).toBe(issuedCredential);
     expect(artifacts.hasCredential(issuedCredential)).toBe(true);
     expect(service.stop(created.row.id, created.capability!)).toBe(true);
@@ -1395,10 +1482,12 @@ describe("native session persistence", () => {
     const successArtifacts = new NativeArtifactService({ store: successStore, artifactsRoot: path.join(success.dir, "artifacts"), expectedMcpUrl: NATIVE_MCP_URL, mcpUrl: NATIVE_MCP_URL, getBinding: () => success.binding });
     const issued = vi.spyOn(successArtifacts, "issue");
     const idle: PtyFactory = { spawn: () => ({ onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} }) };
+    const codexAttestation = vendor === "codex" ? fakeCodexAttestation() : {};
     const successService = new NativeSessionService({
       store: successStore, terminalManager: async () => new InteractiveTerminalManager(idle), getBinding: () => success.binding,
       workspaceRoot: undefined, materializationState: successState, irPaths: { analysis: path.join(success.dir, "analysis.json"), setup: undefined, context_enrichment: undefined },
       warbleBin: fakeV4Producer(success.dir), artifactService: successArtifacts,
+      ...codexAttestation,
       prepareCodexWrenHome: ({ cwd }) => {
         const home = path.join(cwd, ".wren");
         mkdirSync(home);
@@ -1410,7 +1499,7 @@ describe("native session persistence", () => {
     const descriptor = issued.mock.results[0]?.value as { version: "1"; url: string; credential: string };
     const successRoot = path.join(successState.root, "native", created.row.id);
     const observed = JSON.parse(readFileSync(path.join(successRoot, ".warble", "fake-producer-observation.json"), "utf8")) as Record<string, unknown>;
-    expect(observed).toMatchObject({ scopeKeys: vendor === "codex" ? ["binding", "cwd", "kind", "scope_id", "version", "wren_runtime"] : ["binding", "cwd", "kind", "scope_id", "version"], mcpKeys: ["credential", "url", "version"], scopeMode: 0o600, mcpMode: 0o600, descriptorExact: true, hasNativeMcp: true, argvContainsCredential: false, credentialMatches: true });
+    expect(observed).toMatchObject({ scopeKeys: vendor === "codex" ? ["binding", "cwd", "entry", "kind", "scope_id", "version", "wren_runtime"] : ["binding", "cwd", "entry", "kind", "scope_id", "version"], mcpKeys: ["credential", "url", "version"], scopeMode: 0o600, mcpMode: 0o600, descriptorExact: true, hasNativeMcp: true, argvContainsCredential: false, credentialMatches: true });
     expect(existsSync(String(observed.scopePath))).toBe(false);
     expect(existsSync(String(observed.mcpPath))).toBe(false);
     expect(existsSync(String(observed.discovery))).toBe(true);
@@ -1803,21 +1892,26 @@ describe("native launch-spec v2/v4", () => {
     writeFileSync(specPath, JSON.stringify(spec));
     expect(() => readNativeLaunchSpec(dir, "analysis", "claude", "fixture-scope", binding)).toThrow(/incompatible/);
   });
-  it("accepts the exact pinned Claude analysis v4 driver contract", () => {
+  it("accepts the exact Claude analysis v4 scope-entry contract", () => {
     const { dir, binding } = fixture("analysis", "claude");
     writeNativeLaunchSpec(dir, "analysis", "claude", { kind: "bound_project", scope_id: "fixture-scope", binding: { project_identity: binding!.identity, generation: String(binding!.generation), revision: binding!.revision } }, true);
     expect(readNativeLaunchSpec(dir, "analysis", "claude", "fixture-scope", binding, { version: "1", url: NATIVE_MCP_URL, credential: "credential" })).toMatchObject({
       version: "4",
-      argv: ["--agent", "answer_query", welcomeFor("analysis")],
+      argv: [welcomeFor("analysis")],
     });
   });
-  it("rejects stale Claude scope-entry analysis v4 output instead of widening driver tool authority", () => {
+  // The pair below and above used to point the other way: analysis was pinned, so a scope-entry
+  // spec was the stale one to refuse. Analysis now declares scope entry, so a PINNED spec is what
+  // a stale producer would emit. The property being guarded is unchanged and is not about which
+  // form is wider: this host accepts exactly the shape it declared and refuses the other, so a
+  // producer and host that disagree can never launch something neither of them chose.
+  it("rejects stale pinned Claude analysis v4 output instead of launching an undeclared driver", () => {
     const { dir, binding } = fixture("analysis", "claude");
     writeNativeLaunchSpec(dir, "analysis", "claude", { kind: "bound_project", scope_id: "fixture-scope", binding: { project_identity: binding!.identity, generation: String(binding!.generation), revision: binding!.revision } }, true);
     const specPath = path.join(dir, ".warble", "interactive-launch.json");
     const spec = JSON.parse(readFileSync(specPath, "utf8")) as Record<string, unknown>;
-    spec.argv = [welcomeFor("analysis")];
-    spec.agent = { kind: "claude_scope", name: "genbi-default" };
+    spec.argv = ["--agent", "answer_query", welcomeFor("analysis")];
+    spec.agent = { kind: "claude_agent", name: "answer_query" };
     writeFileSync(specPath, JSON.stringify(spec));
     expect(() => readNativeLaunchSpec(dir, "analysis", "claude", "fixture-scope", binding, { version: "1", url: NATIVE_MCP_URL, credential: "credential" })).toThrow(/incompatible/);
   });
@@ -1845,7 +1939,7 @@ describe("native launch-spec v2/v4", () => {
     writeNativeLaunchSpec(dir, "analysis", "claude", { kind: "bound_project", scope_id: "fixture-scope", binding: { project_identity: binding!.identity, generation: String(binding!.generation), revision: binding!.revision } }, true);
     const specPath = path.join(dir, ".warble", "interactive-launch.json");
     const spec = JSON.parse(readFileSync(specPath, "utf8")) as Record<string, unknown>;
-    spec.argv = ["--agent", "answer_query", "browser supplied prompt"];
+    spec.argv = ["browser supplied prompt"];
     writeFileSync(specPath, JSON.stringify(spec));
     expect(() => readNativeLaunchSpec(dir, "analysis", "claude", "fixture-scope", binding, { version: "1", url: NATIVE_MCP_URL, credential: "credential" })).toThrow(/incompatible/);
   });

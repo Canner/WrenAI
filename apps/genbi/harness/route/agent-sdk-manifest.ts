@@ -48,7 +48,7 @@ export function buildAgentSdkManifestArgs(
  * Runs a `warble-agent-sdk manifest` invocation (built by
  * {@link buildAgentSdkManifestArgs}) to completion and returns its stdout — a
  * single JSON blob, not a stream, so this mirrors `compile/pipeline.ts`'s
- * buffered `runWarble` rather than `mode-b.ts`'s streaming `spawnChat`
+ * buffered `runWarble` rather than `dispatched.ts`'s streaming `spawnChat`
  * (there's no incremental per-step output to relay for a describe/introspect
  * call). Reuses `WarbleCommandFailedError` since it's already the generic
  * "an external warble-family CLI exited non-zero" error shape.

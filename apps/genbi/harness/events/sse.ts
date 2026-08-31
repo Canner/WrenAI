@@ -4,7 +4,7 @@ import type { AgentEvent } from "./types.js";
  * Serializes one `AgentEvent` as a single `text/event-stream` frame per the
  * harness→BFF wire format: `event: <kind>\ndata:
  * <json>\n\n`. The harness itself never opens a socket — the BFF runs it
- * in-process and consumes `AgentEvent`s directly via `onEvent` — this is
+ * In-process and consumes `AgentEvent`s directly via `onEvent` — this is
  * only for the documented "if a future out-of-process split is wanted"
  * fallback, defined + unit-tested here so it exists when needed.
  */

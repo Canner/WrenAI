@@ -8,7 +8,7 @@ import { newId, Store } from "../server/db.js";
 import { resolveEnrichmentBinding, resolveProjectIdentity } from "../server/enrichment.js";
 import { streamTurn } from "../server/turn.js";
 import type { TurnDeps } from "../server/turn.js";
-import { BUILD_CONTEXT_AGENT_ID, CONNECT_SOURCE_AGENT_ID, contextLifecycleIdentityFingerprint, loadBundle, ModeBSessionError, SUBSCRIPTION_TOS_WARNING, WarbleCommandFailedError } from "../harness/index.js";
+import { BUILD_CONTEXT_AGENT_ID, CONNECT_SOURCE_AGENT_ID, contextLifecycleIdentityFingerprint, loadBundle, DispatchedSessionError, SUBSCRIPTION_TOS_WARNING, WarbleCommandFailedError } from "../harness/index.js";
 import type { AgentEvent, AuthChoice, Bundle, LoginProbe, RouteOptions, RouteResult, SetupStepRunner } from "../harness/index.js";
 import type { ContextFileNode, ContextOverview, EvalRun, RuntimeSettings, RuntimeSettingsPutResponse, SetupDecision, SetupStatusEvent, SetupStep, SseFrame } from "../server/wire-types.js";
 import { parseSse } from "./bff-sse-helpers.js";
@@ -88,7 +88,7 @@ function configureSubscriptionRuntime(store: Store): void {
   });
 }
 
-/** A `SetupStepRunner` stub whose `run()` is fully scripted by the test — no real Mode B/CLI involved. */
+/** A `SetupStepRunner` stub whose `run()` is fully scripted by the test — no real dispatched/CLI involved. */
 function stubSetupRunner(run: SetupStepRunner["run"]): SetupStepRunner {
   return { run };
 }
@@ -240,7 +240,7 @@ describe("config/runtime + setup wizard endpoints", () => {
         runId: "hostile", seq: 2, kind: "tool.result", stepId: "hostile", callId: "hostile", tool: "setup_execution", status: "error",
         summary: "provider=claude runner=subscription:claude sessionId=sdk-anchor-hostile safe detail",
       });
-      throw new ModeBSessionError("provider=claude runner=subscription:claude sessionId=sdk-anchor-hostile dispatch failed", "sdk-anchor-hostile");
+      throw new DispatchedSessionError("provider=claude runner=subscription:claude sessionId=sdk-anchor-hostile dispatch failed", "sdk-anchor-hostile");
     });
     const { app, store } = buildApp(undefined, {
       setupRunner,
@@ -1919,7 +1919,7 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
     for (const anchor of [originalAnchor, replacementAnchor]) expect(combined).not.toContain(anchor);
   });
 
-  it("does not auto-retry a declared setup error, runner throw, or non-resumable Mode A/Codex completion", async () => {
+  it("does not auto-retry a declared setup error, runner throw, or non-resumable in-process/Codex completion", async () => {
     const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-host-contract-no-retry-test-"));
     const projectDir = path.join(workspaceRoot, "acme");
     mkdirSync(projectDir, { recursive: true });
@@ -1929,7 +1929,7 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
       ["declared error", async () => ({ finalText: "SETUP_STATUS: error - authentication needs user action", sessionId: "sdk-session" })],
       ["runner throw", async () => { throw new Error("dispatcher timed out"); }],
       ["cancelled runner", async () => { throw new Error("dispatcher cancelled"); }],
-      ["Mode A", async () => ({ finalText: "SETUP_STATUS: ok - connection validated", sessionId: null })],
+      ["in-process", async () => ({ finalText: "SETUP_STATUS: ok - connection validated", sessionId: null })],
       ["Codex", async () => ({ finalText: "SETUP_STATUS: ok - connection validated" })],
     ] as const) {
       let calls = 0;
@@ -2041,7 +2041,7 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
 
   it.each([
     ["explicit SETUP_STATUS:error", async () => ({ finalText: "SETUP_STATUS: error - connection validation did not finish", sessionId: "sdk-terminal" }), "connection validation did not finish"],
-    ["ModeBSessionError", async () => { throw new ModeBSessionError("dispatcher exited: error_max_turns", "sdk-terminal"); }, "error_max_turns"],
+    ["DispatchedSessionError", async () => { throw new DispatchedSessionError("dispatcher exited: error_max_turns", "sdk-terminal"); }, "error_max_turns"],
   ] as const)("persists a compatible anchor and uses a corrective connect_resume retry after %s", async (_name, firstRun, expectedFailure) => {
     const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-corrective-retry-test-"));
     let calls = 0;
@@ -2180,7 +2180,7 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
       setupRunner: stubSetupRunner(async () => {
         calls += 1;
         if (calls === 1) return { finalText: "terminal omitted", sessionId: originalAnchor };
-        throw new ModeBSessionError(`provider=claude sessionId=${thrownAnchor} correction dispatcher failed`, thrownAnchor);
+        throw new DispatchedSessionError(`provider=claude sessionId=${thrownAnchor} correction dispatcher failed`, thrownAnchor);
       }),
     });
     const session = store.createSession("Setup: acme");
@@ -2677,10 +2677,10 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
   it("drops a captured Mode-B session and uses the selected Mode-A runner when runtime changed before schema-discovery retry", async () => {
     const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-setup-context-runtime-switch-test-"));
     let currentAuth: AuthChoice = { mode: "subscription", provider: "claude" };
-    const modeBRunner = stubSetupRunner(async () => {
-      throw new Error("Mode B must not run after the runtime switch");
+    const dispatchedRunner = stubSetupRunner(async () => {
+      throw new Error("dispatched must not run after the runtime switch");
     });
-    const modeARunner = stubSetupRunner(async (opts) => {
+    const inProcessRunner = stubSetupRunner(async (opts) => {
       expect(opts.resumeSessionId).toBeUndefined();
       expect(opts.authChoice).toEqual({ mode: "api-key", adapter: "mock" });
       expect(opts.prompt).toMatch(/prior attempt.*did not complete recognized schema discovery/i);
@@ -2692,7 +2692,7 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
     const { app, store } = buildApp(undefined, {
       workspaceRoot,
       getAuthChoice: () => currentAuth,
-      setupRunnerFor: (choice) => (choice.mode === "subscription" ? modeBRunner : modeARunner),
+      setupRunnerFor: (choice) => (choice.mode === "subscription" ? dispatchedRunner : inProcessRunner),
     });
     mkdirSync(path.join(workspaceRoot, "acme"), { recursive: true });
     writeFileSync(path.join(workspaceRoot, "acme", "wren_project.yml"), "name: acme\n");
@@ -2702,7 +2702,7 @@ describe("POST /api/setup/context — the CONTEXT step's setup turn (build_conte
     store.updateSessionDecision(
       session.id,
       "awaiting_decision",
-      JSON.stringify({ kind: "schema_discovery_retry", stepKey: "context", sessionId: "mode-b-session" }),
+      JSON.stringify({ kind: "schema_discovery_retry", stepKey: "context", sessionId: "dispatched-session" }),
     );
     currentAuth = { mode: "api-key", adapter: "mock" };
 
@@ -3267,7 +3267,7 @@ describe("setup decision checkpoints (max_turns continue/stop, same-name project
     workspaceRoot: string,
     runContext: SetupStepRunner["run"],
     // Lets tests stand in for a `WREN_HARNESS_SETUP_MAX_TURNS` override —
-    // `ModeBSetupRunner.effectiveMaxTurns` is what `server/turn.ts` reads to build the
+    // `DispatchedSetupRunner.effectiveMaxTurns` is what `server/turn.ts` reads to build the
     // "Continue (+N turns)" label. Omitted (as in tests (a)/(c) below) means the stub has no
     // `effectiveMaxTurns`, matching a plain `SetupStepRunner` that predates this override.
     effectiveMaxTurns?: SetupStepRunner["effectiveMaxTurns"],
@@ -3426,8 +3426,8 @@ describe("setup decision checkpoints (max_turns continue/stop, same-name project
         mkdirSync(path.join(workspaceRoot, "acme", "models", "customers"), { recursive: true });
         throw new Error("dispatcher exited: error_max_turns after 25 turns");
       },
-      // Stands in for a ModeBSetupRunner constructed with WREN_HARNESS_SETUP_MAX_TURNS=25 —
-      // see ModeBSetupRunner.effectiveMaxTurns in harness/setup/runner.ts.
+      // Stands in for a DispatchedSetupRunner constructed with WREN_HARNESS_SETUP_MAX_TURNS=25 —
+      // see DispatchedSetupRunner.effectiveMaxTurns in harness/setup/runner.ts.
       (agentId) => (agentId === BUILD_CONTEXT_AGENT_ID ? CUSTOM_MAX_TURNS : undefined),
     );
 
@@ -3439,7 +3439,7 @@ describe("setup decision checkpoints (max_turns continue/stop, same-name project
     // Picking "continue" re-dispatches the context step against the SAME setupRunner instance
     // (deps.setupRunner is wired once at boot — see server/bin.ts), so whatever budget
     // effectiveMaxTurns() reported is exactly what run() will apply on resume: the two can't
-    // drift because both read `ModeBSetupRunnerOptions.maxTurns` through the same resolver.
+    // drift because both read `DispatchedSetupRunnerOptions.maxTurns` through the same resolver.
     const decisionRes = await app.request("/api/setup/decision", { method: "POST", body: JSON.stringify({ sessionId, choiceId: "continue" }) });
     expect(decisionRes.status).toBe(200);
     const { turnId: resumeTurnId } = (await decisionRes.json()) as { sessionId: string; turnId: string };
@@ -3532,20 +3532,20 @@ describe("setup decision checkpoints (max_turns continue/stop, same-name project
     expect(session?.pendingDecision).toBeNull();
 
     // Plan B fallback confirmation: no session id was ever captured (a plain Error, not a
-    // ModeBSessionError, was thrown above), so the resumed turn carries no resumeSessionId —
+    // DispatchedSessionError, was thrown above), so the resumed turn carries no resumeSessionId —
     // there is nothing for setup/runner.ts to forward as `--resume <id>`.
     expect(resumeTurn?.resumeSessionId).toBeNull();
   });
 
-  it("(c2) Plan A: when the failed turn surfaced a resumable session id (ModeBSessionError), 'continue' resumes that SAME session with the short continuation prompt instead of the resume-from-disk inventory prompt", async () => {
+  it("(c2) Plan A: when the failed turn surfaced a resumable session id (DispatchedSessionError), 'continue' resumes that SAME session with the short continuation prompt instead of the resume-from-disk inventory prompt", async () => {
     const workspaceRoot = mkdtempSync(path.join(tmpdir(), "wren-harness-max-turns-resume-session-test-"));
     const CAPTURED_SESSION_ID = "sess_captured_abc123";
     const { app, store, sessionId } = await setupToContextCheckpoint(workspaceRoot, async () => {
       mkdirSync(path.join(workspaceRoot, "acme", "models", "customers"), { recursive: true });
-      // Unlike test (c)'s plain Error, this is a ModeBSessionError — the shape a real
+      // Unlike test (c)'s plain Error, this is a DispatchedSessionError — the shape a real
       // warble-agent-sdk `error_max_turns` exit produces once it has read the dispatcher's
-      // `{t:"session",id}` line (see runModeBDefault/spawnChat in harness/route/mode-b.ts).
-      throw new ModeBSessionError("dispatcher exited: error_max_turns after 120 turns", CAPTURED_SESSION_ID);
+      // `{t:"session",id}` line (see runDispatchedDefault/spawnChat in harness/route/dispatched.ts).
+      throw new DispatchedSessionError("dispatcher exited: error_max_turns after 120 turns", CAPTURED_SESSION_ID);
     }, undefined, () => ({ mode: "subscription", provider: "claude" }));
 
     // The captured session id is persisted on the pending decision, ready for the "continue" branch.
@@ -3680,7 +3680,7 @@ describe("setup decision checkpoints (max_turns continue/stop, same-name project
     const deps: TurnDeps = { store, route: okConnectRoute, baseRouteOptions: BASE_ROUTE_OPTIONS, setupRunner, workspaceRoot };
     const app = createApp(deps);
 
-    const connectRes = await app.request("/api/setup/connect", { method: "POST", body: JSON.stringify({ projectName: "acme", sourceType: "postgres" }) });
+    const connectRes = await app.request("/api/setup/connect", { method: "POST", body: JSON.stringify({ projectName: "acme", sourceType: "bigquery", variant: "dataset" }) });
     expect(connectRes.status).toBe(409);
     const { sessionId } = (await connectRes.json()) as { sessionId: string };
     expect(existsSync(projectDir)).toBe(true); // untouched by the pre-flight itself — only the decision endpoint deletes
@@ -3695,6 +3695,7 @@ describe("setup decision checkpoints (max_turns continue/stop, same-name project
     expect(turn?.agentId).toBe(CONNECT_SOURCE_AGENT_ID);
     expect(turn?.setupStepKey).toBe("connect");
     expect(turn?.composedInput).toContain("acme");
+    expect(turn?.composedInput).toContain("BIGQUERY_PROJECT_ID");
 
     const session = store.getSession(sessionId);
     expect(session?.status).toBe("active");

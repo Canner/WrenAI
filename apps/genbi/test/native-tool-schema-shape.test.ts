@@ -17,7 +17,7 @@ import {
 } from "../harness/tools/index.js";
 
 /**
- * A real Mode A run (OpenAI, `gpt-4.1`, api-key/`openai-compatible` adapter)
+ * A real in-process run (OpenAI, `gpt-4.1`, api-key/`openai-compatible` adapter)
  * rejected `setup_execution` outright:
  *
  *   AI_APICallError: Invalid schema for function 'setup_execution':
@@ -71,7 +71,7 @@ describe("native tool registry — every registered tool's inputSchema serialize
     }
   });
 
-  it("ModeASetupRunner's setup registry (setup_execution) — the exact construction harness/setup/runner.ts uses", () => {
+  it("InProcessSetupRunner's setup registry (setup_execution) — the exact construction harness/setup/runner.ts uses", () => {
     const workspaceRoot = os.tmpdir();
     const env = createLocalExecutionEnv({ rootDir: workspaceRoot });
     const registry = createNativeToolRegistry();

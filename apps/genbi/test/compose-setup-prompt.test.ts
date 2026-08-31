@@ -127,7 +127,7 @@ describe("composeSetupPrompt", () => {
     const duckdbForm: SetupFormValues = { projectName: "acme", sourceType: "duckdb", workspaceRoot: "/workspace/root" };
     const prompt = composeSetupPrompt("connect_resume", duckdbForm);
     // The bug this regresses: the old prompt never mentioned sourceType at all, so an agent
-    // dispatched fresh (no session memory) fell back to the onboarding skill's postgres worked
+    // Dispatched fresh (no session memory) fell back to the onboarding skill's postgres worked
     // example regardless of the actually-selected data source. A non-postgres case (duckdb) is
     // the one that would have failed to disprove the old, sourceType-blind wording.
     expect(prompt).toContain('"duckdb"');
@@ -291,7 +291,7 @@ describe("composeSetupPrompt", () => {
     expect(composeSetupPrompt("connect_resume", form)).not.toMatch(/write only an empty \.env template/i);
   });
 
-  it("the composed prompt never contains a newline (Mode B's chat is a line-per-turn stdin protocol)", () => {
+  it("the composed prompt never contains a newline (dispatched's chat is a line-per-turn stdin protocol)", () => {
     expect(composeSetupPrompt("connect", form)).not.toContain("\n");
     expect(composeSetupPrompt("connect_resume", form)).not.toContain("\n");
     expect(composeSetupPrompt("context", form)).not.toContain("\n");

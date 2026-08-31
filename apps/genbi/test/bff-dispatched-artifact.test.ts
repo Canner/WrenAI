@@ -10,12 +10,12 @@ import type { ArtifactDto, SavedEvent } from "../server/wire-types.js";
 import { parseSse } from "./bff-sse-helpers.js";
 
 /**
- * Root cause: on Mode B (`backend: "agent-sdk"`), a successful
+ * Root cause: on dispatched (`backend: "agent-sdk"`), a successful
  * dashboard turn produced a rich answer (`form: "rich"`, a render envelope of
  * kpi_card/chart/table blocks) that rendered inline, but the BFF never
  * persisted an artifact for it — the `artifact` AgentEvent only ever fires on
- * the Mode A `write_artifact` tool path (`harness/loop/executor.ts`). These tests
- * cover `maybeCreateModeBArtifact` (`server/turn.ts`): a Mode B turn routed to
+ * the in-process `write_artifact` tool path (`harness/loop/executor.ts`). These tests
+ * cover `maybeCreateDispatchedArtifact` (`server/turn.ts`): a dispatched turn routed to
  * an `artifact_write`-capable component (`generate_dashboard`/`explain_change`)
  * must ALSO persist+emit an artifact from its recovered envelope, while a
  * plain `answer_query` rich answer must not.
@@ -58,7 +58,7 @@ const BUNDLE: Bundle = {
   ],
 };
 
-function modeBRoute(finalText: string): (options: RouteOptions) => Promise<RouteResult> {
+function dispatchedRoute(finalText: string): (options: RouteOptions) => Promise<RouteResult> {
   return async (): Promise<RouteResult> => ({ backend: "agent-sdk", warnings: [], finalText });
 }
 
@@ -73,7 +73,7 @@ function fencedEnvelope(envelope: Record<string, unknown>): string {
   return `Here you go:\n\n\`\`\`json\n${JSON.stringify(envelope)}\n\`\`\`\n`;
 }
 
-describe("Mode B dashboard/report turns persist an artifact from the recovered envelope", () => {
+describe("dispatched dashboard/report turns persist an artifact from the recovered envelope", () => {
   let outDir: string;
 
   afterEach(() => {
@@ -81,7 +81,7 @@ describe("Mode B dashboard/report turns persist an artifact from the recovered e
   });
 
   function buildDeps(route: TurnDeps["route"]): TurnDeps {
-    outDir = mkdtempSync(path.join(tmpdir(), "wren-harness-mode-b-artifact-"));
+    outDir = mkdtempSync(path.join(tmpdir(), "wren-harness-dispatched-artifact-"));
     const baseRouteOptions: Omit<RouteOptions, "question" | "onEvent"> = {
       authChoice: { mode: "api-key", adapter: "mock" },
       profileSource: "/fixture/profile",
@@ -100,7 +100,7 @@ describe("Mode B dashboard/report turns persist an artifact from the recovered e
       summary: "Revenue grew 12% month over month.",
       verified: true,
     };
-    const deps = buildDeps(modeBRoute(fencedEnvelope(envelope)));
+    const deps = buildDeps(dispatchedRoute(fencedEnvelope(envelope)));
     const app = createApp(deps);
 
     const session = (await (await app.request("/api/sessions", { method: "POST", body: "{}" })).json()) as { id: string };
@@ -112,15 +112,15 @@ describe("Mode B dashboard/report turns persist an artifact from the recovered e
     ).json()) as { turnId: string };
 
     const frames = parseSse(await (await app.request(`/api/sessions/${session.id}/stream?turn=${turnId}`)).text());
-    // Mode B only knows the answer is artifact-worthy once route() resolves (no
+    // Dispatched only knows the answer is artifact-worthy once route() resolves (no
     // native artifact AgentEvent), so the artifact frame trails the worklog
-    // frame and leads the terminal answer frame — unlike Mode A's live-onEvent
+    // frame and leads the terminal answer frame — unlike in-process's live-onEvent
     // ordering (artifact frame first) covered in bff-artifact-publish.test.ts.
     expect(frames.map((f) => f.event)).toEqual(["worklog", "event", "event", "done"]);
     expect(frames[1]?.data).toMatchObject({ kind: "artifact", artifactKind: "dashboard" });
     expect(frames[2]?.data).toMatchObject({ kind: "answer", answer: { form: "rich", envelope } });
 
-    // A Mode B-created artifact doesn't appear on the Artifacts page until explicitly saved.
+    // A dispatched-created artifact doesn't appear on the Artifacts page until explicitly saved.
     expect((await (await app.request("/api/artifacts")).json()) as ArtifactDto[]).toHaveLength(0);
 
     const artifactId = (frames[1]?.data as { artifactId: string }).artifactId;
@@ -128,7 +128,7 @@ describe("Mode B dashboard/report turns persist an artifact from the recovered e
     expect(artifact.sessionId).toBe(session.id);
     expect(artifact.artifactKind).toBe("dashboard");
     // Verified comes from the envelope's own field, never hardcoded —
-    // Mode A defaults a freshly-produced artifact to unverified; Mode B doesn't.
+    // In-process defaults a freshly-produced artifact to unverified; dispatched doesn't.
     expect(artifact.verified).toBe(true);
 
     // Self-contained persisted representation: the envelope JSON, verbatim, on disk.
@@ -141,7 +141,7 @@ describe("Mode B dashboard/report turns persist an artifact from the recovered e
     await app.request(`/api/sessions/${session.id}/artifacts/${artifactId}/save`, { method: "POST" });
     expect((await (await app.request("/api/artifacts")).json()) as ArtifactDto[]).toHaveLength(1);
 
-    // Publishable via the existing publish route, exactly like a Mode A artifact.
+    // Publishable via the existing publish route, exactly like a in-process artifact.
     const publishRes = await app.request(`/api/sessions/${session.id}/artifacts/${artifactId}/publish`, {
       method: "POST",
       body: JSON.stringify({ scope: "public" }),
@@ -197,7 +197,7 @@ describe("Mode B dashboard/report turns persist an artifact from the recovered e
 
   it("an explain_change turn's rich answer creates a 'report' artifact (report-type mapping)", async () => {
     const envelope = { blocks: [{ type: "text", text: "Revenue dropped because of churn." }], summary: "Churn drove the drop.", verified: false };
-    const deps = buildDeps(modeBRoute(fencedEnvelope(envelope)));
+    const deps = buildDeps(dispatchedRoute(fencedEnvelope(envelope)));
     const app = createApp(deps);
 
     const session = (await (await app.request("/api/sessions", { method: "POST", body: "{}" })).json()) as { id: string };
@@ -223,9 +223,9 @@ describe("Mode B dashboard/report turns persist an artifact from the recovered e
     expect(artifacts[0]?.artifactKind).toBe("report");
   });
 
-  it("a plain answer_query rich answer on Mode B does NOT create an artifact", async () => {
+  it("a plain answer_query rich answer on dispatched does NOT create an artifact", async () => {
     const envelope = { blocks: [{ type: "table", columns: ["month", "total"], rows: [["2024-01", 1000]] }], verified: true };
-    const deps = buildDeps(modeBRoute(fencedEnvelope(envelope)));
+    const deps = buildDeps(dispatchedRoute(fencedEnvelope(envelope)));
     const app = createApp(deps);
 
     const session = (await (await app.request("/api/sessions", { method: "POST", body: "{}" })).json()) as { id: string };
@@ -241,9 +241,9 @@ describe("Mode B dashboard/report turns persist an artifact from the recovered e
     expect(artifacts).toHaveLength(0);
   });
 
-  it("a plain-text (non-envelope) Mode B answer does NOT create an artifact, even routed to generate_dashboard", async () => {
+  it("a plain-text (non-envelope) dispatched answer does NOT create an artifact, even routed to generate_dashboard", async () => {
     // No JSON envelope recoverable from finalText -> toAnswerOrRefusalEvent falls back to form: "text" -> not "rich" -> no artifact.
-    const deps = buildDeps(modeBRoute("Sorry, I could not build that dashboard."));
+    const deps = buildDeps(dispatchedRoute("Sorry, I could not build that dashboard."));
     const app = createApp(deps);
 
     const session = (await (await app.request("/api/sessions", { method: "POST", body: "{}" })).json()) as { id: string };
@@ -264,7 +264,7 @@ describe("Mode B dashboard/report turns persist an artifact from the recovered e
 
   it("replaying an already-resolved turn's stream does not double-create the artifact", async () => {
     const envelope = { blocks: [{ type: "chart", chartType: "bar", data: [] }], summary: "ok", verified: true };
-    const deps = buildDeps(modeBRoute(fencedEnvelope(envelope)));
+    const deps = buildDeps(dispatchedRoute(fencedEnvelope(envelope)));
     const app = createApp(deps);
 
     const session = (await (await app.request("/api/sessions", { method: "POST", body: "{}" })).json()) as { id: string };

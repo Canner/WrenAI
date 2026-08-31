@@ -8,7 +8,7 @@ export const DEFAULT_LOCAL_ENDPOINT = "http://localhost:11434/v1";
 /**
  * Default local model used when neither `LocalAuthChoice` (which has no
  * `model` field of its own — see the API-surface mismatch note in this
- * ticket's report) nor `ModeAOptions.model` supplies one.
+ * ticket's report) nor `InProcessOptions.model` supplies one.
  */
 export const DEFAULT_LOCAL_MODEL = "llama3.1";
 
@@ -18,7 +18,7 @@ export interface DeriveAdapterSpecOptions {
 }
 
 /**
- * Derives a concrete `AdapterSpec` (adapter id + config) for Mode A's three
+ * Derives a concrete `AdapterSpec` (adapter id + config) for in-process's three
  * `AuthChoice` variants:
  *
  * - `api-key` — passed straight through: `authChoice.adapter`/`config` already

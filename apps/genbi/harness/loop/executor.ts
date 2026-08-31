@@ -73,7 +73,7 @@ export interface ExecuteAgentContext {
    * steps (`ai`'s `ToolLoopAgent.prepareCall()`: `stopWhen: this.settings.stopWhen
    * ?? isStepCount(20)`) — that default applied silently to every caller of
    * this executor even before this field existed; it just had no name. Only
-   * `ModeASetupRunner` sets this today (to `DEFAULT_SETUP_MAX_TURNS`,
+   * `InProcessSetupRunner` sets this today (to `DEFAULT_SETUP_MAX_TURNS`,
    * `harness/setup/runner.ts`) — `runAgent`'s Ask-turn path
    * (`harness/session/run.ts`) never sets it, so its behavior (the SDK's own
    * 20-step default) is unchanged by this field's existence. When a
@@ -93,7 +93,7 @@ export interface ExecuteAgentContext {
    * bookkeeping (via `createAgentEventEmitter`); `executeAgent`'s job is
    * only to describe *what happened* at step/tool granularity. `runAgent`
    * passes its emitter's `emit` method down as this field's value. Emitted
-   * events always carry `depth: 0` and no `parent` — Mode A (this
+   * events always carry `depth: 0` and no `parent` — in-process (this
    * executor) has no sub-agent/Task mechanism, so nesting is structurally
    * unavailable here.
    */
@@ -168,7 +168,7 @@ export async function executeAgent(
     const stepId = step.name;
 
     // `step.start`/`step.finish` bracket each bundle step.
-    // Mode A has no sub-agent/Task mechanism, so `depth` is always 0 and
+    // In-process has no sub-agent/Task mechanism, so `depth` is always 0 and
     // `parent` is never set here (see `ExecuteAgentContext.onEvent`'s doc
     // comment).
     ctx.onEvent?.({ kind: "step.start", stepId, name: step.name, tier: step.tier, depth: 0 });

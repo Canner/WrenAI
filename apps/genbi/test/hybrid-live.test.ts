@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createDefaultLoginProbe, type AuthChoice } from "../harness/auth/index.js";
 import { resolveWarbleBinary } from "../harness/compile/resolve-binary.js";
@@ -10,9 +11,9 @@ import { route } from "../harness/route/index.js";
 import { WARBLE_REPO } from "./warble-checkout.js";
 
 /**
- * Opt-in LIVE "hybrid" tests: one Mode A case (a non-uniform
+ * Opt-in LIVE "hybrid" tests: one in-process case (a non-uniform
  * `tierBinding` splitting `cheap`/`strong` across two real providers) and one
- * Mode B case (`--models-config` passthrough to a real `warble-agent-sdk
+ * Dispatched case (`--models-config` passthrough to a real `warble-agent-sdk
  * chat` invocation). Mirrors `e2e-cross-backend-parity.test.ts`'s gating
  * style — SKIPPED by default; nothing here runs as part of `npm test`
  * unless a human/orchestrator deliberately sets every env var a given case
@@ -20,7 +21,7 @@ import { WARBLE_REPO } from "./warble-checkout.js";
  *
  * Known limitations inherited from warble's own hybrid holes (tracked
  * upstream, not fixed by this harness): the render stage wall-hits on any
- * non-`render: none` component under a non-Anthropic tier (the Mode B case
+ * non-`render: none` component under a non-Anthropic tier (the dispatched case
  * below sticks to `answer_query`, which *does* render, so it is expected to
  * surface this if warble's hole is still open), the `openai_compat` local
  * client has no streaming/retry, and net cost savings are unproven. Weak
@@ -29,14 +30,14 @@ import { WARBLE_REPO } from "./warble-checkout.js";
  *
  * Master switch: `WREN_TEST_LIVE_HYBRID=1`.
  *
- * Mode A hybrid case additionally requires:
+ * In-process hybrid case additionally requires:
  *   - `WREN_TEST_HYBRID_CHEAP_ENDPOINT` (a real OpenAI-compatible endpoint,
  *     e.g. a local Ollama server, bound to the `cheap` tier)
  *   - `WREN_TEST_HYBRID_CHEAP_MODEL` (the model id served there)
  *   - `ANTHROPIC_API_KEY` (bound to the `strong` tier via the `anthropic`
  *     adapter)
  *
- * Mode B hybrid case additionally requires:
+ * Dispatched hybrid case additionally requires:
  *   - `WREN_TEST_HYBRID_MODELS_CONFIG` (path to a warble `ModelConfig` YAML
  *     — see `dispatcher/claude-agent-sdk/src/models.ts` for the shape)
  *   - a logged-in `claude` subscription CLI (checked the same way
@@ -46,7 +47,10 @@ import { WARBLE_REPO } from "./warble-checkout.js";
  * profile/project paths, matching the existing suite-wide convention.
  */
 
-const PROFILE_SOURCE = process.env["WREN_TEST_PROFILE_SOURCE"] ?? path.join(WARBLE_REPO, "genbi-default");
+/** This package's own `profiles/` tree — the GenBI profiles now live here, not in a Warble checkout. */
+const PROFILES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "profiles");
+
+const PROFILE_SOURCE = process.env["WREN_TEST_PROFILE_SOURCE"] ?? path.join(PROFILES_DIR, "genbi-default");
 const JAFFLE_WREN = process.env["WREN_TEST_PROJECT"] ?? path.join(WARBLE_REPO, "examples", "jaffle-wren");
 
 const LIVE_HYBRID_ENABLED = process.env["WREN_TEST_LIVE_HYBRID"] === "1";
@@ -80,29 +84,29 @@ async function commonPrereqsOk(): Promise<boolean> {
   return isWarbleAvailable();
 }
 
-async function canRunModeAHybrid(): Promise<boolean> {
+async function canRunInProcessHybrid(): Promise<boolean> {
   if (!(await commonPrereqsOk())) return false;
   if (!HYBRID_CHEAP_ENDPOINT || !HYBRID_CHEAP_MODEL || !HYBRID_STRONG_API_KEY) return false;
   return true;
 }
 
-async function canRunModeBHybrid(): Promise<boolean> {
+async function canRunDispatchedHybrid(): Promise<boolean> {
   if (!(await commonPrereqsOk())) return false;
   if (!HYBRID_MODELS_CONFIG || !existsSync(HYBRID_MODELS_CONFIG)) return false;
   return createDefaultLoginProbe().claudeLoggedIn();
 }
 
-const canRunA = await canRunModeAHybrid();
-const canRunB = await canRunModeBHybrid();
+const canRunA = await canRunInProcessHybrid();
+const canRunB = await canRunDispatchedHybrid();
 
 describe.skipIf(!canRunA)(
-  "hybrid Mode A LIVE: cheap tier on a local endpoint, strong tier on Anthropic [opt-in, real calls, never runs by default]",
+  "hybrid in-process LIVE: cheap tier on a local endpoint, strong tier on Anthropic [opt-in, real calls, never runs by default]",
   () => {
     it(
       "answers the baseline question, splitting resolve_intent (cheap) from generate_sql/render (strong) across two real providers",
       async () => {
         if (HYBRID_CHEAP_ENDPOINT === undefined || HYBRID_CHEAP_MODEL === undefined || HYBRID_STRONG_API_KEY === undefined) {
-          throw new Error("canRunModeAHybrid() already guarantees these are set — narrowing for the type checker");
+          throw new Error("canRunInProcessHybrid() already guarantees these are set — narrowing for the type checker");
         }
 
         const tierBinding: Record<string, AdapterSpec> = {
@@ -126,7 +130,7 @@ describe.skipIf(!canRunA)(
           tierBinding,
         });
 
-        if (result.backend !== "agent") throw new Error(`expected the agent backend (Mode A), got: ${JSON.stringify(result)}`);
+        if (result.backend !== "agent") throw new Error(`expected the agent backend (in-process), got: ${JSON.stringify(result)}`);
         expect(result.kind).toBe("answer");
       },
       120_000,
@@ -135,13 +139,13 @@ describe.skipIf(!canRunA)(
 );
 
 describe.skipIf(!canRunB)(
-  "hybrid Mode B LIVE: --models-config passthrough to warble-agent-sdk chat [opt-in, real subscription, never runs by default]",
+  "hybrid dispatched LIVE: --models-config passthrough to warble-agent-sdk chat [opt-in, real subscription, never runs by default]",
   () => {
     it(
       "answers the baseline question with one step routed onto a non-Anthropic model via warble's own ModelConfig",
       async () => {
         if (HYBRID_MODELS_CONFIG === undefined) {
-          throw new Error("canRunModeBHybrid() already guarantees this is set — narrowing for the type checker");
+          throw new Error("canRunDispatchedHybrid() already guarantees this is set — narrowing for the type checker");
         }
 
         const authChoice: AuthChoice = { mode: "subscription", provider: "claude" };
@@ -154,7 +158,7 @@ describe.skipIf(!canRunB)(
           modelsConfig: HYBRID_MODELS_CONFIG,
         });
 
-        if (result.backend !== "agent-sdk") throw new Error(`expected the agent-sdk backend (Mode B), got: ${JSON.stringify(result)}`);
+        if (result.backend !== "agent-sdk") throw new Error(`expected the agent-sdk backend (dispatched), got: ${JSON.stringify(result)}`);
         expect(result.finalText.length).toBeGreaterThan(0);
       },
       120_000,

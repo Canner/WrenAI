@@ -6,7 +6,7 @@
  * contract — it does no compiling and touches no turn/answer logic.
  *
  * Each component's `model`/`tiers` are derived from the REAL
- * tier -> model binding `route()`/`runModeADefault` would actually apply for
+ * tier -> model binding `route()`/`runInProcessDefault` would actually apply for
  * `baseRouteOptions` (see `buildRealTierResolver`), not from the Setup
  * page's editable seeded `store.getRuntimeSettings()`. Those two can
  * legitimately differ (e.g. a seeded `claude-haiku`/`claude-sonnet` display
@@ -56,6 +56,11 @@ import type {
 } from "./wire-types.js";
 
 type BaseRouteOptions = Omit<RouteOptions, "question" | "onEvent">;
+
+export interface HarnessSetupReadiness {
+  readonly available: boolean;
+  readonly reason?: string;
+}
 
 /** snake_case/kebab-case id -> Title Case display name, e.g. "answer_query" -> "Answer Query". */
 function humanize(id: string): string {
@@ -114,25 +119,25 @@ interface RealTierResolver {
 
 /**
  * Builds a resolver mirroring the tier -> model binding `route()`/
- * `runModeADefault` (`harness/route/mode-a.ts`) actually apply for
+ * `runInProcessDefault` (`harness/route/in-process.ts`) actually apply for
  * `baseRouteOptions`, so `runtime.tierModels` and each component's `model`
  * reflect what really runs rather than the Setup page's seeded settings:
  *
- * - `subscription` (Mode B): there is no per-tier `AdapterSpec` at all — the
+ * - `subscription` (dispatched): there is no per-tier `AdapterSpec` at all — the
  *   provider-specific subscription dispatcher owns model routing internally, and any
  *   `--models-config` override is opaque YAML this harness never parses (see
- *   `ModeBOptions.modelsConfig`'s doc comment) — so every tier honestly
+ *   `DispatchedOptions.modelsConfig`'s doc comment) — so every tier honestly
  *   reports the same subscription label (matching `runtimeModeAndLabel`'s
  *   own `"Subscription (<provider>)"` wording).
- * - a `tierBinding` override present (hybrid mode, Mode A only): resolves
+ * - a `tierBinding` override present (hybrid mode, in-process only): resolves
  *   per-tier via the caller-supplied `AdapterSpec` map, exactly like
  *   `buildHybridTierBinding` does for the `answer_query` agent at run time.
  *   A tier this map doesn't cover (e.g. a different bundle component uses a
  *   tier name `answer_query` never uses, so the hybrid map was never
  *   required to cover it) is genuinely unresolvable from the real binding —
  *   falls back to the Setup-configured value, visibly labeled as such.
- * - otherwise (uniform, Mode A's default path): derives ONE `AdapterSpec` via
- *   `deriveAdapterSpec(authChoice, model)` — the exact call `runModeADefault`
+ * - otherwise (uniform, in-process's default path): derives ONE `AdapterSpec` via
+ *   `deriveAdapterSpec(authChoice, model)` — the exact call `runInProcessDefault`
  *   itself makes — which realizes every tier alike. If that derivation
  *   itself throws (e.g. `gateway` mode missing `baseURL`/`model`), the same
  *   failure would occur at turn-execution time too; report every tier via
@@ -171,7 +176,7 @@ function buildRealTierResolver(baseRouteOptions: BaseRouteOptions, store: Store)
 
 /**
  * `backend` mirrors `authChoice.mode` verbatim — a real, already-
- * meaningful auth-strategy name — rather than the internal `modeA`/`modeB`
+ * meaningful auth-strategy name — rather than the internal `inProcess`/`dispatched`
  * framework-dispatch bucket the DTO used to leak.
  */
 function runtimeBackendAndLabel(authChoice: RouteOptions["authChoice"]): { backend: HarnessRuntimeBackend; label: string } {
@@ -263,7 +268,7 @@ function buildStep(step: Step): HarnessStep {
 }
 
 // The agent's distinct step tiers, each resolved to its REAL model via `resolver` (not the
-// Setup-editable store) — mirrors what `runModeADefault` would actually bind for this agent's
+// Setup-editable store) — mirrors what `runInProcessDefault` would actually bind for this agent's
 // steps. The runtime routes one component per turn; each component's tiers/model report the
 // real binding that applies when that component is selected.
 /** Public, purpose-level reason used only when native readiness cannot execute the selected purpose. */
@@ -288,7 +293,9 @@ const NATIVE_PURPOSE_UNAVAILABLE_REASON = "The selected native session is unavai
  */
 function buildComponent(agent: Agent, resolver: RealTierResolver, dispatchTarget: string, purposeInfo: HarnessPurpose): HarnessComponent {
   if ("availability" in agent) {
-    const viaLabel = purposeInfo.available ? purposeInfo.targetLabel : undefined;
+    const viaLabel = purposeInfo.executionKind === "native_session" && purposeInfo.available
+      ? purposeInfo.targetLabel
+      : undefined;
     return {
       id: agent.id,
       name: humanize(agent.id),
@@ -439,21 +446,40 @@ function buildConnection(baseRouteOptions: BaseRouteOptions, store: Store, purpo
   };
 }
 
-function buildHarnessPurpose(purpose: NativePurpose, nativeReadiness?: NativeSessionReadiness): HarnessPurpose {
+function setupRunnerTarget(authChoice: RouteOptions["authChoice"]): Pick<Extract<HarnessPurpose, { executionKind: "setup_runner" }>, "target" | "targetLabel"> {
+  switch (runtimeDispatcher(authChoice)) {
+    case "claude-agent-sdk": return { target: "claude-agent-sdk:setup", targetLabel: "Claude Setup runner" };
+    case "codex-local": return { target: "codex-local:setup", targetLabel: "Codex Setup runner" };
+    case "in-process": return { target: "in-process:setup", targetLabel: "In-process Setup runner" };
+  }
+}
+
+function buildHarnessPurpose(purpose: NativePurpose, baseRouteOptions: BaseRouteOptions, nativeReadiness?: NativeSessionReadiness, setupReadiness?: HarnessSetupReadiness): HarnessPurpose {
   const definition = NATIVE_DISPATCH_REGISTRY[purpose];
+  if (purpose === "setup") {
+    const available = setupReadiness?.available ?? false;
+    return {
+      ...definition,
+      executionKind: "setup_runner",
+      ...setupRunnerTarget(baseRouteOptions.authChoice),
+      available,
+      ...(!available ? { reason: setupReadiness?.reason ?? "The selected Setup runner is unavailable." } : {}),
+    };
+  }
   const readiness = nativeReadiness?.purposes[purpose];
   const available = readiness?.available ?? false;
   return {
     ...definition,
+    executionKind: "native_session",
     ...(readiness?.target ? { target: readiness.target, targetLabel: readiness.targetLabel as "Claude CLI" | "Codex CLI" } : {}),
     available,
     ...(!available ? { reason: readiness?.reason ?? NATIVE_PURPOSE_UNAVAILABLE_REASON } : {}),
   };
 }
 
-export function buildHarnessDto(bundle: Bundle, store: Store, baseRouteOptions: BaseRouteOptions, purpose: NativePurpose = "analysis", nativeReadiness?: NativeSessionReadiness): HarnessDto {
+export function buildHarnessDto(bundle: Bundle, store: Store, baseRouteOptions: BaseRouteOptions, purpose: NativePurpose = "analysis", nativeReadiness?: NativeSessionReadiness, setupReadiness?: HarnessSetupReadiness): HarnessDto {
   const resolver = buildRealTierResolver(baseRouteOptions, store);
-  const purposeInfo = buildHarnessPurpose(purpose, nativeReadiness);
+  const purposeInfo = buildHarnessPurpose(purpose, baseRouteOptions, nativeReadiness, setupReadiness);
   return {
     purpose: purposeInfo,
     profile: buildProfile(bundle, baseRouteOptions, store, purpose),

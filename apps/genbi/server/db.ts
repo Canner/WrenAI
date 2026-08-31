@@ -166,7 +166,7 @@ export type PendingDecisionPayload =
       readonly stepKey: "context";
       /**
        * Plan A session resume: the SDK session id the failed turn ran under (captured from a
-       * `ModeBSessionError`, `harness/route/mode-b.ts`), if the runner reported one. When present,
+       * `DispatchedSessionError`, `harness/route/dispatched.ts`), if the runner reported one. When present,
        * `POST /api/setup/decision`'s "continue" branch resumes this SAME agent-sdk conversation
        * instead of recomposing a disk-state prompt (`composeSetupPrompt`'s `resumeFromDisk`).
        * `undefined` for decisions recorded before this field existed, or when the runner never
@@ -1010,6 +1010,16 @@ export class Store {
     return row ? rowToNativeStructuredAnswer(row) : undefined;
   }
 
+  getLatestNativeStructuredAnswer(nativeSessionId: string): NativeStructuredAnswerRow | undefined {
+    const row = this.db.prepare(
+      `SELECT * FROM native_structured_answers
+       WHERE native_session_id = ?
+       ORDER BY created_at DESC, rowid DESC
+       LIMIT 1`,
+    ).get(nativeSessionId);
+    return row ? rowToNativeStructuredAnswer(row) : undefined;
+  }
+
   listNativeSessions(): NativeSessionRow[] {
     return this.db.prepare(`SELECT * FROM native_sessions ORDER BY updated_at DESC, rowid DESC`).all().map(rowToNativeSession);
   }
@@ -1472,7 +1482,7 @@ export class Store {
     return row ? rowToArtifact(row) : undefined;
   }
 
-  /** Only artifacts the user explicitly saved — see `saveArtifact`. Auto-created (Mode A/B) rows stay off the Artifacts page until saved. `getArtifact` stays unfiltered for direct-id lookups (content route, save route). */
+  /** Only artifacts the user explicitly saved — see `saveArtifact`. Auto-created (in-process/B) rows stay off the Artifacts page until saved. `getArtifact` stays unfiltered for direct-id lookups (content route, save route). */
   listArtifacts(): ArtifactRow[] {
     const rows = this.db.prepare(`SELECT * FROM artifacts WHERE saved_at IS NOT NULL ORDER BY created_at DESC`).all();
     return rows.map(rowToArtifact);

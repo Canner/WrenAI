@@ -1,15 +1,15 @@
 import { enforceCompliance } from "../compliance/index.js";
-import { runModeADefault } from "./mode-a.js";
-import { runModeBDefault } from "./mode-b.js";
+import { runInProcessDefault } from "./in-process.js";
+import { runDispatchedDefault } from "./dispatched.js";
 import { runCodexAskDefault } from "./codex-ask.js";
 import type { RouteOptions, RouteResult } from "./types.js";
 
 /**
  * The single seam mapping a resolved `AuthChoice` to a back-end:
- * Claude subscription -> Mode B (warble-agent-sdk), Codex subscription ->
+ * Claude subscription -> dispatched (warble-agent-sdk), Codex subscription ->
  * codex:local, everything else
- * (`api-key`/`local`/`gateway`) -> Mode A (compile to a vercel bundle and run
- * in-process via `runAgent`). `modeA`/`modeB` are injectable so callers and
+ * (`api-key`/`local`/`gateway`) -> in-process (compile to a vercel bundle and run
+ * In-process via `runAgent`). `inProcess`/`dispatched` are injectable so callers and
  * tests can stub either back-end without touching the other or invoking any
  * real compile/dispatch — this is the hook point later tickets (compliance
  * gating, hybrid dispatch) attach to without needing to touch the CLI or
@@ -18,7 +18,7 @@ import type { RouteOptions, RouteResult } from "./types.js";
  * The compliance gate (`enforceCompliance`) runs first, before either
  * back-end is invoked: a `subscription` `AuthChoice` used for a `"hosted"`
  * deployment throws `ComplianceError` here, so no caller of `route()` can
- * reach Mode B for a use the ToS doesn't allow, regardless of whether it
+ * reach dispatched for a use the ToS doesn't allow, regardless of whether it
  * came through the CLI's own (separate, warning-printing) check. The
  * resulting `warnings` (e.g. `SUBSCRIPTION_TOS_WARNING`) are attached to the
  * returned `RouteResult` so programmatic callers of `route()` see them too
@@ -26,18 +26,18 @@ import type { RouteOptions, RouteResult } from "./types.js";
  * timed `enforceCompliance` call (before `route()` is even invoked, so they
  * print before the back-end runs rather than after `route()` resolves), but
  * that's an independent concern from surfacing them on the result value
- * here. `runModeBDefault` also re-runs this same gate as a belt for direct
+ * here. `runDispatchedDefault` also re-runs this same gate as a belt for direct
  * (non-`route()`) callers — see its doc comment.
  *
- * The per-tier "hybrid" override: `options.tierBinding` (Mode A's per-tier override) and
- * `options.modelsConfig` (Mode B's `--models-config` passthrough) are each
+ * The per-tier "hybrid" override: `options.tierBinding` (in-process's per-tier override) and
+ * `options.modelsConfig` (dispatched's `--models-config` passthrough) are each
  * meaningful for exactly one back-end. Rather than silently ignore one when
  * the `authChoice` picks the other back-end, `route()` loud-fails — the
- * same "no silent misrouting" posture as the existing Mode B provider guard.
+ * same "no silent misrouting" posture as the existing dispatched provider guard.
  */
 export async function route(options: RouteOptions): Promise<RouteResult> {
-  const runModeA = options.modeA ?? runModeADefault;
-  const runModeB = options.modeB ?? runModeBDefault;
+  const runInProcess = options.inProcess ?? runInProcessDefault;
+  const runDispatched = options.dispatched ?? runDispatchedDefault;
   const runCodexAsk = options.codexAsk ?? runCodexAskDefault;
   const { authChoice } = options;
   const deployment = options.deployment ?? "personal";
@@ -47,8 +47,8 @@ export async function route(options: RouteOptions): Promise<RouteResult> {
   if (authChoice.mode === "subscription") {
     if (options.tierBinding !== undefined) {
       throw new Error(
-        "tierBinding (hybrid Mode A per-tier routing) has no effect under a subscription " +
-          "authChoice — Mode B has no adapter/tier binding of its own; use modelsConfig instead " +
+        "tierBinding (hybrid in-process per-tier routing) has no effect under a subscription " +
+          "authChoice — dispatched has no adapter/tier binding of its own; use modelsConfig instead " +
           "(warble-agent-sdk's own --models-config per-step routing)",
       );
     }
@@ -77,7 +77,7 @@ export async function route(options: RouteOptions): Promise<RouteResult> {
       });
       return { backend: "codex-local", warnings, ...result };
     }
-    const result = await runModeB({
+    const result = await runDispatched({
       authChoice,
       profileSource: options.profileSource,
       userProject: options.userProject,
@@ -98,14 +98,14 @@ export async function route(options: RouteOptions): Promise<RouteResult> {
 
   if (options.modelsConfig !== undefined) {
     throw new Error(
-      `modelsConfig (hybrid Mode B --models-config passthrough) has no effect under a ` +
+      `modelsConfig (hybrid dispatched --models-config passthrough) has no effect under a ` +
         `"${authChoice.mode}" authChoice — that flag only reaches warble-agent-sdk's chat ` +
-        "invocation, which Mode A never shells; use tierBinding instead (this harness's own " +
+        "invocation, which in-process never shells; use tierBinding instead (this harness's own " +
         "per-tier adapter map)",
     );
   }
 
-  const result = await runModeA({
+  const result = await runInProcess({
     authChoice,
     profileSource: options.profileSource,
     userProject: options.userProject,

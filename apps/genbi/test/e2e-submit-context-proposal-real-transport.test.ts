@@ -14,7 +14,7 @@ import type { TurnDeps } from "../server/turn.js";
  * AC#6: an end-to-end proposal-to-ledger check over a REAL socket -- a BFF
  * listening on a spare, OS-assigned port (`port: 0`), reached with a
  * hand-crafted JSON-RPC `tools/call` body over actual `fetch`, not the
- * in-process Hono `.request()` helper the rest of this suite uses. That
+ * In-process Hono `.request()` helper the rest of this suite uses. That
  * helper never opens a socket or serializes/parses real HTTP bodies, so it
  * cannot see a defect in the transport layer itself (headers, chunked JSON,
  * content-type negotiation) the way `native-artifacts.test.ts`'s own

@@ -4,7 +4,7 @@ import { canonicalizeProposal, hashEnrichmentOperation, normalizeEnrichmentConfi
 import {
   composeDraftPrompt,
   composeInspectPrompt,
-  createModeBEnrichmentDraftRunner,
+  createDispatchedEnrichmentDraftRunner,
   DRAFT_ENRICHMENT_AGENT_ID,
   type EnrichmentDispatchInput,
   INSPECT_CONTEXT_AGENT_ID,
@@ -174,10 +174,10 @@ describe("composeDraftPrompt", () => {
   });
 });
 
-describe("createModeBEnrichmentDraftRunner (injected dispatch, no live model turn)", () => {
+describe("createDispatchedEnrichmentDraftRunner (injected dispatch, no live model turn)", () => {
   it("dispatches inspect_context then draft_enrichment, folding turn 1's output into turn 2's composed question, against the bound project", async () => {
     const calls: EnrichmentDispatchInput[] = [];
-    const runner = createModeBEnrichmentDraftRunner({
+    const runner = createDispatchedEnrichmentDraftRunner({
       getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
       dispatch: async (input) => {
         calls.push(input);
@@ -225,17 +225,17 @@ describe("createModeBEnrichmentDraftRunner (injected dispatch, no live model tur
 
   it("rejects a draft call when the live auth choice is not Claude subscription, without ever dispatching (no live model turn, no subprocess spawn)", async () => {
     // Deliberately no `dispatch` override: this proves the *production*
-    // `defaultDispatch` path rejects before calling `runModeBDefault` at all,
-    // so this stays safe to run without a live model or a real Mode B
+    // `defaultDispatch` path rejects before calling `runDispatchedDefault` at all,
+    // so this stays safe to run without a live model or a real dispatched
     // subprocess.
-    const guarded = createModeBEnrichmentDraftRunner({ getAuthChoice: () => ({ mode: "api-key", adapter: "mock" }) });
+    const guarded = createDispatchedEnrichmentDraftRunner({ getAuthChoice: () => ({ mode: "api-key", adapter: "mock" }) });
     await expect(guarded.draft({ projectPath: "/tmp/project", mode: "grill", projectRevision: "rev-abc" })).rejects.toThrow(
       /requires Claude subscription auth/,
     );
   });
 
   it("propagates a translation failure (unparseable or shapeless terminal) as EnrichmentContractError rather than a raw parse error", async () => {
-    const runner = createModeBEnrichmentDraftRunner({
+    const runner = createDispatchedEnrichmentDraftRunner({
       getAuthChoice: () => ({ mode: "subscription", provider: "claude" }),
       dispatch: async (input) => ({ finalText: input.agentId === INSPECT_CONTEXT_AGENT_ID ? "gaps" : "not json at all" }),
     });
@@ -245,25 +245,25 @@ describe("createModeBEnrichmentDraftRunner (injected dispatch, no live model tur
   });
 });
 
-describe("createModeBEnrichmentDraftRunner readiness() -- the same live answer draft() itself would give, without ever dispatching", () => {
+describe("createDispatchedEnrichmentDraftRunner readiness() -- the same live answer draft() itself would give, without ever dispatching", () => {
   it("reports available for Claude subscription auth", () => {
-    const runner = createModeBEnrichmentDraftRunner({ getAuthChoice: () => ({ mode: "subscription", provider: "claude" }) });
+    const runner = createDispatchedEnrichmentDraftRunner({ getAuthChoice: () => ({ mode: "subscription", provider: "claude" }) });
     expect(runner.readiness?.()).toEqual({ available: true });
   });
 
   it("reports unavailable with a stable reason code for Codex subscription auth -- the exact defect this seam fixes", () => {
-    const runner = createModeBEnrichmentDraftRunner({ getAuthChoice: () => ({ mode: "subscription", provider: "codex" }) });
+    const runner = createDispatchedEnrichmentDraftRunner({ getAuthChoice: () => ({ mode: "subscription", provider: "codex" }) });
     expect(runner.readiness?.()).toEqual({ available: false, reason: "requires_claude_subscription" });
   });
 
   it("reports unavailable with the same reason code for a non-subscription auth mode (api-key)", () => {
-    const runner = createModeBEnrichmentDraftRunner({ getAuthChoice: () => ({ mode: "api-key", adapter: "mock" }) });
+    const runner = createDispatchedEnrichmentDraftRunner({ getAuthChoice: () => ({ mode: "api-key", adapter: "mock" }) });
     expect(runner.readiness?.()).toEqual({ available: false, reason: "requires_claude_subscription" });
   });
 
   it("re-reads the live auth choice on every call, matching draft()'s own live (non-frozen) read", () => {
     let authChoice: AuthChoice = { mode: "subscription", provider: "codex" };
-    const runner = createModeBEnrichmentDraftRunner({ getAuthChoice: () => authChoice });
+    const runner = createDispatchedEnrichmentDraftRunner({ getAuthChoice: () => authChoice });
     expect(runner.readiness?.()).toEqual({ available: false, reason: "requires_claude_subscription" });
     authChoice = { mode: "subscription", provider: "claude" };
     expect(runner.readiness?.()).toEqual({ available: true });
@@ -271,7 +271,7 @@ describe("createModeBEnrichmentDraftRunner readiness() -- the same live answer d
 
   it("never dispatches (no live model turn, no subprocess spawn) -- readiness is a pure read", () => {
     let dispatched = false;
-    const runner = createModeBEnrichmentDraftRunner({
+    const runner = createDispatchedEnrichmentDraftRunner({
       getAuthChoice: () => ({ mode: "subscription", provider: "codex" }),
       dispatch: async () => {
         dispatched = true;

@@ -1,8 +1,8 @@
 {
   "vercel_bundle_version": "0.1",
   "compat": {
-    "min_ir_version": "0.5",
-    "max_ir_version": "0.5"
+    "min_ir_version": "0.6",
+    "max_ir_version": "0.6"
   },
   "profile": "genbi-default",
   "target": "vercel:headless",

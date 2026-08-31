@@ -31,7 +31,7 @@ describe("buildHarnessDto — real genbi-default bundle", () => {
       verifyGate: true,
       bundleId: "genbi-default@vercel:headless",
       bundleVersion: "0.1",
-      irVersion: "0.5",
+      irVersion: "0.6",
       dispatchTarget: "vercel:headless",
       bundleHash: expect.stringMatching(/^[0-9a-f]{7}$/),
       status: "Not bound yet",
@@ -628,7 +628,7 @@ describe("buildHarnessDto — synthetic bundles (mapping edge cases)", () => {
     [{ mode: "local", endpoint: "http://localhost:11434/v1" } as const, "local", "Local (http://localhost:11434/v1)", "in-process"],
     [{ mode: "gateway" } as const, "gateway", "Gateway", "in-process"],
   ])(
-    "derives runtime.backend/label from authChoice %o — never the internal modeA/modeB dispatch bucket",
+    "derives runtime.backend/label from authChoice %o — never the internal inProcess/dispatched dispatch bucket",
     (authChoice, expectedBackend, expectedLabel, expectedDispatcher) => {
       const bundle = loadBundle(buildSyntheticBundle());
       const store = new Store(":memory:");
@@ -670,5 +670,16 @@ describe("buildHarnessDto — synthetic bundles (mapping edge cases)", () => {
     store.setConfigJson("context.models", []);
     const dto = buildHarnessDto(bundle, store, BASE_ROUTE_OPTIONS);
     expect(dto.connection).toMatchObject({ tablesSynced: 0, health: "degraded" });
+  });
+
+  it.each([
+    [{ mode: "subscription", provider: "claude" } as const, "claude-agent-sdk:setup", "Claude Setup runner"],
+    [{ mode: "subscription", provider: "codex" } as const, "codex-local:setup", "Codex Setup runner"],
+    [{ mode: "api-key", adapter: "mock" } as const, "in-process:setup", "In-process Setup runner"],
+  ])("describes Setup through its provider-specific Setup runner for auth %o", (authChoice, target, targetLabel) => {
+    const setupBundle = loadBundle(buildSyntheticBundle({ profile: "genbi-setup" }));
+    const dto = buildHarnessDto(setupBundle, new Store(":memory:"), { ...BASE_ROUTE_OPTIONS, authChoice }, "setup", undefined, { available: true });
+    expect(dto.purpose).toMatchObject({ executionKind: "setup_runner", target, targetLabel, available: true });
+    expect(dto.purpose).not.toHaveProperty("reason");
   });
 });

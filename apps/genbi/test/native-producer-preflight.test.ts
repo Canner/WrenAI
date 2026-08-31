@@ -1,4 +1,5 @@
-import { appendFileSync, chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,19 +61,22 @@ const scope = JSON.parse(readFileSync(value('--native-scope'), 'utf8'));
 const runtimeKeys = ['version','shim','launcher','venv_python','tool_root','site_packages','source_root','interpreter','interpreter_root'];
 if (target === 'codex:interactive' && (!scope.wren_runtime || JSON.stringify(Object.keys(scope.wren_runtime).sort()) !== JSON.stringify(runtimeKeys.slice().sort()))) process.exit(91);
 if (target === 'claude-code:interactive' && Object.hasOwn(scope, 'wren_runtime')) process.exit(92);
-if (scope.version !== '2' || scope.cwd !== out) process.exit(96);
-if (purpose !== 'setup' && (!scope.binding || !scope.binding.project_identity || !scope.binding.generation || !scope.binding.revision)) process.exit(93);
-if (purpose !== 'setup' && scope.scope_id.startsWith('preflight-') && (scope.binding?.project_identity !== 'native-preflight-project' || scope.binding?.generation !== '1' || scope.binding?.revision !== 'native-preflight-revision')) process.exit(95);
-if (purpose === 'setup' && (Object.hasOwn(scope, 'binding') || typeof scope.bootstrap_root !== 'string' || scope.bootstrap_root === out)) process.exit(94);
-appendFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'producer-${name}.calls'), target + ':' + purpose + '\\n');
 const agent = purpose === 'analysis' ? 'answer_query' : purpose === 'setup' ? 'connect_source' : 'draft_enrichment';
 const profile = purpose === 'analysis' ? 'genbi-default' : purpose === 'setup' ? 'genbi-setup' : 'genbi-enrich-context';
-const scopeEntry = false;
+const scopeEntry = target === 'claude-code:interactive' && purpose === 'analysis';
 const welcome = purpose === 'setup'
   ? 'Help me set up this GenBI project. Start by explaining the next setup step and ask what data source I want to connect.'
   : purpose === 'analysis'
     ? 'Help me analyze this data. Ask me what question I want to answer about the server-bound project.'
     : "Help me inspect this project's context and draft a read-only enrichment proposal. Do not apply changes; ask what context I want to review.";
+if (scope.version !== '3' || scope.cwd !== out) process.exit(96);
+const entryKeys = scopeEntry ? ['kind', 'prompt'] : ['prompt', 'verb'];
+if (!scope.entry || JSON.stringify(Object.keys(scope.entry).sort()) !== JSON.stringify(entryKeys) || scope.entry.prompt !== welcome) process.exit(96);
+if (scopeEntry ? scope.entry.kind !== 'scope' : scope.entry.verb !== agent) process.exit(96);
+if (purpose !== 'setup' && (!scope.binding || !scope.binding.project_identity || !scope.binding.generation || !scope.binding.revision)) process.exit(93);
+if (purpose !== 'setup' && scope.scope_id.startsWith('preflight-') && (scope.binding?.project_identity !== 'native-preflight-project' || scope.binding?.generation !== '1' || scope.binding?.revision !== 'native-preflight-revision')) process.exit(95);
+if (purpose === 'setup' && (Object.hasOwn(scope, 'binding') || typeof scope.bootstrap_root !== 'string' || scope.bootstrap_root === out)) process.exit(94);
+appendFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'producer-${name}.calls'), target + ':' + purpose + '\\n');
 mkdirSync(path.join(out, '.warble'), { recursive: true });
 writeFileSync(path.join(out, 'RUN.md'), 'handoff');
 writeFileSync(path.join(out, '.warble', 'interactive-launch.json'), JSON.stringify({
@@ -106,6 +110,20 @@ function productionService(dir: string, producer: string, wrenShim: string, term
   const state = initializeNativeSessionStateBase(path.join(stateParent, "state.sqlite"));
   const artifacts = new NativeArtifactService({ store, artifactsRoot: path.join(dir, "artifacts"), expectedMcpUrl: "http://127.0.0.1:4787/api/native-sessions/mcp", mcpUrl: "http://127.0.0.1:4787/api/native-sessions/mcp", getBinding: () => binding });
   const pty: PtyFactory = { spawn: () => ({ onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} }) };
+  const codexRoot = mkdtempSync(path.join(tmpdir(), "genbi-native-preflight-codex-")); dirs.push(codexRoot);
+  const codexBinDirectory = path.join(codexRoot, "bin"); mkdirSync(codexBinDirectory);
+  const codexBin = path.join(codexBinDirectory, "codex");
+  writeFileSync(codexBin, "#!/bin/sh\necho codex-cli 0.146.0\n"); chmodSync(codexBin, 0o700);
+  writeFileSync(path.join(codexRoot, "package.json"), JSON.stringify({ name: "@openai/codex", version: "0.146.0" }));
+  const codexClosure = createHash("sha256");
+  const visitCodex = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const candidate = path.join(directory, entry.name);
+      if (entry.isDirectory()) visitCodex(candidate);
+      else if (entry.isFile()) { codexClosure.update(path.relative(codexRoot, candidate)); codexClosure.update("\0"); codexClosure.update(readFileSync(candidate)); }
+    }
+  };
+  visitCodex(codexRoot);
   return {
     store,
     service: new NativeSessionService({
@@ -116,6 +134,11 @@ function productionService(dir: string, producer: string, wrenShim: string, term
       materializationState: state,
       irPaths: irPaths(dir),
       warbleBin: producer,
+      codexBin,
+      codexBinSha256: createHash("sha256").update(readFileSync(codexBin)).digest("hex"),
+      codexSource: "npm:@openai/codex",
+      codexSourceClosureSha256: codexClosure.digest("hex"),
+      codexVersion: "0.146.0",
       wrenShim,
       terminalHostAvailable: async () => true,
       executableAvailable: () => true,

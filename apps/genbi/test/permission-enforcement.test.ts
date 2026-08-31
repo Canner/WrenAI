@@ -15,7 +15,7 @@ import { createWrenQueryTool, createWriteArtifactTool } from "../harness/tools/n
 import { readFixture } from "./fixtures.js";
 
 /**
- * Permission-enforcement regression (item C, Mode A / harness-owned):
+ * Permission-enforcement regression (item C, in-process / harness-owned):
  * locks the property that the harness's `ExecutionEnv`/capability gate
  * actually blocks out-of-scope or destructive access, and that the native
  * wren tool only ever runs `wren` — never a command derived from model or
@@ -28,11 +28,11 @@ import { readFixture } from "./fixtures.js";
  * exactly how `test/exec-local.test.ts`, `test/native-write-artifact.test.ts`,
  * and `test/tool-resolution.test.ts` already test these guards.
  *
- * Mode B's tool allow-list is enforced separately, warble-side, by the
+ * Dispatched's tool allow-list is enforced separately, warble-side, by the
  * Claude Agent SDK's `canUseTool` hook — out of this package's scope and
  * proven there, not here. The CLI-spike workspace-trust gotcha (an
  * interactive `claude` CLI prompting to trust an untrusted directory) does
- * not apply to the SDK path Mode B actually uses (`warble-agent-sdk chat`),
+ * not apply to the SDK path dispatched actually uses (`warble-agent-sdk chat`),
  * which drives the Agent SDK programmatically with no interactive prompt.
  */
 

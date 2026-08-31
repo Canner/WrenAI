@@ -20,8 +20,8 @@ interface BuildBundleOptions {
 export function buildSyntheticBundle(options: BuildBundleOptions = {}): unknown {
   const {
     profile = "synthetic-profile",
-    minIrVersion = "0.5",
-    maxIrVersion = "0.5",
+    minIrVersion = "0.6",
+    maxIrVersion = "0.6",
     capabilities = [
       { capability: "llm:cheap", outcome: "native", provided_by: "runtime", criticality: "required" },
     ],

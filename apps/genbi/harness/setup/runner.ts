@@ -2,7 +2,7 @@
  * Agentic setup/connect flow — BFF wiring.
  *
  * The Setup wizard's CONNECT step onboards a NEW wren project by dispatching
- * warble's `connect_source` component via a Mode B (claude-agent-sdk)
+ * warble's `connect_source` component via a dispatched (claude-agent-sdk)
  * subprocess. Design decisions this file encodes (see the ticket for full
  * rationale):
  *
@@ -10,13 +10,13 @@
  *    only in the agent conversation: each setup turn is independently
  *    re-verifiable via `parseSetupTerminal`'s on-disk artifact checks below,
  *    regardless of which mechanism served the turn. Historically every setup
- *    turn was ALSO a fresh Mode B dispatch with no SDK-level continuity
+ *    turn was ALSO a fresh dispatched dispatch with no SDK-level continuity
  *    across turns (a disk-state-only "Plan B" re-composition — see
  *    `server/compose.ts`'s `composeSetupPrompt`'s `resumeFromDisk` option).
  *    `SetupStepRunOptions.resumeSessionId`/`SetupStepRunResult.sessionId`
  *    below add the alternative "Plan A": resuming the SAME underlying
- *    agent-sdk conversation (`ModeBOptions.resumeSessionId` /
- *    `ModeBResult.sessionId`, `../route/mode-b.js`) when a caller has one to
+ *    agent-sdk conversation (`DispatchedOptions.resumeSessionId` /
+ *    `DispatchedResult.sessionId`, `../route/dispatched.js`) when a caller has one to
  *    resume from, so a `max_turns_continue` decision (`server/turn.ts`) can
  *    give the agent a fresh turn budget without making it re-orient from
  *    scratch (re-`ls`, re-`Read`, re-fetch skills). Both remain available:
@@ -26,8 +26,8 @@
  *    the composed prompt, not in warble — `parseSetupTerminal` below parses
  *    it back out of the turn's finalText, and independently verifies
  *    `<root>/<name>/wren_project.yml` on disk before trusting an `ok`.
- *  - `SetupStepRunner` is a backend-abstract seam: `ModeBSetupRunner`
- *    (claude-agent-sdk subprocess, subscription auth) and `ModeASetupRunner`
+ *  - `SetupStepRunner` is a backend-abstract seam: `DispatchedSetupRunner`
+ *    (claude-agent-sdk subprocess, subscription auth) and `InProcessSetupRunner`
  *    (in-process vercel loop, api-key/local/gateway auth) both implement it,
  *    and a caller picks between them purely on `authChoice.mode` without
  *    otherwise caring which one served a given turn.
@@ -48,9 +48,9 @@ import { createAgentEventEmitter, type AgentEvent, type AgentEventInput } from "
 import { createLocalExecutionEnv, type ExecutionPolicy } from "../exec/index.js";
 import { executeAgent, StepBudgetExhaustedError } from "../loop/index.js";
 
-// Re-exported: `ModeASetupRunner.run()` throws this (with an enriched,
+// Re-exported: `InProcessSetupRunner.run()` throws this (with an enriched,
 // Mode-A-specific `.message` — see its `catch` block below) whenever the
-// dispatched agent's step budget is what ended the turn, not the model
+// Dispatched agent's step budget is what ended the turn, not the model
 // finishing on its own. Callers that want to distinguish that from any
 // other setup-dispatch failure (e.g. via `instanceof`) can import it from
 // here without also reaching into `harness/loop/index.js`.
@@ -60,7 +60,7 @@ import type { AdapterSpec } from "../providers/index.js";
 import { deriveAdapterSpec } from "../route/adapter-spec.js";
 import { resolveCodexLocalCli } from "../route/codex-local-cli.js";
 import type { ResolvedCli } from "../route/agent-sdk-cli.js";
-import { runModeBDefault } from "../route/mode-b.js";
+import { runDispatchedDefault } from "../route/dispatched.js";
 import { buildUniformTierBinding } from "../route/tier-binding.js";
 import { createNativeToolRegistry, createSetupExecutionTool, SETUP_EXECUTION_TOOL_NAME } from "../tools/index.js";
 import { withResolvedTools } from "../tools/wiring.js";
@@ -69,7 +69,7 @@ import { CodexSetupEventMapper } from "./codex-events.js";
 /** The warble component the setup wizard's connect step dispatches. */
 export const CONNECT_SOURCE_AGENT_ID = "connect_source";
 
-/** The warble component the setup wizard's context step dispatches (`warble/genbi-setup/components/build_context`). */
+/** The Warble component the setup wizard's context step dispatches (`profiles/genbi-setup/components/build_context`). */
 export const BUILD_CONTEXT_AGENT_ID = "build_context";
 
 /**
@@ -77,7 +77,7 @@ export const BUILD_CONTEXT_AGENT_ID = "build_context";
  * chat --max-turns`. Well above the dispatcher's own default (40) because
  * `build_context` agentically generates an MDL — many read/introspect/write/
  * build/validate tool calls — and routinely blows past 40, failing the turn
- * with `error_max_turns`. Overridable via `ModeBSetupRunnerOptions.maxTurns`
+ * with `error_max_turns`. Overridable via `DispatchedSetupRunnerOptions.maxTurns`
  * (wired to `WREN_HARNESS_SETUP_MAX_TURNS` in `server/bin.ts`).
  */
 export const DEFAULT_SETUP_MAX_TURNS = 120;
@@ -107,12 +107,12 @@ export interface SetupStepRunOptions {
    * dispatching exactly what it always has without passing this explicitly.
    */
   readonly agentId?: string;
-  /** Forwarded to the Mode B executor so the turn's worklog streams identically to an Ask turn. */
+  /** Forwarded to the dispatched executor so the turn's worklog streams identically to an Ask turn. */
   readonly onEvent?: (event: AgentEvent) => void;
   /**
    * Plan A session resume: an SDK session id captured from an earlier turn's `SetupStepRunResult`
-   * (success) or its thrown error (failure — see `ModeBSessionError`, `../route/mode-b.js`). When
-   * set, forwarded to `ModeBOptions.resumeSessionId` so this turn resumes the SAME agent-sdk
+   * (success) or its thrown error (failure — see `DispatchedSessionError`, `../route/dispatched.js`). When
+   * set, forwarded to `DispatchedOptions.resumeSessionId` so this turn resumes the SAME agent-sdk
    * conversation instead of starting a fresh one. Omitted (or a runner that doesn't support it)
    * falls back to the pre-existing fresh-dispatch behavior.
    */
@@ -134,8 +134,8 @@ export interface SetupStepRunResult {
 
 /**
  * Backend-abstract seam for dispatching one setup-wizard turn. Implementations
- * own how the `connect_source` component actually runs (Mode B subprocess
- * today; a future in-process Mode A variant could implement this same
+ * own how the `connect_source` component actually runs (dispatched subprocess
+ * today; a future in-process variant could implement this same
  * interface) and are responsible for forwarding `onEvent` so the caller's SSE
  * worklog streaming is unaffected by which backend served the turn.
  */
@@ -168,9 +168,9 @@ export function selectSetupRunnerForAuth(authChoice: AuthChoice, runners: SetupR
 
 /**
  * Resolves the `--max-turns` budget for dispatching `agentId`, given an
- * optional explicit override (`ModeBSetupRunnerOptions.maxTurns`, wired from
+ * optional explicit override (`DispatchedSetupRunnerOptions.maxTurns`, wired from
  * `WREN_HARNESS_SETUP_MAX_TURNS` in `server/bin.ts`). Shared by
- * `ModeBSetupRunner.run()` and `ModeBSetupRunner.effectiveMaxTurns()` so the
+ * `DispatchedSetupRunner.run()` and `DispatchedSetupRunner.effectiveMaxTurns()` so the
  * two can never disagree.
  */
 function resolveEffectiveMaxTurns(configuredMaxTurns: number | undefined, agentId: string): number | undefined {
@@ -187,18 +187,18 @@ const SAFE_PROJECT_NAME = /^[a-zA-Z0-9_-]+$/;
  * be a strict descendant of the former. This is a pre-dispatch guard, not a
  * claim that filesystem paths cannot change after the child process starts.
  */
-function resolveModeBUserProject(runOptions: SetupStepRunOptions, agentId: string): string {
+function resolveDispatchedUserProject(runOptions: SetupStepRunOptions, agentId: string): string {
   const stepKey = runOptions.stepKey ?? (agentId === BUILD_CONTEXT_AGENT_ID ? "context" : "connect");
   if (stepKey === "connect") return runOptions.workspaceRoot;
 
   const projectName = runOptions.projectName;
   if (projectName === undefined || !SAFE_PROJECT_NAME.test(projectName)) {
-    throw new Error(`Mode B ${stepKey} requires a validated single-segment projectName`);
+    throw new Error(`dispatched ${stepKey} requires a validated single-segment projectName`);
   }
 
   const canonicalDirectory = (directory: string, label: string): string => {
-    if (!existsSync(directory)) throw new Error(`Mode B ${stepKey} ${label} must exist before dispatch`);
-    if (!statSync(directory).isDirectory()) throw new Error(`Mode B ${stepKey} ${label} must be a directory`);
+    if (!existsSync(directory)) throw new Error(`dispatched ${stepKey} ${label} must exist before dispatch`);
+    if (!statSync(directory).isDirectory()) throw new Error(`dispatched ${stepKey} ${label} must be a directory`);
     return realpathSync(directory);
   };
   const canonicalWorkspace = canonicalDirectory(runOptions.workspaceRoot, "workspace root");
@@ -206,13 +206,13 @@ function resolveModeBUserProject(runOptions: SetupStepRunOptions, agentId: strin
   const canonicalProject = canonicalDirectory(projectDir, "project directory");
   const relative = path.relative(canonicalWorkspace, canonicalProject);
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error(`Mode B ${stepKey} project directory must be a strict descendant of the setup workspace root`);
+    throw new Error(`dispatched ${stepKey} project directory must be a strict descendant of the setup workspace root`);
   }
   return canonicalProject;
 }
 
-export interface ModeBSetupRunnerOptions {
-  /** Path to the committed genbi-setup IR (e.g. `warble/genbi-setup/ir.golden.json`) — see `resolveSetupIrPath`. */
+export interface DispatchedSetupRunnerOptions {
+  /** Path to the committed genbi-setup IR (e.g. `profiles/genbi-setup/ir.golden.json`) — see `resolveSetupIrPath`. */
   readonly irPath: string;
   readonly warbleBin?: string;
   readonly agentSdkBin?: string;
@@ -225,17 +225,17 @@ export interface ModeBSetupRunnerOptions {
 }
 
 /**
- * Dispatches a setup-wizard turn over Mode B, bypassing `route()` entirely
+ * Dispatches a setup-wizard turn over dispatched, bypassing `route()` entirely
  * (unlike the Ask turn path) so it can perform its own, setup-specific
  * subscription-mode check with a clear, actionable error message rather than
- * `route()`'s generic Mode A/B branch. Uses `ModeBOptions.irPath` to skip
+ * `route()`'s generic in-process/B branch. Uses `DispatchedOptions.irPath` to skip
  * `compileProfile` — there is no bound wren project yet during setup, so
  * there is nothing to compile a profile against; the setup dispatch always
  * runs the same fixed, warble-committed IR regardless of which project is
  * being onboarded.
  */
-export class ModeBSetupRunner implements SetupStepRunner {
-  constructor(private readonly options: ModeBSetupRunnerOptions) {}
+export class DispatchedSetupRunner implements SetupStepRunner {
+  constructor(private readonly options: DispatchedSetupRunnerOptions) {}
 
   effectiveMaxTurns(agentId: string): number | undefined {
     return resolveEffectiveMaxTurns(this.options.maxTurns, agentId);
@@ -248,23 +248,23 @@ export class ModeBSetupRunner implements SetupStepRunner {
     // many tool calls. connect/connect_resume stay on the dispatcher's default
     // (40) so a stuck connect (e.g. bad credentials retrying) still fails fast
     // rather than burning 3x the runway first. An explicit
-    // ModeBSetupRunnerOptions.maxTurns override, when set, applies to any turn.
+    // DispatchedSetupRunnerOptions.maxTurns override, when set, applies to any turn.
     // Kept in lockstep with `effectiveMaxTurns()` above via the shared
     // `resolveEffectiveMaxTurns` helper.
     const maxTurns = this.effectiveMaxTurns(agentId);
     if (authChoice.mode !== "subscription") {
       throw new Error(
-        `Agentic setup requires subscription auth mode (Mode B) to dispatch "${agentId}" ` +
+        `Agentic setup requires subscription auth mode (dispatched) to dispatch "${agentId}" ` +
           `via the claude-agent-sdk dispatcher — got "${authChoice.mode}". Set WREN_HARNESS_MODE=subscription ` +
           "to enable the setup wizard's connect step.",
       );
     }
 
     const modelsConfig = this.options.getModelsConfig?.();
-    const userProject = resolveModeBUserProject(runOptions, agentId);
-    const result = await runModeBDefault({
+    const userProject = resolveDispatchedUserProject(runOptions, agentId);
+    const result = await runDispatchedDefault({
       authChoice,
-      // Unused: `irPath` below makes `runModeBDefault` skip compileProfile
+      // Unused: `irPath` below makes `runDispatchedDefault` skip compileProfile
       // entirely (see its short-circuit), so this value is never read. It is
       // set to the same setup IR for clarity, not because it is consulted.
       profileSource: this.options.irPath,
@@ -307,6 +307,57 @@ export interface CodexSetupRunnerOptions {
   readonly timeoutMs?: number;
 }
 
+async function resolveCodexSetupProducedField(irPath: string, agentId: string): Promise<string> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(irPath, "utf8"));
+  } catch {
+    throw new Error("Codex setup IR is not valid JSON");
+  }
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("Codex setup IR does not contain a valid component contract");
+  }
+  const components = (parsed as { components?: unknown }).components;
+  if (!Array.isArray(components)) {
+    throw new Error("Codex setup IR does not contain a valid component contract");
+  }
+  const matches = components.filter(
+    (component): component is { id: string; llm_calls?: unknown } =>
+      typeof component === "object" && component !== null && (component as { id?: unknown }).id === agentId,
+  );
+  const component = matches[0];
+  if (matches.length !== 1 || component === undefined || !Array.isArray(component.llm_calls) || component.llm_calls.length !== 1) {
+    throw new Error(`Codex setup component "${agentId}" does not declare exactly one produced field`);
+  }
+  const produces = (component.llm_calls[0] as { produces?: unknown } | null)?.produces;
+  if (typeof produces !== "string" || !produces.trim()) {
+    throw new Error(`Codex setup component "${agentId}" does not declare exactly one produced field`);
+  }
+  return produces;
+}
+
+function unwrapCodexSetupEnvelope(rawFinalText: string, expectedField: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawFinalText);
+  } catch {
+    throw new Error("Codex setup final response is not valid JSON");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("Codex setup final response must be a single-field JSON object");
+  }
+  const fields = Object.keys(parsed);
+  if (fields.length !== 1 || fields[0] !== expectedField) {
+    throw new Error(`Codex setup final response must contain only the declared "${expectedField}" field`);
+  }
+  const produced = (parsed as Record<string, unknown>)[expectedField];
+  if (typeof produced !== "string") {
+    throw new Error(`Codex setup final response field "${expectedField}" must be a string`);
+  }
+  return produced;
+}
+
 /**
  * Setup-only Codex subscription runner. It invokes the target's `dispatch`
  * command directly against the committed setup IR and exposes exactly one
@@ -325,6 +376,7 @@ export class CodexSetupRunner implements SetupStepRunner {
     }
     const model = this.options.getStrongModel().trim();
     if (!model) throw new Error("Codex setup requires a configured strong-tier model");
+    const expectedProducedField = await resolveCodexSetupProducedField(this.options.irPath, agentId);
 
     const cli = this.options.codexLocalCli ?? (await resolveCodexLocalCli(this.options.codexLocalBin));
     const traceDir = this.options.mcpServer ? undefined : await mkdtemp(path.join(os.tmpdir(), "wren-codex-setup-trace-"));
@@ -332,7 +384,7 @@ export class CodexSetupRunner implements SetupStepRunner {
     if (tracePath) await writeFile(tracePath, "", { encoding: "utf8", mode: 0o600 });
     const mcp = this.options.mcpServer ?? defaultCodexSetupMcpInvocation(tracePath!);
     const timeoutMs = this.options.timeoutMs ?? 10 * 60 * 1000;
-    const turnRoot = resolveModeBUserProject(runOptions, agentId);
+    const turnRoot = resolveDispatchedUserProject(runOptions, agentId);
     const args = [
       ...cli.prefixArgs,
       "dispatch",
@@ -366,7 +418,8 @@ export class CodexSetupRunner implements SetupStepRunner {
     emitter.emit({ kind: "run.start", mode: "B", agentId });
     const mapper = new CodexSetupEventMapper(tracePath);
     try {
-      const finalText = await spawnCodexSetup(cli.command, args, mapper, emitter.emit, timeoutMs + 5_000);
+      const rawFinalText = await spawnCodexSetup(cli.command, args, mapper, emitter.emit, timeoutMs + 5_000);
+      const finalText = unwrapCodexSetupEnvelope(rawFinalText, expectedProducedField);
       emitter.emit({ kind: "run.finish", status: "answer" });
       return { finalText };
     } catch (error) {
@@ -478,7 +531,7 @@ function spawnCodexSetup(
 /**
  * This package's bundled setup capability-provider fragment
  * (`providers/setup.provider.yaml`) — the default `--provider` for
- * `ModeASetupRunner`'s dispatch, mirroring `compileProfile`'s own
+ * `InProcessSetupRunner`'s dispatch, mirroring `compileProfile`'s own
  * `DEFAULT_WREN_PROVIDER_PATH` constant (`harness/compile/pipeline.ts`).
  */
 export const DEFAULT_SETUP_PROVIDER_PATH = path.resolve(
@@ -489,8 +542,8 @@ export const DEFAULT_SETUP_PROVIDER_PATH = path.resolve(
   "setup.provider.yaml",
 );
 
-export interface ModeASetupRunnerOptions {
-  /** Path to the committed genbi-setup IR (e.g. `warble/genbi-setup/ir.golden.json`) — same contract as `ModeBSetupRunnerOptions.irPath`. */
+export interface InProcessSetupRunnerOptions {
+  /** Path to the committed genbi-setup IR (e.g. `profiles/genbi-setup/ir.golden.json`) — same contract as `DispatchedSetupRunnerOptions.irPath`. */
   readonly irPath: string;
   readonly warbleBin?: string;
   /** Overrides the bundled `providers/setup.provider.yaml` fragment `warble dispatch --provider` uses. */
@@ -503,24 +556,24 @@ export interface ModeASetupRunnerOptions {
   readonly getStrongAdapterSpec?: (authChoice: AuthChoice) => AdapterSpec;
   /**
    * Agent-loop step budget forwarded as `ExecuteAgentContext.maxSteps`;
-   * resolved the same way as `ModeBSetupRunnerOptions.maxTurns` via the
+   * resolved the same way as `DispatchedSetupRunnerOptions.maxTurns` via the
    * shared `resolveEffectiveMaxTurns` (only `build_context` gets the raised
    * `DEFAULT_SETUP_MAX_TURNS` budget by default; `connect`/`connect_resume`
    * fall back to `ToolLoopAgent`'s own SDK default of 20 steps unless this
    * is set). Wired to the same `WREN_HARNESS_SETUP_MAX_TURNS` env var as
-   * `ModeBSetupRunnerOptions.maxTurns` in `server/bin.ts`.
+   * `DispatchedSetupRunnerOptions.maxTurns` in `server/bin.ts`.
    */
   readonly maxTurns?: number;
 }
 
 /**
- * Dispatches a setup-wizard turn over Mode A: the in-process vercel loop
+ * Dispatches a setup-wizard turn over in-process: the in-process vercel loop
  * (`harness/loop/executor.ts`'s `executeAgent`), instead of shelling a
- * claude-agent-sdk subprocess. Mirrors `ModeBSetupRunner`'s own shape
+ * claude-agent-sdk subprocess. Mirrors `DispatchedSetupRunner`'s own shape
  * (same `SetupStepRunner` interface, same "bypass the per-user compile
  * pipeline and dispatch the fixed, warble-committed setup IR directly"
- * design) but reuses the Mode A building blocks `harness/route/mode-a.ts`'s
- * `runModeADefault` wires together, minus the two pieces that don't apply to
+ * design) but reuses the in-process building blocks `harness/route/in-process.ts`'s
+ * `runInProcessDefault` wires together, minus the two pieces that don't apply to
  * setup:
  *
  *  - No `resolveWrenBinary()` preflight — the setup components' only tool
@@ -534,11 +587,11 @@ export interface ModeASetupRunnerOptions {
  *    the two setup components declare. Rather than widen that shared module
  *    for a guardrail only this path uses, this runner builds its own fixed
  *    `ExecutionPolicy` below, matching what `setup_execution` actually grants
- *    on the Mode B (claude-agent-sdk) side: unrestricted exec (subject only
+ *    on the dispatched (claude-agent-sdk) side: unrestricted exec (subject only
  *    to the native tool's own destructive/redirection denylist, never
  *    `readOnly`-gated) and a write scope of the whole workspace root.
  *
- * Unlike `ModeBSetupRunner`, which forwards its `--max-turns` budget to a
+ * Unlike `DispatchedSetupRunner`, which forwards its `--max-turns` budget to a
  * subprocess CLI flag, this runner's turn budget is an in-process
  * `ExecuteAgentContext.maxSteps` (an `isStepCount` stop condition on the
  * step's underlying `ToolLoopAgent`) — see `effectiveMaxTurns()` below for
@@ -546,7 +599,7 @@ export interface ModeASetupRunnerOptions {
  * for how a turn that runs out of steps before finishing is reported.
  *
  * Also calls `executeAgent` directly rather than the higher-level
- * `runAgent()` Mode A's Ask-turn path uses: `runAgent` asserts every
+ * `runAgent()` in-process's Ask-turn path uses: `runAgent` asserts every
  * `agent.capabilities[]` entry against a `CapabilityRegistry`, but
  * `connect_source`/`build_context` declare `source_connect`/`context_build`
  * — capabilities outside the fixed `DEFAULT_CAPABILITIES` set a wren-project
@@ -556,8 +609,8 @@ export interface ModeASetupRunnerOptions {
  * a setup-only capability needs, without inventing a parallel registry for
  * two names nothing else provides.
  */
-export class ModeASetupRunner implements SetupStepRunner {
-  constructor(private readonly options: ModeASetupRunnerOptions) {}
+export class InProcessSetupRunner implements SetupStepRunner {
+  constructor(private readonly options: InProcessSetupRunnerOptions) {}
 
   /**
    * The `ExecuteAgentContext.maxSteps` budget this runner will actually pass
@@ -571,7 +624,7 @@ export class ModeASetupRunner implements SetupStepRunner {
    * overrides it. There was a real, unconfigurable ceiling the whole time;
    * it just had no name and nothing here reported it. Now that `run()` below
    * threads an explicit `maxSteps` through, this reports the real value —
-   * mirroring `ModeBSetupRunner.effectiveMaxTurns` — via the same
+   * mirroring `DispatchedSetupRunner.effectiveMaxTurns` — via the same
    * `resolveEffectiveMaxTurns` helper so the two can never disagree.
    */
   effectiveMaxTurns(agentId: string): number | undefined {
@@ -584,8 +637,8 @@ export class ModeASetupRunner implements SetupStepRunner {
 
     if (authChoice.mode === "subscription") {
       throw new Error(
-        `Mode A setup dispatch requires an api-key/local/gateway auth mode to dispatch "${agentId}" ` +
-          `via the in-process vercel loop — got "subscription". Use ModeBSetupRunner ` +
+        `in-process setup dispatch requires an api-key/local/gateway auth mode to dispatch "${agentId}" ` +
+          `via the in-process vercel loop — got "subscription". Use DispatchedSetupRunner ` +
           "(WREN_HARNESS_MODE=subscription) for a subscription auth choice instead.",
       );
     }
@@ -593,7 +646,7 @@ export class ModeASetupRunner implements SetupStepRunner {
     const warbleBin = await resolveWarbleBinary(this.options.warbleBin);
     const providerPath = this.options.providerPath ?? DEFAULT_SETUP_PROVIDER_PATH;
     const callerSuppliedOutDir = this.options.outDir !== undefined;
-    const outDir = this.options.outDir ?? (await mkdtemp(path.join(os.tmpdir(), "wren-harness-setup-mode-a-")));
+    const outDir = this.options.outDir ?? (await mkdtemp(path.join(os.tmpdir(), "wren-harness-setup-in-process-")));
 
     // `executeAgent` emits the UN-stamped `AgentEventInput` shape (no
     // `runId`/`seq` — it doesn't know either); `SetupStepRunOptions.onEvent`
@@ -640,7 +693,7 @@ export class ModeASetupRunner implements SetupStepRunner {
       // comment above for why. `artifactWriteScope: "."` resolves against
       // `env`'s `rootDir` below, which IS `workspaceRoot` — so "." means
       // "anywhere under workspaceRoot", matching `setup_execution`'s
-      // project-root write scope on the Mode B side.
+      // project-root write scope on the dispatched side.
       const policy: ExecutionPolicy = { readOnly: false, artifactWriteScope: "." };
       const env = createLocalExecutionEnv({ rootDir: runOptions.workspaceRoot });
 
@@ -650,7 +703,7 @@ export class ModeASetupRunner implements SetupStepRunner {
       );
 
       // Kept in lockstep with `effectiveMaxTurns()` above via the shared
-      // `resolveEffectiveMaxTurns` helper, exactly like `ModeBSetupRunner.run()`
+      // `resolveEffectiveMaxTurns` helper, exactly like `DispatchedSetupRunner.run()`
       // does for its own `--max-turns` flag.
       const maxSteps = this.effectiveMaxTurns(agentId);
 
@@ -670,7 +723,7 @@ export class ModeASetupRunner implements SetupStepRunner {
 
       // Every setup component has exactly one step (`connect` / `build`), so
       // its `produces` artifact is the turn's final answer — mirroring
-      // `ModeBSetupRunner`'s `result.finalText`, which is likewise "the last
+      // `DispatchedSetupRunner`'s `result.finalText`, which is likewise "the last
       // thing the dispatched turn said."
       const producedName = agent.steps[0]?.produces;
       const finalText = producedName !== undefined ? String(artifacts.get(producedName) ?? "") : "";
@@ -683,7 +736,7 @@ export class ModeASetupRunner implements SetupStepRunner {
       emitter.emit({ kind: "answer", text: finalText });
       emitter.emit({ kind: "run.finish", status: "answer" });
 
-      // `sessionId: null`, not omitted: Mode A has no SDK subprocess
+      // `sessionId: null`, not omitted: in-process has no SDK subprocess
       // conversation to resume (`executeAgent` re-runs the bundle's dataflow
       // from scratch every call) — `null` is `SetupStepRunResult`'s
       // documented "the dispatcher itself reported no session id at all,"
@@ -698,7 +751,7 @@ export class ModeASetupRunner implements SetupStepRunner {
       // (which never even runs `parseSetupTerminal` on a thrown `run()`
       // error — see `executeSetupTurn`, `server/turn.ts` — it reports
       // `error.message` directly). No literal "Continue" checkpoint is
-      // offered here (out of scope for this runner: Mode A has no SDK
+      // offered here (out of scope for this runner: in-process has no SDK
       // session to resume — `sessionId: null` below, always) — just an
       // honest message pointing at where any partial work may have landed.
       if (error instanceof StepBudgetExhaustedError) {
@@ -870,8 +923,8 @@ export interface SetupTerminalContext {
  * from the originating `AgentEvent`'s own structured `status`/`outcome`
  * field, and `server/turn.ts` passes that raw, unsanitized snapshot into
  * `parseSetupTerminal` — no plumbing change was needed to expose it here.
- * See {@link execSucceeded} for why it is trustworthy for a Mode B (`Bash`)
- * entry but NOT for a Mode A / Codex local (`setup_execution`-shaped) one.
+ * See {@link execSucceeded} for why it is trustworthy for a dispatched (`Bash`)
+ * entry but NOT for a in-process / Codex local (`setup_execution`-shaped) one.
  */
 export interface SetupWorklogEntry {
   readonly label: string;
@@ -1216,36 +1269,36 @@ function missingConnectArtifact(context: SetupTerminalContext): string | undefin
 }
 
 /**
- * Matches Mode A's / Codex local's `setup_execution` "exec" call's
+ * Matches in-process's / Codex local's `setup_execution` "exec" call's
  * `ToolStep.detail` — a `summarizeToolOutput`-bounded (200-char)
  * `JSON.stringify` of `{exitCode, stdout, stderr, ...}` (see
  * `harness/tools/setup-native.ts`) — and extracts the exit code. A regex, not
  * `JSON.parse`: once `stdout`/`stderr` push a stringified object past 200
  * characters (routine for a CLI usage/error message), the truncated detail
- * is no longer valid JSON, but Mode A serializes `exitCode` first so it
+ * is no longer valid JSON, but in-process serializes `exitCode` first so it
  * always survives.
  *
  * Deliberately Mode-A/Codex-local-only. There used to be a sibling
  * `MODE_B_BASH_EXIT_CODE` regex here matching a literal `"exit code: N"`
- * phrase, on the theory that a Mode B Bash result might carry that text —
- * but no real code path ever writes it: Mode B's `detail` is the command's
+ * phrase, on the theory that a dispatched Bash result might carry that text —
+ * but no real code path ever writes it: dispatched's `detail` is the command's
  * raw (240-char-truncated) stdout via `summarizeResultContent` in warble's
  * `dispatcher/claude-agent-sdk/src/events.ts`, with no such wrapping. That
- * dead regex made `execSucceeded` return `undefined` for every genuine Mode B
+ * dead regex made `execSucceeded` return `undefined` for every genuine dispatched
  * discovery/validate/build call, which made the `context` step's discovery
- * gate structurally unsatisfiable in Mode B — see `execSucceeded` for the fix.
+ * gate structurally unsatisfiable in dispatched — see `execSucceeded` for the fix.
  */
 const SETUP_EXEC_EXIT_CODE = /^\{"exitCode":(-?\d+)/;
 
-function modeAExecExitCode(detail: string | undefined): number | undefined {
+function inProcessExecExitCode(detail: string | undefined): number | undefined {
   if (detail === undefined) return undefined;
   const match = SETUP_EXEC_EXIT_CODE.exec(detail);
   return match ? Number(match[1]) : undefined;
 }
 
 /**
- * Mode A registers the scoped execution capability under its policy name,
- * while Mode B's streamed SDK events retain the underlying `Bash` tool name.
+ * In-process registers the scoped execution capability under its policy name,
+ * while dispatched's streamed SDK events retain the underlying `Bash` tool name.
  * Both names represent the same setup-only command boundary at this layer.
  */
 const MODE_B_SETUP_EXECUTION_TOOL_NAME = "Bash";
@@ -1260,18 +1313,18 @@ function isSetupExecutionEntry(entry: SetupWorklogEntry): boolean {
   );
 }
 
-/** Mode A and Codex local share the same non-throwing `setup_execution` tool — see {@link execSucceeded}. */
-function isModeAShapedExecEntry(entry: SetupWorklogEntry): boolean {
+/** In-process and Codex local share the same non-throwing `setup_execution` tool — see {@link execSucceeded}. */
+function isInProcessShapedExecEntry(entry: SetupWorklogEntry): boolean {
   return entry.label === SETUP_EXECUTION_TOOL_NAME || entry.label === CODEX_SETUP_EXECUTION_TOOL_NAME;
 }
 
 /**
  * Whether a setup-execution worklog entry represents a genuinely successful
  * command run — `true`/`false` when that's known, `undefined` when it isn't
- * recorded either way (e.g. a Mode A file-write action, which has no exit
+ * recorded either way (e.g. a in-process file-write action, which has no exit
  * code at all).
  *
- * Mode A and Codex local share the same non-throwing `setup_execution` tool
+ * In-process and Codex local share the same non-throwing `setup_execution` tool
  * (`harness/tools/setup-native.ts`): the JS tool call itself only throws on a
  * pre-flight denylist/scope violation (`SetupCommandDeniedError`), never on
  * the shell command's own exit code — a nonexistent CLI subcommand still
@@ -1279,20 +1332,20 @@ function isModeAShapedExecEntry(entry: SetupWorklogEntry): boolean {
  * `ToolStep.state` is ALWAYS `"done"` for these entries regardless of
  * whether the shell command itself succeeded, so the only trustworthy signal
  * for them is the structured exit code folded into `detail`
- * ({@link modeAExecExitCode}) — unchanged from before this fix.
+ * ({@link inProcessExecExitCode}) — unchanged from before this fix.
  *
- * Mode B's Bash tool has no such gap: `LiveWorkLog.ingest` (`server/fold.ts`)
+ * Dispatched's Bash tool has no such gap: `LiveWorkLog.ingest` (`server/fold.ts`)
  * already sets `ToolStep.state` from the originating `AgentEvent`'s own
  * `status` field ("success" -> "done", "error" -> "error") at fold time, for
  * both a genuine command failure and a blocked/guardrail-denied execution —
  * either way the tool call itself did not succeed, so `state` is sound to
- * trust directly. It is also the ONLY signal available: Mode B's `detail` is
+ * trust directly. It is also the ONLY signal available: dispatched's `detail` is
  * the command's raw (240-char-truncated) stdout, never a structured exit
  * code.
  */
 function execSucceeded(entry: SetupWorklogEntry): boolean | undefined {
-  if (isModeAShapedExecEntry(entry)) {
-    const exitCode = modeAExecExitCode(entry.detail);
+  if (isInProcessShapedExecEntry(entry)) {
+    const exitCode = inProcessExecExitCode(entry.detail);
     return exitCode === undefined ? undefined : exitCode === 0;
   }
   if (entry.state === "done") return true;
@@ -1333,8 +1386,8 @@ function execCommandOf(entry: SetupWorklogEntry): string | undefined {
  * worded as advisory ("does not by itself confirm...") rather than as a
  * counter-assertion for exactly this reason.
  *
- * `exitCode` is optional: Mode A/Codex local failures carry a real numeric
- * exit code; a Mode B (Bash) failure — including a blocked/guardrail-denied
+ * `exitCode` is optional: in-process/Codex local failures carry a real numeric
+ * exit code; a dispatched (Bash) failure — including a blocked/guardrail-denied
  * execution — has none (only the fact that it failed), so callers must
  * degrade their wording gracefully rather than assume a number is present.
  */
@@ -1344,7 +1397,7 @@ function firstFailedExec(
   for (const entry of worklog) {
     if (!isSetupExecutionEntry(entry)) continue;
     if (execSucceeded(entry) === false) {
-      const exitCode = isModeAShapedExecEntry(entry) ? modeAExecExitCode(entry.detail) : undefined;
+      const exitCode = isInProcessShapedExecEntry(entry) ? inProcessExecExitCode(entry.detail) : undefined;
       return { command: execCommandOf(entry), ...(exitCode !== undefined ? { exitCode } : {}) };
     }
   }
@@ -1410,7 +1463,7 @@ export function classifyRecordedSchemaDiscovery(worklog: readonly SetupWorklogEn
     const succeeded = execSucceeded(entry);
     if (succeeded === true) return { kind: "successful", command };
     if (succeeded === false && failed === undefined) {
-      const exitCode = isModeAShapedExecEntry(entry) ? modeAExecExitCode(entry.detail) : undefined;
+      const exitCode = isInProcessShapedExecEntry(entry) ? inProcessExecExitCode(entry.detail) : undefined;
       failed = { kind: "failed", command, ...(exitCode !== undefined ? { exitCode } : {}) };
     }
   }

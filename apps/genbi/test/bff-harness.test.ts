@@ -47,12 +47,12 @@ describe("GET /api/harness", () => {
     expect(res.status).toBe(200);
     const dto = (await res.json()) as HarnessDto;
 
-    expect(dto.purpose).toEqual({ purpose: "analysis", profile: "genbi-default", scopeKind: "bound_project", available: false, reason: "The selected native session is unavailable." });
+    expect(dto.purpose).toEqual({ purpose: "analysis", profile: "genbi-default", scopeKind: "bound_project", executionKind: "native_session", available: false, reason: "The selected native session is unavailable." });
     expect(dto.profile).toMatchObject({ id: "genbi-default", verifyGate: true, bundleId: "genbi-default@vercel:headless", status: "Not bound yet" });
     expect(dto.runtime).toEqual({
       backend: "api-key",
       label: "API key (mock)",
-      dispatcher: "in-process", // authChoice.mode "api-key" -> Mode A, in-process
+      dispatcher: "in-process", // authChoice.mode "api-key" -> in-process, in-process
       // synthetic bundle's only agent has a single step on tier "cheap"; runtime.tierModels
       // reports the effective boot route until the seeded Setup defaults are explicitly saved.
       // That keeps the runtime panel aligned with what dispatch will actually use.
@@ -84,6 +84,92 @@ describe("GET /api/harness", () => {
     const dto = await res.json() as HarnessDto;
     expect(dto.purpose).toMatchObject({ available: false, reason: "native host is unavailable" });
     expect(dto.components[0]).toMatchObject({ status: "unavailable", unavailableReason: "native host is unavailable" });
+  });
+
+  it("uses Setup runner readiness for Setup while retaining native Setup compatibility only in diagnostics", async () => {
+    const deps: TurnDeps = {
+      store: new Store(":memory:"),
+      route: noRoute(),
+      baseRouteOptions: BASE_ROUTE_OPTIONS,
+      describeHarnessBundle: async () => bundleForPurpose("setup"),
+      setupRunner: {} as never,
+      workspaceRoot: "/fixture/bootstrap-workspace",
+      nativeSessions: {
+        readiness: async () => ({
+          purposes: { setup: { available: false, reason: "native setup sessions require a workspace root" } },
+        }),
+      } as never,
+    };
+    const app = createApp(deps);
+
+    const res = await app.request("/api/harness?purpose=setup");
+    expect(res.status).toBe(200);
+    const dto = await res.json() as HarnessDto;
+    expect(dto.purpose).toEqual({
+      purpose: "setup",
+      profile: "genbi-setup",
+      scopeKind: "bootstrap",
+      executionKind: "setup_runner",
+      target: "in-process:setup",
+      targetLabel: "In-process Setup runner",
+      available: true,
+    });
+    expect(dto.components.every((component) => component.status === "ready")).toBe(true);
+    expect(dto.nativeSessions.dispatches.find((dispatch) => dispatch.purpose === "setup")).toMatchObject({
+      available: false,
+      reason: "native setup sessions require a workspace root",
+    });
+  });
+
+  it("keeps Setup available when its native-session diagnostic probe fails", async () => {
+    const deps: TurnDeps = {
+      store: new Store(":memory:"),
+      route: noRoute(),
+      baseRouteOptions: BASE_ROUTE_OPTIONS,
+      describeHarnessBundle: async () => bundleForPurpose("setup"),
+      setupRunner: {} as never,
+      workspaceRoot: "/fixture/bootstrap-workspace",
+      nativeSessions: {
+        readiness: async () => { throw new Error("native readiness probe failed"); },
+      } as never,
+    };
+    const app = createApp(deps);
+
+    const res = await app.request("/api/harness?purpose=setup");
+    expect(res.status).toBe(200);
+    const dto = await res.json() as HarnessDto;
+    expect(dto.purpose).toMatchObject({ executionKind: "setup_runner", available: true });
+    expect(dto.components.every((component) => component.status === "ready")).toBe(true);
+    expect(dto.nativeSessions.dispatches).toEqual(expect.arrayContaining([
+      expect.objectContaining({ purpose: "setup", available: false }),
+    ]));
+  });
+
+  it("reports the Setup wizard's own bootstrap-root requirement without classifying it as a native session", async () => {
+    const deps: TurnDeps = {
+      store: new Store(":memory:"),
+      route: noRoute(),
+      baseRouteOptions: { ...BASE_ROUTE_OPTIONS, authChoice: { mode: "subscription", provider: "codex" } },
+      describeHarnessBundle: async () => bundleForPurpose("setup"),
+      setupRunner: {} as never,
+      nativeSessions: {
+        readiness: async () => ({ purposes: { setup: { available: false, reason: "wrong native reason" } } }),
+      } as never,
+    };
+    const app = createApp(deps);
+
+    const res = await app.request("/api/harness?purpose=setup");
+    expect(res.status).toBe(200);
+    const dto = await res.json() as HarnessDto;
+    expect(dto.purpose).toMatchObject({
+      executionKind: "setup_runner",
+      target: "codex-local:setup",
+      targetLabel: "Codex Setup runner",
+      available: false,
+      reason: "The Setup wizard requires a bootstrap workspace root.",
+    });
+    expect(dto.purpose.reason).not.toContain("native");
+    expect(dto.components[0]).toMatchObject({ status: "unavailable", unavailableReason: "The Setup wizard requires a bootstrap workspace root." });
   });
 
   it("returns 500 with a JSON error (not a crash) when the compile/describe dependency throws", async () => {

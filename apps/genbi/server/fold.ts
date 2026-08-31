@@ -9,7 +9,7 @@
  *    with no live event stream.
  *  - Live (best-effort): if the caller wires `onEvent`, `LiveWorkLog`
  *    accumulates an incrementally-growing `ToolStep[]` as `step.*`/`tool.*`
- *    events arrive, for a richer in-flight work log. Mode A never populates
+ *    events arrive, for a richer in-flight work log. In-process never populates
  *    `parent`/`depth` today, so this never invents fake nesting — it only
  *    forwards whatever the runtime actually reports.
  */
@@ -40,7 +40,7 @@ export function foldTrace(trace: StepTrace): ToolStep[] {
   }));
 }
 
-/** Extracts the floor `StepTrace` from a route() result, if the backend produced one (Mode A only). */
+/** Extracts the floor `StepTrace` from a route() result, if the backend produced one (in-process only). */
 export function extractTrace(result: RouteResult): StepTrace | undefined {
   return result.backend === "agent" ? result.trace : undefined;
 }
@@ -49,8 +49,8 @@ export function extractTrace(result: RouteResult): StepTrace | undefined {
  * Maps a resolved route() result to the UI's terminal answer/refusal event
  * (id assigned by the caller).
  *
- * Mode B (`backend: "agent-sdk"`) has no structured `RenderEnvelope` of its
- * own — `runModeBDefault` only returns the dispatcher's final stdout text
+ * Dispatched (`backend: "agent-sdk"`) has no structured `RenderEnvelope` of its
+ * own — `runDispatchedDefault` only returns the dispatcher's final stdout text
  * (`finalText`) — but the dispatched agent still emits its final structured
  * answer as a (possibly fenced) JSON envelope inside that text (this was the
  * root cause of the bug this handles: that envelope was previously dropped
@@ -92,7 +92,7 @@ export function toAnswerOrRefusalEvent(
   return { id, kind: "refusal", reason: result.reason, fix: REFUSAL_FIX_HINT };
 }
 
-/** Mode A's native in-process tool names that constitute an actual data claim — schema browsing / artifact saving don't count. */
+/** In-process's native in-process tool names that constitute an actual data claim — schema browsing / artifact saving don't count. */
 const DATA_ACCESS_TOOL_NAMES = new Set<string>([
   WREN_QUERY_TOOL_NAME,
   BUILD_DASHBOARD_TOOL_NAME,
@@ -100,7 +100,7 @@ const DATA_ACCESS_TOOL_NAMES = new Set<string>([
 ]);
 
 /**
- * Mode B never produces those native tool names — the dispatched agent's `answer_query`/
+ * Dispatched never produces those native tool names — the dispatched agent's `answer_query`/
  * `generate_dashboard` components are only granted the SDK's built-in `Bash` tool and run all
  * data access through the `wren` CLI's read-path, always shaped `wren -q -o json -s '<SQL>'` (see
  * the warble hub components' `generate_sql.md`/`repair_sql.md`/`compose_layout.md` steps). Schema
@@ -124,7 +124,7 @@ function bashCommandOf(step: ToolStep): string | undefined {
 
 /**
  * Whether the turn's work log shows a real data-access attempt, success or failure alike — either
- * a Mode A native query/dashboard tool call, or a Mode B `Bash` call that actually ran a query
+ * a in-process native query/dashboard tool call, or a dispatched `Bash` call that actually ran a query
  * through the `wren` CLI (as opposed to schema introspection, which doesn't count as a data claim).
  */
 function attemptedDataAccess(worklog: readonly ToolStep[]): boolean {
@@ -168,7 +168,7 @@ export function clarifyDecisionStep(detail: string): ToolStep {
  * The trailing verify-gate verdict, derived from the resolved `route()` result:
  *  - a verified ANSWER (`envelope.verified === true`) -> a "done" verdict;
  *  - a REFUSAL -> an "error" verdict carrying the refusal reason;
- *  - a non-verified answer (or Mode B, which has no envelope/verify signal)
+ *  - a non-verified answer (or dispatched, which has no envelope/verify signal)
  *    -> `undefined`, so no gate entry is appended.
  */
 export function gateDecisionStep(result: RouteResult): ToolStep | undefined {
@@ -388,10 +388,10 @@ export class LiveWorkLog {
   ingest(event: AgentEvent): ToolStep[] | undefined {
     switch (event.kind) {
       case "step.start":
-        // Mode A has no sub-agent/Task mechanism (see this module's
+        // In-process has no sub-agent/Task mechanism (see this module's
         // doc comment) — its bundle-declared LLM steps are plain steps, kind
         // "step", not "subagent" (that kind stays reserved for a real nested
-        // sub-agent turn, which only Mode B could ever produce).
+        // sub-agent turn, which only dispatched could ever produce).
         this.upsert(event.stepId, event.name, "running", "step", event.parent, event.depth);
         return this.snapshot();
       case "step.finish":

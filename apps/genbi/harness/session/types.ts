@@ -6,10 +6,10 @@ export interface AnswerResult {
   readonly kind: "answer";
   readonly envelope: RenderEnvelope;
   /**
-   * The FLOOR. Always present for a Mode A run (`runAgent`
-   * always accumulates one, even with no `onEvent` sink attached). Mode B
+   * The FLOOR. Always present for a in-process run (`runAgent`
+   * always accumulates one, even with no `onEvent` sink attached). Dispatched
    * carries no trace at all — it isn't a `RunAgentResult`, so this field
-   * doesn't apply there (see `route/mode-b.ts`'s doc comment for the gap).
+   * doesn't apply there (see `route/dispatched.ts`'s doc comment for the gap).
    */
   readonly trace?: StepTrace;
 }

@@ -59,7 +59,7 @@ describe("the goldens are fixtures, not runtime artifacts", () => {
 describe("what a draft dispatches", () => {
   it("compiles from the profile source rather than short-circuiting on a prebuilt IR", async () => {
     const { draftProfileInput } = await import("../server/enrichment-runner.js");
-    // With a source, `irPath` must be absent: passing it makes runModeBDefault
+    // With a source, `irPath` must be absent: passing it makes runDispatchedDefault
     // skip compileProfile, which is precisely how the fixture's context used to
     // reach the agent.
     expect(draftProfileInput("/profiles/genbi-enrich-context", "/profiles/genbi-enrich-context/ir.golden.json")).toEqual({
@@ -95,5 +95,10 @@ describe("resolveDispatchIr wiring", () => {
     expect(bin).toMatch(/compileProfile\(\{ profileSource, userProject: binding\.path/);
     expect(bin).toMatch(/compileRawProfile\(\{ profileSource/);
     expect((bin.match(/new NativeSessionService\(/g) ?? []).length).toBe(1);
+  });
+
+  it("forces direct compiled BFF execution through the same strict local runtime verifier", () => {
+    const bin = readFileSync(new URL("../server/bin.ts", import.meta.url), "utf-8");
+    expect(bin).toMatch(/const launchAttestation = readLaunchAttestation\(\);[\s\S]*verifyBffLocalRuntime\(packageRoot\);/);
   });
 });

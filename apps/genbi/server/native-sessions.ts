@@ -4,7 +4,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
-import { accessSync, chmodSync, constants, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { accessSync, chmodSync, constants, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { EnrichmentBinding } from "./enrichment.js";
@@ -45,6 +45,25 @@ const START_SEPARATE_REPLAY_LIMIT = 128;
 const CODEX_NATIVE_PERMISSION_HEADER = "[permissions.warble_native_wren.filesystem]";
 const PROVIDER_SESSION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CODEX_RESUME_HANDLE_FILE = path.join(".warble", "codex-thread-id");
+
+type NativeLaunchPhase =
+  | "workspace"
+  | "dispatch"
+  | "launch_spec"
+  | "codex_wren_home"
+  | "codex_project_read"
+  | "terminal_manager"
+  | "codex_executable"
+  | "terminal_start"
+  | "running_transition";
+
+function logNativeLaunchFailure(purpose: NativePurpose, vendor: NativeVendor, phase: NativeLaunchPhase, error: unknown): void {
+  const category = error instanceof InteractiveLaunchError ? "rejected" : "unexpected";
+  // Keep the precise boundary server-side without logging exception text,
+  // paths, credentials, argv, or other launch material. Browser/API callers
+  // continue through nativeSessionLaunchFailure's closed public projection.
+  console.error(`[native-sessions] launch failed purpose=${purpose} vendor=${vendor} phase=${phase} category=${category}`);
+}
 
 /**
  * The producer deliberately sees only a sealed binding identity, never a caller-supplied path.
@@ -251,15 +270,22 @@ export type NativeSessionReadiness = {
   readonly mcp: NativeMcpHealth;
 } & Record<NativePurpose, NativePurposeReadiness>;
 
-const agentFor = (purpose: NativePurpose, vendor: NativeVendor): string => {
-  const base = purpose === "analysis" ? "answer_query" : purpose === "setup" ? "connect_source" : "draft_enrichment";
-  return vendor === "claude" ? base : `genbi-${purpose === "context_enrichment" ? "enrich-context" : purpose}`;
-};
+/**
+ * The profile component each purpose enters through. This host owns these names: the components
+ * live in this product's own profiles, and Warble no longer keeps a copy — it materializes
+ * whichever verb the scope declares, after checking the declaration against the compiled IR.
+ */
+const entryVerbFor = (purpose: NativePurpose): string =>
+  purpose === "analysis" ? "answer_query" : purpose === "setup" ? "connect_source" : "draft_enrichment";
+
+const agentFor = (purpose: NativePurpose, vendor: NativeVendor): string =>
+  vendor === "claude" ? entryVerbFor(purpose) : `genbi-${purpose === "context_enrichment" ? "enrich-context" : purpose}`;
 
 /**
- * Closed v4 Claude entry contract mirrored from Warble's `NativePurpose::claude_agent()` mapping
- * (dispatcher/claude-code-cli/src/interactive.rs). Each native purpose enters through its named
- * driver, never the profile-wide scope document. In particular, analysis is pinned to
+ * Closed v4 Claude entry contract. This host is the only place the mapping exists: Warble used to
+ * carry a matching table and no longer does, so there is no second copy to drift from. Each native
+ * purpose enters through its named driver, never the profile-wide scope document. In particular,
+ * analysis is pinned to
  * `answer_query`: that driver alone receives `persist_answer`, so a scope-entry launch must not
  * make the capability reachable by analysis step agents.
  *
@@ -267,11 +293,31 @@ const agentFor = (purpose: NativePurpose, vendor: NativeVendor): string => {
  * purpose here only together with the corresponding Warble mapping and an exact-shape test; an
  * omitted purpose remains a scope entry and is rejected if Warble emits a pin for it.
  */
-const PINNED_CLAUDE_PURPOSES: readonly NativePurpose[] = ["analysis", "setup", "context_enrichment"];
+const PINNED_CLAUDE_PURPOSES: readonly NativePurpose[] = ["setup", "context_enrichment"];
 
 /** Whether this closed producer contract uses the profile-wide Claude scope document. */
 const claudeScopeEntry = (purpose: NativePurpose, vendor: NativeVendor): boolean =>
   vendor === "claude" && !PINNED_CLAUDE_PURPOSES.includes(purpose);
+
+/**
+ * The entry this host declares in the scope descriptor Warble validates.
+ *
+ * Scope entry names no verb: the session starts at the profile-wide scope document and its own
+ * driver selects the component that owns each request, using the descriptions those components
+ * authored. Warble refuses a `scope` entry that also carries a verb, so the two forms are built
+ * here as alternatives rather than one shape with an optional field.
+ *
+ * `analysis` is the only purpose on the scope form today. It is also the one that gives up the
+ * most by pinning: its profile mounts four selectable components, and a pinned session can only
+ * reach the other three by delegating out of the one it was forced to start as.
+ */
+const nativeEntryFor = (
+  purpose: NativePurpose,
+  vendor: NativeVendor,
+): { readonly kind: "scope"; readonly prompt: string } | { readonly verb: string; readonly prompt: string } =>
+  claudeScopeEntry(purpose, vendor)
+    ? { kind: "scope", prompt: welcomePromptFor(purpose) }
+    : { verb: entryVerbFor(purpose), prompt: welcomePromptFor(purpose) };
 
 /** Closed producer/host contract for the one initial native TUI prompt. */
 const welcomePromptFor = (purpose: NativePurpose): string => {
@@ -309,6 +355,12 @@ export interface NativeSessionServiceOptions {
    */
   readonly resolveDispatchIr?: (purpose: NativePurpose, binding: EnrichmentBinding | undefined) => Promise<string>;
   readonly warbleBin: string;
+  /** Exact startup-attested Codex CLI path and bytes; native PTYs never rediscover it through PATH. */
+  readonly codexBin?: string;
+  readonly codexBinSha256?: string;
+  readonly codexSource?: "standalone" | "npm:@openai/codex";
+  readonly codexSourceClosureSha256?: string;
+  readonly codexVersion?: string;
   /** Absolute server-configured Wren shim for native Codex sessions; never a request input. */
   readonly wrenShim?: string;
   /** Read-only probe used by readiness; creation remains the final authority. */
@@ -331,6 +383,49 @@ export interface NativeSessionServiceOptions {
   readonly startSeparateReplayLimit?: number;
   /** Test seam for the fixed, server-owned Warble dispatch only. */
   readonly dispatch?: (input: NativeDispatchInput) => Promise<void>;
+}
+
+/** Resolve and re-hash the exact startup-attested Codex executable immediately before use. */
+export function resolvePinnedCodexExecutable(codexBin: string, expectedSha256: string, sourcePin?: {
+  readonly source: "standalone" | "npm:@openai/codex";
+  readonly closureSha256: string;
+  readonly version: string;
+}): string {
+  try {
+    if (!path.isAbsolute(codexBin) || !/^[a-f0-9]{64}$/.test(expectedSha256)) throw new Error("invalid pin");
+    const canonical = realpathSync(codexBin);
+    const stat = statSync(canonical);
+    accessSync(canonical, constants.X_OK);
+    if (!stat.isFile() || createHash("sha256").update(readFileSync(canonical)).digest("hex") !== expectedSha256) throw new Error("mismatched pin");
+    if (sourcePin) {
+      let sourceRoot = canonical;
+      let declaredVersion: unknown;
+      for (let candidate = path.dirname(canonical); candidate !== path.dirname(candidate); candidate = path.dirname(candidate)) {
+        const packageFile = path.join(candidate, "package.json");
+        if (!existsSync(packageFile)) continue;
+        try {
+          const metadata = JSON.parse(readFileSync(packageFile, "utf8")) as { readonly name?: unknown; readonly version?: unknown };
+          if (metadata.name === "@openai/codex") { sourceRoot = candidate; declaredVersion = metadata.version; break; }
+        } catch { /* Not the selected Codex package root. */ }
+      }
+      const source = sourceRoot === canonical ? "standalone" : "npm:@openai/codex";
+      if (source !== sourcePin.source || (source !== "standalone" && declaredVersion !== sourcePin.version)) throw new Error("mismatched source");
+      const closure = createHash("sha256");
+      const visit = (directory: string): void => {
+        for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+          const candidate = path.join(directory, entry.name); const relative = path.relative(sourceRoot, candidate);
+          if (entry.isSymbolicLink()) throw new Error("symlinked source");
+          if (entry.isDirectory()) visit(candidate);
+          else if (entry.isFile()) { closure.update(relative); closure.update("\0"); closure.update(readFileSync(candidate)); }
+        }
+      };
+      if (sourceRoot === canonical) closure.update(readFileSync(canonical)); else visit(sourceRoot);
+      if (closure.digest("hex") !== sourcePin.closureSha256) throw new Error("mismatched source closure");
+    }
+    return canonical;
+  } catch {
+    throw new InteractiveLaunchError("the attested Codex executable is unavailable or has changed");
+  }
 }
 
 export interface NativeDispatchInput {
@@ -629,7 +724,7 @@ export async function probeNativeSessionProducer(input: {
         const binding = NATIVE_DISPATCH_REGISTRY[purpose].scopeKind === "bound_project"
           ? { project_identity: "native-preflight-project", generation: "1", revision: "native-preflight-revision" }
           : undefined;
-        writeFileSync(scopePath, JSON.stringify({ version: "2", kind: NATIVE_DISPATCH_REGISTRY[purpose].scopeKind, scope_id: scopeId, cwd: outputRoot, ...(purpose === "setup" ? { bootstrap_root: bootstrapRoot } : {}), ...(wrenRuntime ? { wren_runtime: wrenRuntime } : {}), ...(binding ? { binding } : {}) }), { encoding: "utf8", mode: 0o600, flag: "wx" });
+        writeFileSync(scopePath, JSON.stringify({ version: "3", kind: NATIVE_DISPATCH_REGISTRY[purpose].scopeKind, scope_id: scopeId, cwd: outputRoot, entry: nativeEntryFor(purpose, vendor), ...(purpose === "setup" ? { bootstrap_root: bootstrapRoot } : {}), ...(wrenRuntime ? { wren_runtime: wrenRuntime } : {}), ...(binding ? { binding } : {}) }), { encoding: "utf8", mode: 0o600, flag: "wx" });
         writeFileSync(mcpPath, JSON.stringify({ version: "1", url: "http://127.0.0.1:0/api/native-sessions/mcp", credential: "native-preflight-nonsecret" }), { encoding: "utf8", mode: 0o600, flag: "wx" });
         const dispatched = await runNativeProbe(executable, ["dispatch", irPath, "--target", targetForProvider(vendor), "--purpose", purpose, "--native-scope", scopePath, "--native-mcp", mcpPath, "--out", outputRoot]);
         const phase = `dispatch_${purpose}_${vendor}`;
@@ -824,6 +919,20 @@ export class NativeSessionService {
   /** Existing injected producer seams are test-only and preserve old unit fixtures. */
   private legacyFixtureMode(): boolean {
     return this.options.dispatch !== undefined || this.options.producerAvailable !== undefined || this.options.warbleBin === "unused";
+  }
+
+  private pinnedCodexExecutable(required: boolean): string | undefined {
+    try {
+      if (!this.options.codexBin || !this.options.codexBinSha256) throw new Error("missing pin");
+      const sourcePin = required && this.options.codexSource && this.options.codexSourceClosureSha256 && this.options.codexVersion
+        ? { source: this.options.codexSource, closureSha256: this.options.codexSourceClosureSha256, version: this.options.codexVersion }
+        : undefined;
+      if (required && !sourcePin) throw new Error("missing source pin");
+      return resolvePinnedCodexExecutable(this.options.codexBin, this.options.codexBinSha256, sourcePin);
+    } catch {
+      if (required) throw new InteractiveLaunchError("the attested Codex executable is unavailable or has changed");
+      return undefined;
+    }
   }
 
   /**
@@ -1203,7 +1312,14 @@ export class NativeSessionService {
 
   async readiness(): Promise<NativeSessionReadiness> {
     const terminalHostAvailable = this.options.terminalHostAvailable ?? (async () => true);
-    const executableAvailable = this.options.executableAvailable ?? interactiveExecutableAvailable;
+    const pinnedCodexAvailable = !this.options.executableAvailable && !this.legacyFixtureMode()
+      ? this.pinnedCodexExecutable(false) !== undefined
+      : undefined;
+    const executableAvailable = (vendor: NativeVendor) => this.options.executableAvailable
+      ? this.options.executableAvailable(vendor)
+      : vendor === "codex" && pinnedCodexAvailable !== undefined
+        ? pinnedCodexAvailable
+        : interactiveExecutableAvailable(vendor);
     const hostAvailable = await terminalHostAvailable();
     const mcpReadiness = this.options.artifactService?.readiness();
     const runtime = this.options.store.getNativeRuntimeBinding();
@@ -1334,6 +1450,7 @@ export class NativeSessionService {
     // Setup is bootstrap-scoped, but its accepted v4 recovery tool still uses
     // the same short-lived server-owned MCP transport. The tool allowlist,
     // not a producer-visible scope, decides which operation it can perform.
+    let launchPhase: NativeLaunchPhase = "workspace";
     try {
       // The bootstrap workspace remains the authorized project-creation
       // context in the producer scope. Every purpose, including Setup, emits
@@ -1358,9 +1475,10 @@ export class NativeSessionService {
         if (error instanceof NativeWrenRuntimeError) throw new InteractiveLaunchError("native Wren runtime is unavailable");
         throw error;
       }
-      const scope: Record<string, unknown> = { version: "2", kind: row.scopeKind, scope_id: scopeId, cwd, ...(purpose === "setup" ? { bootstrap_root: authorizedWorkspace } : {}), ...(wrenRuntime ? { wren_runtime: wrenRuntime } : {}), ...(binding ? { binding: { project_identity: binding.identity, generation: String(binding.generation), revision: binding.revision } } : {}) };
+      const scope: Record<string, unknown> = { version: "3", kind: row.scopeKind, scope_id: scopeId, cwd, entry: nativeEntryFor(purpose, dispatchDefinition.provider), ...(purpose === "setup" ? { bootstrap_root: authorizedWorkspace } : {}), ...(wrenRuntime ? { wren_runtime: wrenRuntime } : {}), ...(binding ? { binding: { project_identity: binding.identity, generation: String(binding.generation), revision: binding.revision } } : {}) };
       const dispatch = this.options.dispatch ?? dispatchNativeArtifacts;
       validateNativeSessionWorkspace(materializationState, authorizedWorkspace, cwd);
+      launchPhase = "dispatch";
       await dispatch({ warbleBin: producer?.producer?.executable ?? this.options.warbleBin, ...(producer?.producer ? { producer: producer.producer } : {}), irPath, target: dispatchDefinition.target, cwd, purpose, scope, ...(mcp ? { mcp } : {}) });
       if (!input.vendor && !sameNativeRuntimeBinding(capturedRuntime, this.options.store.getNativeRuntimeBinding())) {
         this.options.store.transitionNativeSession(id, "stale", { failure: "native runtime binding changed before launch", ended: true });
@@ -1370,18 +1488,22 @@ export class NativeSessionService {
         this.options.store.transitionNativeSession(id, "stale", { failure: "native session binding changed before launch", ended: true });
         throw new InteractiveLaunchError("native session is stale because the bound project changed");
       }
+      launchPhase = "launch_spec";
       const spec = readNativeLaunchSpec(cwd, purpose, dispatchDefinition.provider, scopeId, binding, mcp, materializationState, authorizedWorkspace, providerLaunch);
       let codexWrenHome: CodexWrenHome | undefined;
       if (spec.version === "4" && dispatchDefinition.provider === "codex" && binding) {
         if (wrenRuntime) {
+          launchPhase = "codex_wren_home";
           codexWrenHome = (this.options.prepareCodexWrenHome ?? ((input) => materializeCodexWrenHome(input.runtime, input.projectPath, input.cwd)))({
             runtime: wrenRuntime,
             projectPath: binding.path,
             cwd,
           });
         }
+        launchPhase = "codex_project_read";
         grantCodexBoundProjectRead(cwd, binding.path, codexWrenHome?.dataRoots);
       }
+      launchPhase = "terminal_manager";
       const terminalManager = await this.options.terminalManager();
       if (binding && !sameBinding(binding, this.options.getBinding())) {
         this.options.store.transitionNativeSession(id, "stale", { failure: "native session binding changed before PTY launch", ended: true });
@@ -1402,12 +1524,18 @@ export class NativeSessionService {
       // revalidated Setup root may reach the native TUI.
       delete terminalEnv[NATIVE_SETUP_BOOTSTRAP_ROOT_ENV_VAR];
       if (spec.bootstrap_root) terminalEnv[NATIVE_SETUP_BOOTSTRAP_ROOT_ENV_VAR] = spec.bootstrap_root;
-      const terminal = terminalManager.start(spec, { id, capability }, terminalEnv, NO_INTERACTIVE_TERMINAL_LEASES);
+      launchPhase = "codex_executable";
+      const hostExecutable = dispatchDefinition.provider === "codex" && !this.legacyFixtureMode()
+        ? this.pinnedCodexExecutable(true)
+        : undefined;
+      launchPhase = "terminal_start";
+      const terminal = terminalManager.start(hostExecutable ? { ...spec, hostExecutable } : spec, { id, capability }, terminalEnv, NO_INTERACTIVE_TERMINAL_LEASES);
       this.sessions.set(id, terminal);
       // Mark running before registering a replaying exit listener. A PTY can
       // exit between start() and this registration; `onExit` immediately
       // replays that state and must win over this transition, never be
       // overwritten by a later unconditional running write.
+      launchPhase = "running_transition";
       this.options.store.transitionNativeSession(id, "running", { started: true });
       terminal.onExit((exitCode) => {
         this.captureCodexResumeHandle(this.options.store.getNativeSession(id) ?? row);
@@ -1422,6 +1550,7 @@ export class NativeSessionService {
       if (this.sessions.has(id)) this.armLease(id, "native session attachment timed out", NATIVE_SESSION_INITIAL_ATTACHMENT_GRACE_MS);
       return { row: this.options.store.getNativeSession(id)!, capability, ...(recoveryCapability ? { recoveryCapability } : {}) };
     } catch (error) {
+      logNativeLaunchFailure(purpose, dispatchDefinition.provider, launchPhase, error);
       this.recoveryCapabilities.delete(id);
       artifactService?.revoke(this.artifactCredentials.get(id)); this.artifactCredentials.delete(id);
       const current = this.options.store.getNativeSession(id);

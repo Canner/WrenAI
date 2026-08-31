@@ -4,13 +4,15 @@ import { fileURLToPath } from "node:url";
 
 /**
  * Locates a local checkout of the `warble` repository, for the opt-in tests that
- * exercise the real compiler and its `genbi-default` profile instead of a
- * synthetic bundle.
+ * exercise the real compiler, its dispatchers and its example projects instead
+ * of a synthetic bundle.
  *
  * Resolution mirrors what the harness itself does at run time (see
  * `harness/compile/resolve-binary.ts`): walk up from this package looking for a
  * sibling `warble` directory. `WREN_TEST_WARBLE_REPO` overrides it for a
- * checkout that isn't a sibling.
+ * checkout that isn't a sibling. A candidate is recognised by Warble's own
+ * shared Hub component library (`hub/components`) — the GenBI profiles no
+ * longer identify a Warble checkout, since they live in this package now.
  *
  * Returns `undefined` when there is none — which is the normal case for a fresh
  * clone, and why every caller gates its suite on the paths existing rather than
@@ -21,7 +23,7 @@ import { fileURLToPath } from "node:url";
 export function findWarbleCheckout(): string | undefined {
   const override = process.env["WREN_TEST_WARBLE_REPO"];
   if (override !== undefined && override !== "") {
-    return existsSync(path.join(override, "genbi-default")) ? override : undefined;
+    return existsSync(path.join(override, "hub", "components")) ? override : undefined;
   }
 
   let dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -29,7 +31,7 @@ export function findWarbleCheckout(): string | undefined {
   for (let i = 0; i < maxDepth; i += 1) {
     const parent = path.dirname(dir);
     const candidate = path.join(parent, "warble");
-    if (existsSync(path.join(candidate, "genbi-default"))) return candidate;
+    if (existsSync(path.join(candidate, "hub", "components"))) return candidate;
     if (parent === dir) break; // reached the filesystem root
     dir = parent;
   }

@@ -7,7 +7,7 @@ import {
   collectBundleTierNames,
   collectIrTierNames,
   materializeRuntimeRouteOptions,
-  requiredModeACredentialEnvVars,
+  requiredInProcessCredentialEnvVars,
   runtimeSettingsCorrection,
   RuntimeBindingError,
   validateRuntimeTierBindings,
@@ -46,7 +46,7 @@ describe("runtime tier binding compiler", () => {
     expect(() => validateRuntimeTierBindings(settings({ tierModels: [{ tier: "cheap", model: "x" }, { tier: "cheap", model: "y" }, { tier: "strong", model: "z" }] }), tiers)).toThrow(RuntimeBindingError);
   });
 
-  it("materializes distinct Mode A AdapterSpecs from per-tier overrides", () => {
+  it("materializes distinct in-process AdapterSpecs from per-tier overrides", () => {
     const runtime = settings();
     validateRuntimeTierBindings(runtime, tiers);
     const options = materializeRuntimeRouteOptions(runtime, { mode: "api-key", adapter: "anthropic" });
@@ -58,7 +58,7 @@ describe("runtime tier binding compiler", () => {
 
   it("validates credentials for the adapters materialized by tier rows, not an unused global adapter", () => {
     const runtime = settings({ apiKeyAdapter: "openai-compatible" });
-    expect(requiredModeACredentialEnvVars(runtime)).toEqual(["ANTHROPIC_API_KEY"]);
+    expect(requiredInProcessCredentialEnvVars(runtime)).toEqual(["ANTHROPIC_API_KEY"]);
   });
 
   it("reads ordered unique tiers from compiled IR and rejects malformed tier contracts", () => {
@@ -67,7 +67,7 @@ describe("runtime tier binding compiler", () => {
     expect(() => collectIrTierNames({ components: [] })).toThrow(/no llm_call tiers/);
   });
 
-  it("generates Claude Mode B modelsConfig without persisting an API key and retains a separate driver", () => {
+  it("generates Claude dispatched modelsConfig without persisting an API key and retains a separate driver", () => {
     vi.stubEnv("OPENAI_API_KEY", "must-not-appear");
     const runtime = settings({
       authMode: "subscription",

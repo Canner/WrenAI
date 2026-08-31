@@ -1,0 +1,42 @@
+# apply_enrichment — deterministic, sink-scoped post-approval lifecycle. This component has no
+# llm_steps: the host validates the typed proposal, enforces stale/replay checks, applies one
+# operation at a time, validates each MDL operation (reverting that operation on failure), then
+# builds once at session end. It is intentionally a gated-tool so targets without an approval
+# channel wall-hit instead of weakening the high-impact approval requirement.
+id: apply_enrichment
+verb: apply_enrichment
+type: constitutive
+realization_kind: gated-tool
+
+binding_mode: pinned
+context_requirements:
+  - "an existing pinned Wren project whose semantic layer parses and has a successful build proof"
+context_precondition:
+  - { predicate: wren_project_exists }
+
+params: []
+llm_steps: []
+trigger: { kind: one_shot }
+guardrails:
+  - { name: must_dry_run, locked: true }
+  - { name: human_approval, locked: true }
+  - { name: no_silent_overwrite, locked: true }
+  - { name: context_write_authz, locked: true, scope: "enrichment-sinks" }
+  - { name: rollback_available, locked: true }
+required_capabilities:
+  - context_write_authz
+  - context_validate
+  - context_build
+  - version_control
+  - human_approval
+  - enrichment_apply:deterministic
+borrowed_actions: []
+effect:
+  render_blocks: [diff, status]
+  outcome:
+    kind: mutation
+    target: context
+    change_type: context_enrichment
+eval:
+  template_ref: eval/
+  metrics: [enrichment_apply_safety, compliance]

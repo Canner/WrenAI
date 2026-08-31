@@ -24,7 +24,7 @@
  * `summarizeResultContent` in warble's `dispatcher/claude-agent-sdk/src/events.ts` (read directly,
  * not guessed) — `truncate(<raw stdout text, or joined text blocks, or JSON.stringify fallback>)`,
  * with NO `"Exit code: N"` wrapping anywhere in that function. That reading is what grounds this
- * file's claims about Mode B's `detail` shape for a SUCCESSFUL Mode B result; it is not a
+ * file's claims about dispatched's `detail` shape for a SUCCESSFUL dispatched result; it is not a
  * cassette-backed fact for the remaining synthetic constructions below (AC2's truncated-summary
  * setup, and AC4's guardrail-denial input, which has no recording — see that test's own comment
  * for why). The FAILURE shape is no longer a guess: AC3 and the dedicated dispatcher-contract
@@ -36,12 +36,12 @@
  *
  * `classifyRecordedSchemaDiscovery`/`classifyRecordedContextLifecycle` used to require a
  * structured `exitCode` regexed out of `ToolStep.detail` (`execExitCode`, since replaced) before
- * counting any command as successful. Mode B's `detail` never carries that shape — it's the
- * command's raw, 240-char-truncated stdout — so a genuinely successful Mode B discovery command
+ * counting any command as successful. Dispatched's `detail` never carries that shape — it's the
+ * command's raw, 240-char-truncated stdout — so a genuinely successful dispatched discovery command
  * could never satisfy the gate; see `harness/setup/runner.ts`'s `execSucceeded` doc comment for the
  * full account. The fix reads the *structured* `ToolStep.state` that `LiveWorkLog.ingest` already
  * derives from the event's own `status` field at fold time (`server/fold.ts`), for `Bash`-labeled
- * (Mode B) entries specifically — Mode A/Codex-local entries still trust only the structured exit
+ * (dispatched) entries specifically — in-process/Codex-local entries still trust only the structured exit
  * code folded into `detail`, unchanged. The first test below is the direct regression proof: it now
  * asserts the OPPOSITE outcome from before the fix, on the exact same synthetic input.
  */
@@ -93,7 +93,7 @@ function writeMdl(context: SetupTerminalContext, modelNames: readonly string[], 
 }
 
 /**
- * Builds the real `tool.call` + `tool.result` `AgentEvent` pair a Mode B Bash invocation
+ * Builds the real `tool.call` + `tool.result` `AgentEvent` pair a dispatched Bash invocation
  * produces, per `harness/events/types.ts`'s `ToolCallEvent`/`ToolResultEvent`. `summary` is the
  * plain (truncated) content a real dispatcher would report — see this file's doc comment for
  * where that shape was checked. `ok` defaults to `true`; pass `false` to model a genuine command
@@ -146,7 +146,7 @@ function foldEvents(events: readonly AgentEvent[]): ReturnType<LiveWorkLog["snap
 
 /**
  * Replays one recorded dispatcher cassette (`test/fixtures/cassettes/<name>.ndjson`) through the
- * REAL Mode B mapper — `parseWarbleChatEventLine` -> `mapChatEventToAgentEvent` -> a real
+ * REAL dispatched mapper — `parseWarbleChatEventLine` -> `mapChatEventToAgentEvent` -> a real
  * `AgentEventEmitter` — exactly as the AC9 test at the bottom of this file does inline. Extracted
  * here only for the two cassette-driven tests that follow it; AC9 itself is left exactly as
  * written (it is not in scope for this change) rather than migrated onto this helper.
@@ -182,7 +182,7 @@ function replayCassette(name: string): {
 }
 
 describe("fold-to-gate integration: real LiveWorkLog output through the real setup terminal gate", () => {
-  it("AC1: a Mode B turn with successful, allowlist-matching discovery now passes the gate", () => {
+  it("AC1: a dispatched turn with successful, allowlist-matching discovery now passes the gate", () => {
     // Three Bash calls mirroring the setup flow's discovery -> validate -> build sequence. Each
     // `summary` is plain content, exactly the shape `summarizeResultContent` (warble's
     // claude-agent-sdk mapper) actually produces for a Bash tool_result today — no "Exit code: N"
@@ -224,7 +224,7 @@ describe("fold-to-gate integration: real LiveWorkLog output through the real set
   });
 
   it("AC2: the discovery signal survives detail truncated to the real 240-char cap, because it no longer lives in detail", () => {
-    // Mode B's `detail` is the command's raw stdout truncated to 240 chars by warble's own mapper
+    // Dispatched's `detail` is the command's raw stdout truncated to 240 chars by warble's own mapper
     // before this harness ever sees it (see this file's header comment). Simulate that cap exactly
     // — a `summary` already truncated to 240 chars, the way it would arrive over the wire — and
     // confirm success still comes through, because the gate now derives success from the folded
@@ -249,9 +249,9 @@ describe("fold-to-gate integration: real LiveWorkLog output through the real set
     expect(result.status).toBe("ok");
   });
 
-  it("AC3 (real cassette): a genuinely failing Mode B discovery command, replayed through the REAL mapper, is classified failed, and the gate still reports context_schema_discovery_failed", () => {
+  it("AC3 (real cassette): a genuinely failing dispatched discovery command, replayed through the REAL mapper, is classified failed, and the gate still reports context_schema_discovery_failed", () => {
     // `test/fixtures/cassettes/chat__build_context__discovery-failed.ndjson` is a real recording of
-    // a Mode B build_context turn against a project the CLI itself refuses to query because
+    // a dispatched build_context turn against a project the CLI itself refuses to query because
     // `target/mdl.json` is missing: the agent's one allowlist-matching discovery command (`wren
     // --sql ... information_schema.tables ...`) genuinely exits 1. This is the exact recording that
     // settled the independent reviewer's blocking concern on this fix (see this file's header, and
@@ -315,9 +315,9 @@ describe("fold-to-gate integration: real LiveWorkLog output through the real set
     // invocation-level failures (e.g. a blocked/denied command), leaving open whether a command
     // that ran and merely exited nonzero might come back reported as `is_error: false`. An
     // independent reviewer raised exactly that gap as a blocking concern on `execSucceeded`
-    // (`harness/setup/runner.ts`), which trusts a Mode B (`Bash`) entry's folded `state` — "done"
+    // (`harness/setup/runner.ts`), which trusts a dispatched (`Bash`) entry's folded `state` — "done"
     // for success, "error" for anything else — as the ONLY signal available for that mode (there is
-    // no structured exit code in Mode B's `detail`; see `execSucceeded`'s own doc comment). It was
+    // no structured exit code in dispatched's `detail`; see `execSucceeded`'s own doc comment). It was
     // settled with one live dispatcher invocation against a project with an unreachable/unbuilt data
     // source, recorded at `test/fixtures/cassettes/chat__build_context__discovery-failed.ndjson`.
     //
@@ -331,7 +331,7 @@ describe("fold-to-gate integration: real LiveWorkLog output through the real set
     expect(bashSteps).toHaveLength(1);
 
     // recorded ok:false -> folded state "error" (never "done") -> `execSucceeded` returns `false`
-    // (never `true`) for Mode B -> the discovery-allowlist match this command satisfies is
+    // (never `true`) for dispatched -> the discovery-allowlist match this command satisfies is
     // classified "failed", never "successful". If the dispatcher ever reported this same real
     // failure as `ok:true`, `state` below would flip to "done" and this assertion would fail.
     expect(bashSteps[0]?.state).toBe("error");
@@ -340,10 +340,10 @@ describe("fold-to-gate integration: real LiveWorkLog output through the real set
     expect(classifyRecordedSchemaDiscovery(worklog).kind).not.toBe("successful");
   });
 
-  it("AC4 (SYNTHETIC — no recording exists for this scenario): a blocked/guardrail-denied Mode B execution never counts as successful discovery", () => {
+  it("AC4 (SYNTHETIC — no recording exists for this scenario): a blocked/guardrail-denied dispatched execution never counts as successful discovery", () => {
     // Unlike AC3 above, this input is still hand-constructed: capturing a real guardrail/denylist
     // rejection would require a live dispatcher invocation against a command the setup denylist
-    // actually blocks (`harness/tools/setup-native.ts`'s Mode A denylist, or its Mode B analogue),
+    // actually blocks (`harness/tools/setup-native.ts`'s in-process denylist, or its dispatched analogue),
     // and no such recording was made in the packet that settled AC3's cassette — only the
     // genuine-command-failure case (a project whose data source was unreachable) was probed live.
     // So this test keeps constructing its `ok:false`/`error:` input by hand, same as before.
@@ -370,9 +370,9 @@ describe("fold-to-gate integration: real LiveWorkLog output through the real set
     expect(discovery.kind).toBe("failed");
   });
 
-  it("AC9 (real cassette): the recorded already-built retry turn, replayed through the REAL Mode B NDJSON mapper, has no discovery evidence — confirming Defect 2's premise on a real recording, not a synthetic guess", () => {
+  it("AC9 (real cassette): the recorded already-built retry turn, replayed through the REAL dispatched NDJSON mapper, has no discovery evidence — confirming Defect 2's premise on a real recording, not a synthetic guess", () => {
     // `test/fixtures/cassettes/chat__build_context__already-built.ndjson` is a real recording of a
-    // Mode B dispatcher turn against a project whose earlier attempt had already succeeded: the
+    // Dispatched dispatcher turn against a project whose earlier attempt had already succeeded: the
     // agent re-validates, finds `target/mdl.json` already built, inspects the existing project
     // files, runs one cross-model row-count query, and reports `SETUP_STATUS: error` — hedging about
     // an unrelated host SDK version mismatch. None of its five Bash commands match the
@@ -419,7 +419,7 @@ describe("fold-to-gate integration: real LiveWorkLog output through the real set
     // Five real Bash calls, all recorded as having succeeded (`ok: true` in the cassette), plus the
     // one enclosing `build_context` step entry the real mapper's `step_start`/`step_finish` pair
     // also folds in — confirming the real mapper + fold pipeline produces a `state: "done"` worklog
-    // here, exactly the shape `execSucceeded` now trusts for Mode B.
+    // here, exactly the shape `execSucceeded` now trusts for dispatched.
     const bashSteps = worklog.filter((step) => step.label === "Bash");
     expect(bashSteps).toHaveLength(5);
     for (const step of bashSteps) {

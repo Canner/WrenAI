@@ -1,0 +1,4 @@
+# A pinned, existing semantic project. Runtime hosts replace this fixture binding with the project
+# selected at bind time and must present a successful context-build proof before starting a run.
+# Path is relative to this profile directory.
+project: ../../../../examples/v5-jaffle

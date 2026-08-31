@@ -1,11 +1,11 @@
 /**
- * Shared golden fixture for cross-back-end (Mode A vs Mode B) parity: the
+ * Shared golden fixture for cross-back-end (in-process vs dispatched) parity: the
  * baseline question + its expected `answer_query` envelope over the
  * `jaffle-wren` sample project, plus a tolerant equivalence relation over
  * envelope-shaped objects.
  *
  * Used by:
- * - `test/parity-contract.test.ts` (hermetic, item B): Mode A driven by the
+ * - `test/parity-contract.test.ts` (hermetic, item B): in-process driven by the
  *   mock adapter must produce an envelope that both conforms to
  *   `answer_query`'s `output_schema` and `matchesGolden`.
  * - `test/e2e-cross-backend-parity.test.ts` (opt-in live, item D): both real

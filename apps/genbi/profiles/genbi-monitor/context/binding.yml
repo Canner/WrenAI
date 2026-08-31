@@ -1,0 +1,7 @@
+# Coarse context binding: the whole v5-jaffle semantic layer — same shape and same resolution path
+# as genbi-default/context/binding.yml (IR v0.3+ builds a real MdlContext over the bound project and
+# evaluates context_precondition predicates against it). The host rewrites this `project:` line to
+# the user's own wren project at onboarding time; this repo pins v5-jaffle so `genbi-monitor`
+# compiles standalone for CI/dev.
+# Path is relative to this profile directory.
+project: ../../../../examples/v5-jaffle

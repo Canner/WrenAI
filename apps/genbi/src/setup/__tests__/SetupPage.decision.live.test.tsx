@@ -200,6 +200,34 @@ describe('Setup page — decision checkpoint (live mode)', () => {
     expect(screen.getByText('Discover the connected schema and build its semantic model foundation.')).toBeInTheDocument();
   });
 
+  it('connect: a failed clean keeps the decision retryable and displays the bounded server error', async () => {
+    const user = userEvent.setup();
+    postSetupConnectTurn.mockRejectedValueOnce(
+      new SetupDecisionRequiredError('s1', {
+        kind: 'name_conflict',
+        options: [
+          { id: 'rename', label: 'Rename' },
+          { id: 'clean', label: 'Start clean' },
+          { id: 'cancel', label: 'Cancel' },
+        ],
+        detail: 'A project named "my-project" already exists.',
+      }),
+    );
+
+    renderWithProviders(<AppRoutes />, { route: '/setup' });
+    await user.type(screen.getByPlaceholderText('my-project'), 'my-project');
+    await user.click(screen.getByRole('button', { name: 'Create project' }));
+
+    postSetupDecision.mockRejectedValueOnce(new Error('stored pending decision is malformed or no longer supported; it was not resolved'));
+    const clean = await screen.findByRole('button', { name: 'Start clean' });
+    await user.click(clean);
+
+    expect(await screen.findByText('Connecting the data source failed')).toBeInTheDocument();
+    expect(screen.getByText('stored pending decision is malformed or no longer supported; it was not resolved')).toBeInTheDocument();
+    await vi.waitFor(() => expect(useSetupStore.getState().connectStream.streaming).toBe(false));
+    expect(screen.getByRole('button', { name: /Start clean$/ })).toBeEnabled();
+  });
+
   it('connect: "Rename" clears the decision and re-opens the (now-empty) project name field for a new attempt', async () => {
     const user = userEvent.setup();
     postSetupConnectTurn.mockRejectedValueOnce(

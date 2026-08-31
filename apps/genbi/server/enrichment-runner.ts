@@ -2,9 +2,9 @@
  * Real (non-mock) `EnrichmentRunner` implementation for the draft path.
  *
  * Dispatches warble's `genbi-enrich-context` profile — `inspect_context`
- * then `draft_enrichment` — via Mode B (the Claude Agent SDK dispatcher),
+ * then `draft_enrichment` — via dispatched (the Claude Agent SDK dispatcher),
  * one subprocess per component. `warble-agent-sdk chat` is a single
- * line-per-turn stdin protocol (see `harness/route/mode-b.ts`'s
+ * line-per-turn stdin protocol (see `harness/route/dispatched.ts`'s
  * `spawnChat`/`buildAgentSdkChatArgs`), so a two-component flow is two
  * separate dispatches: this module folds turn 1's finalText into turn 2's
  * composed question itself — there is no SDK-level session chaining that
@@ -35,12 +35,12 @@
  * component's own instructions.
  */
 import type { AgentEvent, AuthChoice } from "../harness/index.js";
-import { resolveDefaultEnrichIrPath, runModeBDefault } from "../harness/index.js";
+import { resolveDefaultEnrichIrPath, runDispatchedDefault } from "../harness/index.js";
 import { EnrichmentContractError, type EnrichmentMode, type EnrichmentRunner, type EnrichmentRunnerReadiness } from "./enrichment.js";
 
 /**
  * The one live refusal condition `readiness()` and `defaultDispatch` share --
- * this dispatch path only ever talks to Claude via Mode B, so anything else
+ * this dispatch path only ever talks to Claude via dispatched, so anything else
  * is a refusal, not a routing choice. Kept as a single function so the two
  * call sites (the readiness check below, and `defaultDispatch`'s own guard)
  * can never drift apart from each other; the reason code is also exactly
@@ -50,7 +50,7 @@ const REQUIRES_CLAUDE_SUBSCRIPTION = "requires_claude_subscription";
 
 /**
  * A type guard (not just a boolean) so `defaultDispatch`'s own guard clause
- * keeps narrowing `authChoice` to what `runModeBDefault` requires -- the
+ * keeps narrowing `authChoice` to what `runDispatchedDefault` requires -- the
  * single source of truth `draftAuthReadiness` and `defaultDispatch` both
  * call, so the two can never drift apart.
  */
@@ -65,7 +65,7 @@ function draftAuthReadiness(authChoice: AuthChoice): EnrichmentRunnerReadiness {
 export const INSPECT_CONTEXT_AGENT_ID = "inspect_context";
 export const DRAFT_ENRICHMENT_AGENT_ID = "draft_enrichment";
 
-/** One Mode B turn: an `agentId` (warble component) + composed `question`, against a bound project. */
+/** One dispatched turn: an `agentId` (warble component) + composed `question`, against a bound project. */
 export interface EnrichmentDispatchInput {
   readonly agentId: string;
   readonly question: string;
@@ -74,10 +74,10 @@ export interface EnrichmentDispatchInput {
 export interface EnrichmentDispatchResult {
   readonly finalText: string;
 }
-/** Test-only seam: replaces the two real Mode B subprocess dispatches. Never set in production. */
+/** Test-only seam: replaces the two real dispatched subprocess dispatches. Never set in production. */
 export type EnrichmentDispatch = (input: EnrichmentDispatchInput) => Promise<EnrichmentDispatchResult>;
 
-export interface ModeBEnrichmentDraftRunnerOptions {
+export interface DispatchedEnrichmentDraftRunnerOptions {
   /**
    * Live auth-choice read, not a value frozen at construction. `EnrichmentRunner.draft()`
    * (`server/enrichment.ts`) takes no `authChoice` parameter of its own — unlike
@@ -87,19 +87,19 @@ export interface ModeBEnrichmentDraftRunnerOptions {
    * active when `server/bin.ts` constructed this runner at boot.
    */
   readonly getAuthChoice: () => AuthChoice;
-  /** Defaults to `resolveDefaultEnrichIrPath()` (the committed `warble/genbi-enrich-context/ir.golden.json`). */
+  /** Defaults to `resolveDefaultEnrichIrPath()` (the committed `profiles/genbi-enrich-context/ir.golden.json`). */
   readonly irPath?: string;
   readonly warbleBin?: string;
   readonly agentSdkBin?: string;
   readonly outDir?: string;
   /**
-   * Mirrors `ModeBSetupRunnerOptions.getModelsConfig` — a live read, not a value frozen at
+   * Mirrors `DispatchedSetupRunnerOptions.getModelsConfig` — a live read, not a value frozen at
    * construction, so a later `PUT /api/config/runtime` rebind is picked up by the next draft
    * call instead of requiring a process restart.
    */
   /**
    * Directory of the genbi-enrich-context profile. When set, the draft is
-   * dispatched from an IR compiled against the bound project — which is the
+   * Dispatched from an IR compiled against the bound project — which is the
    * only way the agent's injected context describes the project it is about to
    * propose changes to.
    *
@@ -119,13 +119,13 @@ export interface ModeBEnrichmentDraftRunnerOptions {
 }
 
 /**
- * Which profile input `runModeBDefault` is given, and whether it is allowed to
+ * Which profile input `runDispatchedDefault` is given, and whether it is allowed to
  * skip compilation.
  *
  * Passing `irPath` short-circuits `compileProfile`, which is how a prebuilt
  * golden — the profile compiled against warble's own example project — used to
  * reach the agent. With a profile source we want the opposite: compile, so the
- * dispatched IR's context is the bound project's.
+ * Dispatched IR's context is the bound project's.
  *
  * Exported because that branch is the whole point of the fix and is otherwise
  * only reachable through a real dispatch.
@@ -134,7 +134,7 @@ export function draftProfileInput(profileSource: string | undefined, irPath: str
   return profileSource === undefined ? { profileSource: irPath, irPath } : { profileSource };
 }
 
-function defaultDispatch(options: ModeBEnrichmentDraftRunnerOptions): EnrichmentDispatch {
+function defaultDispatch(options: DispatchedEnrichmentDraftRunnerOptions): EnrichmentDispatch {
   return async ({ agentId, question, userProject }) => {
     const irPath = options.irPath ?? resolveDefaultEnrichIrPath();
     if (irPath === undefined) {
@@ -151,7 +151,7 @@ function defaultDispatch(options: ModeBEnrichmentDraftRunnerOptions): Enrichment
       );
     }
     const modelsConfig = options.getModelsConfig?.();
-    const result = await runModeBDefault({
+    const result = await runDispatchedDefault({
       authChoice,
       ...draftProfileInput(options.profileSource, irPath),
       userProject,
@@ -285,7 +285,7 @@ export function translateDraftTerminal(finalText: string): unknown {
 }
 
 /**
- * Builds the real, production `EnrichmentRunner.draft()`: two Mode B
+ * Builds the real, production `EnrichmentRunner.draft()`: two dispatched
  * dispatches (`inspect_context` then `draft_enrichment`) against the bound
  * project, folding turn 1's output into turn 2's composed question, then
  * translating the terminal into the shape the host's own
@@ -295,7 +295,7 @@ export function translateDraftTerminal(finalText: string): unknown {
  * context/enrichment/*` route's) job, same as every mock runner in
  * `test/bff-enrichment.test.ts`.
  */
-export function createModeBEnrichmentDraftRunner(options: ModeBEnrichmentDraftRunnerOptions): EnrichmentRunner {
+export function createDispatchedEnrichmentDraftRunner(options: DispatchedEnrichmentDraftRunnerOptions): EnrichmentRunner {
   const dispatch = options.dispatch ?? defaultDispatch(options);
   return {
     async draft(input): Promise<unknown> {

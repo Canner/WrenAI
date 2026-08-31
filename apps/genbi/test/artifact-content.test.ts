@@ -39,7 +39,7 @@ describe("resolveArtifactContent", () => {
     return root;
   }
 
-  it("reads back a Mode B envelope byte-for-byte (well-formed 'blocks' JSON -> form: 'envelope')", () => {
+  it("reads back a dispatched envelope byte-for-byte (well-formed 'blocks' JSON -> form: 'envelope')", () => {
     const dir = freshRoot();
     const envelope = { blocks: [{ type: "kpi_card", label: "Revenue", value: 42000 }], summary: "ok", verified: true };
     const location = path.join(dir, "session-1", "dashboard-turn-1.json");
@@ -49,7 +49,7 @@ describe("resolveArtifactContent", () => {
     expect(resolveArtifactContent(dir, location)).toEqual({ form: "envelope", envelope });
   });
 
-  it("resolves a relative location against the artifacts root (Mode A's write_artifact convention)", () => {
+  it("resolves a relative location against the artifacts root (in-process's write_artifact convention)", () => {
     const dir = freshRoot();
     writeFileSync(path.join(dir, "notes.md"), "# hello\n", "utf-8");
 

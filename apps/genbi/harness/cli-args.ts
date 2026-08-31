@@ -24,11 +24,11 @@ export interface CliFlags {
   readonly agentSdkBin?: string;
   readonly out?: string;
   readonly deployment?: string;
-  /** Hybrid mode, Mode A: repeatable `--tier-adapter <tier>=<mode>[:<field>=<value>,...]` entries. */
+  /** Hybrid mode, in-process: repeatable `--tier-adapter <tier>=<mode>[:<field>=<value>,...]` entries. */
   readonly tierAdapters?: readonly string[];
-  /** Hybrid mode, Mode B: `--models-config <path>`, forwarded verbatim to `warble-agent-sdk chat`. */
+  /** Hybrid mode, dispatched: `--models-config <path>`, forwarded verbatim to `warble-agent-sdk chat`. */
   readonly modelsConfig?: string;
-  /** Mode B only: `--chat-timeout-ms <n>`, overrides `spawnChat`'s default 10-minute hang guard. See `ModeBOptions.chatTimeoutMs`. */
+  /** Dispatched only: `--chat-timeout-ms <n>`, overrides `spawnChat`'s default 10-minute hang guard. See `DispatchedOptions.chatTimeoutMs`. */
   readonly chatTimeoutMs?: number;
 }
 
@@ -192,14 +192,14 @@ export const EXIT_ERROR = 1;
 export const EXIT_REFUSAL = 2;
 
 /**
- * A `RouteResult` with `kind: "refusal"` (Mode A only — the agent
+ * A `RouteResult` with `kind: "refusal"` (in-process only — the agent
  * declined to answer because a `locked` `gated_check` guardrail wasn't
  * satisfied) is a completed *run*, not a crash, but it is also not an
  * answer; a shell/pipeline consumer of the packaged `bin` piping the CLI's
  * stdout needs a way to tell "ran but refused" (`EXIT_REFUSAL`) apart from
  * both "answered" (`EXIT_OK`) and "failed to run" (`EXIT_ERROR`, the
- * top-level `main().catch()` in `cli.ts`). Mode B has no refusal state of
- * its own to map here — `runModeBDefault` throws (in `mode-b.ts`) on
+ * top-level `main().catch()` in `cli.ts`). Dispatched has no refusal state of
+ * its own to map here — `runDispatchedDefault` throws (in `dispatched.ts`) on
  * an empty final answer rather than returning a refusal-shaped result, so
  * that already lands on `EXIT_ERROR` via the same top-level catch.
  */
@@ -239,7 +239,7 @@ const TIER_ADAPTER_ALLOWED_FIELDS = new Set(["adapter", "apiKey", "model", "endp
  * entry — e.g. `cheap=local:endpoint=http://localhost:11434/v1,model=llama3.1`
  * or `strong=api-key:adapter=anthropic,model=claude-opus-4-6`. `mode` is
  * restricted to `api-key`/`local`/`gateway` — subscription has no adapter of
- * its own (Mode B is the whole-run back-end, never a per-tier one), so
+ * its own (dispatched is the whole-run back-end, never a per-tier one), so
  * naming it here is a loud-fail rather than a silent no-op.
  */
 export function parseTierAdapterFlag(raw: string): ParsedTierAdapterFlag {

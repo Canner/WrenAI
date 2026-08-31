@@ -1,0 +1,15 @@
+# genbi-enrich-context — optional post-bind enrichment for an already built Wren project.
+#
+# This is deliberately separate from genbi-setup: setup creates and builds a project, whereas
+# this profile only operates after a pinned project's MDL is already valid and built. The host
+# starts the run only after it has recorded that build proof; the typed terminal contract owns
+# that runtime-only proof so no state file is added to the project.
+profile: genbi-enrich-context
+
+context:
+  project: context/binding.yml
+
+components:
+  - use: inspect_context
+  - use: draft_enrichment
+  - use: apply_enrichment

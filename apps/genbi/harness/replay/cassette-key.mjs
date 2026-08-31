@@ -8,8 +8,8 @@
  *
  * `key = "<subcommand>__<component>__<scenario>"`, where:
  *
- *  - `subcommand` is `argv[0]` as the BFF's own runner builds it — `"chat"` for Mode B
- *    (`harness/route/mode-b.ts`'s `buildAgentSdkChatArgs`) or `"dispatch"` for Codex
+ *  - `subcommand` is `argv[0]` as the BFF's own runner builds it — `"chat"` for dispatched
+ *    (`harness/route/dispatched.ts`'s `buildAgentSdkChatArgs`) or `"dispatch"` for Codex
  *    (`harness/setup/runner.ts`'s `CodexSetupRunner`). This is a fixed literal per back-end,
  *    never a path.
  *  - `component` is the value that follows `--component` in argv — e.g. `connect_source` /

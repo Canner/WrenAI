@@ -1,0 +1,32 @@
+# inspect_context — cheap, read-only inventory of a bound project's enrichment surface.
+# It observes MDL, cubes, knowledge rules, NL→SQL entries, and raw-material availability, but it
+# emits only opaque evidence references and gap classifications. It never reads credentials or
+# returns raw material content across the host boundary.
+id: inspect_context
+verb: inspect_context
+type: analytical
+realization_kind: skill
+
+binding_mode: pinned
+context_requirements:
+  - "an existing pinned Wren project whose semantic layer parses and has a successful build proof"
+context_precondition:
+  - { predicate: wren_project_exists }
+
+params: []
+llm_steps:
+  - { name: inspect, tier: cheap, prompt_ref: steps/inspect.md, produces: enrichment_gaps }
+trigger: { kind: one_shot }
+guardrails:
+  - { name: read_only_execution, locked: true }
+required_capabilities:
+  - semantic_introspection
+  - raw_material_read
+  - llm:cheap
+borrowed_actions: []
+effect:
+  render_blocks: []
+  outcome: { kind: none }
+eval:
+  template_ref: eval/
+  metrics: [enrichment_gap_coverage]

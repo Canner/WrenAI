@@ -64,14 +64,16 @@ export const NATIVE_SAVE_DASHBOARD_INPUT_SCHEMA = {
   additionalProperties: false,
   required: ["version", "name", "idempotency_key"],
   oneOf: [
-    { required: ["envelope"], not: { required: ["answer_ref"] } },
-    { required: ["answer_ref"], not: { required: ["envelope"] } },
+    { required: ["envelope"], not: { anyOf: [{ required: ["answer_ref"] }, { required: ["answer_selection"] }] } },
+    { required: ["answer_ref"], not: { anyOf: [{ required: ["envelope"] }, { required: ["answer_selection"] }] } },
+    { required: ["answer_selection"], not: { anyOf: [{ required: ["envelope"] }, { required: ["answer_ref"] }] } },
   ],
   properties: {
     version: { anyOf: [{ const: "1" }, { const: 1 }], description: "Use the canonical string literal \"1\". Numeric 1 is accepted for Claude Code compatibility and is canonicalized before persistence." },
     name: { ...SAFE_TEXT_SCHEMA, minLength: 1, maxLength: MAX_NAME_LENGTH, pattern: "\\S" },
     idempotency_key: { ...SAFE_TEXT_SCHEMA, minLength: 8, maxLength: MAX_IDEMPOTENCY_KEY_LENGTH, pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]+$" },
     answer_ref: { ...SAFE_TEXT_SCHEMA, pattern: "^answer-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", description: "Opaque reference returned by persist_answer for this native session." },
+    answer_selection: { const: "latest", description: "Resolve the newest verified answer retained by this native session when its opaque answer_ref is no longer available in the conversation." },
     envelope: {
       type: "object", additionalProperties: false, required: ["blocks", "verified"],
       properties: {
@@ -173,7 +175,14 @@ export interface SaveDashboardReferenceInput {
   readonly idempotency_key: string;
 }
 
-export type SaveDashboardInput = SaveDashboardPayloadInput | SaveDashboardReferenceInput;
+export interface SaveDashboardLatestInput {
+  readonly version: "1";
+  readonly name: string;
+  readonly answer_selection: "latest";
+  readonly idempotency_key: string;
+}
+
+export type SaveDashboardInput = SaveDashboardPayloadInput | SaveDashboardReferenceInput | SaveDashboardLatestInput;
 
 export interface PersistStructuredAnswerInput {
   readonly version: "1";
@@ -290,7 +299,7 @@ function validateDashboardEnvelope(envelope: unknown): void {
 }
 
 function validateInput(value: unknown): SaveDashboardInput {
-  if (!isRecord(value) || !Object.keys(value).every((key) => ["version", "name", "envelope", "answer_ref", "idempotency_key"].includes(key))) throw new NativeArtifactError("invalid Save to Artifacts payload: expected version, name, idempotency_key, and exactly one of envelope or answer_ref");
+  if (!isRecord(value) || !Object.keys(value).every((key) => ["version", "name", "envelope", "answer_ref", "answer_selection", "idempotency_key"].includes(key))) throw new NativeArtifactError("invalid Save to Artifacts payload: expected version, name, idempotency_key, and exactly one answer source");
   // Claude Code 2.1.227 was observed coercing the schema's const "1" to numeric
   // 1. Accept that one semantically identical wire alias, then canonicalize it;
   // every other version remains a loud fail.
@@ -302,13 +311,18 @@ function validateInput(value: unknown): SaveDashboardInput {
   if (rejectsExecutableText(value)) throw new NativeArtifactError("invalid Save to Artifacts payload: executable content or file fields are not allowed");
   const hasEnvelope = Object.hasOwn(value, "envelope");
   const hasReference = Object.hasOwn(value, "answer_ref");
-  if (hasEnvelope === hasReference) throw new NativeArtifactError("invalid Save to Artifacts payload: provide exactly one of envelope or answer_ref");
+  const hasSelection = Object.hasOwn(value, "answer_selection");
+  if ([hasEnvelope, hasReference, hasSelection].filter(Boolean).length !== 1) throw new NativeArtifactError("invalid Save to Artifacts payload: provide exactly one of envelope, answer_ref, or answer_selection");
   if (hasEnvelope) {
     validateDashboardEnvelope(value.envelope);
     return { version: "1", name: value.name, envelope: value.envelope, idempotency_key: value.idempotency_key };
   }
-  if (typeof value.answer_ref !== "string" || !ANSWER_REFERENCE_PATTERN.test(value.answer_ref)) throw new NativeArtifactError("invalid Save to Artifacts payload: answer_ref is invalid");
-  return { version: "1", name: value.name, answer_ref: value.answer_ref, idempotency_key: value.idempotency_key };
+  if (hasReference) {
+    if (typeof value.answer_ref !== "string" || !ANSWER_REFERENCE_PATTERN.test(value.answer_ref)) throw new NativeArtifactError("invalid Save to Artifacts payload: answer_ref is invalid");
+    return { version: "1", name: value.name, answer_ref: value.answer_ref, idempotency_key: value.idempotency_key };
+  }
+  if (value.answer_selection !== "latest") throw new NativeArtifactError("invalid Save to Artifacts payload: answer_selection must be latest");
+  return { version: "1", name: value.name, answer_selection: "latest", idempotency_key: value.idempotency_key };
 }
 
 function validatePersistedStructuredAnswer(value: unknown): PersistStructuredAnswerInput {
@@ -480,11 +494,14 @@ export class NativeArtifactService {
       throw new NativeArtifactError("GenBI MCP session binding is stale. Start a new native session.", 409);
     }
     const payload = validateInput(input);
-    const referenceSave = "answer_ref" in payload;
-    const source = referenceSave
+    const referenceSave = "answer_ref" in payload || "answer_selection" in payload;
+    const source = "answer_ref" in payload
       ? this.options.store.getNativeStructuredAnswer(payload.answer_ref)
-      : undefined;
-    if (referenceSave && !source) throw new NativeArtifactError("persisted answer reference was not found", 404);
+      : "answer_selection" in payload
+        ? this.options.store.getLatestNativeStructuredAnswer(session.id)
+        : undefined;
+    if ("answer_ref" in payload && !source) throw new NativeArtifactError("persisted answer reference was not found", 404);
+    if ("answer_selection" in payload && !source) throw new NativeArtifactError("no persisted answer is available for this native session", 404);
     if (source) validateStoredStructuredAnswer(source, session.id);
     const contents = referenceSave ? source!.envelopeJson : JSON.stringify(payload.envelope);
     const digest = referenceSave ? source!.digest : structuredAnswerDigest(contents);

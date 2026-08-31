@@ -44,7 +44,7 @@ export interface ToolStep {
   /**
    * `"tool"` — a tool call. `"subagent"` — a nested sub-agent/Task turn
    * (subscription dispatchers only; the in-process path has no such mechanism). `"step"` — one of
-   * Mode A's own bundle-declared LLM steps (`step.start`/`step.finish`), i.e.
+   * In-process's own bundle-declared LLM steps (`step.start`/`step.finish`), i.e.
    * the agent's own reasoning/output for that step, distinct from any tool
    * calls it happened to make along the way. `"decision"` — a
    * deterministic control-flow decision the BFF made for the turn (intent
@@ -671,7 +671,7 @@ export interface HarnessProfile {
 /**
  * Which auth strategy is actually configured — mirrors
  * `AuthChoice["mode"]` (`harness/auth/index.ts`) verbatim. Deliberately NOT the
- * internal `modeA`/`modeB` framework-dispatch bucketing (that terminology
+ * internal `inProcess`/`dispatched` framework-dispatch bucketing (that terminology
  * must never reach the wire); see `runtimeBackendAndLabel` in
  * `server/harness.ts`.
  */
@@ -855,19 +855,31 @@ export interface HarnessDto {
 }
 
 /**
- * A read-only projection of the selected purpose. Profile, scope, Runtime
- * target and readiness all come from the server's native dispatch registry;
- * no browser-provided launch/profile/target input is represented here.
+ * A read-only projection of the selected purpose. `executionKind` is the
+ * discriminator that keeps form-led Setup runner readiness separate from
+ * native terminal readiness; no browser-provided launch/profile/target input
+ * is represented here.
  */
-export interface HarnessPurpose {
+interface HarnessPurposeBase {
   readonly purpose: "setup" | "analysis" | "context_enrichment";
   readonly profile: "genbi-setup" | "genbi-default" | "genbi-enrich-context";
   readonly scopeKind: "bootstrap" | "bound_project";
-  readonly target?: "claude-code:interactive" | "codex:interactive";
-  readonly targetLabel?: "Claude CLI" | "Codex CLI";
   readonly available: boolean;
   readonly reason?: string;
 }
+
+export type HarnessPurpose = HarnessPurposeBase & (
+  | {
+      readonly executionKind: "setup_runner";
+      readonly target: "claude-agent-sdk:setup" | "codex-local:setup" | "in-process:setup";
+      readonly targetLabel: "Claude Setup runner" | "Codex Setup runner" | "In-process Setup runner";
+    }
+  | {
+      readonly executionKind: "native_session";
+      readonly target?: "claude-code:interactive" | "codex:interactive";
+      readonly targetLabel?: "Claude CLI" | "Codex CLI";
+    }
+);
 
 // ---------------------------------------------------------------------------
 // SSE wire framing (BFF -> UI). Matches the `StreamHandlers` contract:

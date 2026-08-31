@@ -246,6 +246,7 @@ export const strings = {
     purpose: 'Purpose',
     profile: 'Profile',
     compiledDispatchTarget: 'Compiled dispatch target',
+    setupRunnerTarget: 'Setup runner',
     nativeSessionTarget: 'Native session target',
     readiness: 'Readiness',
     ready: 'Ready',

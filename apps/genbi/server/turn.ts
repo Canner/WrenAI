@@ -5,8 +5,8 @@
  * without re-invoking `route()`.
  *
  * `route` and `baseRouteOptions` are injected (`TurnDeps`) so tests can pass
- * a stub `route`/`modeA` without a real LLM or CLI — mirroring the seam
- * `harness/route/route.ts` already uses internally for `modeA`/`modeB`.
+ * a stub `route`/`inProcess` without a real LLM or CLI — mirroring the seam
+ * `harness/route/route.ts` already uses internally for `inProcess`/`dispatched`.
  */
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -16,7 +16,7 @@ import {
   BUILD_CONTEXT_AGENT_ID,
   contextLifecycleIdentityFingerprint,
   DEFAULT_SETUP_MAX_TURNS,
-  ModeBSessionError,
+  DispatchedSessionError,
   parseSetupTerminal,
   recordedContextLifecyclePrefix,
   resolveArtifactsDir,
@@ -293,7 +293,7 @@ export function effectiveRouteOptions(
   }
   // These three fields are mutually exclusive runtime materializations. Drop
   // any boot-time value before applying the live persisted choice so an auth
-  // switch cannot carry a stale Mode A/Claude/Codex binding into another mode.
+  // switch cannot carry a stale in-process/Claude/Codex binding into another mode.
   const {
     tierBinding: _bootTierBinding,
     modelsConfig: _bootModelsConfig,
@@ -343,8 +343,8 @@ const RECENT_TURNS_FOR_COMPOSE = 5;
 /**
  * The compiled bundle's `artifact_write`-capable agent ids, cached
  * alongside `agentIds` off the SAME `describeBundle` resolution (one compile
- * per `TurnDeps`, not two) — used to decide whether a Mode B turn's rich
- * answer should ALSO be persisted as an artifact (see `maybeCreateModeBArtifact`
+ * per `TurnDeps`, not two) — used to decide whether a dispatched turn's rich
+ * answer should ALSO be persisted as an artifact (see `maybeCreateDispatchedArtifact`
  * below). `generate_dashboard`/`explain_change` declare this capability in the
  * genbi-default profile (see `bundle/schema.ts`'s `capabilitySchema`);
  * `answer_query`/`explore_model` don't — this is a signal read straight off
@@ -401,7 +401,7 @@ async function isArtifactProducerAgent(deps: TurnDeps, agentId: string): Promise
   return (await getBundleAgentInfo(deps)).artifactProducerAgentIds.has(agentId);
 }
 
-/** `generate_dashboard` -> `"dashboard"`; every other artifact-producing agent (e.g. `explain_change`) -> `"report"` — mirrors Mode A's `write_artifact` default (`harness/loop/executor.ts`). */
+/** `generate_dashboard` -> `"dashboard"`; every other artifact-producing agent (e.g. `explain_change`) -> `"report"` — mirrors in-process's `write_artifact` default (`harness/loop/executor.ts`). */
 function artifactKindForAgent(agentId: string): ArtifactKind {
   return agentId === "generate_dashboard" ? "dashboard" : "report";
 }
@@ -576,7 +576,7 @@ async function executeTurn(
   // with tool calls, each with its own detail) whenever it has content — it's
   // strictly richer than the floor trace's tool-outcomes-only view. Fall back
   // to `foldTrace(trace)` only when the live log is empty (no `onEvent`
-  // firings reached it at all, e.g. Mode B, or a caller that never wires
+  // firings reached it at all, e.g. Dispatched, or a caller that never wires
   // live events) — this exactly preserves prior behavior for those cases.
   const trace = extractTrace(result);
   const liveSnapshot = liveLog.snapshot();
@@ -597,7 +597,7 @@ async function executeTurn(
   // artifact-producing component (`generate_dashboard`/`explain_change` —
   // NOT a plain `answer_query` table), persist it as a real artifact too, so
   // it's publishable regardless of which backend ran the turn.
-  const artifactEvent = await maybeCreateModeBArtifact(deps, session, turn, result, terminalEvent);
+  const artifactEvent = await maybeCreateDispatchedArtifact(deps, session, turn, result, terminalEvent);
 
   // Persist the turn as fully resolved BEFORE emitting any terminal frames.
   // If a client disconnect makes an emit below throw, the turn is already
@@ -647,7 +647,7 @@ async function executeTurn(
  * (never present in the NDJSON stream today). `verified` comes straight from
  * the envelope's own `verified` field, never hardcoded.
  */
-async function maybeCreateModeBArtifact(
+async function maybeCreateDispatchedArtifact(
   deps: TurnDeps,
   session: SessionRow,
   turn: TurnRow,
@@ -675,7 +675,7 @@ async function maybeCreateModeBArtifact(
   return artifactEvent;
 }
 
-/** Whether a caught setup-turn error is the dispatcher's `error_max_turns` exit (Mode B running out of its configured turn budget), vs. any other genuine failure. */
+/** Whether a caught setup-turn error is the dispatcher's `error_max_turns` exit (dispatched running out of its configured turn budget), vs. any other genuine failure. */
 function isMaxTurnsError(message: string): boolean {
   return /error_max_turns/i.test(message);
 }
@@ -720,7 +720,7 @@ function nonEmptySessionId(value: string | null | undefined): value is string {
 
 /** The only thrown setup error that can carry a safe, resumable dispatcher anchor. */
 function sessionIdFromSetupError(error: unknown): string | undefined {
-  return error instanceof ModeBSessionError && nonEmptySessionId(error.sessionId) ? error.sessionId : undefined;
+  return error instanceof DispatchedSessionError && nonEmptySessionId(error.sessionId) ? error.sessionId : undefined;
 }
 
 /**
@@ -937,7 +937,7 @@ async function executeSetupTurn(deps: TurnDeps, session: SessionRow, turn: TurnR
     setupRunner.run({
       prompt,
       workspaceRoot,
-      // The form was validated before persistence. Thread it to Mode B so
+      // The form was validated before persistence. Thread it to dispatched so
       // resumed connect/context turns bind the SDK cwd and mutation scope to
       // the project itself rather than the outer scaffold workspace.
       projectName: form.projectName,
@@ -967,8 +967,8 @@ async function executeSetupTurn(deps: TurnDeps, session: SessionRow, turn: TurnR
     await chain.catch(() => {});
     const message = err instanceof Error ? err.message : String(err);
     // Plan A: a failed turn (e.g. this very `error_max_turns` exit) can still carry a resumable
-    // SDK session id — `ModeBSessionError` mirrors warble's own `DispatchSessionError` for exactly
-    // this reason. `undefined` (not a `ModeBSessionError` at all, e.g. a stub runner in tests) is
+    // SDK session id — `DispatchedSessionError` mirrors warble's own `DispatchSessionError` for exactly
+    // this reason. `undefined` (not a `DispatchedSessionError` at all, e.g. a stub runner in tests) is
     // treated the same as "no session id available" below.
     const failedSessionId = sessionIdFromSetupError(err);
     const failedRecoveryAnchor = recoveryAnchor(failedSessionId, initialAuthChoice);
@@ -1052,7 +1052,7 @@ async function executeSetupTurn(deps: TurnDeps, session: SessionRow, turn: TurnR
   // A host-contract diagnostic can only be emitted after a completed runner
   // result claimed success. Keep the original turn/SSE open and make exactly
   // one same-session continuation when the backend supplied a real anchor.
-  // Mode A returns `null` and Codex currently returns no session id, so both
+  // In-process returns `null` and Codex currently returns no session id, so both
   // intentionally keep their existing single-dispatch behavior.
   let retainedRecoveryAnchor =
     turn.contextRecovery === "schema_discovery" ? undefined : turnRecoveryAnchor(turn, completedSessionId, initialAuthChoice);

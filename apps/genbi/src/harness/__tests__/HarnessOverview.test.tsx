@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fireEvent, screen, within } from '@testing-library/react';
 import { renderWithProviders } from '@/test/utils';
 import { HarnessOverview } from '../HarnessOverview';
-import { fixtureHarnessView } from '../fixtures';
+import { fixtureHarnessView, fixtureHarnessViews } from '../fixtures';
 
 describe('HarnessOverview', () => {
   it('presents compiled dispatch and native session targets separately in the primary execution path', () => {
@@ -22,6 +22,16 @@ describe('HarnessOverview', () => {
     expect(screen.queryByText('Active runtime target')).not.toBeInTheDocument();
   });
 
+  it('presents the form-led Setup runner instead of a native session target for Setup', () => {
+    renderWithProviders(<HarnessOverview harness={fixtureHarnessViews.setup} />);
+
+    const execution = screen.getByText('Execution path').closest('.ant-card') as HTMLElement;
+    expect(execution).toHaveTextContent('setup');
+    expect(execution).toHaveTextContent('Setup runner');
+    expect(execution).toHaveTextContent('Claude Setup runner');
+    expect(execution).not.toHaveTextContent('Native session target');
+  });
+
   it('keeps implementation detail in expandable diagnostics and distinguishes backend from dispatcher', () => {
     renderWithProviders(<HarnessOverview harness={fixtureHarnessView} />);
 
@@ -33,8 +43,8 @@ describe('HarnessOverview', () => {
     expect(screen.getByText('Dispatcher implementation')).toBeInTheDocument();
     expect(screen.getByText('Claude Agent SDK')).toBeInTheDocument();
     expect(screen.getByText('claude-haiku')).toBeInTheDocument();
-    expect(screen.queryByText(/Mode A/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Mode B/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/in-process/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/dispatched/)).not.toBeInTheDocument();
   });
 
   it('shows an unavailable component and its reason in the primary table without an executable expander', () => {

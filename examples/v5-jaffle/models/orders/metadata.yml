@@ -13,6 +13,11 @@ columns:
     is_calculated: false
     not_null: false
     properties: {}
+  - name: order_date
+    type: TIMESTAMP
+    is_calculated: false
+    not_null: false
+    properties: {}
   - name: amount
     type: DOUBLE
     is_calculated: false

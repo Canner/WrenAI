@@ -18,4 +18,11 @@ const commit = run(["rev-parse", "HEAD"]);
 if (commit.status !== 0) fail("UI worktree commit is unavailable");
 const rootDigest = createHash("sha256").update(root).digest("hex");
 const treeIdentity = createHash("sha256").update(`${rootDigest}\0${commit.stdout.trim()}`).digest("hex");
-if (!attestation?.genbi || !attestation?.ui || attestation.genbi.rootDigest !== rootDigest || attestation.genbi.commit !== commit.stdout.trim() || attestation.genbi.treeIdentity !== treeIdentity || JSON.stringify(attestation.ui) !== JSON.stringify(attestation.genbi)) fail("local launch attestation belongs to a different UI worktree");
+// The `genbi` block also attests the profile/IR runtime inputs, which the `ui` block does not
+// carry, so the two are no longer structurally identical. Compare the provenance triple field by
+// field and keep the closed-shape check on `ui` that whole-object equality used to give.
+const provenance = ["rootDigest", "commit", "treeIdentity"];
+const sameProvenance = attestation?.genbi && attestation?.ui
+  && JSON.stringify(Object.keys(attestation.ui).sort()) === JSON.stringify([...provenance].sort())
+  && provenance.every((key) => attestation.ui[key] === attestation.genbi[key]);
+if (!sameProvenance || attestation.genbi.rootDigest !== rootDigest || attestation.genbi.commit !== commit.stdout.trim() || attestation.genbi.treeIdentity !== treeIdentity) fail("local launch attestation belongs to a different UI worktree");

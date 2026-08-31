@@ -308,7 +308,7 @@ describe("hybrid: buildTierBindingFromFlags", () => {
 });
 
 describe("determineExitCode (refusal exit-code contract)", () => {
-  it("maps a Mode A refusal to EXIT_REFUSAL (2), not EXIT_OK", () => {
+  it("maps a in-process refusal to EXIT_REFUSAL (2), not EXIT_OK", () => {
     const refusal: RouteResult = {
       backend: "agent",
       warnings: [],
@@ -320,7 +320,7 @@ describe("determineExitCode (refusal exit-code contract)", () => {
     expect(EXIT_REFUSAL).toBe(2);
   });
 
-  it("maps a Mode A answer to EXIT_OK (0)", () => {
+  it("maps a in-process answer to EXIT_OK (0)", () => {
     const answer: RouteResult = {
       backend: "agent",
       warnings: [],
@@ -331,13 +331,13 @@ describe("determineExitCode (refusal exit-code contract)", () => {
     expect(EXIT_OK).toBe(0);
   });
 
-  it("maps a Mode B result (no `kind` field at all) to EXIT_OK — Mode B has no refusal state", () => {
-    const modeBResult: RouteResult = {
+  it("maps a dispatched result (no `kind` field at all) to EXIT_OK — dispatched has no refusal state", () => {
+    const dispatchedResult: RouteResult = {
       backend: "agent-sdk",
       warnings: [],
       finalText: "Acme is the top customer by revenue.",
     };
-    expect(determineExitCode(modeBResult)).toBe(EXIT_OK);
+    expect(determineExitCode(dispatchedResult)).toBe(EXIT_OK);
   });
 
   it("a subscription ToS warning on the result does not affect the exit code either way", () => {

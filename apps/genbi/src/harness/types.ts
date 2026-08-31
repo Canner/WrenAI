@@ -182,16 +182,27 @@ export interface AgentProfileRow {
 
 export type HarnessPurpose = 'setup' | 'analysis' | 'context_enrichment';
 
-/** Server-derived native-purpose metadata for the profile currently rendered. */
-export interface HarnessPurposeInfo {
+/** Server-derived active execution metadata for the profile currently rendered. */
+interface HarnessPurposeInfoBase {
   purpose: HarnessPurpose;
   profile: 'genbi-setup' | 'genbi-default' | 'genbi-enrich-context';
   scopeKind: 'bootstrap' | 'bound_project';
-  target?: 'claude-code:interactive' | 'codex:interactive';
-  targetLabel?: 'Claude CLI' | 'Codex CLI';
   available: boolean;
   reason?: string;
 }
+
+export type HarnessPurposeInfo = HarnessPurposeInfoBase & (
+  | {
+      executionKind: 'setup_runner';
+      target: 'claude-agent-sdk:setup' | 'codex-local:setup' | 'in-process:setup';
+      targetLabel: 'Claude Setup runner' | 'Codex Setup runner' | 'In-process Setup runner';
+    }
+  | {
+      executionKind: 'native_session';
+      target?: 'claude-code:interactive' | 'codex:interactive';
+      targetLabel?: 'Claude CLI' | 'Codex CLI';
+    }
+);
 
 /** Everything the Harness overview page renders, for one server-owned purpose profile. */
 export interface HarnessView {

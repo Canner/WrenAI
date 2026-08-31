@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promi
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CodexSetupRunner, selectSetupRunnerForAuth } from "../harness/setup/runner.js";
+import { CodexSetupRunner, parseSetupTerminal, selectSetupRunnerForAuth } from "../harness/setup/runner.js";
 import { CodexSetupEventMapper } from "../harness/setup/codex-events.js";
 import { createAgentEventEmitter } from "../harness/events/index.js";
 import { classifyRecordedSchemaDiscovery } from "../harness/setup/runner.js";
@@ -16,11 +16,31 @@ afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-async function fakeDispatcher(): Promise<{ cli: { command: string; prefixArgs: string[] }; capture: string }> {
+async function fakeDispatcher(options?: {
+  answer?: unknown;
+  rawAnswer?: string;
+}): Promise<{ cli: { command: string; prefixArgs: string[] }; capture: string; irPath: string }> {
   const dir = await mkdtemp(path.join(os.tmpdir(), "genbi-codex-setup-"));
   dirs.push(dir);
   const script = path.join(dir, "fake-dispatcher.mjs");
   const capture = path.join(dir, "capture.json");
+  const irPath = path.join(dir, "setup-ir.json");
+  await writeFile(
+    irPath,
+    JSON.stringify({
+      components: [
+        { id: "connect_source", llm_calls: [{ produces: "connection_summary" }] },
+        { id: "build_context", llm_calls: [{ produces: "context_summary" }] },
+      ],
+    }),
+    "utf8",
+  );
+  const answerExpression =
+    options?.rawAnswer !== undefined
+      ? JSON.stringify(options.rawAnswer)
+      : options?.answer !== undefined
+        ? JSON.stringify(JSON.stringify(options.answer))
+        : 'JSON.stringify({ [component === "connect_source" ? "connection_summary" : "context_summary"]: "SETUP_STATUS: ok - " + component })';
   await writeFile(
     script,
     `import { writeFileSync } from "node:fs";
@@ -36,23 +56,30 @@ const component = args[args.indexOf("--component") + 1];
 console.log(JSON.stringify({ t: "step_start", id: "execute", name: "execute" }));
 console.log(JSON.stringify({ t: "tool_call", id: "call-1", name: "setup.setup_execution" }));
 console.log(JSON.stringify({ t: "tool_result", id: "call-1", ok: true }));
-console.log(JSON.stringify({ t: "answer", text: "SETUP_STATUS: ok - " + component }));
+console.log(JSON.stringify({ t: "answer", text: ${answerExpression} }));
 console.log(JSON.stringify({ t: "step_finish", id: "execute", ok: true }));
 `,
     "utf8",
   );
-  return { cli: { command: process.execPath, prefixArgs: [script, capture] }, capture };
+  return { cli: { command: process.execPath, prefixArgs: [script, capture] }, capture, irPath };
 }
 
 async function dispatcherWithTermResistantDescendant(): Promise<{
   cli: { command: string; prefixArgs: string[] };
   marker: string;
+  irPath: string;
 }> {
   const dir = await mkdtemp(path.join(os.tmpdir(), "genbi-codex-timeout-"));
   dirs.push(dir);
   const parent = path.join(dir, "parent.mjs");
   const child = path.join(dir, "child.mjs");
   const marker = path.join(dir, "descendant-survived");
+  const irPath = path.join(dir, "setup-ir.json");
+  await writeFile(
+    irPath,
+    JSON.stringify({ components: [{ id: "connect_source", llm_calls: [{ produces: "connection_summary" }] }] }),
+    "utf8",
+  );
   await writeFile(
     child,
     `import { writeFileSync } from "node:fs";
@@ -71,7 +98,7 @@ setInterval(() => {}, 1000);
 `,
     "utf8",
   );
-  return { cli: { command: process.execPath, prefixArgs: [parent, child, marker] }, marker };
+  return { cli: { command: process.execPath, prefixArgs: [parent, child, marker] }, marker, irPath };
 }
 
 describe("CodexSetupRunner", () => {
@@ -145,7 +172,7 @@ describe("CodexSetupRunner", () => {
   it.each(["connect_source", "build_context"] as const)(
     "dispatches %s only through warble-codex-local with the guarded setup MCP tool",
     async (agentId) => {
-      const { cli, capture } = await fakeDispatcher();
+      const { cli, capture, irPath } = await fakeDispatcher();
       const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "genbi-codex-project-root-"));
       dirs.push(workspaceRoot);
       const projectName = "acme";
@@ -156,7 +183,7 @@ describe("CodexSetupRunner", () => {
       vi.stubEnv("CODEX_API_KEY", "must-not-cross");
       vi.stubEnv("CODEX_HOME", "/private/caller-owned-home");
       const runner = new CodexSetupRunner({
-        irPath: "/profiles/genbi-setup.json",
+        irPath,
         getStrongModel: () => "gpt-5.6-sol",
         codexLocalCli: cli,
         mcpServer: { command: process.execPath, prefixArgs: ["/dist/server/codex-setup-mcp.js"] },
@@ -181,7 +208,7 @@ describe("CodexSetupRunner", () => {
       expect(captured.args).toEqual(
         expect.arrayContaining([
           "dispatch",
-          "/profiles/genbi-setup.json",
+          irPath,
           "--component",
           agentId,
           "--model",
@@ -213,6 +240,74 @@ describe("CodexSetupRunner", () => {
     },
   );
 
+  it("unwraps a valid needs_input envelope for connect_source", async () => {
+    const { cli, irPath } = await fakeDispatcher({
+      answer: { connection_summary: "SETUP_STATUS: needs_input - fill the local template" },
+    });
+    const runner = new CodexSetupRunner({
+      irPath,
+      getStrongModel: () => "gpt-5.6-sol",
+      codexLocalCli: cli,
+      mcpServer: { command: process.execPath, prefixArgs: ["/dist/server/codex-setup-mcp.js"] },
+    });
+
+    await expect(
+      runner.run({
+        prompt: "setup",
+        workspaceRoot: "/workspace",
+        authChoice: { mode: "subscription", provider: "codex" },
+      }),
+    ).resolves.toMatchObject({ finalText: "SETUP_STATUS: needs_input - fill the local template" });
+  });
+
+  it.each([
+    ["malformed JSON", { rawAnswer: "not-json" }, /not valid JSON/],
+    ["wrong field", { answer: { context_summary: "SETUP_STATUS: ok" } }, /only the declared "connection_summary" field/],
+    [
+      "extra field",
+      { answer: { connection_summary: "SETUP_STATUS: ok", extra: "no" } },
+      /only the declared "connection_summary" field/,
+    ],
+    ["non-string value", { answer: { connection_summary: { status: "ok" } } }, /must be a string/],
+  ] as const)("rejects a %s transport envelope", async (_label, dispatcherOptions, expectedError) => {
+    const { cli, irPath } = await fakeDispatcher(dispatcherOptions);
+    const runner = new CodexSetupRunner({
+      irPath,
+      getStrongModel: () => "gpt-5.6-sol",
+      codexLocalCli: cli,
+      mcpServer: { command: process.execPath, prefixArgs: ["/dist/server/codex-setup-mcp.js"] },
+    });
+
+    await expect(
+      runner.run({
+        prompt: "setup",
+        workspaceRoot: "/workspace",
+        authChoice: { mode: "subscription", provider: "codex" },
+      }),
+    ).rejects.toThrow(expectedError);
+  });
+
+  it("leaves an unwrapped value without SETUP_STATUS for the existing terminal validator to reject", async () => {
+    const { cli, irPath } = await fakeDispatcher({ answer: { connection_summary: "scaffold completed" } });
+    const runner = new CodexSetupRunner({
+      irPath,
+      getStrongModel: () => "gpt-5.6-sol",
+      codexLocalCli: cli,
+      mcpServer: { command: process.execPath, prefixArgs: ["/dist/server/codex-setup-mcp.js"] },
+    });
+
+    const result = await runner.run({
+      prompt: "setup",
+      workspaceRoot: "/workspace",
+      authChoice: { mode: "subscription", provider: "codex" },
+    });
+
+    expect(parseSetupTerminal(result.finalText, { root: "/workspace", name: "acme" })).toMatchObject({
+      status: "error",
+      failureKind: "missing_terminal_status",
+    });
+  });
+
   it("rejects non-Codex auth before resolving or spawning a dispatcher", async () => {
     const runner = new CodexSetupRunner({ irPath: "/ir.json", getStrongModel: () => "gpt-5.6-sol" });
     await expect(
@@ -227,9 +322,9 @@ describe("CodexSetupRunner", () => {
   it(
     "escalates timeout cleanup to the whole process group after the direct child exits",
     async () => {
-      const { cli, marker } = await dispatcherWithTermResistantDescendant();
+      const { cli, marker, irPath } = await dispatcherWithTermResistantDescendant();
       const runner = new CodexSetupRunner({
-        irPath: "/ir.json",
+        irPath,
         getStrongModel: () => "gpt-5.6-sol",
         codexLocalCli: cli,
         mcpServer: { command: process.execPath, prefixArgs: ["/dist/server/codex-setup-mcp.js"] },
@@ -252,11 +347,11 @@ describe("CodexSetupRunner", () => {
   it("selects Codex, Claude, and non-subscription setup runners without fallback", () => {
     const claude = { run: vi.fn() };
     const codex = { run: vi.fn() };
-    const modeA = { run: vi.fn() };
-    const runners = { claudeSubscription: claude, codexSubscription: codex, nonSubscription: modeA };
+    const inProcess = { run: vi.fn() };
+    const runners = { claudeSubscription: claude, codexSubscription: codex, nonSubscription: inProcess };
 
     expect(selectSetupRunnerForAuth({ mode: "subscription", provider: "codex" }, runners)).toBe(codex);
     expect(selectSetupRunnerForAuth({ mode: "subscription", provider: "claude" }, runners)).toBe(claude);
-    expect(selectSetupRunnerForAuth({ mode: "api-key", adapter: "mock" }, runners)).toBe(modeA);
+    expect(selectSetupRunnerForAuth({ mode: "api-key", adapter: "mock" }, runners)).toBe(inProcess);
   });
 });

@@ -1,16 +1,16 @@
 import type { RenderEnvelope } from "../render/index.js";
 
 /**
- * The mode-agnostic, back-end-emitted event union. Both Mode A (in-process
- * Vercel AI SDK) and Mode B (shelled `warble-agent-sdk chat`) emit this same
+ * The mode-agnostic, back-end-emitted event union. Both in-process (the
+ * Vercel AI SDK) and dispatched (shelled `warble-agent-sdk chat`) emit this same
  * shape; the BFF (out of scope here) folds it into the UI's own SSE wire
  * frames.
  *
- * `parent`/`depth` (on `step.*`/`tool.*`) model sub-agent nesting. Mode A has
+ * `parent`/`depth` (on `step.*`/`tool.*`) model sub-agent nesting. In-process has
  * no Task mechanism — `executeAgent` runs a flat in-process DAG — so its
- * events always carry `depth: 0` and never set `parent`. Only Mode B can
- * populate them (this harness does not currently parse Mode B's own nesting;
- * see `route/mode-b.ts`'s doc comment for the gap).
+ * events always carry `depth: 0` and never set `parent`. Only dispatched can
+ * populate them (this harness does not currently parse dispatched's own nesting;
+ * see `route/dispatched.ts`'s doc comment for the gap).
  */
 export type AgentEventKind =
   | "run.start"
@@ -93,7 +93,7 @@ export interface TokenEvent extends AgentEventBase {
   readonly text: string;
 }
 
-/** `envelope` is Mode A's shape (`RenderEnvelope`); `text` is Mode B's (`finalText`). Never both. */
+/** `envelope` is in-process's shape (`RenderEnvelope`); `text` is dispatched's (`finalText`). Never both. */
 export interface AnswerAgentEvent extends AgentEventBase {
   readonly kind: "answer";
   readonly envelope?: RenderEnvelope;

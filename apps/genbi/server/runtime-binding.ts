@@ -1,14 +1,14 @@
 /**
  * Compiles the Setup runtime form into the binding actually consumed by the
  * harness.  Settings deliberately contain no credential values; this module
- * reads an API key only while constructing an in-memory Mode A adapter spec.
+ * reads an API key only while constructing an in-memory in-process adapter spec.
  */
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { resolveWarbleBinary, runWarble } from "../harness/index.js";
+import { resolveHubDir, resolveWarbleBinary, runWarble } from "../harness/index.js";
 import type { AuthChoice, AdapterSpec, RouteOptions } from "../harness/index.js";
 import type { CodexManifestModels } from "../harness/route/codex-local-manifest.js";
 import type { RuntimeSettings, RuntimeTierAdapter, TierModelBinding } from "./wire-types.js";
@@ -108,8 +108,8 @@ function effectiveAdapter(binding: TierModelBinding, settings: RuntimeSettings):
   return settings.apiKeyAdapter ?? "anthropic";
 }
 
-/** Credential env vars used by the materialized Mode A rows (local rows need none). */
-export function requiredModeACredentialEnvVars(settings: RuntimeSettings): string[] {
+/** Credential env vars used by the materialized in-process rows (local rows need none). */
+export function requiredInProcessCredentialEnvVars(settings: RuntimeSettings): string[] {
   const required = new Set<string>();
   for (const binding of settings.tierModels) {
     const adapter = effectiveAdapter(binding, settings);
@@ -147,7 +147,7 @@ export function validateRuntimeTierBindings(settings: RuntimeSettings, bundleTie
   assertRuntimeSettingsDispatchable(settings);
 }
 
-function modeASpec(tier: string, binding: TierModelBinding, settings: RuntimeSettings): AdapterSpec {
+function inProcessSpec(tier: string, binding: TierModelBinding, settings: RuntimeSettings): AdapterSpec {
   const model = requireModel(tier, binding, settings);
   switch (effectiveAdapter(binding, settings)) {
     case "anthropic":
@@ -162,7 +162,7 @@ function modeASpec(tier: string, binding: TierModelBinding, settings: RuntimeSet
   }
 }
 
-function modeBTierYaml(tier: string, binding: TierModelBinding, settings: RuntimeSettings): string[] {
+function dispatchedTierYaml(tier: string, binding: TierModelBinding, settings: RuntimeSettings): string[] {
   const model = requireModel(tier, binding, settings);
   const adapter = effectiveAdapter(binding, settings);
   const key = JSON.stringify(tier);
@@ -179,7 +179,7 @@ function modeBTierYaml(tier: string, binding: TierModelBinding, settings: Runtim
 export function writeClaudeModelsConfig(settings: RuntimeSettings, bundleTiers: readonly string[]): string {
   const bindings = bindingByTier(settings);
   const lines = ["tiers:"];
-  for (const tier of bundleTiers) lines.push(...modeBTierYaml(tier, bindings.get(tier)!, settings));
+  for (const tier of bundleTiers) lines.push(...dispatchedTierYaml(tier, bindings.get(tier)!, settings));
   // `orchestrator` is a dispatcher driver entry, deliberately separate from
   // the bundle tier rows that the user edits.
   lines.push(`  "orchestrator": ${JSON.stringify(nonEmpty(settings.subscriptionDriverModel) ?? "")}`, "");
@@ -214,7 +214,7 @@ export function materializeRuntimeRouteOptions(
   }
   const bindings = bindingByTier(settings);
   return {
-    tierBinding: Object.fromEntries(tiers.map((tier) => [tier, modeASpec(tier, bindings.get(tier)!, settings)])),
+    tierBinding: Object.fromEntries(tiers.map((tier) => [tier, inProcessSpec(tier, bindings.get(tier)!, settings)])),
   };
 }
 
@@ -261,7 +261,12 @@ export async function compileUnboundProfileTierNames(options: {
   try {
     const irPath = path.join(workDir, "ir.json");
     const warbleBin = await resolveWarbleBinary(options.warbleBin);
-    await runWarble(warbleBin, ["compile", path.resolve(options.profileSource), "-o", irPath]);
+    // Same reason as the compile pipeline's own invocation (see `resolveHubDir`): name the Hub root
+    // the resolved binary belongs to, so a `warble` that isn't a checkout-local build can't
+    // silently resolve components against the wrong library — or none.
+    const hubDir = resolveHubDir(warbleBin);
+    const hubDirArgs = hubDir !== undefined ? ["--hub-dir", hubDir] : [];
+    await runWarble(warbleBin, ["compile", path.resolve(options.profileSource), "-o", irPath, ...hubDirArgs]);
     const ir = JSON.parse(await readFile(irPath, "utf8")) as unknown;
     return collectIrTierNames(ir);
   } finally {

@@ -139,7 +139,7 @@ describe("native context_enrichment submission tool", () => {
     fixture.store.close();
   });
 
-  it("records a submitted proposal in the same enrichment ledger Mode B uses, in the same public shape", async () => {
+  it("records a submitted proposal in the same enrichment ledger dispatched uses, in the same public shape", async () => {
     // AC#2 and AC#9 (the defect regression): before this feature, a native
     // session had no channel to reach the ledger at all, so this call would
     // have hit `methodNotFound` and `getLatestEnrichmentRun()` would stay
@@ -161,7 +161,7 @@ describe("native context_enrichment submission tool", () => {
     const operations = fixture.store.listEnrichmentOperations(run!.id);
     expect(operations).toHaveLength(2);
     expect(operations.map((operation) => operation.sink).sort()).toEqual(["cubes/revenue/metadata.yml", "knowledge/rules/business.md"]);
-    // Same public shape the UI's accept/edit/skip surface reads for Mode B --
+    // Same public shape the UI's accept/edit/skip surface reads for dispatched --
     // no UI change was made, so the ledger record this feature creates must
     // already look exactly like what that UI already knows how to render.
     const viaHttp = await (await app.request(`/api/context/enrichment/${run!.id}`)).json() as { operations: { sink: string; decision: string | null }[] };

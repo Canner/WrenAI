@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runCodexAskDefault } from "../harness/route/codex-ask.js";
-import { runModeBDefault } from "../harness/route/mode-b.js";
+import { runDispatchedDefault } from "../harness/route/dispatched.js";
 
 const roots: string[] = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -26,7 +26,7 @@ describe("default subscription dispatchers", () => {
   it("does not spawn the Claude executable when abort wins while its async CLI resolution prepares", async () => {
     const fake = fixture();
     const controller = new AbortController();
-    const pending = runModeBDefault({
+    const pending = runDispatchedDefault({
       authChoice: { mode: "subscription", provider: "claude" },
       profileSource: fake.root,
       userProject: fake.root,

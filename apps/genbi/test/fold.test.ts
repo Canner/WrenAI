@@ -408,7 +408,7 @@ describe("LiveWorkLog (live path): captures input from tool.call and detail from
     expect(step).not.toHaveProperty("detail");
   });
 
-  it("step.start produces kind \"step\" (not \"subagent\" — Mode A has no sub-agent mechanism), and step.finish with no detail leaves it unset", () => {
+  it("step.start produces kind \"step\" (not \"subagent\" — in-process has no sub-agent mechanism), and step.finish with no detail leaves it unset", () => {
     const log = new LiveWorkLog();
 
     log.ingest({ kind: "step.start", runId: "r", seq: 1, stepId: "generate_sql", name: "generate_sql", tier: "strong", depth: 0 } as AgentEvent);

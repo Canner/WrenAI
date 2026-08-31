@@ -1,0 +1,44 @@
+# build_context — generate the semantic layer (MDL) for a project connect_source just scaffolded.
+# Second half of the genbi-setup flow (see ../../profile.yml). Assumes credentials have already been
+# filled in by the user following connect_source's hand-off; this component does not itself touch
+# credential values.
+#
+# Same shape and same reasoning as connect_source: `type: analytical` + `realization_kind: skill` +
+# `outcome.kind: none`, NOT `constitutive`/`gated-tool` -- see connect_source/component.yml for why
+# (human_approval would loud-fail headless). MDL generated here is a fresh scaffold with no existing
+# lineage to gate, so it does not reuse bootstrap_mdl's context_write_authz/mutation lifecycle either;
+# it stays on the same setup_execution guarded-Bash lifecycle as connect_source.
+
+id: build_context
+verb: build_context
+type: analytical
+realization_kind: skill
+
+binding_mode: runtime_selected
+context_requirements:
+  - "a project connect_source has already scaffolded, with credentials filled in and connectable"
+# No context_precondition: same reasoning as connect_source -- there is no existing semantic layer to
+# probe yet; this component is what produces one.
+
+params: []
+
+llm_steps:
+  # Single strong step, same reasoning as connect_source (avoids requiring llm:per_step_tier).
+  - { name: build, tier: strong, prompt_ref: steps/build.md, produces: context_summary }
+trigger: { kind: one_shot }
+guardrails:
+  # Same setup_execution guardrail/scope as connect_source -- see that component.yml's comment.
+  - { name: setup_execution, locked: true, scope: "." }
+required_capabilities:
+  - context_build
+  - llm:strong
+borrowed_actions: []
+
+effect:
+  render_blocks: []
+  outcome:
+    kind: none
+
+eval:
+  template_ref: eval/
+  metrics: [build_success]

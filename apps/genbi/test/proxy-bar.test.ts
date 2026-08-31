@@ -51,8 +51,8 @@ describe("proxy bar (no embedded proxy relay for subscription auth)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("Mode B shells only the resolved warble-agent-sdk CLI (never a proxy binary) — by construction", async () => {
-    const { buildAgentSdkChatArgs } = await import("../harness/route/mode-b.js");
+  it("dispatched shells only the resolved warble-agent-sdk CLI (never a proxy binary) — by construction", async () => {
+    const { buildAgentSdkChatArgs } = await import("../harness/route/dispatched.js");
     const command = buildAgentSdkChatArgs(
       { command: "warble-agent-sdk", prefixArgs: [] },
       {

@@ -93,7 +93,7 @@ function NewSessionControl({ live, readiness }: { live: boolean; readiness?: Nat
         })}
       </section> : null}
       {error ? <Typography.Text type="danger" role="alert">{error}</Typography.Text> : null}
-      <Button disabled={!available} onClick={() => void create()} loading={creating}>Start separate native terminal</Button>
+      <Button type="primary" disabled={!available} onClick={() => void create()} loading={creating}>Start separate native terminal</Button>
     </section>
   </div>;
   return <Popover content={content} overlayClassName="sessions-new-popover" trigger="click" open={open} onOpenChange={(next) => {

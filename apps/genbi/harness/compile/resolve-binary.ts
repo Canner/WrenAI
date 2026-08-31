@@ -59,16 +59,63 @@ function isExecutableOnPath(bin: string): Promise<boolean> {
 }
 
 /**
+ * Resolves the Hub component-library root to pass as `warble compile --hub-dir`, derived from the
+ * **already-resolved** `warble` binary rather than configured on its own.
+ *
+ * warble bakes its default Hub path in at *build* time (its own doc says the Hub is known at
+ * compile time and never discovered by walking the filesystem at run time), so a binary built
+ * inside a warble checkout still finds its own Hub with no flag at all. That stops being true the
+ * moment the compiler is not a checkout-local build — installed from a release, found on `PATH`,
+ * built in CI, or a checkout that has since moved — and the failure is silent: components resolve
+ * against the wrong library, or against none. Naming the root turns that into a loud "component
+ * not found in any configured source".
+ *
+ * Deriving it from the binary is the whole point. The compiler and the Hub it reads must come from
+ * the same warble version; an independently configured Hub root can silently pair a new library
+ * with an old compiler, which is the same class of mismatch `CompileCacheKey.warbleIdentity`
+ * exists to catch.
+ *
+ * Two tiers, then give up:
+ *
+ * 1. The binary's own checkout — a `<root>/target/release/warble` puts the Hub at
+ *    `<root>/hub/components`. Skipped for a bare `"warble"` resolved off `PATH`, which names no
+ *    directory to walk up from.
+ * 2. A sibling `warble` checkout's `hub/components`, via the same ancestor walk tier 3 of
+ *    {@link resolveWarbleBinary} uses.
+ *
+ * Returns `undefined` when neither resolves; callers then pass no `--hub-dir` at all, leaving
+ * today's compiled-in default in charge rather than pointing warble at a directory we guessed.
+ */
+export function resolveHubDir(warbleBin: string): string | undefined {
+  // `path.dirname("warble") === "."` is exactly the bare-PATH case: resolving `..` against the
+  // process cwd would name some unrelated ancestor, so only a binary that names a directory
+  // gets tier 1.
+  if (path.dirname(warbleBin) !== ".") {
+    const candidate = path.resolve(warbleBin, "..", "..", "..", "hub", "components");
+    if (existsSync(candidate)) return candidate;
+  }
+  return findSiblingWarbleEntry("hub", "components");
+}
+
+/**
  * Walks up from this package's own directory (`harness/compile/` in source, `dist/compile/` once
  * built — either way two levels below the package root) looking for a `warble` directory sibling
  * to each ancestor, returning `.../warble/target/release/warble` the first time it exists.
  */
 function findSiblingReleaseBuild(): string | undefined {
+  return findSiblingWarbleEntry("target", "release", "warble");
+}
+
+/**
+ * The shared ancestor walk behind both sibling lookups above: for each ancestor of this package,
+ * test `<ancestor's parent>/warble/<...segments>` and return the first that exists.
+ */
+function findSiblingWarbleEntry(...segments: readonly string[]): string | undefined {
   let dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const maxDepth = 10;
   for (let i = 0; i < maxDepth; i += 1) {
     const parent = path.dirname(dir);
-    const candidate = path.join(parent, "warble", "target", "release", "warble");
+    const candidate = path.join(parent, "warble", ...segments);
     if (existsSync(candidate)) return candidate;
     if (parent === dir) break; // reached filesystem root
     dir = parent;

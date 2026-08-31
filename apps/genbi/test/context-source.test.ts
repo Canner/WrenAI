@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mocks node:child_process's `execFile` so no real `wren` subprocess ever runs in this
 // hermetic unit test — mirrors the `vi.mock("node:child_process", async (importOriginal) => ...)`
-// pattern used elsewhere in this repo (e.g. test/mode-b-irpath-bypass.test.ts, there for `spawn`).
+// pattern used elsewhere in this repo (e.g. test/dispatched-irpath-bypass.test.ts, there for `spawn`).
 type ExecFileCallback = (error: (Error & { code?: string }) | null, stdout: string, stderr: string) => void;
 const execFileMock = vi.fn<(file: string, args: readonly string[], options: unknown, callback: ExecFileCallback) => void>();
 vi.mock("node:child_process", async (importOriginal) => {

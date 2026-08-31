@@ -22,9 +22,9 @@ the dispatcher protocol and does not fall back between vendors.
 | Current caller / asset | Current owner | Migration state | Compatibility rule |
 | --- | --- | --- | --- |
 | `server/turn.ts` and `/api/sessions/*` | Structured Ask | Not migrated | Retain all routes, stored rows, SSE replay, clarify, and artifact mutations. |
-| `harness/route/mode-b.ts`, `harness/route/codex-ask.ts`, and `server/turn.ts` | Structured Ask runtime | Adapter available; not switched | Keep existing Claude/Codex dispatch and mapper contracts; a caller must opt into the producer. |
+| `harness/route/dispatched.ts`, `harness/route/codex-ask.ts`, and `server/turn.ts` | Structured Ask runtime | Adapter available; not switched | Keep existing Claude/Codex dispatch and mapper contracts; a caller must opt into the producer. |
 | `test/bff-resume.test.ts`, `test/bff-artifact-publish.test.ts`, and `test/bff-store.test.ts` | Structured Ask replay consumers | Not migrated | Preserve their stored-turn and artifact replay coverage. |
-| `test/codex-ask.test.ts`, `test/chat-event-mapper.test.ts`, `test/mode-b.test.ts`, and `test/run-agent.test.ts` | Offline dispatcher consumers | Not migrated | Preserve process seams and vendor-specific mapper coverage. |
+| `test/codex-ask.test.ts`, `test/chat-event-mapper.test.ts`, `test/dispatched.test.ts`, and `test/run-agent.test.ts` | Offline dispatcher consumers | Not migrated | Preserve process seams and vendor-specific mapper coverage. |
 | `harness/replay/*`, `test/cassette-*.test.ts`, and `test/fixtures/cassettes/*` | Cassette/replay consumers | Not migrated | Preserve raw-dispatcher capture/replay and sanitizer behavior. |
 | `src/eval/*` fixtures | Eval-style frontend consumers | Not migrated | Keep current fixtures until a named consumer adopts the producer contract. |
 | `core/wren` packaged Ask templates | Core CLI | Not a GenBI BFF caller | No migration implied. |

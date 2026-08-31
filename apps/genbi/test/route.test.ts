@@ -1,22 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { ComplianceError, SUBSCRIPTION_TOS_WARNING } from "../harness/compliance/index.js";
 import { route } from "../harness/route/index.js";
-import type { CodexAskExecutor, CodexAskOptions, ModeAExecutor, ModeAOptions, ModeBExecutor, ModeBOptions } from "../harness/route/index.js";
+import type { CodexAskExecutor, CodexAskOptions, InProcessExecutor, InProcessOptions, DispatchedExecutor, DispatchedOptions } from "../harness/route/index.js";
 import type { AuthChoice } from "../harness/auth/index.js";
 
 const PROFILE_SOURCE = "/fixture/profile";
 const USER_PROJECT = "/fixture/project";
 const QUESTION = "who is our top customer?";
 
-function neverCalledModeA(): ModeAExecutor {
+function neverCalledInProcess(): InProcessExecutor {
   return () => {
-    throw new Error("modeA should not have been invoked");
+    throw new Error("inProcess should not have been invoked");
   };
 }
 
-function neverCalledModeB(): ModeBExecutor {
+function neverCalledDispatched(): DispatchedExecutor {
   return () => {
-    throw new Error("modeB should not have been invoked");
+    throw new Error("dispatched should not have been invoked");
   };
 }
 
@@ -25,9 +25,9 @@ describe("route (seam)", () => {
     { mode: "api-key", adapter: "anthropic" },
     { mode: "local", endpoint: "http://localhost:11434/v1" },
     { mode: "gateway", config: { baseURL: "https://gateway.example.com/v1", model: "gpt-4o" } },
-  ])("routes %o to Mode A without invoking Mode B", async (authChoice) => {
-    let received: ModeAOptions | undefined;
-    const modeA: ModeAExecutor = async (options) => {
+  ])("routes %o to in-process without invoking dispatched", async (authChoice) => {
+    let received: InProcessOptions | undefined;
+    const inProcess: InProcessExecutor = async (options) => {
       received = options;
       return { kind: "answer", envelope: { blocks: [] } };
     };
@@ -37,8 +37,8 @@ describe("route (seam)", () => {
       profileSource: PROFILE_SOURCE,
       userProject: USER_PROJECT,
       question: QUESTION,
-      modeA,
-      modeB: neverCalledModeB(),
+      inProcess,
+      dispatched: neverCalledDispatched(),
     });
 
     expect(result).toEqual({ backend: "agent", warnings: [], kind: "answer", envelope: { blocks: [] } });
@@ -48,10 +48,10 @@ describe("route (seam)", () => {
     expect(received?.question).toBe(QUESTION);
   });
 
-  it("routes a subscription AuthChoice to Mode B without invoking Mode A", async () => {
+  it("routes a subscription AuthChoice to dispatched without invoking in-process", async () => {
     const authChoice: AuthChoice = { mode: "subscription", provider: "claude" };
-    let received: ModeBOptions | undefined;
-    const modeB: ModeBExecutor = async (options) => {
+    let received: DispatchedOptions | undefined;
+    const dispatched: DispatchedExecutor = async (options) => {
       received = options;
       return { finalText: "Acme is the top customer by revenue." };
     };
@@ -61,8 +61,8 @@ describe("route (seam)", () => {
       profileSource: PROFILE_SOURCE,
       userProject: USER_PROJECT,
       question: QUESTION,
-      modeA: neverCalledModeA(),
-      modeB,
+      inProcess: neverCalledInProcess(),
+      dispatched,
     });
 
     expect(result).toEqual({
@@ -77,9 +77,9 @@ describe("route (seam)", () => {
     expect(received?.deployment).toBe("personal");
   });
 
-  it("passes model/warbleBin/workDir/bundle/mcpServers through to Mode A only when set", async () => {
-    let received: ModeAOptions | undefined;
-    const modeA: ModeAExecutor = async (options) => {
+  it("passes model/warbleBin/workDir/bundle/mcpServers through to in-process only when set", async () => {
+    let received: InProcessOptions | undefined;
+    const inProcess: InProcessExecutor = async (options) => {
       received = options;
       return { kind: "answer", envelope: { blocks: [] } };
     };
@@ -92,8 +92,8 @@ describe("route (seam)", () => {
       model: "llama3.1",
       warbleBin: "/opt/warble",
       workDir: "/tmp/workdir",
-      modeA,
-      modeB: neverCalledModeB(),
+      inProcess,
+      dispatched: neverCalledDispatched(),
     });
 
     expect(received?.model).toBe("llama3.1");
@@ -103,9 +103,9 @@ describe("route (seam)", () => {
     expect(received?.mcpServers).toBeUndefined();
   });
 
-  it("passes warbleBin/agentSdkBin/outDir/workDir through to Mode B only when set", async () => {
-    let received: ModeBOptions | undefined;
-    const modeB: ModeBExecutor = async (options) => {
+  it("passes warbleBin/agentSdkBin/outDir/workDir through to dispatched only when set", async () => {
+    let received: DispatchedOptions | undefined;
+    const dispatched: DispatchedExecutor = async (options) => {
       received = options;
       return { finalText: "ok" };
     };
@@ -119,8 +119,8 @@ describe("route (seam)", () => {
       agentSdkBin: "/opt/warble-agent-sdk",
       outDir: "/tmp/outdir",
       workDir: "/tmp/workdir",
-      modeA: neverCalledModeA(),
-      modeB,
+      inProcess: neverCalledInProcess(),
+      dispatched,
     });
 
     expect(received?.warbleBin).toBe("/opt/warble");
@@ -129,9 +129,9 @@ describe("route (seam)", () => {
     expect(received?.workDir).toBe("/tmp/workdir");
   });
 
-  it("passes agentId through to Mode B when set, and leaves it unset by default", async () => {
-    let received: ModeBOptions | undefined;
-    const modeB: ModeBExecutor = async (options) => {
+  it("passes agentId through to dispatched when set, and leaves it unset by default", async () => {
+    let received: DispatchedOptions | undefined;
+    const dispatched: DispatchedExecutor = async (options) => {
       received = options;
       return { finalText: "ok" };
     };
@@ -142,14 +142,14 @@ describe("route (seam)", () => {
       userProject: USER_PROJECT,
       question: QUESTION,
       agentId: "connect_source",
-      modeA: neverCalledModeA(),
-      modeB,
+      inProcess: neverCalledInProcess(),
+      dispatched,
     });
 
     expect(received?.agentId).toBe("connect_source");
 
-    let receivedUnset: ModeBOptions | undefined;
-    const modeBUnset: ModeBExecutor = async (options) => {
+    let receivedUnset: DispatchedOptions | undefined;
+    const dispatchedUnset: DispatchedExecutor = async (options) => {
       receivedUnset = options;
       return { finalText: "ok" };
     };
@@ -159,8 +159,8 @@ describe("route (seam)", () => {
       profileSource: PROFILE_SOURCE,
       userProject: USER_PROJECT,
       question: QUESTION,
-      modeA: neverCalledModeA(),
-      modeB: modeBUnset,
+      inProcess: neverCalledInProcess(),
+      dispatched: dispatchedUnset,
     });
 
     expect(receivedUnset?.agentId).toBeUndefined();
@@ -178,8 +178,8 @@ describe("route (seam)", () => {
       profileSource: PROFILE_SOURCE,
       userProject: USER_PROJECT,
       question: QUESTION,
-      modeA: neverCalledModeA(),
-      modeB: neverCalledModeB(),
+      inProcess: neverCalledInProcess(),
+      dispatched: neverCalledDispatched(),
       codexAsk,
       codexModels: models,
       codexHome: "/private/codex-home",
@@ -198,20 +198,20 @@ describe("route (seam)", () => {
     });
   });
 
-  it("propagates a codex:local failure without invoking Claude or Mode A", async () => {
+  it("propagates a codex:local failure without invoking Claude or in-process", async () => {
     await expect(route({
       authChoice: { mode: "subscription", provider: "codex" },
       profileSource: PROFILE_SOURCE,
       userProject: USER_PROJECT,
       question: QUESTION,
-      modeA: neverCalledModeA(),
-      modeB: neverCalledModeB(),
+      inProcess: neverCalledInProcess(),
+      dispatched: neverCalledDispatched(),
       codexAsk: async () => { throw new Error("codex child failed"); },
     })).rejects.toThrow("codex child failed");
   });
 
   describe("compliance gate wiring", () => {
-    it("rejects subscription + deployment: hosted before invoking modeB", async () => {
+    it("rejects subscription + deployment: hosted before invoking dispatched", async () => {
       await expect(
         route({
           authChoice: { mode: "subscription", provider: "claude" },
@@ -219,14 +219,14 @@ describe("route (seam)", () => {
           userProject: USER_PROJECT,
           question: QUESTION,
           deployment: "hosted",
-          modeA: neverCalledModeA(),
-          modeB: neverCalledModeB(),
+          inProcess: neverCalledInProcess(),
+          dispatched: neverCalledDispatched(),
         }),
       ).rejects.toThrow(ComplianceError);
     });
 
-    it("allows subscription + deployment: personal (and the default, deployment omitted) through to modeB", async () => {
-      const modeB: ModeBExecutor = async () => ({ finalText: "ok" });
+    it("allows subscription + deployment: personal (and the default, deployment omitted) through to dispatched", async () => {
+      const dispatched: DispatchedExecutor = async () => ({ finalText: "ok" });
 
       for (const deployment of ["personal", undefined] as const) {
         await expect(
@@ -236,15 +236,15 @@ describe("route (seam)", () => {
             userProject: USER_PROJECT,
             question: QUESTION,
             ...(deployment !== undefined ? { deployment } : {}),
-            modeA: neverCalledModeA(),
-            modeB,
+            inProcess: neverCalledInProcess(),
+            dispatched,
           }),
         ).resolves.toEqual({ backend: "agent-sdk", warnings: [SUBSCRIPTION_TOS_WARNING], finalText: "ok" });
       }
     });
 
-    it("deployment: hosted does not affect non-subscription auth (still routes to modeA)", async () => {
-      const modeA: ModeAExecutor = async () => ({ kind: "answer", envelope: { blocks: [] } });
+    it("deployment: hosted does not affect non-subscription auth (still routes to inProcess)", async () => {
+      const inProcess: InProcessExecutor = async () => ({ kind: "answer", envelope: { blocks: [] } });
 
       await expect(
         route({
@@ -253,8 +253,8 @@ describe("route (seam)", () => {
           userProject: USER_PROJECT,
           question: QUESTION,
           deployment: "hosted",
-          modeA,
-          modeB: neverCalledModeB(),
+          inProcess,
+          dispatched: neverCalledDispatched(),
         }),
       ).resolves.toEqual({ backend: "agent", warnings: [], kind: "answer", envelope: { blocks: [] } });
     });
@@ -262,15 +262,15 @@ describe("route (seam)", () => {
 
   describe("warnings surfaced on RouteResult", () => {
     it("subscription + personal (default): warnings contains the ToS warning", async () => {
-      const modeB: ModeBExecutor = async () => ({ finalText: "ok" });
+      const dispatched: DispatchedExecutor = async () => ({ finalText: "ok" });
 
       const result = await route({
         authChoice: { mode: "subscription", provider: "claude" },
         profileSource: PROFILE_SOURCE,
         userProject: USER_PROJECT,
         question: QUESTION,
-        modeA: neverCalledModeA(),
-        modeB,
+        inProcess: neverCalledInProcess(),
+        dispatched,
       });
 
       expect(result.warnings).toEqual([SUBSCRIPTION_TOS_WARNING]);
@@ -281,15 +281,15 @@ describe("route (seam)", () => {
       { mode: "local", endpoint: "http://localhost:11434/v1" },
       { mode: "gateway", config: { baseURL: "https://gateway.example.com/v1", model: "gpt-4o" } },
     ])("%o: warnings is empty (only subscription auth carries the ToS warning)", async (authChoice) => {
-      const modeA: ModeAExecutor = async () => ({ kind: "answer", envelope: { blocks: [] } });
+      const inProcess: InProcessExecutor = async () => ({ kind: "answer", envelope: { blocks: [] } });
 
       const result = await route({
         authChoice,
         profileSource: PROFILE_SOURCE,
         userProject: USER_PROJECT,
         question: QUESTION,
-        modeA,
-        modeB: neverCalledModeB(),
+        inProcess,
+        dispatched: neverCalledDispatched(),
       });
 
       expect(result.warnings).toEqual([]);
@@ -297,9 +297,9 @@ describe("route (seam)", () => {
   });
 
   describe("hybrid: tierBinding/modelsConfig cross-mode guards", () => {
-    it("passes tierBinding through to Mode A only when set", async () => {
-      let received: ModeAOptions | undefined;
-      const modeA: ModeAExecutor = async (options) => {
+    it("passes tierBinding through to in-process only when set", async () => {
+      let received: InProcessOptions | undefined;
+      const inProcess: InProcessExecutor = async (options) => {
         received = options;
         return { kind: "answer", envelope: { blocks: [] } };
       };
@@ -311,14 +311,14 @@ describe("route (seam)", () => {
         userProject: USER_PROJECT,
         question: QUESTION,
         tierBinding,
-        modeA,
-        modeB: neverCalledModeB(),
+        inProcess,
+        dispatched: neverCalledDispatched(),
       });
 
       expect(received?.tierBinding).toEqual(tierBinding);
     });
 
-    it("loud-fails when tierBinding is given alongside a subscription authChoice, without invoking modeB", async () => {
+    it("loud-fails when tierBinding is given alongside a subscription authChoice, without invoking dispatched", async () => {
       await expect(
         route({
           authChoice: { mode: "subscription", provider: "claude" },
@@ -326,15 +326,15 @@ describe("route (seam)", () => {
           userProject: USER_PROJECT,
           question: QUESTION,
           tierBinding: { cheap: { adapter: "mock", config: {} } },
-          modeA: neverCalledModeA(),
-          modeB: neverCalledModeB(),
+          inProcess: neverCalledInProcess(),
+          dispatched: neverCalledDispatched(),
         }),
       ).rejects.toThrow(/tierBinding.*has no effect under a subscription/);
     });
 
-    it("passes modelsConfig through to Mode B only when set", async () => {
-      let received: ModeBOptions | undefined;
-      const modeB: ModeBExecutor = async (options) => {
+    it("passes modelsConfig through to dispatched only when set", async () => {
+      let received: DispatchedOptions | undefined;
+      const dispatched: DispatchedExecutor = async (options) => {
         received = options;
         return { finalText: "ok" };
       };
@@ -345,16 +345,16 @@ describe("route (seam)", () => {
         userProject: USER_PROJECT,
         question: QUESTION,
         modelsConfig: "/tmp/models.yaml",
-        modeA: neverCalledModeA(),
-        modeB,
+        inProcess: neverCalledInProcess(),
+        dispatched,
       });
 
       expect(received?.modelsConfig).toBe("/tmp/models.yaml");
     });
 
-    it("passes agentId through to Mode A only when set", async () => {
-      let received: ModeAOptions | undefined;
-      const modeA: ModeAExecutor = async (options) => {
+    it("passes agentId through to in-process only when set", async () => {
+      let received: InProcessOptions | undefined;
+      const inProcess: InProcessExecutor = async (options) => {
         received = options;
         return { kind: "answer", envelope: { blocks: [] } };
       };
@@ -365,14 +365,14 @@ describe("route (seam)", () => {
         userProject: USER_PROJECT,
         question: QUESTION,
         agentId: "explain_change",
-        modeA,
-        modeB: neverCalledModeB(),
+        inProcess,
+        dispatched: neverCalledDispatched(),
       });
 
       expect(received?.agentId).toBe("explain_change");
 
-      let receivedUnset: ModeAOptions | undefined;
-      const modeAUnset: ModeAExecutor = async (options) => {
+      let receivedUnset: InProcessOptions | undefined;
+      const inProcessUnset: InProcessExecutor = async (options) => {
         receivedUnset = options;
         return { kind: "answer", envelope: { blocks: [] } };
       };
@@ -381,13 +381,13 @@ describe("route (seam)", () => {
         profileSource: PROFILE_SOURCE,
         userProject: USER_PROJECT,
         question: QUESTION,
-        modeA: modeAUnset,
-        modeB: neverCalledModeB(),
+        inProcess: inProcessUnset,
+        dispatched: neverCalledDispatched(),
       });
       expect(receivedUnset?.agentId).toBeUndefined();
     });
 
-    it("loud-fails when modelsConfig is given alongside a non-subscription authChoice, without invoking modeA", async () => {
+    it("loud-fails when modelsConfig is given alongside a non-subscription authChoice, without invoking inProcess", async () => {
       await expect(
         route({
           authChoice: { mode: "api-key", adapter: "anthropic" },
@@ -395,8 +395,8 @@ describe("route (seam)", () => {
           userProject: USER_PROJECT,
           question: QUESTION,
           modelsConfig: "/tmp/models.yaml",
-          modeA: neverCalledModeA(),
-          modeB: neverCalledModeB(),
+          inProcess: neverCalledInProcess(),
+          dispatched: neverCalledDispatched(),
         }),
       ).rejects.toThrow(/modelsConfig.*has no effect under a "api-key"/);
     });

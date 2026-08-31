@@ -1,0 +1,16 @@
+# genbi-default — the flagship GenBI profile.
+#
+# Mounts the four consuming GenBI components as a single git-authoritative behavior surface, bound to
+# one semantic context. The components themselves live in Warble's shared Hub component library; this
+# profile mounts them by id and does not own its own component library.
+
+profile: genbi-default
+
+context:
+  project: ./context/binding.yml
+
+components:
+  - use: explore_model
+  - use: answer_query
+  - use: generate_dashboard
+  - use: explain_change

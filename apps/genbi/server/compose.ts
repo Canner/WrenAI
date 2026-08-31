@@ -142,8 +142,8 @@ function describeResumeInventory(projectDir: string): string {
 
 /**
  * Composes the single-line prompt for a setup/connect turn dispatched via
- * `ModeBSetupRunner` (the `connect_source` warble component). Single-line
- * because Mode B's `chat` subcommand is a line-per-turn stdin protocol —
+ * `DispatchedSetupRunner` (the `connect_source` warble component). Single-line
+ * because dispatched's `chat` subcommand is a line-per-turn stdin protocol —
  * `buildAgentSdkChatArgs` rejects a question containing a newline.
  *
  * Credential boundary (load-bearing): this prompt
@@ -167,7 +167,7 @@ export function composeSetupPrompt(
     readonly resumeFromDisk?: boolean;
     /**
      * Plan A session resume: the caller is dispatching this turn with
-     * `ModeBOptions.resumeSessionId` set, so the agent-sdk conversation itself
+     * `DispatchedOptions.resumeSessionId` set, so the agent-sdk conversation itself
      * (not just the on-disk project state) already carries everything the
      * prior attempt read/listed/fetched. When set, the `context` step composes
      * a short "continue in this same conversation" nudge instead of
@@ -223,7 +223,7 @@ export function composeSetupPrompt(
   // of rediscovery this resume path exists to avoid; the sandbox rule itself still applies.
   //
   // Only shell REDIRECTION (no 2>&1, no >, no >>) is actually enforced — on both dispatch
-  // paths (Mode A's setup-native.ts and Mode B's warble dispatcher guardrail share the same
+  // paths (in-process's setup-native.ts and dispatched's warble dispatcher guardrail share the same
   // DESTRUCTIVE/REDIRECTION denylist; neither blocks pipes or ||/&& chaining). The prior
   // wording here falsely claimed the sandbox blocks those too, which a real agent disproved by
   // running `cd <projectDir> && wren profile add ...` — the only way that step could succeed,

@@ -13,13 +13,13 @@ export type { DescribeBundleOptions } from "./describe.js";
 export { resolveArtifactContent } from "./artifact-content.js";
 export type { ArtifactContentDto, ArtifactContentUnavailableReason } from "./artifact-content.js";
 
-export { buildAgentSdkChatArgs, ModeBSessionError, runModeBDefault } from "./mode-b.js";
-export type { AgentSdkChatCommand, BuildAgentSdkChatArgsOptions } from "./mode-b.js";
+export { buildAgentSdkChatArgs, DispatchedSessionError, runDispatchedDefault } from "./dispatched.js";
+export type { AgentSdkChatCommand, BuildAgentSdkChatArgsOptions } from "./dispatched.js";
 
 export { buildCodexAskArgs, runCodexAskDefault } from "./codex-ask.js";
 export { CodexAskEventMapper } from "./codex-ask-events.js";
 
-export { resolveArtifactsDir, runModeADefault } from "./mode-a.js";
+export { resolveArtifactsDir, runInProcessDefault } from "./in-process.js";
 
 export { resolveDefaultEnrichIrPath, resolveDefaultProfileSource, resolveDefaultSetupIrPath } from "./profile-source.js";
 
@@ -28,14 +28,14 @@ export { route } from "./route.js";
 export { buildHybridTierBinding, buildUniformTierBinding } from "./tier-binding.js";
 
 export type {
-  ModeAExecutor,
-  ModeAOptions,
+  InProcessExecutor,
+  InProcessOptions,
   CodexAskExecutor,
   CodexAskOptions,
   CodexAskResult,
-  ModeBExecutor,
-  ModeBOptions,
-  ModeBResult,
+  DispatchedExecutor,
+  DispatchedOptions,
+  DispatchedResult,
   RouteOptions,
   RouteResult,
 } from "./types.js";

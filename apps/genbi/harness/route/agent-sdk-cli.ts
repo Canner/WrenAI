@@ -17,7 +17,7 @@ export class AgentSdkCliNotFoundError extends Error {
 }
 
 /**
- * Resolves the warble `claude-agent-sdk` dispatcher CLI (Mode B's back-end)
+ * Resolves the warble `claude-agent-sdk` dispatcher CLI (dispatched's back-end)
  * in three tiers, mirroring `resolveWarbleBinary`:
  *
  * 1. `explicit` — if given, treated as a ready-to-run command with no args

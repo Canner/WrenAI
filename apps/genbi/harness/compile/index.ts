@@ -7,7 +7,7 @@ export {
 } from "./errors.js";
 export { hashDirectory, hashFiles } from "./fingerprint.js";
 export { compileProfile, compileRawProfile, runWarble } from "./pipeline.js";
-export { resolveWarbleBinary } from "./resolve-binary.js";
+export { resolveHubDir, resolveWarbleBinary } from "./resolve-binary.js";
 export type {
   CompileCache,
   CompileCacheEntry,

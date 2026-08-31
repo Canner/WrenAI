@@ -210,6 +210,8 @@ describe('Sessions workbench', () => {
     const menu = screen.getByLabelText('New session options');
     const existingChoices = screen.getAllByRole('button', { name: /Open existing Analyze data session/ });
     expect(menu).toHaveClass('sessions-new-menu');
+    expect(screen.getByRole('button', { name: 'Start Structured Ask' })).toHaveClass('ant-btn-primary');
+    expect(screen.getByRole('button', { name: 'Start separate native terminal' })).toHaveClass('ant-btn-primary');
     expect(existingChoices).toHaveLength(2);
     expect(existingChoices[1]).toHaveAttribute('title', 'Open existing Analyze data session ting-two');
     await user.click(existingChoices[1]!);

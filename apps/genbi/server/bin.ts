@@ -9,20 +9,22 @@
  * Env vars:
  *   PORT                        HTTP port to listen on (default 4787)
  *   WREN_BFF_DB_PATH            SQLite file path (default "./wren-harness-bff.sqlite")
- *   WREN_HARNESS_PROJECT        userProject dir for route() — required UNLESS
- *                               WREN_HARNESS_WORKSPACE_ROOT is set (bootstrap mode, see below)
- *   WREN_HARNESS_WORKSPACE_ROOT dir the agentic setup wizard scaffolds NEW wren projects
- *                               into (`<root>/<name>/`). When set and WREN_HARNESS_PROJECT is
- *                               unset, the BFF boots "bootstrap-pending": no project is bound
- *                               yet, Ask-turn routes 409 until the setup wizard's connect/bind
- *                               steps bind one via TurnDeps.bindProject (see server/turn.ts's
- *                               resolveUserProject/effectiveRouteOptions). `/api/setup/*` and
- *                               `/api/config/runtime` work unbound.
- *   WREN_HARNESS_SETUP_IR       path to the compiled genbi-setup IR (warble's
+ *   WREN_HARNESS_WORKSPACE_ROOT REQUIRED. Dir the agentic setup wizard scaffolds NEW wren
+ *                               projects into (`<root>/<name>/`). The BFF always boots
+ *                               "bootstrap-pending": no project is bound yet, Ask-turn routes
+ *                               409 until the setup wizard binds one via TurnDeps.bindProject
+ *                               (see server/turn.ts's resolveUserProject /
+ *                               effectiveRouteOptions). `/api/setup/*` and
+ *                               `/api/config/runtime` work unbound. An EXISTING project is
+ *                               taken through the wizard's adopt flow (POST /api/setup/adopt),
+ *                               which accepts any path on disk and survives a restart via
+ *                               recoverBootstrapProjectBinding — there is no boot-time
+ *                               binding env var.
+ *   WREN_HARNESS_SETUP_IR       path to the compiled genbi-setup IR (the profile's
  *                               `connect_source` component) the setup wizard dispatches via
- *                               Mode B's ModeBOptions.irPath bypass. Defaults to
- *                               resolveDefaultSetupIrPath()'s sibling-repo walk
- *                               (warble/genbi-setup/ir.golden.json); unlike WREN_HARNESS_PROFILE
+ *                               dispatched's DispatchedOptions.irPath bypass. Defaults to
+ *                               resolveDefaultSetupIrPath()'s walk for this package's own
+ *                               profiles/genbi-setup/ir.golden.json; unlike WREN_HARNESS_PROFILE
  *                               this does NOT hard-fail at boot if unresolved — only
  *                               POST /api/setup/connect(/resume) needs it, and those return a
  *                               clear 500 at dispatch time instead.
@@ -37,24 +39,24 @@
  *   WREN_HARNESS_WREN_SHIM      optional absolute server-owned Wren shim for
  *                               native Codex runtime permissions; defaults to
  *                               the fixed local installation when unset
- *   WREN_HARNESS_AGENT_SDK_BIN  path to the agent-sdk CLI binary (Mode B)
+ *   WREN_HARNESS_AGENT_SDK_BIN  path to the agent-sdk CLI binary (dispatched)
  *   WREN_HARNESS_CODEX_LOCAL_BIN path to the warble-codex-local dispatcher CLI
  *   WREN_HARNESS_CODEX_BIN       optional path to the Codex CLI used by that dispatcher
  *   WREN_HARNESS_CODEX_HOME      absolute dedicated, externally authenticated CODEX_HOME used
  *                               by persistent codex:local Ask sessions; must not be the default
  *                               Codex home and must not contain config.toml
- *   WREN_HARNESS_OUT            output dir forwarded to route() (Mode B run dir; also Mode A's
+ *   WREN_HARNESS_OUT            output dir forwarded to route() (dispatched run dir; also in-process's
  *                               native write_artifact scope root, unless WREN_HARNESS_ARTIFACTS_DIR
- *                               is set — see harness/route/mode-a.ts's resolveArtifactsDir)
- *   WREN_HARNESS_ARTIFACTS_DIR  Mode A only: overrides resolveArtifactsDir's default
+ *                               is set — see harness/route/in-process.ts's resolveArtifactsDir)
+ *   WREN_HARNESS_ARTIFACTS_DIR  in-process only: overrides resolveArtifactsDir's default
  *                               (an os.tmpdir() path) when WREN_HARNESS_OUT isn't set — read
  *                               directly by resolveArtifactsDir, not plumbed through CliFlags
  *   WREN_HARNESS_DEPLOYMENT     personal|hosted (default personal)
  *   WREN_HARNESS_TIER_ADAPTER   repeatable via commas: "<tier>=<mode>[:<field>=<value>,...]"
  *                               (see harness/cli-args.ts's parseTierAdapterFlag), e.g.
  *                               "cheap=local:endpoint=http://localhost:11434/v1,model=llama3.1"
- *   WREN_HARNESS_MODELS_CONFIG  path forwarded verbatim to warble-agent-sdk chat (Mode B)
- *   WREN_HARNESS_CHAT_TIMEOUT_MS  Mode B only: overrides spawnChat's default 10-minute hang
+ *   WREN_HARNESS_MODELS_CONFIG  path forwarded verbatim to warble-agent-sdk chat (dispatched)
+ *   WREN_HARNESS_CHAT_TIMEOUT_MS  dispatched only: overrides spawnChat's default 10-minute hang
  *                               guard on a "warble-agent-sdk chat" invocation. Raise this for a
  *                               legitimately slower cold-start Ask turn (e.g. right after
  *                               onboarding a project, before any compile cache is warm) instead
@@ -67,7 +69,7 @@
  *                               40 — because build_context (generating an MDL) needs many turns
  *                               and otherwise dies with error_max_turns. Positive integer.
  *   WREN_HARNESS_ENRICH_IR      a PREBUILT genbi-enrich-context IR — in practice the profile's
- *                               eval golden, i.e. that profile compiled against warble's own
+ *                               eval golden, i.e. that profile compiled against this repo's own
  *                               example project with that project's schema baked into
  *                               `context_binding.resolved`. It is NOT a per-user artifact and is
  *                               no longer what a draft or a native session dispatches: both now
@@ -77,8 +79,8 @@
  *                               Warble can dispatch this profile SHAPE at all and have no user
  *                               project in view — a fixture is the correct input there.
  *                               Defaults to
- *                               resolveDefaultEnrichIrPath()'s sibling-repo walk
- *                               (warble/genbi-enrich-context/ir.golden.json); like
+ *                               resolveDefaultEnrichIrPath()'s walk for this package's own
+ *                               profiles/genbi-enrich-context/ir.golden.json; like
  *                               WREN_HARNESS_SETUP_IR this does NOT hard-fail at boot if
  *                               unresolved — GET /api/context/enrichment reports the draft
  *                               capability unavailable until one is configured, and
@@ -95,6 +97,7 @@ import { serve } from "@hono/node-server";
 import { createRequire } from "node:module";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import {
   createDefaultLoginProbe,
@@ -102,8 +105,8 @@ import {
   describeBundle,
   deriveAdapterSpec,
   enforceCompliance,
-  ModeASetupRunner,
-  ModeBSetupRunner,
+  InProcessSetupRunner,
+  DispatchedSetupRunner,
   resolveDefaultEnrichIrPath,
   resolveDefaultProfileSource,
   resolveDefaultSetupIrPath,
@@ -128,8 +131,8 @@ import { toAuthChoiceFromRuntimeSettings } from "./auth-choice.js";
 import { Store } from "./db.js";
 import { resolveEnrichmentBinding, resolveProjectIdentity } from "./enrichment.js";
 import type { EnrichmentBinding } from "./enrichment.js";
-import { createModeBEnrichmentDraftRunner } from "./enrichment-runner.js";
-import { dispatchInteractiveArtifacts, getInteractiveTerminalReadiness, InteractiveLaunchError, InteractiveTerminalManager, interactiveExecutableAvailable, prepareInteractiveHandoff, unavailableInteractiveReadiness } from "./interactive-terminal.js";
+import { createDispatchedEnrichmentDraftRunner } from "./enrichment-runner.js";
+import { dispatchInteractiveArtifacts, getInteractiveTerminalReadiness, InteractiveLaunchError, InteractiveTerminalManager, prepareInteractiveHandoff, unavailableInteractiveReadiness } from "./interactive-terminal.js";
 import type { InteractiveTarget, PtyFactory } from "./interactive-terminal.js";
 import { createProbedPtyFactory, ensureDarwinNodePtySpawnHelper } from "./node-pty-host.js";
 import { NativeSessionService } from "./native-sessions.js";
@@ -145,14 +148,13 @@ import { invalidateBundleAgentIdsCache } from "./turn.js";
 import type { TurnDeps } from "./turn.js";
 import { createSetWrenHomeForSetupMode } from "./wren-home.js";
 import { createSubscriptionModelCatalog } from "./subscription-model-catalog.js";
-import { readLaunchAttestation, resolveExclusiveLaunchMode } from "./launch-attestation.js";
+import { readLaunchAttestation, verifyBffLocalRuntime } from "./launch-attestation.js";
 
 function envFlags(): CliFlags {
   const env = process.env;
   const tierAdapters = env["WREN_HARNESS_TIER_ADAPTER"];
   const chatTimeoutMs = parseChatTimeoutMs(env["WREN_HARNESS_CHAT_TIMEOUT_MS"]);
   return {
-    ...(env["WREN_HARNESS_PROJECT"] !== undefined ? { project: env["WREN_HARNESS_PROJECT"] } : {}),
     ...(env["WREN_HARNESS_PROFILE"] !== undefined ? { profile: env["WREN_HARNESS_PROFILE"] } : {}),
     ...(env["WREN_HARNESS_MODE"] !== undefined ? { mode: env["WREN_HARNESS_MODE"] } : {}),
     ...(env["WREN_HARNESS_PROVIDER"] !== undefined ? { provider: env["WREN_HARNESS_PROVIDER"] } : {}),
@@ -174,21 +176,30 @@ async function main(): Promise<void> {
   const flags = envFlags();
   const port = Number.parseInt(process.env["PORT"] ?? "4787", 10);
   const workspaceRoot = process.env["WREN_HARNESS_WORKSPACE_ROOT"];
-  const hasProject = flags.project !== undefined && flags.project.trim().length > 0;
-  const hasWorkspaceRoot = workspaceRoot !== undefined && workspaceRoot.trim().length > 0;
 
-  let launchMode: "bootstrap" | "bound";
-  try {
-    launchMode = resolveExclusiveLaunchMode(flags.project, workspaceRoot);
-  } catch {
+  // Loud-fail rather than ignore: a caller still exporting the removed bound-mode variable
+  // believes it is booting against that project, and silently starting unbound would hand
+  // them a BFF pointed somewhere else entirely.
+  if (process.env["WREN_HARNESS_PROJECT"] !== undefined) {
     process.stderr.write(
-      "error: set exactly one of WREN_HARNESS_PROJECT (bound mode) or WREN_HARNESS_WORKSPACE_ROOT " +
-        "(bootstrap mode — boots unbound, the setup wizard binds a project later)\n",
+      "error: WREN_HARNESS_PROJECT is no longer supported — the BFF has a single boot mode. " +
+        "Set WREN_HARNESS_WORKSPACE_ROOT and bring an existing project in through the setup " +
+        "wizard's adopt flow, which now survives a restart.\n",
     );
     process.exitCode = 1;
     return;
   }
-  const launchAttestation = readLaunchAttestation(launchMode);
+  if (workspaceRoot === undefined || workspaceRoot.trim().length === 0) {
+    process.stderr.write("error: WREN_HARNESS_WORKSPACE_ROOT is required\n");
+    process.exitCode = 1;
+    return;
+  }
+  const launchAttestation = readLaunchAttestation();
+  const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+  const packageRoot = path.basename(path.dirname(moduleDirectory)) === "dist-server"
+    ? path.resolve(moduleDirectory, "../..")
+    : path.resolve(moduleDirectory, "..");
+  verifyBffLocalRuntime(packageRoot);
 
   const profileSource = flags.profile ?? resolveDefaultProfileSource();
   // Frozen at boot: GET /api/harness accepts only a purpose and must never
@@ -214,7 +225,7 @@ async function main(): Promise<void> {
       ...(flags.warbleBin !== undefined ? { warbleBin: flags.warbleBin } : {}),
     });
 
-  // userProject is a placeholder here when booting bootstrap-pending (hasProject === false):
+  // userProject is always a placeholder here: the BFF boots unbound.
   // RouteOptions.userProject is a required string, but every real reader resolves the LIVE
   // value through TurnDeps.getUserProject() (see server/turn.ts's resolveUserProject /
   // effectiveRouteOptions), which takes precedence over this fixed field once wired below.
@@ -223,7 +234,7 @@ async function main(): Promise<void> {
   const baseRouteOptions: Omit<RouteOptions, "question" | "onEvent"> = {
     authChoice,
     profileSource,
-    userProject: flags.project ?? "",
+    userProject: "",
     deployment,
     ...(flags.model !== undefined ? { model: flags.model } : {}),
     ...(flags.warbleBin !== undefined ? { warbleBin: flags.warbleBin } : {}),
@@ -244,14 +255,10 @@ async function main(): Promise<void> {
       : {}),
   };
 
-  // Mutable project binding: userProject starts as `flags.project` (bound mode) or
-  // `undefined` (bootstrap-pending mode) and can be rebound later, once, by the setup
-  // wizard's connect flow calling deps.bindProject(dir) — see server/turn.ts.
-  let boundProject: string | undefined = hasProject
-    ? flags.project
-    : workspaceRoot === undefined
-      ? undefined
-      : recoverBootstrapProjectBinding(store, workspaceRoot);
+  // Mutable project binding: the BFF always boots unbound, recovering a previously bound
+  // project from durable state when there is one, and is otherwise bound by the setup
+  // wizard's connect/adopt flows calling deps.bindProject(dir) — see server/turn.ts.
+  let boundProject: string | undefined = recoverBootstrapProjectBinding(store, workspaceRoot);
   // eslint-disable-next-line prefer-const -- assigned once below, referenced by the closures first
   let deps: TurnDeps;
   function getUserProject(): string | undefined {
@@ -322,11 +329,11 @@ async function main(): Promise<void> {
   const setupIrPath = process.env["WREN_HARNESS_SETUP_IR"] ?? resolveDefaultSetupIrPath();
   const setupMaxTurns = parseSetupMaxTurns(process.env["WREN_HARNESS_SETUP_MAX_TURNS"]);
   // Provider-aware setup selection: Claude subscription dispatches through
-  // ModeBSetupRunner, Codex subscription through CodexSetupRunner, and
+  // DispatchedSetupRunner, Codex subscription through CodexSetupRunner, and
   // api-key/local/gateway through
-  // the in-process vercel loop (ModeASetupRunner). `agentSdkBin` still only
-  // applies to Mode B — it has no subprocess to pass a binary path to — but
-  // `setupMaxTurns` now applies to both: Mode A enforces it as an in-process
+  // the in-process vercel loop (InProcessSetupRunner). `agentSdkBin` still only
+  // applies to dispatched — it has no subprocess to pass a binary path to — but
+  // `setupMaxTurns` now applies to both: in-process enforces it as an in-process
   // tool-loop step budget (`ExecuteAgentContext.maxSteps`) rather than a
   // subprocess CLI flag, and `effectiveMaxTurns` reports it accordingly (see
   // that class's doc comment in harness/setup/runner.ts).
@@ -338,7 +345,7 @@ async function main(): Promise<void> {
   let setupRunner: SetupStepRunner | undefined;
   let setupRunnerFor: ((choice: AuthChoice) => SetupStepRunner) | undefined;
   if (setupIrPath !== undefined) {
-    const modeBSetupRunner = new ModeBSetupRunner({
+    const dispatchedSetupRunner = new DispatchedSetupRunner({
       irPath: setupIrPath,
       getModelsConfig: () => {
         if (!store.hasExplicitRuntimeSettings()) return flags.modelsConfig;
@@ -354,15 +361,15 @@ async function main(): Promise<void> {
       ...(flags.out !== undefined ? { outDir: flags.out } : {}),
       ...(setupMaxTurns !== undefined ? { maxTurns: setupMaxTurns } : {}),
     });
-    const modeASetupRunner = new ModeASetupRunner({
+    const inProcessSetupRunner = new InProcessSetupRunner({
       irPath: setupIrPath,
       getStrongAdapterSpec: (choice) => {
         if (!store.hasExplicitRuntimeSettings()) {
-          if (choice.mode === "subscription") throw new Error("Mode A setup requires non-subscription auth");
+          if (choice.mode === "subscription") throw new Error("in-process setup requires non-subscription auth");
           return deriveAdapterSpec(choice, flags.model !== undefined ? { model: flags.model } : {});
         }
         const strong = materializeRuntimeRouteOptions(store.getRuntimeSettings(), choice).tierBinding?.["strong"];
-        if (!strong) throw new Error("Mode A setup requires a configured strong-tier adapter");
+        if (!strong) throw new Error("in-process setup requires a configured strong-tier adapter");
         return strong;
       },
       ...(flags.warbleBin !== undefined ? { warbleBin: flags.warbleBin } : {}),
@@ -387,17 +394,18 @@ async function main(): Promise<void> {
         : {}),
     });
     const runnerSet = {
-      claudeSubscription: modeBSetupRunner,
+      claudeSubscription: dispatchedSetupRunner,
       codexSubscription: codexSetupRunner,
-      nonSubscription: modeASetupRunner,
+      nonSubscription: inProcessSetupRunner,
     };
     const runnerFor = (choice: AuthChoice): SetupStepRunner => selectSetupRunnerForAuth(choice, runnerSet);
     setupRunner = runnerFor(authChoice);
     setupRunnerFor = runnerFor;
   } else {
     process.stderr.write(
-      "warning: no genbi-setup IR found (set WREN_HARNESS_SETUP_IR or check out warble as a " +
-        "sibling repo) — POST /api/setup/connect will 500 until one is configured\n",
+      "warning: no genbi-setup IR found (set WREN_HARNESS_SETUP_IR or restore this package's " +
+        "profiles/genbi-setup/ir.golden.json) — POST /api/setup/connect will 500 until one is " +
+        "configured\n",
     );
   }
 
@@ -411,21 +419,21 @@ async function main(): Promise<void> {
   // before this change — only the draft capability goes live.
   const enrichIrPath = process.env["WREN_HARNESS_ENRICH_IR"] ?? resolveDefaultEnrichIrPath();
   // The profile's committed IR beside profile.yml — its eval golden, carrying
-  // warble's example project's schema. It is a producer-contract and readiness
+  // the example project's schema. It is a producer-contract and readiness
   // input only: what a session actually dispatches is compiled per binding by
   // `resolveDispatchIr` below.
   const analysisIrCandidate = process.env["WREN_HARNESS_ANALYSIS_IR"] ?? path.join(profileSource, "ir.golden.json");
   const analysisIrPath = existsSync(analysisIrCandidate) ? analysisIrCandidate : undefined;
-  let enrichmentRunner: ReturnType<typeof createModeBEnrichmentDraftRunner> | undefined;
+  let enrichmentRunner: ReturnType<typeof createDispatchedEnrichmentDraftRunner> | undefined;
   if (enrichIrPath !== undefined) {
-    enrichmentRunner = createModeBEnrichmentDraftRunner({
+    enrichmentRunner = createDispatchedEnrichmentDraftRunner({
       irPath: enrichIrPath,
       // Compile against the bound project rather than dispatching the prebuilt
-      // IR, which is the profile's eval golden and carries warble's example
+      // IR, which is the profile's eval golden and carries this repo's example
       // project's schema.
       profileSource: harnessProfileSources.context_enrichment,
       getAuthChoice,
-      // Mirrors ModeBSetupRunner's getModelsConfig above: enrichment draft dispatch is Claude
+      // Mirrors DispatchedSetupRunner's getModelsConfig above: enrichment draft dispatch is Claude
       // subscription only, so this always materializes the Claude models config regardless of
       // which auth choice is currently live — getAuthChoice's own check rejects the call before
       // dispatch if the live choice isn't actually Claude subscription.
@@ -440,9 +448,9 @@ async function main(): Promise<void> {
     });
   } else {
     process.stderr.write(
-      "warning: no genbi-enrich-context IR found (set WREN_HARNESS_ENRICH_IR or check out warble " +
-        "as a sibling repo) — GET /api/context/enrichment will report draft unavailable until one " +
-        "is configured\n",
+      "warning: no genbi-enrich-context IR found (set WREN_HARNESS_ENRICH_IR or restore this " +
+        "package's profiles/genbi-enrich-context/ir.golden.json) — GET /api/context/enrichment " +
+        "will report draft unavailable until one is configured\n",
     );
   }
 
@@ -525,11 +533,19 @@ async function main(): Promise<void> {
       return compiled.irPath;
     },
     warbleBin: flags.warbleBin ?? "warble",
+    ...(launchAttestation.runtime.provider === "codex"
+      ? {
+          codexBin: process.env["WREN_HARNESS_CODEX_BIN"]!,
+          codexBinSha256: launchAttestation.runtime.executableSha256,
+          codexSource: launchAttestation.runtime.source,
+          codexSourceClosureSha256: launchAttestation.runtime.sourceClosureSha256,
+          codexVersion: launchAttestation.runtime.version,
+        }
+      : {}),
     ...(process.env["WREN_HARNESS_WREN_SHIM"] !== undefined ? { wrenShim: process.env["WREN_HARNESS_WREN_SHIM"] } : {}),
     terminalHostAvailable: async () => {
       try { await loadPty(); return true; } catch { return false; }
     },
-    executableAvailable: interactiveExecutableAvailable,
     artifactService: nativeArtifacts,
   });
 
@@ -595,10 +611,10 @@ async function main(): Promise<void> {
         },
       });
     },
-    ...(workspaceRoot !== undefined ? { workspaceRoot, setWrenHomeForSetupMode } : {}),
+    workspaceRoot,
+    setWrenHomeForSetupMode,
     launchAttestation,
   };
-  if (hasProject && flags.project !== undefined) bindProject(flags.project);
   const app = createApp(deps);
 
   const websocket = new WebSocketServer({ noServer: true });

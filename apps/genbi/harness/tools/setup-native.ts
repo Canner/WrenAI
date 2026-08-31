@@ -9,8 +9,8 @@ import { SetupCommandDeniedError, SetupExecCwdScopeError, SetupExecutionInputErr
  * `setup_execution` (native realization): the ONE native tool
  * `connect_source` and `build_context` both bind to (see
  * `providers/setup.provider.yaml`) — a scope-limited exec + write pair
- * mirroring the `setup_execution` guardrail's semantics on the Mode B
- * (claude-agent-sdk) side of the same onboarding flow, so an api-key/Mode A
+ * mirroring the `setup_execution` guardrail's semantics on the dispatched
+ * (claude-agent-sdk) side of the same onboarding flow, so an api-key/in-process
  * session can drive the same setup components under an equivalent, not
  * merely similarly-named, permission boundary.
  *
@@ -29,7 +29,7 @@ import { SetupCommandDeniedError, SetupExecCwdScopeError, SetupExecutionInputErr
  * credential design (see `credentialBoundary` in `server/compose.ts` and the
  * onboarding skill) writes an EMPTY `.env` template and never reads it back —
  * but nothing enforced that until this pair was added. Observed live (real
- * `gpt-4.1`, Mode A): the agent ran `cat <project>/.env` through this same
+ * `gpt-4.1`, in-process): the agent ran `cat <project>/.env` through this same
  * `exec` action, it succeeded (neither DESTRUCTIVE nor REDIRECTION matches a
  * plain read), and the full stdout — a connection string, or for
  * postgres/snowflake/bigquery, a password/API-key/service-account value — was
@@ -37,7 +37,7 @@ import { SetupCommandDeniedError, SetupExecCwdScopeError, SetupExecutionInputErr
  * `turns.trace_json` (see `redactSetupExecutionOutput` below, the persistence-side
  * companion to this pair). A counterpart change belongs in warble's
  * claude-agent-sdk dispatcher (same file/branch as DESTRUCTIVE/REDIRECTION
- * above) so the Mode B side of this same setup scope gets the identical
+ * above) so the dispatched side of this same setup scope gets the identical
  * guard — kept in the same shape and same position here so that copy can
  * mirror it byte-for-byte.
  */
@@ -67,7 +67,7 @@ const DOTENV_PATH = /(^|[\s"'/=])\.env(\.[\w.-]+)?(?=$|[\s"'/])/;
 
 // A setup exec may legitimately perform a cold schema discovery or context
 // build, so this is a generous hang guard rather than a performance target.
-// It matches the existing warble compile/dispatch ceiling. Mode A previously
+// It matches the existing warble compile/dispatch ceiling. In-process previously
 // supplied no timeout at all, allowing one interactive or deadlocked command
 // to leave the setup turn (and its explicit recovery retry) running forever.
 const SETUP_EXEC_TIMEOUT_MS = 2 * 60 * 1000;
@@ -117,7 +117,7 @@ export interface SetupExecutionToolOptions {
  * Flattening the schema drops the model-facing pairing a discriminated union
  * used to encode for free (`exec` needs `command`; `write` needs `path` +
  * `content`) — nothing about the field TYPES says which action requires
- * which field. Since Mode A has no turn budget (unlike Mode B's fixed
+ * which field. Since in-process has no turn budget (unlike dispatched's fixed
  * `--max-turns` cap on setup), an under-described schema makes that pairing
  * discoverable only by the model guessing wrong and reading a thrown
  * `SetupExecutionInputError` back — unbounded trial-and-error on the user's

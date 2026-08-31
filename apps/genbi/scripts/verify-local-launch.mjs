@@ -33,19 +33,20 @@ const livePurposeContracts = {
   context_enrichment: { scopeKind: "bound_project", profile: "genbi-enrich-context" },
 };
 const nativeRuntimeBindingRequiredReason = "native sessions require a saved Runtime & authentication binding";
-const liveRequiredPurposes = {
-  bootstrap: [],
-  bound: ["analysis", "context_enrichment"],
-};
+// A launch is gated before Setup has run, so no native purpose can be live yet — each one
+// is asserted unavailable-for-the-right-reason above instead.
+const liveRequiredPurposes = [];
 const nativeVendors = ["claude", "codex"];
 
 function usage(message) {
   const text = [
     message ? `error: ${message}` : undefined,
-    "Usage: pnpm run verify:launch -- --mode bootstrap|bound --runtime subscription:claude --warble-root <checkout> --warble-bin <binary> --agent-sdk-bin <binary> [mode input]",
-    "  bootstrap: --workspace-root <directory> (and no --project)",
-    "  bound:     --project <canonical wren project> (and no --workspace-root)",
+    "Usage: pnpm run verify:launch -- --workspace-root <directory> --runtime subscription:claude|subscription:codex --warble-root <checkout> --warble-bin <binary> [runtime inputs]",
+    "  Claude runtime: --agent-sdk-bin <binary>",
+    "  Codex runtime:  --codex-local-bin <binary> --codex-bin <exact-codex-executable>",
+    "  An existing project is adopted through the running app, not selected here.",
     "Optional: --profile <dir> --setup-ir <file> --enrich-ir <file> --analysis-ir <file>",
+    "  Profiles and their committed IRs live in this package's own profiles/ tree, not the Warble checkout.",
     "Live gate: --live --bff-url <url> --ui-url <url> (after both processes are running)",
   ].filter(Boolean).join("\n");
   throw new GateError("usage", text);
@@ -57,8 +58,8 @@ class GateError extends Error {
 
 function parseArgs(argv) {
   // pnpm forwards the separator itself to a bare `node` script: accept the
-  // conventional `pnpm run verify:launch -- --mode ...` spelling as well as a
-  // direct `node scripts/verify-local-launch.mjs --mode ...` invocation.
+  // conventional `pnpm run verify:launch -- --workspace-root ...` spelling as well as a
+  // direct `node scripts/verify-local-launch.mjs --workspace-root ...` invocation.
   if (argv[0] === "--") argv = argv.slice(1);
   const options = {};
   for (let index = 0; index < argv.length; index += 1) {
@@ -74,15 +75,21 @@ function parseArgs(argv) {
     options[key] = value;
     index += 1;
   }
-  if (options.mode !== "bootstrap" && options.mode !== "bound") usage("--mode must be bootstrap or bound");
-  for (const required of ["runtime", "warbleRoot", "warbleBin", "agentSdkBin"]) if (!options[required]) usage(`--${required.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required`);
-  if (options.runtime !== "subscription:claude") usage("--runtime must be subscription:claude");
-  if (options.skipBuild && process.env.NODE_ENV !== "test") usage("--skip-build is reserved for the deterministic fixture suite");
-  if (options.mode === "bootstrap") {
-    if (!options.workspaceRoot || options.project) usage("bootstrap mode requires --workspace-root and forbids --project");
-  } else if (!options.project || options.workspaceRoot) {
-    usage("bound mode requires --project and forbids --workspace-root");
+  // The retired bound-mode selectors are rejected by name rather than ignored as unknown
+  // flags: a caller still passing them believes they are gating that project, and silently
+  // gating a bootstrap launch instead would attest a tuple they never asked for.
+  if (options.project !== undefined) usage("--project is no longer supported — an existing project is adopted through the running app");
+  if (options.mode !== undefined) usage("--mode is no longer supported — the BFF has a single boot mode");
+  for (const required of ["workspaceRoot", "runtime", "warbleRoot", "warbleBin"]) if (!options[required]) usage(`--${required.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required`);
+  if (options.runtime !== "subscription:claude" && options.runtime !== "subscription:codex") usage("--runtime must be subscription:claude or subscription:codex");
+  if (options.runtime === "subscription:claude") {
+    if (!options.agentSdkBin) usage("--agent-sdk-bin is required for subscription:claude");
+    if (options.codexLocalBin || options.codexBin) usage("--codex-local-bin and --codex-bin apply only to subscription:codex");
+  } else {
+    if (!options.codexLocalBin || !options.codexBin) usage("--codex-local-bin and --codex-bin are required for subscription:codex");
+    if (options.agentSdkBin) usage("--agent-sdk-bin applies only to subscription:claude");
   }
+  if (options.skipBuild && process.env.NODE_ENV !== "test") usage("--skip-build is reserved for the deterministic fixture suite");
   if (options.live && (!options.bffUrl || !options.uiUrl)) usage("--live requires --bff-url and --ui-url");
   if (!options.live && (options.bffUrl || options.uiUrl)) usage("--bff-url and --ui-url require --live");
   return options;
@@ -140,11 +147,12 @@ function execFileSyncResult(command, args, cwd) {
   return { code: result.status ?? (result.error ? 1 : 0), stdout: result.stdout ?? "", stderr: result.stderr ?? "", error: result.error };
 }
 
-function assertInside(root, value, label) {
-  if (!contained(root, value)) throw new GateError("provenance", `${label} must be inside the selected Warble checkout`);
+function assertInside(root, value, label, rootLabel = "Warble checkout") {
+  if (!contained(root, value)) throw new GateError("provenance", `${label} must be inside the selected ${rootLabel}`);
 }
 
 function hash(file) { return createHash("sha256").update(readFileSync(file)).digest("hex"); }
+function pathDigest(file) { return createHash("sha256").update(file).digest("hex"); }
 function hashTree(root) {
   const digest = createHash("sha256");
   const visit = (directory) => forEachSorted(readdirSync(directory, { withFileTypes: true }), (entry) => {
@@ -194,18 +202,13 @@ function bootstrapRoot(value) {
 }
 
 function validateMode(options) {
-  if (options.mode === "bootstrap") {
-    const workspace = bootstrapRoot(options.workspaceRoot);
-    return { workspaceRoot: workspace.root, workspaceParent: workspace.parent };
-  }
-  const project = directory(options.project, "bound project");
-  regularFile(path.join(project, "wren_project.yml"), "bound project wren_project.yml");
-  return { project };
+  const workspace = bootstrapRoot(options.workspaceRoot);
+  return { workspaceRoot: workspace.root, workspaceParent: workspace.parent };
 }
 
-function assertIr(pathToIr, label, warbleRoot) {
+function assertIr(pathToIr, label, genbiRoot) {
   const canonical = regularFile(pathToIr, label);
-  assertInside(warbleRoot, canonical, label);
+  assertInside(genbiRoot, canonical, label, "GenBI checkout");
   try { JSON.parse(readFileSync(canonical, "utf8")); } catch { throw new GateError("contract", `${label} is not valid JSON: ${canonical}`); }
   return canonical;
 }
@@ -250,7 +253,7 @@ async function runWarbleContractProbe({ bin, profile, setupIr, enrichIr, analysi
     for (const component of compiled.components) for (const call of component?.llm_calls ?? []) if (typeof call?.tier === "string" && call.tier.trim()) tiers.add(call.tier.trim());
     if (tiers.size === 0) throw new GateError("runtime_binding", "compiled profile IR declares no runtime tiers");
 
-    // This is also the launch gate's one live exercise of the Mode A/agnostic
+    // This is also the launch gate's one live exercise of the in-process/agnostic
     // describe path: not just checking the dispatcher produced a file, but
     // actually loading it through the same `loadBundle`/`assertCompat` check
     // the BFF's `GET /api/harness` route runs, against a bundle this probe
@@ -321,6 +324,58 @@ function runAgentSdkContractProbe({ bin, analysisIr, setupIr, enrichIr }) {
   return evidence;
 }
 
+function runCodexLocalContractProbe({ bin, analysisIr, setupIr, enrichIr }) {
+  const evidence = [];
+  for (const [label, ir, profile, components, extra] of [
+    ["analysis", analysisIr, "genbi-default", ["answer_query", "generate_dashboard"], ["--orchestrator-model", "fixture", "--cheap-model", "fixture", "--strong-model", "fixture", "--inspect-tool", "get_context", "--query-tool", "run_sql"]],
+    ["setup", setupIr, "genbi-setup", [undefined], ["--source-tool", "setup_execution", "--context-tool", "setup_execution"]],
+    ["context_enrichment", enrichIr, "genbi-enrich-context", ["inspect_context", "draft_enrichment"], ["--model", "fixture", "--semantic-tool", "get_context", "--raw-material-tool", "get_context"]],
+  ]) {
+    for (const component of components) {
+      const args = ["manifest", ir, "--server-command", process.execPath, ...(component ? ["--component", component] : []), ...extra];
+      const result = run(bin, args, { capture: true });
+      let manifest;
+      try { manifest = JSON.parse(result.stdout); } catch { throw new GateError("contract", `codex-local manifest probe did not return valid JSON for ${label}`); }
+      if (result.code !== 0 || !manifest || typeof manifest !== "object" || Array.isArray(manifest)
+        || manifest.manifest_version !== "0.1" || manifest.target !== "codex:local"
+        || manifest.profile !== profile || !Array.isArray(manifest.agents) || manifest.agents.length === 0) {
+        throw new GateError("contract", `codex-local manifest probe is incompatible for ${label}`);
+      }
+      if (component && !manifest.agents.some((agent) => agent?.id === component)) {
+        throw new GateError("contract", `codex-local manifest probe does not expose ${component} for ${label}`);
+      }
+    }
+    evidence.push(`codex-local:manifest(${label})`);
+  }
+  return evidence;
+}
+
+function codexExecutableIdentity(bin) {
+  const result = run(bin, ["--version"], { capture: true });
+  const match = /^codex-cli ([0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?)\s*$/.exec(result.stdout);
+  if (result.code !== 0 || !match) throw new GateError("contract", "Codex executable did not report a supported codex-cli version");
+  let sourceRoot = bin;
+  let declaredVersion;
+  for (let candidate = path.dirname(bin); candidate !== path.dirname(candidate); candidate = path.dirname(candidate)) {
+    const packageFile = path.join(candidate, "package.json");
+    if (!existsSync(packageFile)) continue;
+    try {
+      const metadata = JSON.parse(readFileSync(packageFile, "utf8"));
+      if (metadata?.name === "@openai/codex") { sourceRoot = candidate; declaredVersion = metadata.version; break; }
+    } catch { /* A malformed ancestor package is not the selected Codex source. */ }
+  }
+  const source = sourceRoot === bin ? "standalone" : "npm:@openai/codex";
+  if (source !== "standalone" && declaredVersion !== match[1]) throw new GateError("provenance", "Codex package version does not match the selected executable");
+  return {
+    sourceRoot,
+    source,
+    executablePathDigest: pathDigest(bin),
+    sourceClosureSha256: sourceRoot === bin ? hash(bin) : hashTree(sourceRoot),
+    version: match[1],
+    executableSha256: hash(bin),
+  };
+}
+
 function build() {
   const startedAt = Date.now();
   run("pnpm", ["run", "build"]);
@@ -332,21 +387,36 @@ function build() {
 function writeAttestation(result) {
   const publicAttestation = {
     version: "genbi-launch-attestation/v1",
-    mode: result.mode,
-    genbi: { rootDigest: result.ui.git.rootDigest, commit: result.ui.git.commit, treeIdentity: result.ui.git.treeIdentity },
+    mode: "bootstrap",
+    genbi: {
+      rootDigest: result.ui.git.rootDigest,
+      commit: result.ui.git.commit,
+      treeIdentity: result.ui.git.treeIdentity,
+      runtimeInputs: result.profiles.runtimeInputs,
+    },
     warble: {
       rootDigest: result.warble.git.rootDigest,
       commit: result.warble.git.commit,
       treeIdentity: result.warble.git.treeIdentity,
       binarySha256: result.warble.binarySha256,
-      runtimeInputs: result.warble.runtimeInputs,
     },
     runtime: result.runtimeBinding.runtime,
     bff: { entrySha256: result.bff.build.entrySha256, closureSha256: result.bff.build.closureSha256 },
     ui: { rootDigest: result.ui.git.rootDigest, commit: result.ui.git.commit, treeIdentity: result.ui.git.treeIdentity },
   };
   const file = path.join(packageRoot, "dist-server", "local-launch-attestation.json");
-  const full = { ...publicAttestation, local: { genbiRoot: result.ui.git.root, warbleRoot: result.warble.root, warbleBin: result.warble.binary, agentSdkBin: result.agentSdk.binary, profile: result.warble.profile, setupIr: result.warble.setupIr, enrichIr: result.warble.enrichIr, analysisIr: result.warble.analysisIr, modeInput: result.mode === "bootstrap" ? result.boot.workspaceRoot : result.boot.project } };
+  const full = { ...publicAttestation, local: {
+    genbiRoot: result.ui.git.root,
+    warbleRoot: result.warble.root,
+    warbleBin: result.warble.binary,
+    ...(result.agentSdk ? { agentSdkBin: result.agentSdk.binary } : {}),
+    ...(result.codexLocal ? { codexLocalBin: result.codexLocal.binary, codexBin: result.codex.binary, codexSourceRoot: result.codex.sourceRoot } : {}),
+    profile: result.profiles.profile,
+    setupIr: result.profiles.setupIr,
+    enrichIr: result.profiles.enrichIr,
+    analysisIr: result.profiles.analysisIr,
+    modeInput: result.boot.workspaceRoot,
+  } };
   writeFileSync(file, `${JSON.stringify(full)}\n`, { mode: 0o600 });
   return { file, public: publicAttestation };
 }
@@ -360,34 +430,63 @@ export async function verifyLocalLaunch(options) {
   const warbleBin = regularFile(options.warbleBin, "Warble binary");
   assertInside(warbleRoot, warbleBin, "Warble binary");
   try { accessSync(warbleBin, constants.X_OK); } catch { throw new GateError("provenance", "Warble binary is not executable"); }
-  const agentSdkBin = regularFile(options.agentSdkBin, "agent-sdk dispatcher binary");
-  assertInside(warbleRoot, agentSdkBin, "agent-sdk dispatcher binary");
-  try { accessSync(agentSdkBin, constants.X_OK); } catch { throw new GateError("provenance", "agent-sdk dispatcher binary is not executable"); }
+  let agentSdkBin;
+  let codexLocalBin;
+  let codexBin;
+  if (options.runtime === "subscription:claude") {
+    agentSdkBin = regularFile(options.agentSdkBin, "agent-sdk dispatcher binary");
+    assertInside(warbleRoot, agentSdkBin, "agent-sdk dispatcher binary");
+    try { accessSync(agentSdkBin, constants.X_OK); } catch { throw new GateError("provenance", "agent-sdk dispatcher binary is not executable"); }
+  } else {
+    codexLocalBin = regularFile(options.codexLocalBin, "codex-local dispatcher binary");
+    assertInside(warbleRoot, codexLocalBin, "codex-local dispatcher binary");
+    codexBin = regularFile(options.codexBin, "Codex executable");
+    try { accessSync(codexLocalBin, constants.X_OK); } catch { throw new GateError("provenance", "codex-local dispatcher binary is not executable"); }
+    try { accessSync(codexBin, constants.X_OK); } catch { throw new GateError("provenance", "Codex executable is not executable"); }
+  }
 
-  const profile = directory(options.profile ?? path.join(warbleRoot, "genbi-default"), "Warble profile");
-  assertInside(warbleRoot, profile, "Warble profile");
-  const setupIr = assertIr(options.setupIr ?? path.join(warbleRoot, "genbi-setup", "ir.golden.json"), "Setup IR", warbleRoot);
-  const enrichIr = assertIr(options.enrichIr ?? path.join(warbleRoot, "genbi-enrich-context", "ir.golden.json"), "enrichment IR", warbleRoot);
-  const analysisIr = assertIr(options.analysisIr ?? path.join(profile, "ir.golden.json"), "analysis IR", warbleRoot);
+  const profiles = path.join(packageRoot, "profiles");
+  const profile = directory(options.profile ?? path.join(profiles, "genbi-default"), "GenBI profile");
+  assertInside(genbi.root, profile, "GenBI profile", "GenBI checkout");
+  const setupIr = assertIr(options.setupIr ?? path.join(profiles, "genbi-setup", "ir.golden.json"), "Setup IR", genbi.root);
+  const enrichIr = assertIr(options.enrichIr ?? path.join(profiles, "genbi-enrich-context", "ir.golden.json"), "enrichment IR", genbi.root);
+  const analysisIr = assertIr(options.analysisIr ?? path.join(profile, "ir.golden.json"), "analysis IR", genbi.root);
   const dist = options.skipBuild ? { entry: "(fixture skipped build)", builtAt: "(fixture skipped build)", entrySha256: "(fixture skipped build)" } : build();
   const contracts = await runWarbleContractProbe({ bin: warbleBin, profile, setupIr, enrichIr, analysisIr });
-  const agentSdkProbes = runAgentSdkContractProbe({ bin: agentSdkBin, analysisIr, setupIr, enrichIr });
+  const runtimeProbes = options.runtime === "subscription:claude"
+    ? runAgentSdkContractProbe({ bin: agentSdkBin, analysisIr, setupIr, enrichIr })
+    : runCodexLocalContractProbe({ bin: codexLocalBin, analysisIr, setupIr, enrichIr });
   const runtimeInputs = {
     profileTreeSha256: hashTree(profile),
     setupIrSha256: hash(setupIr),
     enrichIrSha256: hash(enrichIr),
     analysisIrSha256: hash(analysisIr),
   };
+  const codexIdentity = codexBin ? codexExecutableIdentity(codexBin) : undefined;
+  const codexPublicIdentity = codexIdentity ? {
+    source: codexIdentity.source,
+    executablePathDigest: codexIdentity.executablePathDigest,
+    sourceClosureSha256: codexIdentity.sourceClosureSha256,
+    version: codexIdentity.version,
+    executableSha256: codexIdentity.executableSha256,
+  } : undefined;
   const result = {
     result: "passed",
-    mode: options.mode,
+    mode: "bootstrap",
     ui: { packageRoot, git: genbi, launchCommand: "pnpm dev" },
     bff: { packageRoot, git: genbi, entry: dist.entry, build: dist, launchCommand: "pnpm run start:bff" },
-    warble: { root: warbleRoot, git: warble, binary: warbleBin, binarySha256: hash(warbleBin), runtimeInputs, profile, setupIr, enrichIr, analysisIr },
-    agentSdk: { binary: agentSdkBin, binarySha256: hash(agentSdkBin) },
-    runtimeBinding: { runtime: { mode: "subscription", provider: "claude", dispatcher: "claude-agent-sdk", agentSdkSha256: hash(agentSdkBin) }, tiers: contracts.tiers },
+    warble: { root: warbleRoot, git: warble, binary: warbleBin, binarySha256: hash(warbleBin) },
+    profiles: { root: profiles, runtimeInputs, profile, setupIr, enrichIr, analysisIr },
+    ...(agentSdkBin ? { agentSdk: { binary: agentSdkBin, binarySha256: hash(agentSdkBin) } } : {}),
+    ...(codexLocalBin && codexBin ? {
+      codexLocal: { binary: codexLocalBin, binarySha256: hash(codexLocalBin) },
+      codex: { binary: codexBin, ...codexIdentity },
+    } : {}),
+    runtimeBinding: { runtime: options.runtime === "subscription:claude"
+      ? { mode: "subscription", provider: "claude", dispatcher: "claude-agent-sdk", agentSdkSha256: hash(agentSdkBin) }
+      : { mode: "subscription", provider: "codex", dispatcher: "codex-local", codexLocalSha256: hash(codexLocalBin), ...codexPublicIdentity }, tiers: contracts.tiers },
     boot: mode,
-    probes: ["compile", "dispatch:vercel(profile)", "dispatch:vercel(setup)", ...contracts.native.evidence, ...agentSdkProbes],
+    probes: ["compile", "dispatch:vercel(profile)", "dispatch:vercel(setup)", ...contracts.native.evidence, ...runtimeProbes],
   };
   result.attestation = writeAttestation(result);
   return result;
@@ -431,19 +530,12 @@ function assertReadiness(condition, message) {
  * Readiness is a second live attestation boundary: prove that the selected BFF
  * is in the expected boot state, rather than only accepting a reachable API.
  */
-function assertLiveReadiness(readiness, mode, attestation) {
+function assertLiveReadiness(readiness) {
   assertReadiness(isRecord(readiness), "BFF native-session readiness API returned an invalid shape");
   const runtime = readiness.runtime;
   assertReadiness(isRecord(runtime) && typeof runtime.configured === "boolean" && Number.isSafeInteger(runtime.generation) && runtime.generation >= 0, "BFF native-session readiness runtime binding is malformed");
-  const expectedProvider = attestation.runtime.provider;
-  const expectedTarget = expectedProvider === "claude" ? "claude-code:interactive" : "codex:interactive";
-  const expectedTargetLabel = expectedProvider === "claude" ? "Claude CLI" : "Codex CLI";
-  if (mode === "bootstrap") {
-    assertReadiness(runtime.configured === false, "bootstrap BFF must report an unconfigured Runtime binding");
-    assertReadiness(!Object.hasOwn(runtime, "provider") && !Object.hasOwn(runtime, "target") && !Object.hasOwn(runtime, "targetLabel"), "bootstrap BFF Runtime binding unexpectedly selects a native target");
-  } else {
-    assertReadiness(runtime.configured === true && runtime.provider === expectedProvider && runtime.target === expectedTarget && runtime.targetLabel === expectedTargetLabel, "bound BFF Runtime binding does not match the selected native target");
-  }
+  assertReadiness(runtime.configured === false, "BFF must report an unconfigured Runtime binding at launch");
+  assertReadiness(!Object.hasOwn(runtime, "provider") && !Object.hasOwn(runtime, "target") && !Object.hasOwn(runtime, "targetLabel"), "BFF Runtime binding unexpectedly selects a native target before Setup ran");
 
   const purposes = readiness.purposes;
   assertReadiness(isRecord(purposes), "BFF native-session readiness purposes are malformed");
@@ -454,20 +546,16 @@ function assertLiveReadiness(readiness, mode, attestation) {
     assertReadiness(isPlainEmptyObject(value.vendors), `BFF native purpose ${purpose} vendors projection is malformed`);
     assertReadiness(isRecord(value.producer) && value.producer.available === true && !Object.hasOwn(value.producer, "category"), `BFF native purpose ${purpose} producer is incompatible`);
     assertReadiness(value.reason === undefined || typeof value.reason === "string", `BFF native purpose ${purpose} reason is malformed`);
-    if (mode === "bootstrap") {
-      assertReadiness(!Object.hasOwn(value, "target") && !Object.hasOwn(value, "targetLabel"), `bootstrap BFF native purpose ${purpose} unexpectedly selects a target`);
-      assertReadiness(value.available === false && value.reason === nativeRuntimeBindingRequiredReason, `bootstrap BFF native purpose ${purpose} must be unavailable until Runtime authentication is saved`);
-    } else {
-      assertReadiness(value.target === expectedTarget && value.targetLabel === expectedTargetLabel, `bound BFF native purpose ${purpose} target does not match the selected Runtime`);
-    }
+    assertReadiness(!Object.hasOwn(value, "target") && !Object.hasOwn(value, "targetLabel"), `BFF native purpose ${purpose} unexpectedly selects a target`);
+    assertReadiness(value.available === false && value.reason === nativeRuntimeBindingRequiredReason, `BFF native purpose ${purpose} must be unavailable until Runtime authentication is saved`);
   }
   const mcp = readiness.mcp;
   assertReadiness(isRecord(mcp) && mcp.server === "GenBI MCP" && mcp.tool === "save_dashboard" && mcp.destination === "GenBI Artifacts" && typeof mcp.available === "boolean" && (mcp.reason === undefined || typeof mcp.reason === "string"), "BFF native-session MCP readiness is malformed");
-  for (const purpose of liveRequiredPurposes[mode]) {
+  for (const purpose of liveRequiredPurposes) {
     const value = purposes[purpose];
     assertReadiness(value.available === true && value.reason === undefined, `BFF reports native purpose ${purpose} unavailable`);
   }
-  return liveRequiredPurposes[mode];
+  return liveRequiredPurposes;
 }
 
 export async function verifyLive(options, result) {
@@ -478,7 +566,7 @@ export async function verifyLive(options, result) {
   const readinessResponse = await fetchRequired(new URL("/api/native-sessions/readiness", bffUrl), "BFF native-session readiness API");
   let readiness;
   try { readiness = await readinessResponse.json(); } catch { throw new GateError("readiness", "BFF native-session readiness API did not return JSON"); }
-  const requiredPurposes = assertLiveReadiness(readiness, options.mode, result.attestation.public);
+  const requiredPurposes = assertLiveReadiness(readiness);
   const uiAttestation = await fetchRequired(new URL("/_genbi/local-launch-attestation", uiUrl), "UI launch attestation");
   assertExactPublicAttestation(await uiAttestation.json(), result.attestation.public, "UI launch attestation");
   const ui = await fetchRequired(uiUrl, "UI");

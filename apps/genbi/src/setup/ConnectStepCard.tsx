@@ -342,7 +342,7 @@ export function ConnectStepCard() {
         )}
 
         {failure && <SetupFailurePanel failure={failure} step="connect" retrying={streaming} onRetry={retryConnectFailure} />}
-        {!failure && error && <Alert type="error" showIcon message={t('setup.connectErrorTitle')} />}
+        {!failure && error && <Alert type="error" showIcon message={t('setup.connectErrorTitle')} description={error} />}
       </Space>
     </Panel>
   );

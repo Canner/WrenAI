@@ -2,17 +2,21 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadBundle } from "../harness/bundle/loader.js";
 import { createFileSystemCompileCache } from "../harness/compile/cache.js";
 import { compileProfile } from "../harness/compile/pipeline.js";
-import { resolveWarbleBinary } from "../harness/compile/resolve-binary.js";
+import { resolveHubDir, resolveWarbleBinary } from "../harness/compile/resolve-binary.js";
 import { getWarbleIdentity } from "../harness/compile/warble-identity.js";
 import { WarbleBinaryNotFoundError } from "../harness/compile/errors.js";
 import type { CompileCache } from "../harness/compile/types.js";
 import { WARBLE_REPO } from "./warble-checkout.js";
 
-const PROFILE_SOURCE = path.join(WARBLE_REPO, "genbi-default");
+/** This package's own `profiles/` tree — the GenBI profiles now live here, not in a Warble checkout. */
+const PROFILES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "profiles");
+
+const PROFILE_SOURCE = path.join(PROFILES_DIR, "genbi-default");
 const JAFFLE_WREN = path.join(WARBLE_REPO, "examples", "jaffle-wren");
 
 /** A fresh persistent cache each call, so its slot is the durable home for the returned artifacts. */
@@ -64,16 +68,19 @@ describe.skipIf(!canRun)("compileProfile against the real warble binary + genbi-
 
   it("returns the cached artifact on a second call with an unchanged profile/context and never re-invokes warble", async () => {
     const cache: CompileCache = await freshFsCache();
-    // Supplying `warbleIdentity` explicitly means computing the cache key never needs to resolve
-    // `warbleBin` at all (see `CompileProfileOptions.warbleIdentity`) — the precondition for the
-    // second call below to prove a hit needs no binary, not even to identify it.
-    const warbleIdentity = await getWarbleIdentity(await resolveWarbleBinary());
+    // Supplying `warbleIdentity` and `hubDir` explicitly means computing the cache key never needs
+    // to resolve `warbleBin` at all (see `CompileProfileOptions.warbleIdentity`) — the precondition
+    // for the second call below to prove a hit needs no binary, not even to identify it.
+    const resolvedBin = await resolveWarbleBinary();
+    const warbleIdentity = await getWarbleIdentity(resolvedBin);
+    const hubDir = resolveHubDir(resolvedBin);
     const options = {
       profileSource: PROFILE_SOURCE,
       userProject: JAFFLE_WREN,
       mode: "agnostic" as const,
       cache,
       warbleIdentity,
+      ...(hubDir !== undefined ? { hubDir } : {}),
     };
 
     const first = await compileProfile(options);

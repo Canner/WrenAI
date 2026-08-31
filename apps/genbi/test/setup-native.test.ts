@@ -8,7 +8,7 @@ import { SetupCommandDeniedError, SetupExecCwdScopeError, SetupExecutionInputErr
 import { createSetupExecutionTool } from "../harness/tools/setup-native.js";
 
 /**
- * `setup_execution`'s denylist/scope enforcement (item C, Mode A / setup):
+ * `setup_execution`'s denylist/scope enforcement (item C, in-process / setup):
  * per test/permission-enforcement.test.ts's own established convention, these
  * call `createSetupExecutionTool(...).execute!()` directly rather than
  * through a full `executeAgent` tool loop, because the AI SDK swallows a

@@ -1,5 +1,5 @@
 import { deriveRealizationLabel } from './realization';
-import type { AgentProfileRow, Component, ConnectionStatus, HarnessPurpose, HarnessView, ProfileInfo, RuntimeInfo } from './types';
+import type { AgentProfileRow, Component, ConnectionStatus, HarnessPurpose, HarnessPurposeInfo, HarnessView, ProfileInfo, RuntimeInfo } from './types';
 
 /**
  * Fixture data for the Harness page. Mirrors the shape and vocabulary of the
@@ -384,15 +384,27 @@ function fixtureView(
   components: Component[],
   connection: ConnectionStatus,
 ): HarnessView {
+  const purposeInfo: HarnessPurposeInfo = purpose === 'setup'
+    ? {
+        purpose,
+        profile: 'genbi-setup',
+        scopeKind: 'bootstrap',
+        executionKind: 'setup_runner',
+        target: 'claude-agent-sdk:setup',
+        targetLabel: 'Claude Setup runner',
+        available: true,
+      }
+    : {
+        purpose,
+        profile: purpose === 'analysis' ? 'genbi-default' : 'genbi-enrich-context',
+        scopeKind: 'bound_project',
+        executionKind: 'native_session',
+        target: 'claude-code:interactive',
+        targetLabel: 'Claude CLI',
+        available: true,
+      };
   return {
-    purpose: {
-      purpose,
-      profile: purpose === 'setup' ? 'genbi-setup' : purpose === 'analysis' ? 'genbi-default' : 'genbi-enrich-context',
-      scopeKind: purpose === 'setup' ? 'bootstrap' : 'bound_project',
-      target: 'claude-code:interactive',
-      targetLabel: 'Claude CLI',
-      available: true,
-    },
+    purpose: purposeInfo,
     profile,
     runtime: fixtureRuntime,
     connection,

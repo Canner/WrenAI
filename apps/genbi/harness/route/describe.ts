@@ -9,7 +9,7 @@ import { resolveCodexLocalCli } from "./codex-local-cli.js";
 import { describeCodexAskManifest, describeCodexBootstrapManifest, describeCodexEnrichmentManifest, type CodexManifestModels, type CodexManifestPurpose } from "./codex-local-manifest.js";
 
 /**
- * The subset of `RouteOptions`/`ModeAOptions` needed to describe how a
+ * The subset of `RouteOptions`/`InProcessOptions` needed to describe how a
  * profile is CURRENTLY realized. `authChoice` is required (not optional)
  * because it's the discriminator `describeBundle` branches on — see below —
  * unlike `question`/`onEvent`/model-routing options, which don't affect what
@@ -48,18 +48,18 @@ export type DescribeBundleOptions = BoundDescribeBundleOptions | BootstrapDescri
  * == what `route()` really dispatches to. The IR itself stays target-neutral
  * either way; only the DISPLAY artifact this function loads differs:
  *
- * - `authChoice.mode === "subscription"` (Mode B): compiles IR only
+ * - `authChoice.mode === "subscription"` (dispatched): compiles IR only
  *   (`mode: "native"`, reusing `compileProfile`'s cache) — no vercel bundle
  *   is produced on this path at all — then sources the display from the
  *   claude-agent-sdk dispatcher's OWN `manifest` subcommand, which reads
  *   that same IR and emits a structurally-identical-to-the-vercel-bundle
  *   JSON (`target: "claude-agent-sdk:local"`) to stdout. This is genuinely
- *   what Mode B runs — `runModeBDefault` (`./mode-b.js`) shells this same
+ *   what dispatched runs — `runDispatchedDefault` (`./dispatched.js`) shells this same
  *   dispatcher's `chat` subcommand against the same IR.
- * - every other `authChoice.mode` (Mode A: api-key/local/gateway): compiles
+ * - every other `authChoice.mode` (in-process: api-key/local/gateway): compiles
  *   to a vercel bundle (`mode: "agnostic"`, `warble dispatch --target
- *   vercel`) — unchanged pre-existing behavior; `runModeADefault`
- *   (`./mode-a.js`) calls this too rather than keeping its own copy.
+ *   vercel`) — unchanged pre-existing behavior; `runInProcessDefault`
+ *   (`./in-process.js`) calls this too rather than keeping its own copy.
  */
 export async function describeBundle(options: DescribeBundleOptions): Promise<Bundle> {
   if (options.authChoice.mode === "subscription") {

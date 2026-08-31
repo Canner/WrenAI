@@ -19,7 +19,7 @@ vi.mock('@/bff/client', () => ({
 import { useHarnessStore } from '../useHarnessStore';
 
 const liveHarness: HarnessView = {
-  purpose: { purpose: 'analysis', profile: 'genbi-default', scopeKind: 'bound_project', target: 'claude-code:interactive', targetLabel: 'Claude CLI', available: true },
+  purpose: { purpose: 'analysis', profile: 'genbi-default', scopeKind: 'bound_project', executionKind: 'native_session', target: 'claude-code:interactive', targetLabel: 'Claude CLI', available: true },
   profile: {
     id: 'genbi-default',
     name: 'Genbi Default',
@@ -158,7 +158,7 @@ describe('Harness page (live mode)', () => {
     });
     const setup: HarnessView = {
       ...liveHarness,
-      purpose: { purpose: 'setup', profile: 'genbi-setup', scopeKind: 'bootstrap', target: 'claude-code:interactive', targetLabel: 'Claude CLI', available: true },
+      purpose: { purpose: 'setup', profile: 'genbi-setup', scopeKind: 'bootstrap', executionKind: 'setup_runner', target: 'claude-agent-sdk:setup', targetLabel: 'Claude Setup runner', available: true },
       profile: { ...liveHarness.profile, id: 'genbi-setup', name: 'Genbi Setup', bundleId: 'genbi-setup@vercel:headless' },
       components: [{ ...liveHarness.components[0], id: 'connect_source', name: 'Connect Source', callableAs: 'connect_source' }],
       agentProfiles: [{ ...liveHarness.agentProfiles[0], name: 'Genbi Setup' }],
@@ -170,6 +170,10 @@ describe('Harness page (live mode)', () => {
 
     expect(await screen.findByText('Connect Source')).toBeInTheDocument();
     expect(screen.getAllByText('genbi-setup')).not.toHaveLength(0);
+    const setupPanel = screen.getByText('Execution path').closest('.ant-card') as HTMLElement;
+    expect(setupPanel).toHaveTextContent('Setup runner');
+    expect(setupPanel).toHaveTextContent('Claude Setup runner');
+    expect(setupPanel).not.toHaveTextContent('Native session target');
     expect(screen.queryByText('Answer Query')).not.toBeInTheDocument();
     resolveAnalysis(liveHarness);
     await Promise.resolve();
@@ -180,7 +184,7 @@ describe('Harness page (live mode)', () => {
   it('loads the context-enrichment purpose as its own profile', async () => {
     const context: HarnessView = {
       ...liveHarness,
-      purpose: { purpose: 'context_enrichment', profile: 'genbi-enrich-context', scopeKind: 'bound_project', target: 'claude-code:interactive', targetLabel: 'Claude CLI', available: true },
+      purpose: { purpose: 'context_enrichment', profile: 'genbi-enrich-context', scopeKind: 'bound_project', executionKind: 'native_session', target: 'claude-code:interactive', targetLabel: 'Claude CLI', available: true },
       profile: { ...liveHarness.profile, id: 'genbi-enrich-context', name: 'Genbi Enrich Context', bundleId: 'genbi-enrich-context@vercel:headless' },
       components: [{ ...liveHarness.components[0], id: 'draft_enrichment', name: 'Draft Enrichment', callableAs: 'draft_enrichment' }],
       agentProfiles: [{ ...liveHarness.agentProfiles[0], name: 'Genbi Enrich Context' }],

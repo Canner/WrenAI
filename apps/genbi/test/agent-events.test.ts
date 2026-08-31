@@ -14,7 +14,7 @@ import { executeAgent } from "../harness/loop/index.js";
 import type { ExecuteAgentContext } from "../harness/loop/index.js";
 import { createDefaultProviderRegistry, MOCK_ADAPTER_ID } from "../harness/providers/index.js";
 import type { TierBinding } from "../harness/providers/index.js";
-import { runModeBDefault } from "../harness/route/index.js";
+import { runDispatchedDefault } from "../harness/route/index.js";
 import { runAgent } from "../harness/session/index.js";
 import type { RunAgentContext } from "../harness/session/index.js";
 import { WRITE_ARTIFACT_TOOL_NAME } from "../harness/tools/index.js";
@@ -415,7 +415,7 @@ describe("runAgent: FLOOR StepTrace", () => {
   });
 });
 
-describe("mode-parity: Mode A vs Mode B emit the same shape for the kinds both can drive hermetically", () => {
+describe("mode-parity: in-process vs dispatched emit the same shape for the kinds both can drive hermetically", () => {
   it("run.start/run.finish/error share the same field set across modes, differing only in mode/status/content", async () => {
     const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
     const binding = buildAnswerQueryBinding([
@@ -423,49 +423,49 @@ describe("mode-parity: Mode A vs Mode B emit the same shape for the kinds both c
       textResult(VERIFIED_QUERY_RESULT_TEXT),
     ]);
 
-    const modeAEvents: AgentEvent[] = [];
-    await runAgent(bundle, "answer_query", "who is our top customer?", buildRunAgentContext(binding, (e) => modeAEvents.push(e)));
+    const inProcessEvents: AgentEvent[] = [];
+    await runAgent(bundle, "answer_query", "who is our top customer?", buildRunAgentContext(binding, (e) => inProcessEvents.push(e)));
 
-    // Mode B has no mock adapter seam — it shells a real CLI, so its *success*
+    // Dispatched has no mock adapter seam — it shells a real CLI, so its *success*
     // path can't be driven hermetically here (same limitation documented in
     // test/parity-contract.test.ts). Its error path, though, still exercises
     // the identical run.start -> error -> run.finish sequence through the
-    // same createAgentEventEmitter seam Mode A uses, via a nonexistent
+    // same createAgentEventEmitter seam in-process uses, via a nonexistent
     // profileSource that fails fast inside compileProfile's first line
     // (hashDirectory) — see harness/compile/pipeline.ts.
-    const modeBEvents: AgentEvent[] = [];
+    const dispatchedEvents: AgentEvent[] = [];
     await expect(
-      runModeBDefault({
+      runDispatchedDefault({
         authChoice: { mode: "subscription", provider: "claude" },
         profileSource: "/nonexistent/profile",
         userProject: "/nonexistent/project",
         question: "who is our top customer?",
         deployment: "personal",
-        onEvent: (e) => modeBEvents.push(e),
+        onEvent: (e) => dispatchedEvents.push(e),
       }),
     ).rejects.toThrow();
 
-    const modeARunStart = modeAEvents.find((e) => e.kind === "run.start")!;
-    const modeBRunStart = modeBEvents.find((e) => e.kind === "run.start")!;
-    expect(Object.keys(modeARunStart).sort()).toEqual(Object.keys(modeBRunStart).sort());
-    expect(modeARunStart).toMatchObject({ kind: "run.start", mode: "A" });
-    expect(modeBRunStart).toMatchObject({ kind: "run.start", mode: "B" });
+    const inProcessRunStart = inProcessEvents.find((e) => e.kind === "run.start")!;
+    const dispatchedRunStart = dispatchedEvents.find((e) => e.kind === "run.start")!;
+    expect(Object.keys(inProcessRunStart).sort()).toEqual(Object.keys(dispatchedRunStart).sort());
+    expect(inProcessRunStart).toMatchObject({ kind: "run.start", mode: "A" });
+    expect(dispatchedRunStart).toMatchObject({ kind: "run.start", mode: "B" });
 
-    const modeARunFinish = modeAEvents[modeAEvents.length - 1]!;
-    const modeBRunFinish = modeBEvents[modeBEvents.length - 1]!;
-    expect(modeARunFinish.kind).toBe("run.finish");
-    expect(modeBRunFinish.kind).toBe("run.finish");
-    expect(Object.keys(modeARunFinish).sort()).toEqual(Object.keys(modeBRunFinish).sort());
+    const inProcessRunFinish = inProcessEvents[inProcessEvents.length - 1]!;
+    const dispatchedRunFinish = dispatchedEvents[dispatchedEvents.length - 1]!;
+    expect(inProcessRunFinish.kind).toBe("run.finish");
+    expect(dispatchedRunFinish.kind).toBe("run.finish");
+    expect(Object.keys(inProcessRunFinish).sort()).toEqual(Object.keys(dispatchedRunFinish).sort());
 
-    const modeBError = modeBEvents.find((e) => e.kind === "error")!;
-    expect(modeBError).toMatchObject({ kind: "error" });
-    expect(typeof (modeBError as { message: string }).message).toBe("string");
+    const dispatchedError = dispatchedEvents.find((e) => e.kind === "error")!;
+    expect(dispatchedError).toMatchObject({ kind: "error" });
+    expect(typeof (dispatchedError as { message: string }).message).toBe("string");
 
-    // Documented gap, not a parity violation: Mode B is a single-shot
+    // Documented gap, not a parity violation: dispatched is a single-shot
     // subprocess shell-out with no live visibility into its own internals —
     // it never emits step.*/tool.*/artifact granularity (see
-    // harness/route/mode-b.ts's doc comment).
-    expect(modeBEvents.some((e) => e.kind === "step.start" || e.kind === "tool.call" || e.kind === "artifact")).toBe(false);
+    // harness/route/dispatched.ts's doc comment).
+    expect(dispatchedEvents.some((e) => e.kind === "step.start" || e.kind === "tool.call" || e.kind === "artifact")).toBe(false);
   });
 });
 
@@ -496,8 +496,8 @@ describe("serializeAgentEvent / parseAgentEvent (SSE wire format round-trip)", (
       { kind: "step.finish", runId: "r", seq: 3, stepId: "s1", name: "s1", status: "ok" },
       { kind: "tool.call", runId: "r", seq: 4, stepId: "s1", callId: "c1", tool: "query", depth: 0, status: "running" },
       { kind: "tool.result", runId: "r", seq: 5, stepId: "s1", callId: "c1", tool: "query", status: "success" },
-      // `token` is defined in the contract's union but neither Mode A
-      // (non-streaming generateText/ToolLoopAgent turns) nor Mode B (reads
+      // `token` is defined in the contract's union but neither in-process
+      // (non-streaming generateText/ToolLoopAgent turns) nor dispatched (reads
       // only the dispatcher's final stdout) emits it in production today —
       // a documented, type-only gap. Exercised here purely for SSE
       // round-trip coverage.

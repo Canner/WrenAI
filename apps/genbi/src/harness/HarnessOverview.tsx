@@ -28,7 +28,10 @@ const DISPATCHER_LABELS: Record<RuntimeDispatcherKind, string> = {
  */
 export function HarnessOverview({ harness }: HarnessOverviewProps) {
   const { purpose, profile, runtime, connection, components, agentProfiles, nativeSessions } = harness;
-  const nativeSessionTarget = purpose.targetLabel ?? t('harness.targetNotConfigured');
+  const executionTarget = purpose.targetLabel ?? t('harness.targetNotConfigured');
+  const executionTargetLabel = purpose.executionKind === 'setup_runner'
+    ? t('harness.setupRunnerTarget')
+    : t('harness.nativeSessionTarget');
   const readiness = purpose.available ? t('harness.ready') : t('harness.unavailable');
 
   return (
@@ -60,8 +63,8 @@ export function HarnessOverview({ harness }: HarnessOverviewProps) {
             <strong>{profile.dispatchTarget}</strong>
           </div>
           <div>
-            <Typography.Text type="secondary">{t('harness.nativeSessionTarget')}</Typography.Text>
-            <strong>{nativeSessionTarget}</strong>
+            <Typography.Text type="secondary">{executionTargetLabel}</Typography.Text>
+            <strong>{executionTarget}</strong>
           </div>
           <div>
             <Typography.Text type="secondary">{t('harness.readiness')}</Typography.Text>

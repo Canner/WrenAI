@@ -1,0 +1,18 @@
+# genbi-setup — the agentic onboarding profile (Phase 1 of the setup flow). Connects a NEW data
+# source and builds its semantic layer, where genbi-default's components all assume a wren project
+# already exists. Both components are deliberately skill-realized with outcome.kind: none (NOT
+# constitutive/gated-tool) -- the gated-apply lifecycle requires human_approval, which resolves
+# `fail` on a headless target. Onboarding side effects instead run through guarded Bash (`wren`,
+# connector CLIs) and scoped Write, under the `setup_execution` guardrail -- the 5th enforcement
+# point, name-keyed like `read_only_execution` / `artifact_write` / `context_write_authz`.
+#
+# Bound to a RAW context (see context/binding.yml) since no wren project exists yet at connect time --
+# there is no MDL diff to gate here, only onboarding actions.
+profile: genbi-setup
+
+context:
+  project: ./context/binding.yml
+
+components:
+  - use: connect_source
+  - use: build_context

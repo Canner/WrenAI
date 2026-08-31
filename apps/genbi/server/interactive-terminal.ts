@@ -28,6 +28,8 @@ export interface InteractiveLaunchSpec {
   readonly cwd: string;
   readonly artifact_root: string;
   readonly handoff_path: string;
+  /** Host-attested absolute executable; never read from the producer file. */
+  readonly hostExecutable?: string;
   /** Present only for native Setup after the BFF revalidates its sealed root. */
   readonly bootstrap_root?: string;
 }
@@ -41,7 +43,7 @@ export interface PtyProcess {
 }
 
 export interface PtyFactory {
-  spawn(file: "claude" | "codex", args: readonly string[], options: { cwd: string; cols: number; rows: number; env?: NodeJS.ProcessEnv }): PtyProcess;
+  spawn(file: string, args: readonly string[], options: { cwd: string; cols: number; rows: number; env?: NodeJS.ProcessEnv }): PtyProcess;
 }
 
 /**
@@ -143,9 +145,10 @@ export function unavailableInteractiveReadiness(reason: string): Record<Interact
 }
 
 /** Clipboard-only text. It is never passed to a shell or subprocess. */
-export function launchFallbackCommand(spec: Pick<InteractiveLaunchSpec, "cwd" | "executable" | "argv">): string {
+export function launchFallbackCommand(spec: Pick<InteractiveLaunchSpec, "cwd" | "executable" | "argv" | "hostExecutable">): string {
   const quote = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`;
-  return `cd -- ${quote(spec.cwd)} && ${spec.executable}${spec.argv.map((arg) => ` ${quote(arg)}`).join("")}`;
+  const executable = spec.hostExecutable ? quote(spec.hostExecutable) : spec.executable;
+  return `cd -- ${quote(spec.cwd)} && ${executable}${spec.argv.map((arg) => ` ${quote(arg)}`).join("")}`;
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -288,7 +291,7 @@ export class InteractiveTerminalManager {
     env?: NodeJS.ProcessEnv,
     leasePolicy: InteractiveTerminalLeasePolicy = LEGACY_INTERACTIVE_TERMINAL_LEASES,
   ): InteractiveTerminalSession {
-    const process = this.pty.spawn(spec.executable, spec.argv, {
+    const process = this.pty.spawn(spec.hostExecutable ?? spec.executable, spec.argv, {
       cwd: spec.cwd,
       cols: 100,
       rows: 30,

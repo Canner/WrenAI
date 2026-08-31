@@ -32,7 +32,7 @@ Both wrappers select a cassette using the same deterministic rule, in `cassette-
 key = "<subcommand>__<component>__<scenario>"
 ```
 
-- `subcommand` = `argv[0]` (`"chat"` for Mode B, `"dispatch"` for Codex) — a fixed literal per
+- `subcommand` = `argv[0]` (`"chat"` for dispatched, `"dispatch"` for Codex) — a fixed literal per
   back-end, never a path.
 - `component` = the value following `--component` in argv (e.g. `connect_source`,
   `build_context`, or an Ask agentId) — a stable identifier the harness itself controls.
@@ -94,7 +94,7 @@ real HTTP, and reports what happened. Env overrides: `WREN_HARNESS_RUN_PORT`,
 `run-harness.mjs` gets the *expected* "missing cassette" outcome (replay wrapper exits 66) and
 reports that as the expected state, not a bug — see the script's own doc comment. What that run
 still proves without a cassette: the BFF boots in bootstrap mode, `POST /api/setup/connect`
-dispatches a real turn through the real `ModeBSetupRunner` → a real spawn of whatever
+dispatches a real turn through the real `DispatchedSetupRunner` → a real spawn of whatever
 `WREN_HARNESS_AGENT_SDK_BIN` names, and the SSE stream reports the resulting failure instead of
 hanging. What it does **not** prove without a real recording: that real dispatcher bytes correctly
 drive `server/fold.ts` and the setup terminal gate to an `ok` outcome for a genuine connect/build
@@ -106,7 +106,7 @@ for this packet.
 Neither wrapper validates that a cassette's lines still match the dispatcher's current protocol —
 `replay-wrapper.mjs` just re-emits bytes, it never parses them. Staleness surfaces for free,
 downstream, in the real code this harness exercises: `harness/route/chat-event-mapper.ts`'s event
-parser (Mode B) / the Codex event mapper drop any line that doesn't structurally match their
+parser (dispatched) / the Codex event mapper drop any line that doesn't structurally match their
 current vocabulary — silently for one malformed line, but visibly (a stalled/errored turn, an
 empty work log, `parseSetupTerminal` never reaching `ok`) if a whole cassette has gone stale
 against a changed protocol. A stale cassette cannot produce a false "ok": the real parser it flows

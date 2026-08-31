@@ -1,13 +1,16 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { resolveWarbleBinary } from "../harness/index.js";
 import { collectIrTierNames, compileUnboundProfileTierNames } from "../server/runtime-binding.js";
-import { WARBLE_REPO } from "./warble-checkout.js";
 
-const DEFAULT_PROFILE = path.join(WARBLE_REPO, "genbi-default");
-const SETUP_IR = path.join(WARBLE_REPO, "genbi-setup", "ir.golden.json");
+/** This package's own `profiles/` tree — the GenBI profiles now live here, not in a Warble checkout. */
+const PROFILES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "profiles");
+
+const DEFAULT_PROFILE = path.join(PROFILES_DIR, "genbi-default");
+const SETUP_IR = path.join(PROFILES_DIR, "genbi-setup", "ir.golden.json");
 
 async function isWarbleAvailable(): Promise<boolean> {
   try {

@@ -1,0 +1,188 @@
+{
+  "components": [
+    {
+      "binds": {
+        "expected_cadence": "48h",
+        "model": "orders"
+      },
+      "borrowed_actions": [
+        "notify_slack",
+        "open_ticket"
+      ],
+      "context_binding": {
+        "binding_mode": "pinned",
+        "project": "../../../../examples/v5-jaffle"
+      },
+      "context_precondition": [
+        {
+          "args": {
+            "model": "orders"
+          },
+          "predicate": "model_has_timestamp"
+        }
+      ],
+      "context_requirements": [
+        "a model with a load/event timestamp column (DATE / TIMESTAMP)",
+        "an expected freshness cadence (from the MDL or the expected_cadence param)"
+      ],
+      "effect": {
+        "outcome": {
+          "emits": [
+            "freshness_breach"
+          ],
+          "kind": "assertion",
+          "verdict_type": "freshness_verdict"
+        },
+        "render_blocks": [
+          {
+            "fields": {},
+            "type": "status"
+          }
+        ]
+      },
+      "eval": {
+        "metrics": [
+          "detection_accuracy",
+          "severity_calibration"
+        ],
+        "template_ref": "eval/"
+      },
+      "eval_ref": "monitor_freshness.eval",
+      "guardrails": [
+        {
+          "locked": true,
+          "name": "read_only_execution"
+        },
+        {
+          "locked": false,
+          "name": "alert_routing"
+        }
+      ],
+      "id": "monitor_freshness",
+      "llm_calls": [
+        {
+          "conditional": true,
+          "consumes": [
+            "freshness_reading"
+          ],
+          "name": "assess_severity",
+          "produces": "severity_verdict",
+          "prompt": "You are the `assess_severity` step of the `monitor_freshness` assertion, bound to the\n`v5-jaffle` wren project.\n\nYou run ONLY when the deterministic freshness assert has already decided the data is **stale** —\ni.e. `max(<timestamp>)` on the monitored model is older than the expected cadence. The fresh-vs-stale\ndecision is not yours; it was a SQL comparison. You never re-run it, and when the data is fresh this\nstep does not run at all.\n\nYour one job: given the `freshness_reading` (the observed newest timestamp, the observed lag, and the\nexpected cadence), classify how bad the breach is:\n\n- `warn` — modestly overdue (roughly within ~2× the cadence), no compounding signal. The pipeline is\n  probably just late.\n- `critical` — badly overdue (well beyond ~2× the cadence), or the lag is still growing across recent\n  readings, or this model feeds known-critical downstreams. Someone should be paged.\n\nJudge from the lag magnitude relative to the cadence and any history in the reading; do not invent\nnumbers you were not given. Keep it to a reproducible, conservative call — when genuinely on the\nboundary, prefer `warn` and say why.\n\nProduce `severity_verdict` as a compact judgement: the chosen `severity` (`warn` | `critical`) and a\none-line rationale grounded in the lag vs cadence. This feeds the `status` block's `severity` field\nin the verdict envelope; it does not change the fresh/stale verdict itself.",
+          "tier": "cheap",
+          "when": {
+            "guard": "on_flag",
+            "target": "freshness_reading.stale"
+          }
+        }
+      ],
+      "params": [
+        {
+          "bind": "required",
+          "name": "model"
+        },
+        {
+          "bind": "optional",
+          "default": "24h",
+          "name": "expected_cadence"
+        },
+        {
+          "name": "connection",
+          "source": "runtime-injected"
+        },
+        {
+          "name": "model_binding",
+          "source": "runtime-injected"
+        }
+      ],
+      "precondition_result": {
+        "checks": [
+          {
+            "outcome": "pass",
+            "predicate": "model_has_timestamp"
+          }
+        ],
+        "status": "pass"
+      },
+      "prompt_fragment": "## assess_severity\n\nYou are the `assess_severity` step of the `monitor_freshness` assertion, bound to the\n`v5-jaffle` wren project.\n\nYou run ONLY when the deterministic freshness assert has already decided the data is **stale** —\ni.e. `max(<timestamp>)` on the monitored model is older than the expected cadence. The fresh-vs-stale\ndecision is not yours; it was a SQL comparison. You never re-run it, and when the data is fresh this\nstep does not run at all.\n\nYour one job: given the `freshness_reading` (the observed newest timestamp, the observed lag, and the\nexpected cadence), classify how bad the breach is:\n\n- `warn` — modestly overdue (roughly within ~2× the cadence), no compounding signal. The pipeline is\n  probably just late.\n- `critical` — badly overdue (well beyond ~2× the cadence), or the lag is still growing across recent\n  readings, or this model feeds known-critical downstreams. Someone should be paged.\n\nJudge from the lag magnitude relative to the cadence and any history in the reading; do not invent\nnumbers you were not given. Keep it to a reproducible, conservative call — when genuinely on the\nboundary, prefer `warn` and say why.\n\nProduce `severity_verdict` as a compact judgement: the chosen `severity` (`warn` | `critical`) and a\none-line rationale grounded in the lag vs cadence. This feeds the `status` block's `severity` field\nin the verdict envelope; it does not change the fresh/stale verdict itself.",
+      "realization_kind": "tool",
+      "required_capabilities": [
+        "scheduler",
+        "sql_execution:read_only",
+        "notify_channel",
+        "llm:cheap"
+      ],
+      "trigger": {
+        "kind": "scheduled"
+      },
+      "type": "assertive",
+      "verb": "monitor_freshness"
+    }
+  ],
+  "config": {},
+  "context_binding": {
+    "binding_mode": "pinned",
+    "project": "../../../../examples/v5-jaffle",
+    "resolved": {
+      "dimensions": [
+        {
+          "name": "customer_id",
+          "temporal": false
+        },
+        {
+          "name": "name",
+          "temporal": false
+        },
+        {
+          "name": "order_date",
+          "temporal": true
+        }
+      ],
+      "lineage": {
+        "consumers": {
+          "dashboards": 0,
+          "queries": 1
+        },
+        "edges": 7,
+        "nodes": 8,
+        "resolvable": true
+      },
+      "metrics": [
+        {
+          "additivity": "additive",
+          "declared": true,
+          "name": "total_revenue"
+        },
+        {
+          "additivity": "additive",
+          "declared": true,
+          "name": "order_count"
+        },
+        {
+          "declared": false,
+          "name": "id"
+        },
+        {
+          "declared": false,
+          "name": "id"
+        },
+        {
+          "declared": false,
+          "name": "customer_id"
+        },
+        {
+          "declared": false,
+          "name": "amount"
+        }
+      ],
+      "models": [
+        "customers",
+        "orders"
+      ],
+      "time_dimensions": [
+        "order_date"
+      ]
+    }
+  },
+  "profile": "genbi-monitor",
+  "warble_ir_version": "0.6"
+}

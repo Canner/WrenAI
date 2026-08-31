@@ -17,7 +17,7 @@ const USAGE = `Usage: wren-harness <question> --project <dir> [options]
 
 Options:
   --project <dir>         User's wren project directory (required)
-  --profile <dir>         Warble profile source directory (default: sibling repos/warble/genbi-default)
+  --profile <dir>         Warble profile source directory (default: this package's profiles/genbi-default)
   --mode <mode>           subscription | api-key | local | gateway (default: see policy below)
   --provider <name>       subscription mode: claude | codex (default: claude)
   --adapter <name>        api-key mode: provider registry adapter id (e.g. anthropic)
@@ -30,18 +30,18 @@ Options:
   --deployment <ctx>      personal | hosted (default: personal). "hosted" means multi-tenant,
                           shared, or always-on-server use; subscription mode is rejected when
                           --deployment hosted (use api-key or gateway instead).
-  --tier-adapter <spec>   Hybrid mode, Mode A only (api-key/local/gateway): repeatable
+  --tier-adapter <spec>   Hybrid mode, in-process only (api-key/local/gateway): repeatable
                           "<tier>=<mode>[:<field>=<value>,...]" entry binding one bundle tier to
                           its own adapter, e.g. --tier-adapter cheap=local:endpoint=http://localhost:11434/v1
                           --tier-adapter strong=api-key:adapter=anthropic,model=claude-opus-4-6
                           Every tier the compiled agent uses must be bound exactly once (loud-fail
                           on missing/unknown tier names); when given, replaces the uniform
                           --mode/--adapter/--model binding for tier resolution.
-  --models-config <path>  Hybrid mode, Mode B only (subscription): path to warble-agent-sdk's own
+  --models-config <path>  Hybrid mode, dispatched only (subscription): path to warble-agent-sdk's own
                           per-tier YAML config, forwarded verbatim as --models-config <path> to
                           "warble-agent-sdk chat". Known limitation: warble's render stage still
                           wall-hits on non-"render: none" components under a non-Anthropic tier.
-  --chat-timeout-ms <n>   Mode B only (subscription): overrides the default 10-minute hang guard
+  --chat-timeout-ms <n>   dispatched only (subscription): overrides the default 10-minute hang guard
                           on a "warble-agent-sdk chat" invocation. Raise this for a legitimately
                           slower cold-start turn (e.g. right after onboarding a project) rather
                           than the turn being killed and reported as a timeout.
@@ -133,7 +133,7 @@ async function main(): Promise<void> {
     process.stderr.write(`warning: ${warning}\n`);
   }
 
-  // Hybrid mode: --tier-adapter (Mode A) and --models-config (Mode B) are each
+  // Hybrid mode: --tier-adapter (in-process) and --models-config (dispatched) are each
   // meaningful for exactly one back-end; route() itself loud-fails (a plain
   // Error, caught like any other error below) if the wrong one is supplied
   // for the resolved authChoice.mode, so no separate CLI-level guard is

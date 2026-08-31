@@ -1,5 +1,5 @@
 /**
- * Mode B's own mapping FROM warble's `chat --stream-json` NDJSON stream TO this harness's
+ * Dispatched's own mapping FROM warble's `chat --stream-json` NDJSON stream TO this harness's
  * mode-agnostic `AgentEvent` union (`harness/events/types.ts`). Two things live here:
  *
  *  - `WarbleChatEventLike` — a LOCAL structural mirror of warble's own `WarbleChatEvent` vocabulary
@@ -14,13 +14,13 @@
  *    process/stream involved.
  *
  * Step/tool id mapping: warble's own mapper emits ONE enclosing `step_start` per turn (id = the
- * dispatched component's verb) and groups every `tool_call`/`tool_result` under it — see that
+ * Dispatched component's verb) and groups every `tool_call`/`tool_result` under it — see that
  * module's doc comment for why. This function carries that same single `stepId` forward onto
  * every `tool.call`/`tool.result` it produces (`ToolCallEvent`/`ToolResultEvent` both require a
  * `stepId`), tracked in `state.currentStepId` as `step_start` events arrive.
  *
  * `answer` is deliberately mapped to `undefined` — the turn's final answer text is handled by the
- * caller (`runModeBDefault`'s existing `answer`/`run.finish` emission), not duplicated here. `session`
+ * caller (`runDispatchedDefault`'s existing `answer`/`run.finish` emission), not duplicated here. `session`
  * is likewise mapped to `undefined` for the same reason: it is session-resume metadata (the SDK's
  * `session_id`, forwarded on both a successful AND a failed/`error_max_turns` turn), not a work-log
  * event, and `spawnChat` intercepts it directly rather than routing it through this mapper.
@@ -200,7 +200,7 @@ export function mapChatEventToAgentEvent(
         kind: "step.start",
         stepId: raw.id,
         name: raw.name,
-        // Mode B's NDJSON stream carries no per-step tier info (warble doesn't expose it in
+        // Dispatched's NDJSON stream carries no per-step tier info (warble doesn't expose it in
         // `WarbleChatEvent`); `LiveWorkLog.ingest` never reads `tier` when folding to `ToolStep`,
         // so this placeholder has no observable effect on the UI's work log.
         tier: "unknown",

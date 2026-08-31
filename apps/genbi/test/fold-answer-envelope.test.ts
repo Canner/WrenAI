@@ -5,7 +5,7 @@ import type { RouteResult } from "../harness/index.js";
 
 /**
  * Root cause: `toAnswerOrRefusalEvent` unconditionally emitted
- * `form: "text"`/`verified: false` for Mode B (`backend: "agent-sdk"`)
+ * `form: "text"`/`verified: false` for dispatched (`backend: "agent-sdk"`)
  * results, never attempting to recover the render envelope the dispatched
  * agent actually produced in its `finalText`. These tests cover the fix:
  * extracting that envelope (via `extractEnvelopeFromText`) into `form:
@@ -22,7 +22,7 @@ function codexResult(finalText: string): RouteResult {
   return { backend: "codex-local", warnings: [], finalText };
 }
 
-describe("toAnswerOrRefusalEvent (Mode B / agent-sdk backend): recovers a render envelope from finalText", () => {
+describe("toAnswerOrRefusalEvent (dispatched / agent-sdk backend): recovers a render envelope from finalText", () => {
   it("extracts a fenced ```json {blocks} envelope into form: 'rich', with verified from the envelope itself", () => {
     const envelope = {
       blocks: [
@@ -182,10 +182,10 @@ describe("toAnswerOrRefusalEvent (Mode B / agent-sdk backend): recovers a render
     expect(event.answer).toEqual({ form: "text", text: finalText, verified: false, dataAnswer: false });
   });
 
-  // Mode B's `answer_query`/`generate_dashboard` components are only granted the SDK's built-in
+  // Dispatched's `answer_query`/`generate_dashboard` components are only granted the SDK's built-in
   // `Bash` tool and run every data-access query through the `wren` CLI's read-path, always shaped
   // `wren -q -o json -s '<SQL>'` (see the warble hub components' generate_sql.md/repair_sql.md/
-  // compose_layout.md steps) — a real Mode B worklog never carries the native "query"/
+  // compose_layout.md steps) — a real dispatched worklog never carries the native "query"/
   // "build_dashboard" tool-name labels below, only "Bash". These cases exercise that real shape.
 
   it("sets dataAnswer: true on the text fallback when the worklog shows a Bash call that ran a query through the wren CLI", () => {
@@ -228,11 +228,11 @@ describe("toAnswerOrRefusalEvent (Mode B / agent-sdk backend): recovers a render
     expect(event.answer).toEqual({ form: "text", text: finalText, verified: false, dataAnswer: false });
   });
 
-  // `attemptedDataAccess` is a general-purpose helper (also correct for a hypothetical Mode A
-  // caller) — these cover the native-tool-name branch, even though Mode A's own route() never
+  // `attemptedDataAccess` is a general-purpose helper (also correct for a hypothetical in-process
+  // caller) — these cover the native-tool-name branch, even though in-process's own route() never
   // actually falls through to this text-fallback branch itself (it always returns a rich envelope
   // or a refusal).
-  it("sets dataAnswer: true when the worklog shows a Mode A native query/build_dashboard tool-name call", () => {
+  it("sets dataAnswer: true when the worklog shows a in-process native query/build_dashboard tool-name call", () => {
     const finalText = "The query ran but I couldn't render a chart from it.";
     const worklog: ToolStep[] = [{ id: "call-1", label: "query", state: "done", kind: "tool" }];
 

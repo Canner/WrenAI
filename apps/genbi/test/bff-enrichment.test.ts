@@ -7,7 +7,7 @@ import type { AuthChoice } from "../harness/index.js";
 import { createApp } from "../server/app.js";
 import { Store } from "../server/db.js";
 import { hashEnrichmentOperation, resolveEnrichmentBinding, resolveProjectIdentity, type EnrichmentApprovalProvider, type EnrichmentApprovalRequest } from "../server/enrichment.js";
-import { createModeBEnrichmentDraftRunner } from "../server/enrichment-runner.js";
+import { createDispatchedEnrichmentDraftRunner } from "../server/enrichment-runner.js";
 import type { TurnDeps } from "../server/turn.js";
 
 const dirs: string[] = [];
@@ -667,7 +667,7 @@ describe("post-bind enrichment BFF", () => {
 
 describe("draft capability reflects the runner's own live readiness, not just its existence", () => {
   /**
-   * Wires the real `createModeBEnrichmentDraftRunner` (not a bare mock)
+   * Wires the real `createDispatchedEnrichmentDraftRunner` (not a bare mock)
    * against a live, mutable `AuthChoice`, exactly the shape `server/bin.ts`
    * uses in production -- so this exercises the actual seam (route forwards
    * `runner.readiness()` verbatim) rather than re-asserting a hand-rolled
@@ -697,7 +697,7 @@ describe("draft capability reflects the runner's own live readiness, not just it
       store,
       baseRouteOptions: { authChoice: liveAuth, profileSource: "fixture", userProject },
       route: async () => ({ backend: "agent", warnings: [], kind: "answer", envelope: { blocks: [], summary: "ok" }, trace: { steps: [] } }),
-      enrichmentRunner: createModeBEnrichmentDraftRunner({ getAuthChoice: () => liveAuth }),
+      enrichmentRunner: createDispatchedEnrichmentDraftRunner({ getAuthChoice: () => liveAuth }),
       getAuthChoice: () => liveAuth,
       setAuthChoice: (choice) => { liveAuth = choice; },
       getRuntimeTierNames: async () => ["cheap", "strong"],

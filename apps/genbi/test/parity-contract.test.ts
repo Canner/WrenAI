@@ -10,23 +10,23 @@ import { mockWrenServerConfig } from "./mock-mcp-server.js";
 import { readFixture } from "./fixtures.js";
 
 /**
- * Hermetic cross-back-end OUTPUT parity (item B): both Mode A and
- * Mode B are compiled from the *same* profile and must satisfy the *same*
+ * Hermetic cross-back-end OUTPUT parity (item B): both in-process and
+ * Dispatched are compiled from the *same* profile and must satisfy the *same*
  * contract — `answer_query`'s `output_schema` — because `route()` never
  * branches the contract itself, only which executor runs it (see
- * `harness/route/route.ts`). This asserts that hermetically, on Mode A, using
+ * `harness/route/route.ts`). This asserts that hermetically, on in-process, using
  * the mock adapter to script a deterministic golden-shaped final envelope
- * exactly as `test/mode-a.test.ts` does for its own fixtures.
+ * exactly as `test/in-process.test.ts` does for its own fixtures.
  *
  * This closes the "no output-level conformance check" gap: `renderEnvelope`
  * uses `generateText` (not `generateObject`), so `output_schema` has no
  * enforcement unless something calls `collectJsonSchemaErrors` against the
  * result — nothing in the hermetic suite does, until now.
  *
- * Mode B's live output is asserted against the same golden fixture in the
- * opt-in `test/e2e-cross-backend-parity.test.ts` (item D) — Mode B has no
+ * Dispatched's live output is asserted against the same golden fixture in the
+ * opt-in `test/e2e-cross-backend-parity.test.ts` (item D) — dispatched has no
  * mock adapter seam (it shells out to a real CLI), so it cannot be driven
- * hermetically the way Mode A can here.
+ * hermetically the way in-process can here.
  */
 
 const EMPTY_USAGE: LanguageModelV4Usage = {
@@ -65,7 +65,7 @@ function scriptedTurns(turns: LanguageModelV4GenerateResult[]) {
 }
 
 describe("cross-back-end OUTPUT parity — hermetic contract check (item B)", () => {
-  it("Mode A's rendered envelope both satisfies answer_query.output_schema and matchesGolden", async () => {
+  it("in-process's rendered envelope both satisfies answer_query.output_schema and matchesGolden", async () => {
     const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
     const agent = bundle.agents.find((candidate) => candidate.id === "answer_query");
     if (!agent) throw new Error("fixture missing answer_query agent");
@@ -105,7 +105,7 @@ describe("cross-back-end OUTPUT parity — hermetic contract check (item B)", ()
       mcpServers: { sample: mockWrenServerConfig() },
     });
 
-    if (result.backend !== "agent") throw new Error("expected the agent backend (Mode A)");
+    if (result.backend !== "agent") throw new Error("expected the agent backend (in-process)");
     if (result.kind !== "answer") throw new Error("expected an answer result");
     expect(calls).toHaveLength(4);
 

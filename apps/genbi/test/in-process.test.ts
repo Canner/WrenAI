@@ -7,7 +7,7 @@ import { loadBundle } from "../harness/bundle/loader.js";
 import { createLocalExecutionEnv } from "../harness/exec/index.js";
 import type { ExecutionPolicy } from "../harness/exec/index.js";
 import { MOCK_ADAPTER_ID } from "../harness/providers/index.js";
-import { resolveArtifactsDir, runModeADefault } from "../harness/route/index.js";
+import { resolveArtifactsDir, runInProcessDefault } from "../harness/route/index.js";
 import { route } from "../harness/route/index.js";
 import type { AuthChoice } from "../harness/auth/index.js";
 import { createWrenNativeToolRegistry, WREN_QUERY_TOOL_NAME, WrenBinaryNotFoundError, WRITE_ARTIFACT_TOOL_NAME } from "../harness/tools/index.js";
@@ -58,7 +58,7 @@ const UNVERIFIED_QUERY_RESULT_TEXT = JSON.stringify({
 
 /**
  * `buildUniformTierBinding` binds every distinct tier the `answer_query`
- * agent uses (`cheap` and `strong`) to the *same* `AdapterSpec` — Mode A
+ * agent uses (`cheap` and `strong`) to the *same* `AdapterSpec` — in-process
  * targets a single api-key/local model, not a multi-tier setup — so a single
  * scripted mock model must answer every call across both tiers, in order:
  * `resolve_intent` (cheap), the `query` tool call, its finishing text, then
@@ -77,7 +77,7 @@ function scriptedTurns(turns: LanguageModelV4GenerateResult[]) {
   return { calls, doGenerate };
 }
 
-describe("Mode A wiring (route -> runModeADefault -> runAgent)", () => {
+describe("in-process wiring (route -> runInProcessDefault -> runAgent)", () => {
   it("assembles a RunAgentContext from an ApiKeyAuthChoice and returns an AnswerResult", async () => {
     const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
 
@@ -98,7 +98,7 @@ describe("Mode A wiring (route -> runModeADefault -> runAgent)", () => {
       mcpServers: { sample: mockWrenServerConfig() },
     });
 
-    if (result.backend !== "agent") throw new Error("expected the agent backend (Mode A)");
+    if (result.backend !== "agent") throw new Error("expected the agent backend (in-process)");
     expect(result.kind).toBe("answer");
     if (result.kind !== "answer") throw new Error("expected an answer result");
     expect(result.envelope).toEqual({
@@ -137,7 +137,7 @@ describe("Mode A wiring (route -> runModeADefault -> runAgent)", () => {
       mcpServers: { sample: mockWrenServerConfig() },
     });
 
-    if (result.backend !== "agent") throw new Error("expected the agent backend (Mode A)");
+    if (result.backend !== "agent") throw new Error("expected the agent backend (in-process)");
     expect(result.kind).toBe("answer");
     if (result.kind !== "answer") throw new Error("expected an answer result");
     expect(result.envelope.verified).toBe(true);
@@ -155,10 +155,10 @@ describe("Mode A wiring (route -> runModeADefault -> runAgent)", () => {
       },
     };
 
-    // An id that isn't in the fixture bundle: if runModeADefault still used the hardcoded
+    // An id that isn't in the fixture bundle: if runInProcessDefault still used the hardcoded
     // ANSWER_QUERY_AGENT_ID it would find "answer_query" and never reach this error at all.
     await expect(
-      runModeADefault({
+      runInProcessDefault({
         authChoice,
         profileSource: "/unused/profile",
         userProject: "/unused/project",
@@ -180,7 +180,7 @@ describe("Mode A wiring (route -> runModeADefault -> runAgent)", () => {
     process.env["PATH"] = "";
     try {
       await expect(
-        runModeADefault({
+        runInProcessDefault({
           authChoice,
           profileSource: "/unused/profile",
           userProject: "/unused/project",
@@ -197,7 +197,7 @@ describe("Mode A wiring (route -> runModeADefault -> runAgent)", () => {
 });
 
 /**
- * `runModeADefault` used to wire its native-tool `ExecutionEnv` via a bare
+ * `runInProcessDefault` used to wire its native-tool `ExecutionEnv` via a bare
  * `createLocalExecutionEnv()` — no `rootDir` — which defaults to
  * `process.cwd()`. For a live BFF process that's wherever the server process
  * happens to be launched from, so every `write_artifact` call from a
@@ -205,12 +205,12 @@ describe("Mode A wiring (route -> runModeADefault -> runAgent)", () => {
  * output straight into whatever directory started the process. These tests
  * cover the fix's two halves: `resolveArtifactsDir` (the precedence logic) in
  * isolation, and the exact `createWrenNativeToolRegistry` +
- * `createLocalExecutionEnv` wiring `runModeADefault` now builds around it,
+ * `createLocalExecutionEnv` wiring `runInProcessDefault` now builds around it,
  * proving `write_artifact` lands under the resolved artifacts dir — never
  * `process.cwd()` — while `query`'s exec cwd stays pinned to `projectDir`
  * regardless.
  */
-describe("Mode A's native write_artifact scope is never process.cwd()", () => {
+describe("in-process's native write_artifact scope is never process.cwd()", () => {
   const ARTIFACTS_DIR_ENV_VAR = "WREN_HARNESS_ARTIFACTS_DIR";
 
   afterEach(() => {
@@ -236,11 +236,11 @@ describe("Mode A's native write_artifact scope is never process.cwd()", () => {
     });
   });
 
-  describe("the runModeADefault wiring (createWrenNativeToolRegistry over createLocalExecutionEnv({ rootDir: resolveArtifactsDir(...) }))", () => {
+  describe("the runInProcessDefault wiring (createWrenNativeToolRegistry over createLocalExecutionEnv({ rootDir: resolveArtifactsDir(...) }))", () => {
     let artifactsDir: string;
 
     beforeEach(async () => {
-      artifactsDir = await mkdtemp(path.join(tmpdir(), "wren-harness-mode-a-artifacts-"));
+      artifactsDir = await mkdtemp(path.join(tmpdir(), "wren-harness-in-process-artifacts-"));
     });
 
     afterEach(async () => {
@@ -248,7 +248,7 @@ describe("Mode A's native write_artifact scope is never process.cwd()", () => {
     });
 
     it("writes write_artifact's output under the resolved artifacts dir, not process.cwd()", async () => {
-      // Mirrors runModeADefault's own wiring exactly (harness/route/mode-a.ts):
+      // Mirrors runInProcessDefault's own wiring exactly (harness/route/in-process.ts):
       // createLocalExecutionEnv({ rootDir: resolveArtifactsDir(options.outDir) })
       // fed into createWrenNativeToolRegistry alongside a scoped_write policy,
       // as explain_change/generate_dashboard carry.

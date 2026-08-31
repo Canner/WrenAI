@@ -7,7 +7,7 @@ import { createFileSystemCompileCache } from "./cache.js";
 import { composeUserProfile } from "./compose-profile.js";
 import { WarbleCommandFailedError } from "./errors.js";
 import { hashDirectory, hashFiles } from "./fingerprint.js";
-import { resolveWarbleBinary } from "./resolve-binary.js";
+import { resolveHubDir, resolveWarbleBinary } from "./resolve-binary.js";
 import type { CompileCacheKey, CompileProfileOptions, CompileProfileResult, CompileRawProfileOptions } from "./types.js";
 import { getWarbleIdentity } from "./warble-identity.js";
 
@@ -16,7 +16,7 @@ const NATIVE_MODE_PROVIDER_HASH = "native:no-providers";
 
 /**
  * This package's bundled wren capability-provider fragment (`providers/wren.provider.yaml`) — the
- * default `--provider` for Mode A dispatch, matching how `fixtures/genbi-default.native.bundle.json`
+ * default `--provider` for in-process dispatch, matching how `fixtures/genbi-default.native.bundle.json`
  * was produced (see `test/e2e-wren-native.test.ts`'s comment).
  */
 export const DEFAULT_WREN_PROVIDER_PATH = path.resolve(
@@ -41,9 +41,10 @@ const WARBLE_COMMAND_TIMEOUT_MS = 2 * 60 * 1000;
  * `runAgent()` consumes.
  *
  * A cache hit (see below) never *executes* `warble`, but by default DOES need to resolve + read
- * the binary — its content hash is one of the cache-key inputs (see `warbleIdentity` below), so a
- * hit can't be trusted without knowing the current binary's identity. Pass `options.warbleIdentity`
- * explicitly to skip touching the binary at all even on a hit.
+ * the binary — its content hash and the Hub root derived from its location are both cache-key
+ * inputs (see `warbleIdentity` and `hubDir` below), so a hit can't be trusted without knowing which
+ * binary is current and which component library it reads. Pass both `options.warbleIdentity` and
+ * `options.hubDir` explicitly to skip touching the binary at all even on a hit.
  *
  * Deliberately shells via plain `node:child_process` (`execFile`, no shell) rather than this
  * package's `ExecutionEnv` seam (`harness/exec/`): `ExecutionEnv` gates *runtime* native-tool side
@@ -53,12 +54,13 @@ const WARBLE_COMMAND_TIMEOUT_MS = 2 * 60 * 1000;
  * the same no-shell, structured-result `execFile` convention `harness/exec/local.ts` already uses.
  *
  * Results are cached on (profile content hash x user-context fingerprint x mode x resolved
- * provider-fragment content hash x warble binary identity) — see `./cache.js` — so an unchanged
- * profile/context/providers/compiler quadruple returns the previous artifact instead of
- * recompiling. Folding in the provider-fragment hash and warble identity (rather than just
- * profile+context+mode) matters: otherwise a custom `options.providers` and this package's
- * default fragment collide on the same key, and editing a provider fragment or rebuilding
- * `warble` would keep serving a stale artifact forever, since there's no TTL/eviction.
+ * provider-fragment content hash x warble binary identity x resolved Hub root) — see `./cache.js` —
+ * so an unchanged profile/context/providers/compiler/Hub tuple returns the previous artifact
+ * instead of recompiling. Folding in the provider-fragment hash, warble identity and Hub root
+ * (rather than just profile+context+mode) matters: otherwise a custom `options.providers` and this
+ * package's default fragment collide on the same key, and editing a provider fragment, rebuilding
+ * `warble`, or compiling against a different component library would keep serving a stale artifact
+ * forever, since there's no TTL/eviction.
  *
  * The `warble` invocations run inside a temporary scratch directory (the composed profile + raw
  * compiler output). When the cache relocates the artifacts to a durable home outside that scratch
@@ -121,7 +123,14 @@ async function compileProfileSource(
   // it by passing `warbleIdentity` explicitly (see `CompileProfileOptions.warbleIdentity`).
   const warbleIdentity = options.warbleIdentity ?? (await getWarbleIdentity(await ensureWarbleBin()));
 
-  const cacheKey: CompileCacheKey = { profileHash, contextFingerprint, mode: options.mode, providerFragmentHash, warbleIdentity };
+  // Derived from the resolved binary, never configured on its own, so the compiler and the Hub it
+  // reads always come from the same warble (see `resolveHubDir`). That means it shares
+  // `warbleIdentity`'s caveat: without an explicit `options.hubDir` the key can't be computed
+  // without resolving the binary. `undefined` here means no `--hub-dir` is passed at all and
+  // warble's compiled-in default applies — today's behaviour, preserved.
+  const hubDir = options.hubDir ?? resolveHubDir(await ensureWarbleBin());
+
+  const cacheKey: CompileCacheKey = { profileHash, contextFingerprint, mode: options.mode, providerFragmentHash, warbleIdentity, hubDir };
 
   const cached = await cache.get(cacheKey);
   if (cached !== undefined) {
@@ -139,7 +148,13 @@ async function compileProfileSource(
     const compiledProfile = await prepareProfile(workDir);
 
     const irPath = path.join(workDir, "ir.json");
-    await runWarble(warbleBin, ["compile", compiledProfile, "-o", irPath]);
+    // `--hub-dir` reached the compiler in July 2026, well before the IR version this harness
+    // requires, so any binary new enough to satisfy that contract accepts the flag. A binary
+    // older than both was already unsupported — but it used to say so as an IR version
+    // mismatch, and now clap rejects the argument first. The configuration is no more broken
+    // than before; only the message got less helpful, which is worth knowing when one appears.
+    const hubDirArgs = hubDir !== undefined ? ["--hub-dir", hubDir] : [];
+    await runWarble(warbleBin, ["compile", compiledProfile, "-o", irPath, ...hubDirArgs]);
 
     let bundlePath: string | undefined;
     if (options.mode === "agnostic") {
@@ -168,7 +183,7 @@ async function compileProfileSource(
 
 /**
  * Shells a `warble` subcommand (no shell interpolation — `execFile`, argv
- * array only). Exported for `ModeASetupRunner` (`harness/setup/runner.ts`),
+ * array only). Exported for `InProcessSetupRunner` (`harness/setup/runner.ts`),
  * which dispatches the pre-committed `genbi-setup/ir.golden.json` straight to
  * `warble dispatch --target vercel`, bypassing `compileProfile`'s
  * `composeUserProfile` rewrite entirely (there is no user project to bind

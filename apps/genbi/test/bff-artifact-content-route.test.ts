@@ -11,7 +11,7 @@ import type { ArtifactContentDto } from "../server/wire-types.js";
 /**
  * Wires `resolveArtifactContent` (see `test/artifact-content.test.ts`
  * for its own unit coverage) through `GET /api/artifacts/:id/content`: the
- * route resolves each artifact's `location` against the same root Mode A/B
+ * route resolves each artifact's `location` against the same root in-process/B
  * write to, and degrades to `form: "unavailable"` — never a thrown error —
  * for anything it can't honestly serve.
  */
@@ -41,7 +41,7 @@ describe("GET /api/artifacts/:id/content", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns form: 'envelope' for a Mode B artifact whose location holds envelope-shaped JSON", async () => {
+  it("returns form: 'envelope' for a dispatched artifact whose location holds envelope-shaped JSON", async () => {
     const { app, store } = buildApp();
     const session = store.createSession("s");
     const envelope = { blocks: [{ type: "kpi_card", label: "Revenue", value: 42000 }], summary: "ok", verified: true };
@@ -56,7 +56,7 @@ describe("GET /api/artifacts/:id/content", () => {
     expect(await res.json()).toEqual({ form: "envelope", envelope } satisfies ArtifactContentDto);
   });
 
-  it("returns form: 'text' for a Mode A artifact whose location holds non-envelope content", async () => {
+  it("returns form: 'text' for a in-process artifact whose location holds non-envelope content", async () => {
     const { app, store } = buildApp();
     const session = store.createSession("s");
     const location = path.join(outDir, "report.html");
@@ -68,11 +68,11 @@ describe("GET /api/artifacts/:id/content", () => {
     expect(await res.json()).toEqual({ form: "text", text: "<h1>Report</h1>", truncated: false } satisfies ArtifactContentDto);
   });
 
-  it("resolves a relative location against the artifacts root, matching Mode A's write_artifact convention", async () => {
+  it("resolves a relative location against the artifacts root, matching in-process's write_artifact convention", async () => {
     const { app, store } = buildApp();
     const session = store.createSession("s");
     writeFileSync(path.join(outDir, "chart.json"), JSON.stringify({ blocks: [{ type: "chart" }] }), "utf-8");
-    // Mode A's executor persists the raw (possibly relative) path the model
+    // In-process's executor persists the raw (possibly relative) path the model
     // supplied to `write_artifact` — see `harness/loop/executor.ts`.
     const artifact = store.createArtifact({ sessionId: session.id, name: "chart.json", kind: "chart", location: "chart.json", verified: false });
 

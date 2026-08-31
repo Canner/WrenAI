@@ -114,7 +114,12 @@ cd /absolute/path/to/WrenAI/apps/genbi
 WARBLE_ROOT=/absolute/path/to/Warble
 WARBLE_BIN="$WARBLE_ROOT/target/release/warble"
 AGENT_SDK_BIN="$WARBLE_ROOT/dispatcher/claude-agent-sdk/dist/cli.js"
+PROFILES_ROOT="$PWD/profiles"
 ```
+
+The `warble` binary and its dispatchers come from that Warble checkout; the
+GenBI profiles and their committed IRs are this package's own `profiles/` tree,
+which is what the launch gate defaults to and attests under `genbi`.
 
 Run exactly one boot mode. Bootstrap accepts a workspace root where Setup may
 create projects; bound mode accepts an existing Wren project. Build that
@@ -161,10 +166,10 @@ WREN_HARNESS_WARBLE_BIN="$WARBLE_BIN" \
 WREN_HARNESS_AGENT_SDK_BIN="$AGENT_SDK_BIN" \
 WREN_HARNESS_MODE=subscription \
 WREN_HARNESS_PROVIDER=claude \
-WREN_HARNESS_PROFILE="$WARBLE_ROOT/genbi-default" \
-WREN_HARNESS_SETUP_IR="$WARBLE_ROOT/genbi-setup/ir.golden.json" \
-WREN_HARNESS_ENRICH_IR="$WARBLE_ROOT/genbi-enrich-context/ir.golden.json" \
-WREN_HARNESS_ANALYSIS_IR="$WARBLE_ROOT/genbi-default/ir.golden.json" \
+WREN_HARNESS_PROFILE="$PROFILES_ROOT/genbi-default" \
+WREN_HARNESS_SETUP_IR="$PROFILES_ROOT/genbi-setup/ir.golden.json" \
+WREN_HARNESS_ENRICH_IR="$PROFILES_ROOT/genbi-enrich-context/ir.golden.json" \
+WREN_HARNESS_ANALYSIS_IR="$PROFILES_ROOT/genbi-default/ir.golden.json" \
 WREN_HARNESS_WORKSPACE_ROOT=/absolute/path/to/fresh-bootstrap-workspace \
 WREN_BFF_DB_PATH=/absolute/path/to/private-bff-state/bff.sqlite \
 PORT=4787 \
@@ -264,6 +269,7 @@ these before going looking for your own bug.
 src/      the frontend SPA — React + Ant Design, one Zustand store per feature
 server/   the BFF — Hono REST + SSE routes over a SQLite-backed session/artifact store
 harness/  the agent runtime the BFF wraps — compiles a per-user profile and dispatches a turn to it
+profiles/ the GenBI Warble profiles (genbi-default/-setup/-enrich-context/-monitor) + their goldens
 ```
 
 End to end: a question goes to the harness, which compiles the user's

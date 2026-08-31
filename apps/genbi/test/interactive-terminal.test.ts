@@ -73,6 +73,17 @@ describe('interactive launch specification', () => {
     expect(spawned).toEqual([['codex', [], { cwd: binding.path, cols: 100, rows: 30, env: nativeTerminalEnvironment() }]]);
   });
 
+  it('uses a host-attested absolute Codex executable for both PTY and fallback launch', () => {
+    const project = fixture('codex:interactive');
+    const spec = readInteractiveLaunchSpec(project, 'codex:interactive');
+    const spawn = vi.fn(() => ({ onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} }));
+    const pinned = '/opt/pinned/codex';
+    const session = new InteractiveTerminalManager({ spawn }).start({ ...spec, hostExecutable: pinned });
+    expect(spawn).toHaveBeenCalledWith(pinned, [], { cwd: realpathSync(project), cols: 100, rows: 30, env: nativeTerminalEnvironment() });
+    expect(session.fallbackCommand).toContain("'/opt/pinned/codex'");
+    expect(session.fallbackCommand).not.toMatch(/&& codex(?:\s|$)/);
+  });
+
   it('preserves ANSI SGR PTY output while enforcing the color environment against caller values', () => {
     const project = fixture();
     const spec = readInteractiveLaunchSpec(project, 'claude-code:interactive');

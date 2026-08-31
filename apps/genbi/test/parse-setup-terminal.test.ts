@@ -449,7 +449,7 @@ describe("parseSetupTerminal", () => {
 
     // A test formerly stood here asserting that subscription-mode Bash worklog evidence shaped
     // like `detail: "Exit code: 0\nFinal output:\n..."` satisfies this same discovery contract.
-    // That shape is fabricated: nothing in `server/fold.ts` or the real Mode B dispatcher
+    // That shape is fabricated: nothing in `server/fold.ts` or the real dispatched dispatcher
     // (warble's claude-agent-sdk mapper) ever produces it — a Bash tool_result's real
     // `summary`/`error` is the raw (truncated) command output, with no "Exit code" wrapping at
     // all. The fixture was a belief about the neighbouring layer's output, not a sample of it, so
@@ -654,15 +654,15 @@ describe("parseSetupTerminal", () => {
     });
 
     // The two tests above (and every other worklog entry in this describe block) use
-    // `label: "setup_execution"` — Mode A / Codex local's shape, with a structured `exitCode`
+    // `label: "setup_execution"` — in-process / Codex local's shape, with a structured `exitCode`
     // folded into `detail` and NO `state` field at all (that field simply doesn't exist on a
-    // hand-authored Mode A fixture the way it does on a real `ToolStep`). Both diagnostics this
+    // hand-authored in-process fixture the way it does on a real `ToolStep`). Both diagnostics this
     // block is about — the no-introspection reframing above, and `firstFailedExec`'s
-    // exit-code reframing below it in this file — are also reachable through a Mode B
+    // exit-code reframing below it in this file — are also reachable through a dispatched
     // (`label: "Bash"`) entry, whose only success/failure signal is the folded `state` field
     // (`execSucceeded`'s doc comment in `harness/setup/runner.ts`), never a structured exit code.
     // Every existing case in this file is Mode-A-shaped; these two close that gap.
-    it("(Mode B) a zero-table claim with no recorded schema-introspection attempt is reframed as an agent-workflow failure, using state instead of a structured exitCode", () => {
+    it("(dispatched) a zero-table claim with no recorded schema-introspection attempt is reframed as an agent-workflow failure, using state instead of a structured exitCode", () => {
       const context = {
         ...makeContext("acme"),
         stepKey: "context",
@@ -680,7 +680,7 @@ describe("parseSetupTerminal", () => {
       expect(result.message).toContain("not evidence that the connection or data source lacks tables");
     });
 
-    it("(Mode B) a failed Bash entry (state: \"error\", no exit code available) reframes the message as a command/tool failure, not a data-source claim", () => {
+    it("(dispatched) a failed Bash entry (state: \"error\", no exit code available) reframes the message as a command/tool failure, not a data-source claim", () => {
       const context = {
         ...makeContext("acme"),
         stepKey: "context",
@@ -691,9 +691,9 @@ describe("parseSetupTerminal", () => {
 
       expect(result.status).toBe("error");
       expect(result.message).toContain("wren generate-mdl");
-      // No exit code anywhere in the message: Mode B carries no structured exit code
+      // No exit code anywhere in the message: dispatched carries no structured exit code
       // (`firstFailedExec`'s doc comment), so the `exitCodeSuffix` this diagnostic builds is empty
-      // for a Mode B entry — unlike the Mode A case above, which asserts `toContain("exit code 2")`.
+      // for a dispatched entry — unlike the in-process case above, which asserts `toContain("exit code 2")`.
       expect(result.message).not.toMatch(/exit code/i);
       expect(result.message).toMatch(/^`wren generate-mdl` failed during this step/);
       expect(result.message).toContain("not by itself evidence that the connection or data source lacks tables");

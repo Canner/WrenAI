@@ -5,7 +5,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// Same mocking approach as test/mode-b-irpath-bypass.test.ts: mock compileProfile
+// Same mocking approach as test/dispatched-irpath-bypass.test.ts: mock compileProfile
 // so it's provably never called, and mock node:child_process's spawn so no real
 // OS process is spawned while still exercising the real spawnChat/readline path.
 
@@ -38,7 +38,7 @@ function fakeChatProcess(answerText: string): FakeChild {
 const tempDirs: string[] = [];
 
 async function createProjectWorkspace(): Promise<string> {
-  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "wren-harness-mode-b-setup-runner-"));
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "wren-harness-dispatched-setup-runner-"));
   tempDirs.push(workspaceRoot);
   await mkdir(path.join(workspaceRoot, "acme"));
   return workspaceRoot;
@@ -50,20 +50,20 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("ModeBSetupRunner (the real production setup runner, not a stub)", () => {
+describe("DispatchedSetupRunner (the real production setup runner, not a stub)", () => {
   it("a non-subscription authChoice throws WITHOUT spawning anything", async () => {
-    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
-    const runner = new ModeBSetupRunner({
+    const { DispatchedSetupRunner } = await import("../harness/setup/runner.js");
+    const runner = new DispatchedSetupRunner({
       irPath: "/fixture/genbi-setup/ir.golden.json",
       warbleBin: "/fixture/warble",
       agentSdkBin: "/fixture/warble-agent-sdk",
-      outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
+      outDir: "/tmp/wren-harness-dispatched-setup-runner-out",
     });
 
     await expect(
       runner.run({
         prompt: "scaffold a new project",
-        workspaceRoot: "/tmp/wren-harness-mode-b-setup-runner-test",
+        workspaceRoot: "/tmp/wren-harness-dispatched-setup-runner-test",
         authChoice: { mode: "api-key", adapter: "mock" },
       }),
     ).rejects.toThrow(/subscription auth mode/i);
@@ -72,23 +72,23 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
     expect(compileProfileMock).not.toHaveBeenCalled();
   });
 
-  it("a subscription authChoice forwards agentId:connect_source, the fixed irPath, and workspaceRoot into the Mode B dispatch", async () => {
-    compileProfileMock.mockRejectedValue(new Error("compileProfile must not be called by ModeBSetupRunner"));
+  it("a subscription authChoice forwards agentId:connect_source, the fixed irPath, and workspaceRoot into the dispatched dispatch", async () => {
+    compileProfileMock.mockRejectedValue(new Error("compileProfile must not be called by DispatchedSetupRunner"));
     spawnMock.mockImplementation(() => fakeChatProcess("connected to postgres"));
 
-    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
+    const { DispatchedSetupRunner } = await import("../harness/setup/runner.js");
     const getModelsConfig = vi.fn(() => "/tmp/runtime-models.yaml");
-    const runner = new ModeBSetupRunner({
+    const runner = new DispatchedSetupRunner({
       irPath: "/fixture/genbi-setup/ir.golden.json",
       warbleBin: "/fixture/warble",
       agentSdkBin: "/fixture/warble-agent-sdk",
-      outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
+      outDir: "/tmp/wren-harness-dispatched-setup-runner-out",
       getModelsConfig,
     });
 
     const result = await runner.run({
       prompt: "scaffold a new project named acme",
-      workspaceRoot: "/tmp/wren-harness-mode-b-setup-runner-test",
+      workspaceRoot: "/tmp/wren-harness-dispatched-setup-runner-test",
       authChoice: { mode: "subscription", provider: "claude" },
     });
 
@@ -103,11 +103,11 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
       "chat",
       "/fixture/genbi-setup/ir.golden.json",
       "--project",
-      "/tmp/wren-harness-mode-b-setup-runner-test",
+      "/tmp/wren-harness-dispatched-setup-runner-test",
       "--component",
       "connect_source",
       "--out",
-      "/tmp/wren-harness-mode-b-setup-runner-out",
+      "/tmp/wren-harness-dispatched-setup-runner-out",
       "--warble-bin",
       "/fixture/warble",
       "--models-config",
@@ -124,12 +124,12 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
     { stepKey: "context" as const, agentId: "build_context" },
   ])("binds $stepKey to the contained project directory instead of duplicating its prefix", async ({ stepKey, agentId }) => {
     spawnMock.mockImplementation(() => fakeChatProcess("continued from the project root"));
-    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
-    const runner = new ModeBSetupRunner({
+    const { DispatchedSetupRunner } = await import("../harness/setup/runner.js");
+    const runner = new DispatchedSetupRunner({
       irPath: "/fixture/genbi-setup/ir.golden.json",
       warbleBin: "/fixture/warble",
       agentSdkBin: "/fixture/warble-agent-sdk",
-      outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
+      outDir: "/tmp/wren-harness-dispatched-setup-runner-out",
     });
     const workspaceRoot = await createProjectWorkspace();
 
@@ -153,9 +153,9 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
     }
   });
 
-  it.each([undefined, "../outside", "/outside", "nested/project", ".", "acme/.."])("fails closed before the Mode B dispatch for an unsafe project name %j", async (projectName) => {
-    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
-    const runner = new ModeBSetupRunner({
+  it.each([undefined, "../outside", "/outside", "nested/project", ".", "acme/.."])("fails closed before the dispatched dispatch for an unsafe project name %j", async (projectName) => {
+    const { DispatchedSetupRunner } = await import("../harness/setup/runner.js");
+    const runner = new DispatchedSetupRunner({
       irPath: "/fixture/genbi-setup/ir.golden.json",
       warbleBin: "/fixture/warble",
       agentSdkBin: "/fixture/warble-agent-sdk",
@@ -173,9 +173,9 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
-  it("fails closed before the Mode B dispatch when the workspace root or project directory is missing", async () => {
-    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
-    const runner = new ModeBSetupRunner({ irPath: "/fixture/genbi-setup/ir.golden.json", warbleBin: "/fixture/warble", agentSdkBin: "/fixture/warble-agent-sdk" });
+  it("fails closed before the dispatched dispatch when the workspace root or project directory is missing", async () => {
+    const { DispatchedSetupRunner } = await import("../harness/setup/runner.js");
+    const runner = new DispatchedSetupRunner({ irPath: "/fixture/genbi-setup/ir.golden.json", warbleBin: "/fixture/warble", agentSdkBin: "/fixture/warble-agent-sdk" });
     const missingWorkspace = path.join(os.tmpdir(), `wren-harness-missing-${Date.now()}`);
 
     await expect(runner.run({ prompt: "resume", workspaceRoot: missingWorkspace, projectName: "acme", stepKey: "connect_resume", authChoice: { mode: "subscription", provider: "claude" } })).rejects.toThrow(/workspace root must exist/i);
@@ -185,30 +185,30 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
   });
 
   it("rejects a safe-name project symlink that resolves to a sibling-prefix directory outside the canonical workspace", async () => {
-    const parent = await mkdtemp(path.join(os.tmpdir(), "wren-harness-mode-b-symlink-parent-"));
+    const parent = await mkdtemp(path.join(os.tmpdir(), "wren-harness-dispatched-symlink-parent-"));
     tempDirs.push(parent);
     const workspaceRoot = path.join(parent, "workspace");
     const sibling = path.join(parent, "workspace-escape");
     await mkdir(workspaceRoot);
     await mkdir(sibling);
     await symlink(sibling, path.join(workspaceRoot, "acme"));
-    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
-    const runner = new ModeBSetupRunner({ irPath: "/fixture/genbi-setup/ir.golden.json", warbleBin: "/fixture/warble", agentSdkBin: "/fixture/warble-agent-sdk" });
+    const { DispatchedSetupRunner } = await import("../harness/setup/runner.js");
+    const runner = new DispatchedSetupRunner({ irPath: "/fixture/genbi-setup/ir.golden.json", warbleBin: "/fixture/warble", agentSdkBin: "/fixture/warble-agent-sdk" });
 
     await expect(runner.run({ prompt: "resume", workspaceRoot, projectName: "acme", stepKey: "connect_resume", authChoice: { mode: "subscription", provider: "claude" } })).rejects.toThrow(/strict descendant/i);
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it("gives build_context the DEFAULT_SETUP_MAX_TURNS budget (120) but leaves connect_source on the dispatcher default", async () => {
-    compileProfileMock.mockRejectedValue(new Error("compileProfile must not be called by ModeBSetupRunner"));
+    compileProfileMock.mockRejectedValue(new Error("compileProfile must not be called by DispatchedSetupRunner"));
     spawnMock.mockImplementation(() => fakeChatProcess("built MDL"));
 
-    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
-    const runner = new ModeBSetupRunner({
+    const { DispatchedSetupRunner } = await import("../harness/setup/runner.js");
+    const runner = new DispatchedSetupRunner({
       irPath: "/fixture/genbi-setup/ir.golden.json",
       warbleBin: "/fixture/warble",
       agentSdkBin: "/fixture/warble-agent-sdk",
-      outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
+      outDir: "/tmp/wren-harness-dispatched-setup-runner-out",
     });
     const workspaceRoot = await createProjectWorkspace();
 
@@ -227,15 +227,15 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
   });
 
   it("forwards an explicit maxTurns override as --max-turns (overriding the DEFAULT_SETUP_MAX_TURNS default)", async () => {
-    compileProfileMock.mockRejectedValue(new Error("compileProfile must not be called by ModeBSetupRunner"));
+    compileProfileMock.mockRejectedValue(new Error("compileProfile must not be called by DispatchedSetupRunner"));
     spawnMock.mockImplementation(() => fakeChatProcess("built MDL"));
 
-    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
-    const runner = new ModeBSetupRunner({
+    const { DispatchedSetupRunner } = await import("../harness/setup/runner.js");
+    const runner = new DispatchedSetupRunner({
       irPath: "/fixture/genbi-setup/ir.golden.json",
       warbleBin: "/fixture/warble",
       agentSdkBin: "/fixture/warble-agent-sdk",
-      outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
+      outDir: "/tmp/wren-harness-dispatched-setup-runner-out",
       maxTurns: 250,
     });
     const workspaceRoot = await createProjectWorkspace();
@@ -255,15 +255,15 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
   });
 
   it("an explicit agentId (e.g. build_context, the context step's component) overrides the connect_source default in the dispatched --component argv", async () => {
-    compileProfileMock.mockRejectedValue(new Error("compileProfile must not be called by ModeBSetupRunner"));
+    compileProfileMock.mockRejectedValue(new Error("compileProfile must not be called by DispatchedSetupRunner"));
     spawnMock.mockImplementation(() => fakeChatProcess("built MDL with 3 models"));
 
-    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
-    const runner = new ModeBSetupRunner({
+    const { DispatchedSetupRunner } = await import("../harness/setup/runner.js");
+    const runner = new DispatchedSetupRunner({
       irPath: "/fixture/genbi-setup/ir.golden.json",
       warbleBin: "/fixture/warble",
       agentSdkBin: "/fixture/warble-agent-sdk",
-      outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
+      outDir: "/tmp/wren-harness-dispatched-setup-runner-out",
     });
     const workspaceRoot = await createProjectWorkspace();
 
@@ -286,29 +286,29 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
   });
 
   it("effectiveMaxTurns() reports exactly the budget run() dispatches with — the source of truth for the continue-label", async () => {
-    const { ModeBSetupRunner, DEFAULT_SETUP_MAX_TURNS } = await import("../harness/setup/runner.js");
+    const { DispatchedSetupRunner, DEFAULT_SETUP_MAX_TURNS } = await import("../harness/setup/runner.js");
 
-    const defaultRunner = new ModeBSetupRunner({
+    const defaultRunner = new DispatchedSetupRunner({
       irPath: "/fixture/genbi-setup/ir.golden.json",
       warbleBin: "/fixture/warble",
       agentSdkBin: "/fixture/warble-agent-sdk",
-      outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
+      outDir: "/tmp/wren-harness-dispatched-setup-runner-out",
     });
     expect(defaultRunner.effectiveMaxTurns("build_context")).toBe(DEFAULT_SETUP_MAX_TURNS);
     expect(defaultRunner.effectiveMaxTurns("connect_source")).toBeUndefined();
 
-    const overriddenRunner = new ModeBSetupRunner({
+    const overriddenRunner = new DispatchedSetupRunner({
       irPath: "/fixture/genbi-setup/ir.golden.json",
       warbleBin: "/fixture/warble",
       agentSdkBin: "/fixture/warble-agent-sdk",
-      outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
+      outDir: "/tmp/wren-harness-dispatched-setup-runner-out",
       maxTurns: 25,
     });
     const workspaceRoot = await createProjectWorkspace();
     expect(overriddenRunner.effectiveMaxTurns("build_context")).toBe(25);
 
     // Cross-check: run() must actually dispatch the exact value effectiveMaxTurns() reports.
-    compileProfileMock.mockRejectedValue(new Error("compileProfile must not be called by ModeBSetupRunner"));
+    compileProfileMock.mockRejectedValue(new Error("compileProfile must not be called by DispatchedSetupRunner"));
     spawnMock.mockImplementation(() => fakeChatProcess("built MDL"));
     await overriddenRunner.run({
       prompt: "generate the MDL for project acme",
@@ -323,25 +323,25 @@ describe("ModeBSetupRunner (the real production setup runner, not a stub)", () =
     expect(args[idx + 1]).toBe("25");
   });
 
-  it("forwards onEvent through to the Mode B dispatch so setup-turn worklog streaming works", async () => {
+  it("forwards onEvent through to the dispatched dispatch so setup-turn worklog streaming works", async () => {
     spawnMock.mockImplementation(() => fakeChatProcess("scaffolded"));
-    const { ModeBSetupRunner } = await import("../harness/setup/runner.js");
-    const runner = new ModeBSetupRunner({
+    const { DispatchedSetupRunner } = await import("../harness/setup/runner.js");
+    const runner = new DispatchedSetupRunner({
       irPath: "/fixture/genbi-setup/ir.golden.json",
       warbleBin: "/fixture/warble",
       agentSdkBin: "/fixture/warble-agent-sdk",
-      outDir: "/tmp/wren-harness-mode-b-setup-runner-out",
+      outDir: "/tmp/wren-harness-dispatched-setup-runner-out",
     });
 
     const events: unknown[] = [];
     await runner.run({
       prompt: "scaffold",
-      workspaceRoot: "/tmp/wren-harness-mode-b-setup-runner-test",
+      workspaceRoot: "/tmp/wren-harness-dispatched-setup-runner-test",
       authChoice: { mode: "subscription", provider: "claude" },
       onEvent: (event) => events.push(event),
     });
 
-    // run.start / answer / run.finish are always emitted by runModeBDefault regardless
+    // run.start / answer / run.finish are always emitted by runDispatchedDefault regardless
     // of whether the fake NDJSON stream carried any step/tool events.
     expect(events.length).toBeGreaterThan(0);
   });

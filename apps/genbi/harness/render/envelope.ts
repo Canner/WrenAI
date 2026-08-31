@@ -446,11 +446,11 @@ function extractJsonObjectText(text: string): string {
 }
 
 /**
- * Best-effort extraction of a {@link RenderEnvelope} from Mode B's raw
- * `finalText` — a CLI stdout string (`ModeBResult.finalText`), not a
- * structured artifact map the way Mode A's `executeAgent` output is. Mode B
+ * Best-effort extraction of a {@link RenderEnvelope} from dispatched's raw
+ * `finalText` — a CLI stdout string (`DispatchedResult.finalText`), not a
+ * structured artifact map the way in-process's `executeAgent` output is. Dispatched
  * has no dataflow-artifact scan or tool-outcome capture of its own (see
- * `runModeBDefault` — it only reads the dispatcher's terminal stdout line),
+ * `runDispatchedDefault` — it only reads the dispatcher's terminal stdout line),
  * so this is the only signal available to build a `form: "rich"` answer from.
  *
  * The agent is expected to emit its final structured answer as a JSON

@@ -1,0 +1,27 @@
+# genbi-monitor — the freshness-monitoring GenBI profile. Sibling to genbi-default (the
+# answer/dashboard flagship) and genbi-setup (the onboarding profile): this one is the ASSERTIVE
+# profile — a resident scheduled check, not a one-shot render or a setup action. It mounts the single
+# `monitor_freshness` component from Warble's shared Hub; like genbi-default it does not own its own
+# component library.
+#
+# `model: orders` below is a TEMPLATE value, not a fixed product choice: the host rewrites this bind
+# to whichever model the user actually picks to monitor, the same way it already rewrites
+# context/binding.yml's `project:` line to the user's own semantic layer at onboarding time. The
+# committed value here just pins `orders` (v5-jaffle's `orders` model carries an `order_date`
+# TIMESTAMP column, so `model_has_timestamp` holds) so this profile has a deterministic, compilable
+# golden for CI — see ir.golden.json.
+#
+# `expected_cadence: 48h` is deliberately NOT the component's own default (`24h`): a non-default bind
+# is what proves an *optional* bind actually flows through compilation into the IR's `binds` facet,
+# rather than a bind that happens to look identical to the param's declared default either way.
+
+profile: genbi-monitor
+
+context:
+  project: ./context/binding.yml
+
+components:
+  - use: monitor_freshness
+    bind:
+      model: orders
+      expected_cadence: 48h

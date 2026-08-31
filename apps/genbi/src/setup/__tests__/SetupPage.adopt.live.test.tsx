@@ -199,7 +199,31 @@ describe('Setup page — create/adopt mode choice (live mode)', () => {
   });
 });
 
-describe('Setup page — adopt flow (live mode)', () => {
+/**
+ * These cases run long enough that vitest's 5s default made them a coin flip:
+ * the suite failed roughly one run in twelve, always as `Test timed out in
+ * 5000ms` and never on an assertion.
+ *
+ * The two heaviest cases measure ~4.5s with the machine otherwise idle, so
+ * this is not contention — a loaded run only adds the last few hundred
+ * milliseconds that tip them over. The cost is one interaction: picking a
+ * candidate profile takes ~2.8s on its own.
+ *
+ * What that 2.8s is NOT, each ruled out by measurement rather than reasoning:
+ * not character-by-character typing (pasting the path instead changed
+ * nothing), not user-event's machinery (`fireEvent.click` costs the same
+ * 2.8s), not its pointer-events check (disabling it changed nothing), and not
+ * React rendering — a Profiler over the whole tree reports 12 commits
+ * totalling 9ms of render work against 2812ms of wall clock. What remains is
+ * jsdom/antd environment work in effects: style injection and CSSOM parsing,
+ * which no amount of test restructuring makes cheaper.
+ *
+ * So the budget is raised to fit what these cases genuinely cost here, rather
+ * than the tests being rewritten to hide it. A real hang still fails, just at
+ * 20s. If this page's interaction cost ever becomes a product concern, the 9ms
+ * of React work says to look at the environment, not at the components.
+ */
+describe('Setup page — adopt flow (live mode)', { timeout: 20_000 }, () => {
   beforeEach(() => {
     // `hydrate()`'s mode fetch has no `pristine()` guard (unlike the steps
     // fetch) — it always applies, so it must agree with the seeded state or

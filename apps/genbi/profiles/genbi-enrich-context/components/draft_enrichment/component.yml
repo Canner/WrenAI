@@ -1,0 +1,30 @@
+# draft_enrichment — strong-model proposal drafting over the read-only inspection result.
+# The concrete payload stays executor-side; the host-facing proposal contains content digests,
+# evidence ids, confidence, and sink-scoped operation identities only.
+id: draft_enrichment
+verb: draft_enrichment
+type: analytical
+realization_kind: skill
+
+binding_mode: pinned
+context_requirements:
+  - "an existing pinned Wren project whose semantic layer parses and has a successful build proof"
+context_precondition:
+  - { predicate: wren_project_exists }
+
+params: []
+llm_steps:
+  - { name: draft, tier: strong, prompt_ref: steps/draft.md, produces: enrichment_proposal }
+trigger: { kind: one_shot }
+guardrails:
+  - { name: read_only_execution, locked: true }
+required_capabilities:
+  - semantic_introspection
+  - llm:strong
+borrowed_actions: []
+effect:
+  render_blocks: [diff]
+  outcome: { kind: none }
+eval:
+  template_ref: eval/
+  metrics: [enrichment_proposal_soundness, enrichment_sink_routing]

@@ -22,7 +22,7 @@ function richAnswerRoute(): (options: RouteOptions) => Promise<RouteResult> {
 }
 
 describe("BFF turn flow (POST turn -> GET SSE stream -> GET session)", () => {
-  it("executes a Mode A turn end-to-end and persists it for later retrieval", async () => {
+  it("executes a in-process turn end-to-end and persists it for later retrieval", async () => {
     const deps: TurnDeps = { store: new Store(":memory:"), route: richAnswerRoute(), baseRouteOptions: BASE_ROUTE_OPTIONS };
     const app = createApp(deps);
 
@@ -61,7 +61,7 @@ describe("BFF turn flow (POST turn -> GET SSE stream -> GET session)", () => {
   });
 
   it("the finalized worklog includes the LLM step row (kind \"step\", with its own detail), not just tool calls", async () => {
-    // Simulates what runAgent's real onEvent firings look like for a Mode A
+    // Simulates what runAgent's real onEvent firings look like for a in-process
     // turn: a step.start/step.finish bracketing one tool.call/tool.result —
     // the live worklog this produces is richer than the floor trace (which
     // only ever carries tool outcomes), so it must win at finalization.

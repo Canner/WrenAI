@@ -1,0 +1,5 @@
+{
+  "source": "genbi_setup",
+  "description": "Deliberately empty placeholder raw schema. genbi-setup's context binds here (see ../context/binding.yml) only to clear the compiler's coarse is_parseable() floor (core/src/compile.rs), which runs before any per-component precondition regardless of whether a component declares one. At connect time there is no real source to introspect yet -- that introspection happens at RUNTIME, via the wren CLI, inside connect_source's own step. Both genbi-setup components deliberately omit context_precondition, so no predicate ever inspects this content; an empty tables array still parses (RawSchema tolerates it via #[serde(default)]) and is sufficient.",
+  "tables": []
+}

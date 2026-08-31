@@ -33,7 +33,7 @@ import { detectAdapterEnv } from "./env-detect.js";
 import { redactPublicSetupText, redactSetupText, sanitizePublicSetupWorklog } from "./fold.js";
 import { assertHarnessBundlePurpose, buildHarnessDto } from "./harness.js";
 import { projectPublicLaunchAttestation } from "../launch-attestation-public.js";
-import { requiredModeACredentialEnvVars, RuntimeBindingError, runtimeSettingsCorrection, validateRuntimeTierBindings } from "./runtime-binding.js";
+import { requiredInProcessCredentialEnvVars, RuntimeBindingError, runtimeSettingsCorrection, validateRuntimeTierBindings } from "./runtime-binding.js";
 import { computeImpact, EntityKeyNotFoundError } from "./impact.js";
 import {
   ArtifactNotFoundError,
@@ -237,7 +237,7 @@ function parsePendingDecisionPayload(raw: string): PendingDecisionPayload | unde
         ? (value as PendingDecisionPayload)
         : undefined;
     case "name_conflict":
-      return typeof value.projectName === "string" && typeof value.sourceType === "string" && hasOnlyKeys(value, ["kind", "projectName", "sourceType"])
+      return typeof value.projectName === "string" && typeof value.sourceType === "string" && (value.variant === undefined || typeof value.variant === "string") && hasOnlyKeys(value, ["kind", "projectName", "sourceType", "variant"])
         ? (value as PendingDecisionPayload)
         : undefined;
     default:
@@ -897,9 +897,9 @@ export function createApp(deps: TurnDeps) {
     return c.json(toArtifactDto(deps.store, row));
   });
 
-  // Reads back an artifact's persisted content (Mode B's saved
-  // render envelope, or Mode A's arbitrary `write_artifact` output),
-  // resolved against the same root Mode A/B write to (`resolveArtifactsDir`)
+  // Reads back an artifact's persisted content (dispatched's saved
+  // render envelope, or in-process's arbitrary `write_artifact` output),
+  // resolved against the same root in-process/B write to (`resolveArtifactsDir`)
   // and refused as `outside_root` if `row.location` doesn't actually resolve
   // there. Never throws for an unreadable/missing/oversized artifact — those
   // are `form: "unavailable"` responses, not route errors.
@@ -1198,12 +1198,12 @@ export function createApp(deps: TurnDeps) {
     };
     const artifactTool = {
       name: NATIVE_MCP_TOOL_NAME,
-      description: "Save a verified dashboard to Artifacts. Use a prior persist_answer reference to save the exact answer without recomputing, or supply the existing payload form for compatibility.",
+      description: "Save a verified dashboard to Artifacts. Use a prior persist_answer reference, or select this session's latest retained answer when the opaque reference is no longer available, without recomputing. The existing payload form remains available for compatibility.",
       inputSchema: NATIVE_SAVE_DASHBOARD_CONTRACT.inputSchema,
     };
     const persistAnswerTool = {
       name: NATIVE_MCP_PERSIST_ANSWER_TOOL_NAME,
-      description: "Persist this answer's exact typed table and optional definition result before conversational presentation. idempotency_key is retry authority only; the host returns canonical provenance. On success, later save_dashboard calls must use its opaque answer_ref; on failure, present the answer but report that reference saving is unavailable.",
+      description: "Persist this answer's exact typed table and optional definition result before conversational presentation. idempotency_key is retry authority only; the host returns canonical provenance. On success, later save_dashboard calls should use its opaque answer_ref, with the session-scoped latest selector available if that ref leaves the conversation; on failure, present the answer but report that reference saving is unavailable.",
       inputSchema: NATIVE_PERSIST_ANSWER_CONTRACT.inputSchema,
     };
     const enrichmentSubmitTool = {
@@ -1516,7 +1516,23 @@ export function createApp(deps: TurnDeps) {
       const routeOptions = effectiveRouteOptions(deps, { allowUnbound: purpose === "setup" });
       const bundle = await deps.describeHarnessBundle(purpose, routeOptions);
       assertHarnessBundlePurpose(bundle, purpose);
-      return c.json(buildHarnessDto(bundle, deps.store, routeOptions, purpose, await deps.nativeSessions?.readiness()));
+      const setupRuntimeCorrection = purpose === "setup" ? persistedRuntimeCorrection(deps) : undefined;
+      const setupReadiness = purpose === "setup"
+        ? setupRuntimeCorrection !== undefined
+          ? { available: false, reason: setupRuntimeCorrection }
+          : !resolveSetupRunner(deps)
+            ? { available: false, reason: "The Setup runner is not configured on this BFF instance." }
+            : deps.workspaceRoot === undefined
+              ? { available: false, reason: "The Setup wizard requires a bootstrap workspace root." }
+              : { available: true }
+        : undefined;
+      // Native Setup is only a compatibility diagnostic for the form-led
+      // Setup runner. A broken diagnostic probe must not make the active Setup
+      // execution path fail, while native-session purposes still fail closed.
+      const nativeReadiness = purpose === "setup"
+        ? await deps.nativeSessions?.readiness().catch(() => undefined)
+        : await deps.nativeSessions?.readiness();
+      return c.json(buildHarnessDto(bundle, deps.store, routeOptions, purpose, nativeReadiness, setupReadiness));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: message }, 500);
@@ -1620,7 +1636,7 @@ export function createApp(deps: TurnDeps) {
     // adapter may be completely overridden and is not evidence of execution.
     if (candidateAuthChoice.mode !== "subscription") {
       const envStatus = detectAdapterEnv();
-      for (const envVar of requiredModeACredentialEnvVars(updated)) {
+      for (const envVar of requiredInProcessCredentialEnvVars(updated)) {
         const present = envVar === "OPENAI_API_KEY" ? envStatus.openaiCompatible : envStatus.anthropic;
         if (!present) return c.json({ error: `${envVar} is not set on the server — required by a configured tier adapter` }, 400);
       }
@@ -1834,7 +1850,7 @@ export function createApp(deps: TurnDeps) {
     return c.json({ ok: true, steps: deps.store.getSetupSteps(), runtimeSettings: deps.store.getRuntimeSettings() });
   });
 
-  // Dispatches a REAL agentic setup turn (Mode B, `connect_source`) rather than optimistically
+  // Dispatches a REAL agentic setup turn (dispatched, `connect_source`) rather than optimistically
   // flipping step state: the caller gets back a {sessionId, turnId} to open
   // `GET /api/sessions/:id/stream?turn=<turnId>` on, exactly like an Ask turn. The turn only
   // resolves — and only advances connect/context step state — once its SETUP_STATUS terminal
@@ -1897,7 +1913,7 @@ export function createApp(deps: TurnDeps) {
     }
 
     // Pre-flight for a same-name project conflict. Checked BEFORE any turn is
-    // dispatched — an existing non-empty project directory means scaffolding would either
+    // Dispatched — an existing non-empty project directory means scaffolding would either
     // silently mix into it or the agent would refuse, neither of which is a clean outcome. Offer
     // a resumable decision (rename/clean/cancel) instead. An existing but EMPTY directory (e.g. a
     // prior run that never got past `mkdir`) is not treated as a conflict — there's nothing to lose.
@@ -2081,7 +2097,7 @@ export function createApp(deps: TurnDeps) {
         return c.json({ error: "no setup connect form is on record — cannot resume the context step" }, 409);
       }
       // Plan A vs Plan B: if the failed turn reported a resumable SDK session id (see
-      // `server/turn.ts`'s `ModeBSessionError` handling), resume that SAME agent-sdk
+      // `server/turn.ts`'s `DispatchedSessionError` handling), resume that SAME agent-sdk
       // conversation with a short continuation nudge instead of recomposing the long
       // disk-inventory prompt — the agent's own context already has everything
       // `resumeFromDisk` would otherwise have to restate. Falls back to the pre-existing
@@ -2216,14 +2232,18 @@ export function createApp(deps: TurnDeps) {
       return c.json({ error: `projectName "${pending.projectName}" resolves outside the workspace root` }, 400);
     }
     rmSync(projectDir, { recursive: true, force: true });
-    deps.store.updateSessionDecision(sessionId, "active", null);
     const { turnId } = await dispatchConnectTurn(deps, pending.projectName, pending.sourceType, workspaceRoot, pending.variant);
+    // Keep the decision retryable until the replacement turn is safely on
+    // record. If driver provisioning or turn creation fails after the clean,
+    // the user can retry the same idempotent clean action instead of being
+    // stranded in an active session with no turn.
+    deps.store.updateSessionDecision(sessionId, "active", null);
     return c.json({ sessionId, turnId });
   });
 
   // Resumes the connect flow after the user has filled in `.env` out-of-band: reads the
   // connect form + setup session persisted by POST /api/setup/connect (no body required) and
-  // dispatches a corrective Mode B turn for a persisted failure, resuming the
+  // dispatches a corrective dispatched turn for a persisted failure, resuming the
   // compatible SDK conversation when one is server-owned.
   app.post("/api/setup/connect/resume", async (c) => {
     const workspaceRoot = deps.workspaceRoot;

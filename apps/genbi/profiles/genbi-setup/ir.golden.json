@@ -1,0 +1,140 @@
+{
+  "components": [
+    {
+      "borrowed_actions": [],
+      "context_binding": {
+        "binding_mode": "runtime_selected",
+        "project": "raw"
+      },
+      "context_precondition": [],
+      "context_requirements": [
+        "no pre-existing wren project required -- this component scaffolds one from a new data source"
+      ],
+      "effect": {
+        "outcome": {
+          "kind": "none"
+        },
+        "render_blocks": []
+      },
+      "eval": {
+        "metrics": [
+          "connect_success"
+        ],
+        "template_ref": "eval/"
+      },
+      "eval_ref": "connect_source.eval",
+      "guardrails": [
+        {
+          "locked": true,
+          "name": "setup_execution",
+          "scope": "."
+        }
+      ],
+      "id": "connect_source",
+      "llm_calls": [
+        {
+          "conditional": false,
+          "consumes": [],
+          "name": "connect",
+          "produces": "connection_summary",
+          "prompt": "You onboard a NEW data source into a wren project. No wren project exists yet -- that is what this\nstep creates.\n\n- Follow the `wren` CLI's onboarding skill: run `wren skills get onboarding` (if available) and\n  follow what it prints. For a SaaS/managed data source, prefer the `dlt-connector` skill/connector\n  instead of a bespoke script.\n- Scaffold a new wren project for the requested data source under the current working directory,\n  using whichever project name and source type the user specified (ask a clarifying question first\n  if either is ambiguous -- do not guess a data source's connection shape).\n- Credentials, absolutely:\n  - NEVER ask the user to paste a credential/secret value into this conversation.\n  - NEVER read, print, echo, or otherwise surface the *value* of any credential, token, password, or\n    connection secret, even if you can see one (e.g. in an existing file, an env var, or a command's\n    output). Redact it if it appears anywhere you must reference.\n  - Write ONLY an EMPTY `.env` template -- the credential keys the connector needs, each left blank\n    (e.g. `DB_PASSWORD=`) -- never a placeholder that looks like a real secret, never a filled-in\n    value.\n  - Once the `.env` template exists, STOP and hand off to the user: tell them exactly which file to\n    fill in and which keys it needs, then wait. Do not attempt to test the connection until they\n    confirm the file is filled in.\n- Produce `connection_summary`: a short structured report of what was scaffolded (project name,\n  source type, the `.env` path and the keys it expects) and whether you are now waiting on the user\n  to fill in credentials. Your FINAL message must include this summary.",
+          "tier": "strong",
+          "when": null
+        }
+      ],
+      "params": [],
+      "precondition_result": {
+        "checks": [],
+        "status": "pass"
+      },
+      "prompt_fragment": "## connect\n\nYou onboard a NEW data source into a wren project. No wren project exists yet -- that is what this\nstep creates.\n\n- Follow the `wren` CLI's onboarding skill: run `wren skills get onboarding` (if available) and\n  follow what it prints. For a SaaS/managed data source, prefer the `dlt-connector` skill/connector\n  instead of a bespoke script.\n- Scaffold a new wren project for the requested data source under the current working directory,\n  using whichever project name and source type the user specified (ask a clarifying question first\n  if either is ambiguous -- do not guess a data source's connection shape).\n- Credentials, absolutely:\n  - NEVER ask the user to paste a credential/secret value into this conversation.\n  - NEVER read, print, echo, or otherwise surface the *value* of any credential, token, password, or\n    connection secret, even if you can see one (e.g. in an existing file, an env var, or a command's\n    output). Redact it if it appears anywhere you must reference.\n  - Write ONLY an EMPTY `.env` template -- the credential keys the connector needs, each left blank\n    (e.g. `DB_PASSWORD=`) -- never a placeholder that looks like a real secret, never a filled-in\n    value.\n  - Once the `.env` template exists, STOP and hand off to the user: tell them exactly which file to\n    fill in and which keys it needs, then wait. Do not attempt to test the connection until they\n    confirm the file is filled in.\n- Produce `connection_summary`: a short structured report of what was scaffolded (project name,\n  source type, the `.env` path and the keys it expects) and whether you are now waiting on the user\n  to fill in credentials. Your FINAL message must include this summary.",
+      "realization_kind": "skill",
+      "required_capabilities": [
+        "source_connect",
+        "llm:strong"
+      ],
+      "trigger": {
+        "kind": "one_shot"
+      },
+      "type": "analytical",
+      "verb": "connect_source"
+    },
+    {
+      "borrowed_actions": [],
+      "context_binding": {
+        "binding_mode": "runtime_selected",
+        "project": "raw"
+      },
+      "context_precondition": [],
+      "context_requirements": [
+        "a project connect_source has already scaffolded, with credentials filled in and connectable"
+      ],
+      "effect": {
+        "outcome": {
+          "kind": "none"
+        },
+        "render_blocks": []
+      },
+      "eval": {
+        "metrics": [
+          "build_success"
+        ],
+        "template_ref": "eval/"
+      },
+      "eval_ref": "build_context.eval",
+      "guardrails": [
+        {
+          "locked": true,
+          "name": "setup_execution",
+          "scope": "."
+        }
+      ],
+      "id": "build_context",
+      "llm_calls": [
+        {
+          "conditional": false,
+          "consumes": [],
+          "name": "build",
+          "produces": "context_summary",
+          "prompt": "You generate the semantic layer (MDL) for a wren project that connect_source already scaffolded and\nwhose credentials the user has already filled in.\n\n- Follow the `wren` CLI's MDL-generation skill: run the `generate-mdl` skill (if available) to\n  introspect the connected source and draft models, then optionally the `enrich-context` skill to add\n  business knowledge/descriptions on top. Do not hand-write MDL from scratch if a generation skill is\n  available -- generate first, then refine.\n- Validate before building: run `wren context validate` and only proceed to `wren context build` once\n  it reports clean. If validation fails, fix the reported issues and re-validate rather than forcing a\n  build through errors.\n- Do not touch credential values at any point in this step -- if the connection fails, report the\n  failure back to the user rather than editing the `.env` file's values yourself.\n- Produce `context_summary`: report how many models were generated, whether validation passed, and\n  whether the build succeeded. Your FINAL message must include this summary.",
+          "tier": "strong",
+          "when": null
+        }
+      ],
+      "params": [],
+      "precondition_result": {
+        "checks": [],
+        "status": "pass"
+      },
+      "prompt_fragment": "## build\n\nYou generate the semantic layer (MDL) for a wren project that connect_source already scaffolded and\nwhose credentials the user has already filled in.\n\n- Follow the `wren` CLI's MDL-generation skill: run the `generate-mdl` skill (if available) to\n  introspect the connected source and draft models, then optionally the `enrich-context` skill to add\n  business knowledge/descriptions on top. Do not hand-write MDL from scratch if a generation skill is\n  available -- generate first, then refine.\n- Validate before building: run `wren context validate` and only proceed to `wren context build` once\n  it reports clean. If validation fails, fix the reported issues and re-validate rather than forcing a\n  build through errors.\n- Do not touch credential values at any point in this step -- if the connection fails, report the\n  failure back to the user rather than editing the `.env` file's values yourself.\n- Produce `context_summary`: report how many models were generated, whether validation passed, and\n  whether the build succeeded. Your FINAL message must include this summary.",
+      "realization_kind": "skill",
+      "required_capabilities": [
+        "context_build",
+        "llm:strong"
+      ],
+      "trigger": {
+        "kind": "one_shot"
+      },
+      "type": "analytical",
+      "verb": "build_context"
+    }
+  ],
+  "config": {},
+  "context_binding": {
+    "binding_mode": "runtime_selected",
+    "project": "raw",
+    "resolved": {
+      "dimensions": [],
+      "lineage": {
+        "edges": 0,
+        "nodes": 0,
+        "resolvable": true
+      },
+      "metrics": [],
+      "models": [],
+      "time_dimensions": []
+    }
+  },
+  "profile": "genbi-setup",
+  "warble_ir_version": "0.6"
+}

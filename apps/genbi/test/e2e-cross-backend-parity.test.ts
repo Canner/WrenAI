@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createDefaultLoginProbe, type AuthChoice } from "../harness/auth/index.js";
 import { resolveWarbleBinary } from "../harness/compile/resolve-binary.js";
@@ -10,25 +11,25 @@ import { envelopesMatch, matchesGolden, PARITY_QUESTION } from "./golden-envelop
 import { WARBLE_REPO } from "./warble-checkout.js";
 
 /**
- * Opt-in LIVE cross-back-end parity: runs BOTH Mode A
- * (against a real, capable tool-calling model) and Mode B (against a real
+ * Opt-in LIVE cross-back-end parity: runs BOTH in-process
+ * (against a real, capable tool-calling model) and dispatched (against a real
  * Claude subscription) on {@link PARITY_QUESTION} over the `jaffle-wren`
  * sample project, and asserts both results `matchesGolden` AND match each
  * other. This is the only test that actually exercises both live back-ends
  * end-to-end — everything else in the suite is hermetic (item B covers
- * Mode A's output contract with the mock adapter; item C covers permission
+ * In-process's output contract with the mock adapter; item C covers permission
  * enforcement directly).
  *
  * Skipped by default — enable by setting ALL of:
  *   - `WREN_TEST_LIVE_PARITY=1` (master opt-in switch)
- *   - `WREN_TEST_LIVE_MODEL=<model id>` (Mode A's model, e.g. a Claude or
+ *   - `WREN_TEST_LIVE_MODEL=<model id>` (in-process's model, e.g. a Claude or
  *     Ollama model id)
- *   - either `ANTHROPIC_API_KEY` (routes Mode A through the `anthropic`
+ *   - either `ANTHROPIC_API_KEY` (routes in-process through the `anthropic`
  *     adapter, api-key mode) or `WREN_TEST_LIVE_MODEL_ENDPOINT` (routes
- *     Mode A through the `openai-compatible` adapter, local mode — e.g. a
+ *     in-process through the `openai-compatible` adapter, local mode — e.g. a
  *     local Ollama endpoint)
  *
- * Mode B's "subscription available" signal reuses the harness's own
+ * Dispatched's "subscription available" signal reuses the harness's own
  * best-effort login probe (`createDefaultLoginProbe().claudeLoggedIn()`)
  * rather than a bespoke env var, since it already answers exactly this
  * question. `WREN_TEST_PROFILE_SOURCE`/`WREN_TEST_PROJECT` optionally
@@ -40,7 +41,10 @@ import { WARBLE_REPO } from "./warble-checkout.js";
  * usage.
  */
 
-const PROFILE_SOURCE = process.env["WREN_TEST_PROFILE_SOURCE"] ?? path.join(WARBLE_REPO, "genbi-default");
+/** This package's own `profiles/` tree — the GenBI profiles now live here, not in a Warble checkout. */
+const PROFILES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "profiles");
+
+const PROFILE_SOURCE = process.env["WREN_TEST_PROFILE_SOURCE"] ?? path.join(PROFILES_DIR, "genbi-default");
 const JAFFLE_WREN = process.env["WREN_TEST_PROJECT"] ?? path.join(WARBLE_REPO, "examples", "jaffle-wren");
 
 const LIVE_PARITY_ENABLED = process.env["WREN_TEST_LIVE_PARITY"] === "1";
@@ -78,7 +82,7 @@ async function canRunLiveParity(): Promise<boolean> {
 
 const canRun = await canRunLiveParity();
 
-/** Minimal test-only JSON-object extraction from Mode B's raw `finalText`; mirrors (without reusing, since it isn't exported) the tolerant extraction `harness/render/envelope.ts` does for Mode A's model text. */
+/** Minimal test-only JSON-object extraction from dispatched's raw `finalText`; mirrors (without reusing, since it isn't exported) the tolerant extraction `harness/render/envelope.ts` does for in-process's model text. */
 function extractJsonObject(text: string): unknown {
   const trimmed = text.trim();
   try {
@@ -89,13 +93,13 @@ function extractJsonObject(text: string): unknown {
   const start = trimmed.indexOf("{");
   const end = trimmed.lastIndexOf("}");
   if (start === -1 || end === -1 || end <= start) {
-    throw new Error(`could not find a JSON object in Mode B's finalText:\n${trimmed}`);
+    throw new Error(`could not find a JSON object in dispatched's finalText:\n${trimmed}`);
   }
   return JSON.parse(trimmed.slice(start, end + 1));
 }
 
 describe.skipIf(!canRun)(
-  "cross-back-end LIVE parity: Mode A vs Mode B [opt-in, real subscription + real model, never runs by default]",
+  "cross-back-end LIVE parity: in-process vs dispatched [opt-in, real subscription + real model, never runs by default]",
   () => {
     it(
       "both back-ends answer the baseline question, each matchesGolden, and match each other",
@@ -113,33 +117,33 @@ describe.skipIf(!canRun)(
               config: LIVE_MODEL_API_KEY !== undefined ? { model, apiKey: LIVE_MODEL_API_KEY } : { model },
             };
 
-        const modeAResult = await route({
+        const inProcessResult = await route({
           authChoice: authChoiceA,
           profileSource: PROFILE_SOURCE,
           userProject: JAFFLE_WREN,
           question: PARITY_QUESTION,
           model,
         });
-        if (modeAResult.backend !== "agent" || modeAResult.kind !== "answer") {
-          throw new Error(`Mode A did not return an answer: ${JSON.stringify(modeAResult)}`);
+        if (inProcessResult.backend !== "agent" || inProcessResult.kind !== "answer") {
+          throw new Error(`in-process did not return an answer: ${JSON.stringify(inProcessResult)}`);
         }
 
         const authChoiceB: AuthChoice = { mode: "subscription", provider: "claude" };
-        const modeBResult = await route({
+        const dispatchedResult = await route({
           authChoice: authChoiceB,
           profileSource: PROFILE_SOURCE,
           userProject: JAFFLE_WREN,
           question: PARITY_QUESTION,
         });
-        if (modeBResult.backend !== "agent-sdk") {
-          throw new Error(`Mode B did not return the agent-sdk backend: ${JSON.stringify(modeBResult)}`);
+        if (dispatchedResult.backend !== "agent-sdk") {
+          throw new Error(`dispatched did not return the agent-sdk backend: ${JSON.stringify(dispatchedResult)}`);
         }
 
-        const envelopeB = extractJsonObject(modeBResult.finalText);
+        const envelopeB = extractJsonObject(dispatchedResult.finalText);
 
-        expect(matchesGolden(modeAResult.envelope)).toBe(true);
+        expect(matchesGolden(inProcessResult.envelope)).toBe(true);
         expect(matchesGolden(envelopeB)).toBe(true);
-        expect(envelopesMatch(modeAResult.envelope, envelopeB)).toBe(true);
+        expect(envelopesMatch(inProcessResult.envelope, envelopeB)).toBe(true);
       },
       120_000,
     );

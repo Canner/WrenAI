@@ -1,0 +1,9 @@
+# Coarse context binding: the whole v5-jaffle semantic layer. Since IR v0.3 the Warble front-end
+# builds a real MdlContext over the bound project and evaluates context_precondition predicates
+# against it — it does introspect MDL. The binding stays "coarse" in a different sense: it names the
+# whole project, not a specific metric/grain.
+#
+# The host rewrites this `project:` line to the user's own wren project at bind time; the committed
+# value pins this repo's own v5 example so the profile compiles standalone for CI/dev.
+# Path is relative to this profile directory.
+project: ../../../../examples/v5-jaffle

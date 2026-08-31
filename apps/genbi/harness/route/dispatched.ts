@@ -15,7 +15,7 @@ import {
 } from "./chat-event-mapper.js";
 import { resolveAgentSdkCli } from "./agent-sdk-cli.js";
 import type { ResolvedCli } from "./agent-sdk-cli.js";
-import type { ModeBOptions, ModeBResult } from "./types.js";
+import type { DispatchedOptions, DispatchedResult } from "./types.js";
 
 const MODE_B_AGENT_ID = "answer_query";
 
@@ -37,8 +37,8 @@ export interface BuildAgentSdkChatArgsOptions {
    * verbatim as `--component <agentId>`. Defaults to `MODE_B_AGENT_ID`
    * (`"answer_query"`) when unset — the original default from before this
    * option existed. Named `agentId`
-   * to match `ModeAOptions.agentId` (intent routing), even though
-   * Mode B has no per-agent bundle concept of its own — it's the same
+   * to match `InProcessOptions.agentId` (intent routing), even though
+   * Dispatched has no per-agent bundle concept of its own — it's the same
    * "which compiled thing to run" knob, just a component id on the warble
    * IR side rather than an agent id on a compiled vercel bundle.
    */
@@ -47,9 +47,9 @@ export interface BuildAgentSdkChatArgsOptions {
    * The "hybrid" passthrough: forwarded verbatim as `--models-config
    * <modelsConfig>` when set, omitted entirely otherwise (existing callers
    * that don't hybrid-route are byte-for-byte unaffected). This lets the
-   * subscription main loop (Mode B) route one step onto a non-Anthropic
+   * subscription main loop (dispatched) route one step onto a non-Anthropic
    * model per warble's own `ModelConfig.fromYaml` mechanism — see
-   * `runModeBDefault`'s doc comment for the known limitations this inherits.
+   * `runDispatchedDefault`'s doc comment for the known limitations this inherits.
    */
   readonly modelsConfig?: string;
   /** Forwarded as `--max-turns <n>` when set; omitted otherwise so warble's default applies. */
@@ -57,7 +57,7 @@ export interface BuildAgentSdkChatArgsOptions {
   /**
    * Session resume: forwarded verbatim as `--resume <id>` when set, so the dispatcher resumes
    * the SAME agent-sdk conversation instead of starting a fresh one. See
-   * `ModeBOptions.resumeSessionId`.
+   * `DispatchedOptions.resumeSessionId`.
    */
   readonly resume?: string;
 }
@@ -92,7 +92,7 @@ export function buildAgentSdkChatArgs(
   options: BuildAgentSdkChatArgsOptions,
 ): AgentSdkChatCommand {
   if (options.question.trim().length === 0) {
-    throw new Error("Mode B question must not be empty or whitespace-only");
+    throw new Error("dispatched question must not be empty or whitespace-only");
   }
   return {
     command: cli.command,
@@ -130,7 +130,7 @@ function encodeQuestionForStdin(question: string): string {
 }
 
 /**
- * Mode B ("subscription"): compile the profile to IR only (`mode: "native"` —
+ * Dispatched ("subscription"): compile the profile to IR only (`mode: "native"` —
  * no vercel bundle; the claude-agent-sdk dispatcher reads IR directly and
  * drives its own Claude Agent SDK `query()` loop at runtime, so no adapter/
  * tier binding is assembled here), then shell the warble-agent-sdk CLI's
@@ -155,7 +155,7 @@ function encodeQuestionForStdin(question: string): string {
  *
  * As a belt-and-suspenders measure, `route()` already runs the compliance gate
  * (`enforceCompliance`) before ever calling this function, but
- * `runModeBDefault` is also exported from the package root — an embedder
+ * `runDispatchedDefault` is also exported from the package root — an embedder
  * that imports it directly bypasses `route()`, and with it that gate,
  * entirely. Re-running `enforceCompliance` here makes the executor safe
  * regardless of entry point: `route()`'s call and this one are the same
@@ -167,14 +167,14 @@ function encodeQuestionForStdin(question: string): string {
  * the dispatcher resumes the SAME agent-sdk conversation for this turn instead of starting a fresh
  * one — the agent keeps whatever it already read/listed/fetched, rather than re-orienting from
  * scratch on every turn. The turn's own session id (for resuming a LATER turn) comes back on
- * `ModeBResult.sessionId` on success, and — since a resumable session id from a failed turn is just
+ * `DispatchedResult.sessionId` on success, and — since a resumable session id from a failed turn is just
  * as useful as one from a successful turn (an `error_max_turns` failure is exactly the case this
- * exists for) — is still recoverable from a thrown `ModeBSessionError`'s `sessionId` field when this
+ * exists for) — is still recoverable from a thrown `DispatchedSessionError`'s `sessionId` field when this
  * function rejects. This is deliberately independent of `irPath`/`resumeFromDisk`-style setup-state
  * reconstruction elsewhere in the harness (`server/compose.ts`): this option resumes the actual SDK
  * conversation, not a disk-state prompt rebuild.
  */
-export async function runModeBDefault(options: ModeBOptions): Promise<ModeBResult> {
+export async function runDispatchedDefault(options: DispatchedOptions): Promise<DispatchedResult> {
   // Live-event layer: emits run.start/answer/run.finish/error on
   // options.onEvent directly, plus — now that `chat --stream-json` streams
   // per-step/per-tool NDJSON over stdout — step.*/tool.* events mapped in
@@ -193,7 +193,7 @@ export async function runModeBDefault(options: ModeBOptions): Promise<ModeBResul
   // anything.
   if (options.authChoice.provider !== "claude") {
     throw new Error(
-      `runModeBDefault only supports the Claude subscription provider. ` +
+      `runDispatchedDefault only supports the Claude subscription provider. ` +
         `Codex Ask must be dispatched through the codex:local route and will not fall back.`,
     );
   }
@@ -201,16 +201,16 @@ export async function runModeBDefault(options: ModeBOptions): Promise<ModeBResul
 
   // Which warble component `chat` dispatches; defaults to
   // MODE_B_AGENT_ID ("answer_query") — the original default from before this
-  // option existed. See `ModeBOptions.agentId`.
+  // option existed. See `DispatchedOptions.agentId`.
   const agentId = options.agentId ?? MODE_B_AGENT_ID;
 
   const emitter = createAgentEventEmitter(options.onEvent);
   emitter.emit({ kind: "run.start", mode: "B", agentId });
 
   try {
-    // Setup-flow bypass (`ModeBOptions.irPath`): skip compileProfile entirely
+    // Setup-flow bypass (`DispatchedOptions.irPath`): skip compileProfile entirely
     // and dispatch the caller-supplied IR directly. Used by the setup
-    // wizard's `ModeBSetupRunner`, which has no bound wren project to
+    // wizard's `DispatchedSetupRunner`, which has no bound wren project to
     // compile a profile against — it dispatches the fixed, warble-committed
     // genbi-setup IR instead.
     const irPath = options.irPath ?? (await compileProfile({
@@ -262,13 +262,13 @@ export async function runModeBDefault(options: ModeBOptions): Promise<ModeBResul
     emitter.emit({ kind: "run.finish", status: "answer" });
     return { finalText, ...(sessionId !== undefined ? { sessionId } : {}) };
   } catch (error) {
-    emitter.emit({ kind: "error", message: describeModeBError(error) });
+    emitter.emit({ kind: "error", message: describeDispatchedError(error) });
     emitter.emit({ kind: "run.finish", status: "error" });
     throw error;
   }
 }
 
-function describeModeBError(error: unknown): string {
+function describeDispatchedError(error: unknown): string {
   if (error instanceof Error) return error.message;
   return typeof error === "string" ? error : JSON.stringify(error);
 }
@@ -280,16 +280,16 @@ function describeModeBError(error: unknown): string {
  * on a failed turn like `error_max_turns` in the first place, not just a successful one).
  * `sessionId` is `null` when the dispatcher emitted the session line but the SDK itself never
  * produced an id; it is simply absent as a property when `error` is a plain `Error` (e.g. a spawn
- * failure before any NDJSON was ever read) — callers should treat "not a `ModeBSessionError`" the
+ * failure before any NDJSON was ever read) — callers should treat "not a `DispatchedSessionError`" the
  * same as "no session id available", never as a hard failure of their own.
  */
-export class ModeBSessionError extends Error {
+export class DispatchedSessionError extends Error {
   constructor(
     message: string,
     readonly sessionId: string | null,
   ) {
     super(message);
-    this.name = "ModeBSessionError";
+    this.name = "DispatchedSessionError";
   }
 }
 
@@ -298,7 +298,7 @@ export class ModeBSessionError extends Error {
 // done; it only fires on a genuine hang), so it's set generously: a cold Ask
 // right after setup — a fresh, un-warmed project where answer_query explores
 // before it queries — was observed to legitimately need >5 min, so 10 minutes
-// is the default. Override via `ModeBOptions.chatTimeoutMs`
+// is the default. Override via `DispatchedOptions.chatTimeoutMs`
 // (`--chat-timeout-ms` / `WREN_HARNESS_CHAT_TIMEOUT_MS`).
 const CHAT_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -320,10 +320,10 @@ export interface SpawnChatResult {
  * `parseWarbleChatEventLine` and either captured as the turn's final answer (`t: "answer"`), its
  * resumable session id (`t: "session"` — tracked so it can be surfaced on BOTH a successful
  * resolve and a failed reject, since a resumable session id is just as useful after an
- * `error_max_turns` failure as after a success; see `ModeBSessionError`), or mapped to this
+ * `error_max_turns` failure as after a success; see `DispatchedSessionError`), or mapped to this
  * harness's `AgentEvent` vocabulary via `mapChatEventToAgentEvent` and forwarded to `onEvent`. A
  * line that fails to parse is silently dropped (never fatal to the turn — see that module's doc
- * comment). `onEvent` is always called unconditionally here; it is `runModeBDefault`'s
+ * comment). `onEvent` is always called unconditionally here; it is `runDispatchedDefault`'s
  * `emitter.emit`, which is already a documented no-op when the caller supplied no sink.
  */
 function spawnChat(
@@ -333,7 +333,7 @@ function spawnChat(
   signal?: AbortSignal,
 ): Promise<SpawnChatResult> {
   return new Promise((resolve, reject) => {
-    if (signal?.aborted) { reject(new ModeBSessionError("warble-agent-sdk chat was cancelled before spawn", null)); return; }
+    if (signal?.aborted) { reject(new DispatchedSessionError("warble-agent-sdk chat was cancelled before spawn", null)); return; }
     const child = spawn(command.command, [...command.args], {
       detached: process.platform !== "win32",
     });
@@ -398,7 +398,7 @@ function spawnChat(
 
     child.on("error", (error) => {
       settle(() =>
-        reject(new ModeBSessionError(`warble-agent-sdk chat failed to start: ${error.message}`, sessionId ?? null)),
+        reject(new DispatchedSessionError(`warble-agent-sdk chat failed to start: ${error.message}`, sessionId ?? null)),
       );
     });
 
@@ -406,7 +406,7 @@ function spawnChat(
       settle(() => {
         if (stopReason === "timeout") {
           reject(
-            new ModeBSessionError(
+            new DispatchedSessionError(
               `warble-agent-sdk chat failed (timed out after ${timeoutMs}ms): ${stderrText}`,
               sessionId ?? null,
             ),
@@ -414,13 +414,13 @@ function spawnChat(
           return;
         }
         if (stopReason === "cancelled") {
-          reject(new ModeBSessionError("warble-agent-sdk chat was cancelled", sessionId ?? null));
+          reject(new DispatchedSessionError("warble-agent-sdk chat was cancelled", sessionId ?? null));
           return;
         }
         if (code !== 0) {
           const exitCode = code ?? signal ?? "unknown";
           reject(
-            new ModeBSessionError(
+            new DispatchedSessionError(
               `warble-agent-sdk chat failed (exit ${exitCode}): ${stderrText || "(no stderr output)"}`,
               sessionId ?? null,
             ),

@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { chmod, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { AuthChoice } from "../harness/auth/index.js";
 import { describeBundle } from "../harness/route/describe.js";
@@ -9,8 +10,11 @@ import { buildHarnessDto } from "../server/harness.js";
 import { Store } from "../server/db.js";
 import { WARBLE_REPO } from "./warble-checkout.js";
 
-const PROFILE_SOURCE = path.join(WARBLE_REPO, "genbi-default");
-const ENRICH_PROFILE_SOURCE = path.join(WARBLE_REPO, "genbi-enrich-context");
+/** This package's own `profiles/` tree — the GenBI profiles now live here, not in a Warble checkout. */
+const PROFILES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "profiles");
+
+const PROFILE_SOURCE = path.join(PROFILES_DIR, "genbi-default");
+const ENRICH_PROFILE_SOURCE = path.join(PROFILES_DIR, "genbi-enrich-context");
 const JAFFLE_WREN = path.join(WARBLE_REPO, "examples", "jaffle-wren");
 const AGENT_SDK_DIR = path.join(WARBLE_REPO, "dispatcher", "claude-agent-sdk");
 const AGENT_SDK_TSX = path.join(AGENT_SDK_DIR, "node_modules", ".bin", "tsx");
@@ -61,7 +65,7 @@ function expectedDispatcher(authChoice: AuthChoice): "claude-agent-sdk" | "in-pr
 describe.skipIf(!canRun)(
   "describeBundle sources the display from whichever back-end actually runs [opt-in integration]",
   () => {
-    it("subscription authChoice (Mode B) sources the claude-agent-sdk manifest, agreeing with runtimeDispatcher", async () => {
+    it("subscription authChoice (dispatched) sources the claude-agent-sdk manifest, agreeing with runtimeDispatcher", async () => {
       const authChoice: AuthChoice = { mode: "subscription", provider: "claude" };
       const agentSdkBin = await writeAgentSdkWrapper();
 
@@ -82,7 +86,7 @@ describe.skipIf(!canRun)(
       expect(bundle.agents.length).toBeGreaterThan(0);
     });
 
-    it("api-key authChoice (Mode A) sources the vercel bundle, agreeing with runtimeDispatcher's in-process prediction", async () => {
+    it("api-key authChoice (in-process) sources the vercel bundle, agreeing with runtimeDispatcher's in-process prediction", async () => {
       const authChoice: AuthChoice = { mode: "api-key", adapter: "openai" };
 
       const bundle = await describeBundle({

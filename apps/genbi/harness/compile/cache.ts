@@ -5,10 +5,17 @@ import os from "node:os";
 import path from "node:path";
 import type { CompileCache, CompileCacheEntry, CompileCacheKey } from "./types.js";
 
-/** Deterministic on-disk slot name for a cache key — order-independent, one directory per (profile, context, mode, provider-fragment-hash, warble-identity). */
+/**
+ * Deterministic on-disk slot name for a cache key — order-independent, one directory per (profile,
+ * context, mode, provider-fragment-hash, warble-identity, hub-dir). An absent `hubDir` (no
+ * `--hub-dir` passed, so warble's compiled-in default applied) hashes as the empty string, which is
+ * a distinct value from any real root rather than an alias for one.
+ */
 function keyDigest(key: CompileCacheKey): string {
   return createHash("sha256")
-    .update(`${key.profileHash}:${key.contextFingerprint}:${key.mode}:${key.providerFragmentHash}:${key.warbleIdentity}`)
+    .update(
+      `${key.profileHash}:${key.contextFingerprint}:${key.mode}:${key.providerFragmentHash}:${key.warbleIdentity}:${key.hubDir ?? ""}`,
+    )
     .digest("hex");
 }
 
@@ -61,7 +68,7 @@ async function isOwnedByCurrentUser(slot: string): Promise<boolean> {
 
 /**
  * The v1 {@link CompileCache} backend: one subdirectory per cache key under `cacheDir`, each
- * holding a copy of `ir.json` and (Mode A only) `bundle/bundle.json`. `get` treats a slot whose
+ * holding a copy of `ir.json` and (in-process only) `bundle/bundle.json`. `get` treats a slot whose
  * `ir.json` has since been deleted as a miss rather than throwing, so an external cleanup of
  * `cacheDir` degrades to "just recompile" instead of a hard failure.
  *
