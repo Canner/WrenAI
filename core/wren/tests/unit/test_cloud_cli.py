@@ -150,7 +150,9 @@ def test_link_disambiguates_multiple_stored_logins(monkeypatch, tmp_path):
     )
     result = runner.invoke(app, ["cloud", "link", str(tmp_path)])
     assert result.exit_code != 0
-    assert "disambiguate" in result.output.lower()
+    # Asserts the behaviour, not the wording: it must refuse rather than pick,
+    # and it must print the flags that would narrow the choice.
+    assert "--host" in result.output and "--project" in result.output
 
 
 def test_link_host_filters_on_api_host_not_git_host(monkeypatch, tmp_path):
@@ -214,7 +216,9 @@ def test_link_host_still_disambiguates_when_api_hosts_collide(monkeypatch, tmp_p
         ["cloud", "link", str(tmp_path), "--host", "https://cloud.getwren.ai"],
     )
     assert result.exit_code != 0
-    assert "disambiguate" in result.output.lower()
+    # Asserts the behaviour, not the wording: it must refuse rather than pick,
+    # and it must print the flags that would narrow the choice.
+    assert "--host" in result.output and "--project" in result.output
 
 
 def test_link_invokes_cloud_link_with_the_single_stored_login(monkeypatch, tmp_path):
@@ -780,7 +784,9 @@ def test_logout_disambiguates_multiple_stored_logins(monkeypatch):
     )
     result = runner.invoke(app, ["cloud", "auth", "remove", "--yes"])
     assert result.exit_code != 0
-    assert "disambiguate" in result.output.lower()
+    # Asserts the behaviour, not the wording: it must refuse rather than pick,
+    # and it must print the flags that would narrow the choice.
+    assert "--host" in result.output and "--project" in result.output
 
 
 def test_logout_host_filters_on_api_host_not_git_host(monkeypatch):
@@ -1052,3 +1058,96 @@ def test_host_filter_matches_a_scheme_less_value(command, monkeypatch, tmp_path)
 
     assert result.exit_code == 0, result.output
     assert "no stored login" not in result.output
+
+
+# ── Selecting a stored login ───────────────────────────────────────────────
+#
+# The same "no stored login" message has now been reported twice for logins
+# that exist: once for a scheme-less `--host`, once for `--host` given the
+# *git* host. Both times the filter was right and the message was not, so
+# these pin the message.
+
+
+def _two_logins():
+    return [
+        (
+            "https://git.example.com",
+            "16",
+            {
+                "api_host": "https://api.example.com",
+                "org_id": "2",
+                "repo": "org/2/16/shared-data.git",
+                "api_key": "sk-x",
+            },
+        ),
+    ]
+
+
+@pytest.mark.parametrize("command", ["link", "auth_remove"])
+def test_wrong_host_role_says_which_host_is_wanted(command, monkeypatch, tmp_path):
+    """The store is keyed by git host; `--host` means the API host. Passing the
+    git host must not report the project as absent — it exists."""
+
+    monkeypatch.setattr(cloud, "list_logins", _two_logins)
+
+    args = (
+        ["cloud", "link", str(tmp_path)]
+        if command == "link"
+        else ["cloud", "auth", "remove", "--yes"]
+    )
+    # The git host, which is what `~/.wren/cloud.yml` is keyed by.
+    args += ["--host", "https://git.example.com", "--project", "16"]
+
+    result = runner.invoke(app, args)
+
+    assert result.exit_code != 0
+    out = result.output
+    assert "not the git host" in out, "must name the field that failed"
+    assert "https://api.example.com" in out, "must print what is stored"
+    assert "auth list" in out, "must point at the command that shows it"
+
+
+@pytest.mark.parametrize("command", ["link", "auth_remove"])
+def test_absent_project_is_reported_as_absent(command, monkeypatch, tmp_path):
+    """The other branch has to stay distinguishable from the one above."""
+
+    monkeypatch.setattr(cloud, "list_logins", _two_logins)
+
+    args = (
+        ["cloud", "link", str(tmp_path)]
+        if command == "link"
+        else ["cloud", "auth", "remove", "--yes"]
+    )
+    args += ["--project", "99999"]
+
+    result = runner.invoke(app, args)
+
+    assert result.exit_code != 0
+    assert "no stored Wren Cloud login for project 99999" in result.output
+    assert "not the git host" not in result.output, "wrong diagnosis for this case"
+
+
+def test_auth_list_shows_both_hosts_and_never_a_key(monkeypatch):
+    """The reason anyone opened `cloud.yml` was to find a value for `--host`,
+    and that file is keyed by the git host — so the listing has to show both
+    columns, labelled."""
+
+    monkeypatch.setattr(cloud, "list_logins", _two_logins)
+
+    result = runner.invoke(app, ["cloud", "auth", "list"])
+
+    assert result.exit_code == 0, result.output
+    assert "https://api.example.com" in result.output
+    assert "https://git.example.com" in result.output
+    assert "--host" in result.output, "must label which column --host means"
+    assert "sk-x" not in result.output, "a key must never be printed"
+
+
+def test_auth_list_says_so_when_nothing_is_stored(monkeypatch):
+    monkeypatch.setattr(cloud, "list_logins", lambda: [])
+
+    result = runner.invoke(app, ["cloud", "auth", "list"])
+
+    assert result.exit_code == 0
+    assert "No stored" in result.output
+    assert "auth add" in result.output, "must say how to add one"

@@ -681,6 +681,11 @@ mint that project's own key, and is **never** written to disk.
 underscore in `BIG_QUERY`. `--connection-info` is passed through unchanged, so
 its fields are the API's too, and they differ per data source.
 
+**It is not the shape `wren profile` uses, and nothing converts between them.**
+The API wants camelCase keys, and BigQuery `credentials` as the service-account
+object; a profile has snake_case keys and `credentials` as a base64 string.
+Passing a profile export is rejected.
+
 **For the accepted types and a worked `connectionInfo` example for each, see
 [Create a project → Database connectionInfo examples](https://wrenai.readme.io/reference/post_projects#database-connectioninfo-examples).**
 That page is the source of truth; this CLI does not keep its own copy of the
@@ -730,6 +735,27 @@ Your stored key is kept by default, since another directory may still be bound
 to the same project. `--forget-key` drops it too, and removes that host's
 credential-helper entry — but only once no stored login uses that host, because
 the entry is shared by every project on it.
+
+### `wren cloud auth list`
+
+Show what is stored, without showing the keys.
+
+```bash
+wren cloud auth list
+```
+
+```text
+PROJECT  API HOST (--host)          GIT HOST (git talks to)   REPO
+1234     https://cloud.getwren.ai   https://cloud.getwren.ai  org/42/1234/shared-data.git
+```
+
+Both host columns are printed because they mean different things and can
+differ. **`--host` on the other commands is the API host** — the value you gave
+`auth add`. The credential file is keyed by the *git* host instead, because
+that is all git hands the credential helper, so reading the file to find a
+value for `--host` gives you the wrong one. This command is the answer to that.
+
+No flag prints a key.
 
 ### `wren cloud auth remove`
 

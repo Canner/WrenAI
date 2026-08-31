@@ -163,6 +163,74 @@ def auth_add(
     )
 
 
+def _select_login(
+    *, project: Optional[str], host: Optional[str], command: str
+) -> tuple[str, str, dict]:
+    """Pick the one stored login the flags name, or exit with a usable error.
+
+    Shared by `link` and `auth remove` because the filter was duplicated and
+    drifted: the same "no stored login" message has now been reported twice
+    for logins that exist — once for a scheme-less `--host`, once for a
+    `--host` given the *git* host. Both are the message's fault rather than
+    the filter's, so the error names the field that eliminated the candidates
+    and prints what is actually stored.
+    """
+    from wren import cloud  # noqa: PLC0415
+
+    logins = cloud.list_logins()
+    by_project = (
+        logins if project is None else [e for e in logins if e[1] == str(project)]
+    )
+    # `api_host` is what the user typed at `auth add` and what the candidate
+    # list below prints. The store is keyed by *git* host, because that is all
+    # git hands the credential helper — so the two differ on a split-host
+    # deployment, and that difference is exactly what needs explaining here.
+    wanted_host = cloud.normalize_host(host) if host is not None else None
+    selected = (
+        by_project
+        if wanted_host is None
+        else [e for e in by_project if e[2]["api_host"] == wanted_host]
+    )
+
+    if not selected:
+        if project is not None and not by_project:
+            typer.echo(
+                f"Error: no stored Wren Cloud login for project {project}. "
+                "`wren cloud auth list` shows what is stored.",
+                err=True,
+            )
+        elif wanted_host is not None and by_project:
+            stored = sorted({e[2]["api_host"] for e in by_project})
+            typer.echo(
+                f"Error: no stored login matches --host {wanted_host}.\n"
+                f"`--host` is the Wren Cloud API host you gave `auth add`, not "
+                f"the git host. Stored for "
+                + (f"project {project}" if project else "these logins")
+                + ": "
+                + ", ".join(stored)
+                + ".\n`wren cloud auth list` shows all of them.",
+                err=True,
+            )
+        else:
+            typer.echo(
+                "Error: no stored Wren Cloud login. Run `wren cloud auth add` first.",
+                err=True,
+            )
+        raise typer.Exit(1)
+
+    if len(selected) > 1:
+        typer.echo(
+            "Error: more than one stored login matches. Narrow it with "
+            "--host and/or --project. Candidates:",
+            err=True,
+        )
+        for git_host, project_id, entry in selected:
+            typer.echo(f"  --host {entry['api_host']} --project {project_id}", err=True)
+        raise typer.Exit(1)
+
+    return selected[0]
+
+
 @cloud_app.command()
 def link(
     directory: Annotated[
@@ -218,45 +286,9 @@ def link(
     """
     from wren import cloud  # noqa: PLC0415
 
-    logins = cloud.list_logins()
-    if project is not None:
-        logins = [entry for entry in logins if entry[1] == str(project)]
-    if host is not None:
-        # Filtered on the same field the help text promises and the
-        # disambiguation candidates below print: `api_host` — the host the
-        # user passed to `auth add --host`, not the (possibly different)
-        # `--git-host`. Filtering on `git_host` here while displaying
-        # `api_host` would silently reject the exact value a user would
-        # naturally reach for: the host they logged in with.
-        # Normalized before comparing: `auth add` stores the normalized form,
-        # so a scheme-less `--host cloud.getwren.ai` here matched nothing and
-        # reported "no stored login" for a login that exists. Same defect as
-        # the one just fixed on the writing side, on the reading side.
-        logins = [
-            entry
-            for entry in logins
-            if entry[2]["api_host"] == cloud.normalize_host(host)
-        ]
-
-    if not logins:
-        typer.echo(
-            "Error: no stored Wren Cloud login found"
-            + (f" for project {project}" if project else "")
-            + ". Run `wren cloud auth add` first.",
-            err=True,
-        )
-        raise typer.Exit(1)
-    if len(logins) > 1:
-        typer.echo(
-            "Error: more than one stored login matches; disambiguate with "
-            "--host and/or --project. Candidates:",
-            err=True,
-        )
-        for git_host, project_id, entry in logins:
-            typer.echo(f"  --host {entry['api_host']} --project {project_id}", err=True)
-        raise typer.Exit(1)
-
-    git_host, project_id, entry = logins[0]
+    git_host, project_id, entry = _select_login(
+        project=project, host=host, command="link"
+    )
     try:
         outcome = cloud.link(
             directory,
@@ -334,14 +366,26 @@ def create(  # noqa: PLR0913
         Optional[str],
         typer.Option(
             "--connection-info",
-            help='Connection info as a JSON object, e.g. \'{"host": "..."}\'.',
+            help=(
+                "Connection info as a JSON object, in the Wren Cloud API's "
+                "shape — camelCase keys, and BigQuery `credentials` as the "
+                "service-account object rather than a base64 string. This is "
+                "*not* the shape `wren profile` uses; nothing converts between "
+                "them. See the field list per data source at "
+                "https://wrenai.readme.io/reference/post_projects"
+                "#database-connectioninfo-examples"
+            ),
         ),
     ] = None,
     connection_info_file: Annotated[
         Optional[Path],
         typer.Option(
             "--connection-info-file",
-            help="Path to a JSON file with the connection info.",
+            help=(
+                "Path to a JSON file with the connection info, same shape as "
+                "--connection-info. A `wren profile` export is a different "
+                "shape and will be rejected."
+            ),
         ),
     ] = None,
     test_connection: Annotated[
@@ -599,6 +643,41 @@ def unlink(
         )
 
 
+@auth_app.command("list")
+def auth_list() -> None:
+    """Show the stored credentials, without showing the keys themselves.
+
+    Exists because there was no way to see what is stored except to open
+    ``~/.wren/cloud.yml`` — and that file is keyed by *git* host, while
+    ``--host`` on the other commands means the *API* host. Reading the file to
+    find a value for ``--host`` therefore hands you the wrong one. Printing
+    both columns is what makes the difference visible.
+
+    Never prints a key. There is deliberately no flag to.
+    """
+    from wren import cloud  # noqa: PLC0415
+
+    logins = cloud.list_logins()
+    if not logins:
+        typer.echo("No stored Wren Cloud credentials.")
+        typer.echo("Add one with `wren cloud auth add --project <id>`.")
+        return
+
+    rows = [
+        (project_id, entry["api_host"], git_host, entry.get("repo") or "—")
+        for git_host, project_id, entry in logins
+    ]
+    rows.sort(key=lambda r: (r[1], int(r[0]) if r[0].isdigit() else 0))
+
+    headers = ("PROJECT", "API HOST (--host)", "GIT HOST (git talks to)", "REPO")
+    widths = [
+        max(len(headers[i]), *(len(r[i]) for r in rows)) for i in range(len(headers))
+    ]
+    typer.echo("  ".join(h.ljust(w) for h, w in zip(headers, widths)).rstrip())
+    for r in rows:
+        typer.echo("  ".join(c.ljust(w) for c, w in zip(r, widths)).rstrip())
+
+
 @auth_app.command("remove")
 def auth_remove(
     host: Annotated[
@@ -638,41 +717,9 @@ def auth_remove(
     """
     from wren import cloud  # noqa: PLC0415
 
-    logins = cloud.list_logins()
-    if project is not None:
-        logins = [entry for entry in logins if entry[1] == str(project)]
-    if host is not None:
-        # Same field as `link` filters on, for the same reason: `api_host` is
-        # what the user typed at `login` and what the candidates below print.
-        # Normalized before comparing: `auth add` stores the normalized form,
-        # so a scheme-less `--host cloud.getwren.ai` here matched nothing and
-        # reported "no stored login" for a login that exists. Same defect as
-        # the one just fixed on the writing side, on the reading side.
-        logins = [
-            entry
-            for entry in logins
-            if entry[2]["api_host"] == cloud.normalize_host(host)
-        ]
-
-    if not logins:
-        typer.echo(
-            "Error: no stored Wren Cloud login found"
-            + (f" for project {project}" if project else "")
-            + ".",
-            err=True,
-        )
-        raise typer.Exit(1)
-    if len(logins) > 1:
-        typer.echo(
-            "Error: more than one stored login matches; disambiguate with "
-            "--host and/or --project. Candidates:",
-            err=True,
-        )
-        for _git_host, project_id, entry in logins:
-            typer.echo(f"  --host {entry['api_host']} --project {project_id}", err=True)
-        raise typer.Exit(1)
-
-    git_host, project_id, entry = logins[0]
+    git_host, project_id, entry = _select_login(
+        project=project, host=host, command="auth remove"
+    )
 
     if not yes:
         confirm = typer.confirm(
