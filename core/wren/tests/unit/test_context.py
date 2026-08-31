@@ -1594,6 +1594,15 @@ def _assert_v1_sources_unchanged(
     assert get_schema_version(project_path) == 1
 
 
+def _assert_no_v2_entity_directories(project_path: Path) -> None:
+    """Failed v1→v2 apply must not leave any migrated entity directories."""
+    for collection in ("models", "views", "cubes"):
+        root = project_path / collection
+        if not root.is_dir():
+            continue
+        assert not [entry for entry in root.iterdir() if entry.is_dir()]
+
+
 def test_plan_upgrade_v1_to_v2(tmp_path):
     _make_v1_project(tmp_path)
     result = plan_upgrade(tmp_path, target_version=2)
@@ -1841,13 +1850,304 @@ def test_validate_project_reports_non_list_v1_views_container(
     # Not additionally reported once per character/key of the container.
     assert not [e for e in hard if "must be a mapping" in e.message]
 
-    # Every consumer degrades to "no views" rather than raising.
+    # Runtime/build consumers still normalise to "no views". Migration is
+    # stricter because deleting the source after normalisation would lose data.
     assert build_manifest(tmp_path)["views"] == []
     assert build_json(tmp_path)["views"] == []
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="malformed views"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+@pytest.mark.parametrize("views_yml", ["[]\n", "false\n", "0\n", '""\n'])
+def test_plan_upgrade_v1_to_v2_rejects_falsey_non_mapping_views_root(
+    tmp_path, views_yml
+):
+    """Falsey YAML roots are still malformed unless the document is empty."""
+    _make_v1_project(tmp_path)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text(views_yml, encoding="utf-8")
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="malformed views"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+def test_plan_upgrade_v1_to_v2_allows_empty_views_document(tmp_path):
+    """An empty YAML document has no views to lose and remains upgradeable."""
+    _make_v1_project(tmp_path)
+    (tmp_path / "views.yml").write_text("", encoding="utf-8")
+
     plan = plan_upgrade(tmp_path, target_version=2)
+
+    assert "views.yml" in plan.files_deleted
     assert not [f for f in plan.files_created if f.startswith("views/")]
+
+
+@pytest.mark.parametrize(
+    "views_yml",
+    [
+        "legacy_setting: value\n",
+        "views: []\nlegacy_setting: value\n",
+    ],
+)
+def test_plan_upgrade_v1_to_v2_rejects_unpreserved_views_root_keys(
+    tmp_path, views_yml
+):
+    """Root fields migration cannot carry forward must block source deletion."""
+    _make_v1_project(tmp_path)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text(views_yml, encoding="utf-8")
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="unsupported root keys"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+def test_plan_upgrade_v1_to_v2_allows_anchor_root_used_by_merge_key(tmp_path):
+    """A root anchor consumed by a view is preserved through YAML expansion."""
+    _make_v1_project(tmp_path)
+    (tmp_path / "views.yml").write_text(
+        "base: &base\n"
+        "  statement: SELECT 1\n"
+        "views:\n"
+        "  - name: anchored\n"
+        "    <<: *base\n",
+        encoding="utf-8",
+    )
+
+    plan = plan_upgrade(tmp_path, target_version=2)
+
+    assert "views/anchored/metadata.yml" in plan.files_created
+    assert "views.yml" in plan.files_deleted
+
+
+def test_apply_upgrade_v1_to_v2_preserves_merge_override(tmp_path):
+    """Explicit keys may override merged defaults without looking duplicated."""
+    _make_v1_project(tmp_path)
+    (tmp_path / "views.yml").write_text(
+        "base: &base\n"
+        "  statement: SELECT 1\n"
+        "views:\n"
+        "  - <<: *base\n"
+        "    name: anchored\n"
+        "    statement: SELECT 2\n",
+        encoding="utf-8",
+    )
+    plan = plan_upgrade(tmp_path, target_version=2)
+
     apply_upgrade(tmp_path, plan)
-    assert not (tmp_path / "views").exists()
+
+    migrated = yaml.safe_load(
+        (tmp_path / "views" / "anchored" / "metadata.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert migrated["name"] == "anchored"
+    assert migrated["statement"] == "SELECT 2"
+    assert not (tmp_path / "views.yml").exists()
+
+
+@pytest.mark.parametrize(
+    ("first_name", "second_name"),
+    [
+        ("revenue", "revenue"),
+        ("Revenue", "revenue"),
+    ],
+)
+def test_plan_upgrade_v1_to_v2_rejects_colliding_view_targets(
+    tmp_path, first_name, second_name
+):
+    """Legacy views must map to distinct portable v2 target directories."""
+    _make_v1_project(tmp_path)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text(
+        "views:\n"
+        f"  - name: {first_name}\n"
+        "    statement: SELECT 1\n"
+        f"  - name: {second_name}\n"
+        "    statement: SELECT 2\n",
+        encoding="utf-8",
+    )
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="multiple legacy views map"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+    _assert_no_v2_entity_directories(tmp_path)
+
+
+def test_apply_upgrade_v1_to_v2_rechecks_view_target_collisions_before_writing(
+    tmp_path,
+):
+    """A collision introduced after planning must abort before any v2 write."""
+    _make_v1_project(tmp_path)
+    plan = plan_upgrade(tmp_path, target_version=2)
+    (tmp_path / "views.yml").write_text(
+        "views:\n"
+        "  - name: Revenue\n"
+        "    statement: SELECT 1\n"
+        "  - name: revenue\n"
+        "    statement: SELECT 2\n",
+        encoding="utf-8",
+    )
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="multiple legacy views map"):
+        apply_upgrade(tmp_path, plan)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+    _assert_no_v2_entity_directories(tmp_path)
+
+
+@pytest.mark.parametrize("second_name", ["orders", "Orders"])
+def test_plan_upgrade_v1_to_v2_rejects_colliding_model_targets(
+    tmp_path, second_name
+):
+    """Different legacy model files cannot collapse into one v2 directory."""
+    _make_v1_project(tmp_path)
+    revenue_file = tmp_path / "models" / "revenue.yml"
+    revenue_file.write_text(
+        revenue_file.read_text(encoding="utf-8").replace(
+            "name: revenue\n", f"name: {second_name}\n", 1
+        ),
+        encoding="utf-8",
+    )
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="multiple legacy model files map"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+    _assert_no_v2_entity_directories(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "views_yml",
+    [
+        "views:\n  - name: first\nviews:\n  - name: second\n",
+        "views:\n  - name: first\n    statement: SELECT 1\n    statement: SELECT 2\n",
+    ],
+)
+def test_plan_upgrade_v1_to_v2_rejects_duplicate_yaml_keys_without_data_loss(
+    tmp_path, views_yml
+):
+    """Duplicate YAML keys must never be collapsed before migration."""
+    _make_v1_project(tmp_path)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text(views_yml, encoding="utf-8")
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="duplicate YAML key"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+def test_apply_upgrade_v1_to_v2_rechecks_duplicate_yaml_keys_before_writing(tmp_path):
+    """A duplicate introduced after planning must still block all writes."""
+    _make_v1_project(tmp_path)
+    plan = plan_upgrade(tmp_path, target_version=2)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text(
+        "views:\n  - name: first\nviews:\n  - name: second\n",
+        encoding="utf-8",
+    )
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="duplicate YAML key"):
+        apply_upgrade(tmp_path, plan)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+    _assert_no_v2_entity_directories(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "views_yml",
+    [
+        "views: [\n",
+        "views:\n  - ? [name]\n    : value\n",
+    ],
+)
+def test_plan_upgrade_v1_to_v2_wraps_yaml_loader_errors_without_data_loss(
+    tmp_path, views_yml
+):
+    """Malformed YAML must fail as UpgradeError without changing source files."""
+    _make_v1_project(tmp_path)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text(views_yml, encoding="utf-8")
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="invalid views.yml"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+def test_apply_upgrade_v1_to_v2_rechecks_yaml_loader_errors_before_writing(tmp_path):
+    """Malformed YAML introduced after planning must block all writes."""
+    _make_v1_project(tmp_path)
+    plan = plan_upgrade(tmp_path, target_version=2)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text("views: [\n", encoding="utf-8")
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="invalid views.yml"):
+        apply_upgrade(tmp_path, plan)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+    _assert_no_v2_entity_directories(tmp_path)
+
+
+def test_plan_upgrade_v1_to_v2_rejects_nameless_view_without_data_loss(tmp_path):
+    _make_v1_project(tmp_path)
+    views_file = tmp_path / "views.yml"
+    views_file.write_text(
+        "views:\n"
+        "  - name: kept\n"
+        "    statement: SELECT 1\n"
+        "  - statement: SELECT id FROM orders\n"
+        "  - just_a_bare_string\n",
+        encoding="utf-8",
+    )
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="malformed views"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+    assert "SELECT id FROM orders" in views_file.read_text(encoding="utf-8")
+    assert "just_a_bare_string" in views_file.read_text(encoding="utf-8")
 
 
 # ── Regression: model columns non-list / non-dict entries ─────────────────
@@ -2092,23 +2392,31 @@ def test_build_json_does_not_crash_on_v1_views_yml_non_mapping_entries(tmp_path)
     assert [v["name"] for v in manifest["views"]] == ["summary"]
 
 
-def test_plan_upgrade_v1_to_v2_does_not_crash_on_non_mapping_view(tmp_path):
+def test_plan_upgrade_v1_to_v2_rejects_non_mapping_view(tmp_path):
     _make_v1_project(tmp_path)
     _corrupt_v1_views_yml(tmp_path)
-    result = plan_upgrade(tmp_path, target_version=2)
-    view_files = [f for f in result.files_created if f.startswith("views/")]
-    assert view_files == ["views/summary/metadata.yml"]
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="malformed views"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
 
 
-def test_apply_upgrade_v1_to_v2_does_not_crash_on_non_mapping_view(tmp_path):
+def test_apply_upgrade_v1_to_v2_rechecks_non_mapping_view_before_writing(tmp_path):
     _make_v1_project(tmp_path)
-    _corrupt_v1_views_yml(tmp_path)
     result = plan_upgrade(tmp_path, target_version=2)
-    apply_upgrade(tmp_path, result)
-    assert (tmp_path / "views" / "summary" / "metadata.yml").exists()
-    assert not (tmp_path / "views.yml").exists()
-    # Only the well-formed view became a directory — no junk siblings.
-    assert [d.name for d in (tmp_path / "views").iterdir()] == ["summary"]
+    _corrupt_v1_views_yml(tmp_path)
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="malformed views"):
+        apply_upgrade(tmp_path, result)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
 
 
 @pytest.mark.parametrize("entity", ["model", "view", "cube"])
