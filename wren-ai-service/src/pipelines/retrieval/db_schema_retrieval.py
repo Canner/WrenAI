@@ -1986,15 +1986,14 @@ def construct_retrieval_results(
                 for retrieval_result in retrieval_results
             ],
         )
-
-        scored_tables.append((total_score, table_schema["name"], selected_columns))
-
-    scored_tables.sort(key=lambda item: (-item[0], item[1]))
-    return {
-        table_name: {"columns": columns}
-        for _, table_name, columns in scored_tables[:max_tables]
-        if columns
-    }
+        return {
+            "retrieval_results": retrieval_results,
+            "has_calculated_field": check_using_db_schemas_without_pruning[
+                "has_calculated_field"
+            ],
+            "has_metric": check_using_db_schemas_without_pruning["has_metric"],
+            "has_json_field": check_using_db_schemas_without_pruning["has_json_field"],
+        }
 
 
 def _normalize_column_selection_results(parsed_response: Any) -> list[dict]:
