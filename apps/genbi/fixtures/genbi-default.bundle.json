@@ -240,7 +240,7 @@
       "capabilities": [
         {
           "capability": "sql_execution:read_only",
-          "outcome": "realize-via",
+          "outcome": "native",
           "provided_by": "runtime",
           "criticality": "required"
         },
@@ -485,13 +485,13 @@
       "capabilities": [
         {
           "capability": "sql_execution:read_only",
-          "outcome": "realize-via",
+          "outcome": "native",
           "provided_by": "runtime",
           "criticality": "required"
         },
         {
           "capability": "genbi_build",
-          "outcome": "realize-via",
+          "outcome": "native",
           "provided_by": "runtime",
           "criticality": "required"
         },
@@ -636,7 +636,7 @@
       "capabilities": [
         {
           "capability": "sql_execution:read_only",
-          "outcome": "realize-via",
+          "outcome": "native",
           "provided_by": "runtime",
           "criticality": "required"
         },
