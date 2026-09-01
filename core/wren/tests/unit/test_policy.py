@@ -10,7 +10,7 @@ from sqlglot import exp, parse_one
 
 from wren.config import WrenConfig
 from wren.model.error import ErrorCode, WrenError
-from wren.policy import validate_planned_sql, validate_sql_policy
+from wren.policy import resolve_model_name, validate_planned_sql, validate_sql_policy
 
 pytestmark = pytest.mark.unit
 
@@ -669,3 +669,38 @@ def test_planned_sql_fails_open_when_unparseable():
     open where the input direction fails closed.
     """
     validate_planned_sql("SELCT a FRM orders", "postgres")
+
+
+# ── resolve_model_name, case-insensitive fallback ──────────────────────────
+
+
+def test_resolve_model_name_exact_match_wins():
+    assert resolve_model_name("orders", False, {"orders", "Orders"}) == "orders"
+
+
+def test_resolve_model_name_quoted_is_case_sensitive():
+    assert resolve_model_name("Orders", True, {"orders"}) is None
+
+
+def test_resolve_model_name_unquoted_case_insensitive_fallback():
+    assert resolve_model_name("ORDERS", False, {"orders"}) == "orders"
+
+
+def test_resolve_model_name_no_match_returns_none():
+    assert resolve_model_name("missing", False, {"orders"}) is None
+
+
+def test_resolve_model_name_case_collision_is_deterministic():
+    """When two model names differ only in case, an unquoted reference that
+    matches neither exactly must resolve the same way every time.
+
+    Before the fix this depended on ``set`` iteration order, which varies by
+    process under ``PYTHONHASHSEED``: reproduced directly by running this
+    same lookup across 8 fresh subprocesses, which split 6/2 between
+    ``'Orders'`` and ``'orders'``. Sorted order is an arbitrary tie-break
+    (the two names are equally "right", this pair may legitimately be two
+    distinct models, see test_case_sensitivity.py); the point is only that
+    it no longer varies.
+    """
+    for _ in range(8):
+        assert resolve_model_name("ORDERS", False, {"Orders", "orders"}) == "Orders"
