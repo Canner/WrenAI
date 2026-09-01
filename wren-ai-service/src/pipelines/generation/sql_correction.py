@@ -1,10 +1,9 @@
 import logging
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
-from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 
 from langfuse.decorators import observe
@@ -164,7 +163,7 @@ async def post_process(
     generate_sql_correction: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
-    documents: List[Document] | None = None,
+    documents: list[str] | None = None,
     query: str | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
