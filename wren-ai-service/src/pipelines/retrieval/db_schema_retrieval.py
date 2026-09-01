@@ -758,7 +758,8 @@ def _fallback_retrieval_results(
             )
 
     return {
-        "retrieval_results": retrieval_results,
+        "db_schemas": retrieval_results,
+        "tokens": _token_count,
         "has_calculated_field": has_calculated_field,
         "has_metric": has_metric,
         "has_json_field": has_json_field,
@@ -1765,7 +1766,8 @@ def check_using_db_schemas_without_pruning(
         _token_count = limited_token_count
 
     return {
-        "retrieval_results": retrieval_results,
+        "db_schemas": retrieval_results,
+        "tokens": _token_count,
         "has_calculated_field": has_calculated_field,
         "has_metric": has_metric,
         "has_json_field": has_json_field,
@@ -1791,48 +1793,10 @@ def prompt(
             )
         )
 
-    for table_name, table_contents in secondary.items():
-        if table_name not in merged:
-            merged[table_name] = {
-                **table_contents,
-                "columns": list(table_contents.get("columns", [])),
-            }
-            continue
-
-        columns = list(merged[table_name].get("columns", []))
-        for column in table_contents.get("columns", []):
-            if column not in columns:
-                columns.append(column)
-        merged[table_name]["columns"] = columns
-
-    return merged
-
-
-def _lexical_columns_and_tables_needed(
-    construct_db_schemas: list[dict],
-    query: str | None,
-    max_tables: int = 4,
-    max_columns_per_table: int = 12,
-) -> dict[str, dict]:
-    if not query:
+        _prompt = prompt_builder.run(question=query, db_schemas=db_schemas)
+        return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
+    else:
         return {}
-
-    query_tokens = _tokenize_schema_text(_augment_retrieval_query(query))
-    if not query_tokens:
-        return {}
-
-    scored_tables = []
-    for table_schema in construct_db_schemas:
-        if table_schema.get("type") != "TABLE":
-            continue
-
-        table_tokens = _tokenize_schema_text(
-            table_schema.get("name")
-        ) | _tokenize_schema_text(
-            table_schema.get("comment")
-        )
-        table_score = len(query_tokens & table_tokens) * 6
-        column_scores = []
 
 @observe()
 def construct_retrieval_results(

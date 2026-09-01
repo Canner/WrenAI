@@ -7,7 +7,11 @@ Date: 2026-09-01
 - Workspace: `D:\WrenAI`
 - Branch: `organization/ask-schema-grounding-20260820`
 - Local HEAD before this handoff commit: `0ff1e6e23 Improve Ask schema grounding`
-- Remote tracking state at handoff time: local branch was ahead 1 and behind 82
+- Direct push from `D:\WrenAI` was rejected because the local branch was behind the remote branch.
+- The push was prepared from clean integration worktree `D:\WrenAI-push-ask-20260901`.
+- Integration base: remote `organization/ask-schema-grounding-20260820` at `2f4d8f360 Tighten schema-driven Ask semantic validation`.
+- Local commits replayed onto the remote tip: `0ff1e6e23` and `5179591df`.
+- Merge-resolution fixes were applied in the integration worktree and validated before push.
 - Do not use `.codex-tmp` as runtime source. The AI service was restarted from `D:\WrenAI\wren-ai-service`.
 
 ## Goal Continued
@@ -171,6 +175,22 @@ Additional focused Ask service test:
 
 Result: 4 passed.
 
+Post-integration focused test from `D:\WrenAI-push-ask-20260901\wren-ai-service` using the existing `D:\WrenAI` virtualenv:
+
+```powershell
+D:\WrenAI\wren-ai-service\venv\Scripts\python.exe -m pytest tests/pytest/services/test_ask.py tests/pytest/pipelines/generation/test_sql_schema_grounding.py tests/pytest/pipelines/retrieval/test_db_schema_retrieval.py tests/pytest/pipelines/generation/test_sql_answer_prompt.py tests/pytest/pipelines/indexing/test_db_schema.py tests/pytest/pipelines/generation/test_prompt_grounding_contracts.py -q
+```
+
+Result: 139 passed, 1 skipped.
+
+Targeted Jest command was attempted through the repo Yarn release:
+
+```powershell
+node .yarn/releases/yarn-4.5.3.cjs test src/apollo/server/services/tests/queryService.test.ts --runInBand
+```
+
+It did not reach the changed `QueryService` tests because TypeScript compilation failed first in existing `src/apollo/server/repositories/baseRepository.ts` type errors.
+
 Warnings were pre-existing Pydantic deprecation warnings and existing coroutine cleanup warnings in semantics-preparation tests.
 
 ## Files To Include In Handoff Commit
@@ -226,7 +246,7 @@ Do not include:
 ## Remaining Blockers
 
 - Modeling AI Assistant generate semantics/relationships for CW_GL remains unresolved. Earlier evidence showed semantics omitted the selected model and relationships timed out. Final Ask performance validation skipped assistant generation checks.
-- Branch is behind remote by 82 commits. Push may require integration/rebase by whoever owns the branch if GitHub rejects a non-fast-forward push.
+- Direct push from the original dirty workspace was rejected as non-fast-forward; the final push was prepared by replaying the work onto the remote tip in a clean integration worktree.
 
 ## Guardrails Preserved
 

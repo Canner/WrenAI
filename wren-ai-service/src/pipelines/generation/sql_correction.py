@@ -1,9 +1,10 @@
 import logging
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
+from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 
 from langfuse.decorators import observe
