@@ -3,3 +3,7 @@ packages:
 allowBuilds:
   '@warble/cli': true
   node-pty: true
+minimumReleaseAgeExclude:
+  - '@warble/claude-agent-sdk@0.7.0'
+  - '@warble/cli@0.7.0'
+  - '@warble/codex-local@0.7.0'
