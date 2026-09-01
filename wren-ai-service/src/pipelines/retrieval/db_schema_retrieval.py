@@ -1798,6 +1798,19 @@ def prompt(
     else:
         return {}
 
+@observe(as_type="generation", capture_input=False)
+@trace_cost
+async def filter_columns_in_tables(
+    prompt: dict, table_columns_selection_generator: Any, generator_name: str
+) -> dict:
+    if prompt:
+        return await table_columns_selection_generator(
+            prompt=prompt.get("prompt")
+        ), generator_name
+    else:
+        return {}, generator_name
+
+
 @observe()
 def construct_retrieval_results(
     check_using_db_schemas_without_pruning: dict,
