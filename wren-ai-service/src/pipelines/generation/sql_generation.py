@@ -156,7 +156,7 @@ async def post_process(
         generate_sql.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
-        contexts=documents,
+        contexts=validation_contexts or documents,
         fallback_query=grounding_query or query,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
@@ -215,6 +215,7 @@ class SQLGeneration(BasicPipeline):
         allow_data_preview: bool = False,
         sql_knowledge: SqlKnowledge | None = None,
         grounding_query: str | None = None,
+        validation_contexts: list[str] | None = None,
     ):
         logger.info(
             "SQL Generation pipeline is running for project_id=%s mdl_hash=%s",
