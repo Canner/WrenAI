@@ -13,6 +13,7 @@ from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     construct_instructions,
+    construct_schema_identifier_catalog,
     sanitize_sql_generation_reasoning,
     sql_generation_reasoning_system_prompt,
 )

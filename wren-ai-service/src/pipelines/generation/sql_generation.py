@@ -15,6 +15,7 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
+    construct_schema_identifier_catalog,
     generate_simple_analytics_sql,
     get_calculated_field_instructions,
     get_json_field_instructions,

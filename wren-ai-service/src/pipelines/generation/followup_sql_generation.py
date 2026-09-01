@@ -16,6 +16,7 @@ from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_ask_history_messages,
     construct_instructions,
+    construct_schema_identifier_catalog,
     generate_simple_analytics_sql,
     get_calculated_field_instructions,
     get_json_field_instructions,
