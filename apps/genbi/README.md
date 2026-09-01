@@ -181,21 +181,13 @@ The `warble` binary and its dispatchers come from that Warble checkout; the
 GenBI profiles and their committed IRs are this package's own `profiles/` tree,
 which is what the launch gate defaults to and attests under `genbi`.
 
-Run exactly one boot mode. Bootstrap accepts a workspace root where Setup may
-create projects; bound mode accepts an existing Wren project. Build that
-project with `wren context build` before using bound mode. Do not set both.
+The BFF has a single boot mode: bootstrap, against a workspace root where
+Setup may create projects. An existing Wren project is adopted afterward,
+through the running app — there is no separate boot-time mode or flag for it.
 
 ```bash
-# Bootstrap mode
-pnpm run verify:launch -- --mode bootstrap \
+pnpm run verify:launch -- \
   --workspace-root /absolute/path/to/fresh-bootstrap-workspace \
-  --runtime subscription:claude \
-  --warble-bin "$WARBLE_BIN" \
-  --agent-sdk-bin "$AGENT_SDK_BIN"
-
-# Or bound mode
-pnpm run verify:launch -- --mode bound \
-  --project /absolute/path/to/built-wren-project \
   --runtime subscription:claude \
   --warble-bin "$WARBLE_BIN" \
   --agent-sdk-bin "$AGENT_SDK_BIN"
@@ -216,8 +208,7 @@ verified runtime input.
 ### Running the BFF
 
 Start the BFF with the exact paths the gate verified. The SQLite state must be
-outside the bootstrap workspace and every bound project. This example is
-bootstrap mode:
+outside the bootstrap workspace and every project adopted through the app.
 
 ```bash
 mkdir -p /absolute/path/to/private-bff-state
@@ -235,10 +226,6 @@ WREN_BFF_DB_PATH=/absolute/path/to/private-bff-state/bff.sqlite \
 PORT=4787 \
 pnpm run start:bff
 ```
-
-For bound mode, replace `WREN_HARNESS_WORKSPACE_ROOT` with
-`WREN_HARNESS_PROJECT=/absolute/path/to/built-wren-project`. Keep the same boot
-mode and canonical path used by `verify:launch`.
 
 The BFF listens on `:4787` by default (`PORT` overrides it).
 
@@ -263,19 +250,19 @@ curl -s http://localhost:5273/api/config/runtime
 JSON back means the proxy reached the BFF. The SPA's own `index.html` means
 `VITE_BFF_URL` isn't in effect; `502` means it is, but nothing is listening.
 
-That one answers the same regardless of which boot mode you used, so if you
-bound a project, check the project itself resolved:
+Once a project has been adopted through the running app, the same endpoint
+reflects it:
 
 ```bash
 curl -s http://localhost:4787/api/context/overview
 ```
 
-A bound, built project returns its name and models.
+An adopted, built project returns its name and models.
 
 Finally, rerun the same launch-gate command with the live endpoints appended:
 
 ```bash
-pnpm run verify:launch -- --mode bootstrap \
+pnpm run verify:launch -- \
   --workspace-root /absolute/path/to/fresh-bootstrap-workspace \
   --runtime subscription:claude \
   --warble-bin "$WARBLE_BIN" \
@@ -283,8 +270,7 @@ pnpm run verify:launch -- --mode bootstrap \
   --live --bff-url http://localhost:4787 --ui-url http://localhost:5273
 ```
 
-Use the bound-mode arguments instead when that is the mode you launched. This
-live pass is the proof that the UI, BFF, boot mode, runtime, and Warble tuple are
+This live pass is the proof that the UI, BFF, runtime, and Warble tuple are
 the ones selected above.
 
 ### Codex status
