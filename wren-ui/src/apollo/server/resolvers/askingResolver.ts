@@ -188,6 +188,7 @@ export class AskingResolver {
     args: { data: { question: string; threadId?: number } },
     ctx: IContext,
   ): Promise<Task> {
+    const startedAt = Date.now();
     const { question, threadId } = args.data;
     const project = await ctx.projectService.getCurrentProject();
 
@@ -197,6 +198,11 @@ export class AskingResolver {
       threadId,
       language: WrenAILanguage[project.language] || WrenAILanguage.EN,
     });
+    logger.info(
+      `Ask timing stage=frontend_request project_id=${project.id} thread_id=${
+        threadId ?? ''
+      } elapsed_ms=${Date.now() - startedAt}`,
+    );
     ctx.telemetry.sendEvent(TelemetryEvent.HOME_ASK_CANDIDATE, {
       question,
       taskId: task.id,

@@ -1471,6 +1471,7 @@ export class ModelResolver {
     args: { data: PreviewSQLData },
     ctx: IContext,
   ) {
+    const startedAt = Date.now();
     const { sql, projectId, hash, limit, dryRun } = args.data;
     const project = projectId
       ? await ctx.projectService.getProjectById(parseInt(projectId))
@@ -1483,13 +1484,19 @@ export class ModelResolver {
         'Project has not been deployed successfully yet. Deploy the model before previewing or validating SQL.',
       );
     }
-    return await ctx.queryService.preview(sql, {
+    const result = await ctx.queryService.preview(sql, {
       project,
       limit: limit,
       modelingOnly: false,
       manifest,
       dryRun,
     });
+    logger.info(
+      `Ask timing stage=preview_sql_request project_id=${project.id} dry_run=${
+        dryRun ?? false
+      } elapsed_ms=${Date.now() - startedAt}`,
+    );
+    return result;
   }
 
   public async dryPlanSql(

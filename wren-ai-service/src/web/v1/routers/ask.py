@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import time
 import uuid
 from dataclasses import asdict
 
@@ -21,6 +23,7 @@ from src.web.v1.services.ask import (
 )
 
 router = APIRouter()
+logger = logging.getLogger("wren-ai-service")
 
 
 @router.post("/asks")
@@ -29,6 +32,7 @@ async def ask(
     service_container: ServiceContainer = Depends(get_service_container),
     service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> AskResponse:
+    started_at = time.perf_counter()
     query_id = str(uuid.uuid4())
     ask_request.query_id = query_id
     ask_service = service_container.ask_service
@@ -57,6 +61,12 @@ async def ask(
             )
 
     task.add_done_callback(_handle_task_done)
+    logger.info(
+        "Ask timing query_id=%s project_id=%s stage=task_creation elapsed_ms=%.1f",
+        query_id,
+        ask_request.project_id or "",
+        (time.perf_counter() - started_at) * 1000,
+    )
     return AskResponse(query_id=query_id)
 
 

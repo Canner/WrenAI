@@ -101,6 +101,7 @@ export class TextBasedAnswerBackgroundTracker {
               const mdl = deployment.manifest;
               let data: PreviewDataResponse;
               try {
+                const executionStartedAt = Date.now();
                 data = (await this.queryService.preview(threadResponse.sql, {
                   project,
                   manifest: mdl,
@@ -108,6 +109,13 @@ export class TextBasedAnswerBackgroundTracker {
                   limit: 500,
                   cacheEnabled: false,
                 })) as PreviewDataResponse;
+                logger.info(
+                  `Ask timing stage=sql_execution response_id=${
+                    threadResponse.id
+                  } project_id=${project.id} elapsed_ms=${
+                    Date.now() - executionStartedAt
+                  } row_count=${data?.data?.length ?? ''}`,
+                );
               } catch (error) {
                 logger.error(`Error when query sql data: ${error}`);
                 const failedDetail = {
@@ -123,6 +131,7 @@ export class TextBasedAnswerBackgroundTracker {
                 throw error;
               }
 
+              const answerRequestStartedAt = Date.now();
               const response = await this.wrenAIAdaptor.createTextBasedAnswer({
                 query: threadResponse.question,
                 sql: threadResponse.sql,
@@ -132,6 +141,13 @@ export class TextBasedAnswerBackgroundTracker {
                   language: WrenAILanguage[project.language] || WrenAILanguage.EN,
                 },
               });
+              logger.info(
+                `Ask timing stage=answer_formatting_request response_id=${
+                  threadResponse.id
+                } project_id=${project.id} query_id=${
+                  response.queryId
+                } elapsed_ms=${Date.now() - answerRequestStartedAt}`,
+              );
 
               const preprocessingDetail = {
                 ...threadResponse.answerDetail,
@@ -149,10 +165,18 @@ export class TextBasedAnswerBackgroundTracker {
               answerDetail.queryId &&
               answerDetail.status === ThreadResponseAnswerStatus.PREPROCESSING
             ) {
+              const answerPollStartedAt = Date.now();
               const result: TextBasedAnswerResult =
                 await this.wrenAIAdaptor.getTextBasedAnswerResult(
                   answerDetail.queryId,
                 );
+              logger.info(
+                `Ask timing stage=answer_formatting_poll response_id=${
+                  threadResponse.id
+                } query_id=${answerDetail.queryId} elapsed_ms=${
+                  Date.now() - answerPollStartedAt
+                } status=${result.status}`,
+              );
 
               if (result.status === TextBasedAnswerStatus.PREPROCESSING) {
                 return;

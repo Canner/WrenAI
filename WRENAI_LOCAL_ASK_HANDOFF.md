@@ -1,283 +1,236 @@
-# WrenAI Ask Grounding Handoff
+# WrenAI Ask Schema Grounding Handoff
 
-Date: 2026-08-20
+Date: 2026-09-01
 
-## Current Goal
+## Current Branch
 
-Make WrenAI's Ask pipeline schema-first for the active org/project. Natural language should search and rank verified schema metadata, but final SQL must use only tables, views, columns, relationships, metrics, and values supported by the selected project's metadata.
+- Workspace: `D:\WrenAI`
+- Branch: `organization/ask-schema-grounding-20260820`
+- Local HEAD before this handoff commit: `0ff1e6e23 Improve Ask schema grounding`
+- Remote tracking state at handoff time: local branch was ahead 1 and behind 82
+- Do not use `.codex-tmp` as runtime source. The AI service was restarted from `D:\WrenAI\wren-ai-service`.
 
-Do not fix future issues by hardcoding one question, project, table, column, or organization. Representative prompts such as `Which repair logs have the highest priority?` are regression examples only.
+## Goal Continued
 
-## Final Runtime State
+Continue the WrenAI Ask schema-grounding work for CWPay and CW_GL while preserving Orders and PCB_DB behavior. The focus of this continuation was Ask speed and correctness on large schemas:
 
-- UI: `http://127.0.0.1:3000`
-- AI service: `http://127.0.0.1:5555`
-- AI health: `{"status":"ok"}`
-- Active project restored after validation: `org / PCB_DB`
-- Active project id: `10`
-- Orders project id: `11`
-- Sales duplicate: not shown in current project list; `Orders` remains canonical.
+- add timing logs for Ask stages
+- identify slow stages
+- reduce unnecessary LLM calls
+- cache schema-derived metadata and ranking inputs
+- keep SQL generation schema-verified
+- return clear unsupported results instead of hallucinated SQL
+- validate CWPay, CW_GL, Orders, and PCB_DB
 
-Current projects visible through `/api/v1/projects/current`:
+## What Was Done
 
-- id `4`, unnamed DuckDB
-- id `10`, `PCB_DB`
-- id `11`, `Orders`
-- id `12`, `CWPay`
-- id `13`, `CW_GL`
+### Timing and Observability
 
-## What Changed Today
+Ask timing logs now cover the key path across UI and AI service:
 
-### Generic Schema Grounding
+- frontend request
+- task creation
+- schema retrieval support context
+- schema retrieval
+- candidate ranking
+- LLM intent generation
+- SQL generation / deterministic fast path
+- SQL validation
+- SQL execution
+- answer formatting request and polling
+- cancel request and cancellation point
 
-Permanent source changes are now in `D:\WrenAI\wren-ai-service`, not only `.codex-tmp`.
+Relevant logs reviewed:
 
-Main file:
+- `.codex-tmp\ai-dev-after13.err.log`
+- `.codex-tmp\ai-dev-after14.err.log`
+- `.codex-tmp\ai-dev-after15.err.log`
+- `.codex-tmp\ai-dev-after17.err.log`
+- `.codex-tmp\ai-dev-after19.err.log`
+- `.codex-tmp\ai-dev-after20.err.log`
 
-- `wren-ai-service/src/pipelines/generation/utils/sql.py`
+Final stage summary from `.codex-tmp\ai-dev-after20.err.log`:
 
-Added or improved:
+- `sql_generation_fast_path`: avg about 1.4s, max about 2.8s
+- `schema_retrieval`: avg about 0.5s, max about 1.5s
+- `schema_retrieval_support_context`: avg about 19ms
+- task creation and frontend markers were effectively negligible
+- no LLM intent generation was used by the final Ask validation tasks except the explicit cancel test
 
-- SQL identifier validation against retrieved schema.
-- Semantic coverage validation so valid identifiers are not enough; the referenced table/view must also support the requested business concepts.
-- Unsupported-schema result helper that returns `NO_RELEVANT_SQL` with no invented SQL.
-- Deterministic schema-grounded fallback for common Ask families:
-  - count / grouped counts
-  - top-N
-  - highest / lowest
-  - latest / recent
-  - priority / severity
-  - status filters
-  - date/month/year filters
-  - revenue/sales measures
-  - failure counts vs defect-rate metrics
-  - failure type value filters
-- Semantic alias support from Wren retrieved context blocks.
-- More timestamp type support, including `TIMESTAMPTZ`, which fixed the live `latest repair logs` failure.
-- Normalization of dialect issues such as `TOP n`, joined `DESCLIMIT`, and order-by aliases.
-- Logs for generated SQL validation, deterministic fallback SQL, fallback validation, selected table, verified columns, and metric intent.
+There is one non-Ask background outlier in the same AI log: `schema_retrieval_total` around 142s from a column-pruning/question-recommendation path. It was not part of the final Ask task timing set.
 
-### Retrieval Improvements
+### Performance Improvements
 
-Main file:
+- Added deterministic schema-driven fast paths for clear count, grouping, top-N, latest, date/month bucket, distribution, listing, and same-thread group-result follow-up shapes.
+- Added pre-intent unsupported handling for simple analytics requests when active-project schema coverage is missing.
+- Added schema metadata/token/index caching for table/column/description-derived matching.
+- Changed large-schema retrieval to broad candidate gathering and small top-K reranking.
+- Changed generation-context limiting to skip oversized candidates and continue looking for smaller valid candidates within the token budget.
+- Tightened same-thread follow-up grounding to use compact latest verified SQL/table identifiers instead of accumulating stale or oversized history.
+- Preserved schema validation and dry-run validation. Unsupported cases return `NO_RELEVANT_SQL` instead of invalid SQL.
+- Fixed SQL literal offset handling so extracted filter values are validated against the right columns.
+- Fixed top record/listing behavior so row-level date questions order by verified date columns instead of unrelated numeric fields.
+- Tightened answer formatting prompts to use executed SQL result rows only and not invent analysis, values, code, or examples.
+- Added transient MSSQL deadlock retry around Ibis query execution.
 
-- `wren-ai-service/src/pipelines/retrieval/db_schema_retrieval.py`
+### Count Shape Fix
 
-Added or improved:
+The CWPay question `How many invoice records are there?` now returns a scalar aggregate:
 
-- Project-scoped retrieval filters retained and tested.
-- Query expansion for business concepts such as repair, failure, revenue, order, material, status, priority, latest, and date.
-- Ranking uses table names, column names, descriptions/comments, semantic context, and generic-table deboosting.
-- Logs for:
-  - selected project id
-  - retrieved candidate tables and scores
-  - selected schema objects and columns
+```sql
+SELECT
+  COUNT(*) AS "record_count"
+FROM
+  "dbo_View_Open_Invoices"
+```
 
-### Generation Pipeline Wiring
+The result shape is one column, `record_count`, and one row. It no longer returns invoice detail columns for that simple count shape.
 
-Files:
+### Same-Thread Follow-Ups
 
-- `wren-ai-service/src/pipelines/generation/sql_generation.py`
+Follow-up questions now retrieve exact prior verified tables from the latest SQL and use a compact grounding query. This fixed the slow same-thread path that previously fell back to LLM calls on large schemas.
+
+Final targeted follow-up waits:
+
+- CWPay: about 3.0s
+- CW_GL: about 3.0s
+- Orders: about 3.1s
+- PCB_DB: about 2.0s
+
+## Validation Results
+
+Final artifacts:
+
+- `.codex-tmp\ask_perf_benchmark_after_final.json`
+- `.codex-tmp\resume_schema_grounding_validation_after_final.json`
+- `.codex-tmp\cancel_check_after20.json`
+
+Before/after benchmark:
+
+- Before avg Ask wait: 61,818.6ms
+- Before max Ask wait: 143,366ms
+- After avg Ask wait: 3,388ms
+- After max Ask wait: 5,056ms
+
+Observed CWPay examples:
+
+- `How many invoice records are there?`
+  - before: 84,653ms
+  - after: 3,031ms
+  - final SQL uses scalar `COUNT(*) AS "record_count"`
+- `Show invoices by business unit`
+  - before: 112,881ms
+  - after: 3,036ms
+  - final SQL groups by verified `bunit`
+
+Final full validation:
+
+- Project checks: 4/4
+- Ask cases: 18/18
+- Same-thread follow-ups: 4/4
+
+Project checks:
+
+- CWPay: 364 datasource tables, 350 models, modeling page passed, preview 3/3, deploy `SUCCESS`, sync `SYNCRONIZED`
+- CW_GL: 223 datasource tables, 223 models, modeling page passed, preview 3/3, deploy `SUCCESS`, sync `SYNCRONIZED`
+- Orders: 103 datasource tables, 101 models, modeling page passed, preview 3/3, deploy `SUCCESS`, sync `SYNCRONIZED`
+- PCB_DB: 76 datasource tables, 68 models, modeling page passed, preview 3/3, deploy `SUCCESS`, sync `SYNCRONIZED`
+
+Regression status:
+
+- Orders by customer: passed
+- Orders revenue/date/month/latest families: passed
+- PCB_DB repairs/status/priority/month/latest families: passed
+- Unsupported cross-project questions: passed with `NO_RELEVANT_SQL`
+- No observed schema leakage between projects
+- No observed `Failed to create asking task`
+- No observed hallucinated tables or columns in final validation
+
+Cancel validation:
+
+- CWPay cancel task: `7a2e1247-2a73-4a52-9fdd-d41004afc3c7`
+- cancel mutation returned `true`
+- final status: `STOPPED`
+- elapsed to terminal status: 520ms
+
+## Tests Run
+
+From `D:\WrenAI\wren-ai-service`:
+
+```powershell
+.\venv\Scripts\python.exe -m pytest tests/pytest/services/test_ask.py tests/pytest/pipelines/generation/test_sql_schema_grounding.py tests/pytest/pipelines/retrieval/test_db_schema_retrieval.py -q
+```
+
+Result: 114 passed.
+
+Additional focused Ask service test:
+
+```powershell
+.\venv\Scripts\python.exe -m pytest tests/pytest/services/test_ask.py -q
+```
+
+Result: 4 passed.
+
+Warnings were pre-existing Pydantic deprecation warnings and existing coroutine cleanup warnings in semantics-preparation tests.
+
+## Files To Include In Handoff Commit
+
+Include the Ask/UI source and focused tests:
+
+- `wren-ai-service/src/pipelines/generation/data_assistance.py`
 - `wren-ai-service/src/pipelines/generation/followup_sql_generation.py`
-- `wren-ai-service/src/pipelines/generation/sql_correction.py`
-
-Changes:
-
-- Passed the user query into post-processing as `fallback_query`.
-- Added pre-LLM unsupported-schema checks where retrieved schema clearly cannot cover requested concepts.
-- Ensured SQL correction still uses the same schema-first validation and fallback logic.
-- Strengthened correction instructions so invalid or hallucinated identifiers are not preserved.
-
-### UI / Project Cleanup From This Workstream
-
-Files still dirty from the related UI/runtime fixes:
-
-- `wren-ui/src/apollo/server/resolvers/modelResolver.ts`
-- `wren-ui/src/apollo/server/services/askingService.ts`
-
-Relevant behavior:
-
-- Previous `results` crash handling is preserved.
-- Unsupported-schema failures now avoid showing invented SQL as something to fix.
-- Sales/Orders cleanup remains in place: UI project list shows `Orders`, not duplicate `Sales`.
-
-## Live Validation Done
-
-All live checks were run through the UI GraphQL Ask path after restarting the AI service.
-
-### PCB_DB
-
-Active project: `PCB_DB`, id `10`.
-
-Passed:
-
-- `Which repair logs have the highest priority?`
-  - Table: `dbo_repair_logs`
-  - Uses verified `priority`
-  - Orders by generic priority ranking expression
-- `Show all critical-priority repairs`
-  - Table: `dbo_repair_logs`
-  - Filter: `priority = 'critical'`
-- `Show repairs by status`
-  - Table: `dbo_repair_logs`
-  - Group: `status`
-  - Metric: `COUNT(id)`
-- `Show latest repair logs`
-  - Table: `dbo_repair_logs`
-  - Order: `created_at DESC`
-  - This was the live regression fixed by adding timestamp type coverage.
-- `Show the number of failures by material`
-  - Uses verified material/failure fields from PCB_DB.
-- `Show top 5 board models with the most failures`
-  - Table: `dbo_repair_logs`
-  - Metric: `COUNT(failure_code)`
-  - Did not use `defect_rate`.
-- `Show units with JTAG as the failure type`
-  - Table: `dbo_report_failures`
-  - Filter: `failure_type = 'JTAG'`
-- Extra check:
-  - `Show all repairs with a critical priority and an in-progress status.`
-  - Table: `dbo_repair_logs`
-  - Filters: `status = 'in-progress'` and `priority = 'critical'`
-
-### Orders
-
-Temporarily switched active project to `Orders`, id `11`, then restored PCB_DB.
-
-Passed:
-
-- `Show top 10 orders from July`
-  - Uses Orders table/date fields.
-- `Show number of orders by customer`
-  - Groups by customer.
-  - Counts distinct order numbers.
-- `Show revenue by year`
-  - Uses verified sales/revenue value and invoice date fields.
-- Unsupported check: `Which repair logs have the highest priority?`
-  - Returned `NO_RELEVANT_SQL`.
-  - No SQL candidate.
-  - Message clearly said the active project does not contain verified `repair` and `priority/severity` fields.
-
-## Checks Run
-
-Passed:
-
-```powershell
-git diff --check -- wren-ai-service/src/pipelines/generation/utils/sql.py `
-  wren-ai-service/src/pipelines/generation/sql_generation.py `
-  wren-ai-service/src/pipelines/generation/followup_sql_generation.py `
-  wren-ai-service/src/pipelines/generation/sql_correction.py `
-  wren-ai-service/src/pipelines/retrieval/db_schema_retrieval.py `
-  wren-ai-service/tests/pytest/pipelines/generation/test_sql_schema_grounding.py `
-  wren-ai-service/tests/pytest/pipelines/retrieval/test_db_schema_retrieval.py
-```
-
-Passed:
-
-```powershell
-cd D:\WrenAI\wren-ai-service
-.\venv\Scripts\python.exe -m compileall -q src\pipelines\generation src\pipelines\retrieval `
-  tests\pytest\pipelines\generation\test_sql_schema_grounding.py `
-  tests\pytest\pipelines\retrieval\test_db_schema_retrieval.py
-```
-
-Could not run pytest in the service venv:
-
-```text
-D:\WrenAI\wren-ai-service\venv\Scripts\python.exe: No module named pytest
-```
-
-## Tests Added
-
-Main test file:
-
-- `wren-ai-service/tests/pytest/pipelines/generation/test_sql_schema_grounding.py`
-
-Coverage added for:
-
-- Unsupported schema clears invalid SQL.
-- Generic table rejection for unsupported business concepts.
-- Repair priority ordering.
-- Critical-priority repair filters.
-- Repairs by status.
-- Latest repair logs with `TIMESTAMPTZ`.
-- Semantic alias column support, for example using real verified `Urgency` when semantic context says it means priority/severity.
-- Failure by material / technician with verified columns.
-- JTAG failure type filters.
-- Board models with most failures uses count, not defect rate.
-- Highest defect rate uses rate metric.
-- Repairs by technician requires one schema object or relationship coverage.
-
-Retrieval test file:
-
-- `wren-ai-service/tests/pytest/pipelines/retrieval/test_db_schema_retrieval.py`
-
-Coverage added for:
-
-- Project filter conditions.
-- Query expansion.
-- Table ranking by query and schema text.
-- Project-scoped schema retrieval behavior.
-
-## Restart Commands Used
-
-Restart AI service only:
-
-```powershell
-$taskName = 'WrenAI 04 AI Service'
-$listenerProcessIds = Get-NetTCPConnection -LocalPort 5555 -State Listen -ErrorAction SilentlyContinue |
-  Select-Object -ExpandProperty OwningProcess -Unique
-Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-foreach ($listenerProcessId in $listenerProcessIds) {
-  if ($listenerProcessId) {
-    Stop-Process -Id $listenerProcessId -Force -ErrorAction SilentlyContinue
-  }
-}
-Start-ScheduledTask -TaskName $taskName
-```
-
-Health check:
-
-```powershell
-Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5555/health
-```
-
-Project switch endpoints used for validation:
-
-```powershell
-Invoke-WebRequest -UseBasicParsing -Method POST http://127.0.0.1:3000/api/v1/projects/11/select
-Invoke-WebRequest -UseBasicParsing -Method POST http://127.0.0.1:3000/api/v1/projects/10/select
-Invoke-WebRequest -UseBasicParsing http://127.0.0.1:3000/api/v1/projects/current
-```
-
-## Current Dirty Files To Review
-
-Relevant tracked files:
-
-- `wren-ai-service/src/pipelines/generation/followup_sql_generation.py`
+- `wren-ai-service/src/pipelines/generation/followup_sql_generation_reasoning.py`
+- `wren-ai-service/src/pipelines/generation/intent_classification.py`
+- `wren-ai-service/src/pipelines/generation/sql_answer.py`
 - `wren-ai-service/src/pipelines/generation/sql_correction.py`
 - `wren-ai-service/src/pipelines/generation/sql_generation.py`
+- `wren-ai-service/src/pipelines/generation/sql_generation_reasoning.py`
 - `wren-ai-service/src/pipelines/generation/utils/sql.py`
+- `wren-ai-service/src/pipelines/indexing/db_schema.py`
+- `wren-ai-service/src/pipelines/indexing/utils/helper.py`
 - `wren-ai-service/src/pipelines/retrieval/db_schema_retrieval.py`
+- `wren-ai-service/src/web/v1/routers/ask.py`
+- `wren-ai-service/src/web/v1/services/ask.py`
+- `wren-ai-service/src/web/v1/services/ask_feedback.py`
+- `wren-ai-service/src/web/v1/services/sql_answer.py`
+- `wren-ai-service/tests/pytest/pipelines/generation/test_prompt_grounding_contracts.py`
+- `wren-ai-service/tests/pytest/pipelines/generation/test_sql_answer_prompt.py`
 - `wren-ai-service/tests/pytest/pipelines/generation/test_sql_schema_grounding.py`
+- `wren-ai-service/tests/pytest/pipelines/indexing/test_db_schema.py`
 - `wren-ai-service/tests/pytest/pipelines/retrieval/test_db_schema_retrieval.py`
+- `wren-ai-service/tests/pytest/services/test_ask.py`
+- `wren-ui/src/apollo/server/adaptors/wrenAIAdaptor.ts`
+- `wren-ui/src/apollo/server/backgrounds/textBasedAnswerBackgroundTracker.ts`
+- `wren-ui/next.config.js`
+- `wren-ui/src/apollo/server/resolvers/askingResolver.ts`
 - `wren-ui/src/apollo/server/resolvers/modelResolver.ts`
 - `wren-ui/src/apollo/server/services/askingService.ts`
+- `wren-ui/src/apollo/server/services/askingTaskTracker.ts`
+- `wren-ui/src/apollo/server/services/queryService.ts`
+- `wren-ui/src/apollo/server/services/tests/queryService.test.ts`
+- `wren-ui/src/apollo/server/utils/manifest.ts`
+- `WRENAI_LOCAL_ASK_HANDOFF.md`
 
-There are also many local untracked runtime/data artifacts in the repository. Do not clean or delete them casually.
+Do not include:
 
-## Important Caveats
+- `.codex-tmp`
+- local configs
+- logs
+- venv folders
+- extracted datasource dumps
+- Qdrant/storage runtime data
+- `wren-engine` submodule pointer
+- `wren-ui/.yarn/releases/yarn-4.5.3.cjs` mode-only churn
+- `wren-ui/package-lock.json` unless intentionally changing package management
 
-- Runtime source code should remain generic. Do not add checks for exact prompts such as `Which repair logs have the highest priority?`.
-- Tests may use representative table and prompt names; production code must not.
-- Retrieval context currently uses metadata/descriptions and some semantic context. It does not appear to carry robust sample-value lists. Status casing/value handling works for tested prompts, but richer value-aware matching would improve future accuracy.
-- `enable_column_pruning` was not the focus of today's final validation.
-- Full pytest suite still needs an environment with `pytest` installed.
+## Remaining Blockers
 
-## Recommended Next Steps
+- Modeling AI Assistant generate semantics/relationships for CW_GL remains unresolved. Earlier evidence showed semantics omitted the selected model and relationships timed out. Final Ask performance validation skipped assistant generation checks.
+- Branch is behind remote by 82 commits. Push may require integration/rebase by whoever owns the branch if GitHub rejects a non-fast-forward push.
 
-1. Install or enable pytest in `wren-ai-service\venv`, then run focused tests.
-2. Review the large `utils/sql.py` diff carefully; consider extracting fallback/grounding helpers into smaller modules after behavior is stable.
-3. Add sample-value metadata to retrieval context if available, then make value matching use that metadata instead of only text normalization.
-4. Run a broader live Ask regression across PCB_DB, Orders, CWPay, and CW_GL when their data sources are available.
-5. Commit the source changes after review, excluding local runtime/data artifacts.
+## Guardrails Preserved
+
+- No app logic hardcodes datasource, project, organization, table, column, filter-value, or prompt-specific mappings.
+- SQL is generated only from verified retrieved schema and then validated.
+- Answer formatting is grounded in executed SQL results only.
+- Unsupported or weakly covered questions fail quickly with a clear unsupported/clarification result.

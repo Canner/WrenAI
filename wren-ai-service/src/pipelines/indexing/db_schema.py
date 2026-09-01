@@ -102,6 +102,8 @@ class DDLChunker:
             return {
                 "name": model.get("name", ""),
                 "properties": model.get("properties", {}),
+                "tableReference": model.get("tableReference"),
+                "refSql": model.get("refSql"),
                 "columns": columns,
                 "primaryKey": model.get("primaryKey", ""),
             }
@@ -146,6 +148,9 @@ class DDLChunker:
                 "type": "TABLE",
                 "comment": comment,
                 "name": table_name,
+                "properties": properties,
+                "tableReference": model.get("tableReference"),
+                "refSql": model.get("refSql"),
             }
             return {"name": table_name, "payload": str(payload)}
 
@@ -165,6 +170,7 @@ class DDLChunker:
                 "name": column["name"],
                 "data_type": column["type"],
                 "is_primary_key": column["name"] == model["primaryKey"],
+                "properties": column.get("properties", {}),
             }
 
         def _relationship_command(

@@ -256,6 +256,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
    */
 
   public async ask(input: AskInput): Promise<AsyncQueryResponse> {
+    const startedAt = Date.now();
     try {
       const body: Record<string, any> = {
         query: input.query,
@@ -279,8 +280,18 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       }
 
       const res = await axios.post(`${this.wrenAIBaseEndpoint}/v1/asks`, body);
+      logger.info(
+        `Ask timing stage=ai_ask_request project_id=${
+          input.projectId ?? ''
+        } query_id=${res.data.query_id} elapsed_ms=${Date.now() - startedAt}`,
+      );
       return { queryId: res.data.query_id };
     } catch (err: any) {
+      logger.info(
+        `Ask timing stage=ai_ask_request project_id=${
+          input.projectId ?? ''
+        } elapsed_ms=${Date.now() - startedAt} status=failed`,
+      );
       logger.debug(`Got error when asking wren AI: ${getAIServiceError(err)}`);
       throw err;
     }
@@ -288,11 +299,22 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
   public async cancelAsk(queryId: string): Promise<void> {
     // make PATCH request /v1/asks/:query_id to cancel the query
+    const startedAt = Date.now();
     try {
       await axios.patch(`${this.wrenAIBaseEndpoint}/v1/asks/${queryId}`, {
         status: 'stopped',
       });
+      logger.info(
+        `Ask timing stage=cancel_request query_id=${queryId} elapsed_ms=${
+          Date.now() - startedAt
+        }`,
+      );
     } catch (err: any) {
+      logger.info(
+        `Ask timing stage=cancel_request query_id=${queryId} elapsed_ms=${
+          Date.now() - startedAt
+        } status=failed`,
+      );
       logger.debug(`Got error when canceling ask: ${getAIServiceError(err)}`);
       throw err;
     }
@@ -529,6 +551,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   public async createTextBasedAnswer(
     input: TextBasedAnswerInput,
   ): Promise<AsyncQueryResponse> {
+    const startedAt = Date.now();
     const body = {
       query: input.query,
       sql: input.sql,
@@ -543,8 +566,18 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         `${this.wrenAIBaseEndpoint}/v1/sql-answers`,
         body,
       );
+      logger.info(
+        `Ask timing stage=answer_formatting_request thread_id=${
+          input.threadId ?? ''
+        } query_id=${res.data.query_id} elapsed_ms=${Date.now() - startedAt}`,
+      );
       return { queryId: res.data.query_id };
     } catch (err: any) {
+      logger.info(
+        `Ask timing stage=answer_formatting_request thread_id=${
+          input.threadId ?? ''
+        } elapsed_ms=${Date.now() - startedAt} status=failed`,
+      );
       logger.debug(
         `Got error when creating text-based answer: ${getAIServiceError(err)}`,
       );
@@ -556,12 +589,23 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     queryId: string,
   ): Promise<TextBasedAnswerResult> {
     // make GET request /v1/sql-answers/:query_id to get the result
+    const startedAt = Date.now();
     try {
       const res = await axios.get(
         `${this.wrenAIBaseEndpoint}/v1/sql-answers/${queryId}`,
       );
+      logger.info(
+        `Ask timing stage=answer_formatting_poll query_id=${queryId} elapsed_ms=${
+          Date.now() - startedAt
+        } status=${res.data.status}`,
+      );
       return this.transformTextBasedAnswerResult(res.data);
     } catch (err: any) {
+      logger.info(
+        `Ask timing stage=answer_formatting_poll query_id=${queryId} elapsed_ms=${
+          Date.now() - startedAt
+        } status=failed`,
+      );
       logger.debug(
         `Got error when getting text-based answer result: ${getAIServiceError(err)}`,
       );

@@ -1,3 +1,4 @@
+import ast
 from unittest.mock import AsyncMock
 
 import orjson
@@ -48,8 +49,49 @@ async def test_single_model():
             "type": "TABLE",
             "comment": "\n/* {'alias': 'user', 'description': 'A table containing user information.'} */\n",
             "name": "user",
+            "properties": {
+                "description": "A table containing user information.",
+                "displayName": "user",
+            },
+            "tableReference": None,
+            "refSql": None,
         }
     )
+
+
+@pytest.mark.asyncio
+async def test_model_source_table_reference_is_indexed():
+    chunker = DDLChunker()
+    mdl = {
+        "models": [
+            {
+                "name": "orders_model",
+                "properties": {
+                    "description": "Modeled order facts.",
+                    "displayName": "New Orders",
+                },
+                "tableReference": {
+                    "catalog": "warehouse",
+                    "schema": "dbo",
+                    "table": "tblNewOrders",
+                },
+            }
+        ],
+        "views": [],
+        "relationships": [],
+        "metrics": [],
+    }
+
+    actual = await chunker.run(mdl, column_batch_size=1)
+
+    assert len(actual["documents"]) == 1
+    content = ast.literal_eval(actual["documents"][0].content)
+    assert content["properties"]["displayName"] == "New Orders"
+    assert content["tableReference"] == {
+        "catalog": "warehouse",
+        "schema": "dbo",
+        "table": "tblNewOrders",
+    }
 
 
 @pytest.mark.asyncio
@@ -87,6 +129,12 @@ async def test_multiple_models():
             "type": "TABLE",
             "comment": "\n/* {'alias': 'user', 'description': 'A table containing user information.'} */\n",
             "name": "user",
+            "properties": {
+                "description": "A table containing user information.",
+                "displayName": "user",
+            },
+            "tableReference": None,
+            "refSql": None,
         }
     )
 
@@ -97,6 +145,12 @@ async def test_multiple_models():
             "type": "TABLE",
             "comment": "\n/* {'alias': 'order', 'description': 'A table containing order details.'} */\n",
             "name": "order",
+            "properties": {
+                "description": "A table containing order details.",
+                "displayName": "order",
+            },
+            "tableReference": None,
+            "refSql": None,
         }
     )
 
@@ -137,6 +191,7 @@ async def test_column_is_primary_key():
                     "name": "id",
                     "data_type": "INTEGER",
                     "is_primary_key": True,
+                    "properties": {},
                 }
             ],
         }
@@ -178,10 +233,14 @@ async def test_column_with_properties():
             "columns": [
                 {
                     "type": "COLUMN",
-                    "comment": '-- {"alias":"iid","description":"The unique identifier for a user."}\n  ',
+                    "comment": '-- {"alias":"iid","description":"The unique identifier for a user.","sourceColumnName":""}\n  ',
                     "name": "id",
                     "data_type": "INTEGER",
                     "is_primary_key": False,
+                    "properties": {
+                        "displayName": "iid",
+                        "description": "The unique identifier for a user.",
+                    },
                 }
             ],
         }
@@ -194,6 +253,9 @@ async def test_column_with_properties():
             "type": "TABLE",
             "comment": "\n/* {'alias': '', 'description': ''} */\n",
             "name": "user",
+            "properties": {},
+            "tableReference": None,
+            "refSql": None,
         }
     )
 
@@ -232,10 +294,14 @@ async def test_null_metadata_properties_are_indexed_as_empty_text():
             "columns": [
                 {
                     "type": "COLUMN",
-                    "comment": '-- {"alias":null,"description":null}\n  ',
+                    "comment": '-- {"alias":null,"description":null,"sourceColumnName":""}\n  ',
                     "name": "id",
                     "data_type": "INTEGER",
                     "is_primary_key": False,
+                    "properties": {
+                        "displayName": None,
+                        "description": None,
+                    },
                 }
             ],
         }
@@ -245,6 +311,9 @@ async def test_null_metadata_properties_are_indexed_as_empty_text():
             "type": "TABLE",
             "comment": "\n/* {'alias': None, 'description': None} */\n",
             "name": "user",
+            "properties": {"description": None, "displayName": None},
+            "tableReference": None,
+            "refSql": None,
         }
     )
 
@@ -286,10 +355,16 @@ async def test_column_with_nested_columns():
             "columns": [
                 {
                     "type": "COLUMN",
-                    "comment": '-- {"alias":"iid","description":"The unique identifier for a user.","nested_columns":{"nested.address":{"name":"address","type":"VARCHAR"},"nested.orders":{"name":"orders","type":"ARRAY"}}}\n  ',
+                    "comment": '-- {"alias":"iid","description":"The unique identifier for a user.","sourceColumnName":"","nested_columns":{"nested.address":{"name":"address","type":"VARCHAR"},"nested.orders":{"name":"orders","type":"ARRAY"}}}\n  ',
                     "name": "id",
                     "data_type": "INTEGER",
                     "is_primary_key": False,
+                    "properties": {
+                        "displayName": "iid",
+                        "description": "The unique identifier for a user.",
+                        "nested.address": {"name": "address", "type": "VARCHAR"},
+                        "nested.orders": {"name": "orders", "type": "ARRAY"},
+                    },
                 }
             ],
         }
@@ -333,6 +408,7 @@ async def test_column_with_calculated_property():
                     "name": "id",
                     "data_type": "INTEGER",
                     "is_primary_key": False,
+                    "properties": {},
                 }
             ],
         }
@@ -397,6 +473,7 @@ async def test_column_with_relationship():
                     "name": "id",
                     "data_type": "INTEGER",
                     "is_primary_key": True,
+                    "properties": {},
                 }
             ],
         }
@@ -452,6 +529,7 @@ async def test_column_batch_size():
                     "name": "id",
                     "data_type": "INTEGER",
                     "is_primary_key": False,
+                    "properties": {},
                 },
                 {
                     "type": "COLUMN",
@@ -459,6 +537,7 @@ async def test_column_batch_size():
                     "name": "name",
                     "data_type": "VARCHAR",
                     "is_primary_key": False,
+                    "properties": {},
                 },
             ],
         }
@@ -476,6 +555,7 @@ async def test_column_batch_size():
                     "name": "age",
                     "data_type": "INTEGER",
                     "is_primary_key": False,
+                    "properties": {},
                 }
             ],
         }

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+import time
 from typing import Any, Optional
 
 from hamilton import base
@@ -19,23 +20,24 @@ logger = logging.getLogger("wren-ai-service")
 sql_to_answer_system_prompt = """
 ### TASK
 
-You are a data analyst that great at answering non-technical user's questions based on the data, sql so that even non technical users can easily understand.
-Please answer the user's question in concise and clear manner in Markdown format.
+You are a data analyst answering a user's question using only the provided SQL result data.
+Answer clearly for a non-technical user in Markdown.
 
 ### INSTRUCTIONS
 
-1. Read the user's question and understand the user's intention.
-2. Read the sql and understand the data.
-3. Make sure the answer is aimed for non-technical users, so don't mention any technical terms such as SQL syntax.
-4. Generate a concise and clear answer in string format to answerthe user's question based on the data and sql.
-5. If answer is in list format, only list top few examples, and tell users there are more results omitted.
-6. Answer must be in the same language user specified.
-7. Do not include ```markdown or ``` in the answer.
-8. If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response.
+1. Use only the provided Data columns, row records, and rows. Do not invent values, totals, categories, dates, examples, or analysis outputs.
+2. Treat row records as the clearest representation of the result because each value is paired with its column name.
+3. Do not write code, Python, pseudo-code, SQL, code fences, implementation steps, or phrases such as "running the above code".
+4. Do not mention SQL syntax, table names, or database internals unless the user explicitly asks for them.
+5. If no rows are provided, say that no matching rows were returned.
+6. If rows are detailed records, summarize the visible records directly. If rows are aggregates, answer using the aggregate values.
+7. If the answer is a list, keep it concise and use only examples present in the provided data.
+8. Answer must be in the same language user specified.
+9. If the user provides a custom instruction, follow it strictly for the response style unless it conflicts with these data-grounding rules.
 
 ### OUTPUT FORMAT
 
-Please provide your response in proper Markdown stringformat.
+Return only the user-facing answer as a Markdown string.
 """
 
 sql_to_answer_user_prompt_template = """
@@ -44,13 +46,14 @@ User's question: {{ query }}
 SQL: {{ sql }}
 Data: 
 columns: {{ sql_data.columns }}
+row records: {{ sql_data.row_records }}
 rows: {{ sql_data.data }}
 Language: {{ language }}
 Current Time: {{ current_time }}
 
 Custom Instruction: {{ custom_instruction }}
 
-Please think step by step and answer the user's question.
+Answer directly from the provided row records and rows.
 """
 
 
@@ -158,7 +161,8 @@ class SQLAnswer(BasicPipeline):
         custom_instruction: Optional[str] = None,
     ) -> dict:
         logger.info("Sql_Answer Generation pipeline is running...")
-        return await self._pipe.execute(
+        started_at = time.perf_counter()
+        result = await self._pipe.execute(
             ["generate_answer"],
             inputs={
                 "query": query,
@@ -171,3 +175,9 @@ class SQLAnswer(BasicPipeline):
                 **self._components,
             },
         )
+        logger.info(
+            "Ask timing query_id=%s stage=answer_formatting elapsed_ms=%.1f",
+            query_id or "",
+            (time.perf_counter() - started_at) * 1000,
+        )
+        return result

@@ -1,7 +1,10 @@
 import ast
+import asyncio
 import logging
 import re
 import sys
+import time
+from functools import lru_cache
 from typing import Any, Optional
 
 import orjson
@@ -11,8 +14,9 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
-from langfuse.decorators import observe
 from pydantic import BaseModel, ConfigDict
+from sqlparse.sql import Identifier, IdentifierList
+from sqlparse.tokens import DML, Comment, Keyword
 
 from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
@@ -29,66 +33,179 @@ from src.web.v1.services.ask import AskHistory
 logger = logging.getLogger("wren-ai-service")
 
 _SEMANTIC_TABLE_NAME_MERGE_LIMIT = 8
+_LEXICAL_SCHEMA_TABLE_NAME_MERGE_LIMIT = 8
 _MAX_RETRIEVED_TABLE_NAMES = 24
+_MAX_LLM_SCHEMA_CONTEXT_TABLES = 8
+_MAX_LLM_SCHEMA_CONTEXT_TOKENS = 12_000
 _MAX_RELATED_TABLE_EXPANSION_DEPTH = 1
 _RANK_TOKEN = re.compile(r"[a-z0-9]+")
-_GENERIC_TABLE_TOKENS = {
-    "audit",
-    "auth",
-    "calendar",
-    "config",
-    "dim",
-    "dimension",
-    "file",
-    "files",
-    "ingestion",
-    "job",
-    "jobs",
-    "log",
-    "logs",
-    "lookup",
-    "mbr",
-    "member",
-    "members",
-    "migration",
-    "migrations",
-    "preference",
-    "preferences",
-    "queue",
-    "report",
-    "reports",
-    "setting",
-    "settings",
-    "state",
-    "time",
-    "user",
-    "users",
+_RANK_GENERIC_QUERY_TOKENS = {
+    "a",
+    "across",
+    "all",
+    "an",
+    "and",
+    "as",
+    "average",
+    "avg",
+    "between",
+    "bottom",
+    "breakdown",
+    "bucket",
+    "buckets",
+    "by",
+    "count",
+    "counts",
+    "date",
+    "day",
+    "descending",
+    "distribution",
+    "each",
+    "for",
+    "from",
+    "group",
+    "grouped",
+    "groups",
+    "has",
+    "have",
+    "highest",
+    "how",
+    "in",
+    "is",
+    "latest",
+    "least",
+    "list",
+    "lowest",
+    "many",
+    "max",
+    "maximum",
+    "me",
+    "mean",
+    "min",
+    "minimum",
+    "blank",
+    "empty",
+    "missing",
+    "null",
+    "month",
+    "monthly",
+    "most",
+    "newest",
+    "number",
+    "of",
+    "ordered",
+    "per",
+    "quarter",
+    "recent",
+    "record",
+    "records",
+    "result",
+    "results",
+    "row",
+    "rows",
+    "show",
+    "sort",
+    "sorted",
+    "sum",
+    "the",
+    "there",
+    "this",
+    "to",
+    "top",
+    "total",
+    "using",
+    "was",
+    "week",
+    "were",
+    "what",
+    "where",
+    "which",
+    "with",
+    "year",
 }
-_CUSTOMS_FINANCE_TOKENS = {
-    "claim",
-    "claims",
-    "custom",
-    "customs",
-    "duty",
-    "duties",
-    "hmf",
-    "import",
-    "imports",
-    "mpf",
-    "refund",
-    "refunds",
-    "tariff",
-    "tariffs",
-}
-_SALES_REVENUE_TOKENS = {
+_COMPOUND_IDENTIFIER_PART_TOKENS = {
+    "account",
     "amount",
-    "intake",
-    "revenue",
-    "sale",
+    "balance",
+    "business",
+    "buyer",
+    "category",
+    "client",
+    "company",
+    "count",
+    "customer",
+    "date",
+    "division",
+    "failure",
+    "gross",
+    "group",
+    "invoice",
+    "market",
+    "material",
+    "month",
+    "name",
+    "order",
+    "person",
+    "priority",
+    "product",
+    "quantity",
+    "record",
+    "repair",
     "sales",
-    "salesvalue",
+    "salesperson",
+    "severity",
+    "status",
+    "supplier",
+    "ticket",
+    "type",
+    "unit",
     "value",
+    "vendor",
+    "year",
 }
+_COMPOUND_IDENTIFIER_ALIASES = {
+    "acct": {"account"},
+    "amt": {"amount"},
+    "bu": {"business", "unit"},
+    "cust": {"customer"},
+    "gl": {"general", "ledger"},
+    "ord": {"order"},
+    "prod": {"product"},
+    "qty": {"quantity"},
+    "vend": {"vendor"},
+}
+
+_ALL_SCHEMA_DOCUMENTS_CACHE: dict[tuple[int, str, str], list[Document]] = {}
+_ALL_SCHEMA_DOCUMENTS_CACHE_LOCKS: dict[tuple[int, str, str], asyncio.Lock] = {}
+_SCHEMA_DOCUMENTS_CACHE: dict[
+    tuple[int, str, str, tuple[str, ...]], list[Document]
+] = {}
+_SCHEMA_DOCUMENTS_CACHE_LOCKS: dict[
+    tuple[int, str, str, tuple[str, ...]], asyncio.Lock
+] = {}
+
+
+def _elapsed_ms(started_at: float) -> float:
+    return (time.perf_counter() - started_at) * 1000
+
+
+def _log_retrieval_timing(
+    stage: str,
+    started_at: float,
+    project_id: str | None = None,
+    **fields: Any,
+) -> None:
+    suffix = " ".join(
+        f"{key}={value}" for key, value in fields.items() if value is not None
+    )
+    logger.info(
+        "Ask timing project_id=%s stage=%s elapsed_ms=%.1f%s%s",
+        project_id or "",
+        stage,
+        _elapsed_ms(started_at),
+        " " if suffix else "",
+        suffix,
+    )
 
 
 table_columns_selection_system_prompt = """
@@ -119,14 +236,15 @@ The database schema includes structural, semantic, and business modeling metadat
 13. Do not stop at a single top candidate when the question needs multiple related datasets.
 14. If the same business concept is represented by multiple modeled datasets, select each relevant dataset and the fields needed to answer the shared intent.
 15. If multiple modeled datasets expose compatible fields for the same requested result shape, keep each relevant dataset available so SQL generation can combine them as separate result rows instead of discarding all but one.
-16. If WREN RETRIEVED SEMANTIC CONTEXT is present, use sql_table_name_use_exactly and sql_column_name_use_exactly values as the exact names to return.
-17. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand meaning. Do not return descriptions, labels, source metadata, or rewritten variants as table or column names.
-18. Prefer tables and columns that directly model the requested business entities, measures, statuses, dates, identifiers, and dimensions. Do not answer business-domain questions from generic log, file, JSON, payload, text, or app-metric columns when the schema provides specific modeled columns for the same concept.
-19. For terms such as revenue, sales, orders, invoices, customers, products, suppliers, repairs, failures, batches, materials, locations, status, severity, currency, dates, month, year, and business unit, inspect both table meaning and exact column meanings before selecting a table.
-20. If a table only contains generic data/payload/text fields and another table exposes exact business columns that match the request, choose the business table instead of searching the generic field with LIKE.
-21. Never return placeholder table or column names such as tablename, table_name, dbo.tablename, BatchId, Material, Location, or any user-worded identifier unless the exact same identifier appears in the provided CREATE TABLE statement or identifier contract.
-22. If the request asks for revenue, sales, or sales trends, prefer exact business measure columns named like Revenue, SalesValue, USDFXSalesValue, FXSalesValue, IntakeValue, Amount, or equivalent modeled sales fields. Do not use tariff, duty, customs, import, refund, or claim datasets unless the user explicitly asks for those domains.
-23. If the request asks for an explicit rate, ratio, percentage, revenue, amount, sales value, or other named measure and the schema already contains that exact measure column, use the declared measure column directly. Do not use a rate column to answer "most failures", "number of failures", or other count-of-records requests unless the question explicitly asks for a rate/ratio/percentage.
+16. Prefer the set of deployed models, views, metrics, columns, and relationships that best support the current question.
+17. If WREN RETRIEVED SEMANTIC CONTEXT is present, use sql_table_name_use_exactly and sql_column_name_use_exactly values as the exact names to return.
+18. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand meaning. Do not return descriptions, labels, source metadata, or rewritten variants as table or column names.
+19. Prefer tables and columns whose supplied names, descriptions, relationships, metrics, or sample values directly support the requested entities, measures, filters, dates, identifiers, and dimensions. Do not answer from generic log, file, JSON, payload, text, or app-metric columns when retrieved schema metadata provides specific modeled columns for the same requested concept.
+20. Compare the user's requested entities, measures, filters, dates, and dimensions only with schema metadata supplied for the active project. Do not use built-in business synonym lists.
+21. If a table only contains generic data/payload/text fields and another table exposes exact business columns that match the request, choose the business table instead of searching the generic field with LIKE.
+22. Never return placeholder table or column names or any user-worded identifier unless the exact same identifier appears in the provided CREATE TABLE statement or identifier contract.
+23. If a requested measure, dimension, filter, or time field is not represented by retrieved schema metadata, leave it unsupported instead of substituting a similar-looking field.
+24. Metric intent such as count, sum, average, minimum, maximum, ranking, date bucketing, and grouping must be satisfied by declared columns or metric fields from the retrieved schema.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -296,6 +414,18 @@ def _view_columns_from_statement(statement: str) -> list[dict]:
         }
         for column_name in deduplicated_columns
     ]
+
+
+def _source_table_identifier(table_reference: dict | None) -> str:
+    if not isinstance(table_reference, dict):
+        return ""
+
+    parts = [
+        str(table_reference.get(part, "")).strip()
+        for part in ("schema", "table")
+    ]
+    parts = [part for part in parts if part]
+    return ".".join(parts)
 
 
 def _build_view_ddl(content: dict) -> str:
@@ -483,6 +613,8 @@ def _build_table_retrieval_context(
     )
     included_columns = _included_columns(content, columns, tables)
     included_relationships = _included_relationships(content, tables)
+    table_properties = content.get("properties") or {}
+    table_reference = content.get("tableReference") or {}
     context = _format_semantic_context(
         {
             "object_type": "model",
@@ -498,6 +630,9 @@ def _build_table_retrieval_context(
             },
             "semantic_context_not_sql_identifiers": {
                 "description": content["comment"],
+                "display_name": table_properties.get("displayName"),
+                "source_table_name": _source_table_identifier(table_reference),
+                "source_table_reference": table_reference,
             },
             "columns": [
                 {
@@ -505,6 +640,12 @@ def _build_table_retrieval_context(
                     "data_type": get_engine_supported_data_type(column["data_type"]),
                     "is_primary_key": column["is_primary_key"],
                     "semantic_context_not_sql_identifier": column["comment"],
+                    "display_name": (column.get("properties") or {}).get(
+                        "displayName"
+                    ),
+                    "source_column_name": (column.get("properties") or {}).get(
+                        "sourceColumnName"
+                    ),
                 }
                 for column in included_columns
             ],
@@ -702,8 +843,15 @@ async def dbschema_retrieval(
     )
     documents = []
     if embedding:
+        semantic_started_at = time.perf_counter()
         semantic_documents = await _retrieve_semantic_schema_documents(
-            embedding, project_id, dbschema_retriever, mdl_hash
+            embedding, project_id, mdl_hash, dbschema_retriever
+        )
+        _log_retrieval_timing(
+            "schema_retrieval_semantic",
+            semantic_started_at,
+            project_id,
+            document_count=len(semantic_documents),
         )
         semantic_table_names = _table_names_from_schema_documents(semantic_documents)[
             :_SEMANTIC_TABLE_NAME_MERGE_LIMIT
@@ -711,10 +859,35 @@ async def dbschema_retrieval(
         table_names = _merge_names(table_names, semantic_table_names)[
             :_MAX_RETRIEVED_TABLE_NAMES
         ]
+        lexical_started_at = time.perf_counter()
+        lexical_documents, lexical_table_names = await _retrieve_lexical_schema_hits(
+            query=query,
+            project_id=project_id,
+            mdl_hash=mdl_hash,
+            dbschema_retriever=dbschema_retriever,
+            existing_table_names=set(table_names),
+        )
+        _log_retrieval_timing(
+            "schema_retrieval_lexical_scan",
+            lexical_started_at,
+            project_id,
+            document_count=len(lexical_documents),
+            table_count=len(lexical_table_names),
+        )
+        table_names = _merge_names(table_names, lexical_table_names)[
+            :_MAX_RETRIEVED_TABLE_NAMES
+        ]
+        ranking_started_at = time.perf_counter()
         table_names = _rank_table_names_by_query(
             table_names,
-            semantic_documents,
+            _dedupe_documents(semantic_documents + lexical_documents),
             query,
+        )
+        _log_retrieval_timing(
+            "candidate_ranking",
+            ranking_started_at,
+            project_id,
+            candidate_count=len(table_names),
         )
         selected_semantic_table_names = set(semantic_table_names)
         documents = [
@@ -722,11 +895,14 @@ async def dbschema_retrieval(
             for document in semantic_documents
             if document.meta.get("name") in selected_semantic_table_names
         ]
+        documents = _dedupe_documents(documents + lexical_documents)
 
     if table_names:
-        retrieved_table_names = set()
-        pending_table_names = table_names
-        remaining_expansion_depth = _MAX_RELATED_TABLE_EXPANSION_DEPTH
+        if include_related_models:
+            expansion_started_at = time.perf_counter()
+            retrieved_table_names = set()
+            pending_table_names = table_names
+            remaining_expansion_depth = _MAX_RELATED_TABLE_EXPANSION_DEPTH
 
             while pending_table_names:
                 retrieved_table_names.update(pending_table_names)
@@ -748,7 +924,21 @@ async def dbschema_retrieval(
                     if table_name not in retrieved_table_names
                 ][:remaining_slots]
 
+            ranking_started_at = time.perf_counter()
             ranked_documents = _rank_documents_for_query(documents, table_names, query)
+            _log_retrieval_timing(
+                "schema_retrieval_related_expansion",
+                expansion_started_at,
+                project_id,
+                table_count=len(retrieved_table_names),
+                document_count=len(documents),
+            )
+            _log_retrieval_timing(
+                "candidate_ranking",
+                ranking_started_at,
+                project_id,
+                candidate_count=len(ranked_documents),
+            )
             logger.info(
                 "Ask schema retrieval project_id=%s retrieved_tables=%s",
                 project_id,
@@ -760,20 +950,28 @@ async def dbschema_retrieval(
                     for document in ranked_documents
                 ],
             )
-            documents = _dedupe_documents(documents + retrieved_documents)
-            if remaining_expansion_depth <= 0:
-                break
-            remaining_expansion_depth -= 1
-            remaining_slots = _MAX_RETRIEVED_TABLE_NAMES - len(retrieved_table_names)
-            if remaining_slots <= 0:
-                break
-            pending_table_names = [
-                table_name
-                for table_name in _related_table_names(documents)
-                if table_name not in retrieved_table_names
-            ][:remaining_slots]
+            return ranked_documents
 
+        named_started_at = time.perf_counter()
+        retrieved_documents = await _retrieve_schema_documents(
+            table_names, project_id, mdl_hash, dbschema_retriever
+        )
+        _log_retrieval_timing(
+            "schema_retrieval_named_fetch",
+            named_started_at,
+            project_id,
+            table_count=len(table_names),
+            document_count=len(retrieved_documents),
+        )
+        documents = _dedupe_documents(documents + retrieved_documents)
+        ranking_started_at = time.perf_counter()
         ranked_documents = _rank_documents_for_query(documents, table_names, query)
+        _log_retrieval_timing(
+            "candidate_ranking",
+            ranking_started_at,
+            project_id,
+            candidate_count=len(ranked_documents),
+        )
         logger.info(
             "Ask schema retrieval project_id=%s retrieved_tables=%s",
             project_id,
@@ -795,10 +993,142 @@ def _tokenize_schema_text(value: Any) -> set[str]:
     if value is None:
         return set()
     text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(value))
-    return set(_RANK_TOKEN.findall(text.lower()))
+    return _expand_schema_token_variants(set(_RANK_TOKEN.findall(text.lower())))
+
+
+def _normalized_schema_mention_text(value: Any) -> str:
+    if value is None:
+        return ""
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(value))
+    tokens = _RANK_TOKEN.findall(text.lower())
+    return f" {' '.join(tokens)} " if tokens else ""
+
+
+def _schema_identifier_mention_variants(identifier: str) -> set[str]:
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(identifier))
+    tokens = _RANK_TOKEN.findall(text.lower())
+    variants = {" ".join(tokens)} if tokens else set()
+    if len(tokens) > 1:
+        variants.add(" ".join(tokens[1:]))
+    return {variant for variant in variants if variant}
+
+
+def _query_mentions_schema_identifier(normalized_query: str, identifier: str) -> bool:
+    if not normalized_query:
+        return False
+    return any(
+        f" {variant} " in normalized_query
+        for variant in _schema_identifier_mention_variants(identifier)
+    )
+
+
+def _rank_content_tokens(query_tokens: set[str]) -> set[str]:
+    return {
+        token
+        for token in query_tokens
+        if token not in _RANK_GENERIC_QUERY_TOKENS and not token.isdigit()
+    }
+
+
+def _schema_token_variants(token: str) -> set[str]:
+    token = token.lower()
+    variants = {token}
+    if len(token) > 4 and token.endswith("ies"):
+        variants.add(token[:-3] + "y")
+    elif len(token) > 4 and token.endswith("es"):
+        if token.endswith(("ches", "shes", "sses", "uses", "xes", "zes")):
+            variants.add(token[:-2])
+        else:
+            variants.add(token[:-1])
+    elif len(token) > 3 and token.endswith("s") and not token.endswith(("ss", "us")):
+        variants.add(token[:-1])
+    return {variant for variant in variants if variant}
+
+
+def _expand_schema_token_variants(tokens: set[str]) -> set[str]:
+    expanded: set[str] = set()
+    for token in tokens:
+        expanded.update(_schema_token_variants(token))
+    return expanded
+
+
+def _compound_identifier_tokens(token: str) -> set[str]:
+    if len(token) < 5:
+        return set()
+
+    tokens: set[str] = set()
+    for part in _COMPOUND_IDENTIFIER_PART_TOKENS:
+        if part != token and len(part) >= 4 and part in token:
+            tokens.add(part)
+
+    for alias, expansions in _COMPOUND_IDENTIFIER_ALIASES.items():
+        if alias != token and (token.startswith(alias) or token.endswith(alias)):
+            tokens.add(alias)
+            tokens.update(expansions)
+
+    return tokens
+
+
+def _tokenize_schema_identifier_text(value: Any) -> set[str]:
+    tokens = _tokenize_schema_text(value)
+    for token in list(tokens):
+        tokens.update(_compound_identifier_tokens(token))
+    return _expand_schema_token_variants(tokens)
+
+
+def _tokenize_nested_schema_identifier_text(value: Any) -> set[str]:
+    if value is None:
+        return set()
+    if isinstance(value, dict):
+        tokens: set[str] = set()
+        for nested_key, nested_value in value.items():
+            tokens.update(_tokenize_schema_identifier_text(nested_key))
+            tokens.update(_tokenize_nested_schema_identifier_text(nested_value))
+        return tokens
+    if isinstance(value, (list, tuple, set)):
+        tokens: set[str] = set()
+        for nested_value in value:
+            tokens.update(_tokenize_nested_schema_identifier_text(nested_value))
+        return tokens
+    return _tokenize_schema_identifier_text(value)
+
+
+def _tokenize_nested_schema_text(value: Any) -> set[str]:
+    if value is None:
+        return set()
+    if isinstance(value, dict):
+        tokens: set[str] = set()
+        for nested_key, nested_value in value.items():
+            tokens.update(_tokenize_schema_text(nested_key))
+            tokens.update(_tokenize_nested_schema_text(nested_value))
+        return tokens
+    if isinstance(value, (list, tuple, set)):
+        tokens: set[str] = set()
+        for nested_value in value:
+            tokens.update(_tokenize_nested_schema_text(nested_value))
+        return tokens
+    return _tokenize_schema_text(value)
+
+
+def _schema_rank_document_key(documents: list[Document]) -> tuple[tuple[str, str, str], ...]:
+    return tuple(
+        (
+            str(document.meta.get("type", "")),
+            str(document.meta.get("name", "")),
+            str(document.content),
+        )
+        for document in documents
+    )
 
 
 def _schema_rank_text_by_table(documents: list[Document]) -> dict[str, dict[str, set[str]]]:
+    return _cached_schema_rank_text_by_table(_schema_rank_document_key(documents))
+
+
+@lru_cache(maxsize=128)
+def _cached_schema_rank_text_by_table(
+    document_key: tuple[tuple[str, str, str], ...],
+) -> dict[str, dict[str, set[str]]]:
     table_text: dict[str, dict[str, set[str]]] = {}
 
     def ensure(table_name: str) -> dict[str, set[str]]:
@@ -810,26 +1140,45 @@ def _schema_rank_text_by_table(documents: list[Document]) -> dict[str, dict[str,
             }
         return table_text[table_name]
 
-    for document in documents:
+    for _, meta_name, content_text in document_key:
         try:
-            content = ast.literal_eval(document.content)
+            content = ast.literal_eval(content_text)
         except (SyntaxError, ValueError):
             continue
 
-        table_name = document.meta.get("name") or content.get("name")
+        table_name = meta_name or content.get("name")
         if not table_name:
             continue
 
         bucket = ensure(table_name)
-        bucket["table"].update(_tokenize_schema_text(table_name))
-        bucket["table"].update(_tokenize_schema_text(content.get("name")))
+        bucket["table"].update(_tokenize_schema_identifier_text(table_name))
+        bucket["table"].update(_tokenize_schema_identifier_text(content.get("name")))
+        bucket["table"].update(
+            _tokenize_nested_schema_identifier_text(content.get("properties"))
+        )
+        bucket["table"].update(
+            _tokenize_nested_schema_identifier_text(content.get("tableReference"))
+        )
         bucket["comments"].update(_tokenize_schema_text(content.get("comment")))
         bucket["comments"].update(_tokenize_schema_text(content.get("description")))
+        bucket["comments"].update(_tokenize_nested_schema_text(content.get("refSql")))
 
         for column in content.get("columns", []) or []:
-            bucket["columns"].update(_tokenize_schema_text(column.get("name")))
-            bucket["columns"].update(_tokenize_schema_text(column.get("column")))
-            bucket["columns"].update(_tokenize_schema_text(column.get("display_name")))
+            bucket["columns"].update(
+                _tokenize_schema_identifier_text(column.get("name"))
+            )
+            bucket["columns"].update(
+                _tokenize_schema_identifier_text(column.get("column"))
+            )
+            bucket["columns"].update(
+                _tokenize_schema_identifier_text(column.get("display_name"))
+            )
+            bucket["columns"].update(
+                _tokenize_schema_identifier_text(column.get("displayName"))
+            )
+            bucket["columns"].update(
+                _tokenize_nested_schema_identifier_text(column.get("properties"))
+            )
             bucket["comments"].update(_tokenize_schema_text(column.get("comment")))
             bucket["comments"].update(_tokenize_schema_text(column.get("description")))
 
@@ -840,52 +1189,66 @@ def _rank_table_names_by_query(
     table_names: list[str],
     semantic_documents: list[Document],
     query: str | None,
+    require_positive_score: bool = False,
 ) -> list[str]:
     if not query or not table_names:
-        return table_names
+        return [] if require_positive_score else table_names
 
     query_tokens = _tokenize_schema_text(_augment_retrieval_query(query))
     if not query_tokens:
-        return table_names
+        return [] if require_positive_score else table_names
 
     table_text = _schema_rank_text_by_table(semantic_documents)
+    normalized_query = _normalized_schema_mention_text(query)
+    content_tokens = _rank_content_tokens(query_tokens)
 
     def score(table_name: str) -> int:
         bucket = table_text.get(table_name, {})
-        table_tokens = set(bucket.get("table", set())) | _tokenize_schema_text(
+        table_tokens = set(bucket.get("table", set())) | _tokenize_schema_identifier_text(
             table_name
         )
         column_tokens = set(bucket.get("columns", set()))
         comment_tokens = set(bucket.get("comments", set()))
         direct_table_matches = query_tokens & table_tokens
         direct_column_matches = query_tokens & column_tokens
+        direct_comment_matches = query_tokens & comment_tokens
+        covered_tokens = direct_table_matches | direct_column_matches | direct_comment_matches
+        direct_content_matches = content_tokens & covered_tokens
+        direct_content_column_matches = content_tokens & column_tokens
 
         value = (
             len(direct_table_matches) * 6
             + len(direct_column_matches) * 8
-            + len(query_tokens & comment_tokens)
+            + len(direct_comment_matches)
+            + len(direct_content_matches) * 32
+            + len(direct_content_column_matches) * 24
         )
+        if _query_mentions_schema_identifier(normalized_query, table_name):
+            value += 80
+        value += len(
+            direct_table_matches | direct_column_matches | direct_comment_matches
+        ) ** 2
+        if content_tokens and all(
+            _schema_token_variants(token) & covered_tokens
+            for token in content_tokens
+        ):
+            value += 80 + len(content_tokens) * 16
 
         if len(direct_column_matches) >= 2:
             value += 8
         if direct_table_matches and direct_column_matches:
             value += 8
-        if query_tokens & {"revenue", "sale", "sales", "trend", "trends"}:
-            value += len((table_tokens | column_tokens) & _SALES_REVENUE_TOKENS) * 5
-            if not query_tokens & _CUSTOMS_FINANCE_TOKENS:
-                value -= (
-                    len((table_tokens | column_tokens) & _CUSTOMS_FINANCE_TOKENS)
-                    * 8
-                )
-        if table_tokens & _GENERIC_TABLE_TOKENS and not direct_table_matches:
-            value -= 6
         return value
 
-    ranked = sorted(
-        enumerate(table_names),
-        key=lambda item: (-score(item[1]), item[0]),
-    )
-    return [table_name for _, table_name in ranked]
+    scored = [
+        (index, table_name, score(table_name))
+        for index, table_name in enumerate(table_names)
+    ]
+    if require_positive_score:
+        scored = [item for item in scored if item[2] > 0]
+
+    ranked = sorted(scored, key=lambda item: (-item[2], item[0]))
+    return [table_name for _, table_name, _ in ranked]
 
 
 def _rank_documents_by_table_names(
@@ -916,65 +1279,7 @@ def _rank_documents_for_query(
 
 
 def _augment_retrieval_query(query: str) -> str:
-    lowered = query.lower()
-    expansions = []
-
-    concept_terms = {
-        ("revenue", "sales", "sale", "amount", "value"): (
-            "sales revenue amount value gross net total price intake invoice order"
-        ),
-        ("order", "orders"): (
-            "order ord number date customer product business unit division company"
-        ),
-        ("invoice", "invoices"): (
-            "invoice supplier customer currency amount date number"
-        ),
-        ("customer", "customers"): (
-            "customer account client number name identifier"
-        ),
-        ("product", "products"): (
-            "product item material type name category"
-        ),
-        ("repair", "repairs"): (
-            "repair status priority severity failure board model log in progress completed critical"
-        ),
-        ("failure", "failures", "defect", "defects"): (
-            "failure defect severity occurrence record count code type system status"
-        ),
-        ("batch", "batches"): (
-            "batch board model supplier defect rate inspection status"
-        ),
-        ("material", "materials"): (
-            "material item part component location"
-        ),
-        ("location", "locations"): (
-            "location site warehouse area material"
-        ),
-        ("business unit", "bu", "division"): (
-            "business unit division company account organization"
-        ),
-        ("month", "monthly", "july", "year", "trend", "latest"): (
-            "date month year fiscal calendar trend latest recent"
-        ),
-        ("status", "severity", "priority", "critical"): (
-            "status priority severity critical state category progress"
-        ),
-    }
-
-    for triggers, terms in concept_terms.items():
-        if any(trigger in lowered for trigger in triggers):
-            expansions.append(terms)
-
-    if any(
-        trigger in lowered
-        for trigger in ("rate", "ratio", "percent", "percentage")
-    ):
-        expansions.append("rate ratio percent percentage")
-
-    if not expansions:
-        return query
-
-    return f"{query}\nBusiness schema search terms: {'; '.join(expansions)}"
+    return query
 
 
 async def _retrieve_semantic_schema_documents(
@@ -997,6 +1302,111 @@ async def _retrieve_semantic_schema_documents(
         filters=filters,
     )
     return results["documents"]
+
+
+async def _retrieve_all_schema_documents(
+    project_id: str,
+    mdl_hash: str | None,
+    dbschema_retriever: Any,
+) -> list[Document]:
+    cache_key = (id(dbschema_retriever), project_id, mdl_hash or "")
+    if cache_key in _ALL_SCHEMA_DOCUMENTS_CACHE:
+        logger.info(
+            "Ask schema document cache hit project_id=%s mdl_hash=%s scope=all count=%s",
+            project_id,
+            mdl_hash or "",
+            len(_ALL_SCHEMA_DOCUMENTS_CACHE[cache_key]),
+        )
+        return list(_ALL_SCHEMA_DOCUMENTS_CACHE[cache_key])
+
+    lock = _ALL_SCHEMA_DOCUMENTS_CACHE_LOCKS.setdefault(cache_key, asyncio.Lock())
+    async with lock:
+        if cache_key in _ALL_SCHEMA_DOCUMENTS_CACHE:
+            logger.info(
+                "Ask schema document cache hit project_id=%s mdl_hash=%s scope=all count=%s",
+                project_id,
+                mdl_hash or "",
+                len(_ALL_SCHEMA_DOCUMENTS_CACHE[cache_key]),
+            )
+            return list(_ALL_SCHEMA_DOCUMENTS_CACHE[cache_key])
+
+        started_at = time.perf_counter()
+        documents = await _retrieve_all_schema_documents_uncached(
+            project_id,
+            mdl_hash,
+            dbschema_retriever,
+        )
+        if len(_ALL_SCHEMA_DOCUMENTS_CACHE) >= 64:
+            _ALL_SCHEMA_DOCUMENTS_CACHE.pop(next(iter(_ALL_SCHEMA_DOCUMENTS_CACHE)))
+        _ALL_SCHEMA_DOCUMENTS_CACHE[cache_key] = documents
+        _log_retrieval_timing(
+            "schema_retrieval_all_documents",
+            started_at,
+            project_id,
+            cache_hit=False,
+            document_count=len(documents),
+        )
+        return list(documents)
+
+
+async def _retrieve_all_schema_documents_uncached(
+    project_id: str,
+    mdl_hash: str | None,
+    dbschema_retriever: Any,
+) -> list[Document]:
+    filters = {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+        ],
+    }
+
+    filters["conditions"].extend(_project_filter_conditions(project_id, mdl_hash))
+
+    results = await dbschema_retriever.run(query_embedding=[], filters=filters)
+    return results["documents"]
+
+
+async def _retrieve_lexical_schema_hits(
+    query: str | None,
+    project_id: str,
+    mdl_hash: str | None,
+    dbschema_retriever: Any,
+    existing_table_names: set[str],
+) -> tuple[list[Document], list[str]]:
+    if not query:
+        return [], []
+
+    documents = await _retrieve_all_schema_documents(
+        project_id,
+        mdl_hash,
+        dbschema_retriever,
+    )
+    candidate_table_names = [
+        table_name
+        for table_name in _rank_table_names_by_query(
+            _table_names_from_schema_documents(documents),
+            documents,
+            query,
+            require_positive_score=True,
+        )
+        if table_name not in existing_table_names
+    ][:_LEXICAL_SCHEMA_TABLE_NAME_MERGE_LIMIT]
+    if not candidate_table_names:
+        return [], []
+
+    logger.info(
+        "Ask schema lexical project scan project_id=%s mdl_hash=%s retrieved_tables=%s",
+        project_id,
+        mdl_hash or "",
+        candidate_table_names,
+    )
+    candidate_table_name_set = set(candidate_table_names)
+    return [
+        document
+        for document in documents
+        if document.meta.get("name") in candidate_table_name_set
+    ], candidate_table_names
 
 
 def _table_names_from_schema_documents(documents: list[Document]) -> list[str]:
@@ -1036,6 +1446,7 @@ async def _retrieve_schema_documents(
     mdl_hash: str | None,
     dbschema_retriever: Any,
 ) -> list[Document]:
+    table_names = list(dict.fromkeys(table_names))
     table_name_conditions = [
         {"field": "name", "operator": "==", "value": table_name}
         for table_name in table_names
@@ -1044,6 +1455,63 @@ async def _retrieve_schema_documents(
     if not table_name_conditions:
         return []
 
+    cache_key = (
+        id(dbschema_retriever),
+        project_id,
+        mdl_hash or "",
+        tuple(table_names),
+    )
+    if cache_key in _SCHEMA_DOCUMENTS_CACHE:
+        logger.info(
+            "Ask schema document cache hit project_id=%s mdl_hash=%s scope=named table_count=%s document_count=%s",
+            project_id,
+            mdl_hash or "",
+            len(table_names),
+            len(_SCHEMA_DOCUMENTS_CACHE[cache_key]),
+        )
+        return list(_SCHEMA_DOCUMENTS_CACHE[cache_key])
+
+    lock = _SCHEMA_DOCUMENTS_CACHE_LOCKS.setdefault(cache_key, asyncio.Lock())
+    async with lock:
+        if cache_key in _SCHEMA_DOCUMENTS_CACHE:
+            logger.info(
+                "Ask schema document cache hit project_id=%s mdl_hash=%s scope=named table_count=%s document_count=%s",
+                project_id,
+                mdl_hash or "",
+                len(table_names),
+                len(_SCHEMA_DOCUMENTS_CACHE[cache_key]),
+            )
+            return list(_SCHEMA_DOCUMENTS_CACHE[cache_key])
+
+        started_at = time.perf_counter()
+        documents = await _retrieve_schema_documents_uncached(
+            table_names,
+            project_id,
+            mdl_hash,
+            dbschema_retriever,
+            table_name_conditions,
+        )
+        if len(_SCHEMA_DOCUMENTS_CACHE) >= 128:
+            _SCHEMA_DOCUMENTS_CACHE.pop(next(iter(_SCHEMA_DOCUMENTS_CACHE)))
+        _SCHEMA_DOCUMENTS_CACHE[cache_key] = documents
+        _log_retrieval_timing(
+            "schema_retrieval_named_documents",
+            started_at,
+            project_id,
+            cache_hit=False,
+            table_count=len(table_names),
+            document_count=len(documents),
+        )
+        return list(documents)
+
+
+async def _retrieve_schema_documents_uncached(
+    table_names: list[str],
+    project_id: str,
+    mdl_hash: str | None,
+    dbschema_retriever: Any,
+    table_name_conditions: list[dict[str, Any]],
+) -> list[Document]:
     filters = {
         "operator": "AND",
         "conditions": [
@@ -1095,6 +1563,50 @@ def _dedupe_documents(documents: list[Document]) -> list[Document]:
         seen.add(identity)
 
     return deduped
+
+
+def _limit_retrieval_results_for_generation(
+    retrieval_results: list[dict[str, Any]],
+    encoding: tiktoken.Encoding,
+) -> tuple[list[dict[str, Any]], int, int, str | None]:
+    if not retrieval_results:
+        return retrieval_results, 0, 0, None
+
+    original_tokens = len(
+        encoding.encode(
+            " ".join(
+                retrieval_result.get("table_ddl", "")
+                for retrieval_result in retrieval_results
+            )
+        )
+    )
+    limited_results: list[dict[str, Any]] = []
+    limited_tokens = 0
+    skipped_for_token_budget = False
+
+    for retrieval_result in retrieval_results:
+        if len(limited_results) >= _MAX_LLM_SCHEMA_CONTEXT_TABLES:
+            break
+
+        table_tokens = len(encoding.encode(retrieval_result.get("table_ddl", "")))
+        if table_tokens > _MAX_LLM_SCHEMA_CONTEXT_TOKENS:
+            skipped_for_token_budget = True
+            continue
+        if limited_tokens + table_tokens > _MAX_LLM_SCHEMA_CONTEXT_TOKENS:
+            skipped_for_token_budget = True
+            continue
+
+        limited_results.append(retrieval_result)
+        limited_tokens += table_tokens
+
+    if not limited_results:
+        return [], original_tokens, 0, "all_tables_exceed_token_budget"
+
+    if len(limited_results) == len(retrieval_results):
+        return retrieval_results, original_tokens, original_tokens, None
+
+    reason = "ranked_top_k_skipped_token_budget" if skipped_for_token_budget else "ranked_top_k"
+    return limited_results, original_tokens, limited_tokens, reason
 
 
 @observe()
@@ -1217,9 +1729,43 @@ def check_using_db_schemas_without_pruning(
             "has_json_field": has_json_field,
         }
 
+    (
+        limited_retrieval_results,
+        original_token_count,
+        limited_token_count,
+        limit_reason,
+    ) = _limit_retrieval_results_for_generation(retrieval_results, encoding)
+    if limit_reason:
+        if not limited_retrieval_results:
+            logger.info(
+                "Ask retrieval selected schema context exceeded generation budget; using column pruning reason=%s original_tables=%s original_tokens=%s token_budget=%s",
+                limit_reason,
+                len(retrieval_results),
+                original_token_count,
+                _MAX_LLM_SCHEMA_CONTEXT_TOKENS,
+            )
+            return {
+                "db_schemas": [],
+                "tokens": original_token_count,
+                "has_calculated_field": has_calculated_field,
+                "has_metric": has_metric,
+                "has_json_field": has_json_field,
+            }
+        logger.info(
+            "Ask retrieval capped generation schema context reason=%s original_tables=%s selected_tables=%s original_tokens=%s selected_tokens=%s table_budget=%s token_budget=%s",
+            limit_reason,
+            len(retrieval_results),
+            len(limited_retrieval_results),
+            original_token_count,
+            limited_token_count,
+            _MAX_LLM_SCHEMA_CONTEXT_TABLES,
+            _MAX_LLM_SCHEMA_CONTEXT_TOKENS,
+        )
+        retrieval_results = limited_retrieval_results
+        _token_count = limited_token_count
+
     return {
-        "db_schemas": retrieval_results,
-        "tokens": _token_count,
+        "retrieval_results": retrieval_results,
         "has_calculated_field": has_calculated_field,
         "has_metric": has_metric,
         "has_json_field": has_json_field,
@@ -1245,24 +1791,48 @@ def prompt(
             )
         )
 
-        _prompt = prompt_builder.run(question=query, db_schemas=db_schemas)
-        return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
-    else:
+    for table_name, table_contents in secondary.items():
+        if table_name not in merged:
+            merged[table_name] = {
+                **table_contents,
+                "columns": list(table_contents.get("columns", [])),
+            }
+            continue
+
+        columns = list(merged[table_name].get("columns", []))
+        for column in table_contents.get("columns", []):
+            if column not in columns:
+                columns.append(column)
+        merged[table_name]["columns"] = columns
+
+    return merged
+
+
+def _lexical_columns_and_tables_needed(
+    construct_db_schemas: list[dict],
+    query: str | None,
+    max_tables: int = 4,
+    max_columns_per_table: int = 12,
+) -> dict[str, dict]:
+    if not query:
         return {}
 
+    query_tokens = _tokenize_schema_text(_augment_retrieval_query(query))
+    if not query_tokens:
+        return {}
 
-@observe(as_type="generation", capture_input=False)
-@trace_cost
-async def filter_columns_in_tables(
-    prompt: dict, table_columns_selection_generator: Any, generator_name: str
-) -> dict:
-    if prompt:
-        return await table_columns_selection_generator(
-            prompt=prompt.get("prompt")
-        ), generator_name
-    else:
-        return {}, generator_name
+    scored_tables = []
+    for table_schema in construct_db_schemas:
+        if table_schema.get("type") != "TABLE":
+            continue
 
+        table_tokens = _tokenize_schema_text(
+            table_schema.get("name")
+        ) | _tokenize_schema_text(
+            table_schema.get("comment")
+        )
+        table_score = len(query_tokens & table_tokens) * 6
+        column_scores = []
 
 @observe()
 def construct_retrieval_results(
@@ -1361,34 +1931,41 @@ def construct_retrieval_results(
             )
 
         for document in dbschema_retrieval:
-            content = ast.literal_eval(document.content)
-
-            if content["name"] not in tables:
+            try:
+                content = ast.literal_eval(document.content)
+            except (ValueError, SyntaxError):
+                logger.warning(
+                    "Skipping malformed retrieved schema document during schema pruning: %s",
+                    document.meta,
+                )
                 continue
 
-            if content["type"] == "METRIC":
+            if not isinstance(content, dict):
+                logger.warning(
+                    "Skipping non-object retrieved schema document during schema pruning: %s",
+                    document.meta,
+                )
+                continue
+
+            content_name = content.get("name")
+            content_type = content.get("type")
+            if not content_name:
+                logger.warning(
+                    "Skipping retrieved schema document without name during schema pruning: %s",
+                    document.meta,
+                )
+                continue
+
+            if content_name not in tables:
+                continue
+
+            if content_type == "METRIC":
                 retrieval_results.append(
                     {
-                        "table_name": content["name"],
+                        "table_name": content_name,
                         "table_ddl": _build_metric_ddl(content),
                         "identifier_context": _identifier_context(
-                            content["name"],
-                            [
-                                column["name"]
-                                for column in content["columns"]
-                                if column["data_type"].lower() != "unknown"
-                            ],
-                        ),
-                    }
-                )
-                has_metric = True
-            elif content["type"] == "VIEW":
-                retrieval_results.append(
-                    {
-                        "table_name": content["name"],
-                        "table_ddl": _build_view_ddl(content),
-                        "identifier_context": _identifier_context(
-                            content["name"],
+                            content_name,
                             [
                                 column["name"]
                                 for column in content.get("columns", [])
@@ -1398,307 +1975,23 @@ def construct_retrieval_results(
                         ),
                     }
                 )
-
-        logger.info("Ask retrieval selected schema objects=%s", selected_schema_log)
-        return {
-            "retrieval_results": retrieval_results,
-            "has_calculated_field": has_calculated_field,
-            "has_metric": has_metric,
-            "has_json_field": has_json_field,
-        }
-    else:
-        retrieval_results = check_using_db_schemas_without_pruning["db_schemas"]
-        logger.info(
-            "Ask retrieval selected schema objects=%s",
-            [
-                {"table": retrieval_result.get("table_name"), "columns": "all"}
-                for retrieval_result in retrieval_results
-            ],
-        )
-
-        return {
-            "retrieval_results": retrieval_results,
-            "has_calculated_field": check_using_db_schemas_without_pruning[
-                "has_calculated_field"
-            ],
-            "has_metric": check_using_db_schemas_without_pruning["has_metric"],
-            "has_json_field": check_using_db_schemas_without_pruning["has_json_field"],
-        }
-
-
-def _normalize_column_selection_results(parsed_response: Any) -> list[dict]:
-    if isinstance(parsed_response, list):
-        return [item for item in parsed_response if isinstance(item, dict)]
-
-    if not isinstance(parsed_response, dict):
-        return []
-
-    for key in (
-        "results",
-        "tables",
-        "selected_tables",
-        "retrieval_results",
-        "matches",
-        "data",
-        "result",
-        "output",
-    ):
-        if key in parsed_response:
-            normalized = _normalize_column_selection_results(parsed_response[key])
-            if normalized:
-                return normalized
-
-    if "table_name" in parsed_response and (
-        "table_contents" in parsed_response or "columns" in parsed_response
-    ):
-        return [parsed_response]
-
-    keyed_tables = []
-    for table_name, table_contents in parsed_response.items():
-        if not isinstance(table_name, str) or not isinstance(table_contents, dict):
-            continue
-        if "table_contents" in table_contents:
-            keyed_tables.append(
-                {
-                    "table_name": table_name,
-                    "table_contents": table_contents["table_contents"],
-                }
-            )
-        elif "columns" in table_contents:
-            keyed_tables.append(
-                {"table_name": table_name, "table_contents": table_contents}
-            )
-
-    return keyed_tables
-
-
-def _parse_column_selection_response(filter_columns_in_tables: dict) -> dict:
-    raw_reply = (filter_columns_in_tables.get("replies") or [""])[0]
-    try:
-        parsed_response = orjson.loads(raw_reply)
-    except orjson.JSONDecodeError as exc:
-        logger.warning("Unable to parse column-selection JSON response: %s", exc)
-        return {}
-
-    normalized_tables = _normalize_column_selection_results(parsed_response)
-    reformatted_json = {}
-    for table in normalized_tables:
-        table_name = table.get("table_name") or table.get("name")
-        table_contents = table.get("table_contents") or {}
-        if not table_contents and "columns" in table:
-            table_contents = table
-
-        columns = (
-            table_contents.get("columns") if isinstance(table_contents, dict) else None
-        )
-        if not isinstance(table_name, str) or not isinstance(columns, list):
-            continue
-
-        reformatted_json[table_name] = {
-            **table_contents,
-            "columns": [column for column in columns if isinstance(column, str)],
-        }
-
-    if not reformatted_json:
-        response_shape = (
-            f"keys={list(parsed_response.keys())[:8]}"
-            if isinstance(parsed_response, dict)
-            else type(parsed_response).__name__
-        )
-        logger.warning(
-            "Column-selection response did not include usable table columns (%s).",
-            response_shape,
-        )
-
-    return reformatted_json
-
-
-def _build_unpruned_retrieval_results(
-    construct_db_schemas: list[dict],
-    dbschema_retrieval: list[Document],
-) -> dict:
-    retrieval_results = []
-    has_calculated_field = False
-    has_metric = False
-    has_json_field = False
-
-    for table_schema in construct_db_schemas:
-        if table_schema["type"] == "TABLE":
-            ddl, _has_calculated_field, _has_json_field = (
-                _build_table_retrieval_context(table_schema)
-            )
-            retrieval_results.append(
-                {
-                    "table_name": table_schema["name"],
-                    "table_ddl": ddl,
-                }
-            )
-            if _has_calculated_field:
-                has_calculated_field = True
-            if _has_json_field:
-                has_json_field = True
-
-    for document in dbschema_retrieval:
-        content = ast.literal_eval(document.content)
-
-        if content["type"] == "METRIC":
-            retrieval_results.append(
-                {
-                    "table_name": content["name"],
-                    "table_ddl": _build_metric_ddl(content),
-                }
-            )
-            has_metric = True
-        elif content["type"] == "VIEW":
-            retrieval_results.append(
-                {
-                    "table_name": content["name"],
-                    "table_ddl": _build_view_ddl(content),
-                }
-            )
-
-    return {
-        "retrieval_results": retrieval_results,
-        "has_calculated_field": has_calculated_field,
-        "has_metric": has_metric,
-        "has_json_field": has_json_field,
-    }
-
-
-def _merge_column_selection(
-    primary: dict[str, dict],
-    secondary: dict[str, dict],
-) -> dict[str, dict]:
-    merged = {
-        table_name: {
-            **table_contents,
-            "columns": list(table_contents.get("columns", [])),
-        }
-        for table_name, table_contents in primary.items()
-    }
-
-    for table_name, table_contents in secondary.items():
-        if table_name not in merged:
-            merged[table_name] = {
-                **table_contents,
-                "columns": list(table_contents.get("columns", [])),
-            }
-            continue
-
-        columns = list(merged[table_name].get("columns", []))
-        for column in table_contents.get("columns", []):
-            if column not in columns:
-                columns.append(column)
-        merged[table_name]["columns"] = columns
-
-    return merged
-
-
-def _lexical_columns_and_tables_needed(
-    construct_db_schemas: list[dict],
-    query: str | None,
-    max_tables: int = 4,
-    max_columns_per_table: int = 12,
-) -> dict[str, dict]:
-    if not query:
-        return {}
-
-    query_tokens = _tokenize_schema_text(_augment_retrieval_query(query))
-    if not query_tokens:
-        return {}
-
-    scored_tables = []
-    for table_schema in construct_db_schemas:
-        if table_schema.get("type") != "TABLE":
-            continue
-
-        table_tokens = _tokenize_schema_text(
-            table_schema.get("name")
-        ) | _tokenize_schema_text(
-            table_schema.get("comment")
-        )
-        table_score = len(query_tokens & table_tokens) * 6
-        column_scores = []
-
-@observe()
-def construct_retrieval_results(
-    check_using_db_schemas_without_pruning: dict,
-    filter_columns_in_tables: dict,
-    construct_db_schemas: list[dict],
-    dbschema_retrieval: list[Document],
-    query: str | None = None,
-) -> dict[str, Any]:
-    if filter_columns_in_tables:
-        columns_and_tables_needed = _parse_column_selection_response(
-            filter_columns_in_tables
-        )
-        lexical_columns_and_tables_needed = _lexical_columns_and_tables_needed(
-            construct_db_schemas,
-            query,
-        )
-        columns_and_tables_needed = _merge_column_selection(
-            columns_and_tables_needed,
-            lexical_columns_and_tables_needed,
-        )
-        tables = set(columns_and_tables_needed.keys())
-        retrieval_results = []
-        selected_schema_log = []
-        has_calculated_field = False
-        has_metric = False
-        has_json_field = False
-
-        for table_schema in construct_db_schemas:
-            if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
-                selected_columns = set(
-                    columns_and_tables_needed[table_schema["name"]]["columns"]
-                )
-                columns = (
-                    selected_columns
-                    if _selected_columns_are_executable(
-                        table_schema, selected_columns
-                    )
-                    else None
-                )
-                ddl, _has_calculated_field, _has_json_field = (
-                    _build_table_retrieval_context(
-                        table_schema,
-                        columns=columns,
-                        tables=tables,
-                    )
-                )
-                if _has_calculated_field:
-                    has_calculated_field = True
-                if _has_json_field:
-                    has_json_field = True
-
+                has_metric = True
+            elif content_type == "VIEW":
                 retrieval_results.append(
                     {
-                        "table_name": table_schema["name"],
-                        "table_ddl": ddl,
+                        "table_name": content_name,
+                        "table_ddl": _build_view_ddl(content),
+                        "identifier_context": _identifier_context(
+                            content_name,
+                            [
+                                column["name"]
+                                for column in content.get("columns", [])
+                                if column.get("name")
+                                and column.get("data_type", "").lower() != "unknown"
+                            ],
+                        ),
                     }
                 )
-                selected_schema_log.append(
-                    {
-                        "table": table_schema["name"],
-                        "columns": sorted(selected_columns),
-                    }
-                )
-
-        if not retrieval_results:
-            logger.warning(
-                "Column-selection output did not match retrieved schemas; "
-                "falling back to unpruned retrieved schema context."
-            )
-            return _build_unpruned_retrieval_results(
-                construct_db_schemas, dbschema_retrieval
-            )
-
-        if not column_scores and table_score <= 0:
-            continue
-
-        total_score = table_score + sum(score for score, _, _ in column_scores)
-        if total_score <= 0:
-            continue
 
         logger.info("Ask retrieval selected schema objects=%s", selected_schema_log)
         return {
@@ -1913,13 +2206,16 @@ def _lexical_columns_and_tables_needed(
         if table_schema.get("type") != "TABLE":
             continue
 
-        table_tokens = _tokenize_schema_text(
-            table_schema.get("name")
-        ) | _tokenize_schema_text(
-            table_schema.get("comment")
+        table_tokens = (
+            _tokenize_schema_identifier_text(table_schema.get("name"))
+            | _tokenize_schema_text(table_schema.get("comment"))
+            | _tokenize_nested_schema_identifier_text(table_schema.get("properties"))
+            | _tokenize_nested_schema_identifier_text(table_schema.get("tableReference"))
         )
-        table_score = len(query_tokens & table_tokens) * 6
+        table_matches = query_tokens & table_tokens
+        table_score = len(table_matches) * 6
         column_scores = []
+        column_match_union: set[str] = set()
 
         for column in table_schema.get("columns", []):
             if (
@@ -1928,31 +2224,25 @@ def _lexical_columns_and_tables_needed(
             ):
                 continue
 
-            column_tokens = _tokenize_schema_text(column.get("name"))
-            comment_tokens = _tokenize_schema_text(column.get("comment"))
-            score = len(query_tokens & column_tokens) * 10
-            score += len(query_tokens & comment_tokens) * 2
-            if query_tokens & {"revenue", "sale", "sales", "trend", "trends"}:
-                score += len(column_tokens & _SALES_REVENUE_TOKENS) * 6
-            if query_tokens & {"month", "monthly", "year", "july", "date", "latest"}:
-                score += (
-                    len(column_tokens & {"date", "day", "month", "year", "time"})
-                    * 5
-                )
-            if query_tokens & {"top", "highest", "lowest", "bottom"}:
-                measure_tokens = {
-                    "amount",
-                    "count",
-                    "cost",
-                    "margin",
-                    "quantity",
-                    "score",
-                    "value",
-                }
-                if query_tokens & {"rate", "ratio", "percent", "percentage"}:
-                    measure_tokens.update({"rate", "ratio", "percent", "percentage"})
-                score += len(column_tokens & measure_tokens) * 4
+            column_tokens = _tokenize_schema_identifier_text(column.get("name"))
+            column_tokens.update(
+                _tokenize_schema_identifier_text(column.get("display_name"))
+            )
+            column_tokens.update(
+                _tokenize_schema_identifier_text(column.get("displayName"))
+            )
+            column_tokens.update(
+                _tokenize_nested_schema_identifier_text(column.get("properties"))
+            )
+            comment_tokens = _tokenize_schema_text(
+                column.get("comment")
+            ) | _tokenize_schema_text(column.get("description"))
+            column_matches = query_tokens & column_tokens
+            comment_matches = query_tokens & comment_tokens
+            score = len(column_matches) * 10
+            score += len(comment_matches) * 2
             if score > 0:
+                column_match_union.update(column_matches | comment_matches)
                 column_scores.append(
                     (score, column["name"], column.get("is_primary_key"))
                 )
@@ -1960,14 +2250,8 @@ def _lexical_columns_and_tables_needed(
         if not column_scores and table_score <= 0:
             continue
 
-        if table_tokens & _GENERIC_TABLE_TOKENS and table_score <= 0:
-            table_score -= 8
-        if query_tokens & {"revenue", "sale", "sales", "trend", "trends"}:
-            if not query_tokens & _CUSTOMS_FINANCE_TOKENS:
-                table_score -= len(table_tokens & _CUSTOMS_FINANCE_TOKENS) * 10
-            table_score += len(table_tokens & _SALES_REVENUE_TOKENS) * 5
-
         total_score = table_score + sum(score for score, _, _ in column_scores)
+        total_score += len(table_matches | column_match_union) ** 2
         if total_score <= 0:
             continue
 
@@ -2092,7 +2376,8 @@ class DbSchemaRetrieval(BasicPipeline):
             project_id or "",
             mdl_hash or "",
         )
-        return await self._pipe.execute(
+        started_at = time.perf_counter()
+        result = await self._pipe.execute(
             ["construct_retrieval_results"],
             inputs={
                 "query": query,
@@ -2105,3 +2390,14 @@ class DbSchemaRetrieval(BasicPipeline):
                 **self._configs,
             },
         )
+        retrieval_results = result.get("construct_retrieval_results", {}).get(
+            "retrieval_results",
+            [],
+        )
+        _log_retrieval_timing(
+            "schema_retrieval_total",
+            started_at,
+            project_id,
+            retrieval_result_count=len(retrieval_results),
+        )
+        return result

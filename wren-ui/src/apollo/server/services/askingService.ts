@@ -674,6 +674,7 @@ export class AskingService implements IAskingService {
     previousTaskId?: number,
     threadResponseId?: number,
   ): Promise<Task> {
+    const startedAt = Date.now();
     const { threadId, language } = payload;
     const currentProject = await this.projectService.getCurrentProject();
     let projectId = payload.projectId ?? currentProject.id;
@@ -698,16 +699,33 @@ export class AskingService implements IAskingService {
     const histories = threadId && isContextualFollowUpQuestion(input.question)
       ? await this.getAskingHistory(threadId, threadResponseId)
       : null;
-    const logContext = {
-      threadId: threadId ?? null,
-      projectId,
-      currentProjectId: currentProject.id,
+    logger.info(
+      `Ask timing stage=task_creation_context project_id=${projectId} thread_id=${
+        threadId ?? ''
+      } history_count=${histories?.length ?? 0} elapsed_ms=${
+        Date.now() - startedAt
+      }`,
+    );
+    const trackerStartedAt = Date.now();
+    const response = await this.askingTaskTracker.createAskingTask({
+      query: input.question,
+      histories,
       deployId,
-      previousTaskState,
-      historyCount: histories?.length ?? 0,
-      rerunFromCancelled: !!rerunFromCancelled,
-      previousTaskId: previousTaskId ?? null,
-      threadResponseId: threadResponseId ?? null,
+      projectId: projectId.toString(),
+      configurations: { language },
+      rerunFromCancelled,
+      previousTaskId,
+      threadResponseId,
+    });
+    logger.info(
+      `Ask timing stage=task_creation project_id=${projectId} thread_id=${
+        threadId ?? ''
+      } elapsed_ms=${Date.now() - trackerStartedAt} total_ms=${
+        Date.now() - startedAt
+      }`,
+    );
+    return {
+      id: response.queryId,
     };
     logger.info(
       `Creating asking task: ${JSON.stringify({

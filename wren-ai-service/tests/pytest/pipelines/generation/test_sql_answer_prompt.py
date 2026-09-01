@@ -5,6 +5,7 @@ import pytest
 from src.pipelines.generation.sql_answer import (
     SQLAnswer,
     prompt,
+    sql_to_answer_system_prompt,
     sql_to_answer_user_prompt_template,
 )
 
@@ -19,6 +20,12 @@ def test_sql_answer_prompt_uses_sql_data_rows():
                 {"name": "manufacturing_cost_per_unit", "type": "double"},
             ],
             "data": [["Supplier 1", 0.06]],
+            "row_records": [
+                {
+                    "supplier_name": "Supplier 1",
+                    "manufacturing_cost_per_unit": 0.06,
+                }
+            ],
         },
         language="English",
         current_time="2026-08-03T00:00:00",
@@ -29,8 +36,18 @@ def test_sql_answer_prompt_uses_sql_data_rows():
     generated_prompt = result["prompt"]
 
     assert "rows:" in generated_prompt
+    assert "row records:" in generated_prompt
     assert "Supplier 1" in generated_prompt
+    assert "supplier_name" in generated_prompt
     assert "result rows:" not in generated_prompt
+    assert "Please think step by step" not in generated_prompt
+
+
+def test_sql_answer_prompt_blocks_code_style_hallucinated_analysis():
+    assert "Do not write code" in sql_to_answer_system_prompt
+    assert "Python" in sql_to_answer_system_prompt
+    assert "running the above code" in sql_to_answer_system_prompt
+    assert "Do not invent values" in sql_to_answer_system_prompt
 
 
 @pytest.mark.asyncio

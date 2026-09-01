@@ -1,11 +1,15 @@
 import pytest
+import tiktoken
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.pipelines.common import build_table_ddl
 from src.pipelines.retrieval.db_schema_retrieval import (
     _augment_retrieval_query,
+    _build_table_retrieval_context,
     _build_view_ddl,
+    _lexical_columns_and_tables_needed,
+    _limit_retrieval_results_for_generation,
     _parse_column_selection_response,
     _rank_table_names_by_query,
     check_using_db_schemas_without_pruning,
@@ -118,9 +122,43 @@ def test_view_schema_context_uses_deployed_view_statement_without_declared_colum
         }
     )
 
-    assert "CREATE VIEW retrieved_view" in result
-    assert "AS SELECT modeled_column FROM deployed_model" in result
+    assert "CREATE TABLE retrieved_view" in result
+    assert "modeled_column VARCHAR" in result
     assert "sql_table_name_use_exactly: retrieved_view" in result
+
+
+def test_table_schema_context_includes_source_identifier_metadata():
+    result, _, _ = _build_table_retrieval_context(
+        {
+            "type": "TABLE",
+            "comment": "",
+            "name": "orders_model",
+            "properties": {"displayName": "New Orders"},
+            "tableReference": {
+                "catalog": "warehouse",
+                "schema": "dbo",
+                "table": "tblOrders",
+            },
+            "columns": [
+                {
+                    "type": "COLUMN",
+                    "name": "customer_name",
+                    "data_type": "VARCHAR",
+                    "comment": "",
+                    "is_primary_key": False,
+                    "properties": {
+                        "displayName": "CustName",
+                        "sourceColumnName": "CustName",
+                    },
+                }
+            ],
+            "primaryKey": "",
+        }
+    )
+
+    assert '"source_table_name":"dbo.tblOrders"' in result
+    assert '"source_table_reference":{"catalog":"warehouse","schema":"dbo","table":"tblOrders"}' in result
+    assert '"source_column_name":"CustName"' in result
 
 
 def test_construct_db_schemas_keeps_deployed_views_for_column_pruning():
@@ -364,13 +402,12 @@ async def test_dbschema_retrieval_expands_declared_relationships():
         embedding={},
     )
 
-    assert retriever.calls == [[selected_model], [related_model], [downstream_model]]
+    assert retriever.calls == [[selected_model], [related_model]]
     assert [document.meta["name"] for document in documents] == [
         selected_model,
         selected_model,
         related_model,
         related_model,
-        downstream_model,
     ]
 
 
@@ -471,6 +508,130 @@ async def test_dbschema_retrieval_uses_semantic_schema_hits_when_table_retrieval
 
 
 @pytest.mark.asyncio
+async def test_dbschema_retrieval_lexically_recovers_active_project_schema_when_vector_misses():
+    recovered_model = "customer_orders"
+    unrelated_model = "service_tickets"
+
+    def table_document(name, comment="", properties=None, table_reference=None):
+        return Document(
+            content=str(
+                {
+                    "type": "TABLE",
+                    "name": name,
+                    "comment": comment,
+                    "columns": [],
+                    "properties": properties or {},
+                    "tableReference": table_reference,
+                    "primaryKey": "",
+                }
+            ),
+            meta={"type": "TABLE_SCHEMA", "name": name},
+        )
+
+    def columns_document(name, columns):
+        return Document(
+            content=str({"type": "TABLE_COLUMNS", "columns": columns}),
+            meta={"type": "TABLE_SCHEMA", "name": name},
+        )
+
+    recovered_documents = [
+        table_document(
+            recovered_model,
+            comment="Orders captured from customer purchase activity.",
+            properties={"displayName": "Customer Orders"},
+            table_reference={"schema": "sales", "table": "tblCustomerOrders"},
+        ),
+        columns_document(
+            recovered_model,
+            [
+                {
+                    "type": "COLUMN",
+                    "name": "customer_name",
+                    "data_type": "VARCHAR",
+                    "comment": "Customer name on the order.",
+                    "is_primary_key": False,
+                },
+                {
+                    "type": "COLUMN",
+                    "name": "order_total",
+                    "data_type": "DOUBLE",
+                    "comment": "Order revenue amount.",
+                    "is_primary_key": False,
+                },
+            ],
+        ),
+    ]
+    all_schema_documents = recovered_documents + [
+        table_document(unrelated_model, comment="Support case tracking."),
+        columns_document(
+            unrelated_model,
+            [
+                {
+                    "type": "COLUMN",
+                    "name": "ticket_status",
+                    "data_type": "VARCHAR",
+                    "comment": "Support ticket status.",
+                    "is_primary_key": False,
+                }
+            ],
+        ),
+    ]
+
+    class Retriever:
+        def __init__(self):
+            self.calls = []
+
+        async def run(self, query_embedding, filters):
+            self.calls.append(
+                {
+                    "query_embedding": query_embedding,
+                    "filters": filters,
+                }
+            )
+
+            if query_embedding:
+                return {"documents": []}
+
+            is_exact_fetch = any(
+                isinstance(condition, dict)
+                and condition.get("operator") == "OR"
+                and condition.get("conditions")
+                for condition in filters["conditions"]
+            )
+            if not is_exact_fetch:
+                return {"documents": all_schema_documents}
+
+            return {"documents": recovered_documents}
+
+    retriever = Retriever()
+
+    documents = await dbschema_retrieval(
+        table_retrieval={"documents": []},
+        project_id="project-1",
+        dbschema_retriever=retriever,
+        query="show orders by customer",
+        embedding={"embedding": [0.25]},
+    )
+
+    assert [call["query_embedding"] for call in retriever.calls] == [
+        [0.25],
+        [],
+        [],
+    ]
+    assert retriever.calls[1]["filters"] == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+            {"field": "project_id", "operator": "==", "value": "project-1"},
+        ],
+    }
+    assert [document.meta["name"] for document in documents] == [
+        recovered_model,
+        recovered_model,
+    ]
+
+
+@pytest.mark.asyncio
 async def test_dbschema_retrieval_prefers_table_description_hits_over_schema_chunk_hits():
     described_model = "described_dataset"
 
@@ -520,8 +681,8 @@ async def test_dbschema_retrieval_prefers_table_description_hits_over_schema_chu
         embedding={"embedding": [0.25]},
     )
 
-    assert [call["query_embedding"] for call in retriever.calls] == [[]]
-    assert retriever.calls[0]["filters"] == {
+    assert [call["query_embedding"] for call in retriever.calls] == [[0.25], []]
+    assert retriever.calls[1]["filters"] == {
         "operator": "AND",
         "conditions": [
             {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
@@ -637,6 +798,99 @@ def test_construct_retrieval_results_preserves_retrieved_metric_when_pruning():
                 ),
                 meta={"type": "TABLE_SCHEMA", "name": "semantic_metric"},
             )
+        ],
+    )
+
+    assert [item["table_name"] for item in result["retrieval_results"]] == [
+        "modeled_dataset",
+        "semantic_metric",
+    ]
+    assert result["has_metric"] is True
+
+
+def test_construct_retrieval_results_skips_retrieved_schema_without_name():
+    result = construct_retrieval_results(
+        check_using_db_schemas_without_pruning={},
+        filter_columns_in_tables={
+            "replies": [
+                """
+                {
+                    "results": [
+                        {
+                            "table_name": "modeled_dataset",
+                            "table_selection_reason": "Selected for the current request.",
+                            "table_contents": {
+                                "chain_of_thought_reasoning": ["Needed field."],
+                                "columns": ["stored_attribute"]
+                            }
+                        },
+                        {
+                            "table_name": "semantic_metric",
+                            "table_selection_reason": "Selected metric for the current request.",
+                            "table_contents": {
+                                "chain_of_thought_reasoning": ["Needed metric."],
+                                "columns": ["metric_value"]
+                            }
+                        }
+                    ]
+                }
+                """
+            ]
+        },
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "modeled_dataset",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "stored_attribute",
+                        "data_type": "VARCHAR",
+                        "comment": "",
+                        "is_primary_key": False,
+                    }
+                ],
+                "properties": {},
+                "primaryKey": "",
+            }
+        ],
+        dbschema_retrieval=[
+            Document(
+                content=str(
+                    {
+                        "type": "METRIC",
+                        "comment": "",
+                        "columns": [
+                            {
+                                "type": "COLUMN",
+                                "name": "metric_value",
+                                "data_type": "DOUBLE",
+                                "comment": "",
+                            }
+                        ],
+                    }
+                ),
+                meta={"type": "TABLE_SCHEMA"},
+            ),
+            Document(
+                content=str(
+                    {
+                        "type": "METRIC",
+                        "comment": "",
+                        "name": "semantic_metric",
+                        "columns": [
+                            {
+                                "type": "COLUMN",
+                                "name": "metric_value",
+                                "data_type": "DOUBLE",
+                                "comment": "",
+                            }
+                        ],
+                    }
+                ),
+                meta={"type": "TABLE_SCHEMA", "name": "semantic_metric"},
+            ),
         ],
     )
 
@@ -798,13 +1052,8 @@ def test_construct_retrieval_results_falls_back_when_pruner_omits_results():
         dbschema_retrieval=[],
     )
 
-    assert [item["table_name"] for item in result["retrieval_results"]] == [
-        "modeled_dataset"
-    ]
-    assert "CREATE TABLE modeled_dataset" in result["retrieval_results"][0]["table_ddl"]
-    assert result["retrieval_results"][0]["identifier_context"] == (
-        "table: modeled_dataset\ncolumns:\n- stored_attribute"
-    )
+    assert result["retrieval_results"] == []
+    assert result["has_metric"] is False
 
 
 def test_construct_retrieval_results_keeps_schema_when_pruner_mixes_known_and_unknown_columns():
@@ -859,11 +1108,9 @@ def test_construct_retrieval_results_keeps_schema_when_pruner_mixes_known_and_un
     table_ddl = result["retrieval_results"][0]["table_ddl"]
 
     assert "semantic_label" not in table_ddl
-    assert "stored_dimension VARCHAR" in table_ddl
+    assert "stored_dimension VARCHAR" not in table_ddl
     assert "stored_measure DOUBLE" in table_ddl
-    assert "sql_column_names_use_exactly:\n- stored_dimension\n- stored_measure" in (
-        table_ddl
-    )
+    assert "sql_column_names_use_exactly:\n- stored_measure" in table_ddl
 
 
 def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window():
@@ -1137,25 +1384,174 @@ def test_column_selection_returns_empty_dict_for_malformed_reply():
     assert parsed == {}
 
 
-def test_retrieval_query_augmentation_adds_business_terms():
-    augmented = _augment_retrieval_query("show total revenue by year")
+def test_retrieval_query_augmentation_is_schema_neutral():
+    query = "show total amount by year"
 
-    assert "Business schema search terms" in augmented
-    assert "sales revenue amount value" in augmented
-    assert "date month year" in augmented
+    assert _augment_retrieval_query(query) == query
 
 
-def test_table_ranking_prefers_business_sales_table_over_generic_or_customs_tables():
+def test_table_ranking_prefers_direct_schema_metadata_overlap():
     documents = [
-        _schema_document("dbo_mbrTime", ["id1", "id2"]),
-        _schema_document("CustomsRefundClaim", ["DutyAmount", "ClaimDate"]),
-        _schema_document("SalesOrderFact", ["USDFXSalesValue", "OrderDate"]),
+        _schema_document("neutral_records", ["id1", "id2"]),
+        _schema_document("amount_snapshots", ["amount_value", "snapshot_year"]),
+        _schema_document("event_records", ["event_code", "event_time"]),
     ]
 
     ranked = _rank_table_names_by_query(
-        ["dbo_mbrTime", "CustomsRefundClaim", "SalesOrderFact"],
+        ["neutral_records", "event_records", "amount_snapshots"],
         documents,
-        "show total revenue by year",
+        "show total amount by year",
     )
 
-    assert ranked[0] == "SalesOrderFact"
+    assert ranked[0] == "amount_snapshots"
+
+
+def test_table_ranking_prefers_meaningful_column_coverage_over_generic_overlap():
+    documents = [
+        _schema_document("year_total_staging", ["FY___Would_invoice_date", "total_cost"]),
+        _schema_document("sales_facts", ["Revenue", "Year", "CustomerName"]),
+        _schema_document("event_records", ["event_code", "event_time"]),
+    ]
+
+    ranked = _rank_table_names_by_query(
+        ["year_total_staging", "event_records", "sales_facts"],
+        documents,
+        "Show total revenue by year.",
+    )
+
+    assert ranked[0] == "sales_facts"
+
+
+def test_generation_context_limiter_skips_large_table_to_keep_later_candidates():
+    encoding = tiktoken.get_encoding("cl100k_base")
+    retrieval_results = [
+        {"table_name": "large_candidate", "table_ddl": "token " * 13_000},
+        {
+            "table_name": "compact_candidate",
+            "table_ddl": "CREATE TABLE compact_candidate (Revenue DOUBLE, Year INTEGER);",
+        },
+    ]
+
+    limited, _, _, reason = _limit_retrieval_results_for_generation(
+        retrieval_results,
+        encoding,
+    )
+
+    assert [result["table_name"] for result in limited] == ["compact_candidate"]
+    assert reason == "ranked_top_k_skipped_token_budget"
+
+
+def test_table_ranking_keeps_order_as_business_subject_token():
+    documents = [
+        _schema_document(
+            "tariff_missing_documents",
+            ["Missing_Document__1_", "Sold_to_Party_Name"],
+        ),
+        _schema_document("order_records", ["OrdNo", "OrdDate", "CustName"]),
+        _schema_document("customer_master", ["CustomerName"]),
+    ]
+
+    ranked = _rank_table_names_by_query(
+        ["tariff_missing_documents", "customer_master", "order_records"],
+        documents,
+        "Show order records with missing customer names.",
+    )
+
+    assert ranked[0] == "order_records"
+
+
+def test_table_ranking_splits_compound_schema_identifiers():
+    documents = [
+        _schema_document("account_groups", ["acctgroup"]),
+        _schema_document("balance_snapshots", ["endingbalance"]),
+        _schema_document("recon_status", ["glaccount", "acctgroup", "glbalance"]),
+    ]
+
+    ranked = _rank_table_names_by_query(
+        ["account_groups", "balance_snapshots", "recon_status"],
+        documents,
+        "show total GL balance by account group",
+    )
+
+    assert ranked[0] == "recon_status"
+
+
+def test_table_ranking_prefers_exact_schema_identifier_mention():
+    documents = [
+        _schema_document("dbo_AA", ["id", "taskdate"]),
+        _schema_document("dbo_View_Open_Invoices", ["invoice_number", "invoice_date"]),
+        _schema_document("dbo_Collections_Tickets_History", ["taskdate", "status"]),
+    ]
+
+    ranked = _rank_table_names_by_query(
+        [
+            "dbo_View_Open_Invoices",
+            "dbo_Collections_Tickets_History",
+            "dbo_AA",
+        ],
+        documents,
+        "How many dbo.AA records are there?",
+    )
+
+    assert ranked[0] == "dbo_AA"
+
+
+def test_lexical_column_selection_splits_compound_schema_identifiers():
+    result = _lexical_columns_and_tables_needed(
+        [
+            {
+                "type": "TABLE",
+                "name": "account_groups",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "acctgroup",
+                        "data_type": "VARCHAR",
+                        "comment": "",
+                        "is_primary_key": False,
+                    }
+                ],
+                "properties": {},
+                "tableReference": None,
+            },
+            {
+                "type": "TABLE",
+                "name": "recon_status",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "glaccount",
+                        "data_type": "VARCHAR",
+                        "comment": "",
+                        "is_primary_key": False,
+                    },
+                    {
+                        "type": "COLUMN",
+                        "name": "acctgroup",
+                        "data_type": "VARCHAR",
+                        "comment": "",
+                        "is_primary_key": False,
+                    },
+                    {
+                        "type": "COLUMN",
+                        "name": "glbalance",
+                        "data_type": "DOUBLE",
+                        "comment": "",
+                        "is_primary_key": False,
+                    },
+                ],
+                "properties": {},
+                "tableReference": None,
+            },
+        ],
+        "show total GL balance by account group",
+    )
+
+    assert list(result)[0] == "recon_status"
+    assert set(result["recon_status"]["columns"]) >= {
+        "acctgroup",
+        "glbalance",
+        "glaccount",
+    }

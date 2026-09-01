@@ -7,12 +7,14 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 
 const resolveAlias = {
   antd$: path.resolve(__dirname, 'src/import/antd'),
+  'rc-util/es': path.resolve(__dirname, 'node_modules/rc-util/lib'),
 };
 
 /** @type {import('next').NextConfig} */
 const nextConfig = withLess({
   output: 'standalone',
   staticPageGenerationTimeout: 1000,
+  transpilePackages: ['rc-util'],
   compiler: {
     // Enables the styled-components SWC transform
     styledComponents: {

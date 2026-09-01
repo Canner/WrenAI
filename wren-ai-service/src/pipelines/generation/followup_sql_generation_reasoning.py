@@ -13,7 +13,7 @@ from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     construct_instructions,
-    construct_schema_identifier_catalog,
+    sanitize_sql_generation_reasoning,
     sql_generation_reasoning_system_prompt,
 )
 from src.utils import trace_cost
@@ -115,7 +115,7 @@ async def generate_sql_reasoning(
 def post_process(
     generate_sql_reasoning: dict,
 ) -> dict:
-    return generate_sql_reasoning.get("replies")[0]
+    return sanitize_sql_generation_reasoning(generate_sql_reasoning.get("replies")[0])
 
 
 ## End of Pipeline

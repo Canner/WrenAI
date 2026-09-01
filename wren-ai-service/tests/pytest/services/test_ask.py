@@ -9,9 +9,13 @@ from src.pipelines import generation, indexing, retrieval
 from src.providers import generate_components
 from src.utils import fetch_wren_ai_docs
 from src.web.v1.services.ask import (
+    AskHistory,
     AskRequest,
     AskResultRequest,
     AskService,
+    _build_fast_path_grounding_query,
+    _history_sql_table_names,
+    _looks_like_simple_analytics_request,
 )
 from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
@@ -126,6 +130,38 @@ def service_metadata():
 def mdl_str():
     with open("tests/data/book_2_mdl.json", "r") as f:
         return orjson.dumps(json.load(f)).decode("utf-8")
+
+
+def test_word_number_top_followup_uses_simple_fast_path():
+    assert _looks_like_simple_analytics_request(
+        "Show the top five groups from that result."
+    )
+
+
+def test_followup_fast_path_grounding_query_includes_latest_history():
+    grounding_query = _build_fast_path_grounding_query(
+        "Show the top five groups from that result.",
+        [
+            AskHistory(
+                question="How many orders are there by customer?",
+                sql='SELECT "customer", COUNT(*) AS "record_count" FROM "orders" GROUP BY "customer"',
+            )
+        ],
+    )
+
+    assert "How many orders are there by customer?" in grounding_query
+    assert "orders" in grounding_query
+    assert "customer" in grounding_query
+    assert "record_count" in grounding_query
+    assert "Show the top five groups from that result." in grounding_query
+    assert "Previous question" not in grounding_query
+    assert "SELECT" not in grounding_query
+
+
+def test_history_sql_table_names_extracts_prior_verified_tables():
+    assert _history_sql_table_names(
+        'SELECT "customer", COUNT(*) FROM "orders" JOIN "regions" ON "orders"."region_id" = "regions"."id"'
+    ) == ["orders", "regions"]
 
 
 @pytest.mark.asyncio

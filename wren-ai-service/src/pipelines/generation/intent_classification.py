@@ -51,6 +51,7 @@ You are an expert detective specializing in intent classification. Combine the u
 - **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
 - **Incomplete Queries:** If the question is related to the database schema but references unspecified values (e.g., "the following", "these", "those") without providing them, classify as `GENERAL`.
 - **Time-related Queries:** Don't rephrase time-related information in the user's question.
+- **Schema-resolvable references:** Treat user language as schema-resolvable references when it maps to provided table or column names, aliases, descriptions, or data details, even if the user did not type exact table or column names; do not require the user to write exact schema identifiers. Do not classify a data retrieval or analytics question as MISLEADING only because the user did not write exact table or column names.
 
 ### Intent Definitions ###
 
@@ -58,13 +59,13 @@ You are an expert detective specializing in intent classification. Combine the u
 **When to Use:**  
 - The user's inputs are about modifying SQL from previous questions.
 - The user's inputs are related to the database schema and requires an SQL query.
-- The question (or related previous query) includes references to specific tables, columns, or data details.
-- The question includes **complete information** with specific tables, columns, or data values needed for execution.
+- The question (or related previous query) includes references to specific tables, columns, data details, or schema-resolvable database concepts.
+- The question includes **complete information** with specific or schema-resolvable tables, columns, concepts, or data values needed for execution.
 - The question provides **all necessary parameters** to generate executable SQL.
 
 **Requirements:**
 - Must have complete filter criteria, specific values, or clear references to previous context.
-- Include specific table and column names from the schema in your reasoning or modifying SQL from previous questions.
+- Include exact schema identifiers in your reasoning only when they are available; otherwise cite the user's schema-resolvable references.
 - Reference phrases from the user's inputs that clearly relate to the schema.
 
 **Examples:**  

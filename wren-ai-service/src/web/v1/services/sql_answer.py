@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from typing import Dict, Literal, Optional
 
 from cachetools import TTLCache
@@ -73,15 +74,23 @@ class SqlAnswerService:
 
         try:
             query_id = sql_answer_request.query_id
+            total_started_at = time.perf_counter()
 
             self._sql_answer_results[query_id] = SqlAnswerResultResponse(
                 status="preprocessing",
                 trace_id=trace_id,
             )
 
+            preprocess_started_at = time.perf_counter()
             preprocessed_sql_data = self._pipelines["preprocess_sql_data"].run(
                 sql_data=sql_answer_request.sql_data,
             )["preprocess"]
+            logger.info(
+                "Ask timing query_id=%s stage=answer_formatting_preprocess elapsed_ms=%.1f row_count=%s",
+                query_id,
+                (time.perf_counter() - preprocess_started_at) * 1000,
+                preprocessed_sql_data.get("num_rows_used_in_llm"),
+            )
 
             if preprocessed_sql_data.get("num_rows_used_in_llm") == 0:
                 results["metadata"]["error_type"] = "NO_DATA"
@@ -93,6 +102,7 @@ class SqlAnswerService:
                 trace_id=trace_id,
             )
 
+            formatting_task_started_at = time.perf_counter()
             asyncio.create_task(
                 self._pipelines["sql_answer"].run(
                     query=sql_answer_request.query,
@@ -103,6 +113,12 @@ class SqlAnswerService:
                     query_id=query_id,
                     custom_instruction=sql_answer_request.custom_instruction,
                 )
+            )
+            logger.info(
+                "Ask timing query_id=%s stage=answer_formatting_task_creation elapsed_ms=%.1f total_ms=%.1f",
+                query_id,
+                (time.perf_counter() - formatting_task_started_at) * 1000,
+                (time.perf_counter() - total_started_at) * 1000,
             )
 
             return results

@@ -114,7 +114,14 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         })}`,
       );
       // Call the AI service to create a task
+      const startedAt = Date.now();
+      const aiRequestStartedAt = Date.now();
       const response = await this.wrenAIAdaptor.ask(input);
+      logger.info(
+        `Ask timing stage=task_creation_ai_request project_id=${
+          input.projectId ?? ''
+        } elapsed_ms=${Date.now() - aiRequestStartedAt}`,
+      );
       const queryId = response.queryId;
 
       // validate the input
@@ -171,19 +178,28 @@ export class AskingTaskTracker implements IAskingTaskTracker {
           detail: task.result,
         });
       } else {
+        const dbStartedAt = Date.now();
         const createdTask = await this.askingTaskRepository.createOne({
           queryId,
           question: input.query,
           detail: task.result,
         });
+        logger.info(
+          `Ask timing stage=task_creation_db project_id=${
+            input.projectId ?? ''
+          } elapsed_ms=${Date.now() - dbStartedAt}`,
+        );
         task.taskId = createdTask.id;
         this.trackedTasksById.set(createdTask.id, task);
       }
 
       logger.info(
-        `Created asking task with queryId: ${queryId}, taskId: ${
-          task.taskId ?? input.previousTaskId ?? 'unbound'
-        }, projectId: ${input.projectId ?? 'unknown'}`,
+        `Created asking task with queryId: ${queryId}`,
+      );
+      logger.info(
+        `Ask timing stage=task_creation_tracker project_id=${
+          input.projectId ?? ''
+        } query_id=${queryId} elapsed_ms=${Date.now() - startedAt}`,
       );
       return { queryId };
     } catch (err: any) {
@@ -350,8 +366,14 @@ export class AskingTaskTracker implements IAskingTaskTracker {
 
             // Poll for updates
             logger.debug(`Polling for updates for task ${queryId}`);
+            const pollStartedAt = Date.now();
             const resultFromAIService =
               await this.wrenAIAdaptor.getAskResult(queryId);
+            logger.info(
+              `Ask timing stage=task_poll query_id=${queryId} elapsed_ms=${
+                Date.now() - pollStartedAt
+              }`,
+            );
             const result = this.isMissingInAIService(resultFromAIService)
               ? this.createExpiredTaskResult()
               : resultFromAIService;

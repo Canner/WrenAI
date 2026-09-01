@@ -47,6 +47,7 @@ def normalize_semantic_properties(props: Dict[str, Any]) -> Dict[str, Any]:
     semantic_properties = {
         "alias": clean_display_name(props.get("displayName", "")),
         "description": props.get("description", ""),
+        "sourceColumnName": props.get("sourceColumnName", ""),
     }
 
     for key in SEMANTIC_METADATA_KEYS:

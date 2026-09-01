@@ -1,6 +1,6 @@
-import type { ColumnMDL, Manifest } from '@server/mdl/type';
+import type { Manifest } from '@server/mdl/type';
 
-const normalizeColumns = (columns?: Partial<ColumnMDL>[]) => {
+const normalizeColumns = <T extends { name?: string }>(columns?: T[]) => {
   if (!Array.isArray(columns)) {
     return columns;
   }

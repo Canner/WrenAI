@@ -16,6 +16,38 @@ const logger = getLogger('QueryService');
 logger.level = 'debug';
 
 export const DEFAULT_PREVIEW_LIMIT = 500;
+const MSSQL_DEADLOCK_RETRY_LIMIT = 2;
+const MSSQL_DEADLOCK_RETRY_BASE_DELAY_MS = 150;
+
+const delay = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const errorText = (err: any) =>
+  [
+    err?.message,
+    err?.response?.data?.message,
+    err?.response?.data?.detail,
+    err?.extensions?.message,
+    err?.extensions?.originalError?.message,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+const isSqlServerDeadlockError = (err: any) => {
+  const text = errorText(err);
+  if (!text) {
+    return false;
+  }
+
+  return (
+    text.includes('deadlock') &&
+    (text.includes('1205') ||
+      text.includes('deadlock victim') ||
+      text.includes('sqlexecdirectw') ||
+      text.includes('sql server'))
+  );
+};
 
 export interface ColumnMetadata {
   name: string;
@@ -111,17 +143,29 @@ export class QueryService implements IQueryService {
     if (this.useEngine(dataSource)) {
       if (dryRun) {
         logger.debug('Using wren engine to dry run');
+        const startedAt = Date.now();
         await this.wrenEngineAdaptor.dryRun(sql, {
           manifest: mdl,
           limit,
         });
+        logger.info(
+          `Ask timing stage=sql_validation project_id=${project.id} data_source=${dataSource} engine=wren elapsed_ms=${
+            Date.now() - startedAt
+          }`,
+        );
         return true;
       } else {
         logger.debug('Using wren engine to preview');
+        const startedAt = Date.now();
         const data = await this.wrenEngineAdaptor.previewData(
           sql,
           mdl,
           limit,
+        );
+        logger.info(
+          `Ask timing stage=sql_execution project_id=${project.id} data_source=${dataSource} engine=wren elapsed_ms=${
+            Date.now() - startedAt
+          } row_count=${(data as PreviewDataResponse)?.data?.length ?? ''}`,
         );
         return data as PreviewDataResponse;
       }
@@ -204,6 +248,7 @@ export class QueryService implements IQueryService {
     mdl: Manifest,
   ): Promise<IbisResponse> {
     const event = TelemetryEvent.IBIS_DRY_RUN;
+    const startedAt = Date.now();
     try {
       const res = await this.ibisAdaptor.dryRun(sql, {
         dataSource,
@@ -211,10 +256,20 @@ export class QueryService implements IQueryService {
         mdl,
       });
       this.sendIbisEvent(event, res, { dataSource, sql });
+      logger.info(
+        `Ask timing stage=sql_validation data_source=${dataSource} engine=ibis elapsed_ms=${
+          Date.now() - startedAt
+        }`,
+      );
       return {
         correlationId: res.correlationId,
       };
     } catch (err: any) {
+      logger.info(
+        `Ask timing stage=sql_validation data_source=${dataSource} engine=ibis elapsed_ms=${
+          Date.now() - startedAt
+        } status=failed`,
+      );
       this.sendIbisFailedEvent(event, err, {
         dataSource,
         sql,
@@ -233,29 +288,69 @@ export class QueryService implements IQueryService {
     cacheEnabled?: boolean,
   ): Promise<PreviewDataResponse> {
     const event = TelemetryEvent.IBIS_QUERY;
+    let attempt = 0;
+    const startedAt = Date.now();
     try {
-      const res = await this.ibisAdaptor.query(sql, {
-        dataSource,
-        connectionInfo,
-        mdl,
-        limit,
-        refresh,
-        cacheEnabled,
-      });
+      let res: IbisQueryResponse | undefined;
+      while (true) {
+        try {
+          res = await this.ibisAdaptor.query(sql, {
+            dataSource,
+            connectionInfo,
+            mdl,
+            limit,
+            refresh,
+            cacheEnabled,
+          });
+          break;
+        } catch (err: any) {
+          const canRetry =
+            dataSource === DataSourceName.MSSQL &&
+            isSqlServerDeadlockError(err) &&
+            attempt < MSSQL_DEADLOCK_RETRY_LIMIT;
+
+          if (!canRetry) {
+            throw err;
+          }
+
+          attempt += 1;
+          logger.warn(
+            `MSSQL deadlock while querying ibis; retrying attempt ${attempt}/${MSSQL_DEADLOCK_RETRY_LIMIT}`,
+          );
+          await delay(MSSQL_DEADLOCK_RETRY_BASE_DELAY_MS * attempt);
+        }
+      }
+
+      if (!res) {
+        throw new Error('Ibis query did not return a response');
+      }
+
       this.sendIbisEvent(event, res, {
         dataSource,
         sql,
       });
       const data = this.transformDataType(res);
+      logger.info(
+        `Ask timing stage=sql_execution data_source=${dataSource} engine=ibis elapsed_ms=${
+          Date.now() - startedAt
+        } row_count=${data.data?.length ?? ''} cache_hit=${
+          res.cacheHit ?? false
+        } attempts=${attempt + 1}`,
+      );
       return {
         correlationId: res.correlationId,
-        cacheHit: res.cacheHit,
+        cacheHit: res.cacheHit ?? false,
         cacheCreatedAt: res.cacheCreatedAt,
         cacheOverrodeAt: res.cacheOverrodeAt,
-        override: res.override,
+        override: res.override ?? false,
         ...data,
       };
     } catch (err: any) {
+      logger.info(
+        `Ask timing stage=sql_execution data_source=${dataSource} engine=ibis elapsed_ms=${
+          Date.now() - startedAt
+        } status=failed attempts=${attempt + 1}`,
+      );
       this.sendIbisFailedEvent(event, err, {
         dataSource,
         sql,

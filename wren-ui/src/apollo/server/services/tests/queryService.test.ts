@@ -151,6 +151,90 @@ describe('QueryService', () => {
     ]);
   });
 
+  it('retries transient MSSQL deadlock query failures', async () => {
+    const mssqlProject = {
+      type: DataSourceName.MSSQL,
+      connectionInfo: {},
+    };
+    mockIbisAdaptor.query
+      .mockRejectedValueOnce({
+        message:
+          "[SQL Server]Transaction was deadlocked on lock resources and has been chosen as the deadlock victim. Rerun the transaction. (1205) (SQLExecDirectW)",
+      })
+      .mockResolvedValueOnce({
+        data: [['value']],
+        columns: ['field'],
+        dtypes: { field: 'object' },
+        correlationId: 'correlation-id',
+        processTime: 'process-time',
+      });
+
+    const res = await queryService.preview(sql, {
+      project: mssqlProject,
+      manifest,
+      limit: 1,
+    });
+
+    expect(mockIbisAdaptor.query).toHaveBeenCalledTimes(2);
+    expect(res).toMatchObject({
+      columns: [{ name: 'field', type: 'string' }],
+      data: [['value']],
+      correlationId: 'correlation-id',
+    });
+    expect(mockTelemetry.records).toEqual([
+      {
+        event: TelemetryEvent.IBIS_QUERY,
+        properties: {
+          correlationId: 'correlation-id',
+          processTime: 'process-time',
+          sql,
+          dataSource: DataSourceName.MSSQL,
+        },
+        actionSuccess: true,
+      },
+    ]);
+  });
+
+  it('does not retry non-deadlock query failures', async () => {
+    const mssqlProject = {
+      type: DataSourceName.MSSQL,
+      connectionInfo: {},
+    };
+    const error = {
+      message: 'syntax error near from',
+      extensions: {
+        other: {
+          correlationId: 'correlation-id',
+          processTime: 'process-time',
+        },
+      },
+    };
+    mockIbisAdaptor.query.mockRejectedValue(error);
+
+    await expect(
+      queryService.preview(sql, {
+        project: mssqlProject,
+        manifest,
+      }),
+    ).rejects.toMatchObject(error);
+
+    expect(mockIbisAdaptor.query).toHaveBeenCalledTimes(1);
+    expect(mockTelemetry.records).toEqual([
+      {
+        event: TelemetryEvent.IBIS_QUERY,
+        properties: {
+          correlationId: 'correlation-id',
+          processTime: 'process-time',
+          sql,
+          dataSource: DataSourceName.MSSQL,
+          error: 'syntax error near from',
+        },
+        actionSuccess: false,
+        service: undefined,
+      },
+    ]);
+  });
+
   it('records query failure telemetry and rethrows the adaptor error', async () => {
     const error = {
       message: 'adaptor failure',
