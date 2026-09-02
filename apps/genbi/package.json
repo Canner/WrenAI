@@ -61,6 +61,7 @@
   "files": [
     "bin",
     "dist",
+    "!dist/**/*.map",
     "dist-server/server",
     "dist-server/harness",
     "dist-server/providers",
