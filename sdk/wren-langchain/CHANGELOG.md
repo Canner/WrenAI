@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/Canner/WrenAI/compare/wren-langchain-v0.2.1...wren-langchain-v0.2.2) (2026-09-02)
+
+
+### Bug Fixes
+
+* **langchain:** forward session properties to the engine ([#2692](https://github.com/Canner/WrenAI/issues/2692)) ([a9bff62](https://github.com/Canner/WrenAI/commit/a9bff625f87433d69b026222612a156e0de8dc2d))
+
 ## [0.2.1](https://github.com/Canner/WrenAI/compare/wren-langchain-v0.2.0...wren-langchain-v0.2.1) (2026-07-29)
 
 
