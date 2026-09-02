@@ -27,13 +27,13 @@ PWA stays a thin increment.
   packages, which is enough for tests, builds, and any tooling that resolves
   a `warble` binary or dispatcher CLI without an explicit override — see
   [Package-based Warble dependency](#package-based-warble-dependency) below.
-- For a live, attested BFF, a clean checkout of
+- For a live, attested BFF: the pinned `@warble/cli` / `@warble/claude-agent-sdk`
+  packages above already satisfy the launch gate on their own — no separate
+  Warble checkout is required. A clean checkout of
   [Canner/Warble](https://github.com/Canner/Warble), a Rust toolchain, and
-  [`just`](https://github.com/casey/just), in addition to the packages above.
-  The mandatory launch gate binds the BFF to that checkout's profiles, IR
-  fixtures, release binary, and dispatcher — the pinned packages don't
-  currently satisfy it, so a standalone package or global `warble` install is
-  not enough for live GenBI development.
+  [`just`](https://github.com/casey/just) are needed only when attesting
+  against your own in-progress Warble build instead — see
+  [Package-based Warble dependency](#package-based-warble-dependency) below.
 - A logged-in Claude CLI subscription. The currently supported attested local
   launch flow is explicitly `subscription:claude`; API-key, local, gateway,
   and Codex runtime code are not accepted by the current launch gate.
@@ -166,8 +166,19 @@ claude --version
 
 ### Generate the launch attestation
 
-Return to this repository's `apps/genbi` directory and identify the exact
-Warble checkout you just built:
+If you skipped the checkout section above and are attesting the pinned
+packages instead, resolve their installed `bin` paths from `apps/genbi`
+(after `pnpm install`) rather than guessing at `node_modules` layout:
+
+```bash
+cd /absolute/path/to/WrenAI/apps/genbi
+WARBLE_BIN="$(node -p "require('node:path').join(require('node:path').dirname(require.resolve('@warble/cli/package.json')), require('@warble/cli/package.json').bin.warble)")"
+AGENT_SDK_BIN="$(node -p "require('node:path').join(require('node:path').dirname(require.resolve('@warble/claude-agent-sdk/package.json')), require('@warble/claude-agent-sdk/package.json').bin['warble-agent-sdk'])")"
+PROFILES_ROOT="$PWD/profiles"
+```
+
+Otherwise, return to this repository's `apps/genbi` directory and identify the
+exact Warble checkout you just built:
 
 ```bash
 cd /absolute/path/to/WrenAI/apps/genbi
@@ -177,9 +188,10 @@ AGENT_SDK_BIN="$WARBLE_ROOT/dispatcher/claude-agent-sdk/dist/cli.js"
 PROFILES_ROOT="$PWD/profiles"
 ```
 
-The `warble` binary and its dispatchers come from that Warble checkout; the
-GenBI profiles and their committed IRs are this package's own `profiles/` tree,
-which is what the launch gate defaults to and attests under `genbi`.
+The `warble` binary and its dispatcher come from either the installed package
+or that Warble checkout; the GenBI profiles and their committed IRs are always
+this package's own `profiles/` tree, which is what the launch gate defaults to
+and attests under `genbi`.
 
 The BFF has a single boot mode: bootstrap, against a workspace root where
 Setup may create projects. An existing Wren project is adopted afterward,
