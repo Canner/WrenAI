@@ -25,9 +25,34 @@ pub struct CubeQuery {
     #[serde(default)]
     pub filters: Vec<CubeFilter>,
     #[serde(default)]
+    pub order_by: Vec<CubeOrderBy>,
+    #[serde(default)]
     pub limit: Option<usize>,
     #[serde(default)]
     pub offset: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CubeOrderBy {
+    pub member: String,
+    pub direction: SortDirection,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+
+impl std::fmt::Display for SortDirection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            SortDirection::Asc => "ASC",
+            SortDirection::Desc => "DESC",
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -206,6 +231,25 @@ fn validate_query(
             );
         }
     }
+    let selected_members: HashSet<&str> = query
+        .measures
+        .iter()
+        .chain(&query.dimensions)
+        .map(String::as_str)
+        .chain(query.time_dimensions.iter().map(|td| td.dimension.as_str()))
+        .collect();
+    let mut ordered_members = HashSet::new();
+    for item in &query.order_by {
+        if !selected_members.contains(item.member.as_str()) {
+            return plan_err!(
+                "Cannot order by member '{}': member is not selected by the query",
+                item.member
+            );
+        }
+        if !ordered_members.insert(item.member.as_str()) {
+            return plan_err!("Cannot order by member '{}' more than once", item.member);
+        }
+    }
     Ok(())
 }
 
@@ -320,19 +364,21 @@ fn build_sql(
 ) -> Result<String> {
     let mut select_parts: Vec<String> = Vec::new();
     let mut group_ordinals: Vec<String> = Vec::new();
-    let mut order_ordinals: Vec<String> = Vec::new();
+    let mut selected_ordinals: HashMap<String, usize> = HashMap::new();
+    let mut default_time_order: Option<usize> = None;
     let mut pos: usize = 1;
 
-    // 1. Time dimensions (appear first; drive ORDER BY)
+    // 1. Time dimensions (appear first; drive default ORDER BY)
     for td_filter in &query.time_dimensions {
         let td = time_dim_map[td_filter.dimension.as_str()];
         let alias = format!("{}__{}", td_filter.dimension, td_filter.granularity);
         let expr = format!("DATE_TRUNC('{}', {})", td_filter.granularity, td.expression);
         select_parts.push(format!("{expr} AS {alias}"));
         group_ordinals.push(pos.to_string());
-        if order_ordinals.is_empty() {
-            order_ordinals.push(pos.to_string());
-        }
+        selected_ordinals
+            .entry(td_filter.dimension.clone())
+            .or_insert(pos);
+        default_time_order.get_or_insert(pos);
         pos += 1;
     }
 
@@ -341,6 +387,7 @@ fn build_sql(
         let expr = resolve_dim_expr(dim_name, dimension_map, time_dim_map);
         select_parts.push(format!("{expr} AS {dim_name}"));
         group_ordinals.push(pos.to_string());
+        selected_ordinals.entry(dim_name.clone()).or_insert(pos);
         pos += 1;
     }
 
@@ -348,6 +395,8 @@ fn build_sql(
     for measure_name in &query.measures {
         let expr = &resolved_exprs[measure_name];
         select_parts.push(format!("{expr} AS {measure_name}"));
+        selected_ordinals.entry(measure_name.clone()).or_insert(pos);
+        pos += 1;
     }
 
     let mut sql = format!(
@@ -374,11 +423,23 @@ fn build_sql(
     }
 
     // 5. GROUP BY / ORDER BY
+    let order_parts: Vec<String> = if query.order_by.is_empty() {
+        default_time_order
+            .map(|ordinal| ordinal.to_string())
+            .into_iter()
+            .collect()
+    } else {
+        query
+            .order_by
+            .iter()
+            .map(|item| format!("{} {}", selected_ordinals[&item.member], item.direction))
+            .collect()
+    };
     if !group_ordinals.is_empty() {
         sql.push_str(&format!(" GROUP BY {}", group_ordinals.join(", ")));
     }
-    if !order_ordinals.is_empty() {
-        sql.push_str(&format!(" ORDER BY {}", order_ordinals.join(", ")));
+    if !order_parts.is_empty() {
+        sql.push_str(&format!(" ORDER BY {}", order_parts.join(", ")));
     }
 
     // 6. LIMIT / OFFSET
@@ -590,6 +651,7 @@ mod tests {
             dimensions: vec![],
             time_dimensions: vec![],
             filters: vec![],
+            order_by: vec![],
             limit: None,
             offset: None,
         }
@@ -633,6 +695,89 @@ mod tests {
     }
 
     #[test]
+    fn test_cube_query_order_by_json_uses_selected_output_ordinals() {
+        let query: CubeQuery = serde_json::from_str(
+            r#"{
+                "cube": "OrdersCube",
+                "measures": ["revenue"],
+                "dimensions": ["status"],
+                "orderBy": [
+                    {"member": "revenue", "direction": "desc"},
+                    {"member": "status", "direction": "asc"}
+                ],
+                "limit": 5
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            cube_query_to_sql(&query, &orders_manifest()).unwrap(),
+            "SELECT status AS status, SUM(amount) AS revenue FROM orders GROUP BY 1 ORDER BY 2 DESC, 1 ASC LIMIT 5"
+        );
+    }
+
+    #[test]
+    fn test_cube_query_order_by_rejects_unselected_member() {
+        let query: CubeQuery = serde_json::from_str(
+            r#"{
+                "cube": "OrdersCube",
+                "measures": ["revenue"],
+                "orderBy": [{"member": "order_count", "direction": "desc"}]
+            }"#,
+        )
+        .unwrap();
+
+        let err = cube_query_to_sql(&query, &orders_manifest())
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "Cannot order by member 'order_count': member is not selected by the query"
+            ),
+            "err={err}"
+        );
+    }
+
+    #[test]
+    fn test_cube_query_order_by_rejects_duplicate_members() {
+        let query: CubeQuery = serde_json::from_str(
+            r#"{
+                "cube": "OrdersCube",
+                "measures": ["revenue"],
+                "orderBy": [
+                    {"member": "revenue", "direction": "desc"},
+                    {"member": "revenue", "direction": "asc"}
+                ]
+            }"#,
+        )
+        .unwrap();
+
+        let err = cube_query_to_sql(&query, &orders_manifest())
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("Cannot order by member 'revenue' more than once"),
+            "err={err}"
+        );
+    }
+
+    #[test]
+    fn test_cube_query_order_by_json_rejects_invalid_shapes_and_directions() {
+        for json in [
+            r#"{"cube":"OrdersCube","measures":["revenue"],"orderBy":null}"#,
+            r#"{"cube":"OrdersCube","measures":["revenue"],"orderBy":{}}"#,
+            r#"{"cube":"OrdersCube","measures":["revenue"],"orderBy":[{"member":"revenue","direction":"ASC"}]}"#,
+            r#"{"cube":"OrdersCube","measures":["revenue"],"orderBy":[{"member":"revenue","direction":"sideways"}]}"#,
+            r#"{"cube":"OrdersCube","measures":["revenue"],"orderBy":[{"member":"revenue","direction":"desc","expression":"1; DROP TABLE orders"}]}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<CubeQuery>(json).is_err(),
+                "json={json}"
+            );
+        }
+    }
+
+    #[test]
     fn test_dimension_expression_used_not_name() {
         let mut q = query("OrdersCube");
         q.measures = vec!["revenue".to_string()];
@@ -662,6 +807,72 @@ mod tests {
         );
         assert!(sql.contains("GROUP BY 1"), "sql={sql}");
         assert!(sql.contains("ORDER BY 1"), "sql={sql}");
+    }
+
+    #[test]
+    fn test_cube_query_explicit_order_replaces_default_time_order() {
+        let mut q = query("OrdersCube");
+        q.measures = vec!["revenue".to_string()];
+        q.time_dimensions = vec![TimeDimensionFilter {
+            dimension: "created_at".to_string(),
+            granularity: Granularity::Month,
+            date_range: None,
+        }];
+        q.order_by = vec![CubeOrderBy {
+            member: "revenue".to_string(),
+            direction: SortDirection::Desc,
+        }];
+
+        assert_eq!(
+            cube_query_to_sql(&q, &orders_manifest()).unwrap(),
+            "SELECT DATE_TRUNC('month', created_at) AS created_at__month, SUM(amount) AS revenue FROM orders GROUP BY 1 ORDER BY 2 DESC"
+        );
+    }
+
+    #[test]
+    fn test_cube_query_explicit_order_of_time_dimension_uses_its_output_ordinal() {
+        let mut q = query("OrdersCube");
+        q.measures = vec!["revenue".to_string()];
+        q.time_dimensions = vec![TimeDimensionFilter {
+            dimension: "created_at".to_string(),
+            granularity: Granularity::Month,
+            date_range: None,
+        }];
+        q.order_by = vec![CubeOrderBy {
+            member: "created_at".to_string(),
+            direction: SortDirection::Desc,
+        }];
+
+        assert_eq!(
+            cube_query_to_sql(&q, &orders_manifest()).unwrap(),
+            "SELECT DATE_TRUNC('month', created_at) AS created_at__month, SUM(amount) AS revenue FROM orders GROUP BY 1 ORDER BY 1 DESC"
+        );
+    }
+
+    #[test]
+    fn test_cube_query_missing_and_empty_order_by_preserve_identical_legacy_sql() {
+        let absent: CubeQuery = serde_json::from_str(
+            r#"{
+                "cube":"OrdersCube","measures":["revenue"],
+                "timeDimensions":[{"dimension":"created_at","granularity":"month"}]
+            }"#,
+        )
+        .unwrap();
+        let empty: CubeQuery = serde_json::from_str(
+            r#"{
+                "cube":"OrdersCube","measures":["revenue"],
+                "timeDimensions":[{"dimension":"created_at","granularity":"month"}],
+                "orderBy":[]
+            }"#,
+        )
+        .unwrap();
+        let expected = "SELECT DATE_TRUNC('month', created_at) AS created_at__month, SUM(amount) AS revenue FROM orders GROUP BY 1 ORDER BY 1";
+
+        let absent_sql = cube_query_to_sql(&absent, &orders_manifest()).unwrap();
+        let empty_sql = cube_query_to_sql(&empty, &orders_manifest()).unwrap();
+        assert_eq!(absent_sql, expected);
+        assert_eq!(empty_sql, expected);
+        assert_eq!(absent_sql, empty_sql);
     }
 
     #[test]

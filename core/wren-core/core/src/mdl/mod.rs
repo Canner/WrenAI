@@ -39,7 +39,7 @@ pub mod builder {
 }
 pub mod context;
 pub(crate) mod cube;
-pub use cube::{cube_query_to_sql, CubeQuery};
+pub use cube::{cube_query_to_sql, CubeOrderBy, CubeQuery, SortDirection};
 pub(crate) mod dataset;
 mod dialect;
 pub mod function;
