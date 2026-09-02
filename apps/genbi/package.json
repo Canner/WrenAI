@@ -1,11 +1,14 @@
 {
   "name": "@wrenai/genbi",
   "version": "0.0.0",
-  "private": true,
+  "bin": {
+    "genbi": "bin/genbi.mjs"
+  },
   "type": "module",
   "scripts": {
     "dev": "node scripts/start-ui-gated.mjs",
     "build": "tsc -b && vite build && tsc -p tsconfig.server.json && node scripts/copy-providers.js",
+    "prepack": "VITE_BFF_URL=same-origin pnpm run build",
     "start:bff": "node scripts/start-bff-gated.mjs",
     "verify:launch": "node scripts/verify-local-launch.mjs",
     "check:warble-peers": "pnpm peers check",
@@ -54,5 +57,18 @@
     "typescript": "^7.0.2",
     "vite": "^8.1.5",
     "vitest": "^4.1.10"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "dist-server/server",
+    "dist-server/harness",
+    "dist-server/providers",
+    "dist-server/launch-attestation-public.js",
+    "dist-server/launch-attestation-public.d.ts",
+    "profiles"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }
