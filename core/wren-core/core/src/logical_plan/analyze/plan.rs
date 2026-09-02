@@ -943,15 +943,71 @@ fn merge_graph(
         };
         let source = node_map.get(&source).unwrap();
         let target = node_map.get(&target).unwrap();
-        // Skip duplicate edges between the same pair of nodes: the same
-        // relationship may appear in multiple calc-col sub-graphs (e.g. two
-        // calc cols traversing the same relationship), and adding parallel
-        // edges would produce redundant joins downstream.
-        if graph.find_edge(*source, *target).is_none() {
+        // The same relationship may appear in multiple calculated-column
+        // sub-graphs, in which case the duplicate edge is safe to skip. Two
+        // different relationships between the same models cannot be merged,
+        // though: downstream graph traversal can use only one edge and would
+        // silently generate a join with the wrong condition.
+        if let Some(existing_edge) = graph.find_edge(*source, *target) {
+            let existing_link = &graph[existing_edge];
+            let incoming_link = &new_graph[edge];
+            if existing_link != incoming_link {
+                return plan_err!(
+                    "Multiple relationships from '{}' to '{}' require distinct join aliases; \
+                     cannot merge '{}' with '{}'",
+                    graph[*source],
+                    graph[*target],
+                    existing_link,
+                    incoming_link
+                );
+            }
+        } else {
             graph.add_edge(*source, *target, new_graph[edge].clone());
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod merge_graph_tests {
+    use super::*;
+    use crate::mdl::builder::ModelBuilder;
+
+    #[test]
+    fn rejects_distinct_relationships_between_the_same_models() {
+        let orders = Dataset::Model(ModelBuilder::new("orders").build());
+        let addresses = Dataset::Model(ModelBuilder::new("addresses").build());
+
+        let mut graph = Graph::new();
+        let orders_node = graph.add_node(orders.clone());
+        let addresses_node = graph.add_node(addresses.clone());
+        graph.add_edge(
+            orders_node,
+            addresses_node,
+            DatasetLink {
+                join_type: JoinType::ManyToOne,
+                condition: "orders.bill_to_id = addresses.address_id".to_string(),
+            },
+        );
+
+        let mut incoming = Graph::new();
+        let incoming_orders = incoming.add_node(orders);
+        let incoming_addresses = incoming.add_node(addresses);
+        incoming.add_edge(
+            incoming_orders,
+            incoming_addresses,
+            DatasetLink {
+                join_type: JoinType::ManyToOne,
+                condition: "orders.ship_to_id = addresses.address_id".to_string(),
+            },
+        );
+
+        let error = merge_graph(&mut graph, &incoming)
+            .expect_err("distinct relationships must not collapse into one join");
+        let message = error.to_string();
+        assert!(message.contains("orders.bill_to_id"), "{message}");
+        assert!(message.contains("orders.ship_to_id"), "{message}");
+    }
 }
 
 impl PartialOrd for ModelPlanNode {
