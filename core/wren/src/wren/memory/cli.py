@@ -259,7 +259,12 @@ def index(
                 raw = queries_file.read_text(encoding="utf-8")
                 doc = yaml.safe_load(raw)
                 if doc and isinstance(doc, dict) and doc.get("pairs"):
-                    load_result = mem_store.load_queries(doc["pairs"], upsert=False)
+                    # Tag legacy=queries.yml explicitly so a later
+                    # sync_markdown_queries() (not markdown-backed, so it
+                    # would otherwise treat these as stale and re-embed them
+                    # on every run) leaves them alone, same as seed/view rows.
+                    legacy_pairs = [{**p, "source": "legacy"} for p in doc["pairs"]]
+                    load_result = mem_store.load_queries(legacy_pairs, upsert=False)
                     loaded = load_result["loaded"]
                     skipped = load_result["skipped"]
                     if loaded:
@@ -536,16 +541,19 @@ def check(
         )
         return
 
+    from wren.memory.store import _NON_MARKDOWN_SOURCES  # noqa: PLC0415
+
     md_nls = {p["nl"] for p in load_query_pairs(project)}
     mem_store = idx.store
     indexed, _ = mem_store.list_queries(limit=1_000_000)
     indexed_nls = {r.get("nl_query") for r in indexed}
-    # Only user-sourced pairs come from markdown; seeds/views are derived from
-    # the manifest and are not expected to have a knowledge/sql/ file.
+    # Only markdown-backed pairs are expected to have a knowledge/sql/ file;
+    # seed/view/legacy rows are derived or externally sourced (same set
+    # sync_markdown_queries excludes from its own stale scan).
     indexed_user = {
         r.get("nl_query")
         for r in indexed
-        if _parse_source(r.get("tags")) not in ("seed", "view")
+        if _parse_source(r.get("tags")) not in _NON_MARKDOWN_SOURCES
     }
 
     # Compare user pairs only — seed/view rows aren't markdown-backed.
@@ -885,10 +893,9 @@ def forget(
 
 def _parse_source(tags: str | None) -> str:
     """Extract source value from a (possibly null/empty) tags string."""
-    for part in (tags or "").split():
-        if part.startswith("source:"):
-            return part[len("source:") :]
-    return "user"
+    from wren.memory.store import _tag_source  # noqa: PLC0415
+
+    return _tag_source(tags)
 
 
 def _pairs_to_yaml(rows: list[dict]) -> str:

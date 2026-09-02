@@ -26,9 +26,10 @@ _WREN_MEMORY_DIR = Path.home() / ".wren" / "memory"
 _SCHEMA_TABLE = "schema_items"
 _QUERY_TABLE = "query_history"
 
-# query_history sources that are derived from the manifest, not from
-# knowledge/sql/*.md, so a markdown sync must never forget them.
-_NON_MARKDOWN_SOURCES = frozenset({"seed", "view"})
+# query_history sources that are not backed by knowledge/sql/*.md, so a
+# markdown sync must never forget them: seed/view are derived from the
+# manifest, legacy comes from a project's queries.yml.
+_NON_MARKDOWN_SOURCES = frozenset({"seed", "view", "legacy"})
 
 
 def _esc(value: str) -> str:
@@ -648,14 +649,6 @@ class MemoryStore:
 
         Returns ``{"loaded": N, "skipped": M, "updated": U, "forgotten": F}``.
         """
-        existing_rows, _ = self.list_queries(limit=1_000_000)
-        protected_nls = {
-            row["nl_query"]
-            for row in existing_rows
-            if _tag_source(row.get("tags")) in _NON_MARKDOWN_SOURCES
-        }
-        pairs = [p for p in pairs if p["nl"] not in protected_nls]
-
         result = self.load_queries(pairs, upsert=True)
         current_nls = {p["nl"] for p in pairs}
         rows, _ = self.list_queries(limit=1_000_000)
