@@ -5,6 +5,10 @@ These tests use sqlglot parsing only and do not require a database or wren-core.
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+
 import pytest
 from sqlglot import exp, parse_one
 
@@ -695,12 +699,27 @@ def test_resolve_model_name_case_collision_is_deterministic():
     matches neither exactly must resolve the same way every time.
 
     Before the fix this depended on ``set`` iteration order, which varies by
-    process under ``PYTHONHASHSEED``: reproduced directly by running this
-    same lookup across 8 fresh subprocesses, which split 6/2 between
-    ``'Orders'`` and ``'orders'``. Sorted order is an arbitrary tie-break
-    (the two names are equally "right", this pair may legitimately be two
-    distinct models, see test_case_sensitivity.py); the point is only that
-    it no longer varies.
+    process under ``PYTHONHASHSEED``, not within one: a fixed hash seed makes
+    iteration order stable for the lifetime of a process, so a same-process
+    loop passes on the buggy code too, every time. The bug only shows up
+    across fresh interpreters, so the regression spawns one per
+    ``PYTHONHASHSEED`` instead, matching how this was reproduced originally
+    (8 fresh subprocesses split 6/2 between ``'Orders'`` and ``'orders'``).
+    Sorted order is an arbitrary tie-break (the two names are equally
+    "right", this pair may legitimately be two distinct models, see
+    test_case_sensitivity.py); the point is only that it no longer varies.
     """
-    for _ in range(8):
-        assert resolve_model_name("ORDERS", False, {"Orders", "orders"}) == "Orders"
+    script = (
+        "from wren.policy import resolve_model_name; "
+        "print(resolve_model_name('ORDERS', False, {'Orders', 'orders'}))"
+    )
+    for seed in range(8):
+        env = {**os.environ, "PYTHONHASHSEED": str(seed)}
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert result.stdout.strip() == "Orders"
