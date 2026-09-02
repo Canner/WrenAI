@@ -110,18 +110,26 @@ pass `--warble-bin` (or `warbleBin`) explicitly**; that is tier 1 and beats
 everything.
 
 **This is also how the attested live-BFF flow below identifies Warble.** The
-launch gate's attestation records only `warble.binarySha256` — the content
-hash of the resolved binary — not which commit or checkout produced it: the
-claim is "this is the binary that was verified," not "this binary was built
-from this commit, from this tree." `--warble-bin` accepts either the pinned
-package's binary or one from a Warble checkout with no difference in how it's
-verified: both resolve to a binary that gets hashed the same way, and the gate
-no longer requires a `--warble-root` git checkout to hold it. A binary that
-does live inside a checkout still works exactly as before — that's how you
-attest against your own in-progress Warble build (see the next section) — but
-it isn't a requirement any more. What the gate defends against — a binary
-swapped after it was attested — is caught by rehashing the same binary path
-every time the BFF boots, not by where the binary lives on disk.
+attestation names Warble by *how it was resolved*, not by which commit built it:
+the claim is "this is which Warble was verified," not "this binary was built from
+this tree." For an installed package it records the version, the `pnpm-lock.yaml`
+integrity for that version, a hash of the package's own resolution logic
+(`run-warble.js`, `binary.js`, `binary-install.js`, `package.json`), and a hash of
+what that logic extracted into the package's `node_modules/.bin_real`. For a Warble
+checkout it records the content hash of the built executable, as before.
+
+The split exists because the two are not the same kind of thing. `@warble/cli`'s
+`bin` is a small trampoline that is byte-identical in every release; the native
+executable is downloaded during install. Hashing the resolved `--warble-bin` path
+therefore identified nothing on the package path — it could not tell 0.6.0 from
+0.9.0 — while on a checkout that same hash is the whole story.
+
+`--warble-bin` accepts either, and a binary that lives inside a checkout still works
+exactly as before — that is how you attest against your own in-progress Warble build
+(see the next section). What the gate defends against — either binary being swapped
+after it was attested — is caught by re-deriving the same identity every time the BFF
+boots. **Not covered**: package provenance (npm Sigstore), and anything fetched at
+runtime from outside the package, such as the Hub archive downloaded on first compile.
 
 Because pnpm silently accepts (and exits 0 on) an unmet peer-dependency range
 between these packages — e.g. an `@warble/codex-local` built against a

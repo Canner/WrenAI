@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { accessSync, constants, existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { warbleIdentity, sameWarbleIdentity } from "./warble-identity.mjs";
 
 const fail = (message) => { process.stderr.write(`error: ${message}\n`); process.exit(1); };
 const file = process.env.WREN_GENBI_LAUNCH_ATTESTATION;
@@ -82,13 +83,13 @@ if (a.genbi?.commit !== genbi.commit || a.genbi?.rootDigest !== genbi.rootDigest
 if (!process.env.WREN_HARNESS_WORKSPACE_ROOT) fail("BFF mode/root does not match local launch attestation");
 const modeInput = canonicalBootstrapRoot(process.env.WREN_HARNESS_WORKSPACE_ROOT);
 if (a.mode !== "bootstrap" || modeInput !== a?.local?.modeInput) fail("BFF mode/root does not match local launch attestation");
-// Warble and its dispatcher binaries are identified by content hash alone (see the
-// binarySha256/agentSdkSha256/codexLocalSha256 checks below), not by living inside a
-// required checkout root: a pinned npm package install has no working tree to be dirty,
-// and its hash is its identity. There is nothing to run cleanGitRoot against for it
-// any more — an exact-path match against the local attestation plus a content hash is
-// the same standard already applied to codexBin below, which was never containment- or
-// git-checked either.
+// Warble is identified by how it was resolved (decision-87), not by hashing whatever WARBLE_BIN
+// points at: on the package path that is a trampoline whose hash is the same in every release, so
+// re-hashing it detected nothing. The package arm re-derives version, lockfile integrity, the
+// resolver files and the extracted executable here, so a swap of the real executable after the
+// gate ran is caught at this boot rather than only by the operator's one-off compile probe. The
+// dispatcher binaries below are real entry points, not trampolines, so their content hashes were
+// always meaningful and are unchanged.
 const inputs = {};
 for (const [env, key, kind, containerRoot] of [
   ["WREN_HARNESS_WARBLE_BIN", "warbleBin", "file", undefined],
@@ -102,7 +103,10 @@ for (const [env, key, kind, containerRoot] of [
   if ((containerRoot !== undefined && !contained(containerRoot, canonical)) || canonical !== a?.local?.[key]) fail(`BFF ${env} does not match local launch attestation`);
   inputs[key] = canonical;
 }
-if (sha256(inputs.warbleBin) !== a?.warble?.binarySha256) fail("BFF Warble binary does not match local launch attestation");
+let warbleNow;
+try { warbleNow = warbleIdentity(inputs.warbleBin, genbi.root, (candidate) => fail(`BFF Warble package must not contain a symlink: ${candidate}`)); }
+catch (error) { fail(`BFF Warble binary does not match local launch attestation: ${error.message}`); }
+if (!sameWarbleIdentity(warbleNow, a?.warble)) fail("BFF Warble binary does not match local launch attestation");
 const identities = a?.genbi?.runtimeInputs;
 if (!identities || hashTree(inputs.profile) !== identities.profileTreeSha256 || sha256(inputs.setupIr) !== identities.setupIrSha256 || sha256(inputs.enrichIr) !== identities.enrichIrSha256 || sha256(inputs.analysisIr) !== identities.analysisIrSha256) fail("BFF profile runtime input content does not match local launch attestation");
 if (a?.runtime?.mode !== "subscription" || process.env.WREN_HARNESS_MODE !== "subscription" || process.env.WREN_HARNESS_PROVIDER !== a?.runtime?.provider) fail("BFF runtime does not match local launch attestation");

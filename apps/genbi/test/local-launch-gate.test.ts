@@ -27,7 +27,7 @@ function attestationFixture() {
     version: "genbi-launch-attestation/v1" as const,
     mode: "bootstrap" as const,
     genbi: { rootDigest: digest, commit: "abc123", treeIdentity: digest, runtimeInputs: { profileTreeSha256: digest, setupIrSha256: digest, enrichIrSha256: digest, analysisIrSha256: digest } },
-    warble: { binarySha256: digest },
+    warble: { resolution: "checkout" as const, binarySha256: digest },
     runtime: { mode: "subscription" as const, provider: "claude" as const, dispatcher: "claude-agent-sdk" as const, agentSdkSha256: digest },
     bff: { entrySha256: digest, closureSha256: digest },
     ui: { rootDigest: digest, commit: "abc123", treeIdentity: digest },
@@ -207,12 +207,33 @@ process.stdout.write(JSON.stringify({ manifest_version: '0.1', target: 'codex:lo
   writeFileSync(codexBin, "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'codex-cli 0.146.0'; else exit 97; fi\n"); chmodSync(codexBin, 0o700);
   writeFileSync(path.join(codexPackage, "package.json"), JSON.stringify({ name: "@openai/codex", version: "0.146.0" }));
   writeFileSync(staleCodexBin, "#!/bin/sh\necho 'codex-cli 0.145.0'\n"); chmodSync(staleCodexBin, 0o700);
-  // Warble's binary is identified by content hash alone now (see verify-local-launch.mjs);
-  // the fixture no longer git-inits its directory, so every test using it by default
-  // exercises the no-checkout-at-all case (e.g. an npm-package-resolved binary). The
-  // git-checkout case is covered explicitly by "accepts a Warble binary that lives inside
-  // a git checkout, dirty or not" below.
+  // The fixture no longer git-inits its directory, so a binary taken straight from it is not
+  // inside any checkout. That is the *checkout* arm of the identity split all the same: a bare
+  // binary with no owning @warble/cli package is identified by its own content hash, which is
+  // what that arm has always meant. The genuinely package-shaped case needs a package tree
+  // around the binary and is built by warbleCliPackageInstall below.
   return { root, warble, bin, agentSdk, staleAgentSdk, codexLocal, staleCodexLocal, codexPackage, codexBin, staleCodexBin };
+}
+
+/**
+ * The shape a pinned npm install actually has: a trampoline as the package's bin, the resolution
+ * logic beside it, and the native executable downloaded into the package's own
+ * node_modules/.bin_real. The version is read from this package's own pin so the lockfile lookup
+ * resolves against the real pnpm-lock.yaml, as it does in a real launch.
+ */
+function warbleCliPackageInstall(root: string, executableSource: string) {
+  const pinned = JSON.parse(readFileSync(path.join(packageRoot, "package.json"), "utf8")).dependencies["@warble/cli"];
+  const installed = path.join(root, "node_modules", "@warble", "cli");
+  const extracted = path.join(installed, "node_modules", ".bin_real");
+  mkdirSync(extracted, { recursive: true });
+  const executable = path.join(extracted, "warble");
+  writeFileSync(executable, readFileSync(executableSource)); chmodSync(executable, 0o700);
+  const trampoline = path.join(installed, "run-warble.js");
+  writeFileSync(trampoline, '#!/bin/sh\nexec "$(dirname "$0")/node_modules/.bin_real/warble" "$@"\n'); chmodSync(trampoline, 0o700);
+  writeFileSync(path.join(installed, "package.json"), JSON.stringify({ name: "@warble/cli", version: pinned, bin: { warble: "run-warble.js" } }));
+  writeFileSync(path.join(installed, "binary.js"), "module.exports = require('./binary-install');\n");
+  writeFileSync(path.join(installed, "binary-install.js"), "// verifies the download against a baked-in digest\n");
+  return { pinned, trampoline, executable };
 }
 
 function run(args: string[], warble: string, env: Record<string, string> = {}) {
@@ -482,11 +503,48 @@ describe("local GenBI launch gate", () => {
     expect(result.stdout).toContain("launch gate PASSED");
   });
 
-  it("accepts a Warble binary that is not inside any Warble checkout at all, as when resolved from an installed npm package", () => {
-    // Simulates the shape of a pinned npm-installed @warble/cli binary: it lives under
-    // node_modules, inside no Warble checkout, with nothing named "warble" about its
-    // containing directory. The gate must accept it purely on the strength of its content
-    // hash (see writeAttestation/verifyLocalLaunch) — that is the whole point of this change.
+  // The package arm, driven through the real gate and the real boot verifier rather than through
+  // warbleIdentity() alone. Without this, the CLI -> attestation -> boot-check wiring for a package
+  // install has no regression cover: every other fixture here takes the checkout arm, so the suite
+  // could stay green while that path broke. The mutation at the end is the point -- swapping the
+  // downloaded executable while the trampoline stays byte-identical is precisely what used to pass.
+  it("records the package arm end to end and catches an executable swapped behind the trampoline", async () => {
+    const { root, warble, bin, agentSdk } = fixture();
+    const workspace = path.join(root, "workspace"); mkdirSync(workspace);
+    const install = warbleCliPackageInstall(root, bin);
+    const selected = await verifyLocalLaunch(gateOptions({ skipBuild: true, mode: "bootstrap", workspaceRoot: workspace, warbleBin: install.trampoline }, warble));
+
+    const attested = JSON.parse(readFileSync(selected.attestation.file, "utf8")).warble;
+    expect(attested.resolution).toBe("package");
+    expect(attested.version).toBe(install.pinned);
+    expect(attested.integrity).toMatch(/^sha512-/);
+    expect(attested.resolverSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(attested.extractedTreeSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(attested.binarySha256).toBeUndefined();
+
+    const env = { ...process.env, WREN_GENBI_LAUNCH_ATTESTATION: selected.attestation.file, WREN_HARNESS_WORKSPACE_ROOT: workspace, WREN_HARNESS_WARBLE_BIN: install.trampoline, WREN_HARNESS_PROFILE: path.join(profiles, "genbi-default"), WREN_HARNESS_SETUP_IR: path.join(profiles, "genbi-setup", "ir.golden.json"), WREN_HARNESS_ENRICH_IR: path.join(profiles, "genbi-enrich-context", "ir.golden.json"), WREN_HARNESS_ANALYSIS_IR: path.join(profiles, "genbi-default", "ir.golden.json"), WREN_HARNESS_MODE: "subscription", WREN_HARNESS_PROVIDER: "claude", WREN_HARNESS_AGENT_SDK_BIN: agentSdk };
+    expect(spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env }).status).toBe(0);
+
+    const trampolineBefore = createHash("sha256").update(readFileSync(install.trampoline)).digest("hex");
+    const original = readFileSync(install.executable);
+    try {
+      writeFileSync(install.executable, "#!/bin/sh\necho 'IMPOSTOR WARBLE'\n"); chmodSync(install.executable, 0o700);
+      expect(createHash("sha256").update(readFileSync(install.trampoline)).digest("hex")).toBe(trampolineBefore);
+      const tampered = spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env });
+      expect(tampered.status).toBe(1);
+      expect(tampered.stderr).toContain("BFF Warble binary does not match local launch attestation");
+    } finally {
+      writeFileSync(install.executable, original); chmodSync(install.executable, 0o700);
+    }
+    expect(spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env }).status).toBe(0);
+  });
+
+  it("accepts a loose binary under node_modules that no @warble/cli package owns", () => {
+    // A binary that lives under node_modules but has no owning @warble/cli package.json is not
+    // the package arm: with nothing to read a version or a lockfile entry from, it is identified
+    // by its own content hash, exactly as a checkout binary is. The real package shape — a
+    // trampoline whose hash says nothing, with the executable downloaded beside it — is covered
+    // by "records the package arm end to end" below.
     const { root, warble, bin } = fixture();
     const packageBinDir = path.join(root, "node_modules", ".bin");
     mkdirSync(packageBinDir, { recursive: true });
@@ -601,7 +659,7 @@ describe("local GenBI launch gate", () => {
     const distRoot = path.join(packageRoot, "dist-server"); const entry = path.join(distRoot, "server", "bin.js"); const module = path.join(distRoot, "server", "app.js");
     const original = readFileSync(module); const attestation = path.join(mkdtempSync(path.join(os.tmpdir(), "genbi-attestation-")), "attestation.json"); dirs.push(path.dirname(attestation));
     const digest = (value: Buffer) => createHash("sha256").update(value).digest("hex"); const placeholder = "0".repeat(64);
-    writeFileSync(attestation, JSON.stringify({ version: "genbi-launch-attestation/v1", mode: "bootstrap", genbi: { rootDigest: placeholder, commit: "fixture", treeIdentity: placeholder, runtimeInputs: { profileTreeSha256: placeholder, setupIrSha256: placeholder, enrichIrSha256: placeholder, analysisIrSha256: placeholder } }, warble: { binarySha256: placeholder }, runtime: { mode: "subscription", provider: "claude", dispatcher: "claude-agent-sdk", agentSdkSha256: placeholder }, bff: { entrySha256: digest(readFileSync(entry)), closureSha256: hashTree(distRoot) }, ui: { rootDigest: placeholder, commit: "fixture", treeIdentity: placeholder } }));
+    writeFileSync(attestation, JSON.stringify({ version: "genbi-launch-attestation/v1", mode: "bootstrap", genbi: { rootDigest: placeholder, commit: "fixture", treeIdentity: placeholder, runtimeInputs: { profileTreeSha256: placeholder, setupIrSha256: placeholder, enrichIrSha256: placeholder, analysisIrSha256: placeholder } }, warble: { resolution: "checkout", binarySha256: placeholder }, runtime: { mode: "subscription", provider: "claude", dispatcher: "claude-agent-sdk", agentSdkSha256: placeholder }, bff: { entrySha256: digest(readFileSync(entry)), closureSha256: hashTree(distRoot) }, ui: { rootDigest: placeholder, commit: "fixture", treeIdentity: placeholder } }));
     try {
       writeFileSync(module, Buffer.concat([original, Buffer.from("\n// tampered fixture\n")]));
       const result = spawnSync(process.execPath, [entry], { cwd: packageRoot, encoding: "utf8", env: { ...process.env, WREN_GENBI_LAUNCH_ATTESTATION: attestation, WREN_HARNESS_WORKSPACE_ROOT: path.join(path.dirname(attestation), "workspace") } });
