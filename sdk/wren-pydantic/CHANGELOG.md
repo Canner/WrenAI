@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/Canner/WrenAI/compare/wren-pydantic-v0.2.1...wren-pydantic-v0.3.0) (2026-09-02)
+
+
+### Features
+
+* **pydantic:** forward session properties to the engine ([#2684](https://github.com/Canner/WrenAI/issues/2684)) ([9bd52fc](https://github.com/Canner/WrenAI/commit/9bd52fc10e1f9035c96080ebaca0c797fa67574f))
+
 ## [0.2.1](https://github.com/Canner/WrenAI/compare/wren-pydantic-v0.2.0...wren-pydantic-v0.2.1) (2026-07-29)
 
 
