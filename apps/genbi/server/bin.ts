@@ -201,6 +201,15 @@ async function main(): Promise<void> {
     : path.resolve(moduleDirectory, "..");
   verifyBffLocalRuntime(packageRoot);
 
+  // Opt-in same-process SPA serving: only wired when a build actually
+  // exists next to this package (`vite build`'s `dist/index.html`). A dev
+  // boot (no `dist/`) leaves `staticDir` unset, so `server/app.ts` never
+  // mounts the fallback and behavior is unchanged from today (UI served
+  // separately by vite's dev proxy). See `TurnDeps.staticDir`'s doc comment
+  // (server/turn.ts) and `server/spa.ts`.
+  const candidateStaticDir = path.join(packageRoot, "dist");
+  const staticDir = existsSync(path.join(candidateStaticDir, "index.html")) ? candidateStaticDir : undefined;
+
   const profileSource = flags.profile ?? resolveDefaultProfileSource();
   // Frozen at boot: GET /api/harness accepts only a purpose and must never
   // inherit a caller-supplied RouteOptions.profileSource.
@@ -614,6 +623,7 @@ async function main(): Promise<void> {
     workspaceRoot,
     setWrenHomeForSetupMode,
     launchAttestation,
+    ...(staticDir !== undefined ? { staticDir } : {}),
   };
   const app = createApp(deps);
 

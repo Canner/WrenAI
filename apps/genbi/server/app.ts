@@ -13,6 +13,7 @@ import { upgradeWebSocket } from "@hono/node-server";
 import { BUILD_CONTEXT_AGENT_ID, ComplianceError, CONNECT_SOURCE_AGENT_ID, contextLifecycleIdentityFingerprint, enforceCompliance, findLockedGatedCheck, resolveArtifactContent, resolveArtifactsDir } from "../harness/index.js";
 import type { Bundle, ContextLifecyclePrefix } from "../harness/index.js";
 import { adoptWithChosenProfile, verifyAdoptProject } from "./adopt.js";
+import { mountSpaFallback } from "./spa.js";
 import { toAuthChoiceFromRuntimeSettings } from "./auth-choice.js";
 import { composeSetupPrompt, zeroMdlSchemaDiscoveryInstruction } from "./compose.js";
 import { mapContextShowToOverview } from "./context-map.js";
@@ -2480,6 +2481,12 @@ export function createApp(deps: TurnDeps) {
     invalidateBundleAgentIdsCache(deps);
     return c.json({ steps, verifyGatePassed });
   });
+
+  // Opt-in SPA serving, mounted last so its catch-all can never shadow any
+  // `/api/*` route registered above (see server/spa.ts's doc comment for
+  // why mount order is the load-bearing safety property here). Absent in
+  // dev (no `deps.staticDir`), so the vite-proxied dev flow is unchanged.
+  if (deps.staticDir !== undefined) mountSpaFallback(app, deps.staticDir);
 
   return app;
 }

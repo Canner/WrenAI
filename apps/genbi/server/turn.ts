@@ -232,6 +232,18 @@ export interface TurnDeps {
    * `WREN_HOME` from the previous choice in effect.
    */
   setWrenHomeForSetupMode?(mode: SetupMode | undefined): void;
+  /**
+   * Absolute path to a built SPA (`vite build`'s `dist/`, containing
+   * `index.html`) to serve from this same process, same origin as every
+   * `/api/*` route below. Optional so every existing test's `TurnDeps`
+   * literal is unaffected: when absent, `server/app.ts`'s `createApp` never
+   * mounts the SPA fallback and the BFF behaves exactly as it does today
+   * (no static serving at all — the dev flow's vite proxy on a separate
+   * port is the only way the UI is served). `server/bin.ts` wires this only
+   * when `<staticDir>/index.html` actually exists, so a dev boot with no
+   * `dist/` present leaves this unset.
+   */
+  readonly staticDir?: string;
 }
 
 /**
