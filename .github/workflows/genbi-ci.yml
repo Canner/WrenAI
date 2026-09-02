@@ -1,0 +1,67 @@
+name: GenBI app CI
+
+# Trigger sources are controlled events (pull_request, push). No untrusted
+# issue / comment / external payload is interpolated into run/env contexts
+# in this file. ${{ github.* }} usages below are confined to YAML-level
+# fields (group), not run scripts.
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - 'apps/genbi/**'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/genbi-ci.yml'
+  push:
+    branches:
+      - main
+      - feat/genbi-app
+    paths:
+      - 'apps/genbi/**'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/genbi-ci.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: apps/genbi
+
+jobs:
+  ci:
+    name: typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable corepack (pnpm via packageManager field)
+        run: corepack enable
+
+      - name: Install workspace dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Warble peer dependency check
+        run: pnpm run check:warble-peers
+
+      - name: Test
+        run: pnpm run test
+
+      - name: Build
+        run: pnpm run build
