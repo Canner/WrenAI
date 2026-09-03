@@ -148,7 +148,7 @@ import { invalidateBundleAgentIdsCache } from "./turn.js";
 import type { TurnDeps } from "./turn.js";
 import { createSetWrenHomeForSetupMode } from "./wren-home.js";
 import { createSubscriptionModelCatalog } from "./subscription-model-catalog.js";
-import { readLaunchAttestation, verifyBffLocalRuntime } from "./launch-attestation.js";
+import { readLaunchAttestation, verifyBffLocalRuntime, type LaunchAttestationPublic } from "./launch-attestation.js";
 
 function envFlags(): CliFlags {
   const env = process.env;
@@ -194,12 +194,22 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const launchAttestation = readLaunchAttestation();
   const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
   const packageRoot = path.basename(path.dirname(moduleDirectory)) === "dist-server"
     ? path.resolve(moduleDirectory, "../..")
     : path.resolve(moduleDirectory, "..");
-  verifyBffLocalRuntime(packageRoot);
+  let launchAttestation: LaunchAttestationPublic | undefined;
+  if (process.env["WREN_GENBI_LAUNCH_ATTESTATION"]) {
+    launchAttestation = readLaunchAttestation();
+    verifyBffLocalRuntime(packageRoot);
+  } else {
+    process.stderr.write(
+      "notice: starting without a local launch attestation (WREN_GENBI_LAUNCH_ATTESTATION is not set) — " +
+        "this build's UI, BFF, and Warble binary are unverified against each other; the published " +
+        "package instead relies on its pinned @warble/* version and the npm installer's checksum " +
+        "check of the downloaded Warble executable.\n",
+    );
+  }
 
   // Opt-in same-process SPA serving: only wired when a build actually
   // exists next to this package (`vite build`'s `dist/index.html`). A dev
@@ -542,7 +552,7 @@ async function main(): Promise<void> {
       return compiled.irPath;
     },
     warbleBin: flags.warbleBin ?? "warble",
-    ...(launchAttestation.runtime.provider === "codex"
+    ...(launchAttestation?.runtime.provider === "codex"
       ? {
           codexBin: process.env["WREN_HARNESS_CODEX_BIN"]!,
           codexBinSha256: launchAttestation.runtime.executableSha256,
@@ -622,7 +632,7 @@ async function main(): Promise<void> {
     },
     workspaceRoot,
     setWrenHomeForSetupMode,
-    launchAttestation,
+    ...(launchAttestation !== undefined ? { launchAttestation } : {}),
     ...(staticDir !== undefined ? { staticDir } : {}),
   };
   const app = createApp(deps);
