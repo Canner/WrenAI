@@ -36,6 +36,12 @@
  *   WREN_HARNESS_MODEL          model override
  *   WREN_HARNESS_ENDPOINT       local/gateway endpoint URL
  *   WREN_HARNESS_WARBLE_BIN     path to the warble CLI binary
+ *   WREN_HARNESS_CONTEXT_LOADER_BIN
+ *                               path to the wren-context-loader binary, which renders the bound
+ *                               wren project into the prepared-context document a `kind: prepared`
+ *                               binding reads. Falls back to this repo's own Rust build; resolution
+ *                               loud-fails rather than degrading to Warble's built-in MDL adapter
+ *                               (see harness/compile/context-loader.ts)
  *   WREN_HARNESS_WREN_SHIM      optional absolute server-owned Wren shim for
  *                               native Codex runtime permissions; defaults to
  *                               the fixed local installation when unset
