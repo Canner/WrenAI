@@ -215,7 +215,7 @@ function codexGateOptions(options: Record<string, unknown>, value: ReturnType<ty
 
 afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
 
-describe("local GenBI launch gate", () => {
+describe("local GenBI contract check", () => {
 
   it("rejects configured, malformed, wrong-reason, and producer-incompatible bootstrap readiness", async () => {
     const baseline = readinessFixture();
@@ -240,11 +240,11 @@ describe("local GenBI launch gate", () => {
     const { root, warble, bin, agentSdk } = fixture();
     const result = run(["--", "--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin], warble);
     expect(result.status, `${result.stderr}${result.stdout}`.trim() || "(no gate output)").toBe(0);
-    expect(result.stdout).toContain("launch gate PASSED");
+    expect(result.stdout).toContain("contract check PASSED");
     expect(result.stdout).toContain('"tiers": [');
     expect(result.stdout).toContain("dispatch:native(context_enrichment/codex)");
     expect(result.stdout).toContain('"packageRoot"');
-    expect(result.stderr).not.toContain("launch gate BLOCKED");
+    expect(result.stderr).not.toContain("contract check BLOCKED");
     expect(readFileSync(path.join(root, "vercel-providers.log"), "utf8").trim().split("\n")).toEqual([
       path.join(packageRoot, "providers", "wren.provider.yaml"),
       path.join(packageRoot, "providers", "setup.provider.yaml"),
@@ -275,7 +275,7 @@ describe("local GenBI launch gate", () => {
       const value = fixture(mode);
       const result = runCodex(["--skip-build", "--workspace-root", path.join(value.root, "bootstrap"), "--warble-bin", value.bin], value);
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain("launch gate BLOCKED [contract]");
+      expect(result.stderr).toContain("contract check BLOCKED [contract]");
       expect(result.stderr).toContain("codex");
     }
   });
@@ -295,7 +295,7 @@ describe("local GenBI launch gate", () => {
     const result = run(["--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin], warble);
     expect(result.status).toBe(1);
     expect(result.stdout).toBe("");
-    expect(result.stderr).toContain("launch gate BLOCKED [contract]");
+    expect(result.stderr).toContain("contract check BLOCKED [contract]");
     expect(result.stderr).toContain("dispatch_analysis_claude");
   });
 
@@ -304,7 +304,7 @@ describe("local GenBI launch gate", () => {
     const invalidShim = path.join(root, "invalid-wren"); writeFileSync(invalidShim, "not a shim\n");
     const result = run(["--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin], warble, { WREN_HARNESS_WREN_SHIM: invalidShim });
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("launch gate BLOCKED [contract]");
+    expect(result.stderr).toContain("contract check BLOCKED [contract]");
     expect(result.stderr).toContain("wren_runtime_unavailable");
   });
 
@@ -313,20 +313,20 @@ describe("local GenBI launch gate", () => {
       const { root, warble, bin } = fixture("compatible", dispatcher);
       const result = run(["--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin], warble);
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain("launch gate BLOCKED [contract]");
+      expect(result.stderr).toContain("contract check BLOCKED [contract]");
     }
   });
 
   it("fails closed when the selected Warble's Vercel bundle compat window excludes the harness's declared IR version", () => {
     // Regression for the live defect this ticket fixed: a Warble checkout whose dispatched
     // bundle no longer overlaps HARNESS_SUPPORT.irVersion (harness/bundle/version.ts) must be
-    // caught by the launch gate itself, not just discovered later as a live 500 from
+    // caught by the contract check itself, not just discovered later as a live 500 from
     // `GET /api/harness`.
     const { root, warble, bin } = fixture("compatible", "incompatible-ir");
     const result = run(["--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin], warble);
     expect(result.status).toBe(1);
     expect(result.stdout).toBe("");
-    expect(result.stderr).toContain("launch gate BLOCKED [describe]");
+    expect(result.stderr).toContain("contract check BLOCKED [describe]");
     expect(result.stderr).toContain("failed the harness describe/compat check");
   });
 
@@ -334,7 +334,7 @@ describe("local GenBI launch gate", () => {
     const { warble, bin } = fixture();
     const result = run(["--skip-build", "--warble-bin", bin], warble);
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("launch gate BLOCKED [usage]");
+    expect(result.stderr).toContain("contract check BLOCKED [usage]");
     expect(result.stderr).toContain("--workspace-root is required");
   });
 
@@ -342,7 +342,7 @@ describe("local GenBI launch gate", () => {
     const { root, warble, bin } = fixture();
     const result = run(["--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--project", path.join(root, "project"), "--warble-bin", bin], warble);
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("launch gate BLOCKED [usage]");
+    expect(result.stderr).toContain("contract check BLOCKED [usage]");
   });
 
   it("accepts a Warble binary that lives inside a git checkout, dirty or not", () => {
@@ -360,7 +360,7 @@ describe("local GenBI launch gate", () => {
     writeFileSync(path.join(warble, "untracked-source.yml"), "unsafe: true\n");
     const result = run(["--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin], warble);
     expect(result.status, `${result.stderr}${result.stdout}`.trim() || "(no gate output)").toBe(0);
-    expect(result.stdout).toContain("launch gate PASSED");
+    expect(result.stdout).toContain("contract check PASSED");
   });
 
   it("accepts a loose binary under node_modules that no @warble/cli package owns", () => {
@@ -377,7 +377,7 @@ describe("local GenBI launch gate", () => {
     chmodSync(packageBin, 0o700);
     const result = run(["--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", packageBin], warble);
     expect(result.status, `${result.stderr}${result.stdout}`.trim() || "(no gate output)").toBe(0);
-    expect(result.stdout).toContain("launch gate PASSED");
+    expect(result.stdout).toContain("contract check PASSED");
   });
 
   it("accepts an agent-sdk dispatcher binary that is not inside any Warble checkout either", () => {
@@ -392,7 +392,7 @@ describe("local GenBI launch gate", () => {
     chmodSync(packageAgentSdk, 0o700);
     const result = spawnSync(process.execPath, [verifier, "--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin, "--runtime", "subscription:claude", "--agent-sdk-bin", packageAgentSdk], { encoding: "utf8", env: { ...process.env, NODE_ENV: "test" } });
     expect(result.status, `${result.stderr}${result.stdout}`.trim() || "(no gate output)").toBe(0);
-    expect(result.stdout).toContain("launch gate PASSED");
+    expect(result.stdout).toContain("contract check PASSED");
   });
 
   it("rejects a symlinked bootstrap root", () => {

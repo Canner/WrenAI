@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Deterministic pre-launch gate for a local GenBI UI/BFF pair.  It is deliberately
+ * Deterministic pre-contract check for a local GenBI UI/BFF pair.  It is deliberately
  * a standalone Node program so an operator can run it before either long-lived
  * process is started.  It never contacts a model, starts a server, or reads
  * credentials: all Warble calls compile/dispatch local files only.
@@ -216,7 +216,7 @@ async function runWarbleContractProbe({ bin, profile, setupIr, enrichIr, analysi
     for (const component of compiled.components) for (const call of component?.llm_calls ?? []) if (typeof call?.tier === "string" && call.tier.trim()) tiers.add(call.tier.trim());
     if (tiers.size === 0) throw new GateError("runtime_binding", "compiled profile IR declares no runtime tiers");
 
-    // This is also the launch gate's one live exercise of the in-process/agnostic
+    // This is also the contract check's one live exercise of the in-process/agnostic
     // describe path: not just checking the dispatcher produced a file, but
     // actually loading it through the same `loadBundle`/`assertCompat` check
     // the BFF's `GET /api/harness` route runs, against a bundle this probe
@@ -454,10 +454,10 @@ async function main() {
     const options = parseArgs(process.argv.slice(2));
     const result = await verifyLocalLaunch(options);
     if (options.live) result.live = await verifyLive(options);
-    process.stdout.write(`launch gate PASSED\n${JSON.stringify(result, null, 2)}\n`);
+    process.stdout.write(`contract check PASSED\n${JSON.stringify(result, null, 2)}\n`);
   } catch (error) {
-    if (error instanceof GateError) process.stderr.write(`launch gate BLOCKED [${error.code}]: ${error.message}\n`);
-    else process.stderr.write(`launch gate BLOCKED [internal]: ${error instanceof Error ? error.message : String(error)}\n`);
+    if (error instanceof GateError) process.stderr.write(`contract check BLOCKED [${error.code}]: ${error.message}\n`);
+    else process.stderr.write(`contract check BLOCKED [internal]: ${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
   }
 }

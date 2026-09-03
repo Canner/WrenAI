@@ -24,7 +24,7 @@ In addition to the prerequisites in [README.md](./README.md#prerequisites):
   a `warble` binary or dispatcher CLI without an explicit override — see
   [Package-based Warble dependency](#package-based-warble-dependency) below.
 - For a live, attested BFF: the pinned `@warble/cli` / `@warble/claude-agent-sdk`
-  packages above already satisfy the launch gate on their own — no separate
+  packages above already satisfy the contract check on their own — no separate
   Warble checkout is required. A clean checkout of
   [Canner/Warble](https://github.com/Canner/Warble), a Rust toolchain, and
   [`just`](https://github.com/casey/just) are needed only when attesting
@@ -32,7 +32,7 @@ In addition to the prerequisites in [README.md](./README.md#prerequisites):
   [Package-based Warble dependency](#package-based-warble-dependency) below.
 - A logged-in Claude CLI subscription. The currently supported attested local
   launch flow is explicitly `subscription:claude`; API-key, local, gateway,
-  and Codex runtime code are not accepted by the current launch gate.
+  and Codex runtime code are not accepted by the current contract check.
 
 ### Install the CLIs
 
@@ -46,7 +46,7 @@ wren --version
 
 Warble's CLI is published on crates.io. **GenBI does not need this** — it
 consumes the pinned `@warble/cli` npm package (see below), and that pin is what
-the launch gate attests. Install this only if you want a standalone `warble` on
+the contract check attests. Install this only if you want a standalone `warble` on
 your `PATH`:
 
 ```bash
@@ -110,7 +110,7 @@ peer range edited in the lockfile itself, which only
 even on a real conflict, and `strictPeerDependencies` does not change that; what
 catches a hand-edited `package.json` is an install with `--frozen-lockfile`.
 
-The GenBI launch gate needs more than a standalone binary: it hashes the exact
+The GenBI contract check needs more than a standalone binary: it hashes the exact
 profiles, IR files, Warble binary, and Claude Agent SDK dispatcher used by the
 BFF. The installed `@warble/cli` / `@warble/claude-agent-sdk` packages already
 satisfy this (see above) — the steps below are for attesting against your own
