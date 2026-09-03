@@ -302,6 +302,129 @@ Claude Agent SDK binary. Do not substitute `subscription:codex`,
 tuple cannot currently produce a valid launch attestation. Codex local-launch
 instructions should be added when the gate supports and verifies that tuple.
 
+### Codex in the published package
+
+The paragraph above describes the local development launch gate. The installed
+package (`npx @wrenai/genbi` or a global/`npm i -g` install) is a different
+scenario, worth stating precisely because the two are easy to conflate.
+
+`server/bin.ts` starts the BFF without a launch attestation whenever
+`WREN_GENBI_LAUNCH_ATTESTATION` is not set in the environment — which is always,
+for an installed package, since nothing sets that variable outside the local
+dev launch-gate flow. In that mode `readLaunchAttestation()` (which otherwise
+throws if the attestation is missing, unparseable, or hash-mismatched) is never
+called, and `server/bin.ts` writes a one-line stderr notice instead: the build
+is unverified against the Warble binary it is running with, and the installed
+package instead relies on its pinned `@warble/*` version plus the npm
+installer's own checksum check of the downloaded Warble executable.
+
+One concrete effect of skipping the attestation: the four Codex identity
+fields normally read out of it (`codexBinSha256`, `codexSource`,
+`codexSourceClosureSha256`, `codexVersion`) stay `undefined`. This does not
+crash the server. `NativeSessionService`'s readiness computation treats a
+missing pinned Codex executable as cleanly unavailable — a user asking "is
+Codex ready?" gets a normal "unavailable" answer, not an error.
+
+What is *not* currently gated is selection: the Setup wizard
+(`src/setup/RuntimeStepCard.tsx`) offers "Codex CLI" as an ordinary
+runtime-provider option, and `useSetupStore.ts` does not check native-session
+readiness before letting someone select and save that binding. So a user of
+the installed package can walk through Setup, choose Codex, and save it
+successfully — the failure only surfaces later, at the point of actually
+starting a native Codex session. That attempt throws a typed
+`InteractiveLaunchError`, which `server/app.ts` catches and turns into an
+ordinary `409 Bad Request` JSON error response, not a crash or a hang.
+
+Net effect: today, Codex is selectable but non-functional in the published
+package, and the user only finds out when they try to use it rather than when
+they configure it. That is a real UX gap, but it is a documentation and
+(potentially, later) a Setup-UI polish matter — not a crash, data-loss, or
+security issue — so it is recorded here rather than fixed as part of this
+change.
+
+## Versioning
+
+`@wrenai/genbi`'s own version (currently `0.0.0`, pre-release) is **independent
+of Warble's** — it does not track or mirror Warble's version number. Bump
+`@wrenai/genbi`'s version only for genbi's own release events (this doc does
+not define genbi's release cadence; that is a separate, not-yet-settled
+decision). Recommendation: keep it independent, because Warble releases on its
+own weekly cadence driven by its own scope, and coupling the two version
+numbers would either force genbi releases it doesn't need or stall Warble pins
+waiting on an unrelated genbi release. What genbi commits to instead is
+compatibility: the exact `@warble/*` versions this package requires and has
+been verified against, expressed as pinned dependency versions plus the
+launch-gate contract probes, not as a shared version number.
+
+### Bumping the pinned Warble version
+
+`@warble/cli`, `@warble/claude-agent-sdk`, and `@warble/codex-local` are pinned
+to an **exact** version (no `^`/`~`) in `apps/genbi/package.json`, and Warble
+publishes roughly weekly. When a new Warble version ships, follow this
+procedure (worked examples: commit `73418ad4`, then `da44c60a` for the next
+bump after it):
+
+1. Bump the pin for all three `@warble/*` packages to the new exact version in
+   `apps/genbi/package.json` in the same change — they come from the same
+   Warble release and must move together.
+2. Run `pnpm install` at the workspace root to update the lockfile.
+3. Check `pnpm-workspace.yaml`'s `minimumReleaseAgeExclude` list. `pnpm
+   install` **appends** a new entry for the newly-resolved version rather than
+   replacing the old one; repo convention (see both example commits) is to
+   **replace** the superseded `@warble/*` entries with the new version, not
+   accumulate them. Skipping this step leaves stale version entries behind —
+   they do nothing useful, and each one is a permanent hole in
+   `minimumReleaseAgeExclude`'s protection (the whole point of that setting is
+   to delay trusting a freshly-published version; a stale entry for a version
+   already in use provides no protection and just accumulates as dead weight
+   that quietly widens the exclusion list over time). Edit the file by hand
+   after `pnpm install` to enforce the replacement.
+4. Re-run `pnpm run check:warble-peers` (see "Package-based Warble dependency"
+   above) to confirm the new versions still satisfy the `0.6.x` peer range the
+   three packages declare on `@warble/ir-spec`. This catches a version
+   mismatch that plain `pnpm install` accepts silently; it does not check
+   `file:`/`link:`-satisfied peers, so it is only meaningful against the
+   registry-pinned dependency graph described here.
+5. Regenerate the launch attestation (`pnpm run verify:launch`, see "Generate
+   the launch attestation" above) against the newly-pinned `@warble/cli` and
+   `@warble/claude-agent-sdk` binaries, so the attestation actually reflects
+   the new pin rather than a stale one left over from before the bump.
+6. Run `pnpm typecheck`, `pnpm test`, and `pnpm build` to confirm nothing in
+   genbi's own code assumed the old Warble contract.
+7. Commit the `package.json` pin bump, the lockfile, and the corrected
+   `pnpm-workspace.yaml` together as one change, following the pattern of the
+   two example commits above.
+
+If a step is skipped: skipping step 1 (bumping the packages together) risks a
+`@warble/*` trio that didn't ship together and was never tested as a set.
+Skipping step 3's replacement (leaving the append in place) silently weakens
+`minimumReleaseAgeExclude` release over release, with no error message to
+notice it by. Skipping step 4 can let a peer-range mismatch land undetected,
+since ordinary `pnpm install` exits `0` even when peers conflict. Skipping
+step 5 leaves the attestation describing a Warble binary that is no longer the
+one actually pinned, so a developer regenerating a launch later gets a
+misleading "verified" tuple. Skipping steps 6–7 is the ordinary risk of
+skipping tests before a commit.
+
+### Why `@warble/ir-spec` stays behind
+
+`@warble/ir-spec` is pinned at `0.6.0` and does not move in lockstep with the
+other three `@warble/*` packages, by design. The other three packages declare
+`@warble/ir-spec` as a peer dependency with a `0.6.x` range, not an exact
+version — which is what actually makes this safe: as long as ir-spec stays
+inside `0.6.x`, the pinned trio's own version can advance every week without
+requiring an ir-spec bump in lockstep. `@warble/ir-spec` is not itself a
+build output of Warble's normal release train; it is a hand-maintained
+projection of the IR literal that genbi consumes directly, kept intentionally
+decoupled from Warble's weekly cadence so it only needs to change when the IR
+*shape* actually changes, not on every Warble release.
+
+Bump `@warble/ir-spec` only when Warble ships a new IR line (a `0.7.0`-class
+change, not a patch inside `0.6.x`) — and when that happens, re-verify the
+peer range in step 4 above still resolves, because widening past `0.6.x`
+crosses out of what the other three packages currently declare compatible,
+and their own peer ranges will need updating too.
+
 ## Build
 
 ```bash
