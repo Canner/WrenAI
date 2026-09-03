@@ -298,10 +298,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface
-          key: hf-parity-paraphrase-MiniLM-L3-v2
+          key: hf-parity-paraphrase-multilingual-MiniLM-L12-v2
       - name: Compare backends
-        env:
-          WREN_EMBEDDING_MODEL: paraphrase-MiniLM-L3-v2
         run: uv run --no-sync pytest tests/unit/test_memory.py -v -k TestOnnxVectorParity
 
   test-mcp:
