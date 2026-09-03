@@ -31,6 +31,16 @@ _QUERY_TABLE = "query_history"
 # manifest, legacy comes from a project's queries.yml.
 _NON_MARKDOWN_SOURCES = frozenset({"seed", "view", "legacy"})
 
+# Extra token appended (space-separated, after the `source:` token) to a
+# query_history row's tags when it is written by sync_markdown_queries's own
+# upsert. `source:user` is not proof a row is markdown-backed: `wren memory
+# load` defaults every pair to it, and so does a pre-`source:legacy` import
+# of an already-consumed queries.yml, both with no knowledge/sql/*.md file
+# behind them (see sync_markdown_queries). Scoping the forget step to rows
+# carrying this marker, instead of inferring provenance from `source`, means
+# the sync only ever deletes rows it wrote itself.
+_MARKDOWN_SYNC_TAG = "origin:markdown-sync"
+
 
 def _esc(value: str) -> str:
     """Escape single quotes for LanceDB where-clause literals."""
@@ -43,6 +53,11 @@ def _tag_source(tags: str | None) -> str:
         if part.startswith("source:"):
             return part[len("source:") :]
     return "user"
+
+
+def _has_tag(tags: str | None, tag: str) -> bool:
+    """Whether *tag* is one of the whitespace-separated tokens in *tags*."""
+    return tag in (tags or "").split()
 
 
 def _schema_items_arrow_schema(dim: int = _DEFAULT_DIM) -> pa.Schema:
@@ -440,7 +455,7 @@ class MemoryStore:
         # Ensure a clean 0-based index matching the unfiltered table.
         df = df.reset_index(drop=True)
         if source:
-            df = df[df["tags"] == f"source:{source}"]
+            df = df[df["tags"].map(_tag_source) == source]
         total = len(df)
         df = df.sort_values("created_at", ascending=False)
         rows = df.iloc[offset : offset + limit]
@@ -457,7 +472,7 @@ class MemoryStore:
             return 0
         table = self._db.open_table(_QUERY_TABLE)
         df = table.to_pandas()
-        return int((df["tags"] == f"source:{source}").sum())
+        return int((df["tags"].map(_tag_source) == source).sum())
 
     def forget_queries_by_ids(self, row_ids: list[int]) -> int:
         """Delete rows at the given positional indices.  Returns deleted count."""
@@ -484,14 +499,20 @@ class MemoryStore:
         return len(to_delete)
 
     def forget_queries_by_source(self, source: str) -> int:
-        """Delete all query_history rows matching *source* tag.  Returns deleted count."""
+        """Delete all query_history rows matching *source* tag.  Returns deleted count.
+
+        Goes through :meth:`forget_queries_by_ids` (parsing each row's
+        ``source:`` token via :func:`_tag_source`) rather than an equality
+        match on the raw ``tags`` string, so a row carrying an extra token
+        after its ``source:`` tag (e.g. ``_MARKDOWN_SYNC_TAG``) still matches
+        on its actual source, exactly as an untagged row would.
+        """
         if _QUERY_TABLE not in _table_names(self._db):
             return 0
         table = self._db.open_table(_QUERY_TABLE)
-        where = f"tags = 'source:{_esc(source)}'"
-        before = table.count_rows()
-        table.delete(where)
-        return before - table.count_rows()
+        df = table.to_pandas().reset_index(drop=True)
+        ids = [i for i, t in enumerate(df["tags"]) if _tag_source(t) == source]
+        return self.forget_queries_by_ids(ids) if ids else 0
 
     # ── Dump / Load ──────────────────────────────────────────────────────
 
@@ -506,7 +527,7 @@ class MemoryStore:
         table = self._db.open_table(_QUERY_TABLE)
         df = table.to_pandas()
         if source:
-            df = df[df["tags"] == f"source:{source}"]
+            df = df[df["tags"].map(_tag_source) == source]
         df = df.sort_values("created_at", ascending=True)
         return df.drop(columns=["vector"], errors="ignore").to_dict("records")
 
@@ -533,9 +554,19 @@ class MemoryStore:
         return exact_set, nl_to_rowids
 
     def _prepare_query_records(
-        self, pairs: list[dict], *, tags: str | None = None
+        self,
+        pairs: list[dict],
+        *,
+        tags: str | None = None,
+        extra_tag: str | None = None,
     ) -> list[dict]:
-        """Prepare a complete query batch without changing its table."""
+        """Prepare a complete query batch without changing its table.
+
+        *extra_tag*, when given, is appended as an additional space-separated
+        token after the row's usual ``source:`` tag (computed or explicit) so
+        a later scan can recognize the row without touching what ``source:``
+        it carries. See ``_MARKDOWN_SYNC_TAG``.
+        """
         if not pairs:
             return []
         texts = [p["nl"] for p in pairs]
@@ -547,6 +578,8 @@ class MemoryStore:
             record_tags = (
                 tags if tags is not None else f"source:{p.get('source', 'user')}"
             )
+            if extra_tag:
+                record_tags = f"{record_tags} {extra_tag}"
             records.append(
                 {
                     "text": p["nl"],
@@ -581,8 +614,16 @@ class MemoryStore:
         *,
         overwrite: bool = False,
         upsert: bool = False,
+        mark_markdown_synced: bool = False,
     ) -> dict[str, int]:
         """Batch-import parsed YAML pairs into query_history.
+
+        ``mark_markdown_synced`` tags every written row with
+        ``_MARKDOWN_SYNC_TAG`` in addition to its usual ``source:`` tag, so a
+        later ``sync_markdown_queries`` forget pass can recognize rows it
+        wrote itself without inferring that from ``source`` (see
+        ``sync_markdown_queries``). Only meaningful together with
+        ``upsert=True``, the only mode ``sync_markdown_queries`` uses.
 
         Returns ``{"loaded": N, "skipped": M, "updated": U}``.
         """
@@ -603,7 +644,8 @@ class MemoryStore:
                 seen_nl[p["nl"]] = p
             deduped = list(seen_nl.values())
 
-            records = self._prepare_query_records(deduped)
+            extra_tag = _MARKDOWN_SYNC_TAG if mark_markdown_synced else None
+            records = self._prepare_query_records(deduped, extra_tag=extra_tag)
 
             # Batch: collect IDs to delete, then delete once, then insert all.
             ids_to_delete = []
@@ -641,21 +683,32 @@ class MemoryStore:
         """Upsert *pairs* and forget any indexed pair absent from them.
 
         *pairs* must be the complete current ``knowledge/sql/*.md`` set (the
-        source of truth). Mirrors the "stale" definition the ``check`` command
-        already reports (any source other than seed/view whose ``nl_query``
-        is no longer in the markdown) and acts on it, so a deletion or rename
-        actually clears out of the index instead of lingering and still being
-        recalled.
+        source of truth). The forget step is scoped to rows this method
+        itself previously wrote (tagged ``_MARKDOWN_SYNC_TAG`` by the upsert
+        below), never to rows merely matching some inferred "non-markdown"
+        exclusion list: ``source:user`` is also what ``wren memory load``
+        gives a pair with no ``source`` of its own, and what a pre-upgrade
+        ``queries.yml`` import already carried before ``source:legacy``
+        existed, so neither is safe to treat as markdown-backed. A row from
+        either of those paths is never forgotten here, only a row this sync
+        wrote on a prior run and no longer sees in *pairs*.
+
+        One consequence of tracking provenance instead of inferring it: a
+        markdown row that already existed in the index under the old,
+        untagged scheme is not eligible to be forgotten until the upsert
+        above has re-written it at least once (which happens on this very
+        call, for every pair still present). The transition fails toward
+        keeping a row an extra run rather than losing one it shouldn't.
 
         Returns ``{"loaded": N, "skipped": M, "updated": U, "forgotten": F}``.
         """
-        result = self.load_queries(pairs, upsert=True)
+        result = self.load_queries(pairs, upsert=True, mark_markdown_synced=True)
         current_nls = {p["nl"] for p in pairs}
         rows, _ = self.list_queries(limit=1_000_000)
         stale_ids = [
             row["_row_id"]
             for row in rows
-            if _tag_source(row.get("tags")) not in _NON_MARKDOWN_SOURCES
+            if _has_tag(row.get("tags"), _MARKDOWN_SYNC_TAG)
             and row["nl_query"] not in current_nls
         ]
         forgotten = self.forget_queries_by_ids(stale_ids) if stale_ids else 0

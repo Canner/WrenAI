@@ -1546,6 +1546,119 @@ class TestMarkdownSourcedIndex:
         assert len(after) == 1
         assert after[0]["sql_query"] == "SELECT SUM(amount) FROM o"
 
+    def test_sync_preserves_view_queries_absent_from_markdown(self, memory_store):
+        """A source:view row is not markdown-backed either (there is no
+        knowledge/sql/*.md file for a manifest view), so a markdown sync
+        with an empty pair set must never forget it."""
+        memory_store.load_queries(
+            [
+                {
+                    "nl": "Rows in the active orders view",
+                    "sql": "SELECT * FROM active_orders_view",
+                    "source": "view",
+                }
+            ],
+            upsert=False,
+        )
+        before, _ = memory_store.list_queries(limit=100, source="view")
+        assert len(before) == 1
+
+        result = memory_store.sync_markdown_queries([])  # no markdown pairs
+
+        assert result["forgotten"] == 0
+        after, _ = memory_store.list_queries(limit=100, source="view")
+        assert len(after) == 1
+        assert after[0]["sql_query"] == "SELECT * FROM active_orders_view"
+
+    def test_sync_preserves_user_pair_loaded_from_yaml_with_no_markdown_file(
+        self, memory_store
+    ):
+        """`wren memory load pairs.yml` (no --source given) writes a plain
+        source:user row backed by no knowledge/sql/*.md file at all: the
+        YAML file may live anywhere, or be deleted right after the import.
+        A markdown sync must never treat that row as stale just because its
+        source happens to be "user" too, which is also what every
+        markdown-backed pair defaults to.
+        """
+        memory_store.load_queries(
+            [
+                {
+                    "nl": "Revenue by region",
+                    "sql": "SELECT region, SUM(amount) FROM orders GROUP BY region",
+                    "source": "user",
+                }
+            ],
+            upsert=False,
+        )
+        before, _ = memory_store.list_queries(limit=100, source="user")
+        assert len(before) == 1
+
+        result = memory_store.sync_markdown_queries([])  # no markdown pairs
+
+        assert result["forgotten"] == 0
+        after, _ = memory_store.list_queries(limit=100, source="user")
+        assert len(after) == 1
+        assert after[0]["nl_query"] == "Revenue by region"
+
+    def test_sync_preserves_pre_upgrade_queries_yml_import_once_file_is_gone(
+        self, memory_store
+    ):
+        """Before source:legacy tagging existed, a project's queries.yml was
+        imported as a plain source:user row (see the CLI's old, untagged
+        `load_queries(legacy_pairs, upsert=False)` call). A user who
+        consumed queries.yml on an older version, then deleted the file and
+        upgraded, must not lose that row on their first post-upgrade
+        `wren memory index`: there is no markdown file to judge it against,
+        and the row predates this sync entirely, so it never carries the
+        provenance tag a markdown sync would need to treat it as its own.
+        """
+        memory_store.load_queries(
+            [
+                {
+                    "nl": "Total revenue",
+                    "sql": "SELECT SUM(amount) FROM o",
+                    "source": "user",
+                }
+            ],
+            upsert=False,
+        )
+
+        result = memory_store.sync_markdown_queries([])  # queries.yml is gone
+
+        assert result["forgotten"] == 0
+        after, _ = memory_store.list_queries(limit=100, source="user")
+        assert len(after) == 1
+        assert after[0]["nl_query"] == "Total revenue"
+
+    def test_source_filters_still_match_markdown_synced_rows(
+        self, memory_store, tmp_path
+    ):
+        """sync_markdown_queries tags the rows it writes with an extra
+        provenance token after the source tag (_MARKDOWN_SYNC_TAG), so the
+        stored tags string is no longer just "source:user". list/count/dump/
+        forget filtering by --source must keep matching on the source value
+        alone, not on an exact match against the whole tags string.
+        """
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+
+        rows, total = memory_store.list_queries(source="user")
+        assert total == 1
+        assert rows[0]["nl_query"] == "Total revenue"
+        assert memory_store.count_queries_by_source("user") == 1
+        dumped = memory_store.dump_queries(source="user")
+        assert len(dumped) == 1
+
+        deleted = memory_store.forget_queries_by_source("user")
+        assert deleted == 1
+        _, total_after = memory_store.list_queries()
+        assert total_after == 0
+
     def test_sync_lets_a_markdown_pair_win_over_a_colliding_seed_row(
         self, memory_store, tmp_path
     ):
@@ -1644,6 +1757,50 @@ class TestMarkdownSourcedIndex:
         rows, total = store.list_queries(limit=100)
         assert total == 1
         assert rows[0]["nl_query"] == "Total revenue"
+
+    def test_cli_load_then_index_does_not_forget_the_loaded_pair(
+        self, tmp_path, monkeypatch
+    ):
+        """`wren memory load <file>.yml` (see PR #2703 review) writes a
+        source:user row with no knowledge/sql/*.md file behind it. A
+        `wren memory index` right after must not report or execute a forget
+        for that row: it was never markdown-backed to begin with."""
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.cli import app  # noqa: PLC0415
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
+        (tmp_path / "target").mkdir()
+        (tmp_path / "target" / "mdl.json").write_text("{}", encoding="utf-8")
+
+        pairs_file = tmp_path / "pairs.yml"
+        pairs_file.write_text(
+            "version: 1\n"
+            "pairs:\n"
+            "  - nl: Revenue by region\n"
+            "    sql: SELECT region, SUM(amount) FROM orders GROUP BY region\n",
+            encoding="utf-8",
+        )
+
+        cli = CliRunner()
+        load_result = cli.invoke(app, ["memory", "load", str(pairs_file)])
+        assert load_result.exit_code == 0, load_result.output
+        assert "1 new" in load_result.output
+
+        index_result = cli.invoke(app, ["memory", "index"])
+        assert index_result.exit_code == 0, index_result.output
+        assert "Forgot" not in index_result.output
+
+        store = MemoryStore(path=str(tmp_path / ".wren" / "memory"))
+        rows, total = store.list_queries(limit=100)
+        assert total == 1
+        assert rows[0]["nl_query"] == "Revenue by region"
 
     def test_cli_watch_reindex_on_start_lancedb_forgets_deleted_pair(
         self, tmp_path, monkeypatch
