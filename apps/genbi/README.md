@@ -85,12 +85,22 @@ uv tool install wrenai
 wren --version
 ```
 
-Warble 0.2.0 is released on crates.io. For standalone CLI use, you can install
-it without cloning the repository:
+Warble's CLI is published on crates.io. **GenBI does not need this** — it
+consumes the pinned `@warble/cli` npm package (see below), and that pin is what
+the launch gate attests. Install this only if you want a standalone `warble` on
+your `PATH`:
 
 ```bash
-cargo install warble-cli --version 0.2.0 --locked
+cargo install warble-cli --locked
 warble --version
+```
+
+Deliberately no `--version` here: Warble releases often, and a version written
+into this file goes stale within weeks. If you need the exact version GenBI is
+pinned to, read it from `package.json` rather than from prose:
+
+```bash
+node -p "require('./package.json').dependencies['@warble/cli']"
 ```
 
 ### Package-based Warble dependency
@@ -431,13 +441,21 @@ and their own peer ranges will need updating too.
 
 ## Build
 
+Like everything else below the [Getting started](#getting-started) section,
+these run **from `apps/genbi`**. The repo root has no bare `build` script; it
+exposes only the passthroughs `pnpm genbi:build`, `pnpm genbi:test` and
+`pnpm genbi:dev`.
+
 ```bash
+cd apps/genbi
 pnpm build      # tsc -b (frontend typecheck) && vite build (→ dist/) && tsc -p tsconfig.server.json (server + harness → dist-server/)
 pnpm start:bff  # requires WREN_GENBI_LAUNCH_ATTESTATION and the verified BFF env above
 pnpm preview    # serve the frontend production build
 ```
 
 ## Test & typecheck
+
+Also from `apps/genbi` (`pnpm genbi:test` from the root runs the same suite).
 
 ```bash
 pnpm test       # vitest run — frontend (jsdom, src/**) and backend (node, test/**) as separate projects
