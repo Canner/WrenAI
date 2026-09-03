@@ -166,7 +166,10 @@ versions are not supported by this package (`engines.node` in
 variable must be set before starting the app; see [Run](#run) above. There
 is no default.
 
-**Port already in use** — if `4787` (or whatever `PORT` you set) is
-already bound by another process, the BFF fails to start. Either stop
-whatever is using that port or start with a different one, e.g. `PORT=4790
-WREN_HARNESS_WORKSPACE_ROOT=... npx genbi`.
+**`error: port 4787 is already in use`** — something else is bound to
+`4787` (or to whatever `PORT` you set). Either stop it, or start on a free
+port:
+
+```bash
+PORT=4790 WREN_HARNESS_WORKSPACE_ROOT="$HOME/wren-workspace" npx @wrenai/genbi
+```

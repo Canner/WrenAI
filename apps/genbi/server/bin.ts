@@ -640,8 +640,18 @@ async function main(): Promise<void> {
   const websocket = new WebSocketServer({ noServer: true });
   // ws' `noServer` runtime shape is the one documented by @hono/node-server;
   // its package types disagree under exactOptionalPropertyTypes.
-  serve({ fetch: app.fetch, websocket: { server: websocket as never }, hostname: "127.0.0.1", port }, (info) => {
+  const server = serve({ fetch: app.fetch, websocket: { server: websocket as never }, hostname: "127.0.0.1", port }, (info) => {
     process.stdout.write(`wren-harness BFF listening on http://127.0.0.1:${info.port} (db: ${dbPath})\n`);
+  });
+  // Without this, a port that is already taken surfaces as an unhandled 'error' event and a raw
+  // Node stack trace -- the first thing a new user is likely to hit, and the least readable.
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    process.stderr.write(
+      error.code === "EADDRINUSE"
+        ? `error: port ${port} is already in use — stop whatever is using it, or set PORT to a free one\n`
+        : `error: could not start the server on port ${port}: ${error.message}\n`,
+    );
+    process.exit(1);
   });
 }
 
