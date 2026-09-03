@@ -33,6 +33,7 @@ jobs:
   build-and-publish:
     name: Build WASM + publish to npm (token-based)
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     permissions:
       contents: read
     steps:
@@ -87,6 +88,10 @@ jobs:
       - name: Build dist (TypeScript + copy)
         working-directory: core/wren-core-wasm
         run: npm run build:dist
+
+      - name: WASM binary size check
+        working-directory: core/wren-core-wasm
+        run: npm run check:size
 
       - name: Run integration tests
         working-directory: core/wren-core-wasm
