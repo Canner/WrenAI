@@ -345,7 +345,7 @@ describe("local GenBI launch gate", () => {
   it("uses production providers and BFF native preflight for every required Warble surface without starting services", () => {
     const { root, warble, bin, agentSdk } = fixture();
     const result = run(["--", "--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin], warble);
-    expect(result.status).toBe(0);
+    expect(result.status, `${result.stderr}${result.stdout}`.trim() || "(no gate output)").toBe(0);
     expect(result.stdout).toContain("launch gate PASSED");
     expect(result.stdout).toContain('"tiers": [');
     expect(result.stdout).toContain("dispatch:native(context_enrichment/codex)");
@@ -420,7 +420,7 @@ describe("local GenBI launch gate", () => {
         WREN_HARNESS_MODE: "subscription", WREN_HARNESS_PROVIDER: "claude", WREN_HARNESS_AGENT_SDK_BIN: agentSdk,
       },
     });
-    expect(result.status).toBe(0);
+    expect(result.status, `${result.stderr}${result.stdout}`.trim() || "(no gate output)").toBe(0);
   });
 
   it("fails closed on a malformed native launch contract instead of offering manual testing", () => {
@@ -499,7 +499,7 @@ describe("local GenBI launch gate", () => {
     }
     writeFileSync(path.join(warble, "untracked-source.yml"), "unsafe: true\n");
     const result = run(["--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin], warble);
-    expect(result.status).toBe(0);
+    expect(result.status, `${result.stderr}${result.stdout}`.trim() || "(no gate output)").toBe(0);
     expect(result.stdout).toContain("launch gate PASSED");
   });
 
@@ -552,7 +552,7 @@ describe("local GenBI launch gate", () => {
     writeFileSync(packageBin, readFileSync(bin));
     chmodSync(packageBin, 0o700);
     const result = run(["--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", packageBin], warble);
-    expect(result.status).toBe(0);
+    expect(result.status, `${result.stderr}${result.stdout}`.trim() || "(no gate output)").toBe(0);
     expect(result.stdout).toContain("launch gate PASSED");
   });
 
@@ -567,7 +567,7 @@ describe("local GenBI launch gate", () => {
     writeFileSync(packageAgentSdk, readFileSync(agentSdk));
     chmodSync(packageAgentSdk, 0o700);
     const result = spawnSync(process.execPath, [verifier, "--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin, "--runtime", "subscription:claude", "--agent-sdk-bin", packageAgentSdk], { encoding: "utf8", env: { ...process.env, NODE_ENV: "test" } });
-    expect(result.status).toBe(0);
+    expect(result.status, `${result.stderr}${result.stdout}`.trim() || "(no gate output)").toBe(0);
     expect(result.stdout).toContain("launch gate PASSED");
   });
 
