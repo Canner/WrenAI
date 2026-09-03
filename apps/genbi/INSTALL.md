@@ -95,19 +95,23 @@ globally, run `npx genbi` from that project, or invoke
 
 On a successful start you'll see, in order:
 
-1. A notice on stderr that the process is running without a local launch
+1. Possibly a Node.js `ExperimentalWarning` on stderr about SQLite (Node's
+   built-in `node:sqlite` module, which this package uses for its state
+   file). This comes from Node itself, not from `@wrenai/genbi`; whether it
+   appears depends on your Node version, and it's not an error.
+2. A notice on stderr that the process is running without a local launch
    attestation. This is expected and not an error — launch attestation is a
    contributor/dev-only compatibility check between an in-progress UI, BFF,
    and Warble build; the published package instead relies on its pinned
    `@warble/*` package versions plus the checksum verification that already
    ran at install time.
-2. A warning on stderr about using a personal provider subscription (e.g. a
+3. A warning on stderr about using a personal provider subscription (e.g. a
    Claude subscription) to authenticate — that it may be against that
    provider's Terms of Service, that it's for personal single-operator use
    only, and that you're responsible for checking the current ToS. This
    warning is expected on every start where a personal subscription is the
    auth mode; it is not a sign of misconfiguration.
-3. A final line on stdout: `wren-harness BFF listening on
+4. A final line on stdout: `wren-harness BFF listening on
    http://127.0.0.1:<port> (db: <path>)`.
 
 At that point the BFF is up but **unbound** — no Wren project has been
