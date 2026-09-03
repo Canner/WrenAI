@@ -10,10 +10,12 @@ keywords = ["mdl", "semantic-layer", "lineage", "wren"]
 categories = ["database"]
 
 [dependencies]
-# Pinned to a branch, not a release: `PreparedContext` and `prepared_document_from` are not in a
-# published warble version yet. Becomes a plain version requirement once that branch merges and
-# warble cuts a release — until then a branch dep is what keeps this reproducible off this machine.
-warble = { git = "https://github.com/Canner/Warble", branch = "feat/prepared-context-binding" }
+# Pinned to a commit, not a release: `PreparedContext` and `prepared_document_from` are merged to
+# warble's `main` but not in a published version yet. This is the squash commit that landed them.
+# A branch dep is not usable here — the source branch was deleted on merge, and a deleted ref makes
+# every fresh resolution fail while a warm ~/.cargo/git cache still succeeds, so the break would
+# only ever show up on someone else's machine. Becomes `warble = "0.10"` once that release lands.
+warble = { git = "https://github.com/Canner/Warble", rev = "f6bff4e467cc806094921121d9cfa45992c1af04" }
 wren-core-base = { path = "../wren-core-base", version = "0.2.0" }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
