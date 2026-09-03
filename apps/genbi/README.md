@@ -16,6 +16,10 @@ It's a plain SPA rather than an SSR framework on purpose: it only talks to the
 BFF over HTTP/SSE and builds to static assets, so a future desktop shell or
 PWA stays a thin increment.
 
+> This README is for people building or contributing to the app from
+> source. If you just want to install and run the published package, see
+> [INSTALL.md](./INSTALL.md) instead.
+
 ## Prerequisites
 
 - Node 20+ and `pnpm` (the repo pins its version via `corepack`).
