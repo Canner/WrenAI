@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.5](https://github.com/Canner/WrenAI/compare/wren-v0.13.4...wren-v0.13.5) (2026-09-03)
+
+
+### Bug Fixes
+
+* **wren:** connect MSSqlConnector with autocommit so statements are not left in an open transaction ([#2705](https://github.com/Canner/WrenAI/issues/2705)) ([4d167fc](https://github.com/Canner/WrenAI/commit/4d167fc0c3678abcbdd7120d912788305fbfe51b))
+* **wren:** forget query_history rows deleted from knowledge/sql on reindex ([#2703](https://github.com/Canner/WrenAI/issues/2703)) ([10a6432](https://github.com/Canner/WrenAI/commit/10a6432afb24c5ba92f87d13693393e8b0a66401))
+
 ## [0.13.4](https://github.com/Canner/WrenAI/compare/wren-v0.13.3...wren-v0.13.4) (2026-09-02)
 
 
