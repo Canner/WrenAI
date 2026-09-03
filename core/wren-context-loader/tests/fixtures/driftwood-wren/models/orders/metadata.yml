@@ -1,0 +1,41 @@
+name: orders
+properties:
+  description: "New-platform orders (2023-03 onward). One row per order header. Includes copies of legacy orders migrated during 2023 (marked by legacy_ord_id)."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: orders
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+    properties:
+      description: "Unique order id (new platform)."
+  - name: customer_id
+    type: INTEGER
+    properties:
+      description: "FK to customers.id."
+  - name: currency
+    type: VARCHAR
+    properties:
+      description: "Order currency: USD, EUR, or GBP."
+  - name: order_total
+    type: "DECIMAL(12,2)"
+    properties:
+      description: "Header-level gross order total (incl. tax) in the order's currency. Can differ slightly from the sum of line items on a small share of orders."
+  - name: status
+    type: VARCHAR
+    properties:
+      description: "Order status: pending, paid, shipped, delivered, cancelled, refunded. A small share of historical rows use mixed case (e.g. 'PAID', 'Paid')."
+  - name: placed_at
+    type: TIMESTAMP
+    properties:
+      description: "Order placement time (UTC)."
+  - name: shipped_at
+    type: TIMESTAMP
+    properties:
+      description: "Ship time (UTC); NULL = not shipped."
+  - name: legacy_ord_id
+    type: INTEGER
+    properties:
+      description: "Non-NULL when this row is a migrated copy of a legacy order (FK to legacy_orders.ord_id). Such orders exist in BOTH tables."

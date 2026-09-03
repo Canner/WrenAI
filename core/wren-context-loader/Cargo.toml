@@ -1,0 +1,25 @@
+[package]
+name = "wren-context-loader"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Reads a Wren MDL project into Warble's ContextLoader projection, so a Warble profile can bind a wren project without Warble depending on Wren."
+homepage = "https://getwren.ai"
+repository = "https://github.com/Canner/WrenAI"
+keywords = ["mdl", "semantic-layer", "lineage", "wren"]
+categories = ["database"]
+
+[dependencies]
+# Pinned to a branch, not a release: `PreparedContext` and `prepared_document_from` are not in a
+# published warble version yet. Becomes a plain version requirement once that branch merges and
+# warble cuts a release — until then a branch dep is what keeps this reproducible off this machine.
+warble = { git = "https://github.com/Canner/Warble", branch = "feat/prepared-context-binding" }
+wren-core-base = { path = "../wren-core-base", version = "0.2.0" }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1"
+sqlparser = { version = "0.58", features = ["visitor"] }
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"

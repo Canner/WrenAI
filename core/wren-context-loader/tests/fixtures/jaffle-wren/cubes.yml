@@ -1,0 +1,15 @@
+# Declared analytical cube over the orders mart. Added in Phase 2 so the semantic layer carries
+# real, named metrics whose additivity is *decidable* — which is what lets `metric_additive` be
+# evaluated at compile time (a declared additive measure → pass; a non-additive one → fail) rather
+# than being unanswerable, as it is on a cube-less project.
+- name: revenue
+  base_object: orders
+  measures:
+    # Additive: a sum-of-parts equals the whole → safe to decompose along dimensions.
+    - { name: total_revenue, expression: "SUM(amount)", type: DOUBLE }
+    # Non-additive: the average of parts is not the average of the whole → decomposition misleads.
+    - { name: avg_order_value, expression: "AVG(amount)", type: DOUBLE }
+  dimensions:
+    - { name: status, expression: "status", type: TEXT }
+  time_dimensions:
+    - { name: order_date, expression: "order_date", type: DATE }

@@ -1,0 +1,11 @@
+schema_version: 2
+name: jaffle_shop
+version: "1.0"
+
+# Wren Engine namespace (NOT your database's catalog/schema).
+# These identify this MDL project within the engine.
+# Your database's actual catalog/schema goes in each model's table_reference.
+catalog: wren
+schema: public
+
+data_source: duckdb

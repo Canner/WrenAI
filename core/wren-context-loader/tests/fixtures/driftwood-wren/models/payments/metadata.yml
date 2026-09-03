@@ -1,0 +1,37 @@
+name: payments
+properties:
+  description: "Captured payments (new platform). One row per capture attempt; refund reversals appear as negative-amount rows."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: payments
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+    properties:
+      description: "Unique payment id."
+  - name: order_id
+    type: INTEGER
+    properties:
+      description: "FK to orders.id."
+  - name: amount
+    type: "DECIMAL(12,2)"
+    properties:
+      description: "Payment amount NET of processor fees, in the payment currency. NOTE: different meaning from orders.order_total (gross). Refund reversals are negative amounts with method='refund_reversal' and also exist in the refunds table."
+  - name: fee_amount
+    type: "DECIMAL(12,2)"
+    properties:
+      description: "Processor fee for this capture; gross captured = amount + fee_amount."
+  - name: currency
+    type: VARCHAR
+    properties:
+      description: "Payment currency (matches the order's currency)."
+  - name: captured_at
+    type: TIMESTAMP
+    properties:
+      description: "Capture time (UTC)."
+  - name: method
+    type: VARCHAR
+    properties:
+      description: "card, paypal, apple_pay, or refund_reversal (negative rows)."

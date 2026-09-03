@@ -1,0 +1,46 @@
+name: orders
+properties:
+  description: "Final orders mart. One row per order, with payment amounts broken out by method (credit card, coupon, bank transfer, gift card) plus the total order amount."
+table_reference:
+  catalog: jaffle_shop
+  schema: main
+  table: orders
+primary_key: order_id
+columns:
+  - name: order_id
+    type: INT
+    not_null: true
+    properties:
+      description: "Unique order identifier."
+  - name: customer_id
+    type: INT
+    properties:
+      description: "Foreign key to customers.customer_id."
+  - name: order_date
+    type: DATE
+    properties:
+      description: "Date the order was placed."
+  - name: status
+    type: TEXT
+    properties:
+      description: "Order status: placed, shipped, completed, return_pending, or returned."
+  - name: credit_card_amount
+    type: DOUBLE
+    properties:
+      description: "Amount paid by credit card for this order."
+  - name: coupon_amount
+    type: DOUBLE
+    properties:
+      description: "Amount paid with coupons for this order."
+  - name: bank_transfer_amount
+    type: DOUBLE
+    properties:
+      description: "Amount paid by bank transfer for this order."
+  - name: gift_card_amount
+    type: DOUBLE
+    properties:
+      description: "Amount paid with gift cards for this order."
+  - name: amount
+    type: DOUBLE
+    properties:
+      description: "Total order amount (sum of all payment methods)."

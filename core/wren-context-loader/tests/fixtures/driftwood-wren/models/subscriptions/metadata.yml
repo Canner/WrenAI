@@ -1,0 +1,33 @@
+name: subscriptions
+properties:
+  description: "Driftwood+ gear-rental subscriptions (launched 2024-01). One row per subscription."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: subscriptions
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+    properties:
+      description: "Unique subscription id."
+  - name: customer_id
+    type: INTEGER
+    properties:
+      description: "FK to customers.id."
+  - name: plan
+    type: VARCHAR
+    properties:
+      description: "plus_monthly or plus_annual."
+  - name: started_at
+    type: TIMESTAMP
+    properties:
+      description: "Subscription start (UTC)."
+  - name: canceled_at
+    type: TIMESTAMP
+    properties:
+      description: "Cancellation time (UTC); NULL = still active."
+  - name: monthly_price
+    type: "DECIMAL(12,2)"
+    properties:
+      description: "Monthly recurring price in USD (annual plans stored as the monthly-equivalent amount)."
