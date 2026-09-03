@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.6...wren-core-py-v0.8.0) (2026-09-03)
+
+
+### Features
+
+* **core:** support ordered cube queries ([#2677](https://github.com/Canner/WrenAI/issues/2677)) ([8d23753](https://github.com/Canner/WrenAI/commit/8d23753e1e4bd2198064d8c55ddca9d688aec731))
+
 ## [0.7.6](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.5...wren-core-py-v0.7.6) (2026-08-31)
 
 
