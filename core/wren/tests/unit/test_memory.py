@@ -1659,6 +1659,37 @@ class TestMarkdownSourcedIndex:
         _, total_after = memory_store.list_queries()
         assert total_after == 0
 
+    def test_source_filters_ignore_rows_carrying_no_source_tag(self, memory_store):
+        """`wren memory store` and the MCP `store_query` tool pass the caller's
+        own free-form labels through to `tags` (`"revenue,finance"`, or nothing
+        at all), so a real index holds rows with no `source:` token. A
+        `--source user` filter must not claim them, least of all `forget`.
+        """
+        memory_store.store_query(
+            nl_query="A user-tagged pair", sql_query="SELECT 1", tags="revenue,finance"
+        )
+        memory_store.store_query(
+            nl_query="An untagged pair", sql_query="SELECT 2", tags=None
+        )
+        memory_store.store_query(
+            nl_query="A source-tagged pair", sql_query="SELECT 3", tags="source:user"
+        )
+
+        rows, total = memory_store.list_queries(limit=100, source="user")
+        assert total == 1
+        assert rows[0]["nl_query"] == "A source-tagged pair"
+        assert memory_store.count_queries_by_source("user") == 1
+        assert [r["nl_query"] for r in memory_store.dump_queries(source="user")] == [
+            "A source-tagged pair"
+        ]
+
+        assert memory_store.forget_queries_by_source("user") == 1
+        survivors, _ = memory_store.list_queries(limit=100)
+        assert sorted(r["nl_query"] for r in survivors) == [
+            "A user-tagged pair",
+            "An untagged pair",
+        ]
+
     def test_sync_lets_a_markdown_pair_win_over_a_colliding_seed_row(
         self, memory_store, tmp_path
     ):
@@ -1797,6 +1828,12 @@ class TestMarkdownSourcedIndex:
         assert index_result.exit_code == 0, index_result.output
         assert "Forgot" not in index_result.output
 
+        # ...and `check` must agree, rather than reporting drift that `index`
+        # has just proven it cannot clear.
+        check_result = cli.invoke(app, ["memory", "check"])
+        assert check_result.exit_code == 0, check_result.output
+        assert "In sync." in check_result.output
+
         store = MemoryStore(path=str(tmp_path / ".wren" / "memory"))
         rows, total = store.list_queries(limit=100)
         assert total == 1
@@ -1875,6 +1912,45 @@ class TestMarkdownSourcedIndex:
             assert index_result.exit_code == 0, index_result.output
             assert "Forgot" not in index_result.output
 
+            check_result = cli.invoke(app, ["memory", "check"])
+            assert check_result.exit_code == 0, check_result.output
+            assert "In sync." in check_result.output
+
+    def test_cli_export_then_index_reports_in_sync(self, tmp_path, monkeypatch):
+        """`wren memory export` is the documented one-time migration, and it
+        preserves each row's source into the markdown frontmatter, so a
+        legacy queries.yml pair lands in knowledge/sql/ as `source: legacy`.
+        That file is markdown-backed like any other, so `check` must not read
+        it as "not indexed".
+        """
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.cli import app  # noqa: PLC0415
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
+        (tmp_path / "target").mkdir()
+        (tmp_path / "target" / "mdl.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "queries.yml").write_text(
+            "pairs:\n  - nl: Total revenue\n    sql: SELECT SUM(amount) FROM o\n",
+            encoding="utf-8",
+        )
+
+        cli = CliRunner()
+        assert cli.invoke(app, ["memory", "index"]).exit_code == 0
+        export = cli.invoke(app, ["memory", "export"])
+        assert export.exit_code == 0, export.output
+        assert "source: legacy" in next(
+            (tmp_path / "knowledge" / "sql").glob("*.md")
+        ).read_text(encoding="utf-8")
+
+        for _ in range(2):
+            index_result = cli.invoke(app, ["memory", "index"])
+            assert index_result.exit_code == 0, index_result.output
             check_result = cli.invoke(app, ["memory", "check"])
             assert check_result.exit_code == 0, check_result.output
             assert "In sync." in check_result.output

@@ -259,10 +259,11 @@ def index(
                 raw = queries_file.read_text(encoding="utf-8")
                 doc = yaml.safe_load(raw)
                 if doc and isinstance(doc, dict) and doc.get("pairs"):
-                    # Tag legacy=queries.yml explicitly so a later
-                    # sync_markdown_queries() (not markdown-backed, so it
-                    # would otherwise treat these as stale and re-embed them
-                    # on every run) leaves them alone, same as seed/view rows.
+                    # Tag legacy=queries.yml explicitly so these rows are
+                    # distinguishable from markdown-backed ones in
+                    # `memory list/dump/forget --source`. They are already
+                    # safe from sync_markdown_queries, whose forget pass is
+                    # scoped to rows carrying its own provenance tag.
                     legacy_pairs = [{**p, "source": "legacy"} for p in doc["pairs"]]
                     load_result = mem_store.load_queries(legacy_pairs, upsert=False)
                     loaded = load_result["loaded"]
@@ -541,24 +542,28 @@ def check(
         )
         return
 
-    from wren.memory.store import _NON_MARKDOWN_SOURCES  # noqa: PLC0415
+    from wren.memory.store import _MARKDOWN_SYNC_TAG, _has_tag  # noqa: PLC0415
 
     md_nls = {p["nl"] for p in load_query_pairs(project)}
     mem_store = idx.store
     indexed, _ = mem_store.list_queries(limit=1_000_000)
     indexed_nls = {r.get("nl_query") for r in indexed}
-    # Only markdown-backed pairs are expected to have a knowledge/sql/ file;
-    # seed/view/legacy rows are derived or externally sourced (same set
-    # sync_markdown_queries excludes from its own stale scan).
-    indexed_user = {
+    # Markdown-backed means "written by sync_markdown_queries", which is what
+    # the provenance tag records: the same predicate that method's own forget
+    # pass uses. Deriving it from `source` instead would put this report out of
+    # step with the write path in both directions: a `source:legacy`/`view`
+    # pair exported into knowledge/sql/ would read as permanently "not
+    # indexed", and a `wren memory load` pair would read as permanently
+    # "stale" even though no `index` run is able to clear it.
+    indexed_md = {
         r.get("nl_query")
         for r in indexed
-        if _parse_source(r.get("tags")) not in _NON_MARKDOWN_SOURCES
+        if _has_tag(r.get("tags"), _MARKDOWN_SYNC_TAG)
     }
 
-    # Compare user pairs only — seed/view rows aren't markdown-backed.
-    missing = md_nls - indexed_user  # in markdown but not indexed as a user pair
-    stale = indexed_user - md_nls  # user-indexed but no longer in markdown
+    # markdown vs. the rows the sync derived from it
+    missing = md_nls - indexed_md  # in markdown but not indexed as a synced pair
+    stale = indexed_md - md_nls  # synced but no longer in markdown
 
     typer.echo(
         f"knowledge/sql: {len(md_nls)} pair(s); index: {len(indexed_nls)} pair(s)"
@@ -570,7 +575,7 @@ def check(
         typer.echo(f"  {len(missing)} not indexed — run `wren memory index`.")
     if stale:
         typer.echo(
-            f"  {len(stale)} user pair(s) indexed without markdown — "
+            f"  {len(stale)} indexed pair(s) without markdown, "
             "stale index, run `wren memory index`."
         )
 
@@ -892,10 +897,14 @@ def forget(
 
 
 def _parse_source(tags: str | None) -> str:
-    """Extract source value from a (possibly null/empty) tags string."""
+    """Source value for display/export, defaulting an untagged row to "user".
+
+    Distinct from ``store._tag_source``, which reports ``None`` for a row with
+    no ``source:`` token so that ``--source`` filters do not match it.
+    """
     from wren.memory.store import _tag_source  # noqa: PLC0415
 
-    return _tag_source(tags)
+    return _tag_source(tags) or "user"
 
 
 def _pairs_to_yaml(rows: list[dict]) -> str:

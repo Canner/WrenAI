@@ -26,11 +26,6 @@ _WREN_MEMORY_DIR = Path.home() / ".wren" / "memory"
 _SCHEMA_TABLE = "schema_items"
 _QUERY_TABLE = "query_history"
 
-# query_history sources that are not backed by knowledge/sql/*.md, so a
-# markdown sync must never forget them: seed/view are derived from the
-# manifest, legacy comes from a project's queries.yml.
-_NON_MARKDOWN_SOURCES = frozenset({"seed", "view", "legacy"})
-
 # Extra token appended (space-separated, after the `source:` token) to a
 # query_history row's tags when it is written by sync_markdown_queries's own
 # upsert. `source:user` is not proof a row is markdown-backed: `wren memory
@@ -47,12 +42,20 @@ def _esc(value: str) -> str:
     return value.replace("'", "''")
 
 
-def _tag_source(tags: str | None) -> str:
-    """Extract the ``source:`` value from a query_history tags string."""
+def _tag_source(tags: str | None) -> str | None:
+    """Extract the explicit ``source:`` value from a tags string, else ``None``.
+
+    ``None`` means the row carries no ``source:`` token at all, which is what
+    ``store_query`` writes for a `wren memory store` / MCP ``store_query`` pair,
+    whose ``tags`` hold the caller's own free-form labels (``"revenue,finance"``)
+    or nothing. Those rows must not be swept up by a ``--source user`` filter,
+    least of all by ``forget``, so this stays distinct from the ``"user"``
+    *display* default applied in ``cli._parse_source``.
+    """
     for part in (tags or "").split():
         if part.startswith("source:"):
             return part[len("source:") :]
-    return "user"
+    return None
 
 
 def _has_tag(tags: str | None, tag: str) -> bool:
