@@ -22,6 +22,13 @@ Beyond the prerequisites in [README.md](./README.md#prerequisites):
   local and gateway runtimes are not accepted. Claude is by far the better
   exercised of the two — see [Codex status](#codex-status).
 - The Wren CLI on `PATH`:
+- **The `wren-context-loader` generator, built from this repo.** Binding a user's project
+  compiles a prepared-context document first, and the generator is a Rust binary rather than an
+  npm dependency, so `pnpm install` does not supply it. Build it once with
+  `cargo build --release --manifest-path core/wren-context-loader/Cargo.toml`, or point
+  `WREN_HARNESS_CONTEXT_LOADER_BIN` at an existing build. Without either, the first user-project
+  bind fails loudly — by design, since a silent fallback would leave no way to tell which path
+  produced an IR.
 
   ```bash
   uv tool install wrenai

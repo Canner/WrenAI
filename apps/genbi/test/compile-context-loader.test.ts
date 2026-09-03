@@ -164,5 +164,5 @@ describe("compile cache key vs a generator change (project held constant)", () =
     expect(keyA?.profileHash).toBe(keyB?.profileHash);
     expect(keyA?.warbleIdentity).toBe(keyB?.warbleIdentity);
     expect(keyA?.hubDir).toBe(keyB?.hubDir);
-  });
+  }, 30_000);
 });

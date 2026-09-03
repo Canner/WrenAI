@@ -88,6 +88,13 @@ Both are committed so a profile compiles standalone for CI and dev, pinned to th
 `examples/v5-jaffle`. At run time the host regenerates the document against the user's real project
 and rewrites `project:` (see `composeUserProfile`); nothing at run time reads the committed copies.
 
+The generator's content hash is memoized per resolved path for the lifetime of the process, so a
+**running** BFF does not notice a generator rebuilt at the same path: the cache key does not move
+and a bundle compiled from the previous projection keeps being served. Restart the BFF after
+rebuilding the generator. This inherits from `warbleIdentity`, but bites harder here — Warble
+arrives pinned from npm, whereas this generator is an in-repo Rust build that is expected to be
+rebuilt during development.
+
 Regenerate them, from the repository root, in this order — the golden is compiled *from* the
 document, so a stale document silently produces a stale golden:
 
