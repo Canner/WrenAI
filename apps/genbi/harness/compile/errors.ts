@@ -44,7 +44,8 @@ export class ContextLoaderNotFoundError extends Error {
     super(
       `could not resolve the "wren-context-loader" binary:\n` +
         attempts.map((attempt) => `  - ${attempt}`).join("\n") +
-        `\nfix: build it in-repo ("cargo build --release --manifest-path core/wren-context-loader/Cargo.toml") ` +
+        `\nfix: build it in-repo, from the repository root ` +
+        `("cargo build --release --manifest-path core/wren-context-loader/Cargo.toml") ` +
         `or point WREN_HARNESS_CONTEXT_LOADER_BIN at an existing build.`,
     );
     this.name = "ContextLoaderNotFoundError";

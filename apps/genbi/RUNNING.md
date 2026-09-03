@@ -28,7 +28,8 @@ Beyond the prerequisites in [README.md](./README.md#prerequisites):
   `cargo build --release --manifest-path ../../core/wren-context-loader/Cargo.toml`, or point
   `WREN_HARNESS_CONTEXT_LOADER_BIN` at an existing build. Without either, the first user-project
   bind fails loudly — by design, since a silent fallback would leave no way to tell which path
-  produced an IR.
+  produced an IR. Restart the BFF after rebuilding the binary: its identity is memoized for the
+  process lifetime.
 
   ```bash
   uv tool install wrenai

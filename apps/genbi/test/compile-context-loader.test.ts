@@ -79,6 +79,9 @@ describe("resolveContextLoaderBinary", () => {
     }
     expect(message).toContain("could not resolve");
     expect(message).toContain("cargo build --release --manifest-path core/wren-context-loader/Cargo.toml");
+    // The command is repo-root-relative while RUNNING.md tells the reader to sit in `apps/genbi`,
+    // so the message must say which directory it means or a copy-paste from here fails.
+    expect(message).toContain("from the repository root");
   });
 });
 

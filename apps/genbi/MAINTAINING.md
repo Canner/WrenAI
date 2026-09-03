@@ -5,9 +5,10 @@ bumping its pinned Warble version. For building and testing day to day, see
 [README.md](./README.md). For the live dev loop these commands feed into, see
 [RUNNING.md](./RUNNING.md).
 
-Most commands below run from `apps/genbi`, same as the rest of the app; the
-one exception (`pnpm install` in step 2 of the bump procedure) runs at the
-workspace root, as noted inline at that step.
+Most commands below run from `apps/genbi`, same as the rest of the app. Two
+sections say otherwise inline and those declarations govern: `pnpm install` in
+step 2 of the bump procedure runs at the workspace root, and the regeneration
+commands run from the repository root.
 
 ## Versioning
 
