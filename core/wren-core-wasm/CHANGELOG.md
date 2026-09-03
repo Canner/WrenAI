@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/Canner/WrenAI/compare/wren-core-wasm-v0.4.1...wren-core-wasm-v0.4.2) (2026-09-03)
+
+
+### Bug Fixes
+
+* **bindings:** build against wren-core 0.3.2 ([#2708](https://github.com/Canner/WrenAI/issues/2708)) ([2b0543d](https://github.com/Canner/WrenAI/commit/2b0543d586d9a0d2ab23236ac8f93aaa325ea911))
+
 ## [0.4.1](https://github.com/Canner/WrenAI/compare/wren-core-wasm-v0.4.0...wren-core-wasm-v0.4.1) (2026-05-15)
 
 
