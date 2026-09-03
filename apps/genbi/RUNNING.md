@@ -82,25 +82,14 @@ the packages are absent. **To develop GenBI against an in-progress Warble build,
 pass `--warble-bin` (or `warbleBin`) explicitly**; that is tier 1 and beats
 everything.
 
-This is also how the attested live-BFF flow below identifies Warble: the
-attestation names Warble by *how it was resolved*, not by which commit built it.
-For an installed package it records the version, the `pnpm-lock.yaml` integrity
-for that version, a hash of the package's own resolution logic (`run-warble.js`,
-`binary.js`, `binary-install.js`, `package.json`), and a hash of what that logic
-extracted into the package's `node_modules/.bin_real`. For a Warble checkout it
-records the content hash of the built executable, as before.
-
-The split exists because `@warble/cli`'s `bin` is a small trampoline that's
-byte-identical across releases — hashing it alone couldn't tell 0.6.0 from
-0.9.0 — while a checkout's own binary hash is the whole story.
-
-`--warble-bin` accepts either, and a binary inside a checkout still works
-exactly as before — that is how you attest against your own in-progress Warble
-build (see the next section). What the gate defends against — either binary
-being swapped after it was attested — is caught by re-deriving the same
-identity every time the BFF boots. **Not covered**: package provenance (npm
-Sigstore), and anything fetched at runtime from outside the package, such as
-the Hub archive downloaded on first compile.
+The attested live-BFF flow below identifies Warble by *how it was resolved*, not
+by which commit built it: an installed package by its version, its
+`pnpm-lock.yaml` integrity, and hashes of its resolution logic and of what that
+logic extracted; a checkout by its binary's content hash. The two differ because
+`@warble/cli`'s `bin` is a small trampoline that is byte-identical across
+releases, so hashing it alone could not tell 0.6.0 from 0.9.0. `--warble-bin`
+accepts either. **Not covered**: package provenance, and anything fetched at
+runtime from outside the package, such as the Hub archive.
 
 Because pnpm silently accepts (and exits 0 on) an unmet peer-dependency range
 between these packages — e.g. an `@warble/codex-local` built against a
@@ -112,12 +101,14 @@ trusting a clean `pnpm install` alone:
 pnpm run check:warble-peers   # pnpm peers check — reads the lockfile, exits non-zero on a real conflict
 ```
 
-Measured, so you know what it covers: a version conflict between registry packages —
-a consumer wanting `@warble/ir-spec` `0.5.x` against an installed `0.6.0`, which is what
-a Warble IR bump looks like — is reported and exits 1. A peer satisfied by a `file:` or
-`link:` dependency is **not** checked, and passes silently. Plain `pnpm install` reports
-neither: it warns and exits 0 even on a real conflict, and `strictPeerDependencies` does
-not change that, so this separate step is the gate rather than the install itself.
+What it catches, measured: a genuine resolution conflict between registry
+packages — a consumer wanting `@warble/ir-spec` `0.5.x` against an installed
+`0.6.0`, which is what an IR bump looks like — is reported and exits 1. What it
+does **not** catch: a peer satisfied by a `file:` or `link:` dependency, and a
+peer range edited in the lockfile itself, which only
+`pnpm peers check --lockfile-only` sees. Plain `pnpm install` warns and exits 0
+even on a real conflict, and `strictPeerDependencies` does not change that; what
+catches a hand-edited `package.json` is an install with `--frozen-lockfile`.
 
 The GenBI launch gate needs more than a standalone binary: it hashes the exact
 profiles, IR files, Warble binary, and Claude Agent SDK dispatcher used by the
