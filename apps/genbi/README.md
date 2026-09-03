@@ -50,10 +50,9 @@ corepack enable
 pnpm install
 ```
 
-Installation alone does not start the UI. Both `pnpm genbi:dev` and
-`pnpm --filter @wrenai/genbi start:bff` require a launch attestation generated
-from a compatible GenBI/Warble tuple — see [RUNNING.md](./RUNNING.md) for the
-live launch flow needed for hot reload or any BFF-backed work.
+Installation alone does not start the UI. The BFF needs a workspace root and
+the Warble runtime inputs before it will serve anything — see
+[RUNNING.md](./RUNNING.md) for the local flow, hot reload included.
 
 **Every command below runs from `apps/genbi`**, not the repo root — the
 root only forwards `genbi:dev`, `genbi:build` and `genbi:test`, so `pnpm build`
@@ -83,7 +82,7 @@ exposes only the passthroughs `pnpm genbi:build`, `pnpm genbi:test` and
 ```bash
 cd apps/genbi
 pnpm build      # tsc -b (frontend typecheck) && vite build (→ dist/) && tsc -p tsconfig.server.json (server + harness → dist-server/)
-pnpm start:bff  # requires WREN_GENBI_LAUNCH_ATTESTATION and the verified BFF env — see RUNNING.md
+pnpm start:bff  # requires the BFF runtime env — see RUNNING.md
 pnpm preview    # serve the frontend production build
 ```
 

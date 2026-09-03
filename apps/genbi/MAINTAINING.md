@@ -53,11 +53,12 @@ bump after it):
    mismatch that plain `pnpm install` accepts silently; it does not check
    `file:`/`link:`-satisfied peers, so it is only meaningful against the
    registry-pinned dependency graph described here.
-5. Regenerate the launch attestation (`pnpm run verify:launch`, see
-   [Generate the launch attestation](./RUNNING.md#generate-the-launch-attestation))
-   against the newly-pinned `@warble/cli` and `@warble/claude-agent-sdk`
-   binaries, so the attestation actually reflects the new pin rather than a
-   stale one left over from before the bump.
+5. Run the contract probe (`pnpm run check:contracts`, see
+   [Verify the tuple](./RUNNING.md#verify-the-tuple)) against the newly-pinned
+   `@warble/cli` and `@warble/claude-agent-sdk` binaries. This is the step that
+   catches a new Warble whose dispatch contracts or IR compatibility window no
+   longer match this package's committed profiles — a mismatch the version bump
+   itself will not surface.
 6. Run `pnpm typecheck`, `pnpm test`, and `pnpm build` to confirm nothing in
    genbi's own code assumed the old Warble contract.
 7. Commit the `package.json` pin bump, the lockfile, and the corrected

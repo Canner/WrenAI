@@ -134,11 +134,10 @@ The attested flow passes absolute paths and deliberately does not rely on
 claude --version
 ```
 
-### Generate the launch attestation
+### Verify the tuple
 
-If you skipped the checkout section above and are attesting the pinned
-packages instead, resolve their installed `bin` paths from `apps/genbi`
-(after `pnpm install`) rather than guessing at `node_modules` layout:
+Resolve the Warble binary and dispatcher you intend to run against. From the
+installed packages, ask node rather than guessing at the `node_modules` layout:
 
 ```bash
 cd /absolute/path/to/WrenAI/apps/genbi
@@ -147,8 +146,7 @@ AGENT_SDK_BIN="$(node -p "require('node:path').join(require('node:path').dirname
 PROFILES_ROOT="$PWD/profiles"
 ```
 
-Otherwise, return to this repository's `apps/genbi` directory and identify the
-exact Warble checkout you just built:
+Or from a Warble checkout you built yourself:
 
 ```bash
 cd /absolute/path/to/WrenAI/apps/genbi
@@ -158,34 +156,29 @@ AGENT_SDK_BIN="$WARBLE_ROOT/dispatcher/claude-agent-sdk/dist/cli.js"
 PROFILES_ROOT="$PWD/profiles"
 ```
 
-The `warble` binary and its dispatcher come from either the installed package
-or that Warble checkout; the GenBI profiles and their committed IRs are always
-this package's own `profiles/` tree, which is what the launch gate defaults to
-and attests under `genbi`.
+The binary and dispatcher come from either place; the profiles and their
+committed IRs are always this package's own `profiles/` tree.
 
-The BFF has a single boot mode: bootstrap, against a workspace root where
-Setup may create projects. An existing Wren project is adopted afterward,
-through the running app — there is no separate boot-time mode or flag for it.
+The BFF has a single boot mode: bootstrap, against a workspace root where Setup
+may create projects. An existing Wren project is adopted afterward, through the
+running app — there is no boot-time flag for it.
 
 ```bash
-pnpm run verify:launch -- \
+pnpm run check:contracts -- \
   --workspace-root /absolute/path/to/fresh-bootstrap-workspace \
   --runtime subscription:claude \
   --warble-bin "$WARBLE_BIN" \
   --agent-sdk-bin "$AGENT_SDK_BIN"
 ```
 
-The command rebuilds `dist-server`, validates the runtime contracts without a
-model call, and writes an attestation bound to both clean worktrees. Export it
-in every terminal that starts the BFF or UI:
+This rebuilds `dist-server` and runs the real Warble against the profiles,
+validating the dispatch contracts, tier bindings and IR compatibility of the
+tuple you just named — without a model call. It is the check that catches a
+Warble whose contracts have moved away from this package's committed profiles.
 
-```bash
-export WREN_GENBI_LAUNCH_ATTESTATION="$PWD/dist-server/local-launch-attestation.json"
-```
-
-If the command reports `launch gate BLOCKED`, fix the named input and rerun it.
-Do not reuse the attestation after changing either checkout or rebuilding a
-verified runtime input.
+It reports what it probed and exits non-zero on a mismatch. Nothing is written
+and nothing is exported: run it when you change one of its inputs, the way you
+would run tests.
 
 ## Running the BFF
 
@@ -211,11 +204,10 @@ pnpm run start:bff
 
 The BFF listens on `:4787` by default (`PORT` overrides it).
 
-In a second terminal, return to the same `apps/genbi` worktree, export the same
-attestation, and point Vite at the BFF:
+In a second terminal, return to the same `apps/genbi` worktree and point Vite at
+the BFF:
 
 ```bash
-export WREN_GENBI_LAUNCH_ATTESTATION="$PWD/dist-server/local-launch-attestation.json"
 VITE_BFF_URL=http://localhost:4787 pnpm dev
 ```
 
@@ -241,10 +233,10 @@ curl -s http://localhost:4787/api/context/overview
 
 An adopted, built project returns its name and models.
 
-Finally, rerun the same launch-gate command with the live endpoints appended:
+Finally, rerun the same check with the live endpoints appended:
 
 ```bash
-pnpm run verify:launch -- \
+pnpm run check:contracts -- \
   --workspace-root /absolute/path/to/fresh-bootstrap-workspace \
   --runtime subscription:claude \
   --warble-bin "$WARBLE_BIN" \
@@ -257,47 +249,20 @@ the ones selected above.
 
 ## Codex status
 
-The codebase contains Codex Setup and Ask runtime support, but the mandatory
-local launch gate currently accepts only `subscription:claude` and an explicit
-Claude Agent SDK binary. Do not substitute `subscription:codex`,
-`warble-codex-local`, or a dedicated `CODEX_HOME` into the commands above: that
-tuple cannot currently produce a valid launch attestation. Codex local-launch
-instructions should be added when the gate supports and verifies that tuple.
+`check:contracts` accepts `--runtime subscription:codex` as well as
+`subscription:claude`, so the tuple can be probed either way. The Codex executable is
+resolved from `PATH`, the same as `claude`; there is no pinned path for it.
 
-### Codex in the published package
+### Codex is selectable before it is known to work
 
-The paragraph above describes the local development launch gate. The installed
-package (`npx @wrenai/genbi` or a global/`npm i -g` install) behaves
-differently, worth stating precisely since the two are easy to conflate.
+The Setup wizard (`src/setup/RuntimeStepCard.tsx`) offers "Codex CLI" as an
+ordinary runtime-provider option, and `useSetupStore.ts` does not check
+native-session readiness before letting someone select and save that binding.
+So a user can walk through Setup, choose Codex, and save it — with the failure
+surfacing later, when a native Codex session actually starts. That attempt
+throws a typed `InteractiveLaunchError`, which `server/app.ts` turns into an
+ordinary `409` JSON response rather than a crash or a hang.
 
-`server/bin.ts` starts the BFF without a launch attestation whenever
-`WREN_GENBI_LAUNCH_ATTESTATION` is not set — which is always, for an installed
-package, since nothing sets that variable outside the local dev launch-gate
-flow. In that mode `readLaunchAttestation()` (which otherwise throws if the
-attestation is missing, unparseable, or hash-mismatched) is never called, and
-`server/bin.ts` writes a one-line stderr notice instead: the build is
-unverified against the Warble binary it is running with, relying instead on
-its pinned `@warble/*` version plus the npm installer's own checksum check of
-the downloaded Warble executable.
-
-One concrete effect: the four Codex identity fields normally read out of the
-attestation (`codexBinSha256`, `codexSource`, `codexSourceClosureSha256`,
-`codexVersion`) stay `undefined`. This does not crash the server —
-`NativeSessionService`'s readiness computation treats a missing pinned Codex
-executable as cleanly unavailable, so a user asking "is Codex ready?" gets a
-normal "unavailable" answer, not an error.
-
-What is *not* currently gated is selection: the Setup wizard
-(`src/setup/RuntimeStepCard.tsx`) offers "Codex CLI" as an ordinary
-runtime-provider option, and `useSetupStore.ts` does not check native-session
-readiness before letting someone select and save that binding. So a user of
-the installed package can walk through Setup, choose Codex, and save it — the
-failure only surfaces later, when actually starting a native Codex session.
-That attempt throws a typed `InteractiveLaunchError`, which `server/app.ts`
-catches and turns into an ordinary `409 Bad Request` JSON error response, not
-a crash or a hang.
-
-Net effect: Codex is selectable but non-functional in the published package,
-and a user only finds out when they try to use it, not when they configure
-it. This is a documentation and (potentially, later) a Setup-UI polish gap,
-not a crash, data-loss, or security issue.
+Codex is also considerably less exercised than Claude here: the end-to-end path
+has not been run against an installed package. Treat it as unverified rather
+than as known-broken.
