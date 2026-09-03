@@ -1,14 +1,9 @@
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { verifyBffLocalRuntime } from "../server/launch-attestation.js";
-import { createApp } from "../server/app.js";
-import { Store } from "../server/db.js";
-import { readLocalLaunchAttestationPublic } from "../vite.config.js";
 import { HARNESS_SUPPORT } from "../harness/bundle/version.js";
 // @ts-expect-error The operator-facing verifier intentionally stays plain Node ESM.
 import { verifyLive, verifyLocalLaunch } from "../scripts/verify-local-launch.mjs";
@@ -16,40 +11,6 @@ import { verifyLive, verifyLocalLaunch } from "../scripts/verify-local-launch.mj
 const dirs: string[] = [];
 const packageRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const verifier = path.join(packageRoot, "scripts", "verify-local-launch.mjs");
-const uiStarter = path.join(packageRoot, "scripts", "start-ui-gated.mjs");
-const bffVerifier = path.join(packageRoot, "scripts", "verify-bff-attestation.mjs");
-const bffStarter = path.join(packageRoot, "scripts", "start-bff-gated.mjs");
-const profiles = path.join(packageRoot, "profiles");
-const digest = "a".repeat(64);
-
-function attestationFixture() {
-  const publicValue = {
-    version: "genbi-launch-attestation/v1" as const,
-    mode: "bootstrap" as const,
-    genbi: { rootDigest: digest, commit: "abc123", treeIdentity: digest, runtimeInputs: { profileTreeSha256: digest, setupIrSha256: digest, enrichIrSha256: digest, analysisIrSha256: digest } },
-    warble: { resolution: "checkout" as const, binarySha256: digest },
-    runtime: { mode: "subscription" as const, provider: "claude" as const, dispatcher: "claude-agent-sdk" as const, agentSdkSha256: digest },
-    bff: { entrySha256: digest, closureSha256: digest },
-    ui: { rootDigest: digest, commit: "abc123", treeIdentity: digest },
-  };
-  return { publicValue, fullValue: { ...publicValue, local: { genbiRoot: "/private/genbi", warbleBin: "/private/warble/bin", agentSdkBin: "/private/warble/agent-sdk", profile: "/private/warble/profile", setupIr: "/private/warble/setup.json", enrichIr: "/private/warble/enrich.json", analysisIr: "/private/warble/analysis.json", modeInput: "/private/workspace" } } };
-}
-
-function codexAttestationFixture() {
-  const { publicValue, fullValue } = attestationFixture();
-  const runtime = {
-    mode: "subscription" as const,
-    provider: "codex" as const,
-    dispatcher: "codex-local" as const,
-    codexLocalSha256: digest,
-    source: "npm:@openai/codex" as const,
-    executablePathDigest: digest,
-    sourceClosureSha256: digest,
-    version: "0.146.0",
-    executableSha256: digest,
-  };
-  return { publicValue: { ...publicValue, runtime }, fullValue: { ...fullValue, runtime } };
-}
 
 const runtimeBindingRequiredReason = 'native sessions require a saved Runtime & authentication binding';
 

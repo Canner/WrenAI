@@ -6,7 +6,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Store } from "../server/db.js";
 import { createApp } from "../server/app.js";
-import { NATIVE_SESSION_IDLE_TTL_MS, NATIVE_SESSION_INITIAL_ATTACHMENT_GRACE_MS, NATIVE_SESSION_POST_CLAIM_DETACH_GRACE_MS, NATIVE_SETUP_BOOTSTRAP_ROOT_ENV_VAR, NativeSessionService, nativeSessionLaunchFailure, nativeSessionLifecycle, readNativeLaunchSpec, resolvePinnedCodexExecutable } from "../server/native-sessions.js";
+import { NATIVE_SESSION_IDLE_TTL_MS, NATIVE_SESSION_INITIAL_ATTACHMENT_GRACE_MS, NATIVE_SESSION_POST_CLAIM_DETACH_GRACE_MS, NATIVE_SETUP_BOOTSTRAP_ROOT_ENV_VAR, NativeSessionService, nativeSessionLaunchFailure, nativeSessionLifecycle, readNativeLaunchSpec } from "../server/native-sessions.js";
 import { createNativeSessionWorkspace, initializeNativeSessionStateBase } from "../server/native-session-workspace.js";
 import { sealNativeClaudeResumeHandle, sealNativeResumeHandle, unsealNativeClaudeResumeHandle, unsealNativeResumeHandle } from "../server/native-session-resume.js";
 import type { NativeSessionServiceOptions } from "../server/native-sessions.js";
@@ -163,58 +163,9 @@ if (purpose === "context_enrichment" && !String(scope.scope_id).startsWith("pref
   return executable;
 }
 
-function fakeCodexAttestation(): Pick<NativeSessionServiceOptions, "codexBin" | "codexBinSha256" | "codexSource" | "codexSourceClosureSha256" | "codexVersion"> {
-  const root = mkdtempSync(path.join(tmpdir(), "genbi-native-codex-source-")); dirs.push(root);
-  const binDirectory = path.join(root, "bin"); mkdirSync(binDirectory);
-  const codexBin = path.join(binDirectory, "codex");
-  writeFileSync(codexBin, "#!/bin/sh\necho codex-cli 0.146.0\n"); chmodSync(codexBin, 0o700);
-  writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "@openai/codex", version: "0.146.0" }));
-  const closure = createHash("sha256");
-  const visit = (directory: string): void => {
-    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const candidate = path.join(directory, entry.name);
-      if (entry.isDirectory()) visit(candidate);
-      else if (entry.isFile()) { closure.update(path.relative(root, candidate)); closure.update("\0"); closure.update(readFileSync(candidate)); }
-    }
-  };
-  visit(root);
-  return {
-    codexBin,
-    codexBinSha256: createHash("sha256").update(readFileSync(codexBin)).digest("hex"),
-    codexSource: "npm:@openai/codex",
-    codexSourceClosureSha256: closure.digest("hex"),
-    codexVersion: "0.146.0",
-  };
-}
 afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
 
 describe("native session persistence", () => {
-  it("re-hashes the host-attested Codex executable and rejects same-path substitution", () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "genbi-codex-pin-")); dirs.push(dir);
-    const bin = path.join(dir, "codex"); writeFileSync(bin, "#!/bin/sh\necho codex-cli 0.146.0\n"); chmodSync(bin, 0o700);
-    const digest = createHash("sha256").update(readFileSync(bin)).digest("hex");
-    expect(resolvePinnedCodexExecutable(bin, digest)).toBe(realpathSync(bin));
-    writeFileSync(bin, "#!/bin/sh\necho substituted\n"); chmodSync(bin, 0o700);
-    expect(() => resolvePinnedCodexExecutable(bin, digest)).toThrow("attested Codex executable is unavailable or has changed");
-    expect(() => resolvePinnedCodexExecutable("codex", digest)).toThrow("attested Codex executable is unavailable or has changed");
-  });
-
-  it("re-hashes the npm Codex source closure immediately before native launch", () => {
-    const root = mkdtempSync(path.join(tmpdir(), "genbi-codex-npm-pin-")); dirs.push(root);
-    const binDirectory = path.join(root, "bin"); mkdirSync(binDirectory);
-    const bin = path.join(binDirectory, "codex"); writeFileSync(bin, "#!/bin/sh\necho codex-cli 0.146.0\n"); chmodSync(bin, 0o700);
-    const packageFile = path.join(root, "package.json"); writeFileSync(packageFile, JSON.stringify({ name: "@openai/codex", version: "0.146.0" }));
-    const executableSha256 = createHash("sha256").update(readFileSync(bin)).digest("hex");
-    const closure = createHash("sha256");
-    for (const file of [bin, packageFile]) {
-      closure.update(path.relative(root, file)); closure.update("\0"); closure.update(readFileSync(file));
-    }
-    const sourcePin = { source: "npm:@openai/codex" as const, closureSha256: closure.digest("hex"), version: "0.146.0" };
-    expect(resolvePinnedCodexExecutable(bin, executableSha256, sourcePin)).toBe(realpathSync(bin));
-    writeFileSync(packageFile, JSON.stringify({ name: "@openai/codex", version: "0.146.0", substituted: true }));
-    expect(() => resolvePinnedCodexExecutable(bin, executableSha256, sourcePin)).toThrow("attested Codex executable is unavailable or has changed");
-  });
-
   it.each([
     ["setup", "claude"], ["setup", "codex"],
     ["analysis", "claude"], ["analysis", "codex"],
@@ -1482,12 +1433,10 @@ describe("native session persistence", () => {
     const successArtifacts = new NativeArtifactService({ store: successStore, artifactsRoot: path.join(success.dir, "artifacts"), expectedMcpUrl: NATIVE_MCP_URL, mcpUrl: NATIVE_MCP_URL, getBinding: () => success.binding });
     const issued = vi.spyOn(successArtifacts, "issue");
     const idle: PtyFactory = { spawn: () => ({ onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} }) };
-    const codexAttestation = vendor === "codex" ? fakeCodexAttestation() : {};
     const successService = new NativeSessionService({
       store: successStore, terminalManager: async () => new InteractiveTerminalManager(idle), getBinding: () => success.binding,
       workspaceRoot: undefined, materializationState: successState, irPaths: { analysis: path.join(success.dir, "analysis.json"), setup: undefined, context_enrichment: undefined },
       warbleBin: fakeV4Producer(success.dir), artifactService: successArtifacts,
-      ...codexAttestation,
       prepareCodexWrenHome: ({ cwd }) => {
         const home = path.join(cwd, ".wren");
         mkdirSync(home);

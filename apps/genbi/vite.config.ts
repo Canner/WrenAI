@@ -3,13 +3,6 @@ import { defineConfig, loadEnv } from 'vite';
 import { configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
-import { existsSync, readFileSync } from 'node:fs';
-import { projectPublicLaunchAttestation } from './launch-attestation-public.js';
-
-/** Reads a full local file but returns only its strict, endpoint-safe projection. */
-export function readLocalLaunchAttestationPublic(file: string) {
-  return projectPublicLaunchAttestation(JSON.parse(readFileSync(file, 'utf8')));
-}
 
 /**
  * The dev proxy's target, from either a real environment variable or an
@@ -28,30 +21,13 @@ function bffTarget(mode: string): string | undefined {
   return target !== undefined && target.trim().length > 0 ? target : undefined;
 }
 
-/** A local-only endpoint that proves which gated Vite process owns this port. */
-function localLaunchAttestationPlugin() {
-  return {
-    name: 'genbi-local-launch-attestation',
-    configureServer(server: { middlewares: { use: (path: string, handler: (request: unknown, response: { statusCode: number; setHeader: (name: string, value: string) => void; end: (value: string) => void }) => void) => void } }) {
-      server.middlewares.use('/_genbi/local-launch-attestation', (_request, response) => {
-        const file = process.env.WREN_GENBI_LAUNCH_ATTESTATION;
-        if (!file || !existsSync(file)) { response.statusCode = 503; response.end('{"error":"local launch attestation is not configured"}'); return; }
-        try {
-          response.setHeader('content-type', 'application/json');
-          response.end(JSON.stringify(readLocalLaunchAttestationPublic(file)));
-        } catch { response.statusCode = 503; response.end('{"error":"local launch attestation is unavailable"}'); }
-      });
-    },
-  };
-}
-
 // genbi_app is a decoupled SPA: pure client render, no SSR.
 // It talks to the harness/BFF only over HTTP/SSE, and builds to static assets
 // so a future desktop shell (Tauri preferred) or PWA stays a thin increment.
 export default defineConfig(({ mode }) => {
   const target = bffTarget(mode);
   return {
-  plugins: [react(), localLaunchAttestationPlugin()],
+  plugins: [react()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

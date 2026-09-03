@@ -30,7 +30,6 @@ import type { InteractiveTarget, InteractiveTargetReadiness, InteractiveTerminal
 import type { NativeSessionService } from "./native-sessions.js";
 import type { NativeArtifactService } from "./native-artifacts.js";
 import type { NativePurpose } from "./native-dispatch-registry.js";
-import type { LaunchAttestationPublic } from "./launch-attestation.js";
 import { assertRuntimeSettingsDispatchable, materializeRuntimeRouteOptions } from "./runtime-binding.js";
 import { classifyClarify } from "./clarify.js";
 import { classifyIntent } from "./route-intent.js";
@@ -92,8 +91,6 @@ export class ArtifactNotFoundError extends Error {
 
 export interface TurnDeps {
   readonly store: Store;
-  /** Local-only identity supplied by the gated startup wrapper. */
-  readonly launchAttestation?: LaunchAttestationPublic;
   readonly route: (options: RouteOptions) => Promise<RouteResult>;
   /** A native vendor TUI host, deliberately independent from Ask/SSE. */
   readonly startInteractiveTerminal?: (input: { readonly target: InteractiveTarget; readonly binding: EnrichmentBinding }) => Promise<InteractiveTerminalSession>;

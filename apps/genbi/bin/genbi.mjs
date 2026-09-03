@@ -4,12 +4,12 @@
  *
  * This is a thin trampoline: it locates the compiled BFF entry point
  * (`dist-server/server/bin.js`) relative to its own installed location and
- * hands off to it. All real startup logic — port binding, launch
- * attestation, static-SPA wiring — lives in `server/bin.ts`; this wrapper
- * only exists to (a) resolve the port a user should open before the BFF's
- * own "listening" message arrives, and (b) fail with a short message
- * instead of a raw "Cannot find module" stack trace if the installed
- * package is missing its build output.
+ * hands off to it. All real startup logic — port binding, static-SPA
+ * wiring — lives in `server/bin.ts`; this wrapper only exists to (a)
+ * resolve the port a user should open before the BFF's own "listening"
+ * message arrives, and (b) fail with a short message instead of a raw
+ * "Cannot find module" stack trace if the installed package is missing its
+ * build output.
  */
 import { existsSync } from 'node:fs';
 import path from 'node:path';

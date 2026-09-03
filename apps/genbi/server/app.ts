@@ -33,7 +33,6 @@ import { sameNativeRuntimeBinding } from "./native-dispatch-registry.js";
 import { detectAdapterEnv } from "./env-detect.js";
 import { redactPublicSetupText, redactSetupText, sanitizePublicSetupWorklog } from "./fold.js";
 import { assertHarnessBundlePurpose, buildHarnessDto } from "./harness.js";
-import { projectPublicLaunchAttestation } from "../launch-attestation-public.js";
 import { requiredInProcessCredentialEnvVars, RuntimeBindingError, runtimeSettingsCorrection, validateRuntimeTierBindings } from "./runtime-binding.js";
 import { computeImpact, EntityKeyNotFoundError } from "./impact.js";
 import {
@@ -762,13 +761,6 @@ export function createApp(deps: TurnDeps) {
   const app = new Hono();
   const nativeResumeAvailability = (session: Parameters<NonNullable<TurnDeps["nativeSessions"]>["resumeAvailability"]>[0]): NativeSessionResumeAvailability =>
     typeof deps.nativeSessions?.resumeAvailability === "function" ? deps.nativeSessions.resumeAvailability(session) : { available: false, cause: "no_resume_handle" };
-  // This is intentionally a local launch-gate endpoint, not product API
-  // metadata: it exposes only content identities, never local paths or secrets.
-  app.get("/api/local-launch-attestation", (c) => {
-    if (!deps.launchAttestation) return c.json({ error: "local launch attestation is not configured" }, 503);
-    try { return c.json(projectPublicLaunchAttestation(deps.launchAttestation)); }
-    catch { return c.json({ error: "local launch attestation is invalid" }, 503); }
-  });
 
   // ---------------------------------------------------------------------
   // Ask page: sessions + turns

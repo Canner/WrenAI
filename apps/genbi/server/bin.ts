@@ -148,7 +148,6 @@ import { invalidateBundleAgentIdsCache } from "./turn.js";
 import type { TurnDeps } from "./turn.js";
 import { createSetWrenHomeForSetupMode } from "./wren-home.js";
 import { createSubscriptionModelCatalog } from "./subscription-model-catalog.js";
-import { readLaunchAttestation, verifyBffLocalRuntime, type LaunchAttestationPublic } from "./launch-attestation.js";
 
 function envFlags(): CliFlags {
   const env = process.env;
@@ -198,19 +197,6 @@ async function main(): Promise<void> {
   const packageRoot = path.basename(path.dirname(moduleDirectory)) === "dist-server"
     ? path.resolve(moduleDirectory, "../..")
     : path.resolve(moduleDirectory, "..");
-  let launchAttestation: LaunchAttestationPublic | undefined;
-  if (process.env["WREN_GENBI_LAUNCH_ATTESTATION"]) {
-    launchAttestation = readLaunchAttestation();
-    verifyBffLocalRuntime(packageRoot);
-  } else {
-    process.stderr.write(
-      "notice: starting without a local launch attestation (WREN_GENBI_LAUNCH_ATTESTATION is not set) — " +
-        "this build's UI, BFF, and Warble binary are unverified against each other; the published " +
-        "package instead relies on its pinned @warble/* version and the npm installer's checksum " +
-        "check of the downloaded Warble executable.\n",
-    );
-  }
-
   // Opt-in same-process SPA serving: only wired when a build actually
   // exists next to this package (`vite build`'s `dist/index.html`). A dev
   // boot (no `dist/`) leaves `staticDir` unset, so `server/app.ts` never
@@ -552,15 +538,6 @@ async function main(): Promise<void> {
       return compiled.irPath;
     },
     warbleBin: flags.warbleBin ?? "warble",
-    ...(launchAttestation?.runtime.provider === "codex"
-      ? {
-          codexBin: process.env["WREN_HARNESS_CODEX_BIN"]!,
-          codexBinSha256: launchAttestation.runtime.executableSha256,
-          codexSource: launchAttestation.runtime.source,
-          codexSourceClosureSha256: launchAttestation.runtime.sourceClosureSha256,
-          codexVersion: launchAttestation.runtime.version,
-        }
-      : {}),
     ...(process.env["WREN_HARNESS_WREN_SHIM"] !== undefined ? { wrenShim: process.env["WREN_HARNESS_WREN_SHIM"] } : {}),
     terminalHostAvailable: async () => {
       try { await loadPty(); return true; } catch { return false; }
@@ -632,7 +609,6 @@ async function main(): Promise<void> {
     },
     workspaceRoot,
     setWrenHomeForSetupMode,
-    ...(launchAttestation !== undefined ? { launchAttestation } : {}),
     ...(staticDir !== undefined ? { staticDir } : {}),
   };
   const app = createApp(deps);
