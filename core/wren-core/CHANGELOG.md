@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.3.2...wren-semantic-core-v0.4.0) (2026-09-03)
+
+
+### Features
+
+* **core:** support ordered cube queries ([#2677](https://github.com/Canner/WrenAI/issues/2677)) ([8d23753](https://github.com/Canner/WrenAI/commit/8d23753e1e4bd2198064d8c55ddca9d688aec731))
+
+
+### Bug Fixes
+
+* **core:** reject collapsed relationship joins ([#2697](https://github.com/Canner/WrenAI/issues/2697)) ([4000bea](https://github.com/Canner/WrenAI/commit/4000bea0536615a3c950c1f26cc65a55bb13cee4))
+
 ## [0.3.2](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.3.1...wren-semantic-core-v0.3.2) (2026-08-31)
 
 
