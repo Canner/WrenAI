@@ -161,6 +161,14 @@ def resolve_model_name(
     case-sensitively; an unquoted identifier prefers an exact case match but
     falls back to a case-insensitive scan. Returns ``None`` if no model
     matches.
+
+    When an unquoted reference matches more than one model case-insensitively
+    (e.g. both ``Users`` and ``users`` are defined), the one picked is the
+    lexicographically smallest rather than whichever ``model_names`` happens
+    to iterate first: for a ``set`` of strings that iteration order is not
+    the insertion order, it depends on string hashing and varies across
+    processes under ``PYTHONHASHSEED``, so the same query could silently
+    bind a different model on every run.
     """
     model_set = (
         model_names if isinstance(model_names, (set, frozenset)) else set(model_names)
@@ -170,10 +178,14 @@ def resolve_model_name(
     if quoted:
         return None
     name_lower = name.lower()
+    # Single pass, no intermediate list: a tie only needs `<` against the
+    # best candidate seen so far, same cost as the exact-match scan this
+    # replaces.
+    best: str | None = None
     for candidate in model_set:
-        if candidate.lower() == name_lower:
-            return candidate
-    return None
+        if candidate.lower() == name_lower and (best is None or candidate < best):
+            best = candidate
+    return best
 
 
 # Statement shapes that are read-only queries. ``SetOperation`` is the base class
