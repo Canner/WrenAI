@@ -96,16 +96,4 @@ describe("resolveDispatchIr wiring", () => {
     expect(bin).toMatch(/compileRawProfile\(\{ profileSource/);
     expect((bin.match(/new NativeSessionService\(/g) ?? []).length).toBe(1);
   });
-
-  it("forces direct compiled BFF execution through the same strict local runtime verifier whenever an attestation is configured", () => {
-    // A published package has no attestation to check and must still start (an
-    // installed tarball can't drift internally — see decision-89), so this is no
-    // longer unconditional. But whenever WREN_GENBI_LAUNCH_ATTESTATION *is* set,
-    // direct execution of bin.js must still go through the exact same strict
-    // check as the gated wrapper scripts — there is no separate, looser path.
-    const bin = readFileSync(new URL("../server/bin.ts", import.meta.url), "utf-8");
-    expect(bin).toMatch(
-      /if \(process\.env\["WREN_GENBI_LAUNCH_ATTESTATION"\]\) \{\s*launchAttestation = readLaunchAttestation\(\);\s*verifyBffLocalRuntime\(packageRoot\);/,
-    );
-  });
 });

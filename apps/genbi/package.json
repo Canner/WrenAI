@@ -68,8 +68,6 @@
     "dist-server/server",
     "dist-server/harness",
     "dist-server/providers",
-    "dist-server/launch-attestation-public.js",
-    "dist-server/launch-attestation-public.d.ts",
     "profiles"
   ],
   "publishConfig": {

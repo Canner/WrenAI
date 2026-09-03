@@ -1,4 +1,5 @@
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import os from "node:os";
@@ -55,7 +56,6 @@ function hashTree(root: string): string {
   const visit = (directory: string) => {
     for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const candidate = path.join(directory, entry.name); const relative = path.relative(root, candidate);
-      if (relative === "local-launch-attestation.json") continue;
       if (entry.isDirectory()) visit(candidate); else if (entry.isFile()) { digest.update(relative); digest.update("\0"); digest.update(readFileSync(candidate)); }
     }
   };
@@ -216,67 +216,8 @@ function codexGateOptions(options: Record<string, unknown>, value: ReturnType<ty
 afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
 
 describe("local GenBI launch gate", () => {
-  it("projects a closed Codex runtime attestation without local source paths", () => {
-    const { publicValue, fullValue } = codexAttestationFixture();
-    const file = path.join(mkdtempSync(path.join(os.tmpdir(), "genbi-public-codex-attestation-")), "attestation.json"); dirs.push(path.dirname(file)); writeFileSync(file, JSON.stringify(fullValue));
-    expect(readLocalLaunchAttestationPublic(file)).toEqual(publicValue);
-    expect(JSON.stringify(readLocalLaunchAttestationPublic(file))).not.toContain("/private/");
-    for (const runtime of [
-      { ...publicValue.runtime, provider: "claude" },
-      { ...publicValue.runtime, version: "latest" },
-      { ...publicValue.runtime, executableSha256: "not-a-digest" },
-      { ...publicValue.runtime, extra: "field" },
-    ]) {
-      writeFileSync(file, JSON.stringify({ ...fullValue, runtime }));
-      expect(() => readLocalLaunchAttestationPublic(file)).toThrow("public shape is invalid");
-    }
-  });
-
-  it("projects a closed path-free attestation through BFF and Vite readers", async () => {
-    const { publicValue, fullValue } = attestationFixture();
-    const app = createApp({ store: new Store(":memory:"), baseRouteOptions: { authChoice: { mode: "api-key", adapter: "mock" }, profileSource: "fixture", userProject: "/fixture/project" }, route: async () => ({ backend: "agent", warnings: [], kind: "answer", envelope: { blocks: [], summary: "ok" }, trace: { steps: [] } }), launchAttestation: fullValue as never });
-    const bff = await app.request("/api/local-launch-attestation");
-    expect(bff.status).toBe(200);
-    expect(await bff.json()).toEqual(publicValue);
-    const file = path.join(mkdtempSync(path.join(os.tmpdir(), "genbi-public-attestation-")), "attestation.json"); dirs.push(path.dirname(file)); writeFileSync(file, JSON.stringify(fullValue));
-    expect(readLocalLaunchAttestationPublic(file)).toEqual(publicValue);
-    expect(JSON.stringify(readLocalLaunchAttestationPublic(file))).not.toContain("/private/");
-  });
-
-  it("fails closed on an extra attestation field instead of exposing it from BFF or Vite", async () => {
-    const { publicValue, fullValue } = attestationFixture();
-    const malformed = { ...fullValue, extra: "/private/extra" };
-    const app = createApp({ store: new Store(":memory:"), baseRouteOptions: { authChoice: { mode: "api-key", adapter: "mock" }, profileSource: "fixture", userProject: "/fixture/project" }, route: async () => ({ backend: "agent", warnings: [], kind: "answer", envelope: { blocks: [], summary: "ok" }, trace: { steps: [] } }), launchAttestation: malformed as never });
-    const bff = await app.request("/api/local-launch-attestation");
-    expect(bff.status).toBe(503);
-    expect(JSON.stringify(await bff.json())).not.toContain("/private/");
-    const file = path.join(mkdtempSync(path.join(os.tmpdir(), "genbi-public-attestation-")), "attestation.json"); dirs.push(path.dirname(file)); writeFileSync(file, JSON.stringify(malformed));
-    expect(() => readLocalLaunchAttestationPublic(file)).toThrow("public shape is invalid");
-    expect(publicValue).not.toHaveProperty("local");
-  });
-
-  it("verifyLive accepts only the truthful fresh bootstrap Runtime tuple", async () => {
-    const { publicValue, fullValue } = attestationFixture();
-    const readiness = readinessFixture();
-    const bff = await listen((url) => url === "/api/local-launch-attestation" ? publicValue : readiness);
-    const ui = await listen((url) => url === "/_genbi/local-launch-attestation" ? publicValue : '<div id="root"></div>');
-    try {
-      await expect(verifyLive({ mode: "bootstrap", bffUrl: bff.url, uiUrl: ui.url }, { attestation: { public: publicValue } })).resolves.toMatchObject({ requiredPurposes: [] });
-    } finally { await bff.close(); await ui.close(); }
-    const leakedBff = await listen((url) => url === "/api/local-launch-attestation" ? fullValue : readiness);
-    const leakedUi = await listen((url) => url === "/_genbi/local-launch-attestation" ? fullValue : '<div id="root"></div>');
-    try {
-      await expect(verifyLive({ mode: "bootstrap", bffUrl: leakedBff.url, uiUrl: leakedUi.url }, { attestation: { public: publicValue } })).rejects.toThrow("selected public tuple");
-    } finally { await leakedBff.close(); await leakedUi.close(); }
-    const publicBff = await listen((url) => url === "/api/local-launch-attestation" ? publicValue : readiness);
-    const uiOnlyLeak = await listen((url) => url === "/_genbi/local-launch-attestation" ? fullValue : '<div id="root"></div>');
-    try {
-      await expect(verifyLive({ mode: "bootstrap", bffUrl: publicBff.url, uiUrl: uiOnlyLeak.url }, { attestation: { public: publicValue } })).rejects.toThrow("selected public tuple");
-    } finally { await publicBff.close(); await uiOnlyLeak.close(); }
-  });
 
   it("rejects configured, malformed, wrong-reason, and producer-incompatible bootstrap readiness", async () => {
-    const { publicValue } = attestationFixture();
     const baseline = readinessFixture();
     const cases: Array<[unknown, string]> = [
       [readinessFixture(true), 'unconfigured Runtime'],
@@ -288,21 +229,13 @@ describe("local GenBI launch gate", () => {
       [{ ...baseline, purposes: { ...baseline.purposes, analysis: { ...baseline.purposes.analysis, producer: { available: false, category: 'native_session_producer_incompatible' } } } }, 'producer is incompatible'],
     ];
     for (const [readiness, message] of cases) {
-      const bff = await listen((url) => url === '/api/local-launch-attestation' ? publicValue : readiness);
+      const bff = await listen(() => readiness);
       try {
-        await expect(verifyLive({ mode: 'bootstrap', bffUrl: bff.url, uiUrl: 'http://127.0.0.1:9' }, { attestation: { public: publicValue } })).rejects.toThrow(message);
+        await expect(verifyLive({ mode: 'bootstrap', bffUrl: bff.url, uiUrl: 'http://127.0.0.1:9' })).rejects.toThrow(message);
       } finally { await bff.close(); }
     }
   });
 
-  it("makes the compiled BFF entrypoint's local runtime verifier fail closed", () => {
-    const calls: unknown[][] = [];
-    verifyBffLocalRuntime("/selected/genbi", (command, args, options) => { calls.push([command, args, options]); return { status: 0 }; });
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.[1]).toEqual(["/selected/genbi/scripts/verify-bff-attestation.mjs"]);
-    expect(() => verifyBffLocalRuntime("/selected/genbi", () => ({ status: 1, stderr: "error: substituted Codex runtime" }))).toThrow("substituted Codex runtime");
-    expect(() => verifyBffLocalRuntime("/selected/genbi", () => ({ status: null }))).toThrow("runtime verification failed");
-  });
   it("uses production providers and BFF native preflight for every required Warble surface without starting services", () => {
     const { root, warble, bin, agentSdk } = fixture();
     const result = run(["--", "--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin], warble);
@@ -321,23 +254,20 @@ describe("local GenBI launch gate", () => {
   it("accepts and projects only a fully pinned Codex tuple after all file-only purpose probes", async () => {
     const value = fixture();
     const selected = await verifyLocalLaunch(codexGateOptions({ skipBuild: false, mode: "bootstrap", workspaceRoot: path.join(value.root, "bootstrap"), warbleBin: value.bin }, value));
+    // Only what the probe can establish by running the executable: which Codex, and whether it
+    // came from a standalone install or the npm package. The content hashes that used to sit
+    // here identified an artifact for an attestation that no longer exists.
     expect(selected.runtimeBinding.runtime).toEqual({
       mode: "subscription",
       provider: "codex",
       dispatcher: "codex-local",
-      codexLocalSha256: createHash("sha256").update(readFileSync(value.codexLocal)).digest("hex"),
       source: "npm:@openai/codex",
-      executablePathDigest: createHash("sha256").update(realpathSync(value.codexBin)).digest("hex"),
-      sourceClosureSha256: hashTree(value.codexPackage),
       version: "0.146.0",
-      executableSha256: createHash("sha256").update(readFileSync(value.codexBin)).digest("hex"),
     });
     expect(selected.probes).toEqual(expect.arrayContaining([
       "dispatch:native(analysis/codex)", "dispatch:native(setup/codex)", "dispatch:native(context_enrichment/codex)",
       "codex-local:manifest(analysis)", "codex-local:manifest(setup)", "codex-local:manifest(context_enrichment)",
     ]));
-    expect(readLocalLaunchAttestationPublic(selected.attestation.file)).toEqual(selected.attestation.public);
-    expect(JSON.stringify(selected.attestation.public)).not.toContain(value.codexBin);
   }, 15_000);
 
   it("rejects wrong-purpose and malformed Codex launch contracts", () => {
@@ -358,30 +288,6 @@ describe("local GenBI launch gate", () => {
     const claudeWithCodex = spawnSync(process.execPath, [verifier, "--skip-build", "--workspace-root", path.join(value.root, "bootstrap"), "--warble-bin", value.bin, "--runtime", "subscription:claude", "--agent-sdk-bin", value.agentSdk, "--codex-local-bin", value.codexLocal, "--codex-bin", value.codexBin], { encoding: "utf8", env: { ...process.env, NODE_ENV: "test" } });
     expect(claudeWithCodex.status).toBe(1);
     expect(claudeWithCodex.stderr).toContain("apply only to subscription:codex");
-  });
-
-  it("uses the same canonical identity for a fresh absent bootstrap root at preflight and BFF startup", async () => {
-    const { root, warble, bin, agentSdk } = fixture();
-    const workspace = path.join(root, "fresh", "nested-bootstrap");
-    const selected = await verifyLocalLaunch(gateOptions({ skipBuild: true, mode: "bootstrap", workspaceRoot: workspace, warbleBin: bin }, warble));
-    expect(existsSync(workspace)).toBe(false);
-    expect(selected.attestation.public.genbi.runtimeInputs.profileTreeSha256).toMatch(/^[a-f0-9]{64}$/);
-    const result = spawnSync(process.execPath, [bffVerifier], {
-      cwd: packageRoot,
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        WREN_GENBI_LAUNCH_ATTESTATION: selected.attestation.file,
-        WREN_HARNESS_WORKSPACE_ROOT: workspace,
-        WREN_HARNESS_WARBLE_BIN: bin,
-        WREN_HARNESS_PROFILE: path.join(profiles, "genbi-default"),
-        WREN_HARNESS_SETUP_IR: path.join(profiles, "genbi-setup", "ir.golden.json"),
-        WREN_HARNESS_ENRICH_IR: path.join(profiles, "genbi-enrich-context", "ir.golden.json"),
-        WREN_HARNESS_ANALYSIS_IR: path.join(profiles, "genbi-default", "ir.golden.json"),
-        WREN_HARNESS_MODE: "subscription", WREN_HARNESS_PROVIDER: "claude", WREN_HARNESS_AGENT_SDK_BIN: agentSdk,
-      },
-    });
-    expect(result.status, `${result.stderr}${result.stdout}`.trim() || "(no gate output)").toBe(0);
   });
 
   it("fails closed on a malformed native launch contract instead of offering manual testing", () => {
@@ -439,13 +345,6 @@ describe("local GenBI launch gate", () => {
     expect(result.stderr).toContain("launch gate BLOCKED [usage]");
   });
 
-  it("does not permit an operator to bypass the current dist-server build", () => {
-    const result = spawnSync(process.execPath, [verifier, "--skip-build", "--workspace-root", "/tmp/fixture", "--runtime", "subscription:claude", "--warble-bin", "/tmp/fixture/warble", "--agent-sdk-bin", "/tmp/fixture/warble-agent-sdk"], { encoding: "utf8", env: { ...process.env, NODE_ENV: "production" } });
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain("launch gate BLOCKED [usage]");
-    expect(result.stderr).toContain("reserved for the deterministic fixture suite");
-  });
-
   it("accepts a Warble binary that lives inside a git checkout, dirty or not", () => {
     // Nothing checks Warble's git status any more (see verify-local-launch.mjs): a binary
     // that happens to live inside a git checkout — clean or, as here, with untracked
@@ -462,42 +361,6 @@ describe("local GenBI launch gate", () => {
     const result = run(["--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin], warble);
     expect(result.status, `${result.stderr}${result.stdout}`.trim() || "(no gate output)").toBe(0);
     expect(result.stdout).toContain("launch gate PASSED");
-  });
-
-  // The package arm, driven through the real gate and the real boot verifier rather than through
-  // warbleIdentity() alone. Without this, the CLI -> attestation -> boot-check wiring for a package
-  // install has no regression cover: every other fixture here takes the checkout arm, so the suite
-  // could stay green while that path broke. The mutation at the end is the point -- swapping the
-  // downloaded executable while the trampoline stays byte-identical is precisely what used to pass.
-  it("records the package arm end to end and catches an executable swapped behind the trampoline", async () => {
-    const { root, warble, bin, agentSdk } = fixture();
-    const workspace = path.join(root, "workspace"); mkdirSync(workspace);
-    const install = warbleCliPackageInstall(root, bin);
-    const selected = await verifyLocalLaunch(gateOptions({ skipBuild: true, mode: "bootstrap", workspaceRoot: workspace, warbleBin: install.trampoline }, warble));
-
-    const attested = JSON.parse(readFileSync(selected.attestation.file, "utf8")).warble;
-    expect(attested.resolution).toBe("package");
-    expect(attested.version).toBe(install.pinned);
-    expect(attested.integrity).toMatch(/^sha512-/);
-    expect(attested.resolverSha256).toMatch(/^[a-f0-9]{64}$/);
-    expect(attested.extractedTreeSha256).toMatch(/^[a-f0-9]{64}$/);
-    expect(attested.binarySha256).toBeUndefined();
-
-    const env = { ...process.env, WREN_GENBI_LAUNCH_ATTESTATION: selected.attestation.file, WREN_HARNESS_WORKSPACE_ROOT: workspace, WREN_HARNESS_WARBLE_BIN: install.trampoline, WREN_HARNESS_PROFILE: path.join(profiles, "genbi-default"), WREN_HARNESS_SETUP_IR: path.join(profiles, "genbi-setup", "ir.golden.json"), WREN_HARNESS_ENRICH_IR: path.join(profiles, "genbi-enrich-context", "ir.golden.json"), WREN_HARNESS_ANALYSIS_IR: path.join(profiles, "genbi-default", "ir.golden.json"), WREN_HARNESS_MODE: "subscription", WREN_HARNESS_PROVIDER: "claude", WREN_HARNESS_AGENT_SDK_BIN: agentSdk };
-    expect(spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env }).status).toBe(0);
-
-    const trampolineBefore = createHash("sha256").update(readFileSync(install.trampoline)).digest("hex");
-    const original = readFileSync(install.executable);
-    try {
-      writeFileSync(install.executable, "#!/bin/sh\necho 'IMPOSTOR WARBLE'\n"); chmodSync(install.executable, 0o700);
-      expect(createHash("sha256").update(readFileSync(install.trampoline)).digest("hex")).toBe(trampolineBefore);
-      const tampered = spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env });
-      expect(tampered.status).toBe(1);
-      expect(tampered.stderr).toContain("BFF Warble binary does not match local launch attestation");
-    } finally {
-      writeFileSync(install.executable, original); chmodSync(install.executable, 0o700);
-    }
-    expect(spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env }).status).toBe(0);
   });
 
   it("accepts a loose binary under node_modules that no @warble/cli package owns", () => {
@@ -551,31 +414,6 @@ describe("local GenBI launch gate", () => {
     expect(result.stderr).toContain("must not be inside a Wren project");
   });
 
-  it("rejects a bootstrap path that is replaced by a symlink after valid preflight", async () => {
-    const { root, warble, bin, agentSdk } = fixture();
-    const workspace = path.join(root, "fresh", "bootstrap");
-    const selected = await verifyLocalLaunch(gateOptions({ skipBuild: false, mode: "bootstrap", workspaceRoot: workspace, warbleBin: bin }, warble));
-    mkdirSync(path.dirname(workspace), { recursive: true });
-    const outside = path.join(root, "outside"); mkdirSync(outside);
-    spawnSync("ln", ["-s", outside, workspace]);
-    const result = spawnSync(process.execPath, [bffStarter], {
-      cwd: packageRoot,
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        WREN_GENBI_LAUNCH_ATTESTATION: selected.attestation.file,
-        WREN_HARNESS_WORKSPACE_ROOT: workspace,
-        WREN_HARNESS_WARBLE_BIN: bin,
-        WREN_HARNESS_PROFILE: path.join(profiles, "genbi-default"),
-        WREN_HARNESS_SETUP_IR: path.join(profiles, "genbi-setup", "ir.golden.json"),
-        WREN_HARNESS_ENRICH_IR: path.join(profiles, "genbi-enrich-context", "ir.golden.json"),
-        WREN_HARNESS_ANALYSIS_IR: path.join(profiles, "genbi-default", "ir.golden.json"),
-        WREN_HARNESS_MODE: "subscription", WREN_HARNESS_PROVIDER: "claude", WREN_HARNESS_AGENT_SDK_BIN: agentSdk,
-      },
-    });
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain("must not be a symlink");
-  }, 15_000);
 
   it("does not accept an arbitrary process on the requested BFF port", async () => {
     const { root, warble, bin } = fixture();
@@ -585,172 +423,9 @@ describe("local GenBI launch gate", () => {
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("fixture listener unavailable");
     try {
-      await expect(verifyLive({ mode: "bootstrap", bffUrl: `http://127.0.0.1:${address.port}`, uiUrl: "http://127.0.0.1:9" }, expected)).rejects.toThrow("BFF launch attestation does not match");
+      await expect(verifyLive({ mode: "bootstrap", bffUrl: `http://127.0.0.1:${address.port}`, uiUrl: "http://127.0.0.1:9" })).rejects.toThrow("BFF native-session readiness");
     } finally { await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); }
   });
 
-  it("exact-matches mode, worktree identity, commit, and binary hash attestations", async () => {
-    const { root, warble, bin } = fixture();
-    const expected = await verifyLocalLaunch(gateOptions({ skipBuild: true, mode: "bootstrap", workspaceRoot: path.join(root, "bootstrap"), warbleBin: bin }, warble));
-    // "bound" is the retired boot mode: a leftover attestation from before its removal
-    // must not be accepted by a BFF that can no longer honor it.
-    const mismatched = { ...expected.attestation.public, mode: "bound" };
-    const server = createServer((_request, response) => { response.setHeader("content-type", "application/json"); response.end(JSON.stringify(mismatched)); });
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const address = server.address();
-    if (!address || typeof address === "string") throw new Error("fixture listener unavailable");
-    try {
-      await expect(verifyLive({ mode: "bootstrap", bffUrl: `http://127.0.0.1:${address.port}`, uiUrl: "http://127.0.0.1:9" }, expected)).rejects.toThrow("BFF launch attestation does not match");
-    } finally { await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); }
-  });
 
-  it("rejects a selected tuple attestation replayed by the production UI wrapper in another worktree", async () => {
-    const { root, warble, bin } = fixture();
-    const selected = await verifyLocalLaunch(gateOptions({ skipBuild: true, mode: "bootstrap", workspaceRoot: path.join(root, "bootstrap"), warbleBin: bin }, warble));
-    const copy = path.join(root, "copied-worktree"); mkdirSync(copy);
-    for (const args of [["init"], ["config", "user.email", "fixture@example.test"], ["config", "user.name", "fixture"], ["commit", "--allow-empty", "-m", "copy"]]) {
-      const result = spawnSync("git", args, { cwd: copy, encoding: "utf8" }); if (result.status !== 0) throw new Error(result.stderr);
-    }
-    const result = spawnSync(process.execPath, [uiStarter], { cwd: copy, encoding: "utf8", env: { ...process.env, WREN_GENBI_LAUNCH_ATTESTATION: selected.attestation.file } });
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain("belongs to a different UI worktree");
-  });
-
-  it("rejects a tampered non-entry dist-server module while bin.js is unchanged", () => {
-    const distRoot = path.join(packageRoot, "dist-server"); const entry = path.join(distRoot, "server", "bin.js"); const module = path.join(distRoot, "server", "app.js");
-    const original = readFileSync(module); const attestation = path.join(mkdtempSync(path.join(os.tmpdir(), "genbi-attestation-")), "attestation.json"); dirs.push(path.dirname(attestation));
-    const digest = (value: Buffer) => createHash("sha256").update(value).digest("hex"); const placeholder = "0".repeat(64);
-    writeFileSync(attestation, JSON.stringify({ version: "genbi-launch-attestation/v1", mode: "bootstrap", genbi: { rootDigest: placeholder, commit: "fixture", treeIdentity: placeholder, runtimeInputs: { profileTreeSha256: placeholder, setupIrSha256: placeholder, enrichIrSha256: placeholder, analysisIrSha256: placeholder } }, warble: { resolution: "checkout", binarySha256: placeholder }, runtime: { mode: "subscription", provider: "claude", dispatcher: "claude-agent-sdk", agentSdkSha256: placeholder }, bff: { entrySha256: digest(readFileSync(entry)), closureSha256: hashTree(distRoot) }, ui: { rootDigest: placeholder, commit: "fixture", treeIdentity: placeholder } }));
-    try {
-      writeFileSync(module, Buffer.concat([original, Buffer.from("\n// tampered fixture\n")]));
-      const result = spawnSync(process.execPath, [entry], { cwd: packageRoot, encoding: "utf8", env: { ...process.env, WREN_GENBI_LAUNCH_ATTESTATION: attestation, WREN_HARNESS_WORKSPACE_ROOT: path.join(path.dirname(attestation), "workspace") } });
-      expect(result.status).toBe(1);
-      expect(result.stderr).toContain("does not match this dist-server closure");
-    } finally { writeFileSync(module, original); }
-  });
-
-  it("production BFF verifier rejects replayed worktrees and every swapped runtime input", async () => {
-    const { root, warble, bin, agentSdk, staleAgentSdk } = fixture(); const workspace = path.join(root, "workspace"); mkdirSync(workspace);
-    const selected = await verifyLocalLaunch(gateOptions({ skipBuild: true, mode: "bootstrap", workspaceRoot: workspace, warbleBin: bin }, warble));
-    const baseEnv = { ...process.env, WREN_GENBI_LAUNCH_ATTESTATION: selected.attestation.file, WREN_HARNESS_WORKSPACE_ROOT: workspace, WREN_HARNESS_WARBLE_BIN: bin, WREN_HARNESS_PROFILE: path.join(profiles, "genbi-default"), WREN_HARNESS_SETUP_IR: path.join(profiles, "genbi-setup", "ir.golden.json"), WREN_HARNESS_ENRICH_IR: path.join(profiles, "genbi-enrich-context", "ir.golden.json"), WREN_HARNESS_ANALYSIS_IR: path.join(profiles, "genbi-default", "ir.golden.json"), WREN_HARNESS_MODE: "subscription", WREN_HARNESS_PROVIDER: "claude", WREN_HARNESS_AGENT_SDK_BIN: agentSdk };
-    expect(spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env: baseEnv }).status).toBe(0);
-    const other = path.join(root, "other"); mkdirSync(other); for (const args of [["init"], ["config", "user.email", "f@e.test"], ["config", "user.name", "f"], ["commit", "--allow-empty", "-m", "copy"]]) spawnSync("git", args, { cwd: other });
-    expect(spawnSync(process.execPath, [bffVerifier], { cwd: other, encoding: "utf8", env: baseEnv }).status).toBe(1);
-    const replacement = path.join(warble, "replacement"); writeFileSync(replacement, "different"); chmodSync(replacement, 0o700);
-    // WREN_HARNESS_PROJECT is deliberately absent from this list: it is rejected by the BFF
-    // entrypoint (server/bin.ts), not by this standalone verifier script, so it is not one of
-    // this script's swapped-runtime-input cases. It used to sit in this list and "pass" only
-    // because the now-removed Warble dirty-checkout check failed first on every single call
-    // here (the fixture's Warble checkout is uncommitted on purpose), masking whichever
-    // override was actually under test. Once that check was removed for content-hash identity,
-    // this line was exposed as never having exercised anything about WREN_HARNESS_PROJECT at all.
-    for (const override of [
-      { WREN_HARNESS_WARBLE_BIN: replacement }, { WREN_HARNESS_PROFILE: path.join(profiles, "genbi-setup") },
-      { WREN_HARNESS_SETUP_IR: path.join(profiles, "genbi-enrich-context", "ir.golden.json") }, { WREN_HARNESS_ENRICH_IR: path.join(profiles, "genbi-setup", "ir.golden.json") },
-      { WREN_HARNESS_ANALYSIS_IR: path.join(profiles, "genbi-setup", "ir.golden.json") },
-      { WREN_HARNESS_AGENT_SDK_BIN: staleAgentSdk }, { WREN_HARNESS_MODE: "api-key" }, { WREN_HARNESS_PROVIDER: "codex" },
-    ]) expect(spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env: { ...baseEnv, ...override } }).status).toBe(1);
-  });
-
-  it("refuses a Warble binary whose bytes were swapped after attestation, then boots again once restored", async () => {
-    // Content hash is now the *only* thing standing between the BFF and a Warble binary that
-    // was swapped after the gate ran (dirty-checkout/containment detection is gone — see the
-    // comment above the `inputs` loop in verify-bff-attestation.mjs). Proven here by mutation,
-    // not by the suite passing: produce a real attestation, overwrite the attested binary's
-    // bytes at the same path, show the BFF verifier actually refuses with its real message,
-    // restore the original bytes, and show it boots again. A gate that cannot be made to fail
-    // this way would be worse than the problem this change fixes.
-    const { root, warble, bin, agentSdk } = fixture();
-    const workspace = path.join(root, "workspace"); mkdirSync(workspace);
-    const selected = await verifyLocalLaunch(gateOptions({ skipBuild: true, mode: "bootstrap", workspaceRoot: workspace, warbleBin: bin }, warble));
-    const baseEnv = { ...process.env, WREN_GENBI_LAUNCH_ATTESTATION: selected.attestation.file, WREN_HARNESS_WORKSPACE_ROOT: workspace, WREN_HARNESS_WARBLE_BIN: bin, WREN_HARNESS_PROFILE: path.join(profiles, "genbi-default"), WREN_HARNESS_SETUP_IR: path.join(profiles, "genbi-setup", "ir.golden.json"), WREN_HARNESS_ENRICH_IR: path.join(profiles, "genbi-enrich-context", "ir.golden.json"), WREN_HARNESS_ANALYSIS_IR: path.join(profiles, "genbi-default", "ir.golden.json"), WREN_HARNESS_MODE: "subscription", WREN_HARNESS_PROVIDER: "claude", WREN_HARNESS_AGENT_SDK_BIN: agentSdk };
-    expect(spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env: baseEnv }).status).toBe(0);
-    const original = readFileSync(bin);
-    try {
-      writeFileSync(bin, Buffer.concat([original, Buffer.from("\n# same path, substituted bytes\n")]));
-      chmodSync(bin, 0o700);
-      const tampered = spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env: baseEnv });
-      expect(tampered.status).toBe(1);
-      expect(tampered.stderr).toContain("BFF Warble binary does not match local launch attestation");
-    } finally {
-      writeFileSync(bin, original);
-      chmodSync(bin, 0o700);
-    }
-    expect(spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env: baseEnv }).status).toBe(0);
-  });
-
-  it("production BFF verifier accepts the exact Codex tuple and rejects stale, substituted, or cross-vendor inputs", async () => {
-    const value = fixture(); const workspace = path.join(value.root, "workspace"); mkdirSync(workspace);
-    const selected = await verifyLocalLaunch(codexGateOptions({ skipBuild: true, mode: "bootstrap", workspaceRoot: workspace, warbleBin: value.bin }, value));
-    const baseEnv = {
-      ...process.env,
-      WREN_GENBI_LAUNCH_ATTESTATION: selected.attestation.file,
-      WREN_HARNESS_WORKSPACE_ROOT: workspace,
-      WREN_HARNESS_WARBLE_BIN: value.bin,
-      WREN_HARNESS_PROFILE: path.join(profiles, "genbi-default"),
-      WREN_HARNESS_SETUP_IR: path.join(profiles, "genbi-setup", "ir.golden.json"),
-      WREN_HARNESS_ENRICH_IR: path.join(profiles, "genbi-enrich-context", "ir.golden.json"),
-      WREN_HARNESS_ANALYSIS_IR: path.join(profiles, "genbi-default", "ir.golden.json"),
-      WREN_HARNESS_MODE: "subscription",
-      WREN_HARNESS_PROVIDER: "codex",
-      WREN_HARNESS_CODEX_LOCAL_BIN: value.codexLocal,
-      WREN_HARNESS_CODEX_BIN: value.codexBin,
-    };
-    expect(spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env: baseEnv }).status).toBe(0);
-    for (const override of [
-      { WREN_HARNESS_CODEX_LOCAL_BIN: value.staleCodexLocal },
-      { WREN_HARNESS_CODEX_BIN: value.staleCodexBin },
-      { WREN_HARNESS_PROVIDER: "claude" },
-      { WREN_HARNESS_AGENT_SDK_BIN: value.agentSdk },
-    ]) expect(spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env: { ...baseEnv, ...override } }).status).toBe(1);
-    writeFileSync(value.codexBin, "#!/bin/sh\necho 'codex-cli 0.146.0'\n# same path, substituted bytes\n"); chmodSync(value.codexBin, 0o700);
-    const stale = spawnSync(process.execPath, [bffVerifier], { cwd: packageRoot, encoding: "utf8", env: baseEnv });
-    expect(stale.status).toBe(1);
-    expect(stale.stderr).toContain("WREN_HARNESS_CODEX_BIN does not match");
-  });
-
-  // The attested runtime inputs are committed files in THIS worktree now, so editing one at the
-  // same path dirties the GenBI tree — which is the check that fires first, exactly as editing a
-  // Warble-owned input used to trip the Warble worktree check. The edit is made against the real
-  // committed file (the only way to exercise the production wrapper's own provenance path) and is
-  // restored unconditionally.
-  afterEach(() => {
-    // Belt and braces for the committed-file edit below: git is the source of truth, so this is
-    // idempotent and costs nothing when the test restored itself normally.
-    spawnSync("git", ["checkout", "--", path.join(profiles, "genbi-setup", "ir.golden.json")], { cwd: packageRoot });
-  });
-
-  it("production BFF wrapper rejects a same-path profile input edit after valid preflight", async () => {
-    const { root, warble, bin, agentSdk } = fixture(); const workspace = path.join(root, "workspace");
-    const selected = await verifyLocalLaunch(gateOptions({ skipBuild: false, mode: "bootstrap", workspaceRoot: workspace, warbleBin: bin }, warble));
-    const editedIr = path.join(profiles, "genbi-setup", "ir.golden.json");
-    const originalIr = readFileSync(editedIr);
-    let result;
-    try {
-      writeFileSync(editedIr, '{"changed":true}\n');
-      result = spawnSync(process.execPath, [bffStarter], {
-      cwd: packageRoot,
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        WREN_GENBI_LAUNCH_ATTESTATION: selected.attestation.file,
-        WREN_HARNESS_WORKSPACE_ROOT: workspace,
-        WREN_HARNESS_WARBLE_BIN: bin,
-        WREN_HARNESS_PROFILE: path.join(profiles, "genbi-default"),
-        WREN_HARNESS_SETUP_IR: path.join(profiles, "genbi-setup", "ir.golden.json"),
-        WREN_HARNESS_ENRICH_IR: path.join(profiles, "genbi-enrich-context", "ir.golden.json"),
-        WREN_HARNESS_ANALYSIS_IR: path.join(profiles, "genbi-default", "ir.golden.json"),
-        WREN_HARNESS_MODE: "subscription", WREN_HARNESS_PROVIDER: "claude", WREN_HARNESS_AGENT_SDK_BIN: agentSdk,
-      },
-      });
-    } finally { writeFileSync(editedIr, originalIr); }
-    // The in-memory restore above covers the normal path. It does NOT run if this worker is
-    // killed outright -- a hard timeout kill or an OOM -- and the spawnSync it wraps cannot be
-    // interrupted cooperatively. That would leave a corrupted committed golden behind, where the
-    // only symptom is every later gate run failing "worktree has ... source changes" with nothing
-    // pointing at the cause. The afterEach below restores it from git, so the next run self-heals
-    // instead of inheriting the damage.
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain("BFF worktree has tracked or untracked source changes");
-  }, 15_000);
 });
