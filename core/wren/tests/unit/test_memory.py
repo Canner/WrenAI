@@ -1477,6 +1477,484 @@ class TestMarkdownSourcedIndex:
         second, _ = memory_store.list_queries(limit=100)
         assert len(first) == len(second) == 2
 
+    def test_sync_forgets_pair_deleted_from_markdown(self, memory_store, tmp_path):
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        write_query_markdown(tmp_path, "Count orders", "SELECT COUNT(*) FROM o")
+        memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+
+        (tmp_path / "knowledge" / "sql" / "count-orders.md").unlink()
+        result = memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+
+        assert result["forgotten"] == 1
+        remaining, total = memory_store.list_queries(limit=100)
+        assert total == 1
+        assert remaining[0]["nl_query"] == "Total revenue"
+        # the deleted example must no longer surface in recall either
+        hits = memory_store.recall_queries("count orders", limit=5)
+        assert all(h["nl_query"] != "Count orders" for h in hits)
+
+    def test_sync_preserves_seed_queries_absent_from_markdown(
+        self, memory_store, tmp_path
+    ):
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        memory_store.index_schema(_MANIFEST)  # generates seed queries
+        before, _ = memory_store.list_queries(limit=100, source="seed")
+        assert before  # sanity: seeds exist
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+
+        after, _ = memory_store.list_queries(limit=100, source="seed")
+        assert len(after) == len(before)  # seeds untouched by the markdown sync
+
+    def test_sync_preserves_legacy_queries_yml_pairs_absent_from_markdown(
+        self, memory_store
+    ):
+        """A pair loaded from a project's legacy queries.yml is not markdown-
+        backed, so a naive sync_markdown_queries() forgets it as stale on
+        every run and immediately reloads it, reporting a bogus "forgot 1
+        stale pair" each time. Tagging it source:legacy and excluding that
+        tag from the forget scan (same as seed/view) makes it stable across
+        repeated syncs with an empty markdown set.
+        """
+        memory_store.load_queries(
+            [
+                {
+                    "nl": "Total revenue",
+                    "sql": "SELECT SUM(amount) FROM o",
+                    "source": "legacy",
+                }
+            ],
+            upsert=False,
+        )
+        before, _ = memory_store.list_queries(limit=100, source="legacy")
+        assert len(before) == 1
+
+        result = memory_store.sync_markdown_queries([])  # no markdown pairs
+
+        assert result["forgotten"] == 0
+        after, _ = memory_store.list_queries(limit=100, source="legacy")
+        assert len(after) == 1
+        assert after[0]["sql_query"] == "SELECT SUM(amount) FROM o"
+
+    def test_sync_preserves_view_queries_absent_from_markdown(self, memory_store):
+        """A source:view row is not markdown-backed either (there is no
+        knowledge/sql/*.md file for a manifest view), so a markdown sync
+        with an empty pair set must never forget it."""
+        memory_store.load_queries(
+            [
+                {
+                    "nl": "Rows in the active orders view",
+                    "sql": "SELECT * FROM active_orders_view",
+                    "source": "view",
+                }
+            ],
+            upsert=False,
+        )
+        before, _ = memory_store.list_queries(limit=100, source="view")
+        assert len(before) == 1
+
+        result = memory_store.sync_markdown_queries([])  # no markdown pairs
+
+        assert result["forgotten"] == 0
+        after, _ = memory_store.list_queries(limit=100, source="view")
+        assert len(after) == 1
+        assert after[0]["sql_query"] == "SELECT * FROM active_orders_view"
+
+    def test_sync_preserves_user_pair_loaded_from_yaml_with_no_markdown_file(
+        self, memory_store
+    ):
+        """`wren memory load pairs.yml` (no --source given) writes a plain
+        source:user row backed by no knowledge/sql/*.md file at all: the
+        YAML file may live anywhere, or be deleted right after the import.
+        A markdown sync must never treat that row as stale just because its
+        source happens to be "user" too, which is also what every
+        markdown-backed pair defaults to.
+        """
+        memory_store.load_queries(
+            [
+                {
+                    "nl": "Revenue by region",
+                    "sql": "SELECT region, SUM(amount) FROM orders GROUP BY region",
+                    "source": "user",
+                }
+            ],
+            upsert=False,
+        )
+        before, _ = memory_store.list_queries(limit=100, source="user")
+        assert len(before) == 1
+
+        result = memory_store.sync_markdown_queries([])  # no markdown pairs
+
+        assert result["forgotten"] == 0
+        after, _ = memory_store.list_queries(limit=100, source="user")
+        assert len(after) == 1
+        assert after[0]["nl_query"] == "Revenue by region"
+
+    def test_sync_preserves_pre_upgrade_queries_yml_import_once_file_is_gone(
+        self, memory_store
+    ):
+        """Before source:legacy tagging existed, a project's queries.yml was
+        imported as a plain source:user row (see the CLI's old, untagged
+        `load_queries(legacy_pairs, upsert=False)` call). A user who
+        consumed queries.yml on an older version, then deleted the file and
+        upgraded, must not lose that row on their first post-upgrade
+        `wren memory index`: there is no markdown file to judge it against,
+        and the row predates this sync entirely, so it never carries the
+        provenance tag a markdown sync would need to treat it as its own.
+        """
+        memory_store.load_queries(
+            [
+                {
+                    "nl": "Total revenue",
+                    "sql": "SELECT SUM(amount) FROM o",
+                    "source": "user",
+                }
+            ],
+            upsert=False,
+        )
+
+        result = memory_store.sync_markdown_queries([])  # queries.yml is gone
+
+        assert result["forgotten"] == 0
+        after, _ = memory_store.list_queries(limit=100, source="user")
+        assert len(after) == 1
+        assert after[0]["nl_query"] == "Total revenue"
+
+    def test_source_filters_still_match_markdown_synced_rows(
+        self, memory_store, tmp_path
+    ):
+        """sync_markdown_queries tags the rows it writes with an extra
+        provenance token after the source tag (_MARKDOWN_SYNC_TAG), so the
+        stored tags string is no longer just "source:user". list/count/dump/
+        forget filtering by --source must keep matching on the source value
+        alone, not on an exact match against the whole tags string.
+        """
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+
+        rows, total = memory_store.list_queries(source="user")
+        assert total == 1
+        assert rows[0]["nl_query"] == "Total revenue"
+        assert memory_store.count_queries_by_source("user") == 1
+        dumped = memory_store.dump_queries(source="user")
+        assert len(dumped) == 1
+
+        deleted = memory_store.forget_queries_by_source("user")
+        assert deleted == 1
+        _, total_after = memory_store.list_queries()
+        assert total_after == 0
+
+    def test_source_filters_ignore_rows_carrying_no_source_tag(self, memory_store):
+        """`wren memory store` and the MCP `store_query` tool pass the caller's
+        own free-form labels through to `tags` (`"revenue,finance"`, or nothing
+        at all), so a real index holds rows with no `source:` token. A
+        `--source user` filter must not claim them, least of all `forget`.
+        """
+        memory_store.store_query(
+            nl_query="A user-tagged pair", sql_query="SELECT 1", tags="revenue,finance"
+        )
+        memory_store.store_query(
+            nl_query="An untagged pair", sql_query="SELECT 2", tags=None
+        )
+        memory_store.store_query(
+            nl_query="A source-tagged pair", sql_query="SELECT 3", tags="source:user"
+        )
+
+        rows, total = memory_store.list_queries(limit=100, source="user")
+        assert total == 1
+        assert rows[0]["nl_query"] == "A source-tagged pair"
+        assert memory_store.count_queries_by_source("user") == 1
+        assert [r["nl_query"] for r in memory_store.dump_queries(source="user")] == [
+            "A source-tagged pair"
+        ]
+
+        assert memory_store.forget_queries_by_source("user") == 1
+        survivors, _ = memory_store.list_queries(limit=100)
+        assert sorted(r["nl_query"] for r in survivors) == [
+            "A user-tagged pair",
+            "An untagged pair",
+        ]
+
+    def test_sync_lets_a_markdown_pair_win_over_a_colliding_seed_row(
+        self, memory_store, tmp_path
+    ):
+        """User-authored content wins over an auto-generated seed with the same nl.
+
+        A seed sharing a markdown pair's nl_query is not protected: the sync
+        upserts the markdown pair over it. This is deliberate, not a gap. The
+        seed is regenerated by index_schema() on every reindex (self-healing),
+        while a dropped markdown pair is permanent (its file is still on disk,
+        so it can never be re-synced, and `wren memory check` would report it
+        as unfixably out of sync forever). An earlier version of this method
+        pre-filtered markdown pairs against existing seed/view nl_query values
+        to "protect" the seed row; that filter made check/index loop on the
+        markdown pair forever and is why this test asserts the opposite of
+        what its name once claimed.
+        """
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        memory_store.store_query(
+            nl_query="Total revenue",
+            sql_query="SELECT SUM(o_totalprice) FROM orders",
+            tags="source:seed",
+        )
+        before, _ = memory_store.list_queries(limit=100, source="seed")
+        assert len(before) == 1
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        result = memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+
+        # the markdown pair replaced the seed row (an upsert, not a fresh
+        # load) rather than being skipped
+        _, total = memory_store.list_queries(limit=100)
+        assert total == 1
+        assert result["updated"] == 1
+        remaining, _ = memory_store.list_queries(limit=100)
+        assert remaining[0]["sql_query"] == "SELECT SUM(amount) FROM o"
+
+        # and the markdown pair now stays in sync on a second run: nothing to
+        # load, nothing to forget, no unfixable "not indexed" loop
+        result2 = memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+        assert result2["forgotten"] == 0
+        after, _ = memory_store.list_queries(limit=100)
+        assert len(after) == 1
+        assert after[0]["sql_query"] == "SELECT SUM(amount) FROM o"
+
+    def test_sync_with_no_markdown_pairs_forgets_all_user_pairs(
+        self, memory_store, tmp_path
+    ):
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+        (tmp_path / "knowledge" / "sql" / "total-revenue.md").unlink()
+
+        result = memory_store.sync_markdown_queries(load_query_pairs(tmp_path))
+        assert result["forgotten"] == 1
+        _, total = memory_store.list_queries(limit=100)
+        assert total == 0
+
+    def test_cli_index_lancedb_forgets_deleted_pair(self, tmp_path, monkeypatch):
+        """`wren memory index` on the lancedb backend must actually forget a
+        pair deleted from knowledge/sql/*.md, not just report it as stale."""
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.cli import app  # noqa: PLC0415
+        from wren.memory.markdown import write_query_markdown  # noqa: PLC0415
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
+        (tmp_path / "target").mkdir()
+        (tmp_path / "target" / "mdl.json").write_text("{}", encoding="utf-8")
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        write_query_markdown(tmp_path, "Count orders", "SELECT COUNT(*) FROM o")
+
+        cli = CliRunner()
+        first = cli.invoke(app, ["memory", "index"])
+        assert first.exit_code == 0, first.output
+
+        (tmp_path / "knowledge" / "sql" / "count-orders.md").unlink()
+        second = cli.invoke(app, ["memory", "index"])
+        assert second.exit_code == 0, second.output
+        assert "Forgot 1 stale pair" in second.output
+
+        store = MemoryStore(path=str(tmp_path / ".wren" / "memory"))
+        rows, total = store.list_queries(limit=100)
+        assert total == 1
+        assert rows[0]["nl_query"] == "Total revenue"
+
+    def test_cli_load_then_index_does_not_forget_the_loaded_pair(
+        self, tmp_path, monkeypatch
+    ):
+        """`wren memory load <file>.yml` (see PR #2703 review) writes a
+        source:user row with no knowledge/sql/*.md file behind it. A
+        `wren memory index` right after must not report or execute a forget
+        for that row: it was never markdown-backed to begin with."""
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.cli import app  # noqa: PLC0415
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
+        (tmp_path / "target").mkdir()
+        (tmp_path / "target" / "mdl.json").write_text("{}", encoding="utf-8")
+
+        pairs_file = tmp_path / "pairs.yml"
+        pairs_file.write_text(
+            "version: 1\n"
+            "pairs:\n"
+            "  - nl: Revenue by region\n"
+            "    sql: SELECT region, SUM(amount) FROM orders GROUP BY region\n",
+            encoding="utf-8",
+        )
+
+        cli = CliRunner()
+        load_result = cli.invoke(app, ["memory", "load", str(pairs_file)])
+        assert load_result.exit_code == 0, load_result.output
+        assert "1 new" in load_result.output
+
+        index_result = cli.invoke(app, ["memory", "index"])
+        assert index_result.exit_code == 0, index_result.output
+        assert "Forgot" not in index_result.output
+
+        # ...and `check` must agree, rather than reporting drift that `index`
+        # has just proven it cannot clear.
+        check_result = cli.invoke(app, ["memory", "check"])
+        assert check_result.exit_code == 0, check_result.output
+        assert "In sync." in check_result.output
+
+        store = MemoryStore(path=str(tmp_path / ".wren" / "memory"))
+        rows, total = store.list_queries(limit=100)
+        assert total == 1
+        assert rows[0]["nl_query"] == "Revenue by region"
+
+    def test_cli_watch_reindex_on_start_lancedb_forgets_deleted_pair(
+        self, tmp_path, monkeypatch
+    ):
+        """`wren memory watch` calls the same reindex path as `index`, so a
+        deletion must clear on its next forced reindex too."""
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.cli import app  # noqa: PLC0415
+        from wren.memory.markdown import write_query_markdown  # noqa: PLC0415
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
+        (tmp_path / "wren_project.yml").write_text("name: t\n", encoding="utf-8")
+        (tmp_path / "target").mkdir()
+        (tmp_path / "target" / "mdl.json").write_text("{}", encoding="utf-8")
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        write_query_markdown(tmp_path, "Count orders", "SELECT COUNT(*) FROM o")
+
+        cli = CliRunner()
+        first = cli.invoke(
+            app, ["memory", "watch", "--reindex-on-start", "--max-polls", "1"]
+        )
+        assert first.exit_code == 0, first.output
+
+        (tmp_path / "knowledge" / "sql" / "count-orders.md").unlink()
+        second = cli.invoke(
+            app, ["memory", "watch", "--reindex-on-start", "--max-polls", "1"]
+        )
+        assert second.exit_code == 0, second.output
+
+        store = MemoryStore(path=str(tmp_path / ".wren" / "memory"))
+        rows, total = store.list_queries(limit=100)
+        assert total == 1
+        assert rows[0]["nl_query"] == "Total revenue"
+
+    def test_cli_check_does_not_flag_legacy_queries_yml_pairs_as_stale(
+        self, tmp_path, monkeypatch
+    ):
+        """A project with only a legacy queries.yml (no knowledge/sql/*.md for
+        it) must reach `check`'s "In sync." across repeated index runs. Before
+        source:legacy was excluded from check()'s own stale filter (which used
+        to hardcode ("seed", "view") independently of sync_markdown_queries's
+        set), a legacy pair read as a "user" pair not present in markdown and
+        was reported as permanent drift no `index` run could clear.
+        """
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.cli import app  # noqa: PLC0415
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
+        (tmp_path / "target").mkdir()
+        (tmp_path / "target" / "mdl.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "queries.yml").write_text(
+            "pairs:\n  - nl: Total revenue\n    sql: SELECT SUM(amount) FROM o\n",
+            encoding="utf-8",
+        )
+
+        cli = CliRunner()
+        for _ in range(2):
+            index_result = cli.invoke(app, ["memory", "index"])
+            assert index_result.exit_code == 0, index_result.output
+            assert "Forgot" not in index_result.output
+
+            check_result = cli.invoke(app, ["memory", "check"])
+            assert check_result.exit_code == 0, check_result.output
+            assert "In sync." in check_result.output
+
+    def test_cli_export_then_index_reports_in_sync(self, tmp_path, monkeypatch):
+        """`wren memory export` is the documented one-time migration, and it
+        preserves each row's source into the markdown frontmatter, so a
+        legacy queries.yml pair lands in knowledge/sql/ as `source: legacy`.
+        That file is markdown-backed like any other, so `check` must not read
+        it as "not indexed".
+        """
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.cli import app  # noqa: PLC0415
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
+        (tmp_path / "target").mkdir()
+        (tmp_path / "target" / "mdl.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "queries.yml").write_text(
+            "pairs:\n  - nl: Total revenue\n    sql: SELECT SUM(amount) FROM o\n",
+            encoding="utf-8",
+        )
+
+        cli = CliRunner()
+        assert cli.invoke(app, ["memory", "index"]).exit_code == 0
+        export = cli.invoke(app, ["memory", "export"])
+        assert export.exit_code == 0, export.output
+        assert "source: legacy" in next(
+            (tmp_path / "knowledge" / "sql").glob("*.md")
+        ).read_text(encoding="utf-8")
+
+        for _ in range(2):
+            index_result = cli.invoke(app, ["memory", "index"])
+            assert index_result.exit_code == 0, index_result.output
+            check_result = cli.invoke(app, ["memory", "check"])
+            assert check_result.exit_code == 0, check_result.output
+            assert "In sync." in check_result.output
+
     def test_reset_then_reindex_restores_from_markdown(self, memory_store, tmp_path):
         from wren.memory.markdown import (  # noqa: PLC0415
             load_query_pairs,

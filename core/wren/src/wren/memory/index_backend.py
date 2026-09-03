@@ -123,9 +123,7 @@ class LanceDBIndex(MemoryIndex):
 
     def rebuild(self) -> dict:
         pairs = load_query_pairs(self._project)
-        if not pairs:
-            return {"backend": self.name, "loaded": 0, "updated": 0}
-        res = self._store.load_queries(pairs, upsert=True)
+        res = self._store.sync_markdown_queries(pairs)
         return {"backend": self.name, **res}
 
     def reset(self) -> None:
