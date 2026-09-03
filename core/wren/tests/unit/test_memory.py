@@ -1766,7 +1766,7 @@ class TestOnnxEmbeddings:
                 "pooling_mode_cls_token": True,
             },
         )
-        with pytest.raises(ValueError, match="mean pooling"):
+        with pytest.raises(embeddings.UnsupportedPoolingError, match="mean pooling"):
             embeddings._require_mean_pooling("some/model")
 
     def test_bare_model_name_expands_to_the_sentence_transformers_repo(self):

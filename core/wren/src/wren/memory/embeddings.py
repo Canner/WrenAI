@@ -34,6 +34,13 @@ ONNX_BACKEND = "onnx"
 SENTENCE_TRANSFORMERS_BACKEND = "sentence-transformers"
 
 
+class UnsupportedPoolingError(RuntimeError):
+    """The onnx backend cannot reproduce this model's pooling mode.
+
+    Not a ``ValueError``: the CLI reports those as a malformed manifest.
+    """
+
+
 def _disable_transformers_progress_bar() -> None:
     # Imported lazily: transformers ships with the optional `memory` extra,
     # so this module must stay importable when that extra is not installed.
@@ -200,7 +207,7 @@ def _require_mean_pooling(repo_id: str) -> None:
         for key, value in config.items()
         if key.startswith("pooling_mode_") and value
     )
-    raise ValueError(
+    raise UnsupportedPoolingError(
         f"The onnx embedding backend implements mean pooling, but '{repo_id}' "
         f"pools with {active or ['an unrecognized mode']}. Set "
         "WREN_EMBEDDING_BACKEND=sentence-transformers to use this model."

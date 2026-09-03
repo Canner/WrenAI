@@ -220,8 +220,14 @@ def index(
             pass  # instructions are optional; never fail index because of them
 
     mem_store = _get_store(path)
+    from wren.memory.embeddings import UnsupportedPoolingError  # noqa: PLC0415
+
     try:
         result = mem_store.index_schema(manifest, seed_queries=not no_seed)
+    except UnsupportedPoolingError as e:
+        # Not a manifest problem; the message already names the way out.
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
     except ValueError as e:
         typer.echo(f"Malformed manifest: {e}", err=True)
         raise typer.Exit(1) from e
