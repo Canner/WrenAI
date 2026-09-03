@@ -21,6 +21,20 @@ const identityCache = new Map<string, Promise<string>>();
  * override), a cache hit still never *executes* warble, only resolves + reads its file.
  */
 export async function getWarbleIdentity(binPath: string): Promise<string> {
+  return getBinaryIdentity(binPath);
+}
+
+/**
+ * The generic form of {@link getWarbleIdentity}: a memoized content hash of any binary whose
+ * identity belongs in the compile cache key. Also used for the `wren-context-loader` generator (see
+ * `CompileCacheKey.contextLoaderIdentity`), which is a compiler of the same kind one stage earlier
+ * — it turns the user's semantic layer into the prepared-context document Warble then compiles.
+ *
+ * Hashes content rather than shelling out for a version string: it needs no subprocess, so folding
+ * a binary's identity into the key never costs an execution, and it catches a rebuild that keeps
+ * the same version number.
+ */
+export async function getBinaryIdentity(binPath: string): Promise<string> {
   const resolved = path.resolve(binPath);
   let cached = identityCache.get(resolved);
   if (cached === undefined) {

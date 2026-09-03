@@ -1,6 +1,15 @@
 export { createFileSystemCompileCache, createInMemoryCompileCache, resolveDefaultCacheDir } from "./cache.js";
-export { composeUserProfile, extractContextBindingPath, rewriteContextBindingProject } from "./compose-profile.js";
 export {
+  assertPreparedBindingKind,
+  composeUserProfile,
+  extractBindingDocumentPath,
+  extractContextBindingPath,
+  rewriteContextBindingProject,
+} from "./compose-profile.js";
+export { generatePreparedContext, resolveContextLoaderBinary } from "./context-loader.js";
+export {
+  ContextLoaderFailedError,
+  ContextLoaderNotFoundError,
   InvalidProfileShapeError,
   WarbleBinaryNotFoundError,
   WarbleCommandFailedError,
@@ -17,4 +26,4 @@ export type {
   CompileProfileResult,
   CompileRawProfileOptions,
 } from "./types.js";
-export { getWarbleIdentity } from "./warble-identity.js";
+export { getBinaryIdentity, getWarbleIdentity } from "./warble-identity.js";

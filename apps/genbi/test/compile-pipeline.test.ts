@@ -6,9 +6,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadBundle } from "../harness/bundle/loader.js";
 import { createFileSystemCompileCache } from "../harness/compile/cache.js";
+import { resolveContextLoaderBinary } from "../harness/compile/context-loader.js";
 import { compileProfile } from "../harness/compile/pipeline.js";
 import { resolveHubDir, resolveWarbleBinary } from "../harness/compile/resolve-binary.js";
-import { getWarbleIdentity } from "../harness/compile/warble-identity.js";
+import { getBinaryIdentity, getWarbleIdentity } from "../harness/compile/warble-identity.js";
 import { WarbleBinaryNotFoundError } from "../harness/compile/errors.js";
 import type { CompileCache } from "../harness/compile/types.js";
 import { WARBLE_REPO } from "./warble-checkout.js";
@@ -33,7 +34,23 @@ async function isWarbleAvailable(): Promise<boolean> {
   }
 }
 
-const canRun = existsSync(PROFILE_SOURCE) && existsSync(JAFFLE_WREN) && (await isWarbleAvailable());
+/**
+ * `compileProfile` now runs the `wren-context-loader` generator to produce the prepared-context
+ * document its binding reads, so these integration cases need the generator built as well as the
+ * compiler. Gated, not asserted: a fresh clone has no `cargo build` output, and the generator
+ * resolving is exactly what `resolveContextLoaderBinary`'s own unit tests cover.
+ */
+function isContextLoaderAvailable(): boolean {
+  try {
+    resolveContextLoaderBinary();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const canRun =
+  existsSync(PROFILE_SOURCE) && existsSync(JAFFLE_WREN) && (await isWarbleAvailable()) && isContextLoaderAvailable();
 
 describe.skipIf(!canRun)("compileProfile against the real warble binary + genbi-default + jaffle-wren [opt-in integration]", () => {
   it("compiles an IR whose context_binding.project points at jaffle-wren, not the profile's fixture binding, and produces a vercel bundle that loads", async () => {
@@ -68,11 +85,13 @@ describe.skipIf(!canRun)("compileProfile against the real warble binary + genbi-
 
   it("returns the cached artifact on a second call with an unchanged profile/context and never re-invokes warble", async () => {
     const cache: CompileCache = await freshFsCache();
-    // Supplying `warbleIdentity` and `hubDir` explicitly means computing the cache key never needs
-    // to resolve `warbleBin` at all (see `CompileProfileOptions.warbleIdentity`) — the precondition
-    // for the second call below to prove a hit needs no binary, not even to identify it.
+    // Supplying `warbleIdentity`, `contextLoaderIdentity` and `hubDir` explicitly means computing
+    // the cache key never needs to resolve a binary at all (see
+    // `CompileProfileOptions.warbleIdentity`) — the precondition for the second call below to prove
+    // a hit needs no binary, not even to identify it.
     const resolvedBin = await resolveWarbleBinary();
     const warbleIdentity = await getWarbleIdentity(resolvedBin);
+    const contextLoaderIdentity = await getBinaryIdentity(resolveContextLoaderBinary());
     const hubDir = resolveHubDir(resolvedBin);
     const options = {
       profileSource: PROFILE_SOURCE,
@@ -80,6 +99,7 @@ describe.skipIf(!canRun)("compileProfile against the real warble binary + genbi-
       mode: "agnostic" as const,
       cache,
       warbleIdentity,
+      contextLoaderIdentity,
       ...(hubDir !== undefined ? { hubDir } : {}),
     };
 

@@ -1,7 +1,15 @@
 # Coarse context binding: the whole v5-jaffle semantic layer — same shape and same resolution path
-# as genbi-default/context/binding.yml (IR v0.3+ builds a real MdlContext over the bound project and
-# evaluates context_precondition predicates against it). The host rewrites this `project:` line to
-# the user's own wren project at onboarding time; this repo pins v5-jaffle so `genbi-monitor`
-# compiles standalone for CI/dev.
-# Path is relative to this profile directory.
+# as genbi-default/context/binding.yml. `kind: prepared` means Warble reads the JSON document
+# `document:` names (produced by WrenAI's own `wren-context-loader` generator) rather than
+# introspecting MDL itself.
+#
+# `project:` is the layer's IDENTITY, never the document's path; `document:` carries the file. Both
+# resolve relative to this Warble project's own root (the profile directory), not relative to this
+# file.
+#
+# The host rewrites this `project:` line to the user's own semantic layer at onboarding time and
+# regenerates `document:`'s file in place; this repo pins v5-jaffle so `genbi-monitor` compiles
+# standalone for CI/dev. See MAINTAINING.md for how to regenerate the committed document.
+kind: prepared
 project: ../../../../examples/v5-jaffle
+document: context/context.json

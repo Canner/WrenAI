@@ -28,6 +28,20 @@ export interface CompileCacheKey {
    */
   readonly warbleIdentity: string;
   /**
+   * Content identity of the resolved `wren-context-loader` binary — the generator that renders the
+   * user's semantic layer into the prepared-context document a `kind: prepared` binding reads (see
+   * `getBinaryIdentity`). Fixed sentinel for `compileRawProfile`, which binds a raw source and never
+   * runs the generator at all.
+   *
+   * This is here for the *generator's* identity, not the project's: `contextFingerprint` already
+   * content-hashes the user project's semantic-layer files, so folding in the generated document
+   * would say nothing new about the project. What it would miss is a changed generator — a new
+   * version that projects the same layer differently (or extracts a facet the old one dropped)
+   * produces a different document, and therefore a different compiled artifact, from byte-identical
+   * project inputs. Same reason `warbleIdentity` is here, one stage earlier in the pipeline.
+   */
+  readonly contextLoaderIdentity: string;
+  /**
    * The Hub component-library root passed to `warble compile --hub-dir` (see `resolveHubDir`), or
    * `undefined` when none could be derived and the compile therefore ran against warble's own
    * compiled-in default. Two compiles that differ only by Hub root read different component
@@ -79,6 +93,20 @@ export interface CompileProfileOptions {
    * hit skip touching the binary at all.
    */
   readonly warbleIdentity?: string;
+  /**
+   * Explicit path to the `wren-context-loader` binary. See `resolveContextLoaderBinary` for the
+   * resolution order when omitted (explicit → `WREN_HARNESS_CONTEXT_LOADER_BIN` → in-repo build →
+   * loud failure; there is no fallback to Warble's built-in `wren_project` adapter).
+   */
+  readonly contextLoaderBin?: string;
+  /**
+   * Precomputed identity for the resolved `wren-context-loader` binary (see
+   * `CompileCacheKey.contextLoaderIdentity`). Same purpose as `warbleIdentity`: without it,
+   * computing the cache key has to resolve and read the generator even for what would otherwise be
+   * a cache hit. Pass this, `warbleIdentity` and `hubDir` together to make a hit touch no binary at
+   * all. Ignored by `compileRawProfile`, which never runs the generator.
+   */
+  readonly contextLoaderIdentity?: string;
   /**
    * Explicit Hub component-library root for `warble compile --hub-dir`. When omitted it is derived
    * from the resolved `warble` binary (see `resolveHubDir`) so the compiler and its Hub always come

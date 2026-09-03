@@ -7,14 +7,14 @@ import type { CompileCache, CompileCacheEntry, CompileCacheKey } from "./types.j
 
 /**
  * Deterministic on-disk slot name for a cache key — order-independent, one directory per (profile,
- * context, mode, provider-fragment-hash, warble-identity, hub-dir). An absent `hubDir` (no
- * `--hub-dir` passed, so warble's compiled-in default applied) hashes as the empty string, which is
- * a distinct value from any real root rather than an alias for one.
+ * context, mode, provider-fragment-hash, warble-identity, context-loader-identity, hub-dir). An
+ * absent `hubDir` (no `--hub-dir` passed, so warble's compiled-in default applied) hashes as the
+ * empty string, which is a distinct value from any real root rather than an alias for one.
  */
 function keyDigest(key: CompileCacheKey): string {
   return createHash("sha256")
     .update(
-      `${key.profileHash}:${key.contextFingerprint}:${key.mode}:${key.providerFragmentHash}:${key.warbleIdentity}:${key.hubDir ?? ""}`,
+      `${key.profileHash}:${key.contextFingerprint}:${key.mode}:${key.providerFragmentHash}:${key.warbleIdentity}:${key.contextLoaderIdentity}:${key.hubDir ?? ""}`,
     )
     .digest("hex");
 }

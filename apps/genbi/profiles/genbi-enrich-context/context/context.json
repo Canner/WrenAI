@@ -1,0 +1,146 @@
+{
+  "context_version": 1,
+  "parseable": true,
+  "metrics": [
+    {
+      "name": "total_revenue",
+      "owner": "order_metrics",
+      "declared": true,
+      "additivity": "additive"
+    },
+    {
+      "name": "order_count",
+      "owner": "order_metrics",
+      "declared": true,
+      "additivity": "additive"
+    },
+    {
+      "name": "id",
+      "owner": "customers",
+      "declared": false,
+      "additivity": null
+    },
+    {
+      "name": "id",
+      "owner": "orders",
+      "declared": false,
+      "additivity": null
+    },
+    {
+      "name": "customer_id",
+      "owner": "orders",
+      "declared": false,
+      "additivity": null
+    },
+    {
+      "name": "amount",
+      "owner": "orders",
+      "declared": false,
+      "additivity": null
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "customer_id",
+      "owner": "order_metrics",
+      "is_temporal": false
+    },
+    {
+      "name": "name",
+      "owner": "customers",
+      "is_temporal": false
+    },
+    {
+      "name": "order_date",
+      "owner": "orders",
+      "is_temporal": true
+    }
+  ],
+  "models": [
+    {
+      "name": "customers",
+      "has_timestamp": false,
+      "columns": [
+        "id",
+        "name"
+      ]
+    },
+    {
+      "name": "orders",
+      "has_timestamp": true,
+      "columns": [
+        "id",
+        "customer_id",
+        "order_date",
+        "amount"
+      ]
+    }
+  ],
+  "lineage": {
+    "nodes": [
+      {
+        "id": "model:customers",
+        "kind": "model"
+      },
+      {
+        "id": "model:orders",
+        "kind": "model"
+      },
+      {
+        "id": "rel:orders_customer",
+        "kind": "relationship"
+      },
+      {
+        "id": "cube:order_metrics",
+        "kind": "cube"
+      },
+      {
+        "id": "metric:order_metrics.total_revenue",
+        "kind": "metric"
+      },
+      {
+        "id": "metric:order_metrics.order_count",
+        "kind": "metric"
+      },
+      {
+        "id": "dim:order_metrics.customer_id",
+        "kind": "dimension"
+      },
+      {
+        "id": "query:total-revenue",
+        "kind": "query"
+      }
+    ],
+    "edges": [
+      {
+        "from": "model:orders",
+        "to": "rel:orders_customer"
+      },
+      {
+        "from": "model:customers",
+        "to": "rel:orders_customer"
+      },
+      {
+        "from": "model:orders",
+        "to": "cube:order_metrics"
+      },
+      {
+        "from": "cube:order_metrics",
+        "to": "metric:order_metrics.total_revenue"
+      },
+      {
+        "from": "cube:order_metrics",
+        "to": "metric:order_metrics.order_count"
+      },
+      {
+        "from": "cube:order_metrics",
+        "to": "dim:order_metrics.customer_id"
+      },
+      {
+        "from": "model:orders",
+        "to": "query:total-revenue"
+      }
+    ]
+  },
+  "lineage_diagnostics": []
+}

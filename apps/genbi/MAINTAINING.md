@@ -74,6 +74,65 @@ profiles, so the mismatch surfaces later, as a
 misleading "verified" tuple. Skipping steps 6–7 is the ordinary risk of
 skipping tests before a commit.
 
+## Regenerating a profile's prepared-context document and IR golden
+
+Each profile under `profiles/` ships two generated artifacts alongside its hand-written
+`profile.yml` and `context/binding.yml`:
+
+| Artifact | What it is |
+| --- | --- |
+| `context/context.json` | The **prepared-context document** — the JSON projection of a wren project that a `kind: prepared` binding reads. Warble does not introspect MDL itself; WrenAI's `wren-context-loader` generator produces this, and Warble consumes it. |
+| `ir.golden.json` | The compiled IR for the profile exactly as authored. Not only a test fixture: `RUNNING.md` passes these to the BFF as `WREN_HARNESS_SETUP_IR` / `WREN_HARNESS_ENRICH_IR` / `WREN_HARNESS_ANALYSIS_IR`, and several test suites read them. |
+
+Both are committed so a profile compiles standalone for CI and dev, pinned to this repo's own
+`examples/v5-jaffle`. At run time the host regenerates the document against the user's real project
+and rewrites `project:` (see `composeUserProfile`); nothing at run time reads the committed copies.
+
+Regenerate them, from the repository root, in this order — the golden is compiled *from* the
+document, so a stale document silently produces a stale golden:
+
+```sh
+# 1. Build the generator (once; it is a Rust binary, not an npm dependency).
+cargo build --release --manifest-path core/wren-context-loader/Cargo.toml
+
+# 2. Regenerate the document for each profile that binds `kind: prepared`.
+#    (genbi-setup is excluded: it binds `kind: raw_source` and has no document.)
+for p in genbi-default genbi-monitor genbi-enrich-context; do
+  ./core/wren-context-loader/target/release/wren-context-loader \
+    examples/v5-jaffle -o "apps/genbi/profiles/$p/context/context.json"
+done
+
+# 3. Recompile each golden with the *pinned* `@warble/cli`, so the committed IR matches the
+#    compiler this package actually depends on rather than whatever `warble` is on PATH.
+cd apps/genbi
+for p in genbi-default genbi-monitor genbi-enrich-context genbi-setup; do
+  pnpm exec warble compile "profiles/$p" -o "profiles/$p/ir.golden.json"
+done
+```
+
+Pass **no** `--hub-dir`: the pinned `@warble/cli` binary carries its own Hub component library baked
+in at build time, and that compiled-in default is what makes a golden reproducible for anyone with
+the same pin. Pointing it at a local Warble checkout's `hub/components` instead compiles against a
+component library nobody else has, which is how a golden silently stops being reproducible.
+
+Verify a regeneration rather than trusting it: recompiling an unchanged profile must be a no-op
+(`git diff --stat -- 'apps/genbi/profiles/*/ir.golden.json'` empty). A golden that changes when you
+did not intend it to means something else moved — the pin, the Hub, or the generator — and the diff
+should be understood before it is committed.
+
+### Open question: distributing the generator
+
+`wren-context-loader` is resolved from an **in-repo Rust build** (or an explicit
+`WREN_HARNESS_CONTEXT_LOADER_BIN` override), and resolution loud-fails when neither is present.
+That is sufficient for development in this monorepo and for CI, but it is **not** a distribution
+story: an installed `@wrenai/genbi` has no Rust toolchain and no `core/` tree, so a
+user-project-bound compile cannot resolve the generator at all. Warble faced the same problem with
+its own compiler and solved it by publishing a pinned `@warble/cli` npm package whose postinstall
+downloads a prebuilt platform binary. The analogue for this generator — publish a
+platform-binary npm package, vendor prebuilt binaries, statically link it into an existing
+distributed artifact, or drop the separate binary and expose the projection some other way — is a
+real packaging decision with release-process consequences, and is deliberately **not** settled here.
+
 ### Why `@warble/ir-spec` stays behind
 
 `@warble/ir-spec` is pinned at `0.6.0` and does not move in lockstep with the

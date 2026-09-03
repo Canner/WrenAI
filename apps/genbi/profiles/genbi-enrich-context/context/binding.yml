@@ -1,4 +1,15 @@
-# A pinned, existing semantic project. Runtime hosts replace this fixture binding with the project
-# selected at bind time and must present a successful context-build proof before starting a run.
-# Path is relative to this profile directory.
+# A pinned, existing semantic project, bound as a PREPARED document: `kind: prepared` means Warble
+# reads the JSON document `document:` names — produced by WrenAI's own `wren-context-loader`
+# generator — rather than introspecting the project's MDL itself.
+#
+# `project:` is the layer's IDENTITY, never the document's path; `document:` carries the file. Both
+# resolve relative to this Warble project's own root (the profile directory), not relative to this
+# file.
+#
+# Runtime hosts replace this fixture binding with the project selected at bind time (rewriting
+# `project:` and regenerating `document:`'s file in place) and must present a successful
+# context-build proof before starting a run. See MAINTAINING.md for how to regenerate the committed
+# document.
+kind: prepared
 project: ../../../../examples/v5-jaffle
+document: context/context.json

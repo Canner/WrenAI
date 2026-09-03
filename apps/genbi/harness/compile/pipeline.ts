@@ -5,14 +5,23 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createFileSystemCompileCache } from "./cache.js";
 import { composeUserProfile } from "./compose-profile.js";
+import { resolveContextLoaderBinary } from "./context-loader.js";
 import { WarbleCommandFailedError } from "./errors.js";
 import { hashDirectory, hashFiles } from "./fingerprint.js";
 import { resolveHubDir, resolveWarbleBinary } from "./resolve-binary.js";
 import type { CompileCacheKey, CompileProfileOptions, CompileProfileResult, CompileRawProfileOptions } from "./types.js";
-import { getWarbleIdentity } from "./warble-identity.js";
+import { getBinaryIdentity, getWarbleIdentity } from "./warble-identity.js";
 
 /** Fixed `providerFragmentHash` for `"native"` mode, which never reads `--provider` fragments at all. */
 const NATIVE_MODE_PROVIDER_HASH = "native:no-providers";
+
+/**
+ * Fixed `contextLoaderIdentity` for `compileRawProfile`, which compiles a raw-source binding and so
+ * never runs the `wren-context-loader` generator. A sentinel rather than an empty string, for the
+ * same reason `NATIVE_MODE_PROVIDER_HASH` is one: "the generator was not involved" is a distinct
+ * fact, not an alias for some generator that happened to hash to nothing.
+ */
+const RAW_PROFILE_CONTEXT_LOADER_IDENTITY = "raw-profile:no-context-loader";
 
 /**
  * This package's bundled wren capability-provider fragment (`providers/wren.provider.yaml`) — the
@@ -40,6 +49,13 @@ const WARBLE_COMMAND_TIMEOUT_MS = 2 * 60 * 1000;
  * mode — additionally `warble dispatch --target vercel` for the vercel bundle this package's
  * `runAgent()` consumes.
  *
+ * The rebind runs WrenAI's own `wren-context-loader` generator over `userProject` and binds its
+ * output as a `kind: prepared` document, so Warble reads a projection WrenAI produced rather than
+ * introspecting the semantic layer itself. Resolving that generator loud-fails
+ * ({@link ContextLoaderNotFoundError}) — there is no fallback to Warble's built-in `wren_project`
+ * adapter, because the compiled IR is byte-identical either way and a silent degrade would be
+ * undetectable from the artifact.
+ *
  * A cache hit (see below) never *executes* `warble`, but by default DOES need to resolve + read
  * the binary — its content hash and the Hub root derived from its location are both cache-key
  * inputs (see `warbleIdentity` and `hubDir` below), so a hit can't be trusted without knowing which
@@ -54,13 +70,14 @@ const WARBLE_COMMAND_TIMEOUT_MS = 2 * 60 * 1000;
  * the same no-shell, structured-result `execFile` convention `harness/exec/local.ts` already uses.
  *
  * Results are cached on (profile content hash x user-context fingerprint x mode x resolved
- * provider-fragment content hash x warble binary identity x resolved Hub root) — see `./cache.js` —
- * so an unchanged profile/context/providers/compiler/Hub tuple returns the previous artifact
- * instead of recompiling. Folding in the provider-fragment hash, warble identity and Hub root
- * (rather than just profile+context+mode) matters: otherwise a custom `options.providers` and this
- * package's default fragment collide on the same key, and editing a provider fragment, rebuilding
- * `warble`, or compiling against a different component library would keep serving a stale artifact
- * forever, since there's no TTL/eviction.
+ * provider-fragment content hash x warble binary identity x `wren-context-loader` binary identity x
+ * resolved Hub root) — see `./cache.js` — so an unchanged profile/context/providers/compiler/
+ * generator/Hub tuple returns the previous artifact instead of recompiling. Folding in the
+ * provider-fragment hash, warble identity, generator identity and Hub root (rather than just
+ * profile+context+mode) matters: otherwise a custom `options.providers` and this package's default
+ * fragment collide on the same key, and editing a provider fragment, rebuilding `warble`, rebuilding
+ * the generator, or compiling against a different component library would keep serving a stale
+ * artifact forever, since there's no TTL/eviction.
  *
  * The `warble` invocations run inside a temporary scratch directory (the composed profile + raw
  * compiler output). When the cache relocates the artifacts to a durable home outside that scratch
@@ -71,13 +88,24 @@ const WARBLE_COMMAND_TIMEOUT_MS = 2 * 60 * 1000;
  * a caller-supplied `workDir` is never deleted.
  */
 export async function compileProfile(options: CompileProfileOptions): Promise<CompileProfileResult> {
+  // Resolving the generator is memoized here the same way `ensureWarbleBin` memoizes warble below:
+  // both the identity computation (a cache-key input) and the compose step (on a miss) need it, and
+  // resolution loud-fails rather than degrading to Warble's built-in adapter.
+  let resolvedLoaderBin: string | undefined;
+  const ensureContextLoaderBin = (): string => {
+    resolvedLoaderBin ??= resolveContextLoaderBinary(options.contextLoaderBin);
+    return resolvedLoaderBin;
+  };
+
   return compileProfileSource(
     options,
     await hashDirectory(path.resolve(options.userProject)),
+    async () => options.contextLoaderIdentity ?? (await getBinaryIdentity(ensureContextLoaderBin())),
     (workDir) => composeUserProfile({
       profileSource: options.profileSource,
       userProject: options.userProject,
       destDir: workDir,
+      contextLoaderBin: ensureContextLoaderBin(),
     }),
   );
 }
@@ -89,7 +117,12 @@ export async function compileProfile(options: CompileProfileOptions): Promise<Co
  * the entry whenever the source profile changes.
  */
 export async function compileRawProfile(options: CompileRawProfileOptions): Promise<CompileProfileResult> {
-  return compileProfileSource(options, "raw-profile-context", async () => path.resolve(options.profileSource));
+  return compileProfileSource(
+    options,
+    "raw-profile-context",
+    async () => RAW_PROFILE_CONTEXT_LOADER_IDENTITY,
+    async () => path.resolve(options.profileSource),
+  );
 }
 
 type CompileSourceOptions = Omit<CompileProfileOptions, "userProject">;
@@ -97,6 +130,11 @@ type CompileSourceOptions = Omit<CompileProfileOptions, "userProject">;
 async function compileProfileSource(
   options: CompileSourceOptions,
   contextFingerprint: string,
+  /**
+   * Deferred so `compileRawProfile` never resolves a generator it has no use for, and so the
+   * `contextLoaderIdentity` escape hatch can still skip touching the binary on a hit.
+   */
+  contextLoaderIdentityOf: () => Promise<string>,
   prepareProfile: (workDir: string) => Promise<string>,
 ): Promise<CompileProfileResult> {
   const cache = options.cache ?? createFileSystemCompileCache();
@@ -130,7 +168,17 @@ async function compileProfileSource(
   // warble's compiled-in default applies — today's behaviour, preserved.
   const hubDir = options.hubDir ?? resolveHubDir(await ensureWarbleBin());
 
-  const cacheKey: CompileCacheKey = { profileHash, contextFingerprint, mode: options.mode, providerFragmentHash, warbleIdentity, hubDir };
+  const contextLoaderIdentity = await contextLoaderIdentityOf();
+
+  const cacheKey: CompileCacheKey = {
+    profileHash,
+    contextFingerprint,
+    mode: options.mode,
+    providerFragmentHash,
+    warbleIdentity,
+    contextLoaderIdentity,
+    hubDir,
+  };
 
   const cached = await cache.get(cacheKey);
   if (cached !== undefined) {

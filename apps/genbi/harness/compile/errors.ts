@@ -32,6 +32,40 @@ export class WarbleCommandFailedError extends Error {
   }
 }
 
+/**
+ * Thrown by {@link resolveContextLoaderBinary} (see `./context-loader.js`) when the
+ * `wren-context-loader` generator can be found neither via an explicit override nor as an in-repo
+ * build. Deliberately loud, and deliberately *not* recoverable by falling back to the old
+ * `wren_project` binding: Warble emits neither `kind` nor `document` into the IR, so a silent
+ * degrade to the built-in MDL adapter would be invisible in the compiled artifact.
+ */
+export class ContextLoaderNotFoundError extends Error {
+  constructor(attempts: readonly string[]) {
+    super(
+      `could not resolve the "wren-context-loader" binary:\n` +
+        attempts.map((attempt) => `  - ${attempt}`).join("\n") +
+        `\nfix: build it in-repo ("cargo build --release --manifest-path core/wren-context-loader/Cargo.toml") ` +
+        `or point WREN_HARNESS_CONTEXT_LOADER_BIN at an existing build.`,
+    );
+    this.name = "ContextLoaderNotFoundError";
+  }
+}
+
+/** Thrown when the `wren-context-loader` subprocess exits non-zero. */
+export class ContextLoaderFailedError extends Error {
+  constructor(
+    public readonly command: string,
+    public readonly args: readonly string[],
+    public readonly exitCode: number,
+    public readonly stderr: string,
+    public readonly stdout: string = "",
+  ) {
+    const diagnostics = [stderr.trim(), stdout.trim()].filter((chunk) => chunk.length > 0).join("\n");
+    super(`"${command} ${args.join(" ")}" exited ${exitCode}:\n${diagnostics || "(no output)"}`);
+    this.name = "ContextLoaderFailedError";
+  }
+}
+
 /** Thrown when a Warble profile directory doesn't have the expected `profile.yml` / context-binding shape. */
 export class InvalidProfileShapeError extends Error {
   constructor(message: string) {

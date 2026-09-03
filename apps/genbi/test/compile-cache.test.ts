@@ -23,6 +23,7 @@ const KEY: CompileCacheKey = {
   mode: "agnostic",
   providerFragmentHash: "providers-a",
   warbleIdentity: "warble-a",
+  contextLoaderIdentity: "context-loader-a",
   hubDir: "/hub-a/components",
 };
 const OTHER_KEY: CompileCacheKey = { ...KEY, profileHash: "hash-b" };
@@ -55,6 +56,14 @@ describe("createInMemoryCompileCache", () => {
     const cache = createInMemoryCompileCache();
     await cache.set(KEY, { irPath: "/tmp/ir.json" });
     expect(await cache.get({ ...KEY, warbleIdentity: "warble-b" })).toBeUndefined();
+  });
+
+  it("misses when only the context-loader identity differs (e.g. the generator was rebuilt)", async () => {
+    // The project is unchanged here by construction — `contextFingerprint` is the same string — so
+    // this is the generator's identity carrying the invalidation and nothing else.
+    const cache = createInMemoryCompileCache();
+    await cache.set(KEY, { irPath: "/tmp/ir.json" });
+    expect(await cache.get({ ...KEY, contextLoaderIdentity: "context-loader-b" })).toBeUndefined();
   });
 
   it("misses when only the Hub root differs, and an absent Hub root is its own slot rather than an alias for one", async () => {
