@@ -1,6 +1,6 @@
 {
   "name": "@wrenai/genbi",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Wren GenBI — the web UI for WrenAI: ask questions of your data and get dashboards back",
   "license": "Apache-2.0",
   "keywords": [

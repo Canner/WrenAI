@@ -4,7 +4,7 @@
  * reads an API key only while constructing an in-memory in-process adapter spec.
  */
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -248,15 +248,29 @@ export function collectIrTierNames(ir: unknown): string[] {
 }
 
 /**
- * Compiles the canonical profile source without rebinding its context and
- * extracts its tier contract from IR. This is intentionally independent of
- * auth choice and of any user project: the Setup form must discover the rows
- * before either exists.
+ * Reads the profile's tier contract, which the Setup form needs before an auth
+ * choice or a user project exists.
+ *
+ * A tier name is a static property of the profile — it comes from each
+ * `llm_calls[].tier` — so nothing here depends on what project is bound. The
+ * profile ships its own compiled IR next to it, so the contract is read from
+ * that and no Warble process runs at all.
+ *
+ * Compiling instead is the fallback, and only for a profile source that has no
+ * golden beside it (`WREN_HARNESS_PROFILE` pointed at someone's own profile
+ * tree). It is a fallback rather than the default because `warble compile`
+ * requires a resolvable context binding, and the shipped profiles are bound to
+ * a path that only resolves inside a checkout of this repository: in an
+ * installed package that compile fails, and the Setup form has no rows.
  */
 export async function compileUnboundProfileTierNames(options: {
   readonly profileSource: string;
   readonly warbleBin?: string;
 }): Promise<string[]> {
+  const goldenPath = path.join(path.resolve(options.profileSource), "ir.golden.json");
+  if (existsSync(goldenPath)) {
+    return collectIrTierNames(JSON.parse(await readFile(goldenPath, "utf8")) as unknown);
+  }
   const workDir = await mkdtemp(path.join(tmpdir(), "wren-harness-runtime-tiers-"));
   try {
     const irPath = path.join(workDir, "ir.json");
