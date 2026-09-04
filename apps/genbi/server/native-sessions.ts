@@ -687,7 +687,7 @@ export async function probeNativeSessionProducer(input: {
           return nativeProducerResult(false, identity, phase, "result=launch_spec_incompatible");
         }
       } catch (error) {
-        if (error instanceof NativeWrenRuntimeError) return nativeProducerResult(false, identity, `dispatch_${purpose}_${vendor}`, "result=wren_runtime_unavailable");
+        if (error instanceof NativeWrenRuntimeError) return nativeProducerResult(false, identity, `dispatch_${purpose}_${vendor}`, `result=wren_runtime_unavailable (${error.message})`);
         return nativeProducerResult(false, identity, `dispatch_${purpose}_${vendor}`, "result=preflight_workspace_unavailable");
       } finally {
         if (root) rmSync(root, { recursive: true, force: true });

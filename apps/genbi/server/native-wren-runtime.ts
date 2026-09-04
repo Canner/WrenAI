@@ -22,29 +22,29 @@ export interface NativeWrenRuntime {
 
 export class NativeWrenRuntimeError extends Error {}
 
-function unavailable(): never { throw new NativeWrenRuntimeError("native Wren runtime is unavailable"); }
+function unavailable(reason: string): never { throw new NativeWrenRuntimeError(`native Wren runtime is unavailable: ${reason}`); }
 
 function regularExecutable(file: string): string {
   try {
     const canonical = realpathSync(file);
     const stat = statSync(canonical);
-    if (!stat.isFile() || (stat.mode & 0o111) === 0) unavailable();
+    if (!stat.isFile() || (stat.mode & 0o111) === 0) unavailable("shim target is not an executable regular file");
     return canonical;
   } catch (error) {
     if (error instanceof NativeWrenRuntimeError) throw error;
-    return unavailable();
+    return unavailable("shim target could not be stat-ed");
   }
 }
 
 function directory(directory: string): string {
   try {
     const canonical = realpathSync(directory);
-    if (!statSync(canonical).isDirectory()) unavailable();
+    if (!statSync(canonical).isDirectory()) unavailable("expected a directory");
     accessSync(canonical, constants.R_OK | constants.X_OK);
     return canonical;
   } catch (error) {
     if (error instanceof NativeWrenRuntimeError) throw error;
-    return unavailable();
+    return unavailable("directory could not be resolved");
   }
 }
 
@@ -67,21 +67,21 @@ function stableRegularFile(file: string): StableFile {
   try {
     const stat = lstatSync(file);
     const canonical = realpathSync(file);
-    if (!stat.isFile() || stat.isSymbolicLink() || canonical !== file) unavailable();
+    if (!stat.isFile() || stat.isSymbolicLink() || canonical !== file) unavailable("expected a stable regular file, not a symlink or an alias");
     return { canonical, dev: stat.dev, ino: stat.ino, size: stat.size, mtimeMs: stat.mtimeMs, ctimeMs: stat.ctimeMs };
   } catch (error) {
     if (error instanceof NativeWrenRuntimeError) throw error;
-    return unavailable();
+    return unavailable("file could not be stat-ed");
   }
 }
 
 function stableFileText(file: string): string {
   const before = stableRegularFile(file);
   let text: string;
-  try { text = readFileSync(file, "utf8"); } catch { return unavailable(); }
+  try { text = readFileSync(file, "utf8"); } catch { return unavailable("file could not be read"); }
   const after = stableRegularFile(file);
   if (before.canonical !== after.canonical || before.dev !== after.dev || before.ino !== after.ino ||
-    before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) unavailable();
+    before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) unavailable("file changed while it was being read");
   return text;
 }
 
@@ -89,20 +89,20 @@ function gitCommonDirectory(repository: string): string {
   const gitEntry = path.join(repository, ".git");
   try {
     const entry = lstatSync(gitEntry);
-    if (entry.isSymbolicLink()) unavailable();
+    if (entry.isSymbolicLink()) unavailable("git entry is a symlink");
     if (entry.isDirectory()) return directory(gitEntry);
-    if (!entry.isFile()) unavailable();
+    if (!entry.isFile()) unavailable("git entry is not a file");
     const match = /^gitdir: ([^\r\n]+)\r?\n?$/.exec(stableFileText(gitEntry));
-    if (!match) unavailable();
+    if (!match) unavailable("gitdir line did not parse");
     const worktreeGitDir = directory(path.resolve(repository, match[1]!));
     const commonDirFile = path.join(worktreeGitDir, "commondir");
     try {
       const commonDir = stableFileText(commonDirFile).trim();
-      if (!commonDir) unavailable();
+      if (!commonDir) unavailable("no common git directory");
       const commonDirectory = directory(path.resolve(worktreeGitDir, commonDir));
-      if (!contained(path.join(commonDirectory, "worktrees"), worktreeGitDir)) unavailable();
+      if (!contained(path.join(commonDirectory, "worktrees"), worktreeGitDir)) unavailable("worktree gitdir escapes the common directory");
       const declaredGitFile = path.resolve(worktreeGitDir, stableFileText(path.join(worktreeGitDir, "gitdir")).trim());
-      if (declaredGitFile !== gitEntry) unavailable();
+      if (declaredGitFile !== gitEntry) unavailable("declared gitdir does not match the entry");
       return commonDirectory;
     } catch (error) {
       if (error instanceof NativeWrenRuntimeError) throw error;
@@ -110,7 +110,7 @@ function gitCommonDirectory(repository: string): string {
     }
   } catch (error) {
     if (error instanceof NativeWrenRuntimeError) throw error;
-    return unavailable();
+    return unavailable("git layout could not be inspected");
   }
 }
 
@@ -126,11 +126,11 @@ function serverRepositoryRoot(): string {
     } catch (error) {
       if (error instanceof NativeWrenRuntimeError) {
         const parent = path.dirname(candidate);
-        if (parent === candidate) return unavailable();
+        if (parent === candidate) return unavailable("walked past the filesystem root looking for a repository");
         candidate = parent;
         continue;
       }
-      return unavailable();
+      return unavailable("repository root could not be found");
     }
   }
 }
@@ -143,18 +143,18 @@ function approvedWrenSourceRoot(sourceRoot: string): string {
   try {
     const sourceEntry = lstatSync(sourceRoot);
     const canonical = realpathSync(sourceRoot);
-    if (!sourceEntry.isDirectory() || sourceEntry.isSymbolicLink() || canonical !== sourceRoot) unavailable();
+    if (!sourceEntry.isDirectory() || sourceEntry.isSymbolicLink() || canonical !== sourceRoot) unavailable("source root is not a plain directory");
     const runtimeRepository = directory(path.resolve(sourceRoot, "..", "..", ".."));
-    if (sourceRoot !== path.join(runtimeRepository, "core", "wren", "src")) unavailable();
+    if (sourceRoot !== path.join(runtimeRepository, "core", "wren", "src")) unavailable("source root is not core/wren/src");
     stableRegularFile(path.join(runtimeRepository, "core", "wren", "pyproject.toml"));
     stableRegularFile(path.join(sourceRoot, "wren", "__init__.py"));
-    if (gitCommonDirectory(runtimeRepository) !== gitCommonDirectory(serverRepositoryRoot())) unavailable();
+    if (gitCommonDirectory(runtimeRepository) !== gitCommonDirectory(serverRepositoryRoot())) unavailable("source repository differs from the server repository");
     const after = lstatSync(sourceRoot);
-    if (!after.isDirectory() || after.isSymbolicLink() || realpathSync(sourceRoot) !== canonical) unavailable();
+    if (!after.isDirectory() || after.isSymbolicLink() || realpathSync(sourceRoot) !== canonical) unavailable("source root changed while being checked");
     return canonical;
   } catch (error) {
     if (error instanceof NativeWrenRuntimeError) throw error;
-    return unavailable();
+    return unavailable("source root could not be inspected");
   }
 }
 
@@ -168,35 +168,35 @@ export function defaultNativeWrenShim(): string {
  * closure. The source root comes only from the one editable .pth entry.
  */
 export function resolveNativeWrenRuntime(configuredShim = defaultNativeWrenShim()): NativeWrenRuntime {
-  if (!path.isAbsolute(configuredShim)) unavailable();
+  if (!path.isAbsolute(configuredShim)) unavailable("configured shim path is not absolute");
   try {
     const shimEntry = lstatSync(configuredShim);
-    if (!shimEntry.isSymbolicLink()) unavailable();
+    if (!shimEntry.isSymbolicLink()) unavailable("shim is not a symlink");
   } catch {
-    unavailable();
+    unavailable("shim could not be stat-ed");
   }
   const shim = path.resolve(configuredShim);
   const launcher = regularExecutable(shim);
   const toolRoot = directory(path.dirname(path.dirname(launcher)));
   const toolBin = path.join(toolRoot, "bin");
   const venvPython = path.join(toolBin, "python");
-  if (launcher !== path.join(toolBin, "wren")) unavailable();
+  if (launcher !== path.join(toolBin, "wren")) unavailable("shim does not resolve to <tool root>/bin/wren");
   try {
-    if (!lstatSync(venvPython).isSymbolicLink()) unavailable();
+    if (!lstatSync(venvPython).isSymbolicLink()) unavailable("tool venv python is not a symlink");
   } catch {
-    unavailable();
+    unavailable("tool venv python could not be stat-ed");
   }
   const interpreter = regularExecutable(venvPython);
   const interpreterRoot = directory(path.dirname(path.dirname(interpreter)));
   const interpreterBin = path.join(interpreterRoot, "bin");
-  if (!contained(interpreterBin, interpreter) || interpreter === interpreterBin) unavailable();
+  if (!contained(interpreterBin, interpreter) || interpreter === interpreterBin) unavailable("interpreter is not inside its own bin directory");
   directory(path.join(interpreterRoot, "lib"));
   let hasVenvMetadata = false;
   try { hasVenvMetadata = statSync(path.join(toolRoot, "pyvenv.cfg")).isFile(); } catch { /* fail below */ }
-  if (!hasVenvMetadata) unavailable();
+  if (!hasVenvMetadata) unavailable("tool root has no pyvenv.cfg, so it is not a venv");
   let launcherText: string | undefined;
   try { launcherText = readFileSync(launcher, "utf8"); } catch { /* fail below */ }
-  if (launcherText === undefined || (!launcherText.startsWith(`#!${venvPython}\n`) && !launcherText.startsWith(`#!${venvPython}\r\n`))) unavailable();
+  if (launcherText === undefined || (!launcherText.startsWith(`#!${venvPython}\n`) && !launcherText.startsWith(`#!${venvPython}\r\n`))) unavailable("launcher shebang does not point at the tool venv python");
 
   const toolLib = directory(path.join(toolRoot, "lib"));
   let sitePackages: string;
@@ -207,22 +207,22 @@ export function resolveNativeWrenRuntime(configuredShim = defaultNativeWrenShim(
       .filter((candidate) => {
         try { return statSync(candidate).isDirectory() && stableRegularFile(path.join(candidate, "_editable_impl_wrenai.pth")) !== undefined; } catch { return false; }
       });
-    if (candidates.length !== 1) unavailable();
+    if (candidates.length !== 1) unavailable("expected exactly one lib/python*/site-packages");
     sitePackages = directory(candidates[0]!);
-    if (!contained(toolLib, sitePackages)) unavailable();
+    if (!contained(toolLib, sitePackages)) unavailable("site-packages escapes the tool lib directory");
   } catch (error) {
     if (error instanceof NativeWrenRuntimeError) throw error;
-    return unavailable();
+    return unavailable("tool lib could not be inspected");
   }
   let sourceRoot: string;
   try {
     const lines = stableFileText(path.join(sitePackages, "_editable_impl_wrenai.pth"))
       .split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    if (lines.length !== 1 || !path.isAbsolute(lines[0]!)) unavailable();
+    if (lines.length !== 1 || !path.isAbsolute(lines[0]!)) unavailable("pth file did not contain a single absolute path");
     sourceRoot = approvedWrenSourceRoot(lines[0]!);
   } catch (error) {
     if (error instanceof NativeWrenRuntimeError) throw error;
-    return unavailable();
+    return unavailable("pth file could not be read");
   }
   return {
     version: "1", shim, launcher, venv_python: venvPython, tool_root: toolRoot,
