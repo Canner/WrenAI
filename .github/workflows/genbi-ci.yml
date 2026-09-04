@@ -60,8 +60,11 @@ jobs:
       - name: Warble peer dependency check
         run: pnpm run check:warble-peers
 
-      - name: Test
-        run: pnpm run test
-
+      # Build precedes test deliberately: part of the suite loads the compiled BFF
+      # out of dist-server/ to probe it, so on a fresh checkout those tests fail
+      # rather than skip if nothing has been built yet.
       - name: Build
         run: pnpm run build
+
+      - name: Test
+        run: pnpm run test

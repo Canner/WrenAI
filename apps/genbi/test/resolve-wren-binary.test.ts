@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { WrenBinaryNotFoundError } from "../harness/tools/errors.js";
 import { resolveWrenBinary } from "../harness/tools/resolve-wren-binary.js";
+import { hasTool } from "./tool-availability.js";
 
 describe("resolveWrenBinary (preflight)", () => {
   const originalPath = process.env["PATH"];
@@ -13,7 +14,8 @@ describe("resolveWrenBinary (preflight)", () => {
     }
   });
 
-  it("resolves without throwing when wren is on PATH (environment sanity check)", async () => {
+  // Asserts the machine has `wren`, so it can only run where it does.
+  it.skipIf(!hasTool("wren"))("resolves without throwing when wren is on PATH (environment sanity check)", async () => {
     await expect(resolveWrenBinary()).resolves.toBeUndefined();
   });
 
