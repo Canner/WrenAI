@@ -343,7 +343,7 @@ describe("native session persistence", () => {
     store.close();
   });
 
-  it("isolates sequential and overlapping bound-purpose emissions without touching project-owned discovery files", async () => {
+  it("isolates overlapping bound-purpose emissions without touching project-owned discovery files", async () => {
     const { dir, binding } = fixture("analysis", "codex");
     const state = materializationState();
     mkdirSync(path.join(dir, ".codex"), { recursive: true });
@@ -381,11 +381,31 @@ describe("native session persistence", () => {
     expect(readFileSync(path.join(dir, "AGENTS.md"), "utf8")).toBe("project-owned instructions");
     expect(readFileSync(path.join(dir, ".codex", "config.toml"), "utf8")).toBe("project-owned config");
 
-    expect(service.stop(analysis.row.id, analysis.capability!)).toBe(true);
-    const nextAnalysis = await service.openOrCreate({ purpose: "analysis" });
-    expect(nextAnalysis.row.id).not.toBe(analysis.row.id);
-    expect(roots[2]).toBe(path.join(state.root, "native", nextAnalysis.row.id));
-    expect(new Set(roots).size).toBe(3);
+    store.close();
+  });
+
+  it("isolates a sequential replacement session from its stopped predecessor", async () => {
+    const { dir, binding } = fixture("analysis", "codex");
+    const state = materializationState();
+    const store = new Store(":memory:");
+    store.setRuntimeSettings({ ...store.getRuntimeSettings(), subscriptionProvider: "codex", subscriptionDriverModel: "driver", tierModels: [{ tier: "cheap", model: "cheap" }, { tier: "strong", model: "strong" }] });
+    const roots: string[] = [];
+    const service = new NativeSessionService({
+      store, terminalManager: async () => new InteractiveTerminalManager({ spawn: () => ({ onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} }) }), getBinding: () => binding,
+      workspaceRoot: undefined, materializationState: state,
+      irPaths: { analysis: path.join(dir, "analysis.json"), setup: undefined, context_enrichment: undefined }, warbleBin: "unused",
+      dispatch: async ({ cwd, scope }) => { roots.push(cwd); writeNativeLaunchSpec(cwd, "analysis", "codex", scope); },
+    });
+
+    const first = await service.openOrCreate({ purpose: "analysis" });
+    expect(service.stop(first.row.id, first.capability!)).toBe(true);
+    const replacement = await service.openOrCreate({ purpose: "analysis" });
+    expect(replacement.row.id).not.toBe(first.row.id);
+    expect(roots).toEqual([
+      path.join(state.root, "native", first.row.id),
+      path.join(state.root, "native", replacement.row.id),
+    ]);
+    expect(new Set(roots).size).toBe(2);
     store.close();
   });
 
@@ -1190,17 +1210,15 @@ describe("native session persistence", () => {
     store.close();
   });
 
-  it("fails closed on a swapped sealed Claude handle, concurrent resume, and a failed child launch", async () => {
+  it("fails closed when a sealed Claude handle is copied to another session", async () => {
     const { dir, binding } = fixture("analysis", "claude");
     const state = materializationState(); const store = new Store(":memory:");
     let exits: Array<(event: { exitCode: number }) => void> = [];
-    let launches = 0;
-    let currentBinding = binding;
     const pty: PtyFactory = { spawn: () => ({ onData: () => ({ dispose() {} }), onExit: (listener) => { exits.push(listener); return { dispose() {} }; }, write() {}, resize() {}, kill() {} }) };
     const service = new NativeSessionService({
-      store, terminalManager: async () => new InteractiveTerminalManager(pty), getBinding: () => currentBinding, materializationState: state, workspaceRoot: undefined,
+      store, terminalManager: async () => new InteractiveTerminalManager(pty), getBinding: () => binding, materializationState: state, workspaceRoot: undefined,
       irPaths: { analysis: path.join(dir, "analysis.json"), setup: undefined, context_enrichment: undefined }, warbleBin: "unused",
-      dispatch: async ({ cwd, scope }) => { launches += 1; if (launches === 4) throw new Error("child launch failed"); writeNativeLaunchSpec(cwd, "analysis", "claude", scope); },
+      dispatch: async ({ cwd, scope }) => writeNativeLaunchSpec(cwd, "analysis", "claude", scope),
     });
     const first = await service.create({ purpose: "analysis", vendor: "claude" });
     const second = await service.create({ purpose: "analysis", vendor: "claude" });
@@ -1209,19 +1227,46 @@ describe("native session persistence", () => {
     store.saveNativeSessionResumeHandle(second.row.id, "claude", firstHandle.sealedHandle);
     await expect(service.resume({ id: second.row.id, idempotencyKey: "00000000-0000-4000-8000-000000000121" })).rejects.toThrow(/resume handle is unavailable/);
     expect(store.hasAvailableNativeSessionResume(second.row.id, "claude")).toBe(false);
+    store.close();
+  });
 
+  it("fails closed when the Claude resume binding changes", async () => {
+    const { dir, binding } = fixture("analysis", "claude");
+    const state = materializationState(); const store = new Store(":memory:");
+    let currentBinding = binding;
+    let exit!: (event: { exitCode: number }) => void;
+    const pty: PtyFactory = { spawn: () => ({ onData: () => ({ dispose() {} }), onExit: (listener) => { exit = listener; return { dispose() {} }; }, write() {}, resize() {}, kill() {} }) };
+    const service = new NativeSessionService({
+      store, terminalManager: async () => new InteractiveTerminalManager(pty), getBinding: () => currentBinding, materializationState: state, workspaceRoot: undefined,
+      irPaths: { analysis: path.join(dir, "analysis.json"), setup: undefined, context_enrichment: undefined }, warbleBin: "unused",
+      dispatch: async ({ cwd, scope }) => writeNativeLaunchSpec(cwd, "analysis", "claude", scope),
+    });
     const changed = await service.create({ purpose: "analysis", vendor: "claude" });
-    exits[2]!({ exitCode: 0 });
+    exit({ exitCode: 0 });
     currentBinding = { ...binding!, revision: "sha256:changed" };
     await expect(service.resume({ id: changed.row.id, idempotencyKey: "00000000-0000-4000-8000-000000000125" })).rejects.toThrow(/Runtime or project binding changed/);
     expect(store.hasAvailableNativeSessionResume(changed.row.id, "claude")).toBe(false);
-    currentBinding = binding;
+    store.close();
+  });
 
-    const one = service.resume({ id: first.row.id, idempotencyKey: "00000000-0000-4000-8000-000000000122" });
-    const two = service.resume({ id: first.row.id, idempotencyKey: "00000000-0000-4000-8000-000000000123" });
+  it("consumes one Claude resume handle across concurrent requests and retires a failed child", async () => {
+    const { dir, binding } = fixture("analysis", "claude");
+    const state = materializationState(); const store = new Store(":memory:");
+    let exit!: (event: { exitCode: number }) => void;
+    let launches = 0;
+    const pty: PtyFactory = { spawn: () => ({ onData: () => ({ dispose() {} }), onExit: (listener) => { exit = listener; return { dispose() {} }; }, write() {}, resize() {}, kill() {} }) };
+    const service = new NativeSessionService({
+      store, terminalManager: async () => new InteractiveTerminalManager(pty), getBinding: () => binding, materializationState: state, workspaceRoot: undefined,
+      irPaths: { analysis: path.join(dir, "analysis.json"), setup: undefined, context_enrichment: undefined }, warbleBin: "unused",
+      dispatch: async ({ cwd, scope }) => { launches += 1; if (launches === 2) throw new Error("child launch failed"); writeNativeLaunchSpec(cwd, "analysis", "claude", scope); },
+    });
+    const source = await service.create({ purpose: "analysis", vendor: "claude" });
+    exit({ exitCode: 0 });
+    const one = service.resume({ id: source.row.id, idempotencyKey: "00000000-0000-4000-8000-000000000122" });
+    const two = service.resume({ id: source.row.id, idempotencyKey: "00000000-0000-4000-8000-000000000123" });
     await expect(one).rejects.toThrow(/child launch failed/);
     await expect(two).rejects.toThrow(/resume is unavailable/);
-    const child = store.listNativeSessions().find((row) => row.id !== first.row.id && row.id !== second.row.id)!;
+    const child = store.listNativeSessions().find((row) => row.id !== source.row.id)!;
     expect(store.hasAvailableNativeSessionResume(child.id, "claude")).toBe(false);
     store.close();
   });
@@ -1537,9 +1582,15 @@ describe("native session persistence", () => {
     const third = await service.startSeparate({ purpose: "setup", vendor: "codex", idempotencyKey: "00000000-0000-4000-8000-000000000011" });
     expect(third.row.id).not.toBe(one.row.id);
     expect(spawn).toHaveBeenCalledTimes(2);
+    store.close();
+  });
 
+  it("replays a settled start-separate failure but lets a new action launch", async () => {
+    const setup = fixture("setup", "codex");
+    const rejectedStore = new Store(":memory:");
+    const spawn = vi.fn(() => ({ onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} }));
     const rejected = new NativeSessionService({
-      store: new Store(":memory:"), terminalManager: async () => new InteractiveTerminalManager({ spawn }), getBinding: () => undefined,
+      store: rejectedStore, terminalManager: async () => new InteractiveTerminalManager({ spawn }), getBinding: () => undefined,
       workspaceRoot: setup.dir, irPaths: { analysis: undefined, setup: path.join(setup.dir, "setup.json"), context_enrichment: undefined }, warbleBin: "unused", dispatch: vi.fn().mockRejectedValueOnce(new Error("fail")).mockImplementation(async ({ cwd, scope }: { cwd: string; scope: Record<string, unknown> }) => {
         writeNativeLaunchSpec(cwd, "setup", "codex", scope);
       }),
@@ -1548,10 +1599,11 @@ describe("native session persistence", () => {
     expect(failed).toMatchObject({ row: { status: "failed" }, recoveryCapability: expect.any(String) });
     await expect(rejected.startSeparate({ purpose: "setup", vendor: "codex", idempotencyKey: "00000000-0000-4000-8000-000000000012" })).resolves.toEqual(failed);
     await expect(rejected.startSeparate({ purpose: "setup", vendor: "codex", idempotencyKey: "00000000-0000-4000-8000-000000000013" })).resolves.toMatchObject({ row: { status: "running" } });
-    store.close();
+    expect(spawn).toHaveBeenCalledTimes(1);
+    rejectedStore.close();
   });
 
-  it("expires and fences settled start-separate deliveries before they can reuse stale authority", async () => {
+  it("evicts settled start-separate deliveries by capacity and fences changed binding authority", async () => {
     const { dir, binding } = fixture("analysis", "codex");
     const state = materializationState();
     const store = new Store(":memory:");
@@ -1576,16 +1628,33 @@ describe("native session persistence", () => {
 
       currentBinding = { ...currentBinding, generation: currentBinding.generation + 1, revision: "sha256:replacement" };
       await expect(service.startSeparate({ purpose: "analysis", idempotencyKey: "00000000-0000-4000-8000-000000000020" })).rejects.toThrow(/launch action is stale/);
-      currentBinding = binding!;
+    } finally { clock.mockRestore(); store.close(); }
+  });
+
+  it("expires settled start-separate delivery and rotates authority again after stop", async () => {
+    const { dir, binding } = fixture("analysis", "codex");
+    const state = materializationState();
+    const store = new Store(":memory:");
+    store.setRuntimeSettings({ ...store.getRuntimeSettings(), subscriptionProvider: "codex", subscriptionDriverModel: "driver", tierModels: [{ tier: "cheap", model: "cheap" }, { tier: "strong", model: "strong" }] });
+    const dispatch = vi.fn(async ({ cwd, scope }: { cwd: string; scope: Record<string, unknown> }) => writeNativeLaunchSpec(cwd, "analysis", "codex", scope));
+    const service = new NativeSessionService({
+      store, terminalManager: async () => new InteractiveTerminalManager({ spawn: () => ({ onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} }) }), getBinding: () => binding,
+      workspaceRoot: undefined, materializationState: state,
+      irPaths: { analysis: path.join(dir, "analysis.json"), setup: undefined, context_enrichment: undefined }, warbleBin: "unused", dispatch,
+      startSeparateReplayTtlMs: 10, startSeparateReplayLimit: 4,
+    });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(100);
+    try {
+      const first = await service.startSeparate({ purpose: "analysis", idempotencyKey: "00000000-0000-4000-8000-000000000020" });
       clock.mockReturnValue(111);
       const expired = await service.startSeparate({ purpose: "analysis", idempotencyKey: "00000000-0000-4000-8000-000000000020" });
-      expect(expired.row.id).not.toBe(afterCapacityEviction.row.id);
-      expect(expired.capability).not.toBe(afterCapacityEviction.capability);
-      expect(dispatch).toHaveBeenCalledTimes(4);
+      expect(expired.row.id).not.toBe(first.row.id);
+      expect(expired.capability).not.toBe(first.capability);
       expect(service.stop(expired.row.id, expired.capability!)).toBe(true);
       const afterStop = await service.startSeparate({ purpose: "analysis", idempotencyKey: "00000000-0000-4000-8000-000000000020" });
       expect(afterStop.row.id).not.toBe(expired.row.id);
-      expect(dispatch).toHaveBeenCalledTimes(5);
+      expect(afterStop.capability).not.toBe(expired.capability);
+      expect(dispatch).toHaveBeenCalledTimes(3);
     } finally { clock.mockRestore(); store.close(); }
   });
 
