@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -131,4 +131,33 @@ describe("Codex session WREN_HOME", () => {
     expect(() => materialize(value)).toThrow(/profile is unavailable/);
     expect(existsSync(path.join(value.session, ".wren"))).toBe(false);
   });
+
+  it.each(["symlink", "directory", "mode", "profile", "secrets"] as const)(
+    "rejects retained session-home %s replacement or tampering",
+    (mutation) => {
+      const value = fixture();
+      const home = materialize(value);
+      const destination = home.home;
+      if (mutation === "symlink") {
+        const replacement = path.join(value.root, "replacement-home");
+        mkdirSync(replacement, { mode: 0o700 });
+        rmSync(destination, { recursive: true });
+        symlinkSync(replacement, destination, "dir");
+      } else if (mutation === "directory") {
+        rmSync(destination, { recursive: true });
+        mkdirSync(destination, { mode: 0o700 });
+        writeFileSync(path.join(destination, "profiles.yml"), "active: replacement\n", { mode: 0o600 });
+        writeFileSync(path.join(destination, ".env"), "DB_FILE=replacement\n", { mode: 0o600 });
+      } else if (mutation === "mode") {
+        chmodSync(destination, 0o755);
+      } else if (mutation === "profile") {
+        writeFileSync(path.join(destination, "profiles.yml"), "active: replacement\n");
+      } else {
+        writeFileSync(path.join(destination, ".env"), "DB_FILE=replacement\n");
+      }
+
+      expect(() => home.assertActive?.()).toThrow("native Wren session home is unavailable");
+      home.cleanup?.();
+    },
+  );
 });

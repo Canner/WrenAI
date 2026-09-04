@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, lstatSync, mkdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { NativeWrenRuntime } from "./native-wren-runtime.js";
 import { buildNativeChildEnvironment, nativeProcessEnvironment } from "./native-runtime-spec.js";
@@ -103,10 +104,95 @@ export interface CodexWrenHome {
   readonly cleanup?: () => void;
 }
 
-function validatePrivateFile(file: string): void {
-  const metadata = lstatSync(file);
-  if (!metadata.isFile() || metadata.isSymbolicLink() || realpathSync(file) !== file || (metadata.mode & 0o777) !== 0o600) {
-    throw new InteractiveLaunchError("native Wren session home is unavailable");
+interface PrivatePathIdentity {
+  readonly canonical: string;
+  readonly dev: number;
+  readonly ino: number;
+  readonly mode: number;
+}
+
+interface PrivateFileIdentity extends PrivatePathIdentity {
+  readonly size: number;
+  readonly mtimeMs: number;
+  readonly ctimeMs: number;
+  readonly digest: string;
+}
+
+interface WrenHomeIdentity {
+  readonly directory: PrivatePathIdentity;
+  readonly files: Readonly<Record<string, PrivateFileIdentity>>;
+}
+
+function unavailable(): never {
+  throw new InteractiveLaunchError("native Wren session home is unavailable");
+}
+
+function privateDirectoryIdentity(directory: string): PrivatePathIdentity {
+  try {
+    const metadata = lstatSync(directory);
+    const canonical = realpathSync(directory);
+    if (!metadata.isDirectory() || metadata.isSymbolicLink() || canonical !== directory || (metadata.mode & 0o777) !== 0o700) return unavailable();
+    return { canonical, dev: metadata.dev, ino: metadata.ino, mode: metadata.mode & 0o777 };
+  } catch (error) {
+    if (error instanceof InteractiveLaunchError) throw error;
+    return unavailable();
+  }
+}
+
+function privateFileIdentity(file: string): PrivateFileIdentity {
+  try {
+    const metadata = lstatSync(file);
+    const canonical = realpathSync(file);
+    if (!metadata.isFile() || metadata.isSymbolicLink() || canonical !== file || (metadata.mode & 0o777) !== 0o600) return unavailable();
+    return {
+      canonical,
+      dev: metadata.dev,
+      ino: metadata.ino,
+      mode: metadata.mode & 0o777,
+      size: metadata.size,
+      mtimeMs: metadata.mtimeMs,
+      ctimeMs: metadata.ctimeMs,
+      digest: createHash("sha256").update(readFileSync(file)).digest("hex"),
+    };
+  } catch (error) {
+    if (error instanceof InteractiveLaunchError) throw error;
+    return unavailable();
+  }
+}
+
+function samePathIdentity(left: PrivatePathIdentity, right: PrivatePathIdentity): boolean {
+  return left.canonical === right.canonical && left.dev === right.dev && left.ino === right.ino && left.mode === right.mode;
+}
+
+function sameFileIdentity(left: PrivateFileIdentity, right: PrivateFileIdentity): boolean {
+  return samePathIdentity(left, right)
+    && left.size === right.size
+    && left.mtimeMs === right.mtimeMs
+    && left.ctimeMs === right.ctimeMs
+    && left.digest === right.digest;
+}
+
+function captureWrenHome(destination: string, fileNames: readonly string[]): WrenHomeIdentity {
+  try {
+    const actualNames = readdirSync(destination).sort();
+    const expectedNames = [...fileNames].sort();
+    if (JSON.stringify(actualNames) !== JSON.stringify(expectedNames)) return unavailable();
+    return {
+      directory: privateDirectoryIdentity(destination),
+      files: Object.freeze(Object.fromEntries(expectedNames.map((name) => [name, privateFileIdentity(path.join(destination, name))]))),
+    };
+  } catch (error) {
+    if (error instanceof InteractiveLaunchError) throw error;
+    return unavailable();
+  }
+}
+
+function assertWrenHome(destination: string, expected: WrenHomeIdentity): void {
+  const current = captureWrenHome(destination, Object.keys(expected.files));
+  if (!samePathIdentity(current.directory, expected.directory)) return unavailable();
+  for (const [name, identity] of Object.entries(expected.files)) {
+    const observed = current.files[name];
+    if (!observed || !sameFileIdentity(observed, identity)) return unavailable();
   }
 }
 
@@ -117,7 +203,7 @@ function retirementMarker(cwd: string): string {
 function retire(destination: string, marker: string): void {
   rmSync(destination, { recursive: true, force: true });
   writeFileSync(marker, "retired\n", { encoding: "utf8", mode: 0o600, flag: "wx" });
-  validatePrivateFile(marker);
+  privateFileIdentity(marker);
 }
 
 /** Setup has no bound profile yet, but still receives a fresh private WREN_HOME. */
@@ -129,17 +215,15 @@ export function createEmptyCodexWrenHome(cwd: string): CodexWrenHome {
     if (existsSync(marker)) throw new Error("retired");
     mkdirSync(destination, { mode: 0o700 });
     chmodSync(destination, 0o700);
-    const metadata = lstatSync(destination);
-    if (!metadata.isDirectory() || metadata.isSymbolicLink() || realpathSync(destination) !== destination || (metadata.mode & 0o777) !== 0o700) {
-      throw new Error("invalid directory");
-    }
+    const identity = captureWrenHome(destination, []);
     active = true;
     return Object.freeze({
       home: destination,
       dataRoots: Object.freeze([]),
       active: () => active,
       assertActive: () => {
-        if (!active || !existsSync(destination)) throw new InteractiveLaunchError("native Wren session home is unavailable");
+        if (!active) return unavailable();
+        assertWrenHome(destination, identity);
       },
       cleanup: () => {
         if (!active) return;
@@ -180,19 +264,12 @@ export function materializeCodexWrenHome(input: {
       stdio: ["ignore", "pipe", "ignore"],
       timeout: 10_000,
     });
-    const canonical = realpathSync(destination);
-    const metadata = lstatSync(destination);
-    if (canonical !== destination || !metadata.isDirectory() || metadata.isSymbolicLink() || (metadata.mode & 0o777) !== 0o700) {
-      throw new InteractiveLaunchError("native Wren session home is unavailable");
-    }
-    validatePrivateFile(path.join(destination, "profiles.yml"));
     const envFile = path.join(destination, ".env");
-    if (existsSync(envFile)) validatePrivateFile(envFile);
+    const identity = captureWrenHome(destination, ["profiles.yml", ...(existsSync(envFile) ? [".env"] : [])]);
     active = true;
     const assertActive = () => {
-      if (!active || !existsSync(destination) || !statSync(destination).isDirectory()) {
-        throw new InteractiveLaunchError("native Wren session home is unavailable");
-      }
+      if (!active) return unavailable();
+      assertWrenHome(destination, identity);
     };
     return Object.freeze({
       home: destination,

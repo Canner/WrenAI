@@ -30,7 +30,10 @@ export interface RuntimeHostOptions {
 }
 
 const fixedCodexProbe = (): RuntimeBackendProbeResult<"codex-app-server"> => ({
-  readiness: runtimeNotReady("codex-app-server", "unprovisioned", "codex_app_server_unprovisioned"),
+  // Phase 2A has no managed-runtime record/provisioner yet. This is the first
+  // blocking link for every Codex launch, even while the development-local
+  // PTY host itself is healthy.
+  readiness: runtimeNotReady("codex-app-server", "unprovisioned", "codex_wren_runtime_unprovisioned"),
   diagnostic: { phase: "provisioning" },
 });
 

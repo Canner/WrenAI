@@ -80,8 +80,8 @@ describe("RuntimeHost readiness", () => {
 
     const vendor = new RuntimeHost({ selected: "codex-app-server", deployment: "development", localAvailable: () => true });
     await expect(vendor.probe()).resolves.toMatchObject({
-      backends: { local: { state: "ready" }, "codex-app-server": { state: "unprovisioned", code: "codex_app_server_unprovisioned" } },
-      selectedReadiness: { state: "unprovisioned", code: "codex_app_server_unprovisioned" },
+      backends: { local: { state: "ready" }, "codex-app-server": { state: "unprovisioned", code: "codex_wren_runtime_unprovisioned" } },
+      selectedReadiness: { state: "unprovisioned", code: "codex_wren_runtime_unprovisioned" },
     });
   });
 

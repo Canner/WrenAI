@@ -12,8 +12,11 @@ import { initializeNativeSessionStateBase } from "../server/native-session-works
 import { NativeArtifactService } from "../server/native-artifacts.js";
 import { NativeSessionService, probeNativeSessionProducer } from "../server/native-sessions.js";
 import { RuntimeHost } from "../server/runtime-host/local.js";
+import { runtimeReady } from "../server/runtime-host/policy.js";
 import type { PtyFactory } from "../server/interactive-terminal.js";
 import { attestNativeExecutable } from "../server/native-runtime-spec.js";
+import { createEmptyCodexWrenHome } from "../server/native-wren-home.js";
+import { resolveNativeWrenRuntime } from "../server/native-wren-runtime.js";
 
 const dirs: string[] = [];
 const HELP = ["dispatch", "--target", "--purpose", "--native-scope", "--native-mcp", "--out"].join("\n");
@@ -103,7 +106,7 @@ function irPaths(dir: string) {
   return { analysis: path.join(dir, "analysis.json"), setup: path.join(dir, "setup.json"), context_enrichment: path.join(dir, "context.json") } as const;
 }
 
-function productionService(dir: string, producer: string, wrenShim: string, terminalManager?: () => Promise<InteractiveTerminalManager>, subscriptionProvider: "claude" | "codex" = "codex", runtimeHost?: RuntimeHost) {
+function productionService(dir: string, producer: string, wrenShim: string, terminalManager?: () => Promise<InteractiveTerminalManager>, subscriptionProvider: "claude" | "codex" = "codex", runtimeHost?: RuntimeHost, managedRuntimeAvailable = true) {
   const store = new Store(":memory:");
   store.setRuntimeSettings({ ...store.getRuntimeSettings(), subscriptionProvider, subscriptionDriverModel: "driver", tierModels: subscriptionProvider === "claude" ? [{ tier: "cheap", model: "haiku" }, { tier: "strong", model: "sonnet" }] : [{ tier: "cheap", model: "cheap" }, { tier: "strong", model: "strong" }] });
   const binding = store.activateEnrichmentBinding(resolveEnrichmentBinding(dir));
@@ -126,8 +129,26 @@ function productionService(dir: string, producer: string, wrenShim: string, term
     }
   };
   visitCodex(codexRoot);
+  let managedRuntime;
+  if (managedRuntimeAvailable) {
+    try { managedRuntime = resolveNativeWrenRuntime(wrenShim); } catch { /* absent/invalid remains unprovisioned */ }
+  }
+  const effectiveRuntimeHost = runtimeHost ?? new RuntimeHost({
+    selected: "local",
+    deployment: "development",
+    localAvailable: () => true,
+    ...(managedRuntime ? {
+      vendorProbes: {
+        "codex-app-server": async () => ({
+          readiness: runtimeReady("fixture-managed", ["pty"]),
+          diagnostic: { phase: "provisioning" as const },
+        }),
+      },
+    } : {}),
+  });
   return {
     store,
+    state,
     service: new NativeSessionService({
       store,
       terminalManager: terminalManager ?? (async () => new InteractiveTerminalManager(pty)),
@@ -137,20 +158,16 @@ function productionService(dir: string, producer: string, wrenShim: string, term
       irPaths: irPaths(dir),
       warbleBin: producer,
       wrenShim,
+      runtimeHost: effectiveRuntimeHost,
+      ...(managedRuntime ? { resolveManagedCodexWrenRuntime: () => managedRuntime } : {}),
       terminalHostAvailable: async () => true,
       vendorExecutables: {
         claude: attestNativeExecutable("vendor", process.execPath),
         codex: attestNativeExecutable("vendor", codexBin),
       },
-      ...(runtimeHost ? { runtimeHost } : {}),
       executableAvailable: () => true,
       artifactService: artifacts,
-      prepareCodexWrenHome: ({ cwd }) => {
-        const home = path.join(cwd, ".wren");
-        mkdirSync(home);
-        writeFileSync(path.join(home, "profiles.yml"), "active: fixture\nprofiles:\n  fixture:\n    datasource: duckdb\n");
-        return { home, dataRoots: [] };
-      },
+      prepareCodexWrenHome: ({ cwd }) => createEmptyCodexWrenHome(cwd),
     }),
   };
 }
@@ -181,6 +198,58 @@ describe("native producer compatibility preflight", () => {
     }
     await expect(service.openOrCreate({ purpose: "analysis" })).resolves.toMatchObject({ row: { status: "running", purpose: "analysis" } });
     store.close();
+  });
+
+  it("keeps production Codex unprovisioned when the local PTY host is ready but no managed Wren record exists", async () => {
+    const dir = fixtureDir();
+    const wrenShim = runtimeFixture(dir);
+    const terminalManager = vi.fn(async () => new InteractiveTerminalManager({ spawn: vi.fn() }));
+    const { service, store } = productionService(dir, fakeProducer(dir, "compatible"), wrenShim, terminalManager, "codex", undefined, false);
+
+    const readiness = await service.readiness();
+    expect(readiness.runtimeHost).toMatchObject({
+      selected: "local",
+      selectedReadiness: { state: "ready" },
+      backends: { "codex-app-server": { state: "unprovisioned", code: "codex_wren_runtime_unprovisioned" } },
+    });
+    expect(readiness.purposes.analysis).toMatchObject({
+      available: false,
+      reason: "The managed Wren runtime has not been provisioned.",
+      vendors: {
+        codex: { available: false, reason: "The managed Wren runtime has not been provisioned." },
+        claude: { available: true },
+      },
+    });
+    await expect(service.openOrCreate({ purpose: "analysis" })).rejects.toThrow("The managed Wren runtime has not been provisioned.");
+    expect(terminalManager).not.toHaveBeenCalled();
+    expect(store.listNativeSessions()).toEqual([]);
+    store.close();
+  });
+
+  it("rejects a Codex session home replaced after materialization and before PTY start", async () => {
+    const dir = fixtureDir();
+    const wrenShim = runtimeFixture(dir);
+    const replacement = mkdtempSync(path.join(tmpdir(), "genbi-native-wren-home-replacement-"));
+    dirs.push(replacement);
+    const spawn = vi.fn();
+    let state: ReturnType<typeof initializeNativeSessionStateBase>;
+    const terminalManager = vi.fn(async () => {
+      const sessionIds = readdirSync(path.join(state.root, "native"));
+      expect(sessionIds).toHaveLength(1);
+      const sessionHome = path.join(state.root, "native", sessionIds[0]!, ".wren");
+      rmSync(sessionHome, { recursive: true });
+      symlinkSync(replacement, sessionHome, "dir");
+      return new InteractiveTerminalManager({ spawn });
+    });
+    const fixture = productionService(dir, fakeProducer(dir, "compatible"), wrenShim, terminalManager);
+    state = fixture.state;
+
+    await expect(fixture.service.openOrCreate({ purpose: "analysis" })).rejects.toThrow("native Wren session home is unavailable");
+    expect(terminalManager).toHaveBeenCalledOnce();
+    expect(spawn).not.toHaveBeenCalled();
+    expect(fixture.store.listNativeSessions()).toHaveLength(1);
+    expect(fixture.store.listNativeSessions()[0]).toMatchObject({ status: "failed", failure: "native Wren session home is unavailable" });
+    fixture.store.close();
   });
 
   it("keeps the preflight-resolved executable when the configured symlink retargets before launch", async () => {
@@ -281,12 +350,12 @@ describe("native producer compatibility preflight", () => {
       purposes: {
         analysis: {
           available: false,
-          reason: expect.stringContaining("native Wren runtime is unavailable"),
+          reason: "The managed Wren runtime has not been provisioned.",
           producer: { available: false, category: "native_session_producer_incompatible", diagnostic: expect.stringContaining("wren_runtime_unavailable") },
         },
       },
     });
-    await expect(service.openOrCreate({ purpose: "analysis" })).rejects.toThrow("native Wren runtime is unavailable");
+    await expect(service.openOrCreate({ purpose: "analysis" })).rejects.toThrow("The managed Wren runtime has not been provisioned.");
     expect(store.listNativeSessions()).toEqual([]);
     store.close();
   });
@@ -309,9 +378,11 @@ describe("native producer compatibility preflight", () => {
     expect(readiness.purposes.analysis.available).toBe(true);
     expect(readiness.purposes.analysis.reason).toBeUndefined();
     expect(readiness.purposes.analysis.producer).toMatchObject({ available: true });
-    // The unusable vendor is still reported, with its own cause, rather than
-    // being hidden because the configured one happens to work.
-    expect(readiness.purposes.analysis.vendors.codex).toMatchObject({ available: false, reason: expect.stringContaining("native Wren runtime is unavailable") });
+    // The unusable vendor is still reported through the authoritative managed
+    // record fence rather than being hidden because the configured one happens
+    // to work. The lower deterministic probe above retains the exact broken
+    // editable-chain diagnostic without making it a launch fallback.
+    expect(readiness.purposes.analysis.vendors.codex).toMatchObject({ available: false, reason: "The managed Wren runtime has not been provisioned." });
     expect(readiness.purposes.analysis.vendors.claude).toMatchObject({ available: true });
     store.close();
   });

@@ -26,6 +26,7 @@ import type { CodexWrenHome } from "./native-wren-home.js";
 import { runtimeSettingsCorrection } from "./runtime-binding.js";
 import { sealNativeClaudeResumeHandle, sealNativeResumeHandle, unsealNativeResumeHandle } from "./native-session-resume.js";
 import { RuntimeHost } from "./runtime-host/local.js";
+import { runtimeNotReady } from "./runtime-host/policy.js";
 import type { RuntimeReadiness } from "./runtime-host/types.js";
 
 export const NATIVE_VENDORS = ["claude", "codex"] as const;
@@ -52,6 +53,7 @@ const START_SEPARATE_REPLAY_LIMIT = 128;
 const CODEX_NATIVE_PERMISSION_HEADER = "[permissions.warble_native_wren.filesystem]";
 const PROVIDER_SESSION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CODEX_RESUME_HANDLE_FILE = path.join(".warble", "codex-thread-id");
+const CODEX_WREN_RUNTIME_UNPROVISIONED = runtimeNotReady("codex-app-server", "unprovisioned", "codex_wren_runtime_unprovisioned");
 
 type NativeLaunchPhase =
   | "workspace"
@@ -319,6 +321,13 @@ export interface NativeSessionServiceOptions {
   readonly warbleBin: string;
   /** Absolute server-configured Wren shim for native Codex sessions; never a request input. */
   readonly wrenShim?: string;
+  /**
+   * Server-only managed-runtime record resolver. Phase 2A intentionally has
+   * no production implementation: absence is the fail-closed launch fence.
+   * A later provisioner must revalidate its immutable record in this callback;
+   * the editable `wrenShim` resolver is never a launch fallback.
+   */
+  readonly resolveManagedCodexWrenRuntime?: () => NativeWrenRuntime;
   /** Fixed native child HOME captured by BFF composition, never request input. */
   readonly nativeHome?: string;
   /** Decision-17 profile source selected by server setup mode. */
@@ -1378,6 +1387,14 @@ export class NativeSessionService {
     const selectedRuntimeUnavailable = runtimeHostReadiness.selectedReadiness.state === "ready"
       ? undefined
       : runtimeHostReadiness.selectedReadiness.message;
+    const codexBackendReadiness = runtimeHostReadiness.backends["codex-app-server"];
+    const codexWrenRuntimeUnavailable = this.legacyFixtureMode()
+      ? undefined
+      : this.options.resolveManagedCodexWrenRuntime === undefined
+        ? CODEX_WREN_RUNTIME_UNPROVISIONED.message
+        : codexBackendReadiness.state === "ready"
+          ? undefined
+          : codexBackendReadiness.message;
     const mcpReadiness = this.options.artifactService?.readiness();
     const runtime = this.options.store.getNativeRuntimeBinding();
     const runtimeCorrection = this.options.store.hasExplicitRuntimeSettings()
@@ -1419,7 +1436,8 @@ export class NativeSessionService {
             : mcpReadiness && !mcpReadiness.available
               ? mcpReadiness.reason
               : undefined;
-      const reason = runtimeCorrection ?? selectedRuntimeUnavailable ?? sharedReason;
+      const vendorRuntimeUnavailable = dispatch?.provider === "codex" ? codexWrenRuntimeUnavailable : undefined;
+      const reason = runtimeCorrection ?? selectedRuntimeUnavailable ?? vendorRuntimeUnavailable ?? sharedReason;
       const executable = dispatch?.provider === "claude" ? "claude" : "codex";
       const unavailable = reason ?? (!hostAvailable
         ? "native terminal host cannot spawn local processes on this machine"
@@ -1431,7 +1449,9 @@ export class NativeSessionService {
       // one is unusable and why instead of only that "the producer" is.
       if (!legacyFixture && producer) for (const vendor of NATIVE_VENDORS) {
         const probe = producer.vendors[vendor];
-        vendorReadiness[vendor] = probe?.available === false
+        vendorReadiness[vendor] = vendor === "codex" && codexWrenRuntimeUnavailable
+          ? { available: false, reason: codexWrenRuntimeUnavailable }
+          : probe?.available === false
           ? { available: false, reason: probe.reason ?? "native session producer is incompatible" }
           : !executableAvailable(vendor)
             ? { available: false, reason: `the ${vendor === "claude" ? "claude" : "codex"} interactive CLI is not available on this machine` }
@@ -1496,6 +1516,17 @@ export class NativeSessionService {
       : capturedRuntime;
     const dispatchDefinition = dispatchForPurpose(purpose, legacyRuntime);
     if (!dispatchDefinition) throw new InteractiveLaunchError("native sessions require a saved Runtime & authentication binding");
+    let managedCodexWrenRuntime: NativeWrenRuntime | undefined;
+    if (dispatchDefinition.provider === "codex" && !this.legacyFixtureMode()) {
+      const codexReadiness = runtimeReadiness.backends["codex-app-server"];
+      if (codexReadiness.state !== "ready") throw new InteractiveLaunchError(codexReadiness.message);
+      if (!this.options.resolveManagedCodexWrenRuntime) throw new InteractiveLaunchError(CODEX_WREN_RUNTIME_UNPROVISIONED.message);
+      try {
+        managedCodexWrenRuntime = this.options.resolveManagedCodexWrenRuntime();
+      } catch {
+        throw new InteractiveLaunchError(CODEX_WREN_RUNTIME_UNPROVISIONED.message);
+      }
+    }
     if (purpose !== "setup" && !binding) throw new InteractiveLaunchError("native session requires a current bound project");
     const configuredCwd = binding?.path ?? this.options.workspaceRoot;
     const configuredIr = this.options.irPaths[purpose];
@@ -1564,12 +1595,7 @@ export class NativeSessionService {
       const mcp = artifactService?.issue(row, binding);
       if (mcp) this.artifactCredentials.set(id, mcp.credential);
       let wrenRuntime: NativeWrenRuntime | undefined;
-      try {
-        wrenRuntime = dispatchDefinition.provider === "codex" && !this.legacyFixtureMode() ? resolveNativeWrenRuntime(this.wrenShim) : undefined;
-      } catch (error) {
-        if (error instanceof NativeWrenRuntimeError) throw new InteractiveLaunchError("native Wren runtime is unavailable");
-        throw error;
-      }
+      wrenRuntime = managedCodexWrenRuntime;
       const vendorExecutable = this.vendorExecutables[dispatchDefinition.provider];
       if (!vendorExecutable) throw new InteractiveLaunchError(`the ${dispatchDefinition.provider} interactive CLI is not available on this machine`);
       const producerExecutable = producer?.producer

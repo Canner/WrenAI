@@ -13,11 +13,29 @@ import type { NativeSessionServiceOptions } from "../server/native-sessions.js";
 import { NativeArtifactService, NATIVE_MCP_CREDENTIAL_ENV_VAR, NATIVE_MCP_TOOL_NAME } from "../server/native-artifacts.js";
 import { InteractiveTerminalManager } from "../server/interactive-terminal.js";
 import { RuntimeHost } from "../server/runtime-host/local.js";
+import { runtimeReady } from "../server/runtime-host/policy.js";
 import type { PtyFactory } from "../server/interactive-terminal.js";
 import { attestNativeExecutable, type NativeChildEnvironment } from "../server/native-runtime-spec.js";
+import { resolveNativeWrenRuntime } from "../server/native-wren-runtime.js";
 
 const dirs: string[] = [];
 const NATIVE_MCP_URL = "http://127.0.0.1:4787/api/native-sessions/mcp";
+function managedCodexRuntimeOptions() {
+  return {
+    runtimeHost: new RuntimeHost({
+      selected: "local",
+      deployment: "development",
+      localAvailable: () => true,
+      vendorProbes: {
+        "codex-app-server": async () => ({
+          readiness: runtimeReady("fixture-managed", ["pty"]),
+          diagnostic: { phase: "provisioning" as const },
+        }),
+      },
+    }),
+    resolveManagedCodexWrenRuntime: () => resolveNativeWrenRuntime(),
+  } as const;
+}
 function welcomeFor(purpose: "analysis" | "setup" | "context_enrichment") {
   return purpose === "setup"
     ? "Help me set up this GenBI project. Start by explaining the next setup step and ask what data source I want to connect."
@@ -1444,6 +1462,7 @@ describe("native session persistence", () => {
       workspaceRoot: undefined, materializationState: successState, irPaths: { analysis: path.join(success.dir, "analysis.json"), setup: undefined, context_enrichment: undefined },
       warbleBin: fakeV4Producer(success.dir), artifactService: successArtifacts,
       vendorExecutables: { [vendor]: attestNativeExecutable("vendor", process.execPath) },
+      ...(vendor === "codex" ? managedCodexRuntimeOptions() : {}),
       prepareCodexWrenHome: ({ cwd }) => {
         const home = path.join(cwd, ".wren");
         mkdirSync(home);
@@ -1479,6 +1498,7 @@ describe("native session persistence", () => {
       workspaceRoot: undefined, materializationState: failureState, irPaths: { analysis: undefined, setup: undefined, context_enrichment: path.join(failure.dir, "enrich.json") },
       warbleBin: fakeV4Producer(failure.dir), artifactService: failureArtifacts,
       vendorExecutables: { [vendor]: attestNativeExecutable("vendor", process.execPath) },
+      ...(vendor === "codex" ? managedCodexRuntimeOptions() : {}),
     });
     await expect(failureService.create({ purpose: "context_enrichment", vendor })).rejects.toThrow(/materialization failed/);
     const failedDescriptor = failedIssue.mock.results[0]?.value as { credential: string };
@@ -1702,7 +1722,7 @@ describe("native session persistence", () => {
       ],
       [
         new RuntimeHost({ selected: "codex-app-server", deployment: "development", localAvailable: () => true }),
-        "The Codex app-server runtime has not been provisioned by this GenBI release.",
+        "The managed Wren runtime has not been provisioned.",
       ],
       [
         new RuntimeHost({ selected: "claude-sandbox-runtime", deployment: "development", localAvailable: () => true }),
@@ -1757,7 +1777,7 @@ describe("native session persistence", () => {
     const state = materializationState();
     writeFileSync(path.join(dir, "missing-ir.json"), "{}");
     const store = new Store(":memory:");
-    const service = new NativeSessionService({ store, terminalManager: async () => { throw new Error("not reached"); }, getBinding: () => binding, workspaceRoot: undefined, materializationState: state, irPaths: { analysis: path.join(dir, "missing-ir.json"), setup: undefined, context_enrichment: undefined }, warbleBin: path.join(dir, "missing-warble") });
+    const service = new NativeSessionService({ store, terminalManager: async () => { throw new Error("not reached"); }, getBinding: () => binding, workspaceRoot: undefined, materializationState: state, irPaths: { analysis: path.join(dir, "missing-ir.json"), setup: undefined, context_enrichment: undefined }, warbleBin: path.join(dir, "missing-warble"), ...managedCodexRuntimeOptions() });
     // The launch still fails closed; it now names which link broke instead of
     // reporting the whole producer incompatible.
     await expect(service.create({ purpose: "analysis", vendor: "codex" })).rejects.toThrow("the Warble binary could not be resolved");
