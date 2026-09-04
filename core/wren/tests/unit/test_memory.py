@@ -1854,6 +1854,12 @@ class TestOnnxEmbeddings:
         # onnx is chosen on importability alone, so a WREN_EMBEDDING_MODEL that
         # worked under sentence-transformers can land here. Surfacing the raw
         # 404 as a traceback would make a working config look broken.
+        # _runtime imports onnxruntime before it reaches the stubbed _hf_file,
+        # and this is the only test here that enters the real _runtime -- so it
+        # needs the gate TestOnnxVectorParity uses. The `memory` job installs
+        # sentence-transformers only.
+        pytest.importorskip("onnxruntime", reason="wren[memory-onnx] not installed")
+
         import tokenizers  # noqa: PLC0415
 
         from wren.memory import embeddings  # noqa: PLC0415
