@@ -194,16 +194,36 @@ def _hf_file(repo_id: str, filename: str) -> str:
 def _read_json(repo_id: str, filename: str) -> dict | None:
     """Read a small JSON config from the model repo, or None when absent.
 
-    A corrupt file is not treated as absent. ``_require_mean_pooling`` reads
-    "absent" as "assume mean pooling", so swallowing the error there would
-    wave a CLS-pooled model through with quietly wrong vectors -- and
-    ``json.JSONDecodeError`` is a ``ValueError``, so letting it escape would
-    put it behind the CLI's "Malformed manifest:" instead.
+    "Absent" means the hub answered 404. A cache miss that could not be
+    checked online, a rate limit and a dropped connection are not absence, and
+    neither is a corrupt file. The distinction matters because
+    ``_require_mean_pooling`` reads "absent" as "assume mean pooling": report
+    any of those as absence and a network blip waves a CLS-pooled model
+    through with quietly wrong vectors. ``json.JSONDecodeError`` is also a
+    ``ValueError``, so letting it escape would put it behind the CLI's
+    "Malformed manifest:".
     """
     try:
         path = _hf_file(repo_id, filename)
-    except OSError:
-        return None
+    except OSError as e:
+        from huggingface_hub.errors import (  # noqa: PLC0415
+            EntryNotFoundError,
+            LocalEntryNotFoundError,
+        )
+
+        # A remote 404 is the only answer that means "this repo does not
+        # publish the file". LocalEntryNotFoundError is the opposite: nothing
+        # cached *and* the hub unreachable, so presence is unknown.
+        if isinstance(e, EntryNotFoundError) and not isinstance(
+            e, LocalEntryNotFoundError
+        ):
+            return None
+        raise OnnxBackendError(
+            f"'{filename}' for '{repo_id}' could not be fetched: {e}. Whether "
+            "this model is usable here could not be determined; retry with the "
+            "Hugging Face cache or network available, or set "
+            "WREN_EMBEDDING_BACKEND=sentence-transformers."
+        ) from e
     try:
         return json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as e:
@@ -225,7 +245,15 @@ def _max_seq_length(repo_id: str) -> int:
     the default model reports 512 there against a real length of 128, so
     reading it would diverge from the sentence-transformers backend.
     """
-    config = _read_json(repo_id, "sentence_bert_config.json") or {}
+    try:
+        config = _read_json(repo_id, "sentence_bert_config.json") or {}
+    except OnnxBackendError:
+        # Truncation length is soft where pooling mode is not. An ONNX-native
+        # mirror legitimately ships no sentence_bert_config.json, so an
+        # offline run with the rest of the model cached should fall back here
+        # rather than fail -- getting the length wrong degrades recall,
+        # getting the pooling wrong corrupts the index.
+        config = {}
     value = config.get("max_seq_length")
     if isinstance(value, int) and value > 0:
         return value

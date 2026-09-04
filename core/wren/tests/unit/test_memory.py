@@ -1901,6 +1901,89 @@ class TestOnnxEmbeddings:
         with pytest.raises(embeddings.OnnxBackendError, match="could not be read"):
             embeddings._read_json("acme/model", "1_Pooling/config.json")
 
+    def _hf_errors(self):
+        """A hub 404 and an unreachable hub, as `_read_json` must tell apart.
+
+        The 404 is a stand-in rather than a real `RemoteEntryNotFoundError`:
+        that one's constructor needs a live HTTP response object, and its
+        client is httpx under huggingface-hub 1.x but was requests before --
+        neither of which is in the `memory-onnx` dependency closure. What is
+        under test is where the error sits in the hierarchy, which the
+        stand-in reproduces exactly.
+        """
+        from huggingface_hub.errors import (  # noqa: PLC0415
+            EntryNotFoundError,
+            LocalEntryNotFoundError,
+        )
+
+        class _Remote404(EntryNotFoundError, OSError):
+            pass
+
+        return (
+            _Remote404("404 Client Error"),
+            LocalEntryNotFoundError("cannot reach hub and nothing is cached"),
+        )
+
+    def test_a_remote_404_still_means_absent(self, monkeypatch):
+        from wren.memory import embeddings  # noqa: PLC0415
+
+        remote_404, _ = self._hf_errors()
+
+        def _raise(_repo, _name):
+            raise remote_404
+
+        monkeypatch.setattr(embeddings, "_hf_file", _raise)
+        assert embeddings._read_json("acme/model", "1_Pooling/config.json") is None
+
+    def test_an_unreachable_hub_is_not_reported_as_absent(self, monkeypatch):
+        # _require_mean_pooling reads None as "no pooling config" and returns
+        # early, so treating a dropped connection as absence would wave a
+        # CLS-pooled model through -- the same silent-wrong-vectors outcome the
+        # guard exists to prevent, reached from a third direction.
+        from wren.memory import embeddings  # noqa: PLC0415
+
+        _, offline = self._hf_errors()
+
+        def _raise(_repo, _name):
+            raise offline
+
+        monkeypatch.setattr(embeddings, "_hf_file", _raise)
+        with pytest.raises(embeddings.OnnxBackendError, match="could not be fetched"):
+            embeddings._read_json("acme/model", "1_Pooling/config.json")
+
+    def test_the_pooling_guard_does_not_pass_a_model_it_could_not_check(
+        self, monkeypatch
+    ):
+        from wren.memory import embeddings  # noqa: PLC0415
+
+        _, offline = self._hf_errors()
+
+        def _raise(_repo, _name):
+            raise offline
+
+        monkeypatch.setattr(embeddings, "_hf_file", _raise)
+        with pytest.raises(embeddings.OnnxBackendError):
+            embeddings._require_mean_pooling("acme/model")
+
+    def test_an_unreadable_sequence_length_falls_back_instead_of_failing(
+        self, monkeypatch, caplog
+    ):
+        # Truncation length is soft where pooling mode is not: an ONNX-native
+        # mirror legitimately ships no sentence_bert_config.json, and an
+        # offline run with the rest of the model cached should not die on
+        # being unable to confirm that.
+        from wren.memory import embeddings  # noqa: PLC0415
+
+        _, offline = self._hf_errors()
+
+        def _raise(_repo, _name):
+            raise offline
+
+        monkeypatch.setattr(embeddings, "_hf_file", _raise)
+        with caplog.at_level("DEBUG", logger="wren.memory.embeddings"):
+            assert embeddings._max_seq_length("Xenova/some-model") == 128
+        assert "128" in caplog.text
+
     def test_a_defaulted_sequence_length_is_logged(self, monkeypatch, caplog):
         # ONNX-native mirrors publish onnx/model.onnx but no
         # sentence_bert_config.json, so this default is what an onnx user
@@ -1995,6 +2078,23 @@ class TestBackendErrorsReachTheUser:
         monkeypatch.setattr(index_backend, "get_index", lambda *_a, **_kw: _Index())
         self._assert_clean_exit(self._invoke(["memory", "recall", "-q", "revenue"]))
 
+    def test_fetch_reports_it(self, tmp_path, monkeypatch, error_name):
+        # `fetch` embeds via get_context -> _search_schema whenever the schema
+        # is above the character threshold, and it is the second command in
+        # README section 6 -- a likely place to first meet a backend error.
+        from wren.memory import cli  # noqa: PLC0415
+
+        error = self._error(error_name)
+
+        class _Store:
+            def get_context(self, *_a, **_kw):
+                raise error
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        monkeypatch.setattr(cli, "_load_manifest", lambda _mdl: {"models": []})
+        monkeypatch.setattr(cli, "_get_store", lambda _path: _Store())
+        self._assert_clean_exit(self._invoke(["memory", "fetch", "-q", "revenue"]))
+
     def test_store_reports_it(self, tmp_path, monkeypatch, error_name):
         # `store` writes the markdown first and only then indexes, so the pair
         # is not lost -- but the indexing failure still has to be legible.
@@ -2016,6 +2116,65 @@ class TestBackendErrorsReachTheUser:
                 ["memory", "store", "--nl", "Total revenue", "--sql", "SELECT 1"]
             )
         )
+
+
+@pytest.mark.unit
+class TestBackendErrorHandlingIsStructural:
+    """The handler must cover commands nobody has written yet.
+
+    Wrapping call sites one at a time means the matrix above can only ever
+    enumerate what already exists -- the next command that embeds inherits
+    nothing. Handling it on the group closes the class.
+    """
+
+    def test_the_memory_app_installs_the_handling_group(self):
+        from wren.memory.cli import _MemoryGroup, memory_app  # noqa: PLC0415
+
+        assert memory_app.info.cls is _MemoryGroup
+
+    def test_an_unwrapped_command_is_still_covered(self):
+        import typer  # noqa: PLC0415
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.memory.cli import _MemoryGroup  # noqa: PLC0415
+        from wren.memory.embeddings import (  # noqa: PLC0415
+            UnsupportedPoolingError,
+        )
+
+        # Stands in for the next command to embed: no try/except of its own.
+        sub = typer.Typer(cls=_MemoryGroup)
+
+        @sub.command()
+        def brand_new():
+            raise UnsupportedPoolingError(
+                "Set WREN_EMBEDDING_BACKEND=sentence-transformers to use this model."
+            )
+
+        root = typer.Typer()
+        root.add_typer(sub, name="memory")
+        result = CliRunner().invoke(root, ["memory", "brand-new"])
+        assert result.exit_code == 1, result.output
+        assert "WREN_EMBEDDING_BACKEND=sentence-transformers" in result.output
+        assert "Traceback" not in result.output
+
+    def test_an_ordinary_exit_code_is_not_swallowed(self):
+        import typer  # noqa: PLC0415
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.memory.cli import _MemoryGroup  # noqa: PLC0415
+
+        # typer.Exit subclasses RuntimeError, so a handler written against
+        # RuntimeError instead of OnnxBackendError would rewrite every exit
+        # code in the sub-app to 1.
+        sub = typer.Typer(cls=_MemoryGroup)
+
+        @sub.command()
+        def bails():
+            raise typer.Exit(3)
+
+        root = typer.Typer()
+        root.add_typer(sub, name="memory")
+        assert CliRunner().invoke(root, ["memory", "bails"]).exit_code == 3
 
 
 @pytest.mark.unit

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 from datetime import datetime, timezone
@@ -11,10 +10,37 @@ from typing import Annotated, Optional
 
 import typer
 import yaml
+from typer.core import TyperGroup
+
+
+class _MemoryGroup(TyperGroup):
+    """Report an embedding backend that cannot serve the model, from any command.
+
+    These failures surface lazily from the first encode, so every command that
+    embeds can raise one -- `index`, `store`, `recall`, `fetch`, and whatever
+    is added next. Handling them per call site means each new command has to
+    remember; handling them here means it inherits. Each message already names
+    the way out, so echoing it is enough.
+
+    Scoped to `OnnxBackendError` rather than `RuntimeError`: `typer.Exit`
+    subclasses `RuntimeError`, so the wider catch would rewrite every exit code
+    in this sub-app to 1.
+    """
+
+    def invoke(self, ctx):
+        from wren.memory.embeddings import OnnxBackendError  # noqa: PLC0415
+
+        try:
+            return super().invoke(ctx)
+        except OnnxBackendError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1) from e
+
 
 memory_app = typer.Typer(
     name="memory",
     help="Schema and query memory backed by LanceDB.",
+    cls=_MemoryGroup,
 )
 
 _WREN_HOME = Path(os.environ.get("WREN_HOME", Path.home() / ".wren"))
@@ -105,24 +131,6 @@ def _get_store(path: str | None):
             err=True,
         )
         raise typer.Exit(1)
-
-
-@contextlib.contextmanager
-def _report_backend_errors():
-    """Report an embedding backend that cannot serve the model as itself.
-
-    These surface lazily from the first encode, so every command that embeds
-    can raise one -- not just ``index``. Each message already names the way
-    out, so echoing it is enough; without this they reach the user as a
-    traceback whose most informative line is a 404.
-    """
-    from wren.memory.embeddings import OnnxBackendError  # noqa: PLC0415
-
-    try:
-        yield
-    except OnnxBackendError as e:
-        typer.echo(str(e), err=True)
-        raise typer.Exit(1) from e
 
 
 def _print_results(results: list[dict], output: str) -> None:
@@ -240,14 +248,13 @@ def index(
 
     mem_store = _get_store(path)
 
-    # Backend errors are RuntimeErrors, so they pass the ValueError branch
-    # untouched and land in the handler -- none of them is a manifest problem.
-    with _report_backend_errors():
-        try:
-            result = mem_store.index_schema(manifest, seed_queries=not no_seed)
-        except ValueError as e:
-            typer.echo(f"Malformed manifest: {e}", err=True)
-            raise typer.Exit(1) from e
+    # Backend errors are RuntimeErrors, so they pass this branch untouched and
+    # reach _MemoryGroup -- none of them is a manifest problem.
+    try:
+        result = mem_store.index_schema(manifest, seed_queries=not no_seed)
+    except ValueError as e:
+        typer.echo(f"Malformed manifest: {e}", err=True)
+        raise typer.Exit(1) from e
     typer.echo(
         f"Indexed {result['schema_items']} schema items"
         + (f", {result['seed_queries']} seed queries" if result["seed_queries"] else "")
@@ -409,10 +416,9 @@ def store(
         from wren.memory.store import MemoryStore  # noqa: PLC0415
 
         resolved = path or str(_default_memory_path())
-        with _report_backend_errors():
-            MemoryStore(path=resolved).store_query(
-                nl, sql, datasource=datasource, tags=tags
-            )
+        MemoryStore(path=resolved).store_query(
+            nl, sql, datasource=datasource, tags=tags
+        )
     except ModuleNotFoundError as e:
         if (e.name or "").split(".")[0] not in {
             "lancedb",
@@ -445,8 +451,7 @@ def recall(
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
     idx = get_index(project, path or str(_default_memory_path()))
-    with _report_backend_errors():
-        results = idx.search(query, limit=limit, datasource=datasource)
+    results = idx.search(query, limit=limit, datasource=datasource)
     _annotate_markdown_paths(results)
     _print_results(results, output)
 
