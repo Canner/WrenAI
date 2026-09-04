@@ -28,10 +28,6 @@ Beyond the prerequisites in [README.md](./README.md#prerequisites):
   wren --version
   ```
 
-- Only to run against a Warble you build yourself: a checkout of
-  [Canner/Warble](https://github.com/Canner/Warble), a Rust toolchain, and
-  [`just`](https://github.com/casey/just). The pinned packages cover everything
-  else.
 
 ## Where Warble comes from
 
@@ -39,32 +35,17 @@ Beyond the prerequisites in [README.md](./README.md#prerequisites):
 as ordinary dependencies, so tests, builds and the BFF all resolve a working
 Warble with no further setup.
 
-A sibling `warble` checkout is **not** picked up implicitly, and the
-`WREN_HARNESS_ALLOW_WARBLE_SIBLING_CHECKOUT=1` opt-in will not change that on its
-own: the installed package outranks it, so once dependencies are installed the
-flag never gets a turn. **To run against a Warble you are building, pass
-`--warble-bin` explicitly** — that beats everything else.
+That is the whole story for running GenBI: you do not build Warble to run this.
+
+If you are also working on Warble itself, point `--warble-bin` (and
+`WREN_HARNESS_WARBLE_BIN`) at your own build — an explicit path outranks
+everything else, including the sibling-checkout opt-in, which the installed
+package would otherwise win. Building Warble is documented in
+[its own repository](https://github.com/Canner/Warble#from-source).
 
 Changing a pinned version is its own procedure, with a peer check that matters
 there rather than here: see
 [MAINTAINING.md](./MAINTAINING.md#bumping-the-pinned-warble-version).
-
-### Building your own Warble
-
-```bash
-git clone https://github.com/Canner/Warble.git Warble
-cd Warble
-just release
-just install-ts
-just build-ts
-```
-
-Confirm what you built before pointing anything at it:
-
-```bash
-./target/release/warble --version
-./dispatcher/claude-agent-sdk/dist/cli.js --help
-```
 
 ## Verify the tuple
 
@@ -78,14 +59,6 @@ ask node rather than guessing at the `node_modules` layout:
 ```bash
 WARBLE_BIN="$(node -p "require('node:path').join(require('node:path').dirname(require.resolve('@warble/cli/package.json')), require('@warble/cli/package.json').bin.warble)")"
 AGENT_SDK_BIN="$(node -p "require('node:path').join(require('node:path').dirname(require.resolve('@warble/claude-agent-sdk/package.json')), require('@warble/claude-agent-sdk/package.json').bin['warble-agent-sdk'])")"
-```
-
-Or from a checkout you built:
-
-```bash
-WARBLE_ROOT=/absolute/path/to/Warble
-WARBLE_BIN="$WARBLE_ROOT/target/release/warble"
-AGENT_SDK_BIN="$WARBLE_ROOT/dispatcher/claude-agent-sdk/dist/cli.js"
 ```
 
 Then run it. The dispatcher flag depends on the runtime — this is the Claude
