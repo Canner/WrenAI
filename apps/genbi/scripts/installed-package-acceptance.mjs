@@ -9,13 +9,13 @@
  * minimal PATH and a require hook that turns any source-checkout read into a
  * hard failure, so a checkout-only fallback cannot make this pass.
  */
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { closeServerBounded, runBounded, spawnProcessGroup, stopProcessTree } from "./process-cleanup.mjs";
 import { readSseFrames } from "./sse-frames.mjs";
 
 const packageRoot = path.resolve(process.cwd());
@@ -27,8 +27,10 @@ const sourceAuditHook = path.join(tempRoot, "block-checkout-access.cjs");
 const port = await reservePort();
 const fixtureProvider = await startSetupFixtureProvider();
 let serverProcess;
+let phase = "initialize";
 
 try {
+  markPhase("pack");
   await Promise.all([mkdir(packDirectory), mkdir(installRoot), mkdir(workspaceRoot)]);
   await run("pnpm", ["pack", "--pack-destination", packDirectory], { cwd: packageRoot });
 
@@ -36,6 +38,7 @@ try {
   const packedFiles = await tarFiles(packageTarball);
   assertPublishedFiles(packedFiles);
 
+  markPhase("install");
   await run("npm", ["init", "--yes"], { cwd: installRoot });
   await run("npm", ["install", "--no-audit", "--no-fund", packageTarball], { cwd: installRoot });
 
@@ -49,20 +52,23 @@ try {
     }
   }
 
+  markPhase("start");
   await writeFile(sourceAuditHook, createSourceAuditHook(), { mode: 0o600 });
   const childEnv = controlledEnvironment({ installRoot, workspaceRoot, port, sourceAuditHook, fixtureEndpoint: fixtureProvider.endpoint });
-  serverProcess = spawn("npx", ["--no-install", "genbi"], {
+  serverProcess = spawnProcessGroup("npx", ["--no-install", "genbi"], {
     cwd: installRoot,
     env: childEnv,
     stdio: ["ignore", "pipe", "pipe"],
   });
   const output = collectOutput(serverProcess);
 
+  markPhase("setup-connect");
   await waitForServer(port, output);
   await verifyFirstRunSetup(port, workspaceRoot, fixtureProvider);
-  await stop(serverProcess);
+  await stopProcessTree(serverProcess);
   serverProcess = undefined;
 
+  markPhase("complete");
   process.stdout.write(`${JSON.stringify({
     ok: true,
     checks: [
@@ -72,8 +78,14 @@ try {
     ],
   }, null, 2)}\n`);
 } finally {
-  if (serverProcess) await stop(serverProcess).catch(() => undefined);
-  await Promise.all([closeServer(fixtureProvider.server), rm(tempRoot, { recursive: true, force: true })]);
+  const cleanupErrors = [];
+  markPhase("cleanup-child");
+  if (serverProcess) await stopProcessTree(serverProcess).catch((error) => cleanupErrors.push(error));
+  markPhase("cleanup-fixture");
+  await closeServerBounded(fixtureProvider.server).catch((error) => cleanupErrors.push(error));
+  markPhase("cleanup-temp");
+  await rm(tempRoot, { recursive: true, force: true }).catch((error) => cleanupErrors.push(error));
+  if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, `installed package cleanup failed during ${phase}`);
 }
 
 function controlledEnvironment({ installRoot, workspaceRoot, port: selectedPort, sourceAuditHook: hook, fixtureEndpoint }) {
@@ -291,20 +303,6 @@ function collectOutput(child) {
   return { get exitCode() { return exitCode; }, text: () => `${stdout}${stderr}`.slice(-4_000) };
 }
 
-async function stop(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  child.kill("SIGTERM");
-  await new Promise((resolve) => {
-    const forceKill = setTimeout(() => {
-      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-    }, 5_000);
-    child.once("exit", () => {
-      clearTimeout(forceKill);
-      resolve();
-    });
-  });
-}
-
 async function onlyTarball(directory) {
   const files = (await readdir(directory)).filter((file) => file.endsWith(".tgz"));
   if (files.length !== 1) throw new Error(`expected one package tarball, found ${JSON.stringify(files)}`);
@@ -327,17 +325,7 @@ function assertPublishedFiles(files) {
 }
 
 function run(command, args, options) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { ...options, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => (stdout += chunk));
-    child.stderr.on("data", (chunk) => (stderr += chunk));
-    child.once("error", reject);
-    child.once("exit", (code) => code === 0 ? resolve({ stdout, stderr }) : reject(new Error(`${command} ${args.join(" ")} failed (${code}): ${stderr.slice(-4_000)}`)));
-  });
+  return runBounded(command, args, options);
 }
 
 async function reservePort() {
@@ -356,7 +344,7 @@ function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function closeServer(server) {
-  if (!server.listening) return Promise.resolve();
-  return new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+function markPhase(nextPhase) {
+  phase = nextPhase;
+  process.stderr.write(`[installed-package] phase=${phase}\n`);
 }

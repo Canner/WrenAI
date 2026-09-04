@@ -24,6 +24,8 @@ describe("installed-package and vendor-contract CI wiring", () => {
     const runner = readFileSync(path.join(packageRoot, "scripts", "installed-package-acceptance.mjs"), "utf8");
     expect(runner).toContain("/api/setup/connect");
     expect(runner).toContain("readSseFrames");
+    expect(runner).toContain("spawnProcessGroup");
+    expect(runner).toContain("cleanup-child");
     expect(runner).toContain("Setup connect did not persist its step transition");
     for (const key of [
       "WREN_HARNESS_PROFILE",
