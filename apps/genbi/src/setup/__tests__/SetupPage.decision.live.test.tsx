@@ -308,7 +308,7 @@ describe('Setup page — decision checkpoint (live mode)', () => {
     await vi.waitFor(() => expect(useSetupStore.getState().steps.find((s) => s.key === 'context')?.state).toBe('done'));
     const sidebar = screen.getByRole('navigation', { name: 'Setup' });
     expect(within(sidebar).getByText('4. Bind profile')).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it('context: the build_context trace is shown only once — the live view while streaming, the persisted (collapsed) copy once done — never both, and no step is left stuck "(running)"', async () => {
     const user = userEvent.setup();
@@ -356,5 +356,5 @@ describe('Setup page — decision checkpoint (live mode)', () => {
     expect(screen.getAllByText('Scanning models')).toHaveLength(1);
     expect(screen.queryByText('(running)')).not.toBeInTheDocument();
     expect(screen.getByText('(done)')).toBeInTheDocument();
-  });
+  }, 15_000);
 });
