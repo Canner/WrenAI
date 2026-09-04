@@ -257,7 +257,7 @@ export class CodexAskEventMapper {
         ) {
           throw new Error("warble-codex-local Ask emitted an invalid dashboard render artifact");
         }
-        // Dashboard CONTENT requirement (decision-56): genbi owns the product
+        // Dashboard CONTENT requirement: genbi owns the product
         // shape of a dashboard -- a rendered dashboard must carry at least
         // one data panel (`kpi_card`/`chart`/`table`) and one `definition`.
         // This is the guarantee's owner now that warble-codex-local no

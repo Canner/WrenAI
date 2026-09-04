@@ -116,7 +116,7 @@ describe.skipIf(!canRun)(
       // JSON with `loadBundleWithProvenance` before this DTO mapping.
       // `apply_enrichment` is unavailable on the compiled programmatic
       // dispatch target (claude-agent-sdk:local) — but this purpose's native
-      // session IS available, so per decision-43 the component actually runs
+      // session IS available, so the component actually runs
       // (via native CLI, not the programmatic path) and must be promoted to
       // "ready", qualified by the native target, rather than shown as
       // Unavailable at the wrong axis.

@@ -172,7 +172,7 @@ describe("Codex Ask CLI contract", () => {
   });
 
   it("degrades a dashboard render artifact that is short a data panel or a definition, same as today's render_degraded", async () => {
-    // decision-56: genbi host owns the "at least one data panel + one
+    // genbi host owns the "at least one data panel + one
     // definition" content guarantee now that warble-codex-local no longer
     // enforces it. Before (dashboard-degraded, above) and after (these two
     // scenarios simulate a target that no longer rejects short content)

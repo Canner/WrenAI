@@ -11,6 +11,7 @@ Path → License map
 
   | Path                          | License                                       |
   | ----------------------------- | --------------------------------------------- |
+  | `apps/**`                     | Apache License 2.0                            |
   | `core/**`                     | Apache License 2.0 (see LICENSE-APACHE-2.0)   |
   | `sdk/**`                      | Apache License 2.0                            |
   | `skills/**`                   | Apache License 2.0                            |
