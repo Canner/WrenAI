@@ -1,20 +1,12 @@
 # GenBI app (`@wrenai/genbi`)
 
-A verified-first GenBI web app: it renders the structured answer envelopes
-(`blocks[]` + a `verified` flag) produced by the Wren agent harness — tables,
-charts, KPIs, narrative text — rather than assembling SQL itself.
+WrenAI's web UI. Point it at your data through the setup wizard, then ask
+questions in the browser and get answers back as tables, charts, KPIs and
+narrative.
 
-| Concern | Choice |
-| --- | --- |
-| Build / dev | Vite — client-rendered SPA, no SSR |
-| UI | React + Ant Design (Wren AI Design System theme) |
-| Routing | React Router |
-| State | Zustand |
-| Charts | ECharts |
-
-It's a plain SPA rather than an SSR framework on purpose: it only talks to the
-BFF over HTTP/SSE and builds to static assets, so a future desktop shell or
-PWA stays a thin increment.
+The app does not write SQL itself. A question goes to the Wren agent harness,
+which answers with a structured envelope — the blocks to render, and whether the
+answer was verified — and the UI renders that.
 
 > This README is for people building or contributing to the app from
 > source. If you just want to install and run the published package, see
@@ -35,9 +27,8 @@ cover the rest:
 - The separately installed `wren` CLI on `PATH`. Live questions and context
   inspection shell out to it; the app does not install it for you.
 
-For a live, BFF-backed dev loop you'll also need the pinned `@warble/*`
-packages (already pulled in by `pnpm install`, see below) or a Warble
-checkout, and a logged-in Claude CLI subscription — see
+A live, BFF-backed dev loop also needs a provider CLI you are logged in to. The
+pinned `@warble/*` packages are already pulled in by `pnpm install` — see
 [RUNNING.md § Prerequisites](./RUNNING.md#prerequisites).
 
 ## Getting started
@@ -74,7 +65,7 @@ VITE_BFF_URL=http://localhost:4787 pnpm dev
 Open the URL Vite prints — `http://localhost:5273` unless something already holds
 that port, in which case it takes the next free one and says which.
 
-You need a provider CLI on `PATH` (`claude`); the harness probes for one at boot
+You need a provider CLI on `PATH` (`claude` or `codex`); the harness probes for one at boot
 and says so plainly if it finds none. `WREN_HARNESS_WORKSPACE_ROOT` is the
 directory Setup scaffolds new projects into — the one thing with no sensible
 default. Everything else the BFF needs it resolves itself.
@@ -117,15 +108,27 @@ against real projects and depend on how well the configured model behaves. If a
 test you didn't touch fails and mentions a real query, check whether it's one of
 these before going looking for your own bug.
 
-## Layout
+## Architecture
 
 ```
 src/      the frontend SPA — React + Ant Design, one Zustand store per feature
 server/   the BFF — Hono REST + SSE routes over a SQLite-backed session/artifact store
-harness/  the agent runtime the BFF wraps — compiles a per-user profile and dispatches a turn to it
-profiles/ the GenBI Warble profiles (genbi-default/-setup/-enrich-context/-monitor) + their goldens
+harness/  the agent runtime the BFF wraps — compiles a per-user profile and dispatches it
+profiles/ the GenBI Warble profiles (genbi-default/-setup/-enrich-context/-monitor) + IRs
 ```
 
-End to end: a question goes to the harness, which compiles the user's
-profile and dispatches it to the configured backend; a verified answer
-envelope comes back, and the UI renders it.
+End to end: a question goes to the harness, which compiles the user's profile and
+dispatches it to the configured backend; a verified answer envelope comes back,
+and the UI renders it.
+
+| Concern | Choice |
+| --- | --- |
+| Build / dev | Vite — client-rendered SPA, no SSR |
+| UI | React + Ant Design (Wren AI Design System theme) |
+| Routing | React Router |
+| State | Zustand |
+| Charts | ECharts |
+
+It is a plain SPA rather than an SSR framework on purpose: it only talks to the
+BFF over HTTP/SSE and builds to static assets, so a future desktop shell or PWA
+stays a thin increment.
