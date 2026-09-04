@@ -50,6 +50,18 @@ jobs:
       - name: Enable corepack (pnpm via packageManager field)
         run: corepack enable
 
+      # The native-session preflight resolves the wren CLI through the uv tool
+      # layout at ~/.local/bin/wren, not through PATH, and reports the Codex
+      # dispatch path unavailable without it. wrenai is on PyPI and needs no
+      # credentials, so CI installs it rather than skipping that coverage.
+      - name: Install the wren CLI
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install wrenai
+        run: |
+          uv tool install wrenai
+          wren --version
+
       - name: Install workspace dependencies
         working-directory: .
         run: pnpm install --frozen-lockfile
