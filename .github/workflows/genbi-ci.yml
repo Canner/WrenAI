@@ -74,6 +74,10 @@ jobs:
         working-directory: .
         run: pnpm install --frozen-lockfile
 
+      - name: Test context-loader installer contract
+        working-directory: .
+        run: pnpm --dir apps/context-loader test
+
       - name: Typecheck
         run: pnpm run typecheck
 

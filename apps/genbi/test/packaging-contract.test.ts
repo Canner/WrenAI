@@ -23,6 +23,8 @@ describe("installed-package and vendor-contract CI wiring", () => {
     expect(workflow).toContain("macOS packed-install context-loader acceptance");
     expect(workflow).toContain("runs-on: macos-14");
     expect(workflow).toContain("pnpm run check:installed-package");
+    expect(workflow).toContain("Test context-loader installer contract");
+    expect(workflow).toContain("pnpm --dir apps/context-loader test");
   });
 
   it("keeps the deterministic vendor-contract entry point explicit", () => {

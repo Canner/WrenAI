@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
 import { CANONICAL_BINARY, ContextLoaderPackageError, isSha256, readJson, sha256File, targetFor } from "../lib/verified.mjs";
@@ -42,6 +42,26 @@ export async function installContextLoader({ packageRoot, fetchImpl = fetch, pla
   } catch (error) {
     await rm(staging, { force: true });
     throw error instanceof ContextLoaderPackageError ? error : new ContextLoaderPackageError("download-failed", "could not download the required artifact (offline cache miss)");
+  }
+}
+
+/**
+ * The checked-out source package carries an intentionally empty, pre-release
+ * artifact template. Only that exact repository layout skips postinstall;
+ * packed packages always download and verify their tagged artifact.
+ */
+export async function isRepositorySourcePackage(packageRoot) {
+  const repositoryRoot = path.resolve(packageRoot, "..", "..");
+  if (path.resolve(packageRoot) !== path.join(repositoryRoot, "apps", "context-loader")) return false;
+  try {
+    await Promise.all([
+      access(path.join(repositoryRoot, ".git")),
+      access(path.join(repositoryRoot, "pnpm-workspace.yaml")),
+      access(path.join(repositoryRoot, "core", "wren", "pyproject.toml")),
+    ]);
+    return true;
+  } catch {
+    return false;
   }
 }
 

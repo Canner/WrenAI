@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
@@ -47,10 +47,13 @@ async function makeVerifiedPackage(marker: string, version = "0.1.0"): Promise<s
   const binary = path.join(root, "bin", "wren-context-loader");
   const content = Buffer.from(`#!/bin/sh\n# ${marker}\n`);
   const digest = createHash("sha256").update(content).digest("hex");
+  const archiveSha256 = "a".repeat(64);
+  const target = `${process.platform}-${process.arch}`;
   await mkdir(path.dirname(binary), { recursive: true });
   await writeFile(binary, content, { mode: 0o755 });
   await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "@wrenai/context-loader", version }));
-  await writeFile(path.join(root, "install-state.json"), JSON.stringify({ package: "@wrenai/context-loader", version, target: `${process.platform}-${process.arch}`, binaryPath: path.join("bin", "wren-context-loader"), binarySha256: digest }));
+  await writeFile(path.join(root, "artifacts.json"), JSON.stringify({ schema: 1, package: "@wrenai/context-loader", version, artifacts: { [target]: { url: "https://example.invalid/context-loader.tar.gz", archiveSha256, binarySha256: digest, binaryPath: "wren-context-loader" } } }));
+  await writeFile(path.join(root, "install-state.json"), JSON.stringify({ package: "@wrenai/context-loader", version, target, archiveSha256, binaryPath: path.join("bin", "wren-context-loader"), binarySha256: digest }));
   return root;
 }
 
@@ -113,7 +116,7 @@ describe("verified package context loader", () => {
     const a = readVerifiedContextLoaderPackage(aRoot);
     const b = readVerifiedContextLoaderPackage(bRoot);
     expect(a?.kind).toBe("package");
-    expect(a?.bin).toBe(path.join(aRoot, "bin", "wren-context-loader"));
+    expect(a?.bin).toBe(await realpath(path.join(aRoot, "bin", "wren-context-loader")));
     expect(a).toBeDefined();
     expect(b).toBeDefined();
     expect(getContextLoaderIdentity(a!)).not.toBe(getContextLoaderIdentity(b!));
@@ -126,6 +129,38 @@ describe("verified package context loader", () => {
     const stale = await makeVerifiedPackage("stale");
     await writeFile(path.join(stale, "install-state.json"), JSON.stringify({ package: "@wrenai/context-loader", version: "0.0.0", target: `${process.platform}-${process.arch}`, binaryPath: path.join("bin", "wren-context-loader"), binarySha256: "0".repeat(64) }));
     expect(readVerifiedContextLoaderPackage(stale)).toBeUndefined();
+  });
+
+  it("requires the packaged artifact manifest to attest the record and binary, not merely a self-reported state hash", async () => {
+    const missingManifest = await makeVerifiedPackage("missing-manifest");
+    await rm(path.join(missingManifest, "artifacts.json"));
+    expect(readVerifiedContextLoaderPackage(missingManifest)).toBeUndefined();
+
+    const forgedState = await makeVerifiedPackage("trusted");
+    const forgedBytes = Buffer.from("#!/bin/sh\n# forged\n");
+    const forgedDigest = createHash("sha256").update(forgedBytes).digest("hex");
+    await writeFile(path.join(forgedState, "bin", "wren-context-loader"), forgedBytes, { mode: 0o755 });
+    const state = JSON.parse(await readFile(path.join(forgedState, "install-state.json"), "utf8"));
+    await writeFile(path.join(forgedState, "install-state.json"), JSON.stringify({ ...state, binarySha256: forgedDigest }));
+    expect(readVerifiedContextLoaderPackage(forgedState)).toBeUndefined();
+  });
+
+  it("rejects final-file and ancestor-directory symlinks even when their bytes match the declared digest", async () => {
+    const finalLink = await makeVerifiedPackage("final-link");
+    const finalTarget = path.join(await mkdtemp(path.join(os.tmpdir(), "wren-harness-loader-external-")), "wren-context-loader");
+    const finalBytes = await readFile(path.join(finalLink, "bin", "wren-context-loader"));
+    await writeFile(finalTarget, finalBytes, { mode: 0o755 });
+    await rm(path.join(finalLink, "bin", "wren-context-loader"));
+    await symlink(finalTarget, path.join(finalLink, "bin", "wren-context-loader"));
+    expect(readVerifiedContextLoaderPackage(finalLink)).toBeUndefined();
+
+    const ancestorLink = await makeVerifiedPackage("ancestor-link");
+    const externalDir = await mkdtemp(path.join(os.tmpdir(), "wren-harness-loader-external-dir-"));
+    const ancestorBytes = await readFile(path.join(ancestorLink, "bin", "wren-context-loader"));
+    await writeFile(path.join(externalDir, "wren-context-loader"), ancestorBytes, { mode: 0o755 });
+    await rm(path.join(ancestorLink, "bin"), { recursive: true });
+    await symlink(externalDir, path.join(ancestorLink, "bin"));
+    expect(readVerifiedContextLoaderPackage(ancestorLink)).toBeUndefined();
   });
 });
 

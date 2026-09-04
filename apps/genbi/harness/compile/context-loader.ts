@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -97,35 +97,89 @@ function resolveVerifiedPackageBinary(): ResolvedContextLoader | undefined {
 /** Validates a package-local installation record without resolving it from the host environment. */
 export function readVerifiedContextLoaderPackage(packageRoot: string, target = targetForCurrentPlatform()): ResolvedContextLoader | undefined {
   try {
-    const packageJson = readJson(path.join(packageRoot, "package.json"));
-    const state = readJson(path.join(packageRoot, "install-state.json"));
-    const bin = path.resolve(packageRoot, CANONICAL_PACKAGE_BINARY);
+    const root = physicalPackageRoot(packageRoot);
+    if (root === undefined) return undefined;
+    const packageJson = readVerifiedJson(root, "package.json");
+    const manifest = readVerifiedJson(root, "artifacts.json");
+    const state = readVerifiedJson(root, "install-state.json");
+    if (packageJson === undefined || manifest === undefined || state === undefined) return undefined;
+    const artifacts = typeof manifest.artifacts === "object" && manifest.artifacts !== null ? manifest.artifacts as Record<string, unknown> : undefined;
+    const artifact = artifacts?.[target];
+    const bin = physicalRegularFile(root, CANONICAL_PACKAGE_BINARY);
     if (
       packageJson.name !== CONTEXT_LOADER_PACKAGE ||
       typeof packageJson.version !== "string" ||
+      manifest.schema !== 1 ||
+      manifest.package !== CONTEXT_LOADER_PACKAGE ||
+      manifest.version !== packageJson.version ||
+      !isArtifact(artifact) ||
       state.package !== CONTEXT_LOADER_PACKAGE ||
       state.version !== packageJson.version ||
       state.target !== target ||
       state.binaryPath !== CANONICAL_PACKAGE_BINARY ||
-      !isSha256(state.binarySha256) ||
-      !bin.startsWith(`${packageRoot}${path.sep}`) ||
-      !existsSync(bin) ||
-      createHash("sha256").update(readFileSync(bin)).digest("hex") !== state.binarySha256
+      state.archiveSha256 !== artifact.archiveSha256 ||
+      state.binarySha256 !== artifact.binarySha256 ||
+      bin === undefined ||
+      createHash("sha256").update(readFileSync(bin)).digest("hex") !== artifact.binarySha256
     ) {
       return undefined;
     }
-    return { bin, kind: "package", verifiedIdentity: `package:${CONTEXT_LOADER_PACKAGE}@${packageJson.version}:${target}:${state.binarySha256}` };
+    return { bin, kind: "package", verifiedIdentity: `package:${CONTEXT_LOADER_PACKAGE}@${packageJson.version}:${target}:${artifact.binarySha256}` };
   } catch {
     return undefined;
   }
 }
 
-function readJson(file: string): Record<string, unknown> {
-  return JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+function readVerifiedJson(root: string, relativePath: string): Record<string, unknown> | undefined {
+  const file = physicalRegularFile(root, relativePath);
+  if (file === undefined) return undefined;
+  try {
+    const value = JSON.parse(readFileSync(file, "utf8"));
+    return typeof value === "object" && value !== null ? value as Record<string, unknown> : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function isSha256(value: unknown): value is string {
   return typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
+}
+
+function isArtifact(value: unknown): value is { archiveSha256: string; binarySha256: string; binaryPath: string; url: string } {
+  if (typeof value !== "object" || value === null) return false;
+  const artifact = value as Record<string, unknown>;
+  return (
+    typeof artifact.url === "string" &&
+    artifact.url.startsWith("https://") &&
+    isSha256(artifact.archiveSha256) &&
+    isSha256(artifact.binarySha256) &&
+    typeof artifact.binaryPath === "string" &&
+    !artifact.binaryPath.includes("..") &&
+    !path.isAbsolute(artifact.binaryPath)
+  );
+}
+
+/** Returns a package-owned physical root; package-root symlinks are never trusted. */
+function physicalPackageRoot(packageRoot: string): string | undefined {
+  try {
+    if (!lstatSync(packageRoot).isDirectory()) return undefined;
+    return realpathSync(packageRoot);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Refuses final-file links and any ancestor link that resolves outside the physical package root. */
+function physicalRegularFile(root: string, relativePath: string): string | undefined {
+  const lexical = path.resolve(root, relativePath);
+  if (!lexical.startsWith(`${root}${path.sep}`)) return undefined;
+  try {
+    if (!lstatSync(lexical).isFile()) return undefined;
+    const physical = realpathSync(lexical);
+    return physical.startsWith(`${root}${path.sep}`) && statSync(physical).isFile() ? physical : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function targetForCurrentPlatform(): string {
