@@ -1,6 +1,7 @@
 import { closeSync, constants, fchmodSync, fstatSync, lstatSync, openSync } from "node:fs";
 import path from "node:path";
 import { nativeTerminalEnvironment, type PtyFactory, type PtyProcess } from "./interactive-terminal.js";
+import { nativeProcessEnvironment, type NativeChildEnvironment } from "./native-runtime-spec.js";
 
 interface NodePtyModule {
   spawn(
@@ -18,7 +19,7 @@ interface NodePtyModule {
 
 export interface PtyHostOptions {
   readonly cwd?: string;
-  readonly env?: NodeJS.ProcessEnv;
+  readonly env?: NodeJS.ProcessEnv | NativeChildEnvironment;
   readonly probeExecutable?: string;
   readonly probeTimeoutMs?: number;
 }
@@ -89,7 +90,7 @@ export async function createProbedPtyFactory(
       cols: 80,
       rows: 24,
       name: "xterm-256color",
-      env,
+      env: nativeProcessEnvironment(env),
     });
   } catch {
     throw new Error("interactive terminal host cannot spawn local processes");
@@ -118,7 +119,7 @@ export async function createProbedPtyFactory(
       name: "xterm-256color",
       // Defend this lower adapter too: future PTY callers cannot bypass the
       // server-owned native-terminal color contract by supplying an env.
-      env: nativeTerminalEnvironment(spawnOptions.env ?? env),
+      env: nativeProcessEnvironment(nativeTerminalEnvironment(spawnOptions.env ?? env)),
     }),
   };
 }

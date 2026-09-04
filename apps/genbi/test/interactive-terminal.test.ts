@@ -1,10 +1,11 @@
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getInteractiveTerminalReadiness, InteractiveLaunchError, InteractiveTerminalManager, interactiveExecutableAvailable, legacyInteractiveWorkspace, nativeTerminalEnvironment, prepareInteractiveHandoff, readInteractiveLaunchSpec, TERMINAL_OUTPUT_RETENTION_LIMIT_BYTES, type PtyFactory } from '../server/interactive-terminal.js';
+import { dispatchInteractiveArtifacts, getInteractiveTerminalReadiness, InteractiveLaunchError, InteractiveTerminalManager, interactiveExecutableAvailable, legacyInteractiveWorkspace, nativeTerminalEnvironment, prepareInteractiveHandoff, readInteractiveLaunchSpec, TERMINAL_OUTPUT_RETENTION_LIMIT_BYTES, type PtyFactory } from '../server/interactive-terminal.js';
 import { initializeNativeSessionStateBase } from '../server/native-session-workspace.js';
 import type { EnrichmentBinding } from '../server/enrichment.js';
+import { attestNativeExecutable, buildNativeChildEnvironment } from '../server/native-runtime-spec.js';
 
 const dirs: string[] = [];
 function fixture(target: 'claude-code:interactive' | 'codex:interactive' = 'claude-code:interactive') {
@@ -21,7 +22,7 @@ function unmaterializedFixture() {
 function writeSpec(project: string, target: 'claude-code:interactive' | 'codex:interactive') {
   writeFileSync(path.join(project, '.warble', 'interactive-launch.json'), JSON.stringify({ version: '1', target, executable: target.startsWith('claude') ? 'claude' : 'codex', argv: [], cwd: project, artifact_root: project, handoff_path: path.join(project, 'RUN.md') }));
 }
-afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
+afterEach(() => { vi.unstubAllEnvs(); while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
 
 function managedFixture() {
   const project = fixture(); const binding: EnrichmentBinding = { path: realpathSync(project), identity: 'dev:1:ino:1', generation: 3, revision: 'sha256:fixture' };
@@ -84,6 +85,36 @@ describe('interactive launch specification', () => {
     expect(session.fallbackCommand).not.toMatch(/&& codex(?:\s|$)/);
   });
 
+  it('runs the compatibility producer with a sealed environment and rejects rotation before a second spawn', async () => {
+    const project = fixture('codex:interactive');
+    const producerPath = path.join(project, 'producer');
+    const marker = path.join(project, 'producer-ran');
+    const rotatedMarker = path.join(project, 'rotated-producer-ran');
+    writeFileSync(producerPath, `#!/bin/sh\ntest -z "$NODE_PATH" || exit 9\nprintf ran > '${marker}'\n`, { mode: 0o700 });
+    const producer = attestNativeExecutable('producer', producerPath);
+    const env = buildNativeChildEnvironment({ toolDirectories: [project], home: homedir(), projectPath: project });
+    vi.stubEnv('NODE_PATH', project);
+
+    await dispatchInteractiveArtifacts({
+      producer,
+      irPath: path.join(project, 'fixture-ir.json'),
+      target: 'codex:interactive',
+      cwd: project,
+      env,
+    });
+    expect(existsSync(marker)).toBe(true);
+
+    writeFileSync(producerPath, `#!/bin/sh\nprintf rotated > '${rotatedMarker}'\n`, { mode: 0o700 });
+    await expect(dispatchInteractiveArtifacts({
+      producer,
+      irPath: path.join(project, 'fixture-ir.json'),
+      target: 'codex:interactive',
+      cwd: project,
+      env,
+    })).rejects.toThrow(/native child environment is invalid/);
+    expect(existsSync(rotatedMarker)).toBe(false);
+  });
+
   it('preserves ANSI SGR PTY output while enforcing the color environment against caller values', () => {
     const project = fixture();
     const spec = readInteractiveLaunchSpec(project, 'claude-code:interactive');
@@ -105,7 +136,7 @@ describe('interactive launch specification', () => {
       cwd: realpathSync(project),
       cols: 100,
       rows: 30,
-      env: { PATH: '/fixed/bin', TERM: 'xterm-256color', COLORTERM: 'truecolor', WREN_PROJECT_HOME: project },
+      env: { PATH: '/fixed/bin', HOME: homedir(), TERM: 'xterm-256color', COLORTERM: 'truecolor', WREN_PROJECT_HOME: project },
     });
   });
 

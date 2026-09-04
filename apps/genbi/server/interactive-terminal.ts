@@ -7,11 +7,14 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, realpathSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { spawn as spawnProcess } from "node:child_process";
 import type { EnrichmentBinding } from "./enrichment.js";
 export { InteractiveLaunchError, legacyInteractiveWorkspace } from "./native-session-workspace.js";
 import { InteractiveLaunchError, nativeSessionStateBaseAvailable, validateLegacyInteractiveWorkspace } from "./native-session-workspace.js";
 import type { NativeSessionStateBase } from "./native-session-workspace.js";
+import { assertNativeExecutableIdentity, buildNativeChildEnvironment, nativeProcessEnvironment } from "./native-runtime-spec.js";
+import type { NativeChildEnvironment, NativeExecutableIdentity } from "./native-runtime-spec.js";
 
 export const INTERACTIVE_TARGETS = ["claude-code:interactive", "codex:interactive"] as const;
 export type InteractiveTarget = (typeof INTERACTIVE_TARGETS)[number];
@@ -43,7 +46,7 @@ export interface PtyProcess {
 }
 
 export interface PtyFactory {
-  spawn(file: string, args: readonly string[], options: { cwd: string; cols: number; rows: number; env?: NodeJS.ProcessEnv }): PtyProcess;
+  spawn(file: string, args: readonly string[], options: { cwd: string; cols: number; rows: number; env?: NativeChildEnvironment }): PtyProcess;
 }
 
 /**
@@ -56,16 +59,33 @@ export interface PtyFactory {
  * advertised xterm ANSI palette silently optional and allow a caller to
  * weaken the native-terminal contract.
  */
-export function nativeTerminalEnvironment(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const { NO_COLOR: _noColor, ...inherited } = base;
-  return { ...inherited, TERM: "xterm-256color", COLORTERM: "truecolor" };
+export function nativeTerminalEnvironment(base?: NodeJS.ProcessEnv | NativeChildEnvironment): NativeChildEnvironment {
+  const environment = base ?? buildNativeChildEnvironment({
+    toolDirectories: [path.dirname(process.execPath)],
+    home: os.homedir(),
+  });
+  const pathValue = environment.PATH ?? path.dirname(process.execPath);
+  const home = environment.HOME ?? os.homedir();
+  return Object.freeze({
+    PATH: pathValue,
+    HOME: home,
+    TERM: "xterm-256color",
+    COLORTERM: "truecolor",
+    ...(environment.WREN_PROJECT_HOME ? { WREN_PROJECT_HOME: environment.WREN_PROJECT_HOME } : {}),
+    ...(environment.WREN_HOME ? { WREN_HOME: environment.WREN_HOME } : {}),
+    ...(environment.CODEX_HOME ? { CODEX_HOME: environment.CODEX_HOME } : {}),
+    ...(environment.WARBLE_MCP_CONNECTION_CREDENTIAL ? { WARBLE_MCP_CONNECTION_CREDENTIAL: environment.WARBLE_MCP_CONNECTION_CREDENTIAL } : {}),
+    ...(environment.WARBLE_SETUP_BOOTSTRAP_ROOT ? { WARBLE_SETUP_BOOTSTRAP_ROOT: environment.WARBLE_SETUP_BOOTSTRAP_ROOT } : {}),
+    ...(environment.PYTHONNOUSERSITE ? { PYTHONNOUSERSITE: "1" as const } : {}),
+    ...(environment.PYTHONUTF8 ? { PYTHONUTF8: "1" as const } : {}),
+  });
 }
 
 /**
  * Mirrors the PATH lookup a shell-free PTY launch relies on. A shell alias or
  * function is deliberately not accepted: node-pty cannot execute either.
  */
-export function interactiveExecutableAvailable(executable: "claude" | "codex", pathValue = process.env["PATH"]): boolean {
+export function interactiveExecutableAvailable(executable: "claude" | "codex", pathValue?: string): boolean {
   if (!pathValue) return false;
   return pathValue.split(path.delimiter).some((directory) => {
     if (!directory) return false;
@@ -199,13 +219,14 @@ export function readInteractiveLaunchSpec(boundProject: string, requestedTarget:
   return { version: "1", target: requestedTarget, executable: EXECUTABLE[requestedTarget], argv: [], cwd, artifact_root: artifactRoot, handoff_path: handoffPath };
 }
 
-export async function dispatchInteractiveArtifacts(input: { readonly warbleBin: string; readonly irPath: string; readonly target: InteractiveTarget; readonly cwd: string; readonly boundProject?: string; readonly materializationState?: NativeSessionStateBase }): Promise<void> {
+export async function dispatchInteractiveArtifacts(input: { readonly producer: NativeExecutableIdentity; readonly irPath: string; readonly target: InteractiveTarget; readonly cwd: string; readonly env: NativeChildEnvironment; readonly boundProject?: string; readonly materializationState?: NativeSessionStateBase }): Promise<void> {
   // Structured hardcoded argv only. In particular, never append browser or
   // proposal text to this invocation and never use a shell.
   if ((input.boundProject === undefined) !== (input.materializationState === undefined)) throw new InteractiveLaunchError("interactive enrichment materialization failed");
   if (input.boundProject && input.materializationState) validateLegacyInteractiveWorkspace(input.materializationState, input.boundProject, input.cwd);
+  assertNativeExecutableIdentity(input.producer);
   await new Promise<void>((resolve, reject) => {
-    const child = spawnProcess(input.warbleBin, ["dispatch", input.irPath, "--target", input.target, "--out", input.cwd], { cwd: input.cwd, shell: false, stdio: "ignore" });
+    const child = spawnProcess(input.producer.executable, ["dispatch", input.irPath, "--target", input.target, "--out", input.cwd], { cwd: input.cwd, env: nativeProcessEnvironment(input.env), shell: false, stdio: "ignore" });
     child.once("error", () => reject(new InteractiveLaunchError("interactive enrichment materialization failed")));
     child.once("exit", (code) => code === 0 ? resolve() : reject(new InteractiveLaunchError("interactive enrichment materialization failed")));
   });
@@ -224,6 +245,7 @@ export interface InteractivePreparationInput {
 export interface InteractivePreparationDeps {
   readonly getCurrentBinding: () => EnrichmentBinding | undefined;
   readonly executableAvailable?: (executable: "claude" | "codex") => boolean;
+  readonly resolveExecutable?: (executable: "claude" | "codex") => NativeExecutableIdentity | undefined;
 }
 
 /**
@@ -233,15 +255,18 @@ export interface InteractivePreparationDeps {
  */
 export async function prepareInteractiveHandoff(input: InteractivePreparationInput, deps: InteractivePreparationDeps): Promise<{ readonly spec: InteractiveLaunchSpec; readonly handoff: PreparedInteractiveHandoff }> {
   const executableAvailable = deps.executableAvailable ?? interactiveExecutableAvailable;
-  if (!executableAvailable(EXECUTABLE[input.target])) {
+  const executable = deps.resolveExecutable?.(EXECUTABLE[input.target]);
+  if (!(executable ?? executableAvailable(EXECUTABLE[input.target]))) {
     throw new InteractiveLaunchError(`the ${EXECUTABLE[input.target]} interactive CLI is not available on this machine`);
   }
+  if (executable) assertNativeExecutableIdentity(executable);
   await input.materialize();
   const current = deps.getCurrentBinding();
   if (!current || current.path !== input.binding.path || current.identity !== input.binding.identity || current.generation !== input.binding.generation || current.revision !== input.binding.revision) {
     throw new InteractiveLaunchError("interactive enrichment is stale because the bound project changed");
   }
-  const spec = readInteractiveLaunchSpec(input.binding.path, input.target, input.artifactRoot, input.materializationState);
+  const parsed = readInteractiveLaunchSpec(input.binding.path, input.target, input.artifactRoot, input.materializationState);
+  const spec = executable ? { ...parsed, hostExecutable: executable.executable } : parsed;
   return { spec, handoff: { target: spec.target, fallbackCommand: launchFallbackCommand(spec) } };
 }
 
@@ -259,6 +284,7 @@ export async function getInteractiveTerminalReadiness(input: {
   readonly getCurrentBinding: () => EnrichmentBinding | undefined;
   readonly terminalHostAvailable: () => Promise<boolean>;
   readonly executableAvailable?: (executable: "claude" | "codex") => boolean;
+  readonly resolveExecutable?: (executable: "claude" | "codex") => NativeExecutableIdentity | undefined;
   /** BFF-owned base; validation is non-mutating and never reads the project root. */
   readonly materializationState?: NativeSessionStateBase;
 }): Promise<Record<InteractiveTarget, InteractiveTargetReadiness>> {
@@ -269,7 +295,7 @@ export async function getInteractiveTerminalReadiness(input: {
   const executableAvailable = input.executableAvailable ?? interactiveExecutableAvailable;
   const result = {} as Record<InteractiveTarget, InteractiveTargetReadiness>;
   for (const target of INTERACTIVE_TARGETS) {
-    if (!executableAvailable(EXECUTABLE[target])) {
+    if (!(input.resolveExecutable?.(EXECUTABLE[target]) ?? executableAvailable(EXECUTABLE[target]))) {
       const reason = `the ${EXECUTABLE[target]} interactive CLI is not available on this machine`;
       result[target] = { copyAvailable: false, embeddedTerminalAvailable: false, copyReason: reason, embeddedTerminalReason: reason };
       continue;
@@ -288,7 +314,7 @@ export class InteractiveTerminalManager {
   start(
     spec: InteractiveLaunchSpec,
     identity?: { readonly id: string; readonly capability: string },
-    env?: NodeJS.ProcessEnv,
+    env?: NodeJS.ProcessEnv | NativeChildEnvironment,
     leasePolicy: InteractiveTerminalLeasePolicy = LEGACY_INTERACTIVE_TERMINAL_LEASES,
   ): InteractiveTerminalSession {
     const process = this.pty.spawn(spec.hostExecutable ?? spec.executable, spec.argv, {

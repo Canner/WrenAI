@@ -3,13 +3,13 @@
  * the PTY remains deliberately process-local and contains the only replay.
  */
 import { createHash, randomUUID } from "node:crypto";
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { accessSync, chmodSync, constants, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { WarbleBinaryNotFoundError } from "../harness/compile/errors.js";
 import type { EnrichmentBinding } from "./enrichment.js";
-import { InteractiveLaunchError, InteractiveTerminalManager, NO_INTERACTIVE_TERMINAL_LEASES, interactiveExecutableAvailable } from "./interactive-terminal.js";
+import { InteractiveLaunchError, InteractiveTerminalManager, NO_INTERACTIVE_TERMINAL_LEASES } from "./interactive-terminal.js";
 import type { InteractiveLaunchSpec, InteractiveTarget, InteractiveTerminalSession } from "./interactive-terminal.js";
 import { newId, type NativeSessionPurpose, type NativeSessionRow, type NativeSessionVendor, type NativeSetupRecoveryCode, type NativeSetupRecoveryRow, type NativeSetupRecoveryState, type Store } from "./db.js";
 import { NATIVE_MCP_CREDENTIAL_ENV_VAR, type NativeArtifactService, type NativeMcpDescriptor, type NativeMcpHealth } from "./native-artifacts.js";
@@ -19,6 +19,10 @@ import { createNativeSessionWorkspace, initializeNativeSessionStateBase, nativeS
 import type { NativeSessionStateBase } from "./native-session-workspace.js";
 import { NativeWrenRuntimeError, resolveNativeWrenRuntime } from "./native-wren-runtime.js";
 import type { NativeWrenRuntime } from "./native-wren-runtime.js";
+import { assertNativeExecutableIdentity, assertNativeRuntimeSpec, attestNativeExecutable, buildNativeChildEnvironment, buildNativeRuntimeSpec, nativeProcessEnvironment, resolveNativeExecutable } from "./native-runtime-spec.js";
+import type { NativeChildEnvironment, NativeExecutableIdentity, NativeRuntimeSpec } from "./native-runtime-spec.js";
+import { createEmptyCodexWrenHome, materializeCodexWrenHome } from "./native-wren-home.js";
+import type { CodexWrenHome } from "./native-wren-home.js";
 import { runtimeSettingsCorrection } from "./runtime-binding.js";
 import { sealNativeClaudeResumeHandle, sealNativeResumeHandle, unsealNativeResumeHandle } from "./native-session-resume.js";
 import { RuntimeHost } from "./runtime-host/local.js";
@@ -94,66 +98,6 @@ export function grantCodexBoundProjectRead(cwd: string, projectPath: string, dat
   const updated = `${config.slice(0, insertion)}${permissions}${config.slice(insertion)}`;
   writeFileSync(configPath, updated, { encoding: "utf8", mode: 0o600 });
   chmodSync(configPath, 0o600);
-}
-
-const MATERIALIZE_WREN_HOME_SCRIPT = String.raw`
-import os
-import pathlib
-import shutil
-import sys
-import yaml
-from wren.profile import expand_profile_secrets, resolve_profile_for_project
-
-project = pathlib.Path(sys.argv[1]).resolve(strict=True)
-destination = pathlib.Path(sys.argv[2])
-name, profile = resolve_profile_for_project(project, strict=True)
-if not name or not profile:
-    raise SystemExit(2)
-destination.mkdir(mode=0o700, parents=False, exist_ok=False)
-profile_path = destination / "profiles.yml"
-profile_path.write_text(yaml.safe_dump({"active": name, "profiles": {name: profile}}, sort_keys=False), encoding="utf-8")
-os.chmod(profile_path, 0o600)
-project_env = project / ".env"
-if project_env.exists():
-    if project_env.is_symlink() or not project_env.is_file():
-        raise SystemExit(3)
-    session_env = destination / ".env"
-    shutil.copyfile(project_env, session_env)
-    os.chmod(session_env, 0o600)
-
-expanded = expand_profile_secrets(profile)
-data_source = expanded.get("datasource")
-data_root = None
-if data_source in ("duckdb", "local_file"):
-    data_root = expanded.get("url")
-elif data_source == "datafusion":
-    data_root = expanded.get("source")
-if data_root:
-    root = pathlib.Path(data_root).expanduser()
-    if not root.is_absolute():
-        root = project / root
-    print(root.resolve(strict=True))
-`;
-
-interface CodexWrenHome {
-  readonly home: string;
-  readonly dataRoots: readonly string[];
-}
-
-function materializeCodexWrenHome(runtime: NativeWrenRuntime, projectPath: string, cwd: string): CodexWrenHome {
-  const destination = path.join(cwd, ".wren");
-  try {
-    const output = execFileSync(runtime.venv_python, ["-c", MATERIALIZE_WREN_HOME_SCRIPT, projectPath, destination], {
-      cwd: projectPath,
-      env: process.env,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-      timeout: 10_000,
-    });
-    return { home: destination, dataRoots: output.trim() ? [output.trim()] : [] };
-  } catch {
-    throw new InteractiveLaunchError("native Wren project profile is unavailable");
-  }
 }
 
 export interface NativeSetupRecoveryReport {
@@ -375,6 +319,19 @@ export interface NativeSessionServiceOptions {
   readonly warbleBin: string;
   /** Absolute server-configured Wren shim for native Codex sessions; never a request input. */
   readonly wrenShim?: string;
+  /** Fixed native child HOME captured by BFF composition, never request input. */
+  readonly nativeHome?: string;
+  /** Decision-17 profile source selected by server setup mode. */
+  readonly sourceWrenHome?: () => string;
+  /** Optional dedicated authenticated Codex home captured at BFF boot. */
+  readonly codexHome?: string;
+  /** Canonical vendor identities captured once by server composition. */
+  readonly vendorExecutables?: Readonly<Partial<Record<NativeVendor, NativeExecutableIdentity>>>;
+  /** Canonical Node identity used by env-shebang tools and the PTY probe. */
+  readonly nodeExecutable?: NativeExecutableIdentity;
+  readonly childToolDirectories?: readonly string[];
+  /** Fixed discovery PATH captured at BFF boot; never consulted after construction. */
+  readonly pathValue?: string;
   /** Read-only probe used by readiness; creation remains the final authority. */
   readonly terminalHostAvailable?: () => Promise<boolean>;
   /** Phase-1 readiness boundary; no runtime host can be selected by browser input. */
@@ -384,7 +341,14 @@ export interface NativeSessionServiceOptions {
   /** Test seam for the configured local Warble producer probe. */
   readonly producerAvailable?: () => boolean;
   /** Test seam for the server-filtered, session-local Wren profile store. */
-  readonly prepareCodexWrenHome?: (input: { readonly runtime: NativeWrenRuntime; readonly projectPath: string; readonly cwd: string }) => CodexWrenHome;
+  readonly prepareCodexWrenHome?: (input: {
+    readonly runtime: NativeWrenRuntime;
+    readonly projectPath: string;
+    readonly cwd: string;
+    readonly sourceWrenHome: string;
+    readonly home: string;
+    readonly toolDirectories: readonly string[];
+  }) => CodexWrenHome;
   /** When configured, bound native sessions use the accepted v4 MCP+welcome descriptor; v2 remains compatible for callers without it. */
   readonly artifactService?: NativeArtifactService;
   /** Server-owned product idle TTL after a successful browser attachment disconnects. */
@@ -402,7 +366,7 @@ export interface NativeSessionServiceOptions {
 export interface NativeDispatchInput {
   readonly warbleBin: string;
   /** Server-owned resolved producer identity captured by the compatibility preflight. */
-  readonly producer?: NativeProducerIdentity;
+  readonly producer: NativeProducerIdentity;
   readonly irPath: string;
   readonly target: InteractiveTarget;
   readonly cwd: string;
@@ -411,6 +375,7 @@ export interface NativeDispatchInput {
   readonly scope: Record<string, unknown>;
   /** Exact v4 MCP descriptor, transported separately through --native-mcp. */
   readonly mcp?: NativeMcpDescriptor;
+  readonly env: NativeChildEnvironment;
 }
 
 interface StartSeparateReplay {
@@ -441,25 +406,6 @@ function hasExactlyKeys(value: Record<string, unknown>, keys: readonly string[])
 function contained(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
-function localExecutableAvailable(executable: string, pathValue = process.env["PATH"]): boolean {
-  return localExecutablePath(executable, pathValue) !== undefined;
-}
-
-function localExecutablePath(executable: string, pathValue = process.env["PATH"]): string | undefined {
-  const candidates = path.isAbsolute(executable) || executable.includes(path.sep)
-    ? [path.resolve(executable)]
-    : (pathValue ?? "").split(path.delimiter).filter(Boolean).map((directory) => path.join(directory, executable));
-  for (const candidate of candidates) {
-    try {
-      const stat = statSync(candidate);
-      if (stat.isFile() && (stat.mode & 0o111) !== 0) return realpathSync(candidate);
-    } catch {
-      // Try the next PATH entry. The public readiness response never learns this path.
-    }
-  }
-  return undefined;
 }
 
 function configuredWorkspace(cwd: string, create: boolean): string | undefined {
@@ -647,24 +593,14 @@ function nativeProducerResult(
   };
 }
 
-function executableIdentity(executable: string): string | undefined {
-  try {
-    const metadata = statSync(executable);
-    if (!metadata.isFile() || (metadata.mode & 0o111) === 0) return undefined;
-    return `sha256:${createHash("sha256").update(readFileSync(executable)).digest("hex")}`;
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * The configured spelling may be a PATH lookup or retargetable symlink. A
  * preflight result instead owns the resolved executable and its digest. Check
  * both again before creating a durable row and directly before spawning.
  */
 function assertNativeProducerIdentity(producer: NativeProducerIdentity): void {
-  const resolved = localExecutablePath(producer.executable);
-  if (resolved !== producer.executable || executableIdentity(producer.executable) !== producer.identity) {
+  const current = attestNativeExecutable("producer", producer.executable);
+  if (current.executable !== producer.executable || current.digest !== producer.identity) {
     throw new InteractiveLaunchError("native session producer is incompatible");
   }
 }
@@ -674,7 +610,7 @@ function assertNativeProducerIdentity(producer: NativeProducerIdentity): void {
  * output is used only for local help-marker parsing and is never logged or
  * returned: a third-party executable may print arbitrary sensitive text.
  */
-function runNativeProbe(command: string, args: readonly string[]): Promise<NativeProbeProcessResult> {
+function runNativeProbe(command: NativeExecutableIdentity, args: readonly string[], env: NativeChildEnvironment): Promise<NativeProbeProcessResult> {
   return new Promise((resolve) => {
     let output = "";
     let timedOut = false;
@@ -689,9 +625,10 @@ function runNativeProbe(command: string, args: readonly string[]): Promise<Nativ
     };
     let child;
     try {
-      child = spawn(command, [...args], {
+      assertNativeExecutableIdentity(command);
+      child = spawn(command.executable, [...args], {
         cwd: os.tmpdir(),
-        env: { PATH: process.env["PATH"] ?? "" },
+        env: nativeProcessEnvironment(env),
         shell: false,
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -728,13 +665,27 @@ export async function probeNativeSessionProducer(input: {
   readonly warbleBin: string;
   readonly irPaths: Readonly<Record<NativePurpose, string | undefined>>;
   readonly wrenShim?: string;
+  readonly nativeHome?: string;
+  readonly nodeExecutable?: NativeExecutableIdentity;
+  readonly childToolDirectories?: readonly string[];
+  readonly pathValue?: string;
 }): Promise<NativeProducerPreflightResult> {
-  const executable = localExecutablePath(input.warbleBin);
-  if (!executable) return nativeProducerResult(false, undefined, "resolve", "result=binary_not_found", "the Warble binary could not be resolved");
-  const identity = executableIdentity(executable);
-  if (!identity) return nativeProducerResult(false, undefined, "identity", "result=identity_unavailable", "the Warble binary could not be identified");
+  const producerExecutable = resolveNativeExecutable("producer", input.warbleBin, input.pathValue);
+  if (!producerExecutable) return nativeProducerResult(false, undefined, "resolve", "result=binary_not_found", "the Warble binary could not be resolved");
+  const identity = producerExecutable.digest;
+  const executable = producerExecutable.executable;
   const producer = { executable, identity };
-  const help = await runNativeProbe(executable, ["dispatch", "--help"]);
+  const nodeExecutable = input.nodeExecutable ?? attestNativeExecutable("node", process.execPath);
+  const childToolDirectories = [...new Set([
+    ...(input.childToolDirectories ?? []),
+    path.dirname(nodeExecutable.executable),
+    path.dirname(executable),
+  ])];
+  const probeEnv = buildNativeChildEnvironment({
+    toolDirectories: childToolDirectories,
+    home: input.nativeHome ?? os.homedir(),
+  });
+  const help = await runNativeProbe(producerExecutable, ["dispatch", "--help"], probeEnv);
   if (help.spawnFailed) return nativeProducerResult(false, identity, "dispatch_help", "result=spawn_failed", "the Warble binary could not be started");
   if (help.timedOut) return nativeProducerResult(false, identity, "dispatch_help", "result=timed_out", "the Warble binary did not respond");
   if (help.exitCode !== 0) return nativeProducerResult(false, identity, "dispatch_help", `result=exit_code_${help.exitCode ?? "signal"}`, "the Warble binary rejected the dispatch probe");
@@ -771,7 +722,7 @@ export async function probeNativeSessionProducer(input: {
           : undefined;
         writeFileSync(scopePath, JSON.stringify({ version: "3", kind: NATIVE_DISPATCH_REGISTRY[purpose].scopeKind, scope_id: scopeId, cwd: outputRoot, entry: nativeEntryFor(purpose, vendor), ...(purpose === "setup" ? { bootstrap_root: bootstrapRoot } : {}), ...(wrenRuntime ? { wren_runtime: wrenRuntime } : {}), ...(binding ? { binding } : {}) }), { encoding: "utf8", mode: 0o600, flag: "wx" });
         writeFileSync(mcpPath, JSON.stringify({ version: "1", url: "http://127.0.0.1:0/api/native-sessions/mcp", credential: "native-preflight-nonsecret" }), { encoding: "utf8", mode: 0o600, flag: "wx" });
-        const dispatched = await runNativeProbe(executable, ["dispatch", irPath, "--target", targetForProvider(vendor), "--purpose", purpose, "--native-scope", scopePath, "--native-mcp", mcpPath, "--out", outputRoot]);
+        const dispatched = await runNativeProbe(producerExecutable, ["dispatch", irPath, "--target", targetForProvider(vendor), "--purpose", purpose, "--native-scope", scopePath, "--native-mcp", mcpPath, "--out", outputRoot], probeEnv);
         if (dispatched.spawnFailed) { outcome = fail("result=spawn_failed", "the Warble binary could not be started for this vendor"); break; }
         if (dispatched.timedOut) { outcome = fail("result=timed_out", "the Warble binary did not respond for this vendor"); break; }
         if (dispatched.exitCode !== 0) { outcome = fail(`result=exit_code_${dispatched.exitCode ?? "signal"}`, "Warble could not dispatch this profile for this vendor"); break; }
@@ -938,11 +889,12 @@ export async function dispatchNativeArtifacts(input: NativeDispatchInput): Promi
     };
     validateDescriptorFile(scopePath);
     if (input.mcp) validateDescriptorFile(mcpPath);
-    const executable = input.producer?.executable ?? input.warbleBin;
-    if (input.producer) assertNativeProducerIdentity(input.producer);
+    assertNativeProducerIdentity(input.producer);
+    if (input.producer.executable !== input.warbleBin) throw new InteractiveLaunchError("native session materialization failed");
+    const executable = input.producer.executable;
     const args = ["dispatch", input.irPath, "--target", input.target, "--purpose", input.purpose, "--native-scope", scopePath, ...(input.mcp ? ["--native-mcp", mcpPath] : []), "--out", input.cwd];
     await new Promise<void>((resolve, reject) => {
-      const child = spawn(executable, args, { cwd: input.cwd, shell: false, stdio: "ignore" });
+      const child = spawn(executable, args, { cwd: input.cwd, env: nativeProcessEnvironment(input.env), shell: false, stdio: "ignore" });
       child.once("error", () => reject(new InteractiveLaunchError("native session materialization failed")));
       child.once("exit", (code) => code === 0 ? resolve() : reject(new InteractiveLaunchError("native session materialization failed")));
     });
@@ -951,7 +903,16 @@ export async function dispatchNativeArtifacts(input: NativeDispatchInput): Promi
 
 export class NativeSessionService {
   private readonly runtimeHost: RuntimeHost;
+  private readonly nativeHome: string;
+  private readonly wrenShim: string;
+  private readonly sourceWrenHome: () => string;
+  private readonly nodeExecutable: NativeExecutableIdentity;
+  private readonly producerExecutable: NativeExecutableIdentity | undefined;
+  private readonly vendorExecutables: Readonly<Partial<Record<NativeVendor, NativeExecutableIdentity>>>;
+  private readonly childToolDirectories: readonly string[];
   private readonly sessions = new Map<string, InteractiveTerminalSession>();
+  private readonly runtimeSpecs = new Map<string, NativeRuntimeSpec>();
+  private readonly codexWrenHomes = new Map<string, CodexWrenHome>();
   private readonly leaseTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** Open/reconnect coalescing only lasts while a matching launch is in flight. */
   private readonly launches = new Map<string, { readonly scopeKey: string; readonly launch: Promise<NativeSessionLaunch> }>();
@@ -974,6 +935,31 @@ export class NativeSessionService {
       deployment: "development",
       localAvailable: options.terminalHostAvailable ?? (async () => true),
     });
+    this.nativeHome = realpathSync(options.nativeHome ?? os.homedir());
+    this.wrenShim = options.wrenShim ?? path.join(this.nativeHome, ".local", "bin", "wren");
+    const capturedSourceWrenHome = options.sourceWrenHome
+      ? undefined
+      : process.env["WREN_HOME"]?.trim() || path.join(os.homedir(), ".wren");
+    this.sourceWrenHome = options.sourceWrenHome ?? (() => capturedSourceWrenHome!);
+    this.nodeExecutable = options.nodeExecutable ?? attestNativeExecutable("node", process.execPath);
+    const capturedPath = options.pathValue;
+    this.producerExecutable = resolveNativeExecutable("producer", options.warbleBin, capturedPath);
+    const capturedVendors: Partial<Record<NativeVendor, NativeExecutableIdentity>> = {
+      ...options.vendorExecutables,
+    };
+    for (const vendor of NATIVE_VENDORS) {
+      if (!capturedVendors[vendor]) {
+        const resolved = resolveNativeExecutable("vendor", vendor, capturedPath)
+          ?? (this.legacyFixtureMode() ? attestNativeExecutable("vendor", process.execPath) : undefined);
+        if (resolved) capturedVendors[vendor] = resolved;
+      }
+    }
+    this.vendorExecutables = Object.freeze(capturedVendors);
+    this.childToolDirectories = Object.freeze([...new Set([
+      ...(options.childToolDirectories ?? []),
+      path.dirname(this.nodeExecutable.executable),
+      ...Object.values(capturedVendors).filter((value): value is NativeExecutableIdentity => value !== undefined).map((value) => path.dirname(value.executable)),
+    ])]);
     this.idleTtlMs = options.idleTtlMs ?? options.postClaimDetachGraceMs ?? NATIVE_SESSION_IDLE_TTL_MS;
     if (!Number.isSafeInteger(this.idleTtlMs) || this.idleTtlMs <= 0) throw new RangeError("native session idle TTL must be a positive integer");
     this.startSeparateReplayTtlMs = options.startSeparateReplayTtlMs ?? START_SEPARATE_REPLAY_TTL_MS;
@@ -1009,15 +995,24 @@ export class NativeSessionService {
    */
   private async productionProducerPreflight(): Promise<NativeProducerPreflightResult | undefined> {
     if (this.legacyFixtureMode()) return undefined;
-    const result = await probeNativeSessionProducer({ warbleBin: this.options.warbleBin, irPaths: this.options.irPaths, ...(this.options.wrenShim !== undefined ? { wrenShim: this.options.wrenShim } : {}) });
+    const result = await probeNativeSessionProducer({
+      warbleBin: this.options.warbleBin,
+      irPaths: this.options.irPaths,
+      nativeHome: this.nativeHome,
+      nodeExecutable: this.nodeExecutable,
+      childToolDirectories: this.childToolDirectories,
+      ...(this.options.pathValue !== undefined ? { pathValue: this.options.pathValue } : {}),
+      wrenShim: this.wrenShim,
+    });
     const log = result.available ? console.info : console.warn;
     log(`[native-sessions] producer preflight ${result.diagnostic}`);
     return result;
   }
 
-  private async assertSelectedRuntimeReady(): Promise<void> {
-    const selected = (await this.runtimeHost.probe()).selectedReadiness;
-    if (selected.state !== "ready") throw new InteractiveLaunchError(selected.message);
+  private async assertSelectedRuntimeReady(): Promise<RuntimeReadiness> {
+    const readiness = await this.runtimeHost.probe();
+    if (readiness.selectedReadiness.state !== "ready") throw new InteractiveLaunchError(readiness.selectedReadiness.message);
+    return readiness;
   }
 
   /**
@@ -1055,6 +1050,7 @@ export class NativeSessionService {
     this.recoveryCapabilities.delete(row.id);
     this.options.artifactService?.revoke(this.artifactCredentials.get(row.id));
     this.artifactCredentials.delete(row.id);
+    this.cleanupRuntime(row.id);
     return stopped;
   }
 
@@ -1375,8 +1371,8 @@ export class NativeSessionService {
   async readiness(): Promise<NativeSessionReadiness> {
     const terminalHostAvailable = this.options.terminalHostAvailable ?? (async () => true);
     const executableAvailable = (vendor: NativeVendor) => this.options.executableAvailable
-      ? this.options.executableAvailable(vendor)
-      : interactiveExecutableAvailable(vendor);
+      ? this.options.executableAvailable(vendor) && this.vendorExecutables[vendor] !== undefined
+      : this.vendorExecutables[vendor] !== undefined;
     const hostAvailable = await terminalHostAvailable();
     const runtimeHostReadiness = await this.runtimeHost.probe();
     const selectedRuntimeUnavailable = runtimeHostReadiness.selectedReadiness.state === "ready"
@@ -1389,7 +1385,7 @@ export class NativeSessionService {
       : undefined;
     const legacyFixture = !runtime.configured && this.legacyFixtureMode();
     const producer = this.legacyFixtureMode() ? undefined : await this.productionProducerPreflight();
-    const legacyProducerAvailable = this.options.producerAvailable ?? (() => this.options.dispatch !== undefined || localExecutableAvailable(this.options.warbleBin));
+    const legacyProducerAvailable = this.options.producerAvailable ?? (() => this.options.dispatch !== undefined || this.producerExecutable !== undefined);
     const result = {} as Record<NativePurpose, NativePurposeReadiness>;
     for (const purpose of NATIVE_PURPOSES) {
       const definition = NATIVE_DISPATCH_REGISTRY[purpose];
@@ -1493,7 +1489,7 @@ export class NativeSessionService {
 
   async create(input: { purpose: NativePurpose; vendor?: NativeVendor }, binding = input.purpose === "setup" ? undefined : this.options.getBinding(), capturedRuntime = this.options.store.getNativeRuntimeBinding(), resumed?: { readonly row: NativeSessionRow; readonly handle: string }): Promise<NativeSessionLaunch> {
     this.assertRuntimeDispatchable();
-    await this.assertSelectedRuntimeReady();
+    const runtimeReadiness = await this.assertSelectedRuntimeReady();
     const purpose = input.purpose;
     const legacyRuntime = !capturedRuntime.configured && input.vendor
       ? { configured: true as const, generation: 0, provider: input.vendor, target: targetForProvider(input.vendor), targetLabel: nativeTargetLabel(input.vendor) }
@@ -1561,7 +1557,7 @@ export class NativeSessionService {
       const materializationState = this.materializationState();
       if (!authorizedWorkspace || !materializationState) throw new InteractiveLaunchError("native session workspace is unavailable");
       const cwd = createNativeSessionWorkspace(materializationState, authorizedWorkspace, id);
-      const producerAvailable = this.options.producerAvailable ?? (() => this.options.dispatch !== undefined || localExecutableAvailable(this.options.warbleBin));
+      const producerAvailable = this.options.producerAvailable ?? (() => this.options.dispatch !== undefined || this.producerExecutable !== undefined);
       if (!(this.options.dispatch !== undefined || configuredIrPath(irPath)) || !producerAvailable()) throw new InteractiveLaunchError("native session materialization prerequisites are unavailable");
       const mcpReadiness = artifactService?.readiness();
       if (mcpReadiness && !mcpReadiness.available) throw new InteractiveLaunchError(mcpReadiness.reason ?? "native MCP URL is invalid");
@@ -1569,16 +1565,46 @@ export class NativeSessionService {
       if (mcp) this.artifactCredentials.set(id, mcp.credential);
       let wrenRuntime: NativeWrenRuntime | undefined;
       try {
-        wrenRuntime = dispatchDefinition.provider === "codex" && !this.legacyFixtureMode() ? resolveNativeWrenRuntime(this.options.wrenShim) : undefined;
+        wrenRuntime = dispatchDefinition.provider === "codex" && !this.legacyFixtureMode() ? resolveNativeWrenRuntime(this.wrenShim) : undefined;
       } catch (error) {
         if (error instanceof NativeWrenRuntimeError) throw new InteractiveLaunchError("native Wren runtime is unavailable");
         throw error;
       }
+      const vendorExecutable = this.vendorExecutables[dispatchDefinition.provider];
+      if (!vendorExecutable) throw new InteractiveLaunchError(`the ${dispatchDefinition.provider} interactive CLI is not available on this machine`);
+      const producerExecutable = producer?.producer
+        ? attestNativeExecutable("producer", producer.producer.executable)
+        : this.options.dispatch !== undefined
+          ? attestNativeExecutable("producer", this.nodeExecutable.executable)
+          : resolveNativeExecutable("producer", this.options.warbleBin, undefined);
+      if (!producerExecutable) throw new InteractiveLaunchError("native session materialization prerequisites are unavailable");
+      const toolDirectories = [...new Set([
+        ...this.childToolDirectories,
+        path.dirname(producerExecutable.executable),
+        ...(wrenRuntime ? [path.join(wrenRuntime.tool_root, "bin"), path.dirname(wrenRuntime.interpreter)] : []),
+      ])];
+      const dispatchEnvironment = buildNativeChildEnvironment({
+        toolDirectories,
+        home: this.nativeHome,
+        ...(binding ? { projectPath: binding.path } : {}),
+        ...(mcp ? { mcpCredential: mcp.credential } : {}),
+        ...(purpose === "setup" ? { setupBootstrapRoot: authorizedWorkspace } : {}),
+      });
       const scope: Record<string, unknown> = { version: "3", kind: row.scopeKind, scope_id: scopeId, cwd, entry: nativeEntryFor(purpose, dispatchDefinition.provider), ...(purpose === "setup" ? { bootstrap_root: authorizedWorkspace } : {}), ...(wrenRuntime ? { wren_runtime: wrenRuntime } : {}), ...(binding ? { binding: { project_identity: binding.identity, generation: String(binding.generation), revision: binding.revision } } : {}) };
       const dispatch = this.options.dispatch ?? dispatchNativeArtifacts;
       validateNativeSessionWorkspace(materializationState, authorizedWorkspace, cwd);
       launchPhase = "dispatch";
-      await dispatch({ warbleBin: producer?.producer?.executable ?? this.options.warbleBin, ...(producer?.producer ? { producer: producer.producer } : {}), irPath, target: dispatchDefinition.target, cwd, purpose, scope, ...(mcp ? { mcp } : {}) });
+      await dispatch({
+        warbleBin: producerExecutable.executable,
+        producer: producer?.producer ?? { executable: producerExecutable.executable, identity: producerExecutable.digest },
+        irPath,
+        target: dispatchDefinition.target,
+        cwd,
+        purpose,
+        scope,
+        ...(mcp ? { mcp } : {}),
+        env: dispatchEnvironment,
+      });
       if (!input.vendor && !sameNativeRuntimeBinding(capturedRuntime, this.options.store.getNativeRuntimeBinding())) {
         this.options.store.transitionNativeSession(id, "stale", { failure: "native runtime binding changed before launch", ended: true });
         throw new InteractiveLaunchError("native session is stale because the runtime binding changed");
@@ -1588,20 +1614,50 @@ export class NativeSessionService {
         throw new InteractiveLaunchError("native session is stale because the bound project changed");
       }
       launchPhase = "launch_spec";
-      const spec = readNativeLaunchSpec(cwd, purpose, dispatchDefinition.provider, scopeId, binding, mcp, materializationState, authorizedWorkspace, providerLaunch);
+      const launchSpec = readNativeLaunchSpec(cwd, purpose, dispatchDefinition.provider, scopeId, binding, mcp, materializationState, authorizedWorkspace, providerLaunch);
       let codexWrenHome: CodexWrenHome | undefined;
-      if (spec.version === "4" && dispatchDefinition.provider === "codex" && binding) {
-        if (wrenRuntime) {
+      if (launchSpec.version === "4" && dispatchDefinition.provider === "codex") {
+        if (wrenRuntime && binding) {
           launchPhase = "codex_wren_home";
-          codexWrenHome = (this.options.prepareCodexWrenHome ?? ((input) => materializeCodexWrenHome(input.runtime, input.projectPath, input.cwd)))({
+          codexWrenHome = (this.options.prepareCodexWrenHome ?? materializeCodexWrenHome)({
             runtime: wrenRuntime,
             projectPath: binding.path,
             cwd,
+            sourceWrenHome: this.sourceWrenHome(),
+            home: this.nativeHome,
+            toolDirectories,
           });
+        } else if (wrenRuntime && purpose === "setup") {
+          launchPhase = "codex_wren_home";
+          codexWrenHome = createEmptyCodexWrenHome(cwd);
         }
-        launchPhase = "codex_project_read";
-        grantCodexBoundProjectRead(cwd, binding.path, codexWrenHome?.dataRoots);
+        if (binding) {
+          launchPhase = "codex_project_read";
+          grantCodexBoundProjectRead(cwd, binding.path, codexWrenHome?.dataRoots);
+        }
       }
+      codexWrenHome?.assertActive?.();
+      if (codexWrenHome) this.codexWrenHomes.set(id, codexWrenHome);
+      const executableIdentities: NativeExecutableIdentity[] = [this.nodeExecutable, producerExecutable, vendorExecutable];
+      if (wrenRuntime) {
+        executableIdentities.push(
+          attestNativeExecutable("wren", wrenRuntime.launcher),
+          attestNativeExecutable("python", wrenRuntime.interpreter),
+        );
+      }
+      const runtimeSpec = buildNativeRuntimeSpec({
+        backend: runtimeReadiness.selected,
+        vendor: dispatchDefinition.provider,
+        executables: executableIdentities,
+        toolDirectories,
+        workspace: cwd,
+        home: this.nativeHome,
+        ...(binding ? { binding } : {}),
+        ...(codexWrenHome ? { sessionWrenHome: codexWrenHome.home } : {}),
+        ...(dispatchDefinition.provider === "codex" && this.options.codexHome ? { codexHome: this.options.codexHome } : {}),
+        ...(mcp ? { mcpCredential: mcp.credential } : {}),
+        ...(launchSpec.bootstrap_root ? { setupBootstrapRoot: launchSpec.bootstrap_root } : {}),
+      });
       launchPhase = "terminal_manager";
       const terminalManager = await this.options.terminalManager();
       if (binding && !sameBinding(binding, this.options.getBinding())) {
@@ -1613,19 +1669,12 @@ export class NativeSessionService {
         throw new InteractiveLaunchError("native session is stale because the runtime binding changed");
       }
       validateNativeSessionWorkspace(materializationState, authorizedWorkspace, cwd);
-      const terminalEnv: NodeJS.ProcessEnv = {
-        ...process.env,
-        ...(mcp ? { [NATIVE_MCP_CREDENTIAL_ENV_VAR]: mcp.credential } : {}),
-        ...(binding ? { WREN_PROJECT_HOME: binding.path } : {}),
-        ...(codexWrenHome ? { WREN_HOME: codexWrenHome.home } : {}),
-      };
-      // Never inherit a caller/operator value: only the launch spec's already
-      // revalidated Setup root may reach the native TUI.
-      delete terminalEnv[NATIVE_SETUP_BOOTSTRAP_ROOT_ENV_VAR];
-      if (spec.bootstrap_root) terminalEnv[NATIVE_SETUP_BOOTSTRAP_ROOT_ENV_VAR] = spec.bootstrap_root;
+      codexWrenHome?.assertActive?.();
+      assertNativeRuntimeSpec(runtimeSpec);
       launchPhase = "terminal_start";
-      const terminal = terminalManager.start(spec, { id, capability }, terminalEnv, NO_INTERACTIVE_TERMINAL_LEASES);
+      const terminal = terminalManager.start({ ...launchSpec, hostExecutable: vendorExecutable.executable }, { id, capability }, runtimeSpec.childEnvironment, NO_INTERACTIVE_TERMINAL_LEASES);
       this.sessions.set(id, terminal);
+      this.runtimeSpecs.set(id, runtimeSpec);
       // Mark running before registering a replaying exit listener. A PTY can
       // exit between start() and this registration; `onExit` immediately
       // replays that state and must win over this transition, never be
@@ -1639,6 +1688,7 @@ export class NativeSessionService {
         this.clearStartSeparateReplaysForSession(id);
         this.recoveryCapabilities.delete(id);
         artifactService?.revoke(this.artifactCredentials.get(id)); this.artifactCredentials.delete(id);
+        this.cleanupRuntime(id);
         const current = this.options.store.getNativeSession(id);
         if (current && (current.status === "running" || current.status === "detached")) this.options.store.transitionNativeSession(id, "exited", { exitCode, ended: true });
       });
@@ -1646,6 +1696,7 @@ export class NativeSessionService {
       return { row: this.options.store.getNativeSession(id)!, capability, ...(recoveryCapability ? { recoveryCapability } : {}) };
     } catch (error) {
       logNativeLaunchFailure(purpose, dispatchDefinition.provider, launchPhase, error);
+      this.cleanupRuntime(id);
       this.recoveryCapabilities.delete(id);
       artifactService?.revoke(this.artifactCredentials.get(id)); this.artifactCredentials.delete(id);
       const current = this.options.store.getNativeSession(id);
@@ -1705,6 +1756,7 @@ export class NativeSessionService {
       this.options.artifactService?.revoke(this.artifactCredentials.get(id));
       this.artifactCredentials.delete(id);
       this.sessions.delete(id);
+      this.cleanupRuntime(id);
       try {
         terminal?.close();
       } catch {
@@ -1720,6 +1772,17 @@ export class NativeSessionService {
 
   /** Called after the store advances the bound-project generation. */
   revokeBindingCapabilities(ids: readonly string[]): void { this.revokeCapabilities(ids); }
+
+  private cleanupRuntime(id: string): void {
+    const home = this.codexWrenHomes.get(id);
+    this.codexWrenHomes.delete(id);
+    this.runtimeSpecs.delete(id);
+    try {
+      home?.cleanup?.();
+    } catch {
+      console.warn("[native-sessions] Wren session home cleanup failed");
+    }
+  }
 
   /**
    * Records only the producer's closed redacted report. Completion remains a
@@ -1781,7 +1844,11 @@ export class NativeSessionService {
 
   private armLease(id: string, reason: string, timeoutMs: number): void {
     this.clearLease(id);
-    this.leaseTimers.set(id, setTimeout(() => {
+    const timer = setTimeout(() => {
+      if (this.options.store.isClosed()) {
+        this.leaseTimers.delete(id);
+        return;
+      }
       const terminal = this.sessions.get(id);
       if (!terminal) {
         this.leaseTimers.delete(id);
@@ -1789,6 +1856,8 @@ export class NativeSessionService {
       }
       this.options.store.transitionNativeSession(id, "stopped", { failure: reason, ended: true });
       this.revokeCapabilities([id]);
-    }, timeoutMs));
+    }, timeoutMs);
+    timer.unref();
+    this.leaseTimers.set(id, timer);
   }
 }

@@ -13,6 +13,7 @@ import { NativeArtifactService } from "../server/native-artifacts.js";
 import { NativeSessionService, probeNativeSessionProducer } from "../server/native-sessions.js";
 import { RuntimeHost } from "../server/runtime-host/local.js";
 import type { PtyFactory } from "../server/interactive-terminal.js";
+import { attestNativeExecutable } from "../server/native-runtime-spec.js";
 
 const dirs: string[] = [];
 const HELP = ["dispatch", "--target", "--purpose", "--native-scope", "--native-mcp", "--out"].join("\n");
@@ -137,6 +138,10 @@ function productionService(dir: string, producer: string, wrenShim: string, term
       warbleBin: producer,
       wrenShim,
       terminalHostAvailable: async () => true,
+      vendorExecutables: {
+        claude: attestNativeExecutable("vendor", process.execPath),
+        codex: attestNativeExecutable("vendor", codexBin),
+      },
       ...(runtimeHost ? { runtimeHost } : {}),
       executableAvailable: () => true,
       artifactService: artifacts,

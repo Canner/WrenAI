@@ -14,6 +14,7 @@ import { NativeArtifactService, NATIVE_MCP_CREDENTIAL_ENV_VAR, NATIVE_MCP_TOOL_N
 import { InteractiveTerminalManager } from "../server/interactive-terminal.js";
 import { RuntimeHost } from "../server/runtime-host/local.js";
 import type { PtyFactory } from "../server/interactive-terminal.js";
+import { attestNativeExecutable, type NativeChildEnvironment } from "../server/native-runtime-spec.js";
 
 const dirs: string[] = [];
 const NATIVE_MCP_URL = "http://127.0.0.1:4787/api/native-sessions/mcp";
@@ -177,11 +178,11 @@ describe("native session persistence", () => {
     const store = new Store(":memory:");
     const artifacts = new NativeArtifactService({ store, artifactsRoot: path.join(dir, "artifacts"), expectedMcpUrl: NATIVE_MCP_URL, mcpUrl: NATIVE_MCP_URL, getBinding: () => binding });
     const spawned: Array<{ file: string; args: readonly string[] }> = [];
-    const spawnEnvs: NodeJS.ProcessEnv[] = [];
+    const spawnEnvs: NativeChildEnvironment[] = [];
     const writes = vi.fn();
     const pty: PtyFactory = { spawn: (file, args, options) => {
       spawned.push({ file, args });
-      spawnEnvs.push(options.env ?? {});
+      if (options.env) spawnEnvs.push(options.env);
       return { onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write: writes, resize() {}, kill() {} };
     } };
     const service = new NativeSessionService({
@@ -210,11 +211,13 @@ describe("native session persistence", () => {
     expect(launch.version).toBe("4");
     const agent = purpose === "analysis" ? "answer_query" : purpose === "setup" ? "connect_source" : "draft_enrichment";
     const scopeEntry = claudeScopeEntry(purpose, vendor);
-    expect(spawned).toEqual([{ file: vendor, args: vendor === "claude"
+    expect(spawned).toHaveLength(1);
+    expect(path.isAbsolute(spawned[0]!.file)).toBe(true);
+    expect(spawned[0]!.args).toEqual(vendor === "claude"
       ? [...(scopeEntry ? [] : ["--agent", agent]), "--session-id", expect.stringMatching(/^[0-9a-f-]{36}$/), welcomeFor(purpose)]
-      : ["--dangerously-bypass-hook-trust", welcomeFor(purpose)] }]);
+      : ["--dangerously-bypass-hook-trust", welcomeFor(purpose)]);
     expect(spawnEnvs[0]).toMatchObject({ TERM: "xterm-256color", COLORTERM: "truecolor" });
-    expect(spawnEnvs[0]?.NO_COLOR).toBeUndefined();
+    expect(spawnEnvs[0] && "NO_COLOR" in spawnEnvs[0]).toBe(false);
     expect(spawnEnvs[0]?.[NATIVE_SETUP_BOOTSTRAP_ROOT_ENV_VAR]).toBe(purpose === "setup" ? realpathSync(dir) : undefined);
     if (vendor === "codex" && binding) {
       expect(readFileSync(path.join(materializationRoot, ".codex", "config.toml"), "utf8")).toContain(`${JSON.stringify(realpathSync(binding.path))} = "read"`);
@@ -331,7 +334,7 @@ describe("native session persistence", () => {
     const store = new Store(":memory:");
     store.setRuntimeSettings({ ...store.getRuntimeSettings(), subscriptionProvider: "codex", subscriptionDriverModel: "driver", tierModels: [{ tier: "cheap", model: "cheap" }, { tier: "strong", model: "strong" }] });
     const roots: string[] = [];
-    const spawned: Array<{ cwd: string; env?: NodeJS.ProcessEnv }> = [];
+    const spawned: Array<{ cwd: string; env?: NativeChildEnvironment }> = [];
     const pty: PtyFactory = { spawn: (_file, _args, options) => {
       spawned.push(options);
       return { onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} };
@@ -356,7 +359,7 @@ describe("native session persistence", () => {
       expect(lstatSync(root).mode & 0o777).toBe(0o700);
     }
     expect(spawned.map((entry) => entry.cwd)).toEqual(expect.arrayContaining(roots));
-    expect(spawned.every((entry) => entry.env?.WREN_PROJECT_HOME === binding!.path)).toBe(true);
+    expect(spawned.every((entry) => entry.env?.WREN_PROJECT_HOME === realpathSync(binding!.path))).toBe(true);
     expect(readFileSync(path.join(dir, "AGENTS.md"), "utf8")).toBe("project-owned instructions");
     expect(readFileSync(path.join(dir, ".codex", "config.toml"), "utf8")).toBe("project-owned config");
 
@@ -400,7 +403,7 @@ describe("native session persistence", () => {
     writeFileSync(path.join(dir, "AGENTS.md"), "project-owned instructions");
     const store = new Store(":memory:");
     store.setRuntimeSettings({ ...store.getRuntimeSettings(), subscriptionProvider: "codex", subscriptionDriverModel: "driver", tierModels: [{ tier: "cheap", model: "cheap" }, { tier: "strong", model: "strong" }] });
-    const spawned: Array<{ cwd: string; env?: NodeJS.ProcessEnv }> = [];
+    const spawned: Array<{ cwd: string; env?: NativeChildEnvironment }> = [];
     const pty: PtyFactory = { spawn: (_file, _args, options) => {
       spawned.push(options);
       return { onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} };
@@ -415,7 +418,7 @@ describe("native session persistence", () => {
     try {
       await expect(service.readiness()).resolves.toMatchObject({ purposes: { analysis: { available: true } } });
       const created = await service.openOrCreate({ purpose: "analysis" });
-      expect(spawned).toEqual([expect.objectContaining({ cwd: path.join(state.root, "native", created.row.id), env: expect.objectContaining({ WREN_PROJECT_HOME: binding!.path }) })]);
+      expect(spawned).toEqual([expect.objectContaining({ cwd: path.join(state.root, "native", created.row.id), env: expect.objectContaining({ WREN_PROJECT_HOME: realpathSync(binding!.path) }) })]);
       expect(readFileSync(path.join(dir, "AGENTS.md"), "utf8")).toBe("project-owned instructions");
       expect(existsSync(path.join(projectWarbleTarget, "interactive-launch.json"))).toBe(false);
     } finally {
@@ -1326,7 +1329,7 @@ describe("native session persistence", () => {
     const state = materializationState();
     const store = new Store(":memory:");
     const artifacts = new NativeArtifactService({ store, artifactsRoot: path.join(dir, "artifacts"), expectedMcpUrl: NATIVE_MCP_URL, mcpUrl: NATIVE_MCP_URL, getBinding: () => binding });
-    const spawn = vi.fn((_file: "claude" | "codex", _args: readonly string[], _options: { cwd: string; cols: number; rows: number; env?: NodeJS.ProcessEnv }) => ({ onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} }));
+    const spawn = vi.fn((_file: string, _args: readonly string[], _options: { cwd: string; cols: number; rows: number; env?: NativeChildEnvironment }) => ({ onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} }));
     let issuedCredential = "";
     const service = new NativeSessionService({
       store, terminalManager: async () => new InteractiveTerminalManager({ spawn }), getBinding: () => binding,
@@ -1342,7 +1345,7 @@ describe("native session persistence", () => {
     const created = await service.create({ purpose: "analysis", vendor });
     const materializationRoot = path.join(state.root, "native", created.row.id);
     expect(readNativeLaunchSpec(materializationRoot, "analysis", vendor, created.row.scopeId, binding, { version: "1", url: "http://127.0.0.1:4787/api/native-sessions/mcp", credential: issuedCredential }, state)).toMatchObject({ version: "4" });
-    const spawnOptions = spawn.mock.calls[0]?.[2] as { env?: NodeJS.ProcessEnv };
+    const spawnOptions = spawn.mock.calls[0]?.[2] as { env?: NativeChildEnvironment };
     expect(spawn.mock.calls[0]?.[1]).toEqual(vendor === "codex"
       ? ["--dangerously-bypass-hook-trust", welcomeFor("analysis")]
       : ["--session-id", expect.stringMatching(/^[0-9a-f-]{36}$/), welcomeFor("analysis")]);
@@ -1440,6 +1443,7 @@ describe("native session persistence", () => {
       store: successStore, terminalManager: async () => new InteractiveTerminalManager(idle), getBinding: () => success.binding,
       workspaceRoot: undefined, materializationState: successState, irPaths: { analysis: path.join(success.dir, "analysis.json"), setup: undefined, context_enrichment: undefined },
       warbleBin: fakeV4Producer(success.dir), artifactService: successArtifacts,
+      vendorExecutables: { [vendor]: attestNativeExecutable("vendor", process.execPath) },
       prepareCodexWrenHome: ({ cwd }) => {
         const home = path.join(cwd, ".wren");
         mkdirSync(home);
@@ -1474,6 +1478,7 @@ describe("native session persistence", () => {
       store: failureStore, terminalManager: async () => new InteractiveTerminalManager(idle), getBinding: () => failure.binding,
       workspaceRoot: undefined, materializationState: failureState, irPaths: { analysis: undefined, setup: undefined, context_enrichment: path.join(failure.dir, "enrich.json") },
       warbleBin: fakeV4Producer(failure.dir), artifactService: failureArtifacts,
+      vendorExecutables: { [vendor]: attestNativeExecutable("vendor", process.execPath) },
     });
     await expect(failureService.create({ purpose: "context_enrichment", vendor })).rejects.toThrow(/materialization failed/);
     const failedDescriptor = failedIssue.mock.results[0]?.value as { credential: string };

@@ -662,6 +662,7 @@ export interface ContextSetupSuccessPersistence {
 
 export class Store {
   private readonly db: DatabaseSync;
+  private closed = false;
   private readonly onContextSuccessWrite: StoreOptions["onContextSuccessWrite"];
   private readonly onEnrichmentTransitionWrite: StoreOptions["onEnrichmentTransitionWrite"];
   private readonly onEnrichmentCreationWrite: StoreOptions["onEnrichmentCreationWrite"];
@@ -820,7 +821,11 @@ export class Store {
 
   close(): void {
     this.db.close();
+    this.closed = true;
   }
+
+  /** Lets delayed process-local cleanup avoid touching SQLite after shutdown. */
+  isClosed(): boolean { return this.closed; }
 
   // ---------------------------------------------------------------------
   // sessions

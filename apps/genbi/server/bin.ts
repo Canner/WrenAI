@@ -101,7 +101,8 @@
  */
 import { serve } from "@hono/node-server";
 import { createRequire } from "node:module";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
@@ -145,6 +146,8 @@ import { createProbedPtyFactory, ensureDarwinNodePtySpawnHelper } from "./node-p
 import { NativeSessionService } from "./native-sessions.js";
 import { NativeArtifactService } from "./native-artifacts.js";
 import { RuntimeHost } from "./runtime-host/local.js";
+import { assertNativeExecutableIdentity, assertNativeRuntimeSpec, attestNativeExecutable, buildNativeChildEnvironment, buildNativeRuntimeSpec, resolveNativeExecutable } from "./native-runtime-spec.js";
+import type { NativeExecutableIdentity } from "./native-runtime-spec.js";
 import { initializeNativeSessionStateBase, legacyInteractiveWorkspace, validateLegacyInteractiveWorkspace } from "./native-session-workspace.js";
 import {
   codexModelsForRuntime,
@@ -230,6 +233,22 @@ async function main(): Promise<void> {
     return undefined;
   });
   const warbleBinOption = resolvedWarbleBin !== undefined ? { warbleBin: resolvedWarbleBin } : {};
+  const nativeHome = realpathSync(os.homedir());
+  const nodeExecutable = attestNativeExecutable("node", process.execPath);
+  const producerExecutable = resolvedWarbleBin ? attestNativeExecutable("producer", resolvedWarbleBin) : undefined;
+  const bootPath = process.env["PATH"];
+  const claudeExecutable = resolveNativeExecutable("vendor", "claude", bootPath);
+  const codexExecutable = resolveNativeExecutable("vendor", "codex", bootPath);
+  const vendorExecutables: Readonly<Partial<Record<"claude" | "codex", NativeExecutableIdentity>>> = Object.freeze({
+    ...(claudeExecutable ? { claude: claudeExecutable } : {}),
+    ...(codexExecutable ? { codex: codexExecutable } : {}),
+  });
+  const nativeToolDirectories = Object.freeze([...new Set([
+    path.dirname(nodeExecutable.executable),
+    ...Object.values(vendorExecutables).filter((value): value is NativeExecutableIdentity => value !== undefined).map((value) => path.dirname(value.executable)),
+    ...(producerExecutable ? [path.dirname(producerExecutable.executable)] : []),
+  ])]);
+  const nativeHostEnvironment = buildNativeChildEnvironment({ toolDirectories: nativeToolDirectories, home: nativeHome });
 
   const profileSource = flags.profile ?? resolveDefaultProfileSource();
   // Frozen at boot: GET /api/harness accepts only a purpose and must never
@@ -341,6 +360,10 @@ async function main(): Promise<void> {
   // a reset) later in the same boot. The actual logic lives in `./wren-home.js` so it's directly
   // unit-testable without going through a mocked `TurnDeps`.
   const originalWrenHome = process.env["WREN_HOME"];
+  const operatorWrenHome = originalWrenHome?.trim() || path.join(nativeHome, ".wren");
+  const nativeSourceWrenHome = () => store.getSetupMode() === "create"
+    ? path.join(workspaceRoot, ".wren")
+    : operatorWrenHome;
   const setWrenHomeForSetupMode = createSetWrenHomeForSetupMode(workspaceRoot, originalWrenHome);
 
   // Mutable auth-choice binding — the auth-choice mirror of boundProject above. Starts at the
@@ -505,7 +528,12 @@ async function main(): Promise<void> {
       try {
         const require = createRequire(import.meta.url);
         ensureDarwinNodePtySpawnHelper(require.resolve("node-pty"));
-        return await createProbedPtyFactory(await import("node-pty"));
+        assertNativeExecutableIdentity(nodeExecutable);
+        return await createProbedPtyFactory(await import("node-pty"), {
+          cwd: nativeMaterializationState.root,
+          env: nativeHostEnvironment,
+          probeExecutable: nodeExecutable.executable,
+        });
       } catch {
         throw new InteractiveLaunchError("interactive terminal host cannot spawn local processes on this machine");
       }
@@ -521,14 +549,23 @@ async function main(): Promise<void> {
 
   async function prepareInteractiveTerminal(target: InteractiveTarget, binding: EnrichmentBinding) {
     if (enrichIrPath === undefined) throw new InteractiveLaunchError("interactive enrichment artifacts are not configured");
+    if (producerExecutable === undefined) throw new InteractiveLaunchError("interactive enrichment materialization failed");
     const artifactRoot = legacyInteractiveWorkspace(nativeMaterializationState, binding.path, target);
+    const dispatchEnvironment = buildNativeChildEnvironment({
+      toolDirectories: nativeToolDirectories,
+      home: nativeHome,
+      projectPath: binding.path,
+    });
     return prepareInteractiveHandoff({
       target,
       binding,
       artifactRoot,
       materializationState: nativeMaterializationState,
-      materialize: () => dispatchInteractiveArtifacts({ warbleBin: resolvedWarbleBin ?? "warble", irPath: enrichIrPath, target, cwd: artifactRoot, boundProject: binding.path, materializationState: nativeMaterializationState }),
-    }, { getCurrentBinding: currentInteractiveBinding });
+      materialize: () => dispatchInteractiveArtifacts({ producer: producerExecutable, irPath: enrichIrPath, target, cwd: artifactRoot, env: dispatchEnvironment, boundProject: binding.path, materializationState: nativeMaterializationState }),
+    }, {
+      getCurrentBinding: currentInteractiveBinding,
+      resolveExecutable: (executable) => executable === "claude" ? vendorExecutables.claude : vendorExecutables.codex,
+    });
   }
 
   const nativeMcpUrl = `http://127.0.0.1:${port}/api/native-sessions/mcp`;
@@ -574,10 +611,17 @@ async function main(): Promise<void> {
     },
     // The service's option is a required string; when resolution failed the bare
     // name is what the preflight will report as unresolvable, with its reason.
-    warbleBin: resolvedWarbleBin ?? "warble",
+    warbleBin: producerExecutable?.executable ?? "warble",
     ...(process.env["WREN_HARNESS_WREN_SHIM"] !== undefined ? { wrenShim: process.env["WREN_HARNESS_WREN_SHIM"] } : {}),
     terminalHostAvailable: nativeTerminalHostAvailable,
     runtimeHost: nativeRuntimeHost,
+    nativeHome,
+    sourceWrenHome: nativeSourceWrenHome,
+    ...(baseRouteOptions.codexHome ? { codexHome: baseRouteOptions.codexHome } : {}),
+    vendorExecutables,
+    nodeExecutable,
+    childToolDirectories: nativeToolDirectories,
+    ...(bootPath !== undefined ? { pathValue: bootPath } : {}),
     artifactService: nativeArtifacts,
   });
 
@@ -626,7 +670,23 @@ async function main(): Promise<void> {
       const { spec } = await prepareInteractiveTerminal(target, binding);
       const manager = await terminalManager();
       validateLegacyInteractiveWorkspace(nativeMaterializationState, binding.path, spec.cwd);
-      return manager.start(spec, undefined, { ...process.env, WREN_PROJECT_HOME: binding.path });
+      if (producerExecutable === undefined || spec.hostExecutable === undefined) throw new InteractiveLaunchError("interactive enrichment materialization failed");
+      const runtimeSpec = buildNativeRuntimeSpec({
+        backend: "local",
+        vendor: target === "claude-code:interactive" ? "claude" : "codex",
+        executables: [
+          nodeExecutable,
+          producerExecutable,
+          attestNativeExecutable("vendor", spec.hostExecutable),
+        ],
+        toolDirectories: nativeToolDirectories,
+        workspace: spec.cwd,
+        home: nativeHome,
+        binding,
+        ...(target === "codex:interactive" && baseRouteOptions.codexHome ? { codexHome: baseRouteOptions.codexHome } : {}),
+      });
+      assertNativeRuntimeSpec(runtimeSpec);
+      return manager.start(spec, undefined, runtimeSpec.childEnvironment);
     },
     prepareInteractiveTerminal: async ({ target, binding }) => {
       return (await prepareInteractiveTerminal(target, binding)).handoff;
@@ -641,6 +701,7 @@ async function main(): Promise<void> {
         terminalHostAvailable: async () => {
           try { await loadPty(); return true; } catch { return false; }
         },
+        resolveExecutable: (executable) => executable === "claude" ? vendorExecutables.claude : vendorExecutables.codex,
       });
     },
     workspaceRoot,
