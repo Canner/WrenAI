@@ -182,7 +182,7 @@ would run tests.
 
 ## Running the BFF
 
-Start the BFF with the exact paths the gate verified. The SQLite state must be
+Start the BFF with the exact paths the check verified. The SQLite state must be
 outside the bootstrap workspace and every project adopted through the app.
 
 ```bash
@@ -190,8 +190,6 @@ mkdir -p /absolute/path/to/private-bff-state
 
 WREN_HARNESS_WARBLE_BIN="$WARBLE_BIN" \
 WREN_HARNESS_AGENT_SDK_BIN="$AGENT_SDK_BIN" \
-WREN_HARNESS_MODE=subscription \
-WREN_HARNESS_PROVIDER=claude \
 WREN_HARNESS_PROFILE="$PROFILES_ROOT/genbi-default" \
 WREN_HARNESS_SETUP_IR="$PROFILES_ROOT/genbi-setup/ir.golden.json" \
 WREN_HARNESS_ENRICH_IR="$PROFILES_ROOT/genbi-enrich-context/ir.golden.json" \
@@ -203,6 +201,17 @@ pnpm run start:bff
 ```
 
 The BFF listens on `:4787` by default (`PORT` overrides it).
+
+**On picking a provider.** Nothing above names one, because you do not have to.
+With no `WREN_HARNESS_MODE`/`WREN_HARNESS_PROVIDER` the harness probes the
+machine for an available subscription CLI and uses what it finds, failing with a
+clear message if there is none. Setting them pins that choice for boot, which is
+only worth doing when more than one is installed and you want a specific one.
+
+Either way this is just the pre-Setup default. The Setup wizard owns the real
+choice: once it saves an explicit runtime setting, that takes over and the
+boot-time values are deliberately dropped, so switching auth mode in the app
+cannot carry a stale binding forward.
 
 In a second terminal, return to the same `apps/genbi` worktree and point Vite at
 the BFF:
