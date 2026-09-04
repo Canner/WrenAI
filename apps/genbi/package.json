@@ -32,6 +32,8 @@
     "prepack": "VITE_BFF_URL=same-origin pnpm run build",
     "start:bff": "node dist-server/server/bin.js",
     "check:contracts": "node scripts/verify-local-launch.mjs",
+    "check:installed-package": "node scripts/installed-package-acceptance.mjs",
+    "check:vendor-contract": "node scripts/run-vendor-contract-probes.mjs",
     "check:warble-peers": "pnpm peers check",
     "preview": "vite preview",
     "test": "vitest run",

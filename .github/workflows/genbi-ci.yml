@@ -86,3 +86,36 @@ jobs:
 
       - name: Test
         run: pnpm run test
+
+      - name: Packed-install acceptance
+        # This packs the actual artifact, installs it below a fresh temporary
+        # project, and invokes `npx --no-install genbi` with no checkout PATH.
+        # It is deliberately separate from source-tree Vitest coverage.
+        run: pnpm run check:installed-package
+
+  vendor-contracts-macos:
+    # These are exact tested-baseline checks, not a production certification
+    # row. macOS is required because Ubuntu cannot renew macOS sandbox evidence.
+    name: macOS deterministic vendor contracts (tested baseline)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install exact vendor tested baseline
+        env:
+          GENBI_VENDOR_TOOL_ROOT: ${{ runner.temp }}/genbi-vendor-tools
+        run: |
+          npm install --prefix "$GENBI_VENDOR_TOOL_ROOT" --no-audit --no-fund --no-save \
+            @openai/codex@0.146.0 \
+            @anthropic-ai/claude-code@2.1.259 \
+            @anthropic-ai/sandbox-runtime@0.0.75
+
+      - name: Run deterministic vendor contracts without credentials or model turns
+        env:
+          GENBI_VENDOR_TOOL_ROOT: ${{ runner.temp }}/genbi-vendor-tools
+        run: node scripts/run-vendor-contract-probes.mjs

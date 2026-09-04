@@ -94,6 +94,11 @@ including inherited outside-read denial and OAuth masking in the actual Bash com
 
 The executable probes create unique probe paths and remove them on exit. A failed denial or cleanup assertion exits non-zero.
 
+The maintained deterministic contract entry point is `pnpm run check:vendor-contract`. In CI it installs the exact macOS
+tested-baseline vendor components in a job-local directory, checks those exact identities, and then runs the RPC, Codex
+lifecycle/schema/cleanup, and sandbox-runtime probes. It intentionally does not run either authenticated probe or any
+model-backed turn. A passing tested baseline is evidence only, not a certified production compatibility row.
+
 Linux, WSL2, and native Windows validation are outside this macOS-only Phase 0 scope.
 
 See `PHASE-0-REPORT.md` for the current evidence and scope matrix, and `ADR-codex-native-terminal.md` for the
