@@ -61,6 +61,16 @@ jobs:
         run: |
           uv tool install wrenai
           wren --version
+          # resolveNativeWrenRuntime wants ~/.local/bin/wren to be a symlink into
+          # a uv tool venv whose bin/python is also a symlink. Print what uv
+          # actually produced here so a mismatch is diagnosable from the log
+          # rather than guessed at.
+          echo "--- wren shim layout ---"
+          ls -l "$HOME/.local/bin/wren" || true
+          target=$(readlink -f "$HOME/.local/bin/wren" || true)
+          echo "resolves to: $target"
+          ls -l "$(dirname "$target")/python" || true
+          uv tool dir || true
 
       - name: Install workspace dependencies
         working-directory: .
