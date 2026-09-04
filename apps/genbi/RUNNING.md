@@ -1,54 +1,17 @@
 # Running GenBI locally
 
-This covers getting a live, BFF-backed GenBI running from a source checkout:
-hot reload, real questions against an adopted Wren project, and the contract
-check that confirms your UI, BFF and Warble build still fit together. For the
-daily build/test/typecheck loop, see [README.md](./README.md#build). For
-installing the published package instead of building from source, see
-[INSTALL.md](./INSTALL.md).
+[README.md § Getting started](./README.md#getting-started) has the minimum needed
+to get the app up. This file is what comes after that: running against a Warble
+build of your own, verifying that your UI, BFF and Warble still fit together, and
+the Codex situation. For installing the published package instead of building
+from source, see [INSTALL.md](./INSTALL.md).
 
-**Every command below runs from `apps/genbi`**, after `pnpm install` at the
-repo root — see [README.md § Getting started](./README.md#getting-started).
-
-## Quickstart
-
-Two processes and one required variable. If this gets you a working app, you only
-need whichever section below you are actually here for.
+**Every command here runs from `apps/genbi`**, after `pnpm install` at the repo
+root.
 
 ```bash
 cd apps/genbi
-pnpm build
 ```
-
-In one terminal, the BFF:
-
-```bash
-WREN_HARNESS_WORKSPACE_ROOT=/absolute/path/to/an/empty/directory pnpm run start:bff
-```
-
-In a second, the UI:
-
-```bash
-VITE_BFF_URL=http://localhost:4787 pnpm dev
-```
-
-Open the URL Vite prints — `http://localhost:5273` unless something already holds
-that port, in which case it takes the next free one and says which.
-
-You need a provider CLI on `PATH` (`claude`). The harness probes for one at boot
-and says so plainly if it finds none.
-
-Three things are easy to get wrong here, and each leaves you with an app that
-looks like it is working:
-
-- **`VITE_BFF_URL` is what connects the two processes.** Without it the SPA calls
-  no BFF at all: it renders fixtures, shows a context and a harness as though they
-  were already configured, and answers nothing. Setting it also installs Vite's
-  `/api` proxy, which is why there is no CORS problem to solve.
-- **`pnpm preview` is not this.** It serves the built SPA with no proxy and no
-  BFF — the fixture case above, with a real BFF running beside it, untouched.
-- **Build before starting the BFF.** `start:bff` runs the compiled server out of
-  `dist-server/`, so a stale or absent build is what you will get.
 
 ## Prerequisites
 

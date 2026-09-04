@@ -50,31 +50,50 @@ corepack enable
 pnpm install
 ```
 
-Installation alone does not start the UI. The BFF needs a workspace root and
-the Warble runtime inputs before it will serve anything — see
-[RUNNING.md](./RUNNING.md) for the local flow, hot reload included.
+**Every command below runs from `apps/genbi`**, not the repo root — the root
+only forwards `genbi:dev`, `genbi:build` and `genbi:test`, so `pnpm build` or
+`pnpm test` from there will tell you the script doesn't exist.
 
-**Every command below runs from `apps/genbi`**, not the repo root — the
-root only forwards `genbi:dev`, `genbi:build` and `genbi:test`, so `pnpm build`
-or `pnpm test` from there will tell you the script doesn't exist.
+Then build once and start two processes: the BFF, and Vite pointed at it.
 
 ```bash
 cd apps/genbi
+pnpm build
 ```
-
-For a fixture-only static preview, no BFF is needed. Note what "fixture-only"
-means: built without `VITE_BFF_URL`, the SPA calls no BFF at all and renders
-canned data, so it will show a context and a harness as though they were already
-configured. That is not your state, and nothing in it will answer a question.
-To run it against a real BFF, follow [RUNNING.md](./RUNNING.md) instead.
 
 ```bash
-pnpm build
-pnpm preview
+# terminal 1
+WREN_HARNESS_WORKSPACE_ROOT=/absolute/path/to/an/empty/directory pnpm run start:bff
 ```
 
-The preview server prints its URL at startup. With no `VITE_BFF_URL` in the
-build environment, the SPA stays fixture-driven and makes no BFF calls.
+```bash
+# terminal 2
+VITE_BFF_URL=http://localhost:4787 pnpm dev
+```
+
+Open the URL Vite prints — `http://localhost:5273` unless something already holds
+that port, in which case it takes the next free one and says which.
+
+You need a provider CLI on `PATH` (`claude`); the harness probes for one at boot
+and says so plainly if it finds none. `WREN_HARNESS_WORKSPACE_ROOT` is the
+directory Setup scaffolds new projects into — the one thing with no sensible
+default. Everything else the BFF needs it resolves itself.
+
+Three things are easy to get wrong, and each leaves you with an app that looks
+like it is working:
+
+- **`VITE_BFF_URL` is what connects the two processes.** Without it the SPA calls
+  no BFF at all: it renders fixtures, shows a context and a harness as though they
+  were already configured, and answers nothing. Setting it also installs Vite's
+  `/api` proxy, so there is no CORS problem to solve.
+- **`pnpm preview` is not this.** It serves the built SPA with no proxy and no BFF
+  — the fixture case above, with a real BFF running beside it, untouched. It is
+  useful for looking at the UI, not for using the app.
+- **Build before starting the BFF.** `start:bff` runs the compiled server out of
+  `dist-server/`, so a stale or absent build is what you will get.
+
+[RUNNING.md](./RUNNING.md) covers the rest: pointing at a Warble build of your
+own, verifying the tuple, and the Codex situation.
 
 ## Build
 
