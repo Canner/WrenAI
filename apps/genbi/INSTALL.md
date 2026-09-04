@@ -65,27 +65,6 @@ Warble binary for your platform (about 12 MB) from GitHub Releases and verifies
 its checksum against the release manifest. That is where an unsupported platform
 fails, before any of the app's own code runs.
 
-<details>
-<summary>Until it is published: install from a tarball</summary>
-
-From a checkout of this repo, in `apps/genbi`:
-
-```bash
-npm pack
-```
-
-That produces `wrenai-genbi-<version>.tgz` — the package's `prepack` script
-builds the UI and server first. Install it wherever you want to run from:
-
-```bash
-npm install /path/to/wrenai-genbi-0.0.0.tgz
-```
-
-The rest of this guide applies unchanged; `npx @wrenai/genbi` below becomes
-`npx genbi` from that directory, or `node_modules/.bin/genbi`.
-
-</details>
-
 ## Run
 
 `@wrenai/genbi` requires one environment variable to start:

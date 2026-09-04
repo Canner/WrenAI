@@ -8,8 +8,13 @@ The app does not write SQL itself. A question goes to the Wren agent harness,
 which answers with a structured envelope — the blocks to render, and whether the
 answer was verified — and the UI renders that.
 
-This README is for working on the app from source: getting it running, and the
-daily build/test/typecheck loop. Three companion docs cover the rest:
+To just run it, `npx @wrenai/genbi` is the whole story — see
+[Getting started](#getting-started) below, or [INSTALL.md](./INSTALL.md) for
+what it needs and how to configure it.
+
+The rest of this README is for working on the app **from source**: getting it
+running, and the daily build/test/typecheck loop. Three companion docs cover
+the rest:
 
 - [RUNNING.md](./RUNNING.md) — a live, BFF-backed dev loop against your own
   Warble build, and checking that the pieces still fit together.
@@ -20,10 +25,10 @@ daily build/test/typecheck loop. Three companion docs cover the rest:
 
 ## Developer preview
 
-`@wrenai/genbi` is at `0.0.0` and has not been published to npm. Nothing here is
-under a compatibility commitment yet — commands, environment variables and
-interfaces move without notice. The Codex runtime is supported in code but has
-not been exercised end to end; Claude is the one that is. See
+`@wrenai/genbi` is published at `0.0.1`. Nothing here is under a compatibility
+commitment yet — commands, environment variables and interfaces move without
+notice. The Codex runtime is supported in code but has not been exercised end
+to end; Claude is the one that is. See
 [MAINTAINING.md](./MAINTAINING.md#versioning) for what the version number does
 and does not promise.
 
@@ -40,8 +45,24 @@ pinned `@warble/*` packages are already pulled in by `pnpm install` — see
 
 ## Getting started
 
-This app lives in a pnpm workspace, so install JavaScript dependencies from
-the repo root:
+### Just run it
+
+```bash
+WREN_HARNESS_WORKSPACE_ROOT=/absolute/path/to/an/empty/directory npx @wrenai/genbi
+```
+
+That fetches the published package, downloads the Warble binary for your
+platform on install, and serves the built UI and the BFF from one process on
+`http://127.0.0.1:4787`. You still need a provider CLI you are logged in to
+(`claude` or `codex`) and the `wren` CLI on `PATH`.
+[INSTALL.md](./INSTALL.md) covers the prerequisites, what happens on first
+start, and every other environment variable.
+
+### From source
+
+Everything below is the development loop, and is only worth setting up if you
+are changing the app. It lives in a pnpm workspace, so install JavaScript
+dependencies from the repo root:
 
 ```bash
 corepack enable
