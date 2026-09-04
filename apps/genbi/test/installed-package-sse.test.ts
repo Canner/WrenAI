@@ -40,4 +40,27 @@ describe("installed-package SSE reader", () => {
     })).rejects.toThrow("Setup stream timed out after 20ms");
     expect(cancelled).toBe(1);
   });
+
+  it("does not let a never-settling cancellation hide the configured timeout", async () => {
+    let cancellationAttempted = false;
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode("event: event\ndata: {\"kind\":\"progress\"}\n\n"));
+      },
+      cancel() {
+        cancellationAttempted = true;
+        return new Promise(() => undefined);
+      },
+    });
+
+    const result = readSseFrames("http://fixture.test/stream", {
+      timeoutMs: 20,
+      fetchImpl: async () => new Response(body),
+    });
+    const promptFailure = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("SSE reader remained pending after its timeout")), 100);
+    });
+    await expect(Promise.race([result, promptFailure])).rejects.toThrow("Setup stream timed out after 20ms");
+    expect(cancellationAttempted).toBe(true);
+  });
 });

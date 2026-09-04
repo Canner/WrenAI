@@ -39,7 +39,20 @@ export async function readSseFrames(url, { timeoutMs = DEFAULT_TIMEOUT_MS, fetch
     }
   } finally {
     clearTimeout(timeout);
-    await reader?.cancel().catch(() => undefined);
+    cancelReader(reader);
+  }
+}
+
+function cancelReader(reader) {
+  if (!reader) return;
+  // `cancel()` asks the source to release its resources, but a broken source
+  // is allowed to return a promise that never settles. Keep that cleanup from
+  // overriding the stream's bounded terminal result; observe rejections so a
+  // later failed cleanup cannot become an unhandled rejection.
+  try {
+    void reader.cancel().catch(() => undefined);
+  } catch {
+    // Reader cancellation is best-effort after the caller has its result.
   }
 }
 
