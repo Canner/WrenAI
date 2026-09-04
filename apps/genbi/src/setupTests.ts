@@ -15,29 +15,35 @@ if (!('ResizeObserver' in globalThis)) {
 // Vitest counts those as unhandled errors and exits non-zero on an otherwise
 // green run, which is how this first reached CI: every assertion passing, the
 // job still red. A stub context is enough; nothing here asserts on pixels.
+//
+// It is a Proxy rather than a literal so it cannot be incomplete. Enumerating
+// methods meant a CI round per missing one — the first version shipped without
+// `rect` and found out that way. Anything not named below answers as a no-op.
+//
 // jsdom *defines* getContext and returns null from it, so testing for the
-// method's absence would never install this.
+// method's absence would never install this. Ask for a context instead.
 if (document.createElement('canvas').getContext('2d') === null) {
-  HTMLCanvasElement.prototype.getContext = (() => {
-    const noop = () => {};
-    return {
-      canvas: undefined,
-      clearRect: noop, fillRect: noop, strokeRect: noop,
-      save: noop, restore: noop, scale: noop, translate: noop, rotate: noop, setTransform: noop,
-      beginPath: noop, closePath: noop, moveTo: noop, lineTo: noop, arc: noop, bezierCurveTo: noop,
-      fill: noop, stroke: noop, clip: noop,
-      createLinearGradient: () => ({ addColorStop: noop }),
-      createRadialGradient: () => ({ addColorStop: noop }),
-      createPattern: () => null,
-      measureText: () => ({ width: 0 }),
-      fillText: noop, strokeText: noop,
-      drawImage: noop,
-      getImageData: () => ({ data: new Uint8ClampedArray(4) }),
-      putImageData: noop,
-      createImageData: () => ({ data: new Uint8ClampedArray(4) }),
-      setLineDash: noop, getLineDash: () => [],
-    };
-  }) as unknown as HTMLCanvasElement["getContext"];
+  const noop = () => {};
+  const withReturn: Record<string, unknown> = {
+    measureText: () => ({ width: 0 }),
+    createLinearGradient: () => ({ addColorStop: noop }),
+    createRadialGradient: () => ({ addColorStop: noop }),
+    createPattern: () => null,
+    getLineDash: () => [],
+    getImageData: () => ({ data: new Uint8ClampedArray(4) }),
+    createImageData: () => ({ data: new Uint8ClampedArray(4) }),
+    isPointInPath: () => false,
+    isPointInStroke: () => false,
+  };
+  const context = new Proxy({} as Record<string, unknown>, {
+    get: (target, property: string) =>
+      property in withReturn ? withReturn[property]
+      : property in target ? target[property]
+      : noop,
+    set: (target, property: string, value) => { target[property] = value; return true; },
+    has: () => true,
+  });
+  HTMLCanvasElement.prototype.getContext = (() => context) as unknown as HTMLCanvasElement['getContext'];
 }
 
 // jsdom does not implement matchMedia; AntD's responsive + theme code reads it.
