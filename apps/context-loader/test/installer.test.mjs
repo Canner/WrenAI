@@ -8,7 +8,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { installContextLoader, isRepositorySourcePackage } from "../scripts/installer.mjs";
-import { readVerifiedState } from "../lib/verified.mjs";
+import { readVerifiedState, targetFor } from "../lib/verified.mjs";
 
 const sha256 = (content) => createHash("sha256").update(content).digest("hex");
 
@@ -22,7 +22,7 @@ function tarEntry(name, content) {
   return Buffer.concat([header, content, Buffer.alloc((512 - (content.length % 512)) % 512), Buffer.alloc(1024)]);
 }
 
-async function fixture({ artifact = Buffer.from("#!/bin/sh\necho loader\n"), target = "darwin-arm64", row = {} } = {}) {
+async function fixture({ artifact = Buffer.from("#!/bin/sh\necho loader\n"), target = targetFor(), row = {} } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "context-loader-package-"));
   const archive = gzipSync(tarEntry("wren-context-loader", artifact));
   const manifest = {
@@ -54,33 +54,35 @@ async function makeSourceWorkspace(root) {
   return packageRoot;
 }
 
-test("installs a digest-verified darwin-arm64 binary atomically and records canonical state", async () => {
+test("installs a digest-verified current-platform binary atomically and records canonical state", async () => {
   const { root, archive, artifact } = await fixture();
-  const first = await installContextLoader({ packageRoot: root, fetchImpl: fetchArchive(archive), platform: "darwin", arch: "arm64" });
+  const first = await installContextLoader({ packageRoot: root, fetchImpl: fetchArchive(archive) });
   assert.equal(first.reused, false);
   assert.deepEqual(await readFile(first.binary), artifact);
   const state = readVerifiedState(root);
   assert.equal(state.binary, await realpath(first.binary));
-  assert.match(state.identity, /package:@wrenai\/context-loader@0\.1\.0:darwin-arm64:[a-f0-9]{64}/);
-  const second = await installContextLoader({ packageRoot: root, fetchImpl: async () => { throw new Error("offline"); }, platform: "darwin", arch: "arm64" });
+  assert.equal(state.state.target, targetFor());
+  assert.match(state.identity, /package:@wrenai\/context-loader@0\.1\.0:[a-z0-9_-]+:[a-f0-9]{64}/);
+  const second = await installContextLoader({ packageRoot: root, fetchImpl: async () => { throw new Error("offline"); } });
   assert.equal(second.reused, true);
 });
 
 test("fails closed for unsupported targets, archive tampering, and binary digest tampering", async () => {
   const supported = await fixture();
+  const unsupportedPlatform = process.platform === "linux" ? "darwin" : "linux";
   await assert.rejects(
-    installContextLoader({ packageRoot: supported.root, fetchImpl: fetchArchive(supported.archive), platform: "linux", arch: "x64" }),
+    installContextLoader({ packageRoot: supported.root, fetchImpl: fetchArchive(supported.archive), platform: unsupportedPlatform, arch: process.arch }),
     /unsupported-platform/,
   );
   const archiveTampered = await fixture({ row: { archiveSha256: "0".repeat(64) } });
-  await assert.rejects(installContextLoader({ packageRoot: archiveTampered.root, fetchImpl: fetchArchive(archiveTampered.archive), platform: "darwin", arch: "arm64" }), /archive-digest-mismatch/);
+  await assert.rejects(installContextLoader({ packageRoot: archiveTampered.root, fetchImpl: fetchArchive(archiveTampered.archive) }), /archive-digest-mismatch/);
   const binaryTampered = await fixture({ row: { binarySha256: "0".repeat(64) } });
-  await assert.rejects(installContextLoader({ packageRoot: binaryTampered.root, fetchImpl: fetchArchive(binaryTampered.archive), platform: "darwin", arch: "arm64" }), /binary-digest-mismatch/);
+  await assert.rejects(installContextLoader({ packageRoot: binaryTampered.root, fetchImpl: fetchArchive(binaryTampered.archive) }), /binary-digest-mismatch/);
 });
 
 test("rejects stale or altered installed state at runtime", async () => {
   const { root, archive } = await fixture();
-  await installContextLoader({ packageRoot: root, fetchImpl: fetchArchive(archive), platform: "darwin", arch: "arm64" });
+  await installContextLoader({ packageRoot: root, fetchImpl: fetchArchive(archive) });
   const statePath = path.join(root, "install-state.json");
   const state = JSON.parse(await readFile(statePath, "utf8"));
   await writeFile(statePath, JSON.stringify({ ...state, version: "0.1.1" }));
@@ -89,7 +91,7 @@ test("rejects stale or altered installed state at runtime", async () => {
 
 test("rejects final-file and ancestor-directory symlinks at runtime", async () => {
   const finalLink = await fixture();
-  const installed = await installContextLoader({ packageRoot: finalLink.root, fetchImpl: fetchArchive(finalLink.archive), platform: "darwin", arch: "arm64" });
+  const installed = await installContextLoader({ packageRoot: finalLink.root, fetchImpl: fetchArchive(finalLink.archive) });
   const external = path.join(await mkdtemp(path.join(os.tmpdir(), "context-loader-external-")), "wren-context-loader");
   await writeFile(external, await readFile(installed.binary), { mode: 0o755 });
   await rm(installed.binary);
@@ -97,7 +99,7 @@ test("rejects final-file and ancestor-directory symlinks at runtime", async () =
   assert.throws(() => readVerifiedState(finalLink.root), /linked|outside/);
 
   const ancestorLink = await fixture();
-  const installedAncestor = await installContextLoader({ packageRoot: ancestorLink.root, fetchImpl: fetchArchive(ancestorLink.archive), platform: "darwin", arch: "arm64" });
+  const installedAncestor = await installContextLoader({ packageRoot: ancestorLink.root, fetchImpl: fetchArchive(ancestorLink.archive) });
   const externalDir = await mkdtemp(path.join(os.tmpdir(), "context-loader-external-dir-"));
   await writeFile(path.join(externalDir, "wren-context-loader"), await readFile(installedAncestor.binary), { mode: 0o755 });
   await rm(path.join(ancestorLink.root, "bin"), { recursive: true });
@@ -107,13 +109,13 @@ test("rejects final-file and ancestor-directory symlinks at runtime", async () =
 
 test("refuses a same-bytes external binary during reuse and a bin-directory link before any install write", async () => {
   const reusable = await fixture();
-  const installed = await installContextLoader({ packageRoot: reusable.root, fetchImpl: fetchArchive(reusable.archive), platform: "darwin", arch: "arm64" });
+  const installed = await installContextLoader({ packageRoot: reusable.root, fetchImpl: fetchArchive(reusable.archive) });
   const external = path.join(await mkdtemp(path.join(os.tmpdir(), "context-loader-reuse-external-")), "wren-context-loader");
   await writeFile(external, await readFile(installed.binary), { mode: 0o755 });
   await rm(installed.binary);
   await symlink(external, installed.binary);
   await assert.rejects(
-    installContextLoader({ packageRoot: reusable.root, fetchImpl: fetchArchive(reusable.archive), platform: "darwin", arch: "arm64" }),
+    installContextLoader({ packageRoot: reusable.root, fetchImpl: fetchArchive(reusable.archive) }),
     /unsafe-path/,
   );
   assert.deepEqual(await readFile(external), reusable.artifact);
@@ -124,7 +126,7 @@ test("refuses a same-bytes external binary during reuse and a bin-directory link
   await writeFile(sentinel, "outside-before", { mode: 0o755 });
   await symlink(externalDir, path.join(fresh.root, "bin"));
   await assert.rejects(
-    installContextLoader({ packageRoot: fresh.root, fetchImpl: fetchArchive(fresh.archive), platform: "darwin", arch: "arm64" }),
+    installContextLoader({ packageRoot: fresh.root, fetchImpl: fetchArchive(fresh.archive) }),
     /unsafe-path/,
   );
   assert.equal(await readFile(sentinel, "utf8"), "outside-before");
