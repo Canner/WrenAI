@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from datetime import datetime, timezone
@@ -104,6 +105,24 @@ def _get_store(path: str | None):
             err=True,
         )
         raise typer.Exit(1)
+
+
+@contextlib.contextmanager
+def _report_backend_errors():
+    """Report an embedding backend that cannot serve the model as itself.
+
+    These surface lazily from the first encode, so every command that embeds
+    can raise one -- not just ``index``. Each message already names the way
+    out, so echoing it is enough; without this they reach the user as a
+    traceback whose most informative line is a 404.
+    """
+    from wren.memory.embeddings import OnnxBackendError  # noqa: PLC0415
+
+    try:
+        yield
+    except OnnxBackendError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
 
 
 def _print_results(results: list[dict], output: str) -> None:
@@ -220,17 +239,15 @@ def index(
             pass  # instructions are optional; never fail index because of them
 
     mem_store = _get_store(path)
-    from wren.memory.embeddings import UnsupportedPoolingError  # noqa: PLC0415
 
-    try:
-        result = mem_store.index_schema(manifest, seed_queries=not no_seed)
-    except UnsupportedPoolingError as e:
-        # Not a manifest problem; the message already names the way out.
-        typer.echo(str(e), err=True)
-        raise typer.Exit(1) from e
-    except ValueError as e:
-        typer.echo(f"Malformed manifest: {e}", err=True)
-        raise typer.Exit(1) from e
+    # Backend errors are RuntimeErrors, so they pass the ValueError branch
+    # untouched and land in the handler -- none of them is a manifest problem.
+    with _report_backend_errors():
+        try:
+            result = mem_store.index_schema(manifest, seed_queries=not no_seed)
+        except ValueError as e:
+            typer.echo(f"Malformed manifest: {e}", err=True)
+            raise typer.Exit(1) from e
     typer.echo(
         f"Indexed {result['schema_items']} schema items"
         + (f", {result['seed_queries']} seed queries" if result["seed_queries"] else "")
@@ -392,9 +409,10 @@ def store(
         from wren.memory.store import MemoryStore  # noqa: PLC0415
 
         resolved = path or str(_default_memory_path())
-        MemoryStore(path=resolved).store_query(
-            nl, sql, datasource=datasource, tags=tags
-        )
+        with _report_backend_errors():
+            MemoryStore(path=resolved).store_query(
+                nl, sql, datasource=datasource, tags=tags
+            )
     except ModuleNotFoundError as e:
         if (e.name or "").split(".")[0] not in {
             "lancedb",
@@ -427,7 +445,8 @@ def recall(
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
     idx = get_index(project, path or str(_default_memory_path()))
-    results = idx.search(query, limit=limit, datasource=datasource)
+    with _report_backend_errors():
+        results = idx.search(query, limit=limit, datasource=datasource)
     _annotate_markdown_paths(results)
     _print_results(results, output)
 

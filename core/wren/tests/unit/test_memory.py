@@ -1598,6 +1598,16 @@ class _FakeSession:
         return [self._hidden]
 
 
+class _StubTokenizer:
+    """Stands in for tokenizers.Tokenizer where only its construction matters."""
+
+    def enable_truncation(self, **_kwargs):
+        pass
+
+    def enable_padding(self, **_kwargs):
+        pass
+
+
 class _CountingTokenizer:
     """Encodes each text as the single token its integer value names."""
 
@@ -1829,6 +1839,84 @@ class TestOnnxEmbeddings:
         with pytest.raises(embeddings.UnsupportedPoolingError, match="mean pooling"):
             embeddings._require_mean_pooling("some/model")
 
+    def test_the_pooling_guard_is_an_onnx_backend_error(self):
+        # cli.py orders its `except` clauses on the RuntimeError/ValueError
+        # split, so widening the hierarchy must not cross that line.
+        from wren.memory import embeddings  # noqa: PLC0415
+
+        assert issubclass(
+            embeddings.UnsupportedPoolingError, embeddings.OnnxBackendError
+        )
+        assert issubclass(embeddings.OnnxBackendError, RuntimeError)
+        assert not issubclass(embeddings.OnnxBackendError, ValueError)
+
+    def test_a_repo_without_an_onnx_export_names_the_way_out(self, monkeypatch):
+        # onnx is chosen on importability alone, so a WREN_EMBEDDING_MODEL that
+        # worked under sentence-transformers can land here. Surfacing the raw
+        # 404 as a traceback would make a working config look broken.
+        import tokenizers  # noqa: PLC0415
+
+        from wren.memory import embeddings  # noqa: PLC0415
+
+        def _missing(_repo, filename):
+            if filename.endswith(".onnx"):
+                raise OSError("404 Client Error")
+            return "/dev/null"
+
+        # The tokenizer loads first -- _runtime does the cheap checks before
+        # fetching the large graph -- so it has to be stubbed to reach the
+        # fetch under test.
+        monkeypatch.setattr(
+            tokenizers.Tokenizer, "from_file", staticmethod(lambda _p: _StubTokenizer())
+        )
+        monkeypatch.setattr(embeddings, "_hf_file", _missing)
+        monkeypatch.setattr(embeddings, "_require_mean_pooling", lambda _repo: None)
+        monkeypatch.setattr(embeddings, "_max_seq_length", lambda _repo: 128)
+        monkeypatch.setattr(embeddings, "_onnx_runtime_cache", None)
+
+        with pytest.raises(embeddings.MissingOnnxExportError) as excinfo:
+            embeddings.OnnxEmbeddings("acme/no-onnx")._runtime()
+        assert "WREN_EMBEDDING_BACKEND=sentence-transformers" in str(excinfo.value)
+
+    def test_corrupt_pooling_config_is_not_reported_as_a_bad_manifest(
+        self, monkeypatch, tmp_path
+    ):
+        # json.JSONDecodeError is a ValueError, so letting it escape would put
+        # a corrupt HF cache entry behind cli.py's "Malformed manifest:" -- the
+        # same misattribution the pooling guard exists to avoid. Returning None
+        # instead would be worse: the guard would read it as "no pooling
+        # config" and wave a CLS-pooled model through.
+        from wren.memory import embeddings  # noqa: PLC0415
+
+        corrupt = tmp_path / "config.json"
+        corrupt.write_text("{not json", encoding="utf-8")
+        monkeypatch.setattr(embeddings, "_hf_file", lambda _r, _f: str(corrupt))
+
+        with pytest.raises(embeddings.OnnxBackendError, match="could not be read"):
+            embeddings._read_json("acme/model", "1_Pooling/config.json")
+
+    def test_a_defaulted_sequence_length_is_logged(self, monkeypatch, caplog):
+        # ONNX-native mirrors publish onnx/model.onnx but no
+        # sentence_bert_config.json, so this default is what an onnx user
+        # typically gets. It is right for the 128-length models, but a
+        # 512-length model would truncate with no signal at all.
+        from wren.memory import embeddings  # noqa: PLC0415
+
+        monkeypatch.setattr(embeddings, "_read_json", lambda _r, _f: None)
+        with caplog.at_level("DEBUG", logger="wren.memory.embeddings"):
+            assert embeddings._max_seq_length("Xenova/some-model") == 128
+        assert "128" in caplog.text
+
+    def test_a_declared_sequence_length_is_not_logged(self, monkeypatch, caplog):
+        from wren.memory import embeddings  # noqa: PLC0415
+
+        monkeypatch.setattr(
+            embeddings, "_read_json", lambda _r, _f: {"max_seq_length": 512}
+        )
+        with caplog.at_level("DEBUG", logger="wren.memory.embeddings"):
+            assert embeddings._max_seq_length("acme/model") == 512
+        assert caplog.text == ""
+
     def test_bare_model_name_expands_to_the_sentence_transformers_repo(self):
         from wren.memory.embeddings import _resolve_repo_id  # noqa: PLC0415
 
@@ -1837,6 +1925,91 @@ class TestOnnxEmbeddings:
             == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
         )
         assert _resolve_repo_id("acme/custom-model") == "acme/custom-model"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "error_name", ["UnsupportedPoolingError", "MissingOnnxExportError"]
+)
+class TestBackendErrorsReachTheUser:
+    """A backend that cannot serve the model must say so, from any command.
+
+    These failures surface lazily from the first encode, so every command that
+    embeds can raise one -- not just `index`, which was the only one that
+    handled it.
+    """
+
+    def _invoke(self, args):
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.cli import app  # noqa: PLC0415
+
+        return CliRunner().invoke(app, args)
+
+    def _error(self, error_name):
+        from wren.memory import embeddings  # noqa: PLC0415
+
+        return getattr(embeddings, error_name)(
+            "The onnx backend cannot serve this model. Set "
+            "WREN_EMBEDDING_BACKEND=sentence-transformers to use this model."
+        )
+
+    def _assert_clean_exit(self, result):
+        assert result.exit_code == 1, result.output
+        assert "WREN_EMBEDDING_BACKEND=sentence-transformers" in result.output
+        assert "Traceback" not in result.output
+        assert "Malformed manifest" not in result.output
+
+    def test_index_reports_it_and_not_as_a_manifest_problem(
+        self, tmp_path, monkeypatch, error_name
+    ):
+        from wren.memory import cli  # noqa: PLC0415
+
+        error = self._error(error_name)
+
+        class _Store:
+            def index_schema(self, *_a, **_kw):
+                raise error
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        monkeypatch.setattr(cli, "_load_manifest", lambda _mdl: {"models": []})
+        monkeypatch.setattr(cli, "_get_store", lambda _path: _Store())
+        self._assert_clean_exit(self._invoke(["memory", "index", "--no-queries"]))
+
+    def test_recall_reports_it(self, tmp_path, monkeypatch, error_name):
+        from wren.memory import index_backend  # noqa: PLC0415
+
+        error = self._error(error_name)
+
+        class _Index:
+            def search(self, *_a, **_kw):
+                raise error
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        monkeypatch.setattr(index_backend, "get_index", lambda *_a, **_kw: _Index())
+        self._assert_clean_exit(self._invoke(["memory", "recall", "-q", "revenue"]))
+
+    def test_store_reports_it(self, tmp_path, monkeypatch, error_name):
+        # `store` writes the markdown first and only then indexes, so the pair
+        # is not lost -- but the indexing failure still has to be legible.
+        from wren.memory import store as store_mod  # noqa: PLC0415
+
+        error = self._error(error_name)
+
+        class _Store:
+            def __init__(self, **_kw):
+                pass
+
+            def store_query(self, *_a, **_kw):
+                raise error
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        monkeypatch.setattr(store_mod, "MemoryStore", _Store)
+        self._assert_clean_exit(
+            self._invoke(
+                ["memory", "store", "--nl", "Total revenue", "--sql", "SELECT 1"]
+            )
+        )
 
 
 @pytest.mark.unit

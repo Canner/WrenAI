@@ -37,11 +37,22 @@ ONNX_BACKEND = "onnx"
 SENTENCE_TRANSFORMERS_BACKEND = "sentence-transformers"
 
 
-class UnsupportedPoolingError(RuntimeError):
-    """The onnx backend cannot reproduce this model's pooling mode.
+class OnnxBackendError(RuntimeError):
+    """The onnx backend cannot serve the configured model.
 
-    Not a ``ValueError``: the CLI reports those as a malformed manifest.
+    Deliberately not a ``ValueError``: the CLI reports those as a malformed
+    manifest, and none of these are a manifest problem. Every subclass names
+    ``WREN_EMBEDDING_BACKEND=sentence-transformers`` in its message, because
+    that is the way out of all of them.
     """
+
+
+class UnsupportedPoolingError(OnnxBackendError):
+    """The onnx backend cannot reproduce this model's pooling mode."""
+
+
+class MissingOnnxExportError(OnnxBackendError):
+    """The model repo does not publish the ONNX graph this backend needs."""
 
 
 def _disable_transformers_progress_bar() -> None:
@@ -181,18 +192,49 @@ def _hf_file(repo_id: str, filename: str) -> str:
 
 
 def _read_json(repo_id: str, filename: str) -> dict | None:
-    """Read a small JSON config from the model repo, or None when absent."""
+    """Read a small JSON config from the model repo, or None when absent.
+
+    A corrupt file is not treated as absent. ``_require_mean_pooling`` reads
+    "absent" as "assume mean pooling", so swallowing the error there would
+    wave a CLS-pooled model through with quietly wrong vectors -- and
+    ``json.JSONDecodeError`` is a ``ValueError``, so letting it escape would
+    put it behind the CLI's "Malformed manifest:" instead.
+    """
     try:
-        return json.loads(Path(_hf_file(repo_id, filename)).read_text(encoding="utf-8"))
+        path = _hf_file(repo_id, filename)
     except OSError:
         return None
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        raise OnnxBackendError(
+            f"'{filename}' for '{repo_id}' could not be read: {e}. The cached "
+            f"copy at {path} looks corrupt; delete it to refetch, or set "
+            "WREN_EMBEDDING_BACKEND=sentence-transformers."
+        ) from e
 
 
 def _max_seq_length(repo_id: str) -> int:
-    """Read the model's truncation length, falling back to the ST default."""
+    """Read the model's truncation length, falling back to the ST default.
+
+    ONNX-native mirrors publish ``onnx/model.onnx`` but no
+    ``sentence_bert_config.json``, so the default is what an onnx user
+    typically gets. It is correct for the 128-length models, but a 512-length
+    model would truncate here with no other signal, hence the log line. Note
+    ``config.json``'s ``max_position_embeddings`` is *not* a usable fallback:
+    the default model reports 512 there against a real length of 128, so
+    reading it would diverge from the sentence-transformers backend.
+    """
     config = _read_json(repo_id, "sentence_bert_config.json") or {}
     value = config.get("max_seq_length")
-    return value if isinstance(value, int) and value > 0 else _DEFAULT_MAX_SEQ_LENGTH
+    if isinstance(value, int) and value > 0:
+        return value
+    logging.getLogger(__name__).debug(
+        "'%s' declares no max_seq_length; truncating at the default of %d.",
+        repo_id,
+        _DEFAULT_MAX_SEQ_LENGTH,
+    )
+    return _DEFAULT_MAX_SEQ_LENGTH
 
 
 def _require_mean_pooling(repo_id: str) -> None:
@@ -260,8 +302,25 @@ class OnnxEmbeddings:
             tokenizer.enable_truncation(max_length=_max_seq_length(self._repo_id))
             tokenizer.enable_padding()
 
+            try:
+                onnx_path = _hf_file(self._repo_id, onnx_file)
+            except OSError as e:
+                # onnx is selected on importability alone, so a
+                # WREN_EMBEDDING_MODEL that works under sentence-transformers
+                # reaches this. Not falling back: a network blip and a repo
+                # with no export both arrive as OSError, and quietly loading
+                # torch on a bad connection is the outcome this extra exists
+                # to avoid. Name the override and let the caller choose.
+                raise MissingOnnxExportError(
+                    f"'{onnx_file}' could not be fetched for '{self._repo_id}': "
+                    f"{e}. The onnx embedding backend needs a repo that "
+                    "publishes an ONNX export. Set "
+                    "WREN_EMBEDDING_BACKEND=sentence-transformers to use this "
+                    "model, or point WREN_ONNX_MODEL_FILE at the right path."
+                ) from e
+
             session = onnxruntime.InferenceSession(
-                _hf_file(self._repo_id, onnx_file),
+                onnx_path,
                 providers=["CPUExecutionProvider"],
             )
             runtime = (session, tokenizer, {i.name for i in session.get_inputs()})
