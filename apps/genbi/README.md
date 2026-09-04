@@ -25,7 +25,7 @@ the rest:
 
 ## Developer preview
 
-`@wrenai/genbi` is published at `0.0.3`. Nothing here is under a compatibility
+`@wrenai/genbi` is published at `0.0.4`. Nothing here is under a compatibility
 commitment yet — commands, environment variables and interfaces move without
 notice. The Codex runtime is supported in code but has not been exercised end
 to end; Claude is the one that is. See

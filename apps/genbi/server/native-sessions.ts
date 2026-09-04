@@ -7,6 +7,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { accessSync, chmodSync, constants, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { WarbleBinaryNotFoundError } from "../harness/compile/errors.js";
 import type { EnrichmentBinding } from "./enrichment.js";
 import { InteractiveLaunchError, InteractiveTerminalManager, NO_INTERACTIVE_TERMINAL_LEASES, interactiveExecutableAvailable } from "./interactive-terminal.js";
 import type { InteractiveLaunchSpec, InteractiveTarget, InteractiveTerminalSession } from "./interactive-terminal.js";
@@ -54,14 +55,17 @@ type NativeLaunchPhase =
   | "codex_project_read"
   | "terminal_manager"
   | "terminal_start"
+  | "dispatch_ir"
   | "running_transition";
 
 function logNativeLaunchFailure(purpose: NativePurpose, vendor: NativeVendor, phase: NativeLaunchPhase, error: unknown): void {
-  const category = error instanceof InteractiveLaunchError ? "rejected" : "unexpected";
-  // Keep the precise boundary server-side without logging exception text,
-  // paths, credentials, argv, or other launch material. Browser/API callers
-  // continue through nativeSessionLaunchFailure's closed public projection.
-  console.error(`[native-sessions] launch failed purpose=${purpose} vendor=${vendor} phase=${phase} category=${category}`);
+  const rejected = error instanceof InteractiveLaunchError;
+  // Exception text, paths, credentials and argv stay out of the log for an
+  // unexpected error, which may carry any of them. A rejection carries a
+  // sentence authored here, and suppressing that turned every diagnosis into a
+  // guess: an operator saw a phase and a category and no cause.
+  const detail = rejected ? ` reason=${(error as InteractiveLaunchError).message}` : "";
+  console.error(`[native-sessions] launch failed purpose=${purpose} vendor=${vendor} phase=${phase} category=${rejected ? "rejected" : "unexpected"}${detail}`);
 }
 
 /**
@@ -533,6 +537,14 @@ export function nativeSessionLaunchFailure(error: unknown): string {
   if (message === "native session producer is incompatible") return message;
   if (message === "native session launch artifacts are unavailable" || message === "native session launch specification is invalid" || message === "native session launch specification is incompatible") return "native session launch artifacts are unavailable";
   if (message === "native session launch paths are unavailable" || message === "native session launch paths are outside its server-owned scope") return "native session launch artifacts are unavailable";
+  // Every InteractiveLaunchError message is authored in this file: a fixed
+  // sentence, a fixed profile name, or a reason readiness already publishes.
+  // None is built from a path, argv, or process output. Falling through to the
+  // generic string threw away the cause of eighteen distinct failures, which is
+  // what left "native session launch failed" as the only thing a user could see.
+  if (error instanceof InteractiveLaunchError) return message;
+  // This one is NOT safe to forward: its text embeds the configured binary path.
+  if (error instanceof WarbleBinaryNotFoundError) return "the Warble binary could not be resolved";
   return "native session launch failed";
 }
 
@@ -1470,9 +1482,19 @@ export class NativeSessionService {
     // Compile for this binding rather than dispatching the profile's golden.
     // Falls back to the configured path only where no resolver is wired (the
     // fixture-mode tests), never silently in production — see `bin.ts`.
-    const irPath = this.options.resolveDispatchIr === undefined
-      ? configuredIr
-      : await this.options.resolveDispatchIr(purpose, binding);
+    // Compiling for this binding runs before the launch try/catch below, so a
+    // failure here reached the HTTP route unlogged and unclassified — the case
+    // where the server printed nothing at all and the browser said only "native
+    // session launch failed".
+    let irPath: string;
+    try {
+      irPath = this.options.resolveDispatchIr === undefined
+        ? configuredIr
+        : await this.options.resolveDispatchIr(purpose, binding);
+    } catch (error) {
+      logNativeLaunchFailure(purpose, dispatchDefinition.provider, "dispatch_ir", error);
+      throw error;
+    }
     const producer = this.legacyFixtureMode() ? undefined : await this.productionProducerPreflight();
     const launchProducer = producer ? producer.vendors[dispatchDefinition.provider] : undefined;
     if (producer && (!launchProducer?.available || !producer.producer)) {

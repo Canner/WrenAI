@@ -127,6 +127,7 @@ import { createApp } from "./app.js";
 import { recoverBootstrapProjectBinding } from "./bootstrap-project-binding.js";
 import { createHarnessProfileSources } from "./harness-profile-sources.js";
 import { compileProfile, compileRawProfile } from "../harness/compile/index.js";
+import { resolveWarbleBinary } from "../harness/compile/resolve-binary.js";
 import { toAuthChoiceFromRuntimeSettings } from "./auth-choice.js";
 import { Store } from "./db.js";
 import { resolveEnrichmentBinding, resolveProjectIdentity } from "./enrichment.js";
@@ -205,6 +206,23 @@ async function main(): Promise<void> {
   // (server/turn.ts) and `server/spa.ts`.
   const candidateStaticDir = path.join(packageRoot, "dist");
   const staticDir = existsSync(path.join(candidateStaticDir, "index.html")) ? candidateStaticDir : undefined;
+
+  // Resolve the Warble binary once, here, and hand the resolved path to every
+  // consumer. Passing the bare name `"warble"` looked like a harmless default and
+  // was not: `resolveWarbleBinary` treats any value it is given as an explicit
+  // path and only searches when given nothing, so that default disabled the one
+  // lookup that finds the `@warble/cli` an install actually ships. It also made
+  // two resolvers disagree about the same string — the native preflight resolves
+  // a bare name through PATH and reported the producer healthy, while every
+  // compile failed.
+  const resolvedWarbleBin = await resolveWarbleBinary(flags.warbleBin).catch((error: unknown) => {
+    // Not fatal: the app still starts, and readiness reports the reason per
+    // vendor rather than the process dying at boot over a feature the user may
+    // not reach.
+    process.stderr.write(`warning: ${error instanceof Error ? error.message : String(error)}\n`);
+    return undefined;
+  });
+  const warbleBinOption = resolvedWarbleBin !== undefined ? { warbleBin: resolvedWarbleBin } : {};
 
   const profileSource = flags.profile ?? resolveDefaultProfileSource();
   // Frozen at boot: GET /api/harness accepts only a purpose and must never
@@ -502,7 +520,7 @@ async function main(): Promise<void> {
       binding,
       artifactRoot,
       materializationState: nativeMaterializationState,
-      materialize: () => dispatchInteractiveArtifacts({ warbleBin: flags.warbleBin ?? "warble", irPath: enrichIrPath, target, cwd: artifactRoot, boundProject: binding.path, materializationState: nativeMaterializationState }),
+      materialize: () => dispatchInteractiveArtifacts({ warbleBin: resolvedWarbleBin ?? "warble", irPath: enrichIrPath, target, cwd: artifactRoot, boundProject: binding.path, materializationState: nativeMaterializationState }),
     }, { getCurrentBinding: currentInteractiveBinding });
   }
 
@@ -533,11 +551,13 @@ async function main(): Promise<void> {
     resolveDispatchIr: async (purpose, binding) => {
       const profileSource = harnessProfileSources[purpose];
       const compiled = purpose === "setup" || binding === undefined
-        ? await compileRawProfile({ profileSource, mode: "native", warbleBin: flags.warbleBin ?? "warble" })
-        : await compileProfile({ profileSource, userProject: binding.path, mode: "native", warbleBin: flags.warbleBin ?? "warble" });
+        ? await compileRawProfile({ profileSource, mode: "native", ...warbleBinOption })
+        : await compileProfile({ profileSource, userProject: binding.path, mode: "native", ...warbleBinOption });
       return compiled.irPath;
     },
-    warbleBin: flags.warbleBin ?? "warble",
+    // The service's option is a required string; when resolution failed the bare
+    // name is what the preflight will report as unresolvable, with its reason.
+    warbleBin: resolvedWarbleBin ?? "warble",
     ...(process.env["WREN_HARNESS_WREN_SHIM"] !== undefined ? { wrenShim: process.env["WREN_HARNESS_WREN_SHIM"] } : {}),
     terminalHostAvailable: async () => {
       try { await loadPty(); return true; } catch { return false; }

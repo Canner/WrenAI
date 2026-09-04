@@ -32,6 +32,15 @@ import { isWarbleSiblingCheckoutDevModeEnabled, resolveInstalledPackageBin } fro
  */
 export async function resolveWarbleBinary(explicit?: string): Promise<string> {
   if (explicit !== undefined) {
+    // A value with no path separator is a command name, not a file path, and is
+    // resolved on PATH — the same reading the native-session preflight gives it.
+    // Requiring it to exist relative to the working directory made `"warble"` an
+    // explicit value that could never resolve, while the preflight found it and
+    // reported the producer healthy: one string, two answers.
+    if (!explicit.includes(path.sep) && !path.isAbsolute(explicit)) {
+      if (await isExecutableOnPath(explicit)) return explicit;
+      throw new WarbleBinaryNotFoundError([`explicit warbleBin "${explicit}" is not on PATH`]);
+    }
     if (!existsSync(explicit)) {
       throw new WarbleBinaryNotFoundError([`explicit warbleBin "${explicit}" does not exist`]);
     }

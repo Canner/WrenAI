@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -83,5 +84,43 @@ describe("resolveHubDir", () => {
     const fromCwd = path.resolve("warble", "..", "..", "..", "hub", "components");
     const resolved = resolveHubDir("warble");
     if (resolved !== undefined) expect(resolved).not.toBe(fromCwd);
+  });
+});
+
+/**
+ * `"warble"` names a command, not a file. Treating it as a path made it an
+ * explicit value that could never resolve, while the native-session preflight
+ * — which resolves a bare name through PATH — reported the same string healthy.
+ * One string, two answers, and every compile failed on an installed package
+ * while the producer preflight said it was compatible.
+ */
+describe("resolveWarbleBinary with a bare command name", () => {
+  it("resolves it on PATH rather than requiring a file of that name in the cwd", async () => {
+    const scratch = await mkdtemp(path.join(os.tmpdir(), "wren-harness-bare-name-"));
+    const binDir = path.join(scratch, "bin");
+    await mkdir(binDir);
+    const command = "genbi-test-warble-shim";
+    await writeFile(path.join(binDir, command), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+
+    const originalPath = process.env["PATH"];
+    // Proves the resolution is PATH-driven and not cwd-relative: nothing named
+    // `command` exists anywhere below the working directory.
+    expect(existsSync(path.resolve(command))).toBe(false);
+    process.env["PATH"] = `${binDir}${path.delimiter}${originalPath ?? ""}`;
+    try {
+      await expect(resolveWarbleBinary(command)).resolves.toBe(command);
+    } finally {
+      if (originalPath === undefined) delete process.env["PATH"]; else process.env["PATH"] = originalPath;
+    }
+  });
+
+  it("still loud-fails when the bare name is on no PATH entry", async () => {
+    const originalPath = process.env["PATH"];
+    process.env["PATH"] = await mkdtemp(path.join(os.tmpdir(), "wren-harness-empty-path-"));
+    try {
+      await expect(resolveWarbleBinary("genbi-test-absent-command")).rejects.toThrow(/is not on PATH/);
+    } finally {
+      if (originalPath === undefined) delete process.env["PATH"]; else process.env["PATH"] = originalPath;
+    }
   });
 });

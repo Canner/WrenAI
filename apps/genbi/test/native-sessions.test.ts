@@ -1279,7 +1279,9 @@ describe("native session persistence", () => {
 
     const staleResponse = await app.request("/api/native-sessions", { method: "POST", body: JSON.stringify({ purpose: "analysis", intent: "start_separate", idempotencyKey: staleKey }) });
     expect(staleResponse.status).toBe(409);
-    expect(await staleResponse.json()).toEqual({ error: "native session launch failed", code: "native_session_launch_action_stale" });
+    // The message now matches the code it ships with, instead of the generic
+    // fallback that said nothing while the code said exactly what happened.
+    expect(await staleResponse.json()).toEqual({ error: "native session launch action is stale", code: "native_session_launch_action_stale" });
 
     service.revokeBindingCapabilities(rotated.revokedNativeSessionIds);
     const freshResponse = await app.request("/api/native-sessions", { method: "POST", body: JSON.stringify({ purpose: "analysis", intent: "start_separate", idempotencyKey: "00000000-0000-4000-8000-000000000112" }) });
