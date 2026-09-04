@@ -1,6 +1,23 @@
 {
   "name": "@wrenai/genbi",
   "version": "0.0.0",
+  "description": "Wren GenBI — the web UI for WrenAI: ask questions of your data and get dashboards back",
+  "keywords": [
+    "wrenai",
+    "genbi",
+    "bi",
+    "analytics",
+    "dashboard",
+    "semantic-layer",
+    "text-to-sql",
+    "ai-agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Canner/WrenAI.git",
+    "directory": "apps/genbi"
+  },
+  "homepage": "https://github.com/Canner/WrenAI/tree/main/apps/genbi#readme",
   "engines": {
     "node": ">=20"
   },
