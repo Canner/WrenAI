@@ -8,17 +8,17 @@ The app does not write SQL itself. A question goes to the Wren agent harness,
 which answers with a structured envelope — the blocks to render, and whether the
 answer was verified — and the UI renders that.
 
-> This README is for people building or contributing to the app from
-> source. If you just want to install and run the published package, see
-> [INSTALL.md](./INSTALL.md) instead.
+This README is for working on the app from source: getting it running, and the
+daily build/test/typecheck loop. Three companion docs cover the rest:
 
-This file covers the daily build/test/typecheck loop. Two companion docs
-cover the rest:
-
-- [RUNNING.md](./RUNNING.md) — installing the CLIs and running a live,
-  BFF-backed dev loop (hot reload, real questions against an adopted project).
-- [MAINTAINING.md](./MAINTAINING.md) — versioning policy and the procedure
-  for bumping the pinned Warble version.
+- [RUNNING.md](./RUNNING.md) — a live, BFF-backed dev loop against your own
+  Warble build, and checking that the pieces still fit together.
+- [MAINTAINING.md](./MAINTAINING.md) — versioning policy and the procedure for
+  bumping the pinned Warble version.
+- [INSTALL.md](./INSTALL.md) — running the app without developing it: what it
+  needs, what it does on first start, and how to configure it. `@wrenai/genbi`
+  is not on npm yet, so today that means installing a tarball you pack yourself;
+  everything else there applies unchanged once it is published.
 
 ## Prerequisites
 
