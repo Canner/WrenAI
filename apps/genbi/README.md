@@ -8,15 +8,6 @@ The app does not write SQL itself. A question goes to the Wren agent harness,
 which answers with a structured envelope — the blocks to render, and whether the
 answer was verified — and the UI renders that.
 
-## Developer preview
-
-`@wrenai/genbi` is at `0.0.0` and has not been published to npm. Nothing here is
-under a compatibility commitment yet — commands, environment variables and
-interfaces move without notice. The Codex runtime is supported in code but has
-not been exercised end to end; Claude is the one that is. See
-[MAINTAINING.md](./MAINTAINING.md#versioning) for what the version number does
-and does not promise.
-
 This README is for working on the app from source: getting it running, and the
 daily build/test/typecheck loop. Three companion docs cover the rest:
 
@@ -25,9 +16,16 @@ daily build/test/typecheck loop. Three companion docs cover the rest:
 - [MAINTAINING.md](./MAINTAINING.md) — versioning policy and the procedure for
   bumping the pinned Warble version.
 - [INSTALL.md](./INSTALL.md) — running the app without developing it: what it
-  needs, what it does on first start, and how to configure it. `@wrenai/genbi`
-  is not on npm yet, so today that means installing a tarball you pack yourself;
-  everything else there applies unchanged once it is published.
+  needs, what it does on first start, and how to configure it.
+
+## Developer preview
+
+`@wrenai/genbi` is at `0.0.0` and has not been published to npm. Nothing here is
+under a compatibility commitment yet — commands, environment variables and
+interfaces move without notice. The Codex runtime is supported in code but has
+not been exercised end to end; Claude is the one that is. See
+[MAINTAINING.md](./MAINTAINING.md#versioning) for what the version number does
+and does not promise.
 
 ## Prerequisites
 
