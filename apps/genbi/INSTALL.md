@@ -1,8 +1,11 @@
 # Installing `@wrenai/genbi`
 
-This is the installation guide for people **consuming** the published
-`@wrenai/genbi` package — not for contributors building it from source. If
-you're working on the app itself, see [README.md](./README.md) instead.
+How to install and run `@wrenai/genbi` without developing it. If you are working
+on the app itself, see [README.md](./README.md) instead.
+
+It is not on npm yet — see [Status](#status-not-yet-published) — so the install
+below packs a tarball from a checkout. Everything after that step is what a
+published install will do too.
 
 ## What it is
 
