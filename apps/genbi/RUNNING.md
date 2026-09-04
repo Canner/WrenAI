@@ -22,19 +22,22 @@ Beyond the prerequisites in [README.md](./README.md#prerequisites):
   local and gateway runtimes are not accepted. Claude is by far the better
   exercised of the two — see [Codex status](#codex-status).
 - The Wren CLI on `PATH`:
-- **The `wren-context-loader` generator, built from this repo.** Binding a user's project
-  compiles a prepared-context document first, and the generator is a Rust binary rather than an
-  npm dependency, so `pnpm install` does not supply it. Build it once with
-  `cargo build --release --manifest-path ../../core/wren-context-loader/Cargo.toml`, or point
-  `WREN_HARNESS_CONTEXT_LOADER_BIN` at an existing build. Without either, the first user-project
-  bind fails loudly — by design, since a silent fallback would leave no way to tell which path
-  produced an IR. Restart the BFF after rebuilding the binary: its identity is memoized for the
-  process lifetime.
 
   ```bash
   uv tool install wrenai
   wren --version
   ```
+
+- For an in-repo user-project bind, build the `wren-context-loader` generator once:
+
+  ```bash
+  cargo build --release --manifest-path ../../core/wren-context-loader/Cargo.toml
+  ```
+
+  An explicit `WREN_HARNESS_CONTEXT_LOADER_BIN` overrides that development build. Installed
+  packages instead use their exact pinned, digest-verified `@wrenai/context-loader` dependency.
+  There is no PATH or legacy-binding fallback. Restart the BFF after rebuilding the development
+  binary because its identity is memoized for the process lifetime.
 
 
 ## Where Warble comes from

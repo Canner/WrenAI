@@ -128,18 +128,24 @@ Verify a regeneration rather than trusting it: recompiling an unchanged profile 
 did not intend it to means something else moved — the pin, the Hub, or the generator — and the diff
 should be understood before it is committed.
 
-### Open question: distributing the generator
+### Distributing the context-loader generator
 
-`wren-context-loader` is resolved from an **in-repo Rust build** (or an explicit
-`WREN_HARNESS_CONTEXT_LOADER_BIN` override), and resolution loud-fails when neither is present.
-That is sufficient for development in this monorepo and for CI, but it is **not** a distribution
-story: an installed `@wrenai/genbi` has no Rust toolchain and no `core/` tree, so a
-user-project-bound compile cannot resolve the generator at all. Warble faced the same problem with
-its own compiler and solved it by publishing a pinned `@warble/cli` npm package whose postinstall
-downloads a prebuilt platform binary. The analogue for this generator — publish a
-platform-binary npm package, vendor prebuilt binaries, statically link it into an existing
-distributed artifact, or drop the separate binary and expose the projection some other way — is a
-real packaging decision with release-process consequences, and is deliberately **not** settled here.
+`@wrenai/genbi` pins `@wrenai/context-loader` to one exact version. The package postinstall
+downloads only the immutable manifest row for the current target, verifies both archive and binary
+SHA-256 values, writes the canonical package-local executable atomically, and records the verified
+package/version/target/digest tuple. Runtime re-verifies that record before execution; it never
+downloads a binary on first bind or uses PATH.
+
+The first certified row is `darwin-arm64`. Treat every other target as unsupported until it has a
+reviewed artifact row and release evidence. The context-loader version is independent of both the
+GenBI application and managed Wren runtime: release it only from an explicit `context-loader-v*`
+tag using `.github/workflows/publish-context-loader.yml`, then separately bump GenBI's exact pin.
+
+Development order remains explicit `WREN_HARNESS_CONTEXT_LOADER_BIN`, then an in-repo Rust build,
+then the verified package. Neither a missing/altered package record nor a failed development
+override may fall through to a legacy binding. The compile cache identity includes that resolver
+kind and the package tuple or development binary digest, so changing the shipped generator moves
+the key.
 
 ### Why `@warble/ir-spec` stays behind
 

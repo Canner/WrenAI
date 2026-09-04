@@ -1,0 +1,24 @@
+{
+  "name": "@wrenai/context-loader",
+  "version": "0.1.0",
+  "description": "Verified native context-loader binary for @wrenai/genbi",
+  "license": "Apache-2.0",
+  "type": "module",
+  "files": [
+    "artifacts.json",
+    "bin",
+    "install-state.json",
+    "lib",
+    "scripts"
+  ],
+  "scripts": {
+    "postinstall": "node scripts/postinstall.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "bin": {
+    "wren-context-loader": "bin/wren-context-loader.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

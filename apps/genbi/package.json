@@ -48,6 +48,7 @@
     "@ai-sdk/provider": "~4.0.3",
     "@ant-design/icons": "^6.3.2",
     "@hono/node-server": "^2.0.10",
+    "@wrenai/context-loader": "0.1.0",
     "@warble/claude-agent-sdk": "0.10.0",
     "@warble/cli": "0.10.0",
     "@warble/codex-local": "0.10.0",

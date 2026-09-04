@@ -1,9 +1,10 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createInMemoryCompileCache } from "../harness/compile/cache.js";
-import { resolveContextLoaderBinary } from "../harness/compile/context-loader.js";
+import { getContextLoaderIdentity, readVerifiedContextLoaderPackage, resolveContextLoaderBinary } from "../harness/compile/context-loader.js";
 import { ContextLoaderNotFoundError } from "../harness/compile/errors.js";
 import { compileProfile } from "../harness/compile/pipeline.js";
 import type { CompileCache, CompileCacheKey } from "../harness/compile/types.js";
@@ -39,6 +40,18 @@ async function makeWarbleStub(): Promise<string> {
     { mode: 0o755 },
   );
   return bin;
+}
+
+async function makeVerifiedPackage(marker: string, version = "0.1.0"): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "wren-harness-loader-package-"));
+  const binary = path.join(root, "bin", "wren-context-loader");
+  const content = Buffer.from(`#!/bin/sh\n# ${marker}\n`);
+  const digest = createHash("sha256").update(content).digest("hex");
+  await mkdir(path.dirname(binary), { recursive: true });
+  await writeFile(binary, content, { mode: 0o755 });
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "@wrenai/context-loader", version }));
+  await writeFile(path.join(root, "install-state.json"), JSON.stringify({ package: "@wrenai/context-loader", version, target: `${process.platform}-${process.arch}`, binaryPath: path.join("bin", "wren-context-loader"), binarySha256: digest }));
+  return root;
 }
 
 describe("resolveContextLoaderBinary", () => {
@@ -90,6 +103,29 @@ describe("getBinaryIdentity over the generator", () => {
     const a = await makeLoaderStub("build-a");
     const b = await makeLoaderStub("build-b");
     expect(await getBinaryIdentity(a)).not.toBe(await getBinaryIdentity(b));
+  });
+});
+
+describe("verified package context loader", () => {
+  it("accepts only a canonical package-local binary and folds package/version/digest into identity", async () => {
+    const aRoot = await makeVerifiedPackage("a", "0.1.0");
+    const bRoot = await makeVerifiedPackage("b", "0.1.1");
+    const a = readVerifiedContextLoaderPackage(aRoot);
+    const b = readVerifiedContextLoaderPackage(bRoot);
+    expect(a?.kind).toBe("package");
+    expect(a?.bin).toBe(path.join(aRoot, "bin", "wren-context-loader"));
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+    expect(getContextLoaderIdentity(a!)).not.toBe(getContextLoaderIdentity(b!));
+  });
+
+  it("rejects a tampered binary or stale package record instead of selecting an ambient fallback", async () => {
+    const root = await makeVerifiedPackage("before");
+    await writeFile(path.join(root, "bin", "wren-context-loader"), "altered", { mode: 0o755 });
+    expect(readVerifiedContextLoaderPackage(root)).toBeUndefined();
+    const stale = await makeVerifiedPackage("stale");
+    await writeFile(path.join(stale, "install-state.json"), JSON.stringify({ package: "@wrenai/context-loader", version: "0.0.0", target: `${process.platform}-${process.arch}`, binaryPath: path.join("bin", "wren-context-loader"), binarySha256: "0".repeat(64) }));
+    expect(readVerifiedContextLoaderPackage(stale)).toBeUndefined();
   });
 });
 
@@ -167,5 +203,23 @@ describe("compile cache key vs a generator change (project held constant)", () =
     expect(keyA?.profileHash).toBe(keyB?.profileHash);
     expect(keyA?.warbleIdentity).toBe(keyB?.warbleIdentity);
     expect(keyA?.hubDir).toBe(keyB?.hubDir);
+  }, 30_000);
+
+  it("misses when only the verified package version changes", async () => {
+    const { profileSource, userProject } = await makeProfileAndProject();
+    const warbleBin = await makeWarbleStub();
+    const loader = await makeLoaderStub("same-shipped-bytes");
+    const a = readVerifiedContextLoaderPackage(await makeVerifiedPackage("same-shipped-bytes", "0.1.0"));
+    const b = readVerifiedContextLoaderPackage(await makeVerifiedPackage("same-shipped-bytes", "0.1.1"));
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+    const cache = createInMemoryCompileCache();
+    const base = { profileSource, userProject, mode: "native" as const, cache, warbleBin, hubDir: "/fixture/hub", contextLoaderBin: loader };
+    const first = await compileProfile({ ...base, contextLoaderIdentity: getContextLoaderIdentity(a!) });
+    const changedVersion = await compileProfile({ ...base, contextLoaderIdentity: getContextLoaderIdentity(b!) });
+    const original = await compileProfile({ ...base, contextLoaderIdentity: getContextLoaderIdentity(a!) });
+    expect(first.cacheHit).toBe(false);
+    expect(changedVersion.cacheHit).toBe(false);
+    expect(original.cacheHit).toBe(true);
   }, 30_000);
 });

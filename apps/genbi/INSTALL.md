@@ -17,20 +17,18 @@ answers (tables, charts, KPIs, narrative text).
 
 ## Supported platforms
 
-`@wrenai/genbi` depends on `@warble/cli`, a Rust binary fetched from GitHub
-Releases during install. That binary is published for exactly these four
-platforms:
+`@wrenai/genbi` has one additional native dependency for user-project binding:
+`@wrenai/context-loader`. Its initial certified target is macOS Apple Silicon,
+so the GenBI package is currently supported only on that platform. This limit is
+intentional; the Warble package supports more platforms, but GenBI must not
+claim a target until its context-loader artifact has been built and verified.
 
 | OS | Architecture |
 | --- | --- |
-| macOS | Apple Silicon (`aarch64-apple-darwin`) |
-| macOS | Intel (`x86_64-apple-darwin`) |
-| Linux (glibc ≥ 2.31) | x86_64 (`x86_64-unknown-linux-gnu`) |
-| Linux (glibc ≥ 2.31) | aarch64 (`aarch64-unknown-linux-gnu`) |
+| macOS | Apple Silicon (`darwin-arm64`) |
 
-**Windows is not supported.** **musl-based Linux (e.g. Alpine) is not
-supported**, nor is glibc older than 2.31 — install fails outright on these;
-see [Troubleshooting](#troubleshooting).
+**Intel macOS, Linux, and Windows are not supported.** Installation fails
+before GenBI starts; see [Troubleshooting](#troubleshooting).
 
 ## Prerequisites
 
@@ -42,8 +40,9 @@ see [Troubleshooting](#troubleshooting).
   `@wrenai/genbi` shells out to it for live questions and context
   inspection; it does not install or configure `wren` for you. See the
   [Wren project](https://github.com/Canner/WrenAI).
-- **Network access to `github.com`** during install (to fetch the Warble
-  binary) and on first use (see [Network](#network) below). Fully offline /
+- **Network access to `github.com`** during install (to fetch the Warble and
+  exact context-loader binaries) and on first use (see [Network](#network)
+  below). Fully offline /
   air-gapped installs are not supported and are out of scope for this guide.
 
 ## Install
@@ -60,10 +59,11 @@ Or install it once, if you would rather not re-fetch:
 npm install -g @wrenai/genbi
 ```
 
-Either way, `npm` runs `@warble/cli`'s postinstall script, which downloads the
-Warble binary for your platform (about 12 MB) from GitHub Releases and verifies
-its checksum against the release manifest. That is where an unsupported platform
-fails, before any of the app's own code runs.
+Either way, `npm` runs the binary-package postinstall scripts. The context
+loader downloads its exact manifest row, verifies archive and binary SHA-256,
+then writes the package-local executable atomically. Unsupported targets,
+offline first installs, altered downloads, and incomplete extraction fail
+before any app code runs.
 
 ## Run
 
@@ -118,7 +118,10 @@ here because they aren't needed for a first install and run.
 1. **At install time** — `@warble/cli`'s postinstall script downloads the
    Warble executable for your platform (~12 MB) from a GitHub Release and
    checksum-verifies it.
-2. **At runtime, on first use** — the first time the app compiles a
+2. **At install time** — `@wrenai/context-loader` downloads the exact
+   darwin-arm64 generator artifact and verifies its archive and binary
+   digests. Runtime never downloads it.
+3. **At runtime, on first use** — the first time the app compiles a
    profile, it downloads a Hub component archive from GitHub. After that
    first download it's cached locally and no further network access to
    GitHub is needed for subsequent compiles.
@@ -127,11 +130,9 @@ Offline or air-gapped environments are not supported by this guide.
 
 ## Troubleshooting
 
-**"Platform ... is not supported by @warble/cli"** (during `npm install`) —
-your OS/architecture isn't one of the four supported platforms listed
-above. This includes Windows and musl-based Linux distributions (e.g.
-Alpine), where the installer additionally reports a libc mismatch before
-failing. There is no workaround; a matching platform is required.
+**"@wrenai/context-loader unsupported-platform"** (during `npm install`) —
+your OS/architecture is not the certified macOS Apple Silicon target. There is
+no fallback to a nearby architecture or an ambient binary.
 
 **Node version errors, or unexpected syntax/runtime errors on startup** —
 confirm your Node version is 20 or later (`node --version`). Older

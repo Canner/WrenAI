@@ -96,7 +96,8 @@ export interface CompileProfileOptions {
   /**
    * Explicit path to the `wren-context-loader` binary. See `resolveContextLoaderBinary` for the
    * resolution order when omitted (explicit → `WREN_HARNESS_CONTEXT_LOADER_BIN` → in-repo build →
-   * loud failure; there is no fallback to Warble's built-in `wren_project` adapter).
+   * verified exact `@wrenai/context-loader` package → loud failure; there is no fallback to
+   * Warble's built-in `wren_project` adapter).
    */
   readonly contextLoaderBin?: string;
   /**

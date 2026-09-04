@@ -1,6 +1,9 @@
 packages:
   - "apps/*"
+overrides:
+  '@wrenai/context-loader': link:apps/context-loader
 allowBuilds:
+  '@wrenai/context-loader': false
   '@warble/cli': true
   node-pty: true
 minimumReleaseAgeExclude:

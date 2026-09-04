@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createFileSystemCompileCache } from "./cache.js";
 import { composeUserProfile } from "./compose-profile.js";
-import { resolveContextLoaderBinary } from "./context-loader.js";
+import { getContextLoaderIdentity, resolveContextLoader } from "./context-loader.js";
 import { WarbleCommandFailedError } from "./errors.js";
 import { hashDirectory, hashFiles } from "./fingerprint.js";
 import { resolveHubDir, resolveWarbleBinary } from "./resolve-binary.js";
@@ -91,21 +91,21 @@ export async function compileProfile(options: CompileProfileOptions): Promise<Co
   // Resolving the generator is memoized here the same way `ensureWarbleBin` memoizes warble below:
   // both the identity computation (a cache-key input) and the compose step (on a miss) need it, and
   // resolution loud-fails rather than degrading to Warble's built-in adapter.
-  let resolvedLoaderBin: string | undefined;
-  const ensureContextLoaderBin = (): string => {
-    resolvedLoaderBin ??= resolveContextLoaderBinary(options.contextLoaderBin);
-    return resolvedLoaderBin;
+  let resolvedLoader: ReturnType<typeof resolveContextLoader> | undefined;
+  const ensureContextLoader = (): ReturnType<typeof resolveContextLoader> => {
+    resolvedLoader ??= resolveContextLoader(options.contextLoaderBin);
+    return resolvedLoader;
   };
 
   return compileProfileSource(
     options,
     await hashDirectory(path.resolve(options.userProject)),
-    async () => options.contextLoaderIdentity ?? (await getBinaryIdentity(ensureContextLoaderBin())),
+    async () => options.contextLoaderIdentity ?? getContextLoaderIdentity(ensureContextLoader()),
     (workDir) => composeUserProfile({
       profileSource: options.profileSource,
       userProject: options.userProject,
       destDir: workDir,
-      contextLoaderBin: ensureContextLoaderBin(),
+      contextLoaderBin: ensureContextLoader().bin,
     }),
   );
 }

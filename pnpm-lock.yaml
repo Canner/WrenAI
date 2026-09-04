@@ -4,9 +4,14 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@wrenai/context-loader': link:apps/context-loader
+
 importers:
 
   .: {}
+
+  apps/context-loader: {}
 
   apps/genbi:
     dependencies:
@@ -40,6 +45,9 @@ importers:
       '@warble/ir-spec':
         specifier: 0.6.0
         version: 0.6.0
+      '@wrenai/context-loader':
+        specifier: link:../context-loader
+        version: link:../context-loader
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0

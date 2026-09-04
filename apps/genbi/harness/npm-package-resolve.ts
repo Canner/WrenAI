@@ -22,13 +22,24 @@ import path from "node:path";
  */
 export function resolveInstalledPackageBin(packageName: string, binName: string): string | undefined {
   try {
-    const require = createRequire(import.meta.url);
-    const pkgJsonPath = require.resolve(`${packageName}/package.json`);
-    const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8")) as { bin?: string | Record<string, string> };
+    const pkgJsonPath = resolveInstalledPackageRoot(packageName);
+    if (pkgJsonPath === undefined) return undefined;
+    const manifestPath = path.join(pkgJsonPath, "package.json");
+    const pkg = JSON.parse(readFileSync(manifestPath, "utf8")) as { bin?: string | Record<string, string> };
     const binField = typeof pkg.bin === "string" ? pkg.bin : pkg.bin?.[binName];
     if (binField === undefined) return undefined;
-    const resolved = path.resolve(path.dirname(pkgJsonPath), binField);
+    const resolved = path.resolve(pkgJsonPath, binField);
     return existsSync(resolved) ? resolved : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Returns an installed package's canonical root through Node resolution, never by walking PATH. */
+export function resolveInstalledPackageRoot(packageName: string): string | undefined {
+  try {
+    const require = createRequire(import.meta.url);
+    return path.dirname(require.resolve(`${packageName}/package.json`));
   } catch {
     return undefined;
   }

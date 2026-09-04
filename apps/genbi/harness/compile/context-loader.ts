@@ -1,8 +1,10 @@
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { ContextLoaderFailedError, ContextLoaderNotFoundError } from "./errors.js";
+import { resolveInstalledPackageRoot } from "../npm-package-resolve.js";
 
 /** Environment override for {@link resolveContextLoaderBinary}, named like the other `WREN_HARNESS_*` binary overrides. */
 const CONTEXT_LOADER_BIN_ENV = "WREN_HARNESS_CONTEXT_LOADER_BIN";
@@ -18,18 +20,30 @@ const IN_REPO_BUILD_PATHS = [
  * document — guards against a hang, not meant to ever fire in normal operation.
  */
 const CONTEXT_LOADER_TIMEOUT_MS = 60 * 1000;
+const CONTEXT_LOADER_PACKAGE = "@wrenai/context-loader";
+const CANONICAL_PACKAGE_BINARY = path.join("bin", "wren-context-loader");
+
+export interface ResolvedContextLoader {
+  readonly bin: string;
+  readonly kind: "explicit" | "in-repo" | "package";
+  /** Package resolution is already digest-verified. Development modes use the binary hash below. */
+  readonly verifiedIdentity?: string;
+}
 
 /**
  * Resolves the `wren-context-loader` binary — the generator that renders a wren project as the
  * prepared-context document a `kind: prepared` binding reads.
  *
- * Two tiers, then a loud failure:
+ * Three deterministic tiers, then a loud failure:
  *
  * 1. `explicit`, else the `WREN_HARNESS_CONTEXT_LOADER_BIN` environment variable. Either must
  *    exist on disk; neither falls through to a search.
  * 2. This repo's own build of the generator crate, found by walking up from this package looking
  *    for `core/wren-context-loader/target/{release,debug}/wren-context-loader`. `release` wins
  *    when both exist, so a stale `debug` build never shadows a deliberate release build.
+ * 3. The verified package-local binary from the exact `@wrenai/context-loader` dependency. Its
+ *    install record must match package version and target, name the canonical binary, and pass a
+ *    fresh SHA-256 check. Resolution never downloads at runtime.
  *
  * There is deliberately **no** `PATH` tier and — more importantly — **no fallback to the old
  * `wren_project` binding**. A fallback would make the extraction unverifiable: a compiled IR is
@@ -39,25 +53,83 @@ const CONTEXT_LOADER_TIMEOUT_MS = 60 * 1000;
  *
  * Throws {@link ContextLoaderNotFoundError} with the accumulated attempts when neither tier works.
  */
-export function resolveContextLoaderBinary(explicit?: string): string {
+export function resolveContextLoader(explicit?: string): ResolvedContextLoader {
   const override = explicit ?? process.env[CONTEXT_LOADER_BIN_ENV];
   if (override !== undefined && override.length > 0) {
     if (!existsSync(override)) {
       const source = explicit !== undefined ? `explicit contextLoaderBin` : CONTEXT_LOADER_BIN_ENV;
       throw new ContextLoaderNotFoundError([`${source} "${override}" does not exist`]);
     }
-    return override;
+    return { bin: override, kind: "explicit" };
   }
 
   const inRepo = findInRepoBuild();
-  if (inRepo !== undefined) return inRepo;
+  if (inRepo !== undefined) return { bin: inRepo, kind: "in-repo" };
+
+  const packaged = resolveVerifiedPackageBinary();
+  if (packaged !== undefined) return packaged;
 
   throw new ContextLoaderNotFoundError([
     `${CONTEXT_LOADER_BIN_ENV} is not set`,
     `no in-repo build found (searched ancestors of this package for ` +
       IN_REPO_BUILD_PATHS.map((segments) => `"${path.join(...segments)}"`).join(" and ") +
-      `) — build it with "cargo build --release --manifest-path core/wren-context-loader/Cargo.toml"`,
+      `) — ${CONTEXT_LOADER_PACKAGE} is not installed with a verified ${targetForCurrentPlatform()} binary`,
   ]);
+}
+
+/** Backward-compatible path-only API for callers that do not need cache provenance. */
+export function resolveContextLoaderBinary(explicit?: string): string {
+  return resolveContextLoader(explicit).bin;
+}
+
+/** Stable cache identity: resolver kind plus either a verified package tuple or the dev binary's bytes. */
+export function getContextLoaderIdentity(resolved: ResolvedContextLoader): string {
+  if (resolved.verifiedIdentity !== undefined) return resolved.verifiedIdentity;
+  return `${resolved.kind}:${createHash("sha256").update(readFileSync(resolved.bin)).digest("hex")}`;
+}
+
+function resolveVerifiedPackageBinary(): ResolvedContextLoader | undefined {
+  const packageRoot = resolveInstalledPackageRoot(CONTEXT_LOADER_PACKAGE);
+  if (packageRoot === undefined) return undefined;
+  return readVerifiedContextLoaderPackage(packageRoot);
+}
+
+/** Validates a package-local installation record without resolving it from the host environment. */
+export function readVerifiedContextLoaderPackage(packageRoot: string, target = targetForCurrentPlatform()): ResolvedContextLoader | undefined {
+  try {
+    const packageJson = readJson(path.join(packageRoot, "package.json"));
+    const state = readJson(path.join(packageRoot, "install-state.json"));
+    const bin = path.resolve(packageRoot, CANONICAL_PACKAGE_BINARY);
+    if (
+      packageJson.name !== CONTEXT_LOADER_PACKAGE ||
+      typeof packageJson.version !== "string" ||
+      state.package !== CONTEXT_LOADER_PACKAGE ||
+      state.version !== packageJson.version ||
+      state.target !== target ||
+      state.binaryPath !== CANONICAL_PACKAGE_BINARY ||
+      !isSha256(state.binarySha256) ||
+      !bin.startsWith(`${packageRoot}${path.sep}`) ||
+      !existsSync(bin) ||
+      createHash("sha256").update(readFileSync(bin)).digest("hex") !== state.binarySha256
+    ) {
+      return undefined;
+    }
+    return { bin, kind: "package", verifiedIdentity: `package:${CONTEXT_LOADER_PACKAGE}@${packageJson.version}:${target}:${state.binarySha256}` };
+  } catch {
+    return undefined;
+  }
+}
+
+function readJson(file: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+}
+
+function isSha256(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
+}
+
+function targetForCurrentPlatform(): string {
+  return `${process.platform}-${process.arch}`;
 }
 
 /**

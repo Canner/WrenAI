@@ -1,0 +1,98 @@
+name: Publish context loader
+
+on:
+  push:
+    tags:
+      - 'context-loader-v*'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish-darwin-arm64:
+    name: Build and publish darwin-arm64 context loader
+    runs-on: macos-14
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Verify explicit tag version
+        id: version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#context-loader-v}"
+          test -n "$version"
+          test "$(node -p "require('./apps/context-loader/package.json').version")" = "$version"
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up locked Rust toolchain
+        uses: dtolnay/rust-toolchain@1.89.0
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Ensure npm supports trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Test generator source
+        working-directory: core/wren-context-loader
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked
+
+      - name: Build target archive
+        id: archive
+        shell: bash
+        run: |
+          cargo build --locked --release --target aarch64-apple-darwin --manifest-path core/wren-context-loader/Cargo.toml
+          name="wren-context-loader-${{ steps.version.outputs.version }}-darwin-arm64.tar.gz"
+          mkdir -p release
+          tar -C core/wren-context-loader/target/aarch64-apple-darwin/release -czf "release/$name" wren-context-loader
+          printf 'name=%s\n' "$name" >> "$GITHUB_OUTPUT"
+
+      - name: Create immutable release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: release/${{ steps.archive.outputs.name }}
+
+      - name: Generate embedded manifest
+        shell: bash
+        run: |
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${{ steps.archive.outputs.name }}"
+          node apps/context-loader/scripts/generate-release-manifest.mjs apps/context-loader "${{ steps.version.outputs.version }}" "$GITHUB_SHA" "release/${{ steps.archive.outputs.name }}" "$url" > release/context-loader-manifest.json
+          cp release/context-loader-manifest.json "release/${{ steps.archive.outputs.name }}.manifest.json"
+
+      - name: Validate installer contract
+        working-directory: apps/context-loader
+        run: node --test test/*.test.mjs
+
+      - name: Run fresh GenBI package-binding contract
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm --filter @wrenai/genbi run build
+          pnpm --filter @wrenai/genbi run check:installed-package
+
+      - name: Pack and publish npm package with provenance
+        working-directory: apps/context-loader
+        run: |
+          npm pack
+          npm publish --provenance --access public
+
+      - name: Upload machine-readable manifest
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: release/${{ steps.archive.outputs.name }}.manifest.json

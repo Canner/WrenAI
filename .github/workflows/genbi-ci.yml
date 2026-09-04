@@ -12,6 +12,7 @@ on:
   pull_request:
     paths:
       - 'apps/genbi/**'
+      - 'apps/context-loader/**'
       - 'package.json'
       - 'pnpm-workspace.yaml'
       - 'pnpm-lock.yaml'
@@ -22,6 +23,7 @@ on:
       - feat/genbi-app
     paths:
       - 'apps/genbi/**'
+      - 'apps/context-loader/**'
       - 'package.json'
       - 'pnpm-workspace.yaml'
       - 'pnpm-lock.yaml'
@@ -87,10 +89,33 @@ jobs:
       - name: Test
         run: pnpm run test
 
+  installed-package-macos:
+    name: macOS packed-install context-loader acceptance
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: apps/genbi
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install workspace dependencies without source-package lifecycle scripts
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packaged application
+        run: pnpm run build
+
       - name: Packed-install acceptance
-        # This packs the actual artifact, installs it below a fresh temporary
-        # project, and invokes `npx --no-install genbi` with no checkout PATH.
-        # It is deliberately separate from source-tree Vitest coverage.
+        # This packs both real npm artifacts, installs them below a fresh temporary
+        # project, and invokes npx with no checkout PATH or Rust toolchain.
         run: pnpm run check:installed-package
 
   vendor-contracts-macos:

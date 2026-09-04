@@ -9,18 +9,23 @@
  * minimal PATH and a require hook that turns any source-checkout read into a
  * hard failure, so a checkout-only fallback cannot make this pass.
  */
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { closeServerBounded, runBounded, spawnProcessGroup, stopProcessTree } from "./process-cleanup.mjs";
 import { readSseFrames } from "./sse-frames.mjs";
 
 const packageRoot = path.resolve(process.cwd());
+const contextLoaderSource = path.resolve(packageRoot, "..", "context-loader");
 const tempRoot = await mkdtemp(path.join(os.tmpdir(), "genbi-installed-package-"));
 const packDirectory = path.join(tempRoot, "pack");
+const contextLoaderPackDirectory = path.join(tempRoot, "context-loader-pack");
+const contextLoaderStage = path.join(tempRoot, "context-loader-stage");
 const installRoot = path.join(tempRoot, "fresh-install");
 const workspaceRoot = path.join(tempRoot, "workspace");
 const sourceAuditHook = path.join(tempRoot, "block-checkout-access.cjs");
@@ -31,20 +36,30 @@ let phase = "initialize";
 
 try {
   markPhase("pack");
-  await Promise.all([mkdir(packDirectory), mkdir(installRoot), mkdir(workspaceRoot)]);
+  await Promise.all([mkdir(packDirectory), mkdir(contextLoaderPackDirectory), mkdir(installRoot), mkdir(workspaceRoot)]);
   await run("pnpm", ["pack", "--pack-destination", packDirectory], { cwd: packageRoot });
+  const contextLoaderTarball = await packVerifiedContextLoaderFixture(contextLoaderSource, contextLoaderStage, contextLoaderPackDirectory);
 
   const packageTarball = await onlyTarball(packDirectory);
   const packedFiles = await tarFiles(packageTarball);
   assertPublishedFiles(packedFiles);
+  const packedManifest = await tarJson(packageTarball, "package/package.json");
+  if (packedManifest.dependencies?.["@wrenai/context-loader"] !== "0.1.0") {
+    throw new Error("packed @wrenai/genbi does not retain an exact @wrenai/context-loader version");
+  }
 
   markPhase("install");
   await run("npm", ["init", "--yes"], { cwd: installRoot });
-  await run("npm", ["install", "--no-audit", "--no-fund", packageTarball], { cwd: installRoot });
+  await run("npm", ["install", "--no-audit", "--no-fund", packageTarball, contextLoaderTarball], { cwd: installRoot });
 
   const installedPackageRoot = path.join(installRoot, "node_modules", "@wrenai", "genbi");
   if (!existsSync(path.join(installedPackageRoot, "package.json"))) {
     throw new Error("fresh install did not contain @wrenai/genbi");
+  }
+  const installedContextLoaderRoot = path.join(installRoot, "node_modules", "@wrenai", "context-loader");
+  const installedContextLoaderBin = path.join(installedContextLoaderRoot, "bin", "wren-context-loader");
+  if (!existsSync(path.join(installedContextLoaderRoot, "install-state.json")) || !existsSync(installedContextLoaderBin)) {
+    throw new Error("fresh install did not preserve the verified context-loader package record");
   }
   for (const forbidden of ["scripts", "test", "examples", path.join("node_modules", "examples")]) {
     if (existsSync(path.join(installedPackageRoot, forbidden))) {
@@ -65,6 +80,7 @@ try {
   markPhase("setup-connect");
   await waitForServer(port, output);
   await verifyFirstRunSetup(port, workspaceRoot, fixtureProvider);
+  await verifyInstalledProjectBind({ installRoot, workspaceRoot, sourceAuditHook, installedPackageRoot, installedContextLoaderBin, port, fixtureEndpoint: fixtureProvider.endpoint });
   await stopProcessTree(serverProcess);
   serverProcess = undefined;
 
@@ -75,6 +91,7 @@ try {
       { name: "tarball excludes checkout-only scripts, tests, fixtures, and examples", ok: true },
       { name: "fresh install launches through npx with package-manager PATH", ok: true },
       { name: "first-run Setup connect terminal flow works without checkout access or development escapes", ok: true },
+      { name: "fresh install binds through a verified package-local context loader with no Rust toolchain or checkout access", ok: true },
     ],
   }, null, 2)}\n`);
 } finally {
@@ -151,6 +168,47 @@ function controlledEnvironment({ installRoot, workspaceRoot, port: selectedPort,
   environment.GENBI_PACKAGING_FORBIDDEN_ROOT = packageRoot;
   environment.NODE_OPTIONS = `--require=${hook}`;
   return environment;
+}
+
+async function packVerifiedContextLoaderFixture(source, stage, destination) {
+  await cp(source, stage, { recursive: true });
+  const binary = path.join(stage, "bin", "wren-context-loader");
+  const content = Buffer.from("#!/bin/sh\nprintf '{\"context_version\":1,\"parseable\":true}' > \"$3\"\n");
+  const binarySha256 = createHash("sha256").update(content).digest("hex");
+  await writeFile(binary, content, { mode: 0o755 });
+  await chmod(binary, 0o755);
+  const packageJson = JSON.parse(await readFile(path.join(stage, "package.json"), "utf8"));
+  await writeFile(path.join(stage, "artifacts.json"), JSON.stringify({ schema: 1, package: packageJson.name, version: packageJson.version, artifacts: { "darwin-arm64": { url: "https://example.invalid/context-loader.tar.gz", archiveSha256: "0".repeat(64), binarySha256, binaryPath: "wren-context-loader" } } }));
+  await writeFile(path.join(stage, "install-state.json"), JSON.stringify({ package: packageJson.name, version: packageJson.version, target: "darwin-arm64", archiveSha256: "0".repeat(64), binarySha256, binaryPath: path.join("bin", "wren-context-loader") }));
+  await run("npm", ["pack", "--ignore-scripts", "--pack-destination", destination], { cwd: stage });
+  return onlyTarball(destination);
+}
+
+async function verifyInstalledProjectBind({ installRoot, workspaceRoot, sourceAuditHook, installedPackageRoot, installedContextLoaderBin, port: selectedPort, fixtureEndpoint }) {
+  const project = path.join(workspaceRoot, "bound-project");
+  const warble = path.join(installRoot, "warble-fixture");
+  await mkdir(project);
+  await writeFile(path.join(project, "wren_project.yml"), "name: bound-project\n");
+  await writeFile(warble, "#!/bin/sh\nwhile [ $# -gt 0 ]; do if [ \"$1\" = \"-o\" ]; then shift; printf '{}' > \"$1\"; fi; shift; done\n", { mode: 0o755 });
+  await chmod(warble, 0o755);
+  const pipeline = pathToFileURL(path.join(installedPackageRoot, "dist-server", "harness", "compile", "pipeline.js")).href;
+  const profile = path.join(installedPackageRoot, "profiles", "genbi-default");
+  const bindEnv = controlledEnvironment({ installRoot, workspaceRoot, port: selectedPort, sourceAuditHook, fixtureEndpoint });
+  bindEnv.XDG_CACHE_HOME = path.join(installRoot, "package-cache");
+  const runBind = async () => run(process.execPath, ["--input-type=module", "--eval", `import { compileProfile } from ${JSON.stringify(pipeline)}; const result = await compileProfile({ profileSource: ${JSON.stringify(profile)}, userProject: ${JSON.stringify(project)}, mode: "native", warbleBin: ${JSON.stringify(warble)}, hubDir: "/fixture/hub" }); console.log(JSON.stringify({ cacheHit: result.cacheHit }));`], {
+    cwd: installRoot,
+    env: bindEnv,
+  });
+  const bound = await runBind();
+  if (!/"cacheHit":false/.test(bound.stdout)) throw new Error(`installed package did not bind a user project through its context loader: ${bound.stdout}${bound.stderr}`);
+  await writeFile(installedContextLoaderBin, "tampered", { mode: 0o755 });
+  let failed = false;
+  try {
+    await runBind();
+  } catch (error) {
+    failed = /could not resolve the "wren-context-loader" binary/.test(String(error));
+  }
+  if (!failed) throw new Error("tampered package-local context loader did not fail closed");
 }
 
 function createSourceAuditHook() {
@@ -312,6 +370,11 @@ async function onlyTarball(directory) {
 async function tarFiles(tarball) {
   const result = await run("tar", ["-tzf", tarball]);
   return result.stdout.split("\n").filter(Boolean);
+}
+
+async function tarJson(tarball, entry) {
+  const result = await run("tar", ["-xOzf", tarball, entry]);
+  return JSON.parse(result.stdout);
 }
 
 function assertPublishedFiles(files) {
