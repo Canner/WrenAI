@@ -46,9 +46,7 @@ bump after it):
    already in use provides no protection and just accumulates as dead weight
    that quietly widens the exclusion list over time). Edit the file by hand
    after `pnpm install` to enforce the replacement.
-4. Re-run `pnpm run check:warble-peers` (see
-   [Package-based Warble dependency](./RUNNING.md#package-based-warble-dependency))
-   to confirm the new versions still satisfy the `0.6.x` peer range the
+4. Re-run `pnpm run check:warble-peers` to confirm the new versions still satisfy the `0.6.x` peer range the
    three packages declare on `@warble/ir-spec`. This catches a version
    mismatch that plain `pnpm install` accepts silently; it does not check
    `file:`/`link:`-satisfied peers, so it is only meaningful against the
@@ -71,8 +69,8 @@ Skipping step 3's replacement (leaving the append in place) silently weakens
 `minimumReleaseAgeExclude` release over release, with no error message to
 notice it by. Skipping step 4 can let a peer-range mismatch land undetected,
 since ordinary `pnpm install` exits `0` even when peers conflict. Skipping
-step 5 leaves the attestation describing a Warble binary that is no longer the
-one actually pinned, so a developer regenerating a launch later gets a
+step 5 leaves the pinned Warble unproven against this package's committed
+profiles, so the mismatch surfaces later, as a
 misleading "verified" tuple. Skipping steps 6–7 is the ordinary risk of
 skipping tests before a commit.
 

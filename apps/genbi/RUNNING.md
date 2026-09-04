@@ -22,16 +22,17 @@ In addition to the prerequisites in [README.md](./README.md#prerequisites):
   packages, which is enough for tests, builds, and any tooling that resolves
   a `warble` binary or dispatcher CLI without an explicit override — see
   [Package-based Warble dependency](#package-based-warble-dependency) below.
-- For a live, attested BFF: the pinned `@warble/cli` / `@warble/claude-agent-sdk`
+- For a live BFF: the pinned `@warble/cli` / `@warble/claude-agent-sdk`
   packages above already satisfy the contract check on their own — no separate
   Warble checkout is required. A clean checkout of
   [Canner/Warble](https://github.com/Canner/Warble), a Rust toolchain, and
-  [`just`](https://github.com/casey/just) are needed only when attesting
-  against your own in-progress Warble build instead — see
+  [`just`](https://github.com/casey/just) are needed only to run against your own
+  in-progress Warble build instead — see
   [Package-based Warble dependency](#package-based-warble-dependency) below.
-- A logged-in Claude CLI subscription. The currently supported attested local
-  launch flow is explicitly `subscription:claude`; API-key, local, gateway,
-  and Codex runtime code are not accepted by the current contract check.
+- A logged-in provider CLI subscription. `check:contracts` takes
+  `--runtime subscription:claude` or `subscription:codex`; API-key, local and
+  gateway runtimes are not accepted. Claude is much the better exercised of the
+  two — see [Codex status](#codex-status).
 
 ### Install the CLIs
 
@@ -45,7 +46,7 @@ wren --version
 
 Warble's CLI is published on crates.io. **GenBI does not need this** — it
 consumes the pinned `@warble/cli` npm package (see below), and that pin is what
-the contract check attests. Install this only if you want a standalone `warble` on
+the contract check runs against. Install this only if you want a standalone `warble` on
 your `PATH`:
 
 ```bash
@@ -81,40 +82,14 @@ the packages are absent. **To develop GenBI against an in-progress Warble build,
 pass `--warble-bin` (or `warbleBin`) explicitly**; that is tier 1 and beats
 everything.
 
-The attested live-BFF flow below identifies Warble by *how it was resolved*, not
-by which commit built it: an installed package by its version, its
-`pnpm-lock.yaml` integrity, and hashes of its resolution logic and of what that
-logic extracted; a checkout by its binary's content hash. The two differ because
-`@warble/cli`'s `bin` is a small trampoline that is byte-identical across
-releases, so hashing it alone could not tell 0.6.0 from 0.9.0. `--warble-bin`
-accepts either. **Not covered**: package provenance, and anything fetched at
-runtime from outside the package, such as the Hub archive.
+These four packages declare peer ranges on each other, and `pnpm install` exits
+`0` even when one is unmet. `pnpm run check:warble-peers` is what catches that —
+it matters when you change a pinned version, so it lives with that procedure in
+[MAINTAINING.md](./MAINTAINING.md#bumping-the-pinned-warble-version).
 
-Because pnpm silently accepts (and exits 0 on) an unmet peer-dependency range
-between these packages — e.g. an `@warble/codex-local` built against a
-different `@warble/ir-spec` minor than the one this workspace has installed —
-run this after any Warble package version bump, in CI or locally, rather than
-trusting a clean `pnpm install` alone:
-
-```bash
-pnpm run check:warble-peers   # pnpm peers check — reads the lockfile, exits non-zero on a real conflict
-```
-
-What it catches, measured: a genuine resolution conflict between registry
-packages — a consumer wanting `@warble/ir-spec` `0.5.x` against an installed
-`0.6.0`, which is what an IR bump looks like — is reported and exits 1. What it
-does **not** catch: a peer satisfied by a `file:` or `link:` dependency, and a
-peer range edited in the lockfile itself, which only
-`pnpm peers check --lockfile-only` sees. Plain `pnpm install` warns and exits 0
-even on a real conflict, and `strictPeerDependencies` does not change that; what
-catches a hand-edited `package.json` is an install with `--frozen-lockfile`.
-
-The GenBI contract check needs more than a standalone binary: it hashes the exact
-profiles, IR files, Warble binary, and Claude Agent SDK dispatcher used by the
-BFF. The installed `@warble/cli` / `@warble/claude-agent-sdk` packages already
-satisfy this (see above) — the steps below are for attesting against your own
-Warble checkout instead, e.g. while developing Warble itself. Clone a clean
-checkout you have access to and build those inputs in place:
+The installed packages are enough for everything above. The steps below are for
+running GenBI against a Warble you are building yourself — clone it and build the
+two executables in place:
 
 ```bash
 git clone https://github.com/Canner/Warble.git Warble
@@ -124,8 +99,8 @@ just install-ts
 just build-ts
 ```
 
-The attested flow passes absolute paths and deliberately does not rely on
-`PATH` or `npm link`. Check the two built executables directly:
+Pass those by absolute path; this flow deliberately does not rely on `PATH` or
+`npm link`. Check them first:
 
 ```bash
 ./target/release/warble --version
