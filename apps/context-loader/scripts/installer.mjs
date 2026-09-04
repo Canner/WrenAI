@@ -1,18 +1,10 @@
 import { createHash } from "node:crypto";
-import { execFile as execFileCallback } from "node:child_process";
-import { lstatSync } from "node:fs";
 import { chmod, lstat, mkdir, open, readFile, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 import { gunzipSync } from "node:zlib";
 import { CANONICAL_BINARY, ContextLoaderPackageError, isSha256, sha256File, targetFor } from "../lib/verified.mjs";
 
-const execFile = promisify(execFileCallback);
-const SOURCE_ORIGINS = new Set([
-  "git@github.com:Canner/WrenAI.git",
-  "https://github.com/Canner/WrenAI.git",
-  "ssh://git@github.com/Canner/WrenAI.git",
-]);
+const SOURCE_MARKER = "SOURCE_WORKSPACE";
 
 /** Downloads, verifies, and atomically installs the exact manifest row for this package. */
 export async function installContextLoader({ packageRoot, fetchImpl = fetch, platform = process.platform, arch = process.arch } = {}) {
@@ -67,23 +59,19 @@ export async function installContextLoader({ packageRoot, fetchImpl = fetch, pla
 
 /**
  * The checked-out source package carries an intentionally empty, pre-release
- * artifact template. Only that exact repository layout skips postinstall;
- * packed packages always download and verify their tagged artifact.
+ * artifact template. Only the tracked source-only marker in the canonical
+ * workspace layout skips postinstall; the package files allowlist excludes it,
+ * so packed packages always download and verify their tagged artifact.
  */
 export async function isRepositorySourcePackage(packageRoot) {
   try {
-    if (!lstatSync(packageRoot).isDirectory()) return false;
-    const physicalPackage = await realpath(packageRoot);
-    const { stdout: repositoryOutput } = await execFile("git", ["-C", physicalPackage, "rev-parse", "--show-toplevel"], { timeout: 2_000 });
-    const repositoryRoot = await realpath(repositoryOutput.trim());
-    if (physicalPackage !== path.join(repositoryRoot, "apps", "context-loader")) return false;
-    const { stdout: originOutput } = await execFile("git", ["-C", repositoryRoot, "remote", "get-url", "origin"], { timeout: 2_000 });
-    if (!SOURCE_ORIGINS.has(originOutput.trim())) return false;
-    await execFile(
-      "git",
-      ["-C", repositoryRoot, "ls-files", "--error-unmatch", "--", "apps/context-loader/package.json", "pnpm-workspace.yaml", "core/wren/pyproject.toml"],
-      { timeout: 2_000 },
-    );
+    const physicalPackage = await physicalPackageRoot(packageRoot);
+    const workspaceRoot = path.resolve(physicalPackage, "..", "..");
+    if (physicalPackage !== path.join(workspaceRoot, "apps", "context-loader")) return false;
+    if (!(await lstat(workspaceRoot)).isDirectory() || (await realpath(workspaceRoot)) !== workspaceRoot) return false;
+    const marker = await ownedRegularFile(physicalPackage, SOURCE_MARKER);
+    const workspaceManifest = await ownedRegularFile(workspaceRoot, "pnpm-workspace.yaml");
+    if (marker !== path.join(physicalPackage, SOURCE_MARKER) || workspaceManifest !== path.join(workspaceRoot, "pnpm-workspace.yaml")) return false;
     return true;
   } catch {
     return false;

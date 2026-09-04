@@ -46,6 +46,14 @@ async function fixture({ artifact = Buffer.from("#!/bin/sh\necho loader\n"), tar
 
 const fetchArchive = (archive) => async () => ({ ok: true, arrayBuffer: async () => archive });
 
+async function makeSourceWorkspace(root) {
+  const packageRoot = path.join(root, "apps", "context-loader");
+  await mkdir(packageRoot, { recursive: true });
+  await writeFile(path.join(root, "pnpm-workspace.yaml"), "packages: []\n");
+  await writeFile(path.join(packageRoot, "SOURCE_WORKSPACE"), "source marker\n");
+  return packageRoot;
+}
+
 test("installs a digest-verified darwin-arm64 binary atomically and records canonical state", async () => {
   const { root, archive, artifact } = await fixture();
   const first = await installContextLoader({ packageRoot: root, fetchImpl: fetchArchive(archive), platform: "darwin", arch: "arm64" });
@@ -123,23 +131,24 @@ test("refuses a same-bytes external binary during reuse and a bin-directory link
   assert.deepEqual(await readdir(externalDir), ["wren-context-loader"]);
 });
 
-test("skips only the tracked source checkout, never a lookalike git repository or packed copy", async () => {
-  const sourcePackage = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-  assert.equal(await isRepositorySourcePackage(sourcePackage), true);
+test("recognizes fork and source-archive workspaces, while npm-packed copies cannot bypass", async () => {
+  const forkRoot = await mkdtemp(path.join(os.tmpdir(), "context-loader-fork-"));
+  const forkPackage = await makeSourceWorkspace(forkRoot);
+  execFileSync("git", ["init", forkRoot]);
+  execFileSync("git", ["-C", forkRoot, "remote", "add", "origin", "https://example.invalid/fork.git"]);
+  assert.equal(await isRepositorySourcePackage(forkPackage), true);
 
-  const fakeRoot = await mkdtemp(path.join(os.tmpdir(), "context-loader-fake-source-"));
-  const fakePackage = path.join(fakeRoot, "apps", "context-loader");
-  await mkdir(path.join(fakeRoot, "core", "wren"), { recursive: true });
-  await mkdir(fakePackage, { recursive: true });
-  await writeFile(path.join(fakePackage, "package.json"), "{}\n");
-  await writeFile(path.join(fakeRoot, "pnpm-workspace.yaml"), "packages: []\n");
-  await writeFile(path.join(fakeRoot, "core", "wren", "pyproject.toml"), "[project]\nname = \"wren\"\n");
-  execFileSync("git", ["init", fakeRoot]);
-  execFileSync("git", ["-C", fakeRoot, "add", "apps/context-loader/package.json", "pnpm-workspace.yaml", "core/wren/pyproject.toml"]);
-  execFileSync("git", ["-C", fakeRoot, "remote", "add", "origin", "https://example.invalid/lookalike.git"]);
-  assert.equal(await isRepositorySourcePackage(fakePackage), false);
+  const sourceArchiveRoot = await mkdtemp(path.join(os.tmpdir(), "context-loader-source-archive-"));
+  const sourceArchivePackage = await makeSourceWorkspace(sourceArchiveRoot);
+  assert.equal(await isRepositorySourcePackage(sourceArchivePackage), true);
 
-  const packedCopy = path.join(fakeRoot, "node_modules", "@wrenai", "context-loader");
-  await mkdir(packedCopy, { recursive: true });
-  assert.equal(await isRepositorySourcePackage(packedCopy), false);
+  const actualPackageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const packed = JSON.parse(execFileSync("npm", ["pack", "--json", "--dry-run"], { cwd: actualPackageRoot, encoding: "utf8" }));
+  assert.equal(packed[0].files.some((entry) => entry.path === "SOURCE_WORKSPACE"), false);
+
+  const unpackedRoot = await mkdtemp(path.join(os.tmpdir(), "context-loader-unpacked-"));
+  const unpackedPackage = path.join(unpackedRoot, "apps", "context-loader");
+  await mkdir(unpackedPackage, { recursive: true });
+  await writeFile(path.join(unpackedRoot, "pnpm-workspace.yaml"), "packages: []\n");
+  assert.equal(await isRepositorySourcePackage(unpackedPackage), false);
 });

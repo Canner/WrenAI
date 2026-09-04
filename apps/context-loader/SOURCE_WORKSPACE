@@ -1,0 +1,1 @@
+This tracked marker identifies the source workspace package. It is intentionally excluded from the npm package files allowlist.
