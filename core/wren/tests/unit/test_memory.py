@@ -1598,6 +1598,27 @@ class _FakeSession:
         return [self._hidden]
 
 
+class _CountingTokenizer:
+    """Encodes each text as the single token its integer value names."""
+
+    def encode_batch(self, texts):
+        return [_FakeEncoding([int(t)], [1]) for t in texts]
+
+
+class _BatchRecordingSession:
+    """Echoes each row's token id into the hidden state, recording batch sizes."""
+
+    def __init__(self):
+        self.batch_sizes: list[int] = []
+
+    def run(self, _outputs, feeds):
+        import numpy as np  # noqa: PLC0415
+
+        ids = feeds["input_ids"]
+        self.batch_sizes.append(int(ids.shape[0]))
+        return [np.array([[[float(row[0]), 1.0]] for row in ids], dtype="float32")]
+
+
 @pytest.mark.unit
 class TestEmbeddingBackendResolution:
     def _resolve(self, monkeypatch, *, onnx: bool, st: bool, env: str | None = None):
@@ -1743,6 +1764,45 @@ class TestOnnxEmbeddings:
         vectors = embedder.compute_query_embeddings("a")
         assert len(vectors) == 1
         np.testing.assert_allclose(np.array(vectors[0]), [0.6, 0.8], atol=1e-6)
+
+    def _batched_embedder(self, monkeypatch):
+        from wren.memory.embeddings import OnnxEmbeddings  # noqa: PLC0415
+
+        session = _BatchRecordingSession()
+        monkeypatch.setattr(
+            OnnxEmbeddings,
+            "_runtime",
+            lambda _self: (
+                session,
+                _CountingTokenizer(),
+                {"input_ids", "attention_mask"},
+            ),
+        )
+        return OnnxEmbeddings("fake-model"), session
+
+    def test_a_large_batch_is_split_before_it_reaches_the_model(self, monkeypatch):
+        # sentence-transformers' encode() caps at batch_size=32, so an
+        # unchunked run here would make peak memory scale with the manifest on
+        # the onnx path alone -- the same MemoryStore call going O(1) to O(n)
+        # purely by switching backend. extract_schema_items emits a record per
+        # column, so the count tracks total field count, not table count.
+        embedder, session = self._batched_embedder(monkeypatch)
+        embedder.compute_source_embeddings([str(i) for i in range(70)])
+        assert session.batch_sizes == [32, 32, 6]
+
+    def test_chunking_leaves_the_vectors_unchanged(self, monkeypatch):
+        # Mean pooling and L2 normalization are both per-row, so how rows are
+        # grouped cannot move a vector. This is what lets the parity gate keep
+        # covering the backend without adjustment.
+        import numpy as np  # noqa: PLC0415
+
+        texts = [str(i) for i in range(70)]
+        embedder, _ = self._batched_embedder(monkeypatch)
+        chunked = np.array(embedder.compute_source_embeddings(texts))
+        one_at_a_time = np.array(
+            [embedder.compute_source_embeddings([t])[0] for t in texts]
+        )
+        np.testing.assert_array_equal(chunked, one_at_a_time)
 
     def test_empty_input_short_circuits_before_the_model(self, monkeypatch):
         from wren.memory.embeddings import OnnxEmbeddings  # noqa: PLC0415

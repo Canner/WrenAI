@@ -29,6 +29,9 @@ _DEFAULT_MODEL = os.getenv(
 )
 _DEFAULT_DIM = 384
 _DEFAULT_MAX_SEQ_LENGTH = 128
+# Matches SentenceTransformer.encode's default batch_size, so peak memory
+# per encode call is the same on both backends.
+_ENCODE_BATCH_SIZE = 32
 
 ONNX_BACKEND = "onnx"
 SENTENCE_TRANSFORMERS_BACKEND = "sentence-transformers"
@@ -266,34 +269,48 @@ class OnnxEmbeddings:
             return runtime
 
     def _encode(self, texts: list[str]) -> list:
-        """Tokenize, run the encoder, mean-pool under the mask, L2 normalize."""
+        """Tokenize, run the encoder, mean-pool under the mask, L2 normalize.
+
+        Runs in fixed-size chunks. ``SentenceTransformer.encode`` defaults to
+        ``batch_size=32`` and lancedb's adapter does not override it, so
+        feeding a whole manifest to one ``session.run`` would make peak memory
+        scale with the manifest on this backend alone. Mean pooling and
+        normalization are both per-row, so chunking cannot move a vector; it
+        also confines padding to each chunk instead of the whole batch.
+        """
         import numpy as np  # noqa: PLC0415
 
         if not texts:
             return []
 
         session, tokenizer, input_names = self._runtime()
-        encodings = tokenizer.encode_batch(texts)
-        ids = np.array([e.ids for e in encodings], dtype=np.int64)
-        mask = np.array([e.attention_mask for e in encodings], dtype=np.int64)
+        vectors: list = []
+        for start in range(0, len(texts), _ENCODE_BATCH_SIZE):
+            encodings = tokenizer.encode_batch(
+                texts[start : start + _ENCODE_BATCH_SIZE]
+            )
+            ids = np.array([e.ids for e in encodings], dtype=np.int64)
+            mask = np.array([e.attention_mask for e in encodings], dtype=np.int64)
 
-        feeds = {"input_ids": ids, "attention_mask": mask}
-        if "token_type_ids" in input_names:
-            feeds["token_type_ids"] = np.zeros_like(ids)
+            feeds = {"input_ids": ids, "attention_mask": mask}
+            if "token_type_ids" in input_names:
+                feeds["token_type_ids"] = np.zeros_like(ids)
 
-        hidden = session.run(None, feeds)[0]
-        # Attention-masked mean pooling, matching 1_Pooling/config.json.
-        weights = mask[..., None].astype(np.float32)
-        pooled = (hidden * weights).sum(axis=1) / np.clip(
-            weights.sum(axis=1), 1e-9, None
-        )
-        # LanceDB's SentenceTransformerEmbeddings defaults to normalize=True and
-        # the sentence-transformers backend does not override it, so every
-        # vector already in a store is L2-normalized. Skipping this would leave
-        # old and new rows on different scales and skew distance ranking.
-        norms = np.linalg.norm(pooled, axis=1, keepdims=True)
-        pooled = pooled / np.clip(norms, 1e-12, None)
-        return list(pooled.astype(np.float32))
+            hidden = session.run(None, feeds)[0]
+            # Attention-masked mean pooling, matching 1_Pooling/config.json.
+            weights = mask[..., None].astype(np.float32)
+            pooled = (hidden * weights).sum(axis=1) / np.clip(
+                weights.sum(axis=1), 1e-9, None
+            )
+            # LanceDB's SentenceTransformerEmbeddings defaults to normalize=True
+            # and the sentence-transformers backend does not override it, so
+            # every vector already in a store is L2-normalized. Skipping this
+            # would leave old and new rows on different scales and skew
+            # distance ranking.
+            norms = np.linalg.norm(pooled, axis=1, keepdims=True)
+            pooled = pooled / np.clip(norms, 1e-12, None)
+            vectors.extend(pooled.astype(np.float32))
+        return vectors
 
     def compute_source_embeddings(self, texts) -> list:
         """Embed documents for indexing."""
