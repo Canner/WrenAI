@@ -62,7 +62,11 @@ or `pnpm test` from there will tell you the script doesn't exist.
 cd apps/genbi
 ```
 
-For a fixture-only static preview, no BFF or attestation is needed:
+For a fixture-only static preview, no BFF is needed. Note what "fixture-only"
+means: built without `VITE_BFF_URL`, the SPA calls no BFF at all and renders
+canned data, so it will show a context and a harness as though they were already
+configured. That is not your state, and nothing in it will answer a question.
+To run it against a real BFF, follow [RUNNING.md](./RUNNING.md) instead.
 
 ```bash
 pnpm build
@@ -83,7 +87,7 @@ exposes only the passthroughs `pnpm genbi:build`, `pnpm genbi:test` and
 cd apps/genbi
 pnpm build      # tsc -b (frontend typecheck) && vite build (→ dist/) && tsc -p tsconfig.server.json (server + harness → dist-server/)
 pnpm start:bff  # requires the BFF runtime env — see RUNNING.md
-pnpm preview    # serve the frontend production build
+pnpm preview    # serve the built SPA — fixture-only, calls no BFF (see RUNNING.md to run it live)
 ```
 
 ## Test & typecheck
