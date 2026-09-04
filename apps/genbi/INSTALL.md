@@ -3,9 +3,8 @@
 How to install and run `@wrenai/genbi` without developing it. If you are working
 on the app itself, see [README.md](./README.md) instead.
 
-It is not on npm yet — see [Status](#status-not-yet-published) — so the install
-below packs a tarball from a checkout. Everything after that step is what a
-published install will do too.
+> **Not on npm yet.** Everything below describes the published package. Until it
+> ships, substitute the tarball step in [Install](#install); nothing else changes.
 
 ## What it is
 
@@ -15,17 +14,6 @@ semantic layer through the `wren` CLI and to an AI agent backend (Warble)
 that it installs as a dependency. Once running, it serves a web UI for
 asking questions over your data and getting back verified, structured
 answers (tables, charts, KPIs, narrative text).
-
-## Status: not yet published
-
-**`@wrenai/genbi` is not yet published to the npm registry.** `npx
-@wrenai/genbi` or `npm install @wrenai/genbi` will not work today. This
-guide instead documents the only working install path right now: building a
-local tarball with `npm pack` from a checkout of this repo, then installing
-that tarball. Once the package is published, the tarball step is replaced
-by a normal `npm install -g @wrenai/genbi` (or `npx @wrenai/genbi`) — the
-rest of this guide (running it, configuration, troubleshooting) will still
-apply unchanged.
 
 ## Supported platforms
 
@@ -46,10 +34,10 @@ see [Troubleshooting](#troubleshooting).
 
 ## Prerequisites
 
-- **Node.js 20 or later.** `apps/genbi/package.json` declares `"engines":
-  {"node": ">=20"}`.
-- **npm** (or another package manager capable of running npm lifecycle
-  scripts and installing a local tarball).
+- **Node.js 20 or later.** The package declares it in `engines`, so npm will
+  warn you.
+- **npm** (or another package manager that runs npm lifecycle scripts — the
+  Warble binary arrives through a postinstall hook).
 - **The `wren` CLI on `PATH`**, already configured against a Wren project.
   `@wrenai/genbi` shells out to it for live questions and context
   inspection; it does not install or configure `wren` for you. See the
@@ -60,39 +48,51 @@ see [Troubleshooting](#troubleshooting).
 
 ## Install
 
-From a checkout of this repo, on `apps/genbi`:
+Nothing to install ahead of time — `npx` fetches it on demand:
+
+```bash
+npx @wrenai/genbi
+```
+
+Or install it once, if you would rather not re-fetch:
+
+```bash
+npm install -g @wrenai/genbi
+```
+
+Either way, `npm` runs `@warble/cli`'s postinstall script, which downloads the
+Warble binary for your platform (about 12 MB) from GitHub Releases and verifies
+its checksum against the release manifest. That is where an unsupported platform
+fails, before any of the app's own code runs.
+
+<details>
+<summary>Until it is published: install from a tarball</summary>
+
+From a checkout of this repo, in `apps/genbi`:
 
 ```bash
 npm pack
 ```
 
-This produces a tarball named `wrenai-genbi-<version>.tgz` in the current
-directory (built via the package's own `prepack` script, which builds the
-UI and server first). Copy that tarball wherever you want to run the app
-from, then install it there, e.g.:
+That produces `wrenai-genbi-<version>.tgz` — the package's `prepack` script
+builds the UI and server first. Install it wherever you want to run from:
 
 ```bash
 npm install /path/to/wrenai-genbi-0.0.0.tgz
 ```
 
-This installs `@wrenai/genbi` as a local dependency and, as part of `npm
-install`, runs `@warble/cli`'s postinstall script, which downloads the
-Warble binary for your platform (about 12 MB) from GitHub Releases and
-verifies its checksum against the release manifest. This is the point
-where an unsupported platform (see above) fails — before any of the app's
-own code runs.
+The rest of this guide applies unchanged; `npx @wrenai/genbi` below becomes
+`npx genbi` from that directory, or `node_modules/.bin/genbi`.
+
+</details>
 
 ## Run
 
 `@wrenai/genbi` requires one environment variable to start:
 
 ```bash
-WREN_HARNESS_WORKSPACE_ROOT=/path/to/a/writable/directory npx genbi
+WREN_HARNESS_WORKSPACE_ROOT=/path/to/a/writable/directory npx @wrenai/genbi
 ```
-
-(If you installed the tarball as a project dependency rather than
-globally, run `npx genbi` from that project, or invoke
-`node_modules/.bin/genbi` directly.)
 
 ## What to expect on first start
 
