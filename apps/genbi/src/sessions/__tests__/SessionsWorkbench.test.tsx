@@ -150,6 +150,24 @@ describe('Sessions workbench', () => {
     expect(sessionStorage.getItem('wren-genbi-native-session-capability:new-one')).toBe('capability-one');
   });
 
+  it('renders the selected RuntimeHost refusal without exposing server diagnostics', async () => {
+    client.list.mockResolvedValue({ sessions: [] });
+    client.readiness.mockResolvedValue({
+      ...ready,
+      runtimeHost: {
+        selected: 'claude-sandbox-runtime' as const,
+        selectedReadiness: { state: 'unprovisioned' as const, code: 'claude_sandbox_runtime_unprovisioned', message: 'The Claude sandbox runtime has not been provisioned by this GenBI release.' },
+        backends: {
+          local: { state: 'ready' as const, version: 'development-local', capabilities: [] },
+          'codex-app-server': { state: 'unprovisioned' as const, code: 'codex_app_server_unprovisioned', message: 'The Codex app-server runtime has not been provisioned by this GenBI release.' },
+          'claude-sandbox-runtime': { state: 'unprovisioned' as const, code: 'claude_sandbox_runtime_unprovisioned', message: 'The Claude sandbox runtime has not been provisioned by this GenBI release.' },
+        },
+      },
+    });
+    renderWithProviders(<Surface />, { route: '/sessions' });
+    expect(await screen.findByText('Runtime host: The Claude sandbox runtime has not been provisioned by this GenBI release.')).toBeInTheDocument();
+  });
+
   it('coalesces duplicate new-session clicks, retains an ambiguous action for retry, and refreshes it after success', async () => {
     let deliver!: (value: { session: ReturnType<typeof native>; capability: string }) => void;
     const inFlight = new Promise<{ session: ReturnType<typeof native>; capability: string }>((resolve) => { deliver = resolve; });

@@ -11,6 +11,7 @@ import { InteractiveTerminalManager } from "../server/interactive-terminal.js";
 import { initializeNativeSessionStateBase } from "../server/native-session-workspace.js";
 import { NativeArtifactService } from "../server/native-artifacts.js";
 import { NativeSessionService, probeNativeSessionProducer } from "../server/native-sessions.js";
+import { RuntimeHost } from "../server/runtime-host/local.js";
 import type { PtyFactory } from "../server/interactive-terminal.js";
 
 const dirs: string[] = [];
@@ -101,7 +102,7 @@ function irPaths(dir: string) {
   return { analysis: path.join(dir, "analysis.json"), setup: path.join(dir, "setup.json"), context_enrichment: path.join(dir, "context.json") } as const;
 }
 
-function productionService(dir: string, producer: string, wrenShim: string, terminalManager?: () => Promise<InteractiveTerminalManager>, subscriptionProvider: "claude" | "codex" = "codex") {
+function productionService(dir: string, producer: string, wrenShim: string, terminalManager?: () => Promise<InteractiveTerminalManager>, subscriptionProvider: "claude" | "codex" = "codex", runtimeHost?: RuntimeHost) {
   const store = new Store(":memory:");
   store.setRuntimeSettings({ ...store.getRuntimeSettings(), subscriptionProvider, subscriptionDriverModel: "driver", tierModels: subscriptionProvider === "claude" ? [{ tier: "cheap", model: "haiku" }, { tier: "strong", model: "sonnet" }] : [{ tier: "cheap", model: "cheap" }, { tier: "strong", model: "strong" }] });
   const binding = store.activateEnrichmentBinding(resolveEnrichmentBinding(dir));
@@ -136,6 +137,7 @@ function productionService(dir: string, producer: string, wrenShim: string, term
       warbleBin: producer,
       wrenShim,
       terminalHostAvailable: async () => true,
+      ...(runtimeHost ? { runtimeHost } : {}),
       executableAvailable: () => true,
       artifactService: artifacts,
       prepareCodexWrenHome: ({ cwd }) => {
@@ -306,6 +308,36 @@ describe("native producer compatibility preflight", () => {
     // being hidden because the configured one happens to work.
     expect(readiness.purposes.analysis.vendors.codex).toMatchObject({ available: false, reason: expect.stringContaining("native Wren runtime is unavailable") });
     expect(readiness.purposes.analysis.vendors.claude).toMatchObject({ available: true });
+    store.close();
+  });
+
+  it("projects RuntimeHost reasons through the BFF without serializing host diagnostics", async () => {
+    const dir = fixtureDir();
+    const wrenShim = runtimeFixture(dir);
+    const runtimeHost = new RuntimeHost({
+      selected: "claude-sandbox-runtime",
+      deployment: "development",
+      localAvailable: () => true,
+      vendorProbes: {
+        "claude-sandbox-runtime": async () => ({
+          readiness: { state: "unavailable", code: "claude_cli_missing", message: "/private/bin/claude --token=never-send" },
+          diagnostic: { phase: "version", observedVersion: "/private/bin/claude --token=never-send" },
+        }),
+      },
+    });
+    const { service, store } = productionService(dir, fakeProducer(dir, "compatible"), wrenShim, undefined, "claude", runtimeHost);
+    const app = createApp({
+      store,
+      baseRouteOptions: { authChoice: { mode: "api-key", adapter: "mock" }, profileSource: "fixture", userProject: dir },
+      route: async () => ({ backend: "agent", warnings: [], kind: "answer", envelope: { blocks: [], summary: "ok" }, trace: { steps: [] } }),
+      nativeSessions: service,
+    });
+    const response = await app.request("/api/native-sessions/readiness");
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ runtimeHost: { selected: "claude-sandbox-runtime", selectedReadiness: { code: "claude_cli_missing", message: "The required Claude CLI is not available." } } });
+    expect(JSON.stringify(body)).not.toContain("/private/bin/claude");
+    expect(runtimeHost.serverDiagnostics()?.["claude-sandbox-runtime"]).toEqual({ phase: "version" });
     store.close();
   });
 });

@@ -129,6 +129,7 @@ export function SessionsSidebar() {
   }, [live, refreshReadiness]);
   const running = sessions.filter((item) => item.status === 'running' || item.status === 'detached' || item.status === 'creating');
   const readinessPurposeMap = readiness?.purposes ?? (readiness as unknown as Record<NativeSessionPurpose, NativeSessionReadiness['purposes'][NativeSessionPurpose]> | undefined);
+  const selectedRuntime = readiness?.runtimeHost?.selectedReadiness;
   const recent = sessions.filter((item) => !running.includes(item));
   const structured = live
     ? structuredSessions
@@ -161,6 +162,7 @@ export function SessionsSidebar() {
     {!live ? <div className="sessions-sidebar-state" role="status">Native terminal sessions require a local BFF connection.</div> : null}
     {live && readinessError ? <div className="sessions-sidebar-state" role="alert">Native host is unavailable. {readinessError}</div> : null}
     {live && readinessLoading && !readiness && !readinessError ? <div className="sessions-sidebar-state" role="status">Checking native terminal availability…</div> : null}
+    {live && selectedRuntime && selectedRuntime.state !== 'ready' ? <div className="sessions-sidebar-state" role="status">Runtime host: {selectedRuntime.message}</div> : null}
     {live && readinessPurposeMap && !newSessionPurposes.some((purpose) => readinessPurposeMap[purpose]?.available) ? <div className="sessions-sidebar-state" role="alert">No native terminal target is available on this host. Structured Ask remains available.</div> : null}
     {live && error ? <div className="sessions-sidebar-state" role="alert">Sessions are unavailable. {error}</div> : null}
     {structuredList}

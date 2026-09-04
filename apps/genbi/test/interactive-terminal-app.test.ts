@@ -59,6 +59,13 @@ describe('interactive terminal BFF endpoints', () => {
     const startSeparate = await app.request('/api/native-sessions', { method: 'POST', body: JSON.stringify({ purpose: 'analysis', intent: 'start_separate', idempotencyKey: '00000000-0000-4000-8000-000000000001' }) });
     expect(startSeparate.status).toBe(201); expect(separate).toHaveBeenCalledWith({ purpose: 'analysis', idempotencyKey: '00000000-0000-4000-8000-000000000001' });
     expect(await startSeparate.json()).toEqual({ session: { id: 'native-separate', purpose: 'analysis', vendor: 'codex', status: 'running', lifecycle: { liveAction: 'reattach', resumeAvailable: false } }, capability: 'separate-cap' });
+    const hostile = await app.request('/api/native-sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ purpose: 'analysis', intent: 'open_existing', runtimeBackend: 'local', executable: '/tmp/not-authorized', environment: { PATH: '/tmp' }, sandboxPolicy: 'none' }),
+    });
+    expect(hostile.status).toBe(400);
+    expect(created).toHaveBeenCalledOnce();
     const resume = await app.request('/api/native-sessions', { method: 'POST', body: JSON.stringify({ purpose: 'analysis', intent: 'resume', sessionId: 'native-session-00000000-0000-4000-8000-000000000002', idempotencyKey: '00000000-0000-4000-8000-000000000003' }) });
     expect(resume.status).toBe(201); expect(resumed).toHaveBeenCalledWith({ id: 'native-session-00000000-0000-4000-8000-000000000002', idempotencyKey: '00000000-0000-4000-8000-000000000003' });
     const openExact = await app.request('/api/native-sessions', { method: 'POST', body: JSON.stringify({ purpose: 'analysis', intent: 'open_existing', sessionId: 'native-session-00000000-0000-4000-8000-000000000001' }) });

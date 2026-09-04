@@ -191,8 +191,20 @@ export interface NativePurposeReadiness {
   producer?: { available: boolean; category?: 'native_session_producer_incompatible' };
 }
 
+export type RuntimeBackendId = 'local' | 'codex-app-server' | 'claude-sandbox-runtime';
+export type RuntimeBackendReadiness =
+  | { state: 'ready'; version: string; capabilities: readonly string[] }
+  | { state: 'unavailable' | 'incompatible' | 'unprovisioned'; code: string; message: string };
+/** Public-only RuntimeHost projection. Server diagnostics are intentionally absent. */
+export interface RuntimeHostReadiness {
+  selected: RuntimeBackendId;
+  selectedReadiness: RuntimeBackendReadiness;
+  backends: Readonly<Record<RuntimeBackendId, RuntimeBackendReadiness>>;
+}
+
 export interface NativeSessionReadiness {
   runtime: import('@/setup/types').NativeRuntimeBinding;
+  runtimeHost?: RuntimeHostReadiness;
   purposes: Record<NativeSessionPurpose, NativePurposeReadiness>;
   /** Host-owned MCP health only; the credential is never sent to the browser. */
   mcp?: { server: 'GenBI MCP'; tool: 'save_dashboard'; destination: 'GenBI Artifacts'; available: boolean; reason?: string };

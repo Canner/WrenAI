@@ -21,6 +21,8 @@ import { NativeWrenRuntimeError, resolveNativeWrenRuntime } from "./native-wren-
 import type { NativeWrenRuntime } from "./native-wren-runtime.js";
 import { runtimeSettingsCorrection } from "./runtime-binding.js";
 import { sealNativeClaudeResumeHandle, sealNativeResumeHandle, unsealNativeResumeHandle } from "./native-session-resume.js";
+import { RuntimeHost } from "./runtime-host/local.js";
+import type { RuntimeReadiness } from "./runtime-host/types.js";
 
 export const NATIVE_VENDORS = ["claude", "codex"] as const;
 export { NATIVE_PURPOSES };
@@ -279,6 +281,8 @@ export interface NativePurposeReadiness {
 
 export type NativeSessionReadiness = {
   readonly runtime: NativeRuntimeBinding;
+  /** Read-only RuntimeHost projection. Diagnostics remain in the host process. */
+  readonly runtimeHost?: RuntimeReadiness;
   readonly purposes: Record<NativePurpose, NativePurposeReadiness>;
   /** Health of the host-owned GenBI MCP endpoint; never includes a credential. */
   readonly mcp: NativeMcpHealth;
@@ -373,6 +377,8 @@ export interface NativeSessionServiceOptions {
   readonly wrenShim?: string;
   /** Read-only probe used by readiness; creation remains the final authority. */
   readonly terminalHostAvailable?: () => Promise<boolean>;
+  /** Phase-1 readiness boundary; no runtime host can be selected by browser input. */
+  readonly runtimeHost?: RuntimeHost;
   /** Test seam for the local executable probe. */
   readonly executableAvailable?: (vendor: NativeVendor) => boolean;
   /** Test seam for the configured local Warble producer probe. */
@@ -1359,6 +1365,12 @@ export class NativeSessionService {
       ? this.options.executableAvailable(vendor)
       : interactiveExecutableAvailable(vendor);
     const hostAvailable = await terminalHostAvailable();
+    const runtimeHost = this.options.runtimeHost ?? new RuntimeHost({
+      selected: "local",
+      deployment: "development",
+      localAvailable: async () => hostAvailable,
+    });
+    const runtimeHostReadiness = await runtimeHost.probe();
     const mcpReadiness = this.options.artifactService?.readiness();
     const runtime = this.options.store.getNativeRuntimeBinding();
     const runtimeCorrection = this.options.store.hasExplicitRuntimeSettings()
@@ -1455,6 +1467,7 @@ export class NativeSessionService {
     }
     return {
       runtime,
+      runtimeHost: runtimeHostReadiness,
       purposes: result,
       mcp: this.options.artifactService?.health() ?? {
         server: "GenBI MCP",
