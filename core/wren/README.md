@@ -25,6 +25,7 @@ pip install 'wrenai[spark]'        # Spark
 pip install 'wrenai[athena]'       # Athena
 pip install 'wrenai[oracle]'       # Oracle
 pip install 'wrenai[memory]'       # Schema & query memory (LanceDB)
+pip install 'wrenai[memory-onnx]'  # Same, torch-free (onnxruntime instead of PyTorch)
 pip install 'wrenai[ui]'           # Browser-based profile form (starlette + uvicorn)
 pip install 'wrenai[main]'         # memory + interactive prompts + ui
 pip install 'wrenai[all]'          # All connectors + main
@@ -133,7 +134,8 @@ flags.
 | `strict_mode` | `false` | When `true`, every table in a query must be defined in the MDL. Queries referencing undeclared tables are rejected before execution. |
 | `denied_functions` | `[]` | List of function names (case-insensitive) that are forbidden in queries. |
 
-**6. (Optional) Index schema for semantic search** (requires `wrenai[memory]`):
+**6. (Optional) Index schema for semantic search** (requires `wrenai[memory]`,
+or `wrenai[memory-onnx]` for a torch-free install):
 
 ```bash
 wren memory index                              # index MDL schema
@@ -142,6 +144,12 @@ wren memory store --nl "top customers" --sql "SELECT ..."  # store NL→SQL pair
 wren memory recall -q "best customers"         # retrieve similar past queries
 wren memory watch                              # auto-reindex on schema/query changes
 ```
+
+`memory-onnx` runs the same weights through onnxruntime instead of PyTorch, so
+it produces the same vectors and existing indexes stay valid -- it is a much
+smaller install, not a different index. When both extras are present, onnx is
+used; set `WREN_EMBEDDING_BACKEND=sentence-transformers` to override, and
+`wren memory status` reports which one is live.
 
 **7. (Optional) Build a shareable GenBI app** — turn the context layer into a
 browser-side dashboard (powered by `wren-core-wasm`) and deploy it to Vercel or
