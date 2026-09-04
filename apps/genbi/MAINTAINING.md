@@ -20,8 +20,8 @@ own weekly cadence driven by its own scope, and coupling the two version
 numbers would either force genbi releases it doesn't need or stall Warble pins
 waiting on an unrelated genbi release. What genbi commits to instead is
 compatibility: the exact `@warble/*` versions this package requires and has
-been verified against, expressed as pinned dependency versions plus the
-launch-gate contract probes, not as a shared version number.
+been verified against, expressed as pinned dependency versions plus the contract
+check, not as a shared version number.
 
 ### Bumping the pinned Warble version
 

@@ -8,6 +8,15 @@ The app does not write SQL itself. A question goes to the Wren agent harness,
 which answers with a structured envelope — the blocks to render, and whether the
 answer was verified — and the UI renders that.
 
+## Developer preview
+
+`@wrenai/genbi` is at `0.0.0` and has not been published to npm. Nothing here is
+under a compatibility commitment yet — commands, environment variables and
+interfaces move without notice. The Codex runtime is supported in code but has
+not been exercised end to end; Claude is the one that is. See
+[MAINTAINING.md](./MAINTAINING.md#versioning) for what the version number does
+and does not promise.
+
 This README is for working on the app from source: getting it running, and the
 daily build/test/typecheck loop. Three companion docs cover the rest:
 
