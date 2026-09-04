@@ -182,12 +182,39 @@ would run tests.
 
 ## Running the BFF
 
-Start the BFF with the exact paths the check verified. The SQLite state must be
-outside the bootstrap workspace and every project adopted through the app.
+One variable is required. Everything else the BFF needs, it resolves for itself:
 
 ```bash
-mkdir -p /absolute/path/to/private-bff-state
+WREN_HARNESS_WORKSPACE_ROOT=/absolute/path/to/fresh-bootstrap-workspace pnpm run start:bff
+```
 
+That is the directory Setup scaffolds new projects into. There is no default for
+it because there is no sensible one — it is where your work will live.
+
+Two more are worth setting in practice, both with defaults:
+
+```bash
+WREN_BFF_DB_PATH=/absolute/path/to/private-bff-state/bff.sqlite \
+PORT=4787 \
+WREN_HARNESS_WORKSPACE_ROOT=/absolute/path/to/fresh-bootstrap-workspace \
+pnpm run start:bff
+```
+
+`PORT` defaults to `4787`. `WREN_BFF_DB_PATH` defaults to
+`./wren-harness-bff.sqlite` in the working directory — fine for a quick run, but
+keep the state file outside the bootstrap workspace for anything you care about,
+since every project is adopted through the app rather than seeded on disk.
+
+### The overrides you do not normally need
+
+The Warble binary and its dispatcher, the profile, and the three IR paths all
+resolve on their own: the binary and dispatcher through the resolver's tiers
+(the pinned npm package is one of them), and the profile and IRs to this
+package's own `profiles/` tree.
+
+Set them only to point somewhere else — most often an in-progress Warble build:
+
+```bash
 WREN_HARNESS_WARBLE_BIN="$WARBLE_BIN" \
 WREN_HARNESS_AGENT_SDK_BIN="$AGENT_SDK_BIN" \
 WREN_HARNESS_PROFILE="$PROFILES_ROOT/genbi-default" \
@@ -195,12 +222,12 @@ WREN_HARNESS_SETUP_IR="$PROFILES_ROOT/genbi-setup/ir.golden.json" \
 WREN_HARNESS_ENRICH_IR="$PROFILES_ROOT/genbi-enrich-context/ir.golden.json" \
 WREN_HARNESS_ANALYSIS_IR="$PROFILES_ROOT/genbi-default/ir.golden.json" \
 WREN_HARNESS_WORKSPACE_ROOT=/absolute/path/to/fresh-bootstrap-workspace \
-WREN_BFF_DB_PATH=/absolute/path/to/private-bff-state/bff.sqlite \
-PORT=4787 \
 pnpm run start:bff
 ```
 
-The BFF listens on `:4787` by default (`PORT` overrides it).
+A missing `WREN_HARNESS_PROFILE` is a hard failure at boot; a missing
+`WREN_HARNESS_SETUP_IR` is not — only the setup wizard's connect step needs it,
+and that returns a clear error at dispatch time instead.
 
 **On picking a provider.** Nothing above names one, because you do not have to.
 With no `WREN_HARNESS_MODE`/`WREN_HARNESS_PROVIDER` the harness probes the
