@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { installContextLoader, isRepositorySourcePackage } from "../scripts/installer.mjs";
 import { readVerifiedState } from "../lib/verified.mjs";
@@ -95,17 +97,49 @@ test("rejects final-file and ancestor-directory symlinks at runtime", async () =
   assert.throws(() => readVerifiedState(ancestorLink.root), /linked|outside/);
 });
 
-test("skips only the verifiable source-workspace layout, never an equivalent packed copy", async () => {
-  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "context-loader-source-"));
-  const sourcePackage = path.join(repositoryRoot, "apps", "context-loader");
-  await mkdir(path.join(repositoryRoot, "core", "wren"), { recursive: true });
-  await mkdir(sourcePackage, { recursive: true });
-  await writeFile(path.join(repositoryRoot, ".git"), "gitdir: fixture\n");
-  await writeFile(path.join(repositoryRoot, "pnpm-workspace.yaml"), "packages: []\n");
-  await writeFile(path.join(repositoryRoot, "core", "wren", "pyproject.toml"), "[project]\nname = \"wren\"\n");
+test("refuses a same-bytes external binary during reuse and a bin-directory link before any install write", async () => {
+  const reusable = await fixture();
+  const installed = await installContextLoader({ packageRoot: reusable.root, fetchImpl: fetchArchive(reusable.archive), platform: "darwin", arch: "arm64" });
+  const external = path.join(await mkdtemp(path.join(os.tmpdir(), "context-loader-reuse-external-")), "wren-context-loader");
+  await writeFile(external, await readFile(installed.binary), { mode: 0o755 });
+  await rm(installed.binary);
+  await symlink(external, installed.binary);
+  await assert.rejects(
+    installContextLoader({ packageRoot: reusable.root, fetchImpl: fetchArchive(reusable.archive), platform: "darwin", arch: "arm64" }),
+    /unsafe-path/,
+  );
+  assert.deepEqual(await readFile(external), reusable.artifact);
+
+  const fresh = await fixture();
+  const externalDir = await mkdtemp(path.join(os.tmpdir(), "context-loader-write-external-"));
+  const sentinel = path.join(externalDir, "wren-context-loader");
+  await writeFile(sentinel, "outside-before", { mode: 0o755 });
+  await symlink(externalDir, path.join(fresh.root, "bin"));
+  await assert.rejects(
+    installContextLoader({ packageRoot: fresh.root, fetchImpl: fetchArchive(fresh.archive), platform: "darwin", arch: "arm64" }),
+    /unsafe-path/,
+  );
+  assert.equal(await readFile(sentinel, "utf8"), "outside-before");
+  assert.deepEqual(await readdir(externalDir), ["wren-context-loader"]);
+});
+
+test("skips only the tracked source checkout, never a lookalike git repository or packed copy", async () => {
+  const sourcePackage = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   assert.equal(await isRepositorySourcePackage(sourcePackage), true);
 
-  const packedCopy = path.join(repositoryRoot, "node_modules", "@wrenai", "context-loader");
+  const fakeRoot = await mkdtemp(path.join(os.tmpdir(), "context-loader-fake-source-"));
+  const fakePackage = path.join(fakeRoot, "apps", "context-loader");
+  await mkdir(path.join(fakeRoot, "core", "wren"), { recursive: true });
+  await mkdir(fakePackage, { recursive: true });
+  await writeFile(path.join(fakePackage, "package.json"), "{}\n");
+  await writeFile(path.join(fakeRoot, "pnpm-workspace.yaml"), "packages: []\n");
+  await writeFile(path.join(fakeRoot, "core", "wren", "pyproject.toml"), "[project]\nname = \"wren\"\n");
+  execFileSync("git", ["init", fakeRoot]);
+  execFileSync("git", ["-C", fakeRoot, "add", "apps/context-loader/package.json", "pnpm-workspace.yaml", "core/wren/pyproject.toml"]);
+  execFileSync("git", ["-C", fakeRoot, "remote", "add", "origin", "https://example.invalid/lookalike.git"]);
+  assert.equal(await isRepositorySourcePackage(fakePackage), false);
+
+  const packedCopy = path.join(fakeRoot, "node_modules", "@wrenai", "context-loader");
   await mkdir(packedCopy, { recursive: true });
   assert.equal(await isRepositorySourcePackage(packedCopy), false);
 });

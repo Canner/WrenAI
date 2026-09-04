@@ -1,24 +1,37 @@
 import { createHash } from "node:crypto";
-import { access, chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { execFile as execFileCallback } from "node:child_process";
+import { lstatSync } from "node:fs";
+import { chmod, lstat, mkdir, open, readFile, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import { gunzipSync } from "node:zlib";
-import { CANONICAL_BINARY, ContextLoaderPackageError, isSha256, readJson, sha256File, targetFor } from "../lib/verified.mjs";
+import { CANONICAL_BINARY, ContextLoaderPackageError, isSha256, sha256File, targetFor } from "../lib/verified.mjs";
+
+const execFile = promisify(execFileCallback);
+const SOURCE_ORIGINS = new Set([
+  "git@github.com:Canner/WrenAI.git",
+  "https://github.com/Canner/WrenAI.git",
+  "ssh://git@github.com/Canner/WrenAI.git",
+]);
 
 /** Downloads, verifies, and atomically installs the exact manifest row for this package. */
 export async function installContextLoader({ packageRoot, fetchImpl = fetch, platform = process.platform, arch = process.arch } = {}) {
   if (typeof packageRoot !== "string") throw new TypeError("packageRoot is required");
-  const packageJson = readJson(path.join(packageRoot, "package.json"), "package.json");
-  const manifest = readJson(path.join(packageRoot, "artifacts.json"), "artifacts.json");
+  const root = await physicalPackageRoot(packageRoot);
+  const packageJson = await readOwnedJson(root, "package.json", "package.json");
+  const manifest = await readOwnedJson(root, "artifacts.json", "artifacts.json");
   const target = targetFor(platform, arch);
   const artifact = manifest.artifacts?.[target];
   validateManifest(packageJson, manifest, artifact, target);
 
-  const binary = path.join(packageRoot, CANONICAL_BINARY);
-  const statePath = path.join(packageRoot, "install-state.json");
-  const reusable = await existingVerified(binary, statePath, packageJson.version, target, artifact.binarySha256);
-  if (reusable) return { binary, reused: true };
+  await ensureOwnedDirectory(root, "bin");
+  const reusable = await existingVerified(root, packageJson.version, target, artifact.archiveSha256, artifact.binarySha256);
+  if (reusable !== undefined) return { binary: reusable, reused: true };
 
+  const binary = path.join(root, CANONICAL_BINARY);
+  const statePath = path.join(root, "install-state.json");
   const staging = `${binary}.tmp-${process.pid}-${Date.now()}`;
+  let stagingCreated = false;
   try {
     const response = await fetchImpl(artifact.url);
     if (!response?.ok) throw new ContextLoaderPackageError("download-failed", `could not download the ${target} artifact`);
@@ -30,17 +43,24 @@ export async function installContextLoader({ packageRoot, fetchImpl = fetch, pla
     if (sha256(content) !== artifact.binarySha256) {
       throw new ContextLoaderPackageError("binary-digest-mismatch", `extracted ${target} binary did not match its SHA-256`);
     }
-    await mkdir(path.dirname(binary), { recursive: true });
-    await writeFile(staging, content, { mode: 0o755 });
+    await ensureOwnedDirectory(root, "bin");
+    await writeNewOwnedFile(root, path.join("bin", path.basename(staging)), content, 0o755);
+    stagingCreated = true;
     await chmod(staging, 0o755);
+    await ownedRegularFile(root, path.join("bin", path.basename(staging)));
+    await ensureOwnedDirectory(root, "bin");
     await rename(staging, binary);
+    stagingCreated = false;
+    const installedBinary = await ownedRegularFile(root, CANONICAL_BINARY);
     const state = { package: packageJson.name, version: packageJson.version, target, archiveSha256: artifact.archiveSha256, binarySha256: artifact.binarySha256, binaryPath: CANONICAL_BINARY };
-    const stateTmp = `${statePath}.tmp-${process.pid}-${Date.now()}`;
-    await writeFile(stateTmp, `${JSON.stringify(state)}\n`, { mode: 0o600 });
+    const stateName = `install-state.json.tmp-${process.pid}-${Date.now()}`;
+    const stateTmp = path.join(root, stateName);
+    await writeNewOwnedFile(root, stateName, `${JSON.stringify(state)}\n`, 0o600);
     await rename(stateTmp, statePath);
-    return { binary, reused: false };
+    await ownedRegularFile(root, "install-state.json");
+    return { binary: installedBinary, reused: false };
   } catch (error) {
-    await rm(staging, { force: true });
+    if (stagingCreated) await removeOwnedFile(root, path.join("bin", path.basename(staging)));
     throw error instanceof ContextLoaderPackageError ? error : new ContextLoaderPackageError("download-failed", "could not download the required artifact (offline cache miss)");
   }
 }
@@ -51,14 +71,19 @@ export async function installContextLoader({ packageRoot, fetchImpl = fetch, pla
  * packed packages always download and verify their tagged artifact.
  */
 export async function isRepositorySourcePackage(packageRoot) {
-  const repositoryRoot = path.resolve(packageRoot, "..", "..");
-  if (path.resolve(packageRoot) !== path.join(repositoryRoot, "apps", "context-loader")) return false;
   try {
-    await Promise.all([
-      access(path.join(repositoryRoot, ".git")),
-      access(path.join(repositoryRoot, "pnpm-workspace.yaml")),
-      access(path.join(repositoryRoot, "core", "wren", "pyproject.toml")),
-    ]);
+    if (!lstatSync(packageRoot).isDirectory()) return false;
+    const physicalPackage = await realpath(packageRoot);
+    const { stdout: repositoryOutput } = await execFile("git", ["-C", physicalPackage, "rev-parse", "--show-toplevel"], { timeout: 2_000 });
+    const repositoryRoot = await realpath(repositoryOutput.trim());
+    if (physicalPackage !== path.join(repositoryRoot, "apps", "context-loader")) return false;
+    const { stdout: originOutput } = await execFile("git", ["-C", repositoryRoot, "remote", "get-url", "origin"], { timeout: 2_000 });
+    if (!SOURCE_ORIGINS.has(originOutput.trim())) return false;
+    await execFile(
+      "git",
+      ["-C", repositoryRoot, "ls-files", "--error-unmatch", "--", "apps/context-loader/package.json", "pnpm-workspace.yaml", "core/wren/pyproject.toml"],
+      { timeout: 2_000 },
+    );
     return true;
   } catch {
     return false;
@@ -75,13 +100,89 @@ function validateManifest(packageJson, manifest, artifact, target) {
   }
 }
 
-async function existingVerified(binary, statePath, version, target, digest) {
+async function existingVerified(root, version, target, archiveDigest, binaryDigest) {
   try {
-    const state = JSON.parse(await readFile(statePath, "utf8"));
-    return state.version === version && state.target === target && state.binaryPath === CANONICAL_BINARY && state.binarySha256 === digest && sha256File(binary) === digest;
+    const stateFile = await ownedRegularFile(root, "install-state.json", { allowMissing: true });
+    const binary = await ownedRegularFile(root, CANONICAL_BINARY, { allowMissing: true });
+    if (stateFile === undefined || binary === undefined) return undefined;
+    const state = JSON.parse(await readFile(stateFile, "utf8"));
+    return state.version === version && state.target === target && state.binaryPath === CANONICAL_BINARY && state.archiveSha256 === archiveDigest && state.binarySha256 === binaryDigest && sha256File(binary) === binaryDigest ? binary : undefined;
   } catch {
-    return false;
+    throw new ContextLoaderPackageError("unsafe-path", "existing install state or binary is linked, malformed, or outside the package root");
   }
+}
+
+async function physicalPackageRoot(packageRoot) {
+  try {
+    if (!(await lstat(packageRoot)).isDirectory()) throw new Error("not a directory");
+    return await realpath(packageRoot);
+  } catch {
+    throw new ContextLoaderPackageError("unsafe-path", "package root is missing, linked, or not a real directory");
+  }
+}
+
+async function readOwnedJson(root, relativePath, label) {
+  const file = await ownedRegularFile(root, relativePath);
+  try {
+    const value = JSON.parse(await readFile(file, "utf8"));
+    if (typeof value !== "object" || value === null) throw new Error("not an object");
+    return value;
+  } catch {
+    throw new ContextLoaderPackageError("invalid-manifest", `${label} is missing or invalid JSON`);
+  }
+}
+
+async function ensureOwnedDirectory(root, relativePath) {
+  const directory = path.join(root, relativePath);
+  try {
+    await mkdir(directory, { recursive: true });
+  } catch {
+    throw new ContextLoaderPackageError("unsafe-path", "could not create the package-local binary directory");
+  }
+  try {
+    if (!(await lstat(directory)).isDirectory()) throw new Error("not a directory");
+    if ((await realpath(directory)) !== directory) throw new Error("linked directory");
+  } catch {
+    throw new ContextLoaderPackageError("unsafe-path", "package-local binary directory is linked or outside the package root");
+  }
+}
+
+async function ownedRegularFile(root, relativePath, { allowMissing = false } = {}) {
+  const lexical = path.resolve(root, relativePath);
+  if (!lexical.startsWith(`${root}${path.sep}`)) throw new ContextLoaderPackageError("unsafe-path", "requested file escapes the package root");
+  try {
+    if (!(await lstat(lexical)).isFile()) throw new Error("not a regular file");
+    const physical = await realpath(lexical);
+    if (!physical.startsWith(`${root}${path.sep}`) || !(await stat(physical)).isFile()) throw new Error("not contained");
+    return physical;
+  } catch (error) {
+    if (allowMissing && isMissing(error)) return undefined;
+    throw new ContextLoaderPackageError("unsafe-path", "package-local file is linked, missing, or outside the package root");
+  }
+}
+
+async function writeNewOwnedFile(root, relativePath, content, mode) {
+  const lexical = path.resolve(root, relativePath);
+  if (!lexical.startsWith(`${root}${path.sep}`)) throw new ContextLoaderPackageError("unsafe-path", "staging file escapes the package root");
+  const handle = await open(lexical, "wx", mode);
+  try {
+    await handle.writeFile(content);
+  } finally {
+    await handle.close();
+  }
+}
+
+async function removeOwnedFile(root, relativePath) {
+  try {
+    const file = await ownedRegularFile(root, relativePath, { allowMissing: true });
+    if (file !== undefined) await rm(file, { force: true });
+  } catch {
+    // Never follow an unexpected link while cleaning up an interrupted install.
+  }
+}
+
+function isMissing(error) {
+  return typeof error === "object" && error !== null && error.code === "ENOENT";
 }
 
 function sha256(value) {
