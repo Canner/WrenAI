@@ -12,6 +12,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -23,6 +24,7 @@ const installRoot = path.join(tempRoot, "fresh-install");
 const workspaceRoot = path.join(tempRoot, "workspace");
 const sourceAuditHook = path.join(tempRoot, "block-checkout-access.cjs");
 const port = await reservePort();
+const fixtureProvider = await startSetupFixtureProvider();
 let serverProcess;
 
 try {
@@ -47,7 +49,7 @@ try {
   }
 
   await writeFile(sourceAuditHook, createSourceAuditHook(), { mode: 0o600 });
-  const childEnv = controlledEnvironment({ installRoot, workspaceRoot, port, sourceAuditHook });
+  const childEnv = controlledEnvironment({ installRoot, workspaceRoot, port, sourceAuditHook, fixtureEndpoint: fixtureProvider.endpoint });
   serverProcess = spawn("npx", ["--no-install", "genbi"], {
     cwd: installRoot,
     env: childEnv,
@@ -56,7 +58,7 @@ try {
   const output = collectOutput(serverProcess);
 
   await waitForServer(port, output);
-  await verifyFirstRunSetup(port);
+  await verifyFirstRunSetup(port, workspaceRoot, fixtureProvider);
   await stop(serverProcess);
   serverProcess = undefined;
 
@@ -65,22 +67,37 @@ try {
     checks: [
       { name: "tarball excludes checkout-only scripts, tests, fixtures, and examples", ok: true },
       { name: "fresh install launches through npx with package-manager PATH", ok: true },
-      { name: "first-run Setup bootstrap flow works without checkout access or development escapes", ok: true },
+      { name: "first-run Setup connect terminal flow works without checkout access or development escapes", ok: true },
     ],
   }, null, 2)}\n`);
 } finally {
   if (serverProcess) await stop(serverProcess).catch(() => undefined);
-  await rm(tempRoot, { recursive: true, force: true });
+  await Promise.all([closeServer(fixtureProvider.server), rm(tempRoot, { recursive: true, force: true })]);
 }
 
-function controlledEnvironment({ installRoot, workspaceRoot, port: selectedPort, sourceAuditHook: hook }) {
+function controlledEnvironment({ installRoot, workspaceRoot, port: selectedPort, sourceAuditHook: hook, fixtureEndpoint }) {
   const environment = { ...process.env };
   const developmentEscapes = [
     "NODE_PATH",
     "WREN_HOME",
+    "WREN_PROJECT_HOME",
+    "WREN_HARNESS_PROJECT",
+    "WREN_HARNESS_PROFILE",
+    "WREN_HARNESS_SETUP_IR",
+    "WREN_HARNESS_ANALYSIS_IR",
+    "WREN_HARNESS_ENRICH_IR",
+    "WREN_HARNESS_ARTIFACTS_DIR",
+    "WREN_HARNESS_SETUP_MAX_TURNS",
+    "WREN_HARNESS_NATIVE_MCP_URL",
+    "WREN_HARNESS_WREN_SHIM",
     "WREN_HARNESS_ALLOW_WARBLE_SIBLING_CHECKOUT",
     "WREN_HARNESS_WARBLE_BIN",
     "WREN_HARNESS_AGENT_SDK_BIN",
+    "WREN_HARNESS_OUT",
+    "WREN_HARNESS_MODELS_CONFIG",
+    "WREN_HARNESS_TIER_ADAPTER",
+    "WREN_HARNESS_CHAT_TIMEOUT_MS",
+    "WREN_HARNESS_DEPLOYMENT",
     "WREN_HARNESS_CODEX_BIN",
     "WREN_HARNESS_CODEX_HOME",
     "WREN_HARNESS_CODEX_LOCAL_BIN",
@@ -90,6 +107,16 @@ function controlledEnvironment({ installRoot, workspaceRoot, port: selectedPort,
     "WREN_HARNESS_API_KEY",
     "WREN_HARNESS_MODEL",
     "WREN_HARNESS_ENDPOINT",
+    "WREN_HARNESS_CASSETTE_DIR",
+    "WREN_HARNESS_CASSETTE_REAL_ARGS_PREFIX",
+    "WREN_HARNESS_CASSETTE_REAL_BIN",
+    "WREN_HARNESS_CASSETTE_REPLAY_DELAY_MS",
+    "WREN_HARNESS_CASSETTE_SCENARIO",
+    "WREN_HARNESS_RUN_CASSETTE_DIR",
+    "WREN_HARNESS_RUN_PORT",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "AZURE_OPENAI_API_KEY",
   ];
   for (const key of developmentEscapes) delete environment[key];
   if (developmentEscapes.some((key) => environment[key] !== undefined)) {
@@ -103,9 +130,11 @@ function controlledEnvironment({ installRoot, workspaceRoot, port: selectedPort,
   environment.PORT = String(selectedPort);
   environment.WREN_HARNESS_WORKSPACE_ROOT = workspaceRoot;
   environment.WREN_BFF_DB_PATH = path.join(installRoot, "first-run.sqlite");
-  // Boot with a local mode only to make the setup control-plane test
-  // deterministic. The runner never submits an agent turn or contacts it.
+  // Boot through the app's local OpenAI-compatible adapter. The fixture is a
+  // loopback protocol double, not an authenticated or paid model endpoint.
   environment.WREN_HARNESS_MODE = "local";
+  environment.WREN_HARNESS_ENDPOINT = fixtureEndpoint;
+  environment.WREN_HARNESS_MODEL = "genbi-setup-fixture";
   environment.GENBI_PACKAGING_FORBIDDEN_ROOT = packageRoot;
   environment.NODE_OPTIONS = `--require=${hook}`;
   return environment;
@@ -127,7 +156,7 @@ function createSourceAuditHook() {
   ].join("\n");
 }
 
-async function verifyFirstRunSetup(selectedPort) {
+async function verifyFirstRunSetup(selectedPort, selectedWorkspaceRoot, provider) {
   const baseUrl = `http://127.0.0.1:${selectedPort}`;
   const shell = await fetch(`${baseUrl}/`);
   const shellText = await shell.text();
@@ -147,10 +176,30 @@ async function verifyFirstRunSetup(selectedPort) {
     throw new Error(`Setup create-mode selection failed: ${JSON.stringify(selected)}`);
   }
 
-  const reset = await json(`${baseUrl}/api/setup/reset`, { method: "POST" });
-  if (reset.ok !== true) throw new Error(`Setup reset failed: ${JSON.stringify(reset)}`);
-  const afterReset = await json(`${baseUrl}/api/setup/mode`);
-  if (afterReset.mode !== undefined) throw new Error(`Setup reset did not restore first-run mode: ${JSON.stringify(afterReset)}`);
+  const connect = await json(`${baseUrl}/api/setup/connect`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ projectName: "fixture-connect", sourceType: "postgres" }),
+  });
+  if (typeof connect.sessionId !== "string" || typeof connect.turnId !== "string") {
+    throw new Error(`Setup connect did not create a turn: ${JSON.stringify(connect)}`);
+  }
+  const frames = await streamFrames(`${baseUrl}/api/sessions/${encodeURIComponent(connect.sessionId)}/stream?turn=${encodeURIComponent(connect.turnId)}`);
+  const terminal = frames.find((frame) => frame.event === "event" && frame.data?.kind === "setup_status");
+  if (terminal?.data?.status !== "ok" || !/fixture connected/.test(terminal.data.message ?? "")) {
+    throw new Error(`Setup connect did not reach its expected terminal result: ${JSON.stringify(frames)}`);
+  }
+  const completedSteps = await json(`${baseUrl}/api/setup/steps`);
+  const stateFor = (key) => completedSteps.find((step) => step?.key === key)?.state;
+  if (stateFor("runtime") !== "done" || stateFor("connect") !== "done" || stateFor("context") !== "current") {
+    throw new Error(`Setup connect did not persist its step transition: ${JSON.stringify(completedSteps)}`);
+  }
+  if (!existsSync(path.join(selectedWorkspaceRoot, "fixture-connect", "wren_project.yml")) || !existsSync(path.join(selectedWorkspaceRoot, "fixture-connect", ".env"))) {
+    throw new Error("Setup connect terminal success did not leave its required project artifacts");
+  }
+  if (provider.requests !== 3 || provider.toolCalls !== 3) {
+    throw new Error(`fixture provider did not drive the expected setup tool loop: ${JSON.stringify({ requests: provider.requests, toolCalls: provider.toolCalls })}`);
+  }
 }
 
 async function json(url, options) {
@@ -158,6 +207,73 @@ async function json(url, options) {
   const body = await response.json().catch(() => undefined);
   if (!response.ok) throw new Error(`request ${new URL(url).pathname} failed with ${response.status}: ${JSON.stringify(body)}`);
   return body;
+}
+
+async function streamFrames(url) {
+  const response = await fetch(url);
+  const body = await response.text();
+  if (!response.ok) throw new Error(`Setup stream failed with ${response.status}: ${body.slice(-1_000)}`);
+  const frames = body.trim().split("\n\n").filter(Boolean).map((block) => {
+    const event = block.split("\n").find((line) => line.startsWith("event:"))?.slice("event:".length).trim();
+    const rawData = block.split("\n").find((line) => line.startsWith("data:"))?.slice("data:".length).trim();
+    return { event, data: rawData ? JSON.parse(rawData) : undefined };
+  });
+  if (!frames.some((frame) => frame.event === "done")) throw new Error(`Setup stream did not finish: ${body.slice(-1_000)}`);
+  return frames;
+}
+
+async function startSetupFixtureProvider() {
+  let requests = 0;
+  let toolCalls = 0;
+  const server = createHttpServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    let body;
+    try {
+      body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    } catch {
+      response.writeHead(400).end(JSON.stringify({ error: "invalid JSON" }));
+      return;
+    }
+    if (request.method !== "POST" || request.url !== "/v1/chat/completions" || !Array.isArray(body.tools) || !body.tools.some((tool) => tool?.function?.name === "setup_execution")) {
+      response.writeHead(400).end(JSON.stringify({ error: "unexpected local fixture request" }));
+      return;
+    }
+    requests += 1;
+    const reply = fixtureReply(requests);
+    toolCalls += reply.tool_calls?.length ?? 0;
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ id: `fixture-${requests}`, object: "chat.completion", created: 0, model: "genbi-setup-fixture", choices: [{ index: 0, message: reply, finish_reason: reply.tool_calls ? "tool_calls" : "stop" }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }));
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve());
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("could not start local Setup fixture provider");
+  return {
+    server,
+    endpoint: `http://127.0.0.1:${address.port}/v1`,
+    get requests() { return requests; },
+    get toolCalls() { return toolCalls; },
+  };
+}
+
+function fixtureReply(requestNumber) {
+  const call = (id, input) => ({ id, type: "function", function: { name: "setup_execution", arguments: JSON.stringify(input) } });
+  if (requestNumber === 1) return { role: "assistant", content: null, tool_calls: [call("fixture-mkdir", { action: "exec", command: "mkdir -p fixture-connect" })] };
+  if (requestNumber === 2) {
+    return {
+      role: "assistant",
+      content: null,
+      tool_calls: [
+        call("fixture-project", { action: "write", path: "fixture-connect/wren_project.yml", content: "name: fixture-connect\\n" }),
+        call("fixture-env", { action: "write", path: "fixture-connect/.env", content: "" }),
+      ],
+    };
+  }
+  if (requestNumber === 3) return { role: "assistant", content: "SETUP_STATUS: ok - fixture connected" };
+  return { role: "assistant", content: "SETUP_STATUS: error - fixture received an unexpected extra request" };
 }
 
 async function waitForServer(selectedPort, output) {
@@ -250,4 +366,9 @@ async function reservePort() {
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function closeServer(server) {
+  if (!server.listening) return Promise.resolve();
+  return new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 }
