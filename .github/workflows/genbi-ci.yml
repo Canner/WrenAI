@@ -50,27 +50,23 @@ jobs:
       - name: Enable corepack (pnpm via packageManager field)
         run: corepack enable
 
-      # The native-session preflight resolves the wren CLI through the uv tool
-      # layout at ~/.local/bin/wren, not through PATH, and reports the Codex
-      # dispatch path unavailable without it. wrenai is on PyPI and needs no
-      # credentials, so CI installs it rather than skipping that coverage.
+      # The native-session preflight will only run a wren it can trace back to
+      # this checkout: it requires an editable install, and checks that the .pth
+      # it leaves behind points at core/wren/src inside the same git repository
+      # as the server. A release install from PyPI does not satisfy that, so CI
+      # installs from the tree it just checked out.
       - name: Install the wren CLI
         uses: astral-sh/setup-uv@v5
 
-      - name: Install wrenai
+      - name: Install wren from this checkout
+        working-directory: .
         run: |
-          uv tool install wrenai
+          uv tool install --editable ./core/wren
           wren --version
-          # resolveNativeWrenRuntime wants ~/.local/bin/wren to be a symlink into
-          # a uv tool venv whose bin/python is also a symlink. Print what uv
-          # actually produced here so a mismatch is diagnosable from the log
-          # rather than guessed at.
           echo "--- wren shim layout ---"
           ls -l "$HOME/.local/bin/wren" || true
           target=$(readlink -f "$HOME/.local/bin/wren" || true)
-          echo "resolves to: $target"
-          ls -l "$(dirname "$target")/python" || true
-          uv tool dir || true
+          ls -l "$(dirname "$target")/../lib"/python*/site-packages/_editable_impl_wrenai.pth || true
 
       - name: Install workspace dependencies
         working-directory: .
