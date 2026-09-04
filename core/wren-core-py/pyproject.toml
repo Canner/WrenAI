@@ -26,10 +26,10 @@ Issues = "https://github.com/Canner/WrenAI/issues"
 
 [dependency-groups]
 dev = [
-  "maturin==1.9.4",
-  "pyarrow==25.0.0",
+  "maturin==1.15.0",
+  "pyarrow==25.0.1",
   "pytest==9.1.1",
-  "ruff==0.13.1",
+  "ruff==0.16.5",
 ]
 
 [tool.maturin]
