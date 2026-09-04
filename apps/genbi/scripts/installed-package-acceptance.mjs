@@ -16,6 +16,7 @@ import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { readSseFrames } from "./sse-frames.mjs";
 
 const packageRoot = path.resolve(process.cwd());
 const tempRoot = await mkdtemp(path.join(os.tmpdir(), "genbi-installed-package-"));
@@ -184,7 +185,7 @@ async function verifyFirstRunSetup(selectedPort, selectedWorkspaceRoot, provider
   if (typeof connect.sessionId !== "string" || typeof connect.turnId !== "string") {
     throw new Error(`Setup connect did not create a turn: ${JSON.stringify(connect)}`);
   }
-  const frames = await streamFrames(`${baseUrl}/api/sessions/${encodeURIComponent(connect.sessionId)}/stream?turn=${encodeURIComponent(connect.turnId)}`);
+  const frames = await readSseFrames(`${baseUrl}/api/sessions/${encodeURIComponent(connect.sessionId)}/stream?turn=${encodeURIComponent(connect.turnId)}`);
   const terminal = frames.find((frame) => frame.event === "event" && frame.data?.kind === "setup_status");
   if (terminal?.data?.status !== "ok" || !/fixture connected/.test(terminal.data.message ?? "")) {
     throw new Error(`Setup connect did not reach its expected terminal result: ${JSON.stringify(frames)}`);
@@ -207,19 +208,6 @@ async function json(url, options) {
   const body = await response.json().catch(() => undefined);
   if (!response.ok) throw new Error(`request ${new URL(url).pathname} failed with ${response.status}: ${JSON.stringify(body)}`);
   return body;
-}
-
-async function streamFrames(url) {
-  const response = await fetch(url);
-  const body = await response.text();
-  if (!response.ok) throw new Error(`Setup stream failed with ${response.status}: ${body.slice(-1_000)}`);
-  const frames = body.trim().split("\n\n").filter(Boolean).map((block) => {
-    const event = block.split("\n").find((line) => line.startsWith("event:"))?.slice("event:".length).trim();
-    const rawData = block.split("\n").find((line) => line.startsWith("data:"))?.slice("data:".length).trim();
-    return { event, data: rawData ? JSON.parse(rawData) : undefined };
-  });
-  if (!frames.some((frame) => frame.event === "done")) throw new Error(`Setup stream did not finish: ${body.slice(-1_000)}`);
-  return frames;
 }
 
 async function startSetupFixtureProvider() {

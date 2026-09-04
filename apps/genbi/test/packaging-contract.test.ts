@@ -23,7 +23,7 @@ describe("installed-package and vendor-contract CI wiring", () => {
   it("keeps the packed-install runner on the real connect/SSE path and scrubs bootstrap selectors", () => {
     const runner = readFileSync(path.join(packageRoot, "scripts", "installed-package-acceptance.mjs"), "utf8");
     expect(runner).toContain("/api/setup/connect");
-    expect(runner).toContain("streamFrames");
+    expect(runner).toContain("readSseFrames");
     expect(runner).toContain("Setup connect did not persist its step transition");
     for (const key of [
       "WREN_HARNESS_PROFILE",
