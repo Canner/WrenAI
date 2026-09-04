@@ -248,6 +248,17 @@ export interface NativeVendorReadiness {
 export interface NativeProducerReadiness {
   readonly available: boolean;
   readonly category?: "native_session_producer_incompatible";
+  /**
+   * Why the preflight rejected the producer. Safe to send: every field is a
+   * fixed string plus a content digest of the resolved binary — the phase name,
+   * a `result=` token, and (for a Wren runtime rejection) one of that resolver's
+   * fixed sentences. None of them interpolate a path or process output.
+   *
+   * It is here because the category alone named a state without a cause, so an
+   * operator reading the Sessions view could not tell a missing binary from an
+   * incompatible one, and neither could a bug report.
+   */
+  readonly diagnostic?: string;
 }
 
 export interface NativePurposeReadiness {
@@ -487,13 +498,38 @@ function configuredIrPath(irPath: string): boolean {
   try { return statSync(irPath).isFile(); } catch { return false; }
 }
 
+/**
+ * Why a vendor's preflight rejected the producer. Each is a fixed sentence
+ * chosen here — none is built from a path, a command, or process output — so
+ * `nativeSessionLaunchFailure` may pass them through unchanged.
+ */
+const NATIVE_PRODUCER_REASONS: ReadonlySet<string> = new Set([
+  "the Warble binary could not be resolved",
+  "the Warble binary could not be identified",
+  "the Warble binary could not be started",
+  "the Warble binary did not respond",
+  "the Warble binary rejected the dispatch probe",
+  "the Warble binary does not support the native session flags this build requires",
+  "the Warble binary could not be started for this vendor",
+  "the Warble binary did not respond for this vendor",
+  "Warble could not dispatch this profile for this vendor",
+  "Warble emitted a launch spec this build cannot run",
+  "the preflight could not create its temporary workspace",
+]);
+
 /** A deliberately small public classification; never expose process or filesystem detail. */
 export function nativeSessionLaunchFailure(error: unknown): string {
   const message = error instanceof Error ? error.message : "";
   if (message === "native MCP URL is invalid") return message;
   if (message === "native session workspace is unavailable") return message;
   if (message === "native session materialization prerequisites are unavailable") return message;
-  if (message === "native Wren runtime is unavailable") return "native session materialization prerequisites are unavailable";
+  // Every NativeWrenRuntimeError message is `native Wren runtime is unavailable: `
+  // followed by one of that resolver's fixed literals; not one of them
+  // interpolates a path or process output, so the whole family may pass through.
+  // Matching the bare sentence, as this did, stopped matching anything once the
+  // resolver started naming which link in the chain broke.
+  if (message.startsWith("native Wren runtime is unavailable")) return message;
+  if (NATIVE_PRODUCER_REASONS.has(message)) return message;
   if (message === "native session producer is incompatible") return message;
   if (message === "native session launch artifacts are unavailable" || message === "native session launch specification is invalid" || message === "native session launch specification is incompatible") return "native session launch artifacts are unavailable";
   if (message === "native session launch paths are unavailable" || message === "native session launch paths are outside its server-owned scope") return "native session launch artifacts are unavailable";
@@ -528,13 +564,31 @@ export interface NativeProducerIdentity {
   readonly identity: string;
 }
 
+/** One vendor's own preflight outcome. A vendor nobody selected must not speak for one that was. */
+export interface NativeProducerVendorProbe {
+  readonly available: boolean;
+  /** Browser-safe: a fixed sentence, never a path or process output. */
+  readonly reason?: string;
+  /** Fixed fields plus a content digest; never a command path or process output. */
+  readonly diagnostic: string;
+}
+
 export interface NativeProducerPreflightResult {
+  /** True when at least one vendor is usable — never a verdict on the vendor in use. */
   readonly available: boolean;
   readonly category?: typeof NATIVE_PRODUCER_CATEGORY;
   /** Server-only resolved executable and content identity for the eventual launch. */
   readonly producer?: NativeProducerIdentity;
   /** Server-only: fixed fields plus a content digest; never a command path or process output. */
   readonly diagnostic: string;
+  /**
+   * Per-vendor outcomes. The preflight probes every vendor so that readiness can
+   * answer for the one actually configured: the Codex leg requires a native Wren
+   * runtime the resolver can trace to the server's own repository, which an
+   * installed package can never satisfy, and a single boolean over both vendors
+   * let that failure take Claude down with it.
+   */
+  readonly vendors: Readonly<Record<NativeVendor, NativeProducerVendorProbe>>;
 }
 
 interface NativeProbeProcessResult {
@@ -545,18 +599,33 @@ interface NativeProbeProcessResult {
   readonly spawnFailed: boolean;
 }
 
+function producerDiagnostic(identity: string | undefined, phase: string, detail: string): string {
+  return `identity=${identity ?? "unavailable"} phase=${phase} ${detail}`;
+}
+
+/** A failure before any vendor-specific work rules out every vendor, for the same reason. */
+function everyVendorUnavailable(probe: NativeProducerVendorProbe): Record<NativeVendor, NativeProducerVendorProbe> {
+  const vendors = {} as Record<NativeVendor, NativeProducerVendorProbe>;
+  for (const vendor of NATIVE_PROBE_TARGETS) vendors[vendor] = probe;
+  return vendors;
+}
+
+/** A shared-phase outcome: it decided nothing vendor-specific, so it speaks for all of them. */
 function nativeProducerResult(
   available: boolean,
   identity: string | undefined,
   phase: string,
   detail: string,
+  reason: string,
   producer?: NativeProducerIdentity,
 ): NativeProducerPreflightResult {
+  const diagnostic = producerDiagnostic(identity, phase, detail);
   return {
     available,
     ...(available ? {} : { category: NATIVE_PRODUCER_CATEGORY }),
-    ...(available && producer ? { producer } : {}),
-    diagnostic: `identity=${identity ?? "unavailable"} phase=${phase} ${detail}`,
+    ...(producer ? { producer } : {}),
+    diagnostic,
+    vendors: everyVendorUnavailable(available ? { available: true, diagnostic } : { available: false, reason, diagnostic }),
   };
 }
 
@@ -643,21 +712,29 @@ export async function probeNativeSessionProducer(input: {
   readonly wrenShim?: string;
 }): Promise<NativeProducerPreflightResult> {
   const executable = localExecutablePath(input.warbleBin);
-  if (!executable) return nativeProducerResult(false, undefined, "resolve", "result=binary_not_found");
+  if (!executable) return nativeProducerResult(false, undefined, "resolve", "result=binary_not_found", "the Warble binary could not be resolved");
   const identity = executableIdentity(executable);
-  if (!identity) return nativeProducerResult(false, undefined, "identity", "result=identity_unavailable");
+  if (!identity) return nativeProducerResult(false, undefined, "identity", "result=identity_unavailable", "the Warble binary could not be identified");
   const producer = { executable, identity };
   const help = await runNativeProbe(executable, ["dispatch", "--help"]);
-  if (help.spawnFailed) return nativeProducerResult(false, identity, "dispatch_help", "result=spawn_failed");
-  if (help.timedOut) return nativeProducerResult(false, identity, "dispatch_help", "result=timed_out");
-  if (help.exitCode !== 0) return nativeProducerResult(false, identity, "dispatch_help", `result=exit_code_${help.exitCode ?? "signal"}`);
+  if (help.spawnFailed) return nativeProducerResult(false, identity, "dispatch_help", "result=spawn_failed", "the Warble binary could not be started");
+  if (help.timedOut) return nativeProducerResult(false, identity, "dispatch_help", "result=timed_out", "the Warble binary did not respond");
+  if (help.exitCode !== 0) return nativeProducerResult(false, identity, "dispatch_help", `result=exit_code_${help.exitCode ?? "signal"}`, "the Warble binary rejected the dispatch probe");
   const missingMarkers = NATIVE_HELP_MARKERS.filter((marker) => !help.output.includes(marker));
-  if (missingMarkers.length > 0) return nativeProducerResult(false, identity, "dispatch_help", `result=missing_markers_${missingMarkers.join(",")}`);
+  if (missingMarkers.length > 0) return nativeProducerResult(false, identity, "dispatch_help", `result=missing_markers_${missingMarkers.join(",")}`, "the Warble binary does not support the native session flags this build requires");
 
-  for (const purpose of NATIVE_PURPOSES) {
-    const irPath = input.irPaths[purpose];
-    if (!irPath || !configuredIrPath(irPath)) continue;
-    for (const vendor of NATIVE_PROBE_TARGETS) {
+  // Vendor is the outer loop on purpose. It used to be the inner one, and the
+  // first failing pair returned for the whole preflight — so a Codex rejection
+  // reported the producer incompatible even for a Claude-only install, which is
+  // exactly what an installed package produces.
+  const vendors = {} as Record<NativeVendor, NativeProducerVendorProbe>;
+  for (const vendor of NATIVE_PROBE_TARGETS) {
+    let outcome: NativeProducerVendorProbe = { available: true, diagnostic: producerDiagnostic(identity, `complete_${vendor}`, "result=compatible") };
+    for (const purpose of NATIVE_PURPOSES) {
+      const irPath = input.irPaths[purpose];
+      if (!irPath || !configuredIrPath(irPath)) continue;
+      const phase = `dispatch_${purpose}_${vendor}`;
+      const fail = (detail: string, reason: string): NativeProducerVendorProbe => ({ available: false, reason, diagnostic: producerDiagnostic(identity, phase, detail) });
       let root: string | undefined;
       try {
         root = mkdtempSync(path.join(os.tmpdir(), "genbi-native-preflight-"));
@@ -677,24 +754,42 @@ export async function probeNativeSessionProducer(input: {
         writeFileSync(scopePath, JSON.stringify({ version: "3", kind: NATIVE_DISPATCH_REGISTRY[purpose].scopeKind, scope_id: scopeId, cwd: outputRoot, entry: nativeEntryFor(purpose, vendor), ...(purpose === "setup" ? { bootstrap_root: bootstrapRoot } : {}), ...(wrenRuntime ? { wren_runtime: wrenRuntime } : {}), ...(binding ? { binding } : {}) }), { encoding: "utf8", mode: 0o600, flag: "wx" });
         writeFileSync(mcpPath, JSON.stringify({ version: "1", url: "http://127.0.0.1:0/api/native-sessions/mcp", credential: "native-preflight-nonsecret" }), { encoding: "utf8", mode: 0o600, flag: "wx" });
         const dispatched = await runNativeProbe(executable, ["dispatch", irPath, "--target", targetForProvider(vendor), "--purpose", purpose, "--native-scope", scopePath, "--native-mcp", mcpPath, "--out", outputRoot]);
-        const phase = `dispatch_${purpose}_${vendor}`;
-        if (dispatched.spawnFailed) return nativeProducerResult(false, identity, phase, "result=spawn_failed");
-        if (dispatched.timedOut) return nativeProducerResult(false, identity, phase, "result=timed_out");
-        if (dispatched.exitCode !== 0) return nativeProducerResult(false, identity, phase, `result=exit_code_${dispatched.exitCode ?? "signal"}`);
+        if (dispatched.spawnFailed) { outcome = fail("result=spawn_failed", "the Warble binary could not be started for this vendor"); break; }
+        if (dispatched.timedOut) { outcome = fail("result=timed_out", "the Warble binary did not respond for this vendor"); break; }
+        if (dispatched.exitCode !== 0) { outcome = fail(`result=exit_code_${dispatched.exitCode ?? "signal"}`, "Warble could not dispatch this profile for this vendor"); break; }
         try {
           readNativeLaunchSpec(outputRoot, purpose, vendor, scopeId, undefined, { version: "1", url: "http://127.0.0.1:0/api/native-sessions/mcp", credential: "native-preflight-nonsecret" });
         } catch {
-          return nativeProducerResult(false, identity, phase, "result=launch_spec_incompatible");
+          outcome = fail("result=launch_spec_incompatible", "Warble emitted a launch spec this build cannot run");
+          break;
         }
       } catch (error) {
-        if (error instanceof NativeWrenRuntimeError) return nativeProducerResult(false, identity, `dispatch_${purpose}_${vendor}`, `result=wren_runtime_unavailable (${error.message})`);
-        return nativeProducerResult(false, identity, `dispatch_${purpose}_${vendor}`, "result=preflight_workspace_unavailable");
+        outcome = error instanceof NativeWrenRuntimeError
+          ? fail(`result=wren_runtime_unavailable (${error.message})`, error.message)
+          : fail("result=preflight_workspace_unavailable", "the preflight could not create its temporary workspace");
+        break;
       } finally {
         if (root) rmSync(root, { recursive: true, force: true });
       }
     }
+    vendors[vendor] = outcome;
   }
-  return nativeProducerResult(true, identity, "complete", "result=compatible", producer);
+
+  const usable = NATIVE_PROBE_TARGETS.filter((vendor) => vendors[vendor].available);
+  const available = usable.length > 0;
+  // When nothing is usable the summary must still carry each vendor's own cause;
+  // collapsing them to "no_compatible_vendor" would lose the only line that says
+  // what actually broke.
+  const vendorResults = NATIVE_PROBE_TARGETS
+    .map((vendor) => `${vendor}=${vendors[vendor].diagnostic.split(" result=")[1] ?? "unknown"}`)
+    .join(" ");
+  return {
+    available,
+    ...(available ? {} : { category: NATIVE_PRODUCER_CATEGORY }),
+    producer,
+    diagnostic: producerDiagnostic(identity, "complete", available ? `result=compatible_${usable.join("+")}` : `result=no_compatible_vendor ${vendorResults}`),
+    vendors,
+  };
 }
 
 function parseNativeSetupRecoveryReport(value: unknown): NativeSetupRecoveryReport {
@@ -1276,6 +1371,10 @@ export class NativeSessionService {
         ? nativeSessionStateBaseAvailableForProject(this.materializationState(), configuredRoot)
         : purpose === "setup" && projectAvailable && nativeSessionStateBaseAvailable(this.materializationState());
       const workspaceUnavailable = !projectAvailable || !stateAvailable;
+      // Only the configured vendor's own probe may block this purpose. Probing
+      // both and collapsing them into one boolean let an unselected vendor veto
+      // the selected one.
+      const selectedProducer = producer && dispatch ? producer.vendors[dispatch.provider] : undefined;
       const reason = runtimeCorrection
         ?? (!dispatch && !legacyFixture
         ? "native sessions require a saved Runtime & authentication binding"
@@ -1283,8 +1382,8 @@ export class NativeSessionService {
         ? purpose === "setup" ? "native setup sessions require a workspace root" : "native sessions require a current bound project"
         : workspaceUnavailable
           ? "native session workspace is unavailable"
-          : producer && !producer.available
-            ? "native session producer is incompatible"
+          : selectedProducer && !selectedProducer.available
+            ? selectedProducer.reason ?? "native session producer is incompatible"
             : !irPath || !(this.options.dispatch !== undefined || configuredIrPath(irPath)) || !legacyProducerAvailable()
             ? "native session materialization prerequisites are unavailable"
             : mcpReadiness && !mcpReadiness.available
@@ -1297,6 +1396,16 @@ export class NativeSessionService {
           ? `the ${executable} interactive CLI is not available on this machine`
           : undefined);
       const vendorReadiness = {} as Record<NativeVendor, NativeVendorReadiness>;
+      // Production readiness now reports every vendor, so the UI can say which
+      // one is unusable and why instead of only that "the producer" is.
+      if (!legacyFixture && producer) for (const vendor of NATIVE_VENDORS) {
+        const probe = producer.vendors[vendor];
+        vendorReadiness[vendor] = probe?.available === false
+          ? { available: false, reason: probe.reason ?? "native session producer is incompatible" }
+          : !executableAvailable(vendor)
+            ? { available: false, reason: `the ${vendor === "claude" ? "claude" : "codex"} interactive CLI is not available on this machine` }
+            : { available: true };
+      }
       if (legacyFixture) for (const vendor of NATIVE_VENDORS) {
         const legacyExecutable = vendor === "claude" ? "claude" : "codex";
         vendorReadiness[vendor] = reason
@@ -1310,7 +1419,16 @@ export class NativeSessionService {
         scopeKind,
         profile: definition.profile,
         ...(dispatch ? { target: dispatch.target, targetLabel: dispatch.targetLabel } : {}),
-        ...(producer ? { producer: producer.available ? { available: true } : { available: false, category: NATIVE_PRODUCER_CATEGORY } } : {}),
+        // With a vendor selected this answers for that vendor; with none selected
+        // it falls back to "is any vendor usable", rather than claiming health
+        // no vendor could back.
+        ...(producer
+          ? {
+              producer: (selectedProducer ? selectedProducer.available : producer.available)
+                ? { available: true, diagnostic: (selectedProducer ?? producer).diagnostic }
+                : { available: false, category: NATIVE_PRODUCER_CATEGORY, diagnostic: (selectedProducer ?? producer).diagnostic },
+            }
+          : {}),
         available: legacyAvailable,
         ...(unavailable ? { reason: unavailable } : {}),
         vendors: vendorReadiness,
@@ -1356,7 +1474,10 @@ export class NativeSessionService {
       ? configuredIr
       : await this.options.resolveDispatchIr(purpose, binding);
     const producer = this.legacyFixtureMode() ? undefined : await this.productionProducerPreflight();
-    if (producer && (!producer.available || !producer.producer)) throw new InteractiveLaunchError("native session producer is incompatible");
+    const launchProducer = producer ? producer.vendors[dispatchDefinition.provider] : undefined;
+    if (producer && (!launchProducer?.available || !producer.producer)) {
+      throw new InteractiveLaunchError(launchProducer?.reason ?? "native session producer is incompatible");
+    }
     if (producer?.producer) assertNativeProducerIdentity(producer.producer);
     const scopeId = resumed?.row.scopeId ?? newId("native-scope"); const id = resumed?.row.id ?? newId("native-session"); const capability = randomUUID();
     const recoveryCapability = purpose === "setup" ? randomUUID() : undefined;

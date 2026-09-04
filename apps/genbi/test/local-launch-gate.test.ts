@@ -25,7 +25,7 @@ function readinessFixture(configured = false) {
     ...(configured ? { target: 'claude-code:interactive', targetLabel: 'Claude CLI' } : {}),
     available: configured && scopeKind === 'bound_project',
     ...(!configured ? { reason: runtimeBindingRequiredReason } : scopeKind === 'bootstrap' ? { reason: 'native setup sessions require a workspace root' } : {}),
-    vendors: {},
+    vendors: { claude: { available: true }, codex: { available: true } },
     producer: { available: true },
   });
   return {
@@ -223,7 +223,10 @@ describe("local GenBI contract check", () => {
       [readinessFixture(true), 'unconfigured Runtime'],
       [{ runtime: { configured: false, generation: 0 } }, 'purposes are malformed'],
       [{ ...baseline, purposes: { ...baseline.purposes, setup: { ...baseline.purposes.setup, reason: 'wrong reason' } } }, 'must be unavailable until Runtime authentication is saved'],
-      [{ ...baseline, purposes: { ...baseline.purposes, analysis: { ...baseline.purposes.analysis, vendors: { claude: { available: true } } } } }, 'vendors projection is malformed'],
+      [{ ...baseline, purposes: { ...baseline.purposes, analysis: { ...baseline.purposes.analysis, vendors: { claude: { available: true } } } } }, 'vendor codex readiness is malformed'],
+      // A vendor this build ships must not be reported broken, even when the
+      // vendor a user would select is fine — that is the whole point of the gate.
+      [{ ...baseline, purposes: { ...baseline.purposes, analysis: { ...baseline.purposes.analysis, vendors: { claude: { available: true }, codex: { available: false, reason: 'native Wren runtime is unavailable: walked past the filesystem root looking for a repository' } } } } }, 'vendor codex is unavailable: native Wren runtime is unavailable'],
       [{ ...baseline, purposes: { ...baseline.purposes, analysis: { ...baseline.purposes.analysis, vendors: [] } } }, 'vendors projection is malformed'],
       [{ ...baseline, purposes: { ...baseline.purposes, analysis: { ...baseline.purposes.analysis, vendors: null } } }, 'vendors projection is malformed'],
       [{ ...baseline, purposes: { ...baseline.purposes, analysis: { ...baseline.purposes.analysis, producer: { available: false, category: 'native_session_producer_incompatible' } } } }, 'producer is incompatible'],

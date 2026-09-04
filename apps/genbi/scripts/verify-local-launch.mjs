@@ -199,7 +199,17 @@ async function probeNativeSessionProducer({ bin, irPaths }) {
     irPaths,
     ...(process.env.WREN_HARNESS_WREN_SHIM !== undefined ? { wrenShim: process.env.WREN_HARNESS_WREN_SHIM } : {}),
   });
-  if (!result?.available) throw new GateError("contract", `Warble native producer preflight failed for the selected runtime closure (${result?.diagnostic ?? "incompatible"})`);
+  // This gate claims evidence for every purpose x vendor below, so every vendor
+  // must pass. Readiness deliberately answers only for the vendor a user
+  // configured; a developer gate that did the same would let a Codex regression
+  // through whenever Claude happened to work.
+  const unusableVendors = nativeVendors.filter((vendor) => result?.vendors?.[vendor]?.available !== true);
+  if (!result?.available || unusableVendors.length > 0) {
+    const detail = unusableVendors.length > 0
+      ? unusableVendors.map((vendor) => `${vendor}: ${result?.vendors?.[vendor]?.diagnostic ?? "incompatible"}`).join("; ")
+      : result?.diagnostic ?? "incompatible";
+    throw new GateError("contract", `Warble native producer preflight failed for the selected runtime closure (${detail})`);
+  }
   return { available: true, evidence: nativePurposes.flatMap((purpose) => nativeVendors.map((vendor) => `dispatch:native(${purpose}/${vendor})`)) };
 }
 
@@ -422,7 +432,15 @@ function assertLiveReadiness(readiness) {
     const expected = livePurposeContracts[purpose];
     const value = purposes[purpose];
     assertReadiness(isRecord(value) && value.scopeKind === expected.scopeKind && value.profile === expected.profile && typeof value.available === "boolean", `BFF native purpose ${purpose} readiness is malformed`);
-    assertReadiness(isPlainEmptyObject(value.vendors), `BFF native purpose ${purpose} vendors projection is malformed`);
+    // Production readiness now reports one entry per vendor. The gate checks
+    // them all: it is verifying the surfaces this build ships, not the one a
+    // particular user selected.
+    assertReadiness(isRecord(value.vendors), `BFF native purpose ${purpose} vendors projection is malformed`);
+    for (const vendor of nativeVendors) {
+      const vendorValue = value.vendors[vendor];
+      assertReadiness(isRecord(vendorValue) && typeof vendorValue.available === "boolean", `BFF native purpose ${purpose} vendor ${vendor} readiness is malformed`);
+      assertReadiness(vendorValue.available === true, `BFF native purpose ${purpose} vendor ${vendor} is unavailable: ${vendorValue.reason ?? "no reason given"}`);
+    }
     assertReadiness(isRecord(value.producer) && value.producer.available === true && !Object.hasOwn(value.producer, "category"), `BFF native purpose ${purpose} producer is incompatible`);
     assertReadiness(value.reason === undefined || typeof value.reason === "string", `BFF native purpose ${purpose} reason is malformed`);
     assertReadiness(!Object.hasOwn(value, "target") && !Object.hasOwn(value, "targetLabel"), `BFF native purpose ${purpose} unexpectedly selects a target`);

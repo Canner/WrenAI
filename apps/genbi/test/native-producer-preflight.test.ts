@@ -101,9 +101,9 @@ function irPaths(dir: string) {
   return { analysis: path.join(dir, "analysis.json"), setup: path.join(dir, "setup.json"), context_enrichment: path.join(dir, "context.json") } as const;
 }
 
-function productionService(dir: string, producer: string, wrenShim: string, terminalManager?: () => Promise<InteractiveTerminalManager>) {
+function productionService(dir: string, producer: string, wrenShim: string, terminalManager?: () => Promise<InteractiveTerminalManager>, subscriptionProvider: "claude" | "codex" = "codex") {
   const store = new Store(":memory:");
-  store.setRuntimeSettings({ ...store.getRuntimeSettings(), subscriptionProvider: "codex", subscriptionDriverModel: "driver", tierModels: [{ tier: "cheap", model: "cheap" }, { tier: "strong", model: "strong" }] });
+  store.setRuntimeSettings({ ...store.getRuntimeSettings(), subscriptionProvider, subscriptionDriverModel: "driver", tierModels: subscriptionProvider === "claude" ? [{ tier: "cheap", model: "haiku" }, { tier: "strong", model: "sonnet" }] : [{ tier: "cheap", model: "cheap" }, { tier: "strong", model: "strong" }] });
   const binding = store.activateEnrichmentBinding(resolveEnrichmentBinding(dir));
   const stateParent = mkdtempSync(path.join(tmpdir(), "genbi-native-preflight-state-"));
   dirs.push(stateParent);
@@ -156,7 +156,8 @@ describe("native producer compatibility preflight", () => {
     const wrenShim = runtimeFixture(dir);
     const producer = fakeProducer(dir, "compatible");
     const result = await probeNativeSessionProducer({ warbleBin: producer, irPaths: irPaths(dir), wrenShim });
-    expect(result).toMatchObject({ available: true, diagnostic: expect.stringMatching(/^identity=sha256:[a-f0-9]{64} phase=complete result=compatible$/) });
+    expect(result).toMatchObject({ available: true, diagnostic: expect.stringMatching(/^identity=sha256:[a-f0-9]{64} phase=complete result=compatible_claude\+codex$/) });
+    expect(result.vendors).toMatchObject({ claude: { available: true }, codex: { available: true } });
     expect(readFileSync(path.join(dir, "producer-compatible.calls"), "utf8").trim().split("\n").sort()).toEqual([
       "claude-code:interactive:analysis",
       "claude-code:interactive:context_enrichment",
@@ -224,8 +225,12 @@ describe("native producer compatibility preflight", () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const { service, store } = productionService(dir, stale, wrenShim);
     const readiness = await service.readiness();
-    expect(readiness.purposes.analysis).toEqual(expect.objectContaining({ available: false, reason: "native session producer is incompatible", producer: { available: false, category: "native_session_producer_incompatible" } }));
-    await expect(service.openOrCreate({ purpose: "setup" })).rejects.toThrow("native session producer is incompatible");
+    expect(readiness.purposes.analysis).toEqual(expect.objectContaining({
+      available: false,
+      reason: "the Warble binary does not support the native session flags this build requires",
+      producer: { available: false, category: "native_session_producer_incompatible", diagnostic: expect.stringContaining("missing_markers") },
+    }));
+    await expect(service.openOrCreate({ purpose: "setup" })).rejects.toThrow("the Warble binary does not support the native session flags this build requires");
     expect(store.listNativeSessions()).toEqual([]);
     expect(warning).toHaveBeenCalledWith(expect.stringMatching(/identity=sha256:[a-f0-9]{64} phase=dispatch_help result=missing_markers_/));
     expect(warning.mock.calls.flat().join(" ")).not.toMatch(/never-log-this|producer-stale|\/private|credential/i);
@@ -238,32 +243,69 @@ describe("native producer compatibility preflight", () => {
     });
     const response = await app.request("/api/native-sessions/readiness");
     expect(response.status).toBe(200);
-    const body = await response.json() as { purposes: { analysis: { producer?: { category?: string } } } };
+    const body = await response.json() as { purposes: { analysis: { producer?: { category?: string; diagnostic?: string } } } };
     expect(body.purposes.analysis.producer?.category).toBe("native_session_producer_incompatible");
+    // The diagnostic is now sent, so the redaction guard below is what keeps it
+    // honest: it may carry fixed phase/result tokens and a content digest, and
+    // still no path, process output, or credential.
+    expect(body.purposes.analysis.producer?.diagnostic).toMatch(/^identity=sha256:[a-f0-9]{64} phase=dispatch_help result=missing_markers_/);
     expect(JSON.stringify(body)).not.toMatch(/never-log-this|producer-stale|\/private|credential/i);
     const launch = await app.request("/api/native-sessions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ purpose: "setup" }) });
     expect(launch.status).toBe(409);
-    expect(await launch.json()).toEqual({ error: "native session producer is incompatible" });
+    expect(await launch.json()).toEqual({ error: "the Warble binary does not support the native session flags this build requires" });
     expect(store.listNativeSessions()).toEqual([]);
     warning.mockRestore();
     store.close();
   });
 
-  it("marks readiness incompatible when the server-owned Wren chain rotates", async () => {
+  it("blocks Codex when the server-owned Wren chain rotates, and says which link broke", async () => {
     const dir = fixtureDir();
     const wrenShim = runtimeFixture(dir);
     rmSync(wrenShim);
     writeFileSync(wrenShim, "not a server-owned shim\n");
     const producer = fakeProducer(dir, "compatible");
-    await expect(probeNativeSessionProducer({ warbleBin: producer, irPaths: irPaths(dir), wrenShim })).resolves.toMatchObject({
-      available: false, category: "native_session_producer_incompatible", diagnostic: expect.stringContaining("wren_runtime_unavailable"),
-    });
+    const probe = await probeNativeSessionProducer({ warbleBin: producer, irPaths: irPaths(dir), wrenShim });
+    // Only the Codex leg consumes the Wren runtime, so only the Codex leg falls.
+    expect(probe.vendors.codex).toMatchObject({ available: false, reason: expect.stringContaining("native Wren runtime is unavailable") });
+    expect(probe.vendors.claude.available).toBe(true);
+
     const { service, store } = productionService(dir, producer, wrenShim);
     await expect(service.readiness()).resolves.toMatchObject({
-      purposes: { analysis: { available: false, reason: "native session producer is incompatible", producer: { available: false, category: "native_session_producer_incompatible" } } },
+      purposes: {
+        analysis: {
+          available: false,
+          reason: expect.stringContaining("native Wren runtime is unavailable"),
+          producer: { available: false, category: "native_session_producer_incompatible", diagnostic: expect.stringContaining("wren_runtime_unavailable") },
+        },
+      },
     });
-    await expect(service.openOrCreate({ purpose: "analysis" })).rejects.toThrow("native session producer is incompatible");
+    await expect(service.openOrCreate({ purpose: "analysis" })).rejects.toThrow("native Wren runtime is unavailable");
     expect(store.listNativeSessions()).toEqual([]);
+    store.close();
+  });
+
+  /**
+   * The shape an installed package produces: the Codex leg cannot resolve a
+   * Wren runtime it can trace to the server's own repository, and there is no
+   * repository to trace to. Claude needs none of that, and must not inherit the
+   * refusal — a single boolean over both vendors is what made it inherit it.
+   */
+  it("leaves Claude usable when only the Codex leg cannot resolve a Wren runtime", async () => {
+    const dir = fixtureDir();
+    const wrenShim = runtimeFixture(dir);
+    rmSync(wrenShim);
+    writeFileSync(wrenShim, "not a server-owned shim\n");
+    const producer = fakeProducer(dir, "compatible");
+
+    const { service, store } = productionService(dir, producer, wrenShim, undefined, "claude");
+    const readiness = await service.readiness();
+    expect(readiness.purposes.analysis.available).toBe(true);
+    expect(readiness.purposes.analysis.reason).toBeUndefined();
+    expect(readiness.purposes.analysis.producer).toMatchObject({ available: true });
+    // The unusable vendor is still reported, with its own cause, rather than
+    // being hidden because the configured one happens to work.
+    expect(readiness.purposes.analysis.vendors.codex).toMatchObject({ available: false, reason: expect.stringContaining("native Wren runtime is unavailable") });
+    expect(readiness.purposes.analysis.vendors.claude).toMatchObject({ available: true });
     store.close();
   });
 });

@@ -1713,7 +1713,9 @@ describe("native session persistence", () => {
     writeFileSync(path.join(dir, "missing-ir.json"), "{}");
     const store = new Store(":memory:");
     const service = new NativeSessionService({ store, terminalManager: async () => { throw new Error("not reached"); }, getBinding: () => binding, workspaceRoot: undefined, materializationState: state, irPaths: { analysis: path.join(dir, "missing-ir.json"), setup: undefined, context_enrichment: undefined }, warbleBin: path.join(dir, "missing-warble") });
-    await expect(service.create({ purpose: "analysis", vendor: "codex" })).rejects.toThrow(/producer is incompatible/);
+    // The launch still fails closed; it now names which link broke instead of
+    // reporting the whole producer incompatible.
+    await expect(service.create({ purpose: "analysis", vendor: "codex" })).rejects.toThrow("the Warble binary could not be resolved");
     expect(service.list()).toEqual([]);
     store.close();
   });
