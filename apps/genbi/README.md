@@ -79,19 +79,6 @@ and says so plainly if it finds none. `WREN_HARNESS_WORKSPACE_ROOT` is the
 directory Setup scaffolds new projects into — the one thing with no sensible
 default. Everything else the BFF needs it resolves itself.
 
-Three things are easy to get wrong, and each leaves you with an app that looks
-like it is working:
-
-- **`VITE_BFF_URL` is what connects the two processes.** Without it the SPA calls
-  no BFF at all: it renders fixtures, shows a context and a harness as though they
-  were already configured, and answers nothing. Setting it also installs Vite's
-  `/api` proxy, so there is no CORS problem to solve.
-- **`pnpm preview` is not this.** It serves the built SPA with no proxy and no BFF
-  — the fixture case above, with a real BFF running beside it, untouched. It is
-  useful for looking at the UI, not for using the app.
-- **Build before starting the BFF.** `start:bff` runs the compiled server out of
-  `dist-server/`, so a stale or absent build is what you will get.
-
 [RUNNING.md](./RUNNING.md) covers the rest: pointing at a Warble build of your
 own, verifying the tuple, and the Codex situation.
 
@@ -106,7 +93,7 @@ exposes only the passthroughs `pnpm genbi:build`, `pnpm genbi:test` and
 cd apps/genbi
 pnpm build      # tsc -b (frontend typecheck) && vite build (→ dist/) && tsc -p tsconfig.server.json (server + harness → dist-server/)
 pnpm start:bff  # requires the BFF runtime env — see RUNNING.md
-pnpm preview    # serve the built SPA — fixture-only, calls no BFF (see RUNNING.md to run it live)
+pnpm preview    # serve the built SPA on its own — no BFF, no proxy, fixture data only
 ```
 
 ## Test & typecheck
