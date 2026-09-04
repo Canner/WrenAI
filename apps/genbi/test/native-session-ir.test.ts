@@ -94,6 +94,8 @@ describe("resolveDispatchIr wiring", () => {
     expect(bin).toMatch(/resolveDispatchIr: async \(purpose, binding\)/);
     expect(bin).toMatch(/compileProfile\(\{ profileSource, userProject: binding\.path/);
     expect(bin).toMatch(/compileRawProfile\(\{ profileSource/);
+    expect(bin).toMatch(/const nativeRuntimeHost = new RuntimeHost\(/);
+    expect(bin).toMatch(/runtimeHost: nativeRuntimeHost/);
     expect((bin.match(/new NativeSessionService\(/g) ?? []).length).toBe(1);
   });
 });

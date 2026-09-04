@@ -950,6 +950,7 @@ export async function dispatchNativeArtifacts(input: NativeDispatchInput): Promi
 }
 
 export class NativeSessionService {
+  private readonly runtimeHost: RuntimeHost;
   private readonly sessions = new Map<string, InteractiveTerminalSession>();
   private readonly leaseTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** Open/reconnect coalescing only lasts while a matching launch is in flight. */
@@ -966,6 +967,13 @@ export class NativeSessionService {
   private readonly startSeparateReplayLimit: number;
   private fixtureMaterializationState: NativeSessionStateBase | undefined;
   constructor(private readonly options: NativeSessionServiceOptions) {
+    this.runtimeHost = options.runtimeHost ?? new RuntimeHost({
+      // Compatibility default for server-side unit seams only. The real BFF
+      // composes and injects its one policy-owned host in `bin.ts`.
+      selected: "local",
+      deployment: "development",
+      localAvailable: options.terminalHostAvailable ?? (async () => true),
+    });
     this.idleTtlMs = options.idleTtlMs ?? options.postClaimDetachGraceMs ?? NATIVE_SESSION_IDLE_TTL_MS;
     if (!Number.isSafeInteger(this.idleTtlMs) || this.idleTtlMs <= 0) throw new RangeError("native session idle TTL must be a positive integer");
     this.startSeparateReplayTtlMs = options.startSeparateReplayTtlMs ?? START_SEPARATE_REPLAY_TTL_MS;
@@ -1005,6 +1013,11 @@ export class NativeSessionService {
     const log = result.available ? console.info : console.warn;
     log(`[native-sessions] producer preflight ${result.diagnostic}`);
     return result;
+  }
+
+  private async assertSelectedRuntimeReady(): Promise<void> {
+    const selected = (await this.runtimeHost.probe()).selectedReadiness;
+    if (selected.state !== "ready") throw new InteractiveLaunchError(selected.message);
   }
 
   /**
@@ -1365,12 +1378,10 @@ export class NativeSessionService {
       ? this.options.executableAvailable(vendor)
       : interactiveExecutableAvailable(vendor);
     const hostAvailable = await terminalHostAvailable();
-    const runtimeHost = this.options.runtimeHost ?? new RuntimeHost({
-      selected: "local",
-      deployment: "development",
-      localAvailable: async () => hostAvailable,
-    });
-    const runtimeHostReadiness = await runtimeHost.probe();
+    const runtimeHostReadiness = await this.runtimeHost.probe();
+    const selectedRuntimeUnavailable = runtimeHostReadiness.selectedReadiness.state === "ready"
+      ? undefined
+      : runtimeHostReadiness.selectedReadiness.message;
     const mcpReadiness = this.options.artifactService?.readiness();
     const runtime = this.options.store.getNativeRuntimeBinding();
     const runtimeCorrection = this.options.store.hasExplicitRuntimeSettings()
@@ -1399,8 +1410,7 @@ export class NativeSessionService {
       // both and collapsing them into one boolean let an unselected vendor veto
       // the selected one.
       const selectedProducer = producer && dispatch ? producer.vendors[dispatch.provider] : undefined;
-      const reason = runtimeCorrection
-        ?? (!dispatch && !legacyFixture
+      const sharedReason = !dispatch && !legacyFixture
         ? "native sessions require a saved Runtime & authentication binding"
         : !cwd
         ? purpose === "setup" ? "native setup sessions require a workspace root" : "native sessions require a current bound project"
@@ -1412,7 +1422,8 @@ export class NativeSessionService {
             ? "native session materialization prerequisites are unavailable"
             : mcpReadiness && !mcpReadiness.available
               ? mcpReadiness.reason
-              : undefined);
+              : undefined;
+      const reason = runtimeCorrection ?? selectedRuntimeUnavailable ?? sharedReason;
       const executable = dispatch?.provider === "claude" ? "claude" : "codex";
       const unavailable = reason ?? (!hostAvailable
         ? "native terminal host cannot spawn local processes on this machine"
@@ -1482,6 +1493,7 @@ export class NativeSessionService {
 
   async create(input: { purpose: NativePurpose; vendor?: NativeVendor }, binding = input.purpose === "setup" ? undefined : this.options.getBinding(), capturedRuntime = this.options.store.getNativeRuntimeBinding(), resumed?: { readonly row: NativeSessionRow; readonly handle: string }): Promise<NativeSessionLaunch> {
     this.assertRuntimeDispatchable();
+    await this.assertSelectedRuntimeReady();
     const purpose = input.purpose;
     const legacyRuntime = !capturedRuntime.configured && input.vendor
       ? { configured: true as const, generation: 0, provider: input.vendor, target: targetForProvider(input.vendor), targetLabel: nativeTargetLabel(input.vendor) }

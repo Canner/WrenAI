@@ -138,6 +138,7 @@ import type { InteractiveTarget, PtyFactory } from "./interactive-terminal.js";
 import { createProbedPtyFactory, ensureDarwinNodePtySpawnHelper } from "./node-pty-host.js";
 import { NativeSessionService } from "./native-sessions.js";
 import { NativeArtifactService } from "./native-artifacts.js";
+import { RuntimeHost } from "./runtime-host/local.js";
 import { initializeNativeSessionStateBase, legacyInteractiveWorkspace, validateLegacyInteractiveWorkspace } from "./native-session-workspace.js";
 import {
   codexModelsForRuntime,
@@ -532,6 +533,16 @@ async function main(): Promise<void> {
     mcpUrl: process.env["WREN_HARNESS_NATIVE_MCP_URL"] ?? nativeMcpUrl,
     getBinding: currentInteractiveBinding,
   });
+  const nativeTerminalHostAvailable = async (): Promise<boolean> => {
+    try { await loadPty(); return true; } catch { return false; }
+  };
+  // This is the sole production composition of the Phase-1 policy. Browser
+  // requests never reach this selection or its executable/policy inputs.
+  const nativeRuntimeHost = new RuntimeHost({
+    selected: "local",
+    deployment: process.env["NODE_ENV"] === "production" ? "production" : "development",
+    localAvailable: nativeTerminalHostAvailable,
+  });
   const nativeSessions = new NativeSessionService({
     store,
     terminalManager,
@@ -559,9 +570,8 @@ async function main(): Promise<void> {
     // name is what the preflight will report as unresolvable, with its reason.
     warbleBin: resolvedWarbleBin ?? "warble",
     ...(process.env["WREN_HARNESS_WREN_SHIM"] !== undefined ? { wrenShim: process.env["WREN_HARNESS_WREN_SHIM"] } : {}),
-    terminalHostAvailable: async () => {
-      try { await loadPty(); return true; } catch { return false; }
-    },
+    terminalHostAvailable: nativeTerminalHostAvailable,
+    runtimeHost: nativeRuntimeHost,
     artifactService: nativeArtifacts,
   });
 

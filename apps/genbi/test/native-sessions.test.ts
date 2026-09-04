@@ -12,6 +12,7 @@ import { sealNativeClaudeResumeHandle, sealNativeResumeHandle, unsealNativeClaud
 import type { NativeSessionServiceOptions } from "../server/native-sessions.js";
 import { NativeArtifactService, NATIVE_MCP_CREDENTIAL_ENV_VAR, NATIVE_MCP_TOOL_NAME } from "../server/native-artifacts.js";
 import { InteractiveTerminalManager } from "../server/interactive-terminal.js";
+import { RuntimeHost } from "../server/runtime-host/local.js";
 import type { PtyFactory } from "../server/interactive-terminal.js";
 
 const dirs: string[] = [];
@@ -1500,7 +1501,7 @@ describe("native session persistence", () => {
     });
     const first = service.startSeparate({ purpose: "setup", vendor: "codex", idempotencyKey: "00000000-0000-4000-8000-000000000010" });
     const second = service.startSeparate({ purpose: "setup", vendor: "codex", idempotencyKey: "00000000-0000-4000-8000-000000000010" });
-    expect(dispatch).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1));
     releaseDispatch();
     await expect(Promise.all([first, second])).resolves.toMatchObject([{ row: { id: expect.any(String) } }, { row: { id: expect.any(String) } }]);
     const [one, two] = await Promise.all([first, second]);
@@ -1591,14 +1592,15 @@ describe("native session persistence", () => {
     let releaseManager!: (manager: InteractiveTerminalManager) => void;
     const managerGate = new Promise<InteractiveTerminalManager>((resolve) => { releaseManager = resolve; });
     const spawn = vi.fn(() => ({ onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} }));
+    const dispatch = vi.fn(async ({ cwd, scope }: { cwd: string; scope: Record<string, unknown> }) => {
+      writeNativeLaunchSpec(cwd, "context_enrichment", "claude", scope);
+    });
     const service = new NativeSessionService({
       store, terminalManager: async () => managerGate, getBinding: () => binding,
-      workspaceRoot: undefined, irPaths: { analysis: undefined, setup: undefined, context_enrichment: path.join(context.dir, "enrich.json") }, warbleBin: "unused", dispatch: async ({ cwd, scope }) => {
-        writeNativeLaunchSpec(cwd, "context_enrichment", "claude", scope);
-      },
+      workspaceRoot: undefined, irPaths: { analysis: undefined, setup: undefined, context_enrichment: path.join(context.dir, "enrich.json") }, warbleBin: "unused", dispatch,
     });
     const launch = service.create({ purpose: "context_enrichment", vendor: "claude" });
-    await Promise.resolve();
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce());
     binding = { ...binding, generation: 8, revision: "sha256:changed" };
     releaseManager(new InteractiveTerminalManager({ spawn }));
     await expect(launch).rejects.toThrow(/bound project changed/);
@@ -1680,10 +1682,46 @@ describe("native session persistence", () => {
     };
     const service = new NativeSessionService(options);
     const hostUnavailable = await service.readiness();
-    expect(hostUnavailable.analysis).toMatchObject({ available: false, vendors: { claude: { available: false, reason: "native terminal host cannot spawn local processes on this machine" }, codex: { available: false, reason: "native terminal host cannot spawn local processes on this machine" } } });
+    expect(hostUnavailable.analysis).toMatchObject({ available: false, vendors: { claude: { available: false, reason: "The local development runtime cannot start a terminal host on this machine." }, codex: { available: false, reason: "The local development runtime cannot start a terminal host on this machine." } } });
     const executableUnavailable = new NativeSessionService({ ...options, terminalHostAvailable: async () => true });
     await expect(executableUnavailable.readiness()).resolves.toMatchObject({ analysis: { available: true, vendors: { claude: { available: false, reason: "the claude interactive CLI is not available on this machine" }, codex: { available: true } } } });
     store.close();
+  });
+
+  it("uses the selected RuntimeHost result to refuse readiness and launch before a local terminal can start", async () => {
+    const { dir, binding } = fixture("analysis", "codex");
+    for (const [runtimeHost, expected] of [
+      [
+        new RuntimeHost({ selected: "local", deployment: "production", localAvailable: () => true }),
+        "The local development runtime is not available in production.",
+      ],
+      [
+        new RuntimeHost({ selected: "codex-app-server", deployment: "development", localAvailable: () => true }),
+        "The Codex app-server runtime has not been provisioned by this GenBI release.",
+      ],
+      [
+        new RuntimeHost({ selected: "claude-sandbox-runtime", deployment: "development", localAvailable: () => true }),
+        "The Claude sandbox runtime has not been provisioned by this GenBI release.",
+      ],
+    ] as const) {
+      const store = new Store(":memory:");
+      const terminalManager = vi.fn(async () => { throw new Error("local terminal must not start"); });
+      const service = new NativeSessionService({
+        store,
+        terminalManager,
+        runtimeHost,
+        getBinding: () => binding,
+        workspaceRoot: undefined,
+        irPaths: { analysis: path.join(dir, "analysis.json"), setup: undefined, context_enrichment: undefined },
+        warbleBin: "unused",
+        dispatch: async () => {},
+      });
+      await expect(service.readiness()).resolves.toMatchObject({ analysis: { available: false, reason: expected } });
+      await expect(service.create({ purpose: "analysis", vendor: "codex" })).rejects.toThrow(expected);
+      expect(terminalManager).not.toHaveBeenCalled();
+      expect(store.listNativeSessions()).toEqual([]);
+      store.close();
+    }
   });
 
   it("marks a BFF-restarted process as restart-only in the browser-safe lifecycle projection", async () => {
