@@ -155,6 +155,12 @@ beforeEach(() => {
   );
 });
 
+// Every test here drives a live SSE stream through the setup page; the file is
+// ~6.6s locally for five of them. On a slower machine any one of them can cross
+// vitest's 5s default — CI has now failed on two different ones — so the room is
+// given to the file rather than chased test by test.
+vi.setConfig({ testTimeout: 15_000 });
+
 describe('Setup page — decision checkpoint (live mode)', () => {
   it('connect: a 409 name_conflict renders the decision card, and "Start clean" streams a fresh turn to completion', async () => {
     const user = userEvent.setup();
@@ -308,7 +314,7 @@ describe('Setup page — decision checkpoint (live mode)', () => {
     await vi.waitFor(() => expect(useSetupStore.getState().steps.find((s) => s.key === 'context')?.state).toBe('done'));
     const sidebar = screen.getByRole('navigation', { name: 'Setup' });
     expect(within(sidebar).getByText('4. Bind profile')).toBeInTheDocument();
-  }, 15_000);
+  });
 
   it('context: the build_context trace is shown only once — the live view while streaming, the persisted (collapsed) copy once done — never both, and no step is left stuck "(running)"', async () => {
     const user = userEvent.setup();
@@ -356,5 +362,5 @@ describe('Setup page — decision checkpoint (live mode)', () => {
     expect(screen.getAllByText('Scanning models')).toHaveLength(1);
     expect(screen.queryByText('(running)')).not.toBeInTheDocument();
     expect(screen.getByText('(done)')).toBeInTheDocument();
-  }, 15_000);
+  });
 });

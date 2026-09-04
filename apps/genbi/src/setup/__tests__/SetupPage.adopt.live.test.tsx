@@ -161,6 +161,11 @@ beforeEach(() => {
   );
 });
 
+// Same shape as the decision live tests: eleven SSE-driven cases, 15.3s locally.
+// Not yet a CI failure, but the same distance from vitest's 5s default that made
+// its sibling one, so it gets the same room rather than a later red build.
+vi.setConfig({ testTimeout: 15_000 });
+
 describe('Setup page — create/adopt mode choice (live mode)', () => {
   it('renders the mode choice when no mode is set, and hides the steps sidebar until one is picked', async () => {
     renderWithProviders(<AppRoutes />, { route: '/setup' });
