@@ -213,6 +213,95 @@ jobs:
           WREN_EMBEDDING_MODEL: paraphrase-MiniLM-L3-v2
         run: uv run --no-sync pytest tests/unit/test_memory.py -v
 
+  test-memory-onnx:
+    name: memory tests (onnx, torch-free)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: core/wren
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ./core/wren-core-py/target/
+          key: ${{ runner.os }}-cargo-wren-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build wren-core-py wheel
+        working-directory: core/wren-core-py
+        run: |
+          uv sync --locked --no-install-project
+          uv run --no-sync maturin build
+      - name: Install dependencies
+        run: |
+          uv sync --locked --extra memory-onnx
+          uv pip install --reinstall --no-index --find-links ../wren-core-py/target/wheels/ wren-core-py
+      - name: Assert the install is torch-free
+        # The whole point of this extra: on linux-x86_64 the sentence-transformers
+        # path resolves the CUDA build of torch plus triton and sixteen nvidia-*
+        # packages. Checking torch alone would miss a resolution that drops
+        # torch but keeps the CUDA payload, which is where the gigabytes are.
+        run: |
+          if uv run --no-sync python -c "import importlib.util as u; raise SystemExit(0 if u.find_spec('torch') else 1)"; then
+            echo "::error::torch was installed by the memory-onnx extra"
+            exit 1
+          fi
+          cuda=$(uv pip list --format=freeze | grep -iE '^(nvidia-|triton==)' || true)
+          if [ -n "$cuda" ]; then
+            echo "::error::CUDA packages were installed by the memory-onnx extra"
+            echo "$cuda"
+            exit 1
+          fi
+      - name: Cache ONNX model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-onnx-paraphrase-MiniLM-L3-v2
+      - name: Run memory tests
+        env:
+          WREN_EMBEDDING_MODEL: paraphrase-MiniLM-L3-v2
+        run: uv run --no-sync pytest tests/unit/test_memory.py -v
+
+  test-embedding-parity:
+    name: embedding backend parity
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: core/wren
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Install both embedding extras
+        # Each of the two jobs above installs one backend, so the parity test
+        # importorskips out of both. It is the assertion existing stores
+        # depend on — a store written by one backend has to stay readable by
+        # the other — so it needs a job where both are present.
+        run: uv sync --locked --extra memory --extra memory-onnx
+      - name: Cache models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-parity-paraphrase-multilingual-MiniLM-L12-v2
+      - name: Compare backends
+        run: uv run --no-sync pytest tests/unit/test_memory.py -v -k TestOnnxVectorParity
+
   test-mcp:
     name: mcp tests
     runs-on: ubuntu-latest

@@ -10,10 +10,37 @@ from typing import Annotated, Optional
 
 import typer
 import yaml
+from typer.core import TyperGroup
+
+
+class _MemoryGroup(TyperGroup):
+    """Report an embedding backend that cannot serve the model, from any command.
+
+    These failures surface lazily from the first encode, so every command that
+    embeds can raise one -- `index`, `store`, `recall`, `fetch`, and whatever
+    is added next. Handling them per call site means each new command has to
+    remember; handling them here means it inherits. Each message already names
+    the way out, so echoing it is enough.
+
+    Scoped to `OnnxBackendError` rather than `RuntimeError`: `typer.Exit`
+    subclasses `RuntimeError`, so the wider catch would rewrite every exit code
+    in this sub-app to 1.
+    """
+
+    def invoke(self, ctx):
+        from wren.memory.embeddings import OnnxBackendError  # noqa: PLC0415
+
+        try:
+            return super().invoke(ctx)
+        except OnnxBackendError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1) from e
+
 
 memory_app = typer.Typer(
     name="memory",
     help="Schema and query memory backed by LanceDB.",
+    cls=_MemoryGroup,
 )
 
 _WREN_HOME = Path(os.environ.get("WREN_HOME", Path.home() / ".wren"))
@@ -220,6 +247,9 @@ def index(
             pass  # instructions are optional; never fail index because of them
 
     mem_store = _get_store(path)
+
+    # Backend errors are RuntimeErrors, so they pass this branch untouched and
+    # reach _MemoryGroup -- none of them is a manifest problem.
     try:
         result = mem_store.index_schema(manifest, seed_queries=not no_seed)
     except ValueError as e:
@@ -474,6 +504,11 @@ def status(
     if info["backend"] == "grep":
         typer.echo(f"  knowledge/sql: {info['pairs']} pair(s)")
         return
+    # Two backends produce these vectors and only one of them pulls torch, so
+    # which one is live is the first thing to check when an install is bigger
+    # or slower than expected.
+    if info.get("embedding_backend"):
+        typer.echo(f"  embeddings: {info['embedding_backend']} ({info['model']})")
     tables = info.get("tables", {})
     if not tables:
         typer.echo("No tables indexed yet.")

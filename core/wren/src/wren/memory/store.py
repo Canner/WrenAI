@@ -12,6 +12,7 @@ from wren.memory.embeddings import (
     _DEFAULT_DIM,
     _DEFAULT_MODEL,
     get_embedding_function,
+    resolve_embedding_backend,
     warm_up,
 )
 from wren.memory.schema_indexer import (
@@ -720,8 +721,18 @@ class MemoryStore:
     # ── Housekeeping ──────────────────────────────────────────────────────
 
     def status(self) -> dict:
-        """Return index statistics."""
-        info: dict = {"path": str(self._path), "tables": {}}
+        """Return index statistics, including which embedding backend is live.
+
+        Reported from ``resolve_embedding_backend()`` rather than from a
+        constructed model, so asking for status never loads one. It is the
+        same resolution the store itself would use on its next embed.
+        """
+        info: dict = {
+            "path": str(self._path),
+            "embedding_backend": resolve_embedding_backend(),
+            "model": self._model_name,
+            "tables": {},
+        }
         for name in _table_names(self._db):
             table = self._db.open_table(name)
             info["tables"][name] = table.count_rows()

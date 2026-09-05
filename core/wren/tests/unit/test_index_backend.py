@@ -97,6 +97,42 @@ def test_cli_index_grep_is_noop(tmp_path, monkeypatch):
     assert "2 pair(s)" in result.output
 
 
+def test_cli_status_names_the_embedding_backend(tmp_path, monkeypatch):
+    # The rendering, not the resolution: a store carrying an onnx install has
+    # to say so, otherwise the only signal that torch was avoided is a
+    # directory listing.
+    class _FakeIndex:
+        def status(self):
+            return {
+                "backend": "lancedb",
+                "embedding_backend": "onnx",
+                "model": "paraphrase-multilingual-MiniLM-L12-v2",
+                "tables": {"schema_items": 11},
+            }
+
+    monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+    monkeypatch.setattr(
+        "wren.memory.index_backend.get_index", lambda *a, **k: _FakeIndex()
+    )
+
+    result = runner.invoke(app, ["memory", "status"])
+    assert result.exit_code == 0, result.output
+    assert "Backend: lancedb" in result.output
+    assert "embeddings: onnx (paraphrase-multilingual-MiniLM-L12-v2)" in result.output
+
+
+def test_cli_status_omits_embeddings_for_grep(tmp_path, monkeypatch):
+    # The grep backend embeds nothing, so naming a backend there would be a
+    # claim about a model that was never loaded.
+    monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+    monkeypatch.setenv("WREN_MEMORY_BACKEND", "grep")
+    _seed(tmp_path)
+
+    result = runner.invoke(app, ["memory", "status"])
+    assert result.exit_code == 0, result.output
+    assert "embeddings:" not in result.output
+
+
 def test_cli_status_and_reset_and_check_grep(tmp_path, monkeypatch):
     monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
     monkeypatch.setenv("WREN_MEMORY_BACKEND", "grep")
