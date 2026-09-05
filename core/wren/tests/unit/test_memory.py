@@ -1850,23 +1850,15 @@ class TestOnnxEmbeddings:
         assert issubclass(embeddings.OnnxBackendError, RuntimeError)
         assert not issubclass(embeddings.OnnxBackendError, ValueError)
 
-    def test_a_repo_without_an_onnx_export_names_the_way_out(self, monkeypatch):
-        # onnx is chosen on importability alone, so a WREN_EMBEDDING_MODEL that
-        # worked under sentence-transformers can land here. Surfacing the raw
-        # 404 as a traceback would make a working config look broken.
-        # _runtime imports onnxruntime before it reaches the stubbed _hf_file,
-        # and this is the only test here that enters the real _runtime -- so it
-        # needs the gate TestOnnxVectorParity uses. The `memory` job installs
-        # sentence-transformers only.
-        pytest.importorskip("onnxruntime", reason="wren[memory-onnx] not installed")
-
+    def _runtime_with_hf_error(self, monkeypatch, error):
+        """Drive _runtime to the ONNX-graph fetch, which raises *error*."""
         import tokenizers  # noqa: PLC0415
 
         from wren.memory import embeddings  # noqa: PLC0415
 
-        def _missing(_repo, filename):
+        def _fetch(_repo, filename):
             if filename.endswith(".onnx"):
-                raise OSError("404 Client Error")
+                raise error
             return "/dev/null"
 
         # The tokenizer loads first -- _runtime does the cheap checks before
@@ -1875,14 +1867,57 @@ class TestOnnxEmbeddings:
         monkeypatch.setattr(
             tokenizers.Tokenizer, "from_file", staticmethod(lambda _p: _StubTokenizer())
         )
-        monkeypatch.setattr(embeddings, "_hf_file", _missing)
+        monkeypatch.setattr(embeddings, "_hf_file", _fetch)
         monkeypatch.setattr(embeddings, "_require_mean_pooling", lambda _repo: None)
         monkeypatch.setattr(embeddings, "_max_seq_length", lambda _repo: 128)
         monkeypatch.setattr(embeddings, "_onnx_runtime_cache", None)
+        return embeddings
+
+    def test_a_repo_without_an_onnx_export_names_the_way_out(self, monkeypatch):
+        # onnx is chosen on importability alone, so a WREN_EMBEDDING_MODEL that
+        # worked under sentence-transformers can land here. Surfacing the raw
+        # 404 as a traceback would make a working config look broken.
+        pytest.importorskip("onnxruntime", reason="wren[memory-onnx] not installed")
+
+        remote_404, _ = self._hf_errors()
+        embeddings = self._runtime_with_hf_error(monkeypatch, remote_404)
 
         with pytest.raises(embeddings.MissingOnnxExportError) as excinfo:
             embeddings.OnnxEmbeddings("acme/no-onnx")._runtime()
         assert "WREN_EMBEDDING_BACKEND=sentence-transformers" in str(excinfo.value)
+
+    def test_an_unreachable_hub_is_not_called_a_missing_export(self, monkeypatch):
+        # Same conflation _read_json no longer makes: a rate limit or a dropped
+        # connection would tell the user that a repo which does publish an ONNX
+        # export does not, and point them at the wrong remedy.
+        pytest.importorskip("onnxruntime", reason="wren[memory-onnx] not installed")
+
+        _, offline = self._hf_errors()
+        embeddings = self._runtime_with_hf_error(monkeypatch, offline)
+
+        with pytest.raises(embeddings.OnnxBackendError) as excinfo:
+            embeddings.OnnxEmbeddings("acme/cached-elsewhere")._runtime()
+        assert not isinstance(excinfo.value, embeddings.MissingOnnxExportError)
+        assert "retry" in str(excinfo.value).lower()
+
+    def test_the_declared_hub_floor_is_where_the_error_classes_live(self):
+        # _read_json and _runtime import these inside an `except OSError`
+        # handler, so on a version where they are absent the ImportError
+        # replaces the error being classified. They moved into
+        # huggingface_hub.errors in 0.25; before that they are in
+        # huggingface_hub.utils._errors and this import raises. No CI job can
+        # reach that -- the lock pins 1.8 -- but `pip install
+        # 'wrenai[memory-onnx]'` into an env holding an older hub can.
+        import tomllib  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+        extras = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"][
+            "optional-dependencies"
+        ]
+        (pin,) = [d for d in extras["memory-onnx"] if d.startswith("huggingface-hub")]
+        floor = tuple(int(part) for part in pin.split(">=")[1].split("."))
+        assert floor >= (0, 25), pin
 
     def test_corrupt_pooling_config_is_not_reported_as_a_bad_manifest(
         self, monkeypatch, tmp_path

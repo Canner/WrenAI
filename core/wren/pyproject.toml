@@ -67,7 +67,11 @@ memory-onnx = [
   "lancedb>=0.6",
   "onnxruntime>=1.17",
   "tokenizers>=0.15",
-  "huggingface-hub>=0.23",
+  # >=0.25: EntryNotFoundError / LocalEntryNotFoundError moved into
+  # huggingface_hub.errors there. embeddings.py imports them inside an
+  # `except OSError` handler, so on an older hub the ImportError would
+  # replace the error being classified.
+  "huggingface-hub>=0.25",
   "numpy>=1.24",
 ]
 interactive = ["InquirerPy>=0.3.4"]

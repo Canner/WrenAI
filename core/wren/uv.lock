@@ -3732,7 +3732,7 @@ requires-dist = [
     { name = "duckdb", specifier = ">=1.5.0" },
     { name = "google-auth", marker = "extra == 'bigquery'" },
     { name = "google-cloud-bigquery", marker = "extra == 'bigquery'", specifier = ">=3.40,<4" },
-    { name = "huggingface-hub", marker = "extra == 'memory-onnx'", specifier = ">=0.23" },
+    { name = "huggingface-hub", marker = "extra == 'memory-onnx'", specifier = ">=0.25" },
     { name = "inquirerpy", marker = "extra == 'interactive'", specifier = ">=0.3.4" },
     { name = "jinja2", marker = "extra == 'ui'", specifier = ">=3.1" },
     { name = "lancedb", marker = "extra == 'memory'", specifier = ">=0.6" },

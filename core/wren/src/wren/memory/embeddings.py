@@ -191,6 +191,31 @@ def _hf_file(repo_id: str, filename: str) -> str:
         return hf_hub_download(repo_id, filename)
 
 
+def _is_absent_from_repo(error: OSError) -> bool:
+    """True when the hub answered "no such file", as opposed to not answering.
+
+    A remote 404 is the only response that means the repo does not publish the
+    file. ``LocalEntryNotFoundError`` is the opposite -- nothing cached *and*
+    the hub unreachable -- and a rate limit or dropped connection say nothing
+    about the file at all. Reporting either as absence is how a transient
+    fault acquires a permanent-sounding explanation.
+
+    Tested against the pair rather than ``RemoteEntryNotFoundError``, which
+    only exists from huggingface-hub 1.x; the pair discriminates identically
+    on both. Needs >= 0.25 all the same, which is where they moved into
+    ``huggingface_hub.errors`` -- before that this import raises inside the
+    caller's ``except`` handler, replacing the error being classified.
+    """
+    from huggingface_hub.errors import (  # noqa: PLC0415
+        EntryNotFoundError,
+        LocalEntryNotFoundError,
+    )
+
+    return isinstance(error, EntryNotFoundError) and not isinstance(
+        error, LocalEntryNotFoundError
+    )
+
+
 def _read_json(repo_id: str, filename: str) -> dict | None:
     """Read a small JSON config from the model repo, or None when absent.
 
@@ -206,17 +231,7 @@ def _read_json(repo_id: str, filename: str) -> dict | None:
     try:
         path = _hf_file(repo_id, filename)
     except OSError as e:
-        from huggingface_hub.errors import (  # noqa: PLC0415
-            EntryNotFoundError,
-            LocalEntryNotFoundError,
-        )
-
-        # A remote 404 is the only answer that means "this repo does not
-        # publish the file". LocalEntryNotFoundError is the opposite: nothing
-        # cached *and* the hub unreachable, so presence is unknown.
-        if isinstance(e, EntryNotFoundError) and not isinstance(
-            e, LocalEntryNotFoundError
-        ):
+        if _is_absent_from_repo(e):
             return None
         raise OnnxBackendError(
             f"'{filename}' for '{repo_id}' could not be fetched: {e}. Whether "
@@ -335,16 +350,24 @@ class OnnxEmbeddings:
             except OSError as e:
                 # onnx is selected on importability alone, so a
                 # WREN_EMBEDDING_MODEL that works under sentence-transformers
-                # reaches this. Not falling back: a network blip and a repo
-                # with no export both arrive as OSError, and quietly loading
-                # torch on a bad connection is the outcome this extra exists
-                # to avoid. Name the override and let the caller choose.
-                raise MissingOnnxExportError(
+                # reaches this. Only a 404 means the export is really missing;
+                # anything else and the remedy is to retry, not to switch
+                # backends. Deliberately not falling back on the 404 either:
+                # quietly loading torch is the outcome this extra exists to
+                # avoid, so name the override and let the caller choose.
+                if _is_absent_from_repo(e):
+                    raise MissingOnnxExportError(
+                        f"'{self._repo_id}' does not publish '{onnx_file}', "
+                        "which the onnx embedding backend needs. Set "
+                        "WREN_EMBEDDING_BACKEND=sentence-transformers to use "
+                        "this model, or point WREN_ONNX_MODEL_FILE at the "
+                        "right path."
+                    ) from e
+                raise OnnxBackendError(
                     f"'{onnx_file}' could not be fetched for '{self._repo_id}': "
-                    f"{e}. The onnx embedding backend needs a repo that "
-                    "publishes an ONNX export. Set "
-                    "WREN_EMBEDDING_BACKEND=sentence-transformers to use this "
-                    "model, or point WREN_ONNX_MODEL_FILE at the right path."
+                    f"{e}. Retry when the Hugging Face cache or network is "
+                    "available, or set "
+                    "WREN_EMBEDDING_BACKEND=sentence-transformers."
                 ) from e
 
             session = onnxruntime.InferenceSession(
