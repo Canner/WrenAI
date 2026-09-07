@@ -38,8 +38,14 @@ class BaseConnectionInfo(BaseModel):
 
 
 class BigQueryConnectionInfo(BaseConnectionInfo):
-    credentials: SecretStr = Field(
-        description="Base64 encode `credentials.json`", examples=["eyJ..."]
+    credentials: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Base64 encode `credentials.json`. Omit to use Application Default "
+            "Credentials (gcloud auth application-default login, workload "
+            "identity, or the GCE/Cloud Run metadata server)."
+        ),
+        examples=["eyJ..."],
     )
     job_timeout_ms: int | None = Field(default=None)
 

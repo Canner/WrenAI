@@ -21,26 +21,33 @@ def _apply_limit(sql: str, limit: int) -> str:
     return f"SELECT * FROM ({cleaned}) AS _sub LIMIT {limit}"
 
 
+_SCOPES = [
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/cloud-platform",
+]
+
+
 class BigQueryConnector(ConnectorABC):
     def __init__(self, connection_info):
         from google.cloud import bigquery  # noqa: PLC0415
-        from google.oauth2 import service_account  # noqa: PLC0415
 
         self.connection_info = connection_info
-        credits_json = loads(
-            base64.b64decode(connection_info.credentials.get_secret_value()).decode(
-                "utf-8"
+        if connection_info.credentials is not None:
+            from google.oauth2 import service_account  # noqa: PLC0415
+
+            credits_json = loads(
+                base64.b64decode(connection_info.credentials.get_secret_value()).decode(
+                    "utf-8"
+                )
             )
-        )
-        credentials = service_account.Credentials.from_service_account_info(
-            credits_json
-        )
-        credentials = credentials.with_scopes(
-            [
-                "https://www.googleapis.com/auth/drive",
-                "https://www.googleapis.com/auth/cloud-platform",
-            ]
-        )
+            credentials = service_account.Credentials.from_service_account_info(
+                credits_json
+            )
+            credentials = credentials.with_scopes(_SCOPES)
+        else:
+            import google.auth  # noqa: PLC0415
+
+            credentials, _ = google.auth.default(scopes=_SCOPES)
         client = bigquery.Client(
             credentials=credentials,
             project=connection_info.get_billing_project_id(),
