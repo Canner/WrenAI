@@ -8,7 +8,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,8 +31,9 @@ const managedWrenManifestSchema = z.object({
     mirror: z.object({ url: URL, sha256: SHA256 }).strict(), interpreterPath: RELATIVE,
   }).strict(),
   wheels: z.array(z.object({ distribution: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/), version: z.string().regex(/^[A-Za-z0-9!+._-]+$/), filename: RELATIVE, url: URL, sourceUrl: z.string().url(), sha256: SHA256 }).strict()).min(1),
-  runtime: z.object({ pythonArchivePath: RELATIVE, venvInterpreterPath: RELATIVE, launcherPath: RELATIVE, module: z.literal("wren.cli:app"), packagePath: RELATIVE, packageTreeSha256: stagedDigest, closureSha256: stagedDigest }).strict(),
+  runtime: z.object({ pythonArchivePath: RELATIVE, venvInterpreterPath: RELATIVE, launcherPath: RELATIVE, module: z.literal("wren.cli:app"), packagePath: RELATIVE, sitePackagesPath: RELATIVE, packageTreeSha256: stagedDigest, sitePackagesTreeSha256: stagedDigest, closureSha256: stagedDigest }).strict(),
   licenseApproval: z.object({ state: z.enum(["pending", "approved"]), evidence: z.string().min(1).optional() }).strict(),
+  approvedManifest: z.object({ url: URL, sha256: SHA256 }).strict().optional(),
 }).strict().superRefine((value, context) => {
   if (new Set(value.wheels.map((wheel) => wheel.filename)).size !== value.wheels.length) context.addIssue({ code: "custom", message: "duplicate wheel filename" });
   if (value.wheels[0]?.distribution !== "wrenai" || value.wheels[0].version !== value.compatibility.wren) context.addIssue({ code: "custom", message: "wrenai must be the first exact wheel" });
@@ -97,7 +98,8 @@ function assertSecureTree(root: string, code: ManagedWrenFailureCode): void {
     const visit = (directory: string) => {
       for (const name of readdirSync(directory)) {
         const target = path.join(directory, name); const entry = lstatSync(target);
-        if (entry.isSymbolicLink() || (entry.mode & 0o022) !== 0) failure(code);
+        if ((entry.mode & 0o022) !== 0) failure(code);
+        if (entry.isSymbolicLink()) { assertContainedRealpath(root, target, code); continue; }
         if (entry.isDirectory()) visit(target); else if (!entry.isFile()) failure(code);
       }
     };
@@ -106,11 +108,23 @@ function assertSecureTree(root: string, code: ManagedWrenFailureCode): void {
 }
 function treeDigest(root: string): string {
   const entries: string[] = [];
-  const visit = (directory: string) => { for (const name of readdirSync(directory).sort()) { if (name === "__pycache__") continue; const target = path.join(directory, name); const stat = lstatSync(target); if (stat.isSymbolicLink()) throw new Error("symlink"); if (stat.isDirectory()) visit(target); else if (stat.isFile()) entries.push(`${path.relative(root, target)}\0${sha256(readFileSync(target))}`); else throw new Error("special"); } };
+  const visit = (directory: string) => { for (const name of readdirSync(directory).sort()) { if (name === "__pycache__") continue; const target = path.join(directory, name); const stat = lstatSync(target); if (stat.isSymbolicLink()) { const canonical = realpathSync(target); if (!contained(root, canonical)) throw new Error("link escape"); entries.push(`${path.relative(root, target)}\0link\0${readlinkSync(target)}`); } else if (stat.isDirectory()) visit(target); else if (stat.isFile()) entries.push(`${path.relative(root, target)}\0${sha256(readFileSync(target))}`); else throw new Error("special"); } };
   visit(root); return sha256(entries.join("\n"));
 }
 function closureDigest(manifest: ManagedWrenManifest): string { return sha256(manifest.wheels.map((wheel) => `${wheel.filename}\0${wheel.sha256}`).sort().join("\n")); }
 function ownershipMarker(root: string): string { return path.join(root, ".genbi-managed-wren.json"); }
+function approvedManifestCache(root: string, digest: string): string { return path.join(root, "attestations", `${digest}.json`); }
+function activatedManifest(base: ManagedWrenManifest, root: string): ManagedWrenManifest {
+  if (base.activation === "approved") return base;
+  if (!base.approvedManifest) return failure("codex_wren_runtime_unprovisioned");
+  try {
+    const bytes = readFileSync(approvedManifestCache(root, base.approvedManifest.sha256));
+    if (sha256(bytes) !== base.approvedManifest.sha256) return failure("codex_wren_manifest_invalid");
+    const parsed = managedWrenManifestSchema.safeParse(JSON.parse(bytes.toString("utf8")));
+    if (!parsed.success || parsed.data.activation !== "approved" || parsed.data.platform !== base.platform) return failure("codex_wren_manifest_invalid");
+    return Object.freeze(parsed.data);
+  } catch { return failure("codex_wren_runtime_unprovisioned"); }
+}
 function stagingMarker(root: string): string { return path.join(root, ".genbi-managed-wren-staging.json"); }
 function actualClosureDigest(root: string, manifest: ManagedWrenManifest): string {
   const hashes: string[] = [];
@@ -136,15 +150,26 @@ function cleanupRecognisedStaging(root: string, digest: string): void {
     rmSync(path.join(root, candidate), { recursive: true, force: true });
   }
 }
+function reclaimStaleLock(lock: string): boolean {
+  try {
+    const entry = lstatSync(lock); if (!entry.isFile() || entry.isSymbolicLink() || (entry.mode & 0o777) !== 0o600) return false;
+    const record = JSON.parse(readFileSync(lock, "utf8")); if (!Number.isInteger(record.pid) || record.pid <= 0) return false;
+    try { process.kill(record.pid, 0); return false; } catch (error: any) { if (error?.code !== "ESRCH") return false; }
+    const before = statSync(lock); unlinkSync(lock); return before.ino > 0;
+  } catch { return false; }
+}
+function assertSafeArchive(archive: string): void {
+  const listing = execFileSync("/usr/bin/tar", ["-tzf", archive], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  for (const member of listing.split("\n").filter(Boolean)) if (member.startsWith("/") || member.split("/").includes("..")) throw new Error("unsafe archive member");
+}
 
 /** Revalidate a record before every native Codex launch. */
 export function resolveManagedWrenRuntime(options: { readonly packageRoot?: string; readonly runtimeRoot?: string } = {}): ManagedWrenRuntimeRecord {
-  const manifest = readManagedWrenManifest(options.packageRoot);
-  if (manifest.activation !== "approved") return failure("codex_wren_runtime_unprovisioned");
-  const digest = manifestDigest(manifest); const root = options.runtimeRoot ?? defaultManagedWrenRoot(); const generation = immutableDirectory(root, digest);
+  const base = readManagedWrenManifest(options.packageRoot); const root = options.runtimeRoot ?? defaultManagedWrenRoot(); const manifest = activatedManifest(base, root);
+  const digest = manifestDigest(manifest); const generation = immutableDirectory(root, digest);
   assertPrivateDirectory(root); assertPrivateDirectory(generation);
   assertSecureTree(generation, "codex_wren_closure_mismatch");
-  let marker: { manifestDigest?: unknown; closureDigest?: unknown; packageDigest?: unknown; interpreterDigest?: unknown; launcherDigest?: unknown };
+  let marker: { manifestDigest?: unknown; closureDigest?: unknown; packageDigest?: unknown; sitePackagesDigest?: unknown; interpreterDigest?: unknown; launcherDigest?: unknown };
   try { const markerPath = ownershipMarker(generation); const entry = lstatSync(markerPath); if (!entry.isFile() || entry.isSymbolicLink() || (entry.mode & 0o777) !== 0o600) return failure("codex_wren_runtime_unprovisioned"); marker = JSON.parse(readFileSync(markerPath, "utf8")); } catch { return failure("codex_wren_runtime_unprovisioned"); }
   if (marker.manifestDigest !== digest) return failure("codex_wren_closure_mismatch");
   const archive = regularFile(generation, path.join(generation, manifest.runtime.pythonArchivePath), "codex_wren_interpreter_mismatch");
@@ -156,8 +181,11 @@ export function resolveManagedWrenRuntime(options: { readonly packageRoot?: stri
   let launcherText = ""; try { launcherText = readFileSync(launcher, "utf8"); } catch { return failure("codex_wren_launcher_mismatch"); }
   if (!launcherText.startsWith(`#!${path.join(generation, manifest.runtime.venvInterpreterPath)}`) || !launcherText.includes("from wren.cli import app")) return failure("codex_wren_launcher_mismatch");
   const packagePath = assertContainedRealpath(generation, path.join(generation, manifest.runtime.packagePath), "codex_wren_package_mismatch");
+  const sitePackages = assertContainedRealpath(generation, path.join(generation, manifest.runtime.sitePackagesPath), "codex_wren_package_mismatch");
   let actualPackage: string; try { actualPackage = treeDigest(packagePath); } catch { return failure("codex_wren_package_mismatch"); }
   if (actualPackage !== manifest.runtime.packageTreeSha256 || marker.packageDigest !== actualPackage) return failure("codex_wren_package_mismatch");
+  let actualSitePackages: string; try { actualSitePackages = treeDigest(sitePackages); } catch { return failure("codex_wren_package_mismatch"); }
+  if (actualSitePackages !== manifest.runtime.sitePackagesTreeSha256 || marker.sitePackagesDigest !== actualSitePackages) return failure("codex_wren_package_mismatch");
   const actualClosure = actualClosureDigest(generation, manifest); if (actualClosure !== manifest.runtime.closureSha256 || marker.closureDigest !== actualClosure) return failure("codex_wren_closure_mismatch");
   const python = regularExecutable(generation, path.join(generation, manifest.python.interpreterPath), "codex_wren_interpreter_mismatch");
   return Object.freeze({ version: "1", shim: launcher, launcher, venv_python: interpreter, tool_root: path.join(generation, "venv"), site_packages: path.dirname(packagePath), source_root: packagePath, interpreter: python, interpreter_root: path.dirname(path.dirname(python)), manifest_digest: digest, generation_root: generation, closure_digest: actualClosure, package_digest: actualPackage });
@@ -169,10 +197,19 @@ export function resolveManagedWrenRuntime(options: { readonly packageRoot?: stri
  * manifest with release-attested digests.
  */
 export async function provisionManagedWrenRuntime(options: { readonly packageRoot?: string; readonly runtimeRoot?: string } = {}): Promise<ManagedWrenRuntimeRecord> {
-  const manifest = readManagedWrenManifest(options.packageRoot);
-  if (manifest.activation !== "approved") return failure("codex_wren_runtime_unprovisioned");
   const root = options.runtimeRoot ?? defaultManagedWrenRoot();
   mkdirSync(root, { recursive: true, mode: 0o700 }); chmodSync(root, 0o700); assertPrivateDirectory(root);
+  const base = readManagedWrenManifest(options.packageRoot); let manifest: ManagedWrenManifest;
+  if (base.activation === "approved") manifest = base;
+  else {
+    if (!base.approvedManifest) return failure("codex_wren_runtime_unprovisioned");
+    try {
+      const response = await fetch(base.approvedManifest.url); if (!response.ok) return failure("codex_wren_provision_failed");
+      const bytes = Buffer.from(await response.arrayBuffer()); if (sha256(bytes) !== base.approvedManifest.sha256) return failure("codex_wren_manifest_invalid");
+      const cache = approvedManifestCache(root, base.approvedManifest.sha256); mkdirSync(path.dirname(cache), { recursive: true, mode: 0o700 }); writeFileSync(cache, bytes, { mode: 0o600, flag: "wx" });
+      manifest = activatedManifest(base, root);
+    } catch (error) { if (error instanceof ManagedWrenRuntimeError) throw error; return failure("codex_wren_provision_failed"); }
+  }
   const digest = manifestDigest(manifest); const destination = immutableDirectory(root, digest);
   try { return resolveManagedWrenRuntime({ ...(options.packageRoot ? { packageRoot: options.packageRoot } : {}), runtimeRoot: root }); } catch (error) { if (!(error instanceof ManagedWrenRuntimeError) || error.code !== "codex_wren_runtime_unprovisioned") throw error; }
   const lock = path.join(root, ".provision.lock"); let descriptor: number | undefined;
@@ -181,8 +218,9 @@ export async function provisionManagedWrenRuntime(options: { readonly packageRoo
     // to a partial directory or declaring a separate runtime valid.
     const deadline = Date.now() + 10_000;
     while (descriptor === undefined && Date.now() < deadline) {
-      try { descriptor = openSync(lock, "wx", 0o600); } catch (error: unknown) {
+      try { descriptor = openSync(lock, "wx", 0o600); writeFileSync(descriptor, JSON.stringify({ pid: process.pid, manifestDigest: digest }) + "\n"); } catch (error: unknown) {
         if (!(error && typeof error === "object" && "code" in error && error.code === "EEXIST")) throw error;
+        if (reclaimStaleLock(lock)) continue;
         await new Promise((resolve) => setTimeout(resolve, 25));
       }
     }
@@ -199,7 +237,7 @@ export async function provisionManagedWrenRuntime(options: { readonly packageRoo
     // Fetching any other URL, index, or dependency resolver is intentionally absent.
     const archive = path.join(staging, manifest.runtime.pythonArchivePath); const download = async (url: string, target: string, expected: string) => { const response = await fetch(url); if (!response.ok) throw new Error("download"); const bytes = Buffer.from(await response.arrayBuffer()); if (sha256(bytes) !== expected) throw new Error("digest"); writeFileSync(target, bytes, { mode: 0o600, flag: "wx" }); };
     await download(manifest.python.mirror.url, archive, manifest.python.mirror.sha256);
-    execFileSync("tar", ["-xzf", archive, "-C", staging], { stdio: "ignore" });
+    assertSafeArchive(archive); execFileSync("/usr/bin/tar", ["-xzf", archive, "-C", staging], { stdio: "ignore" });
     const python = path.join(staging, manifest.python.interpreterPath); regularExecutable(staging, python, "codex_wren_interpreter_mismatch");
     const wheels = path.join(staging, "wheels"); mkdirSync(wheels, { mode: 0o700 });
     for (const wheel of manifest.wheels) await download(wheel.url, path.join(wheels, wheel.filename), wheel.sha256);
@@ -207,8 +245,8 @@ export async function provisionManagedWrenRuntime(options: { readonly packageRoo
     writeFileSync(path.join(staging, "requirements.txt"), requirements, { mode: 0o600, flag: "wx" });
     const venv = path.join(staging, "venv"); execFileSync(python, ["-m", "venv", venv], { stdio: "ignore", env: { PATH: path.dirname(python), HOME: staging, PYTHONNOUSERSITE: "1" } });
     execFileSync(path.join(venv, "bin", "python"), ["-m", "pip", "install", "--no-index", "--no-deps", "--require-hashes", "--find-links", wheels, "-r", path.join(staging, "requirements.txt")], { stdio: "ignore", env: { PATH: path.join(venv, "bin"), HOME: staging, PYTHONNOUSERSITE: "1" } });
-    const packagePath = path.join(staging, manifest.runtime.packagePath); const packageDigest = treeDigest(packagePath); const closure = actualClosureDigest(staging, manifest);
-    if (packageDigest !== manifest.runtime.packageTreeSha256 || closure !== manifest.runtime.closureSha256) throw new Error("attestation");
+    const packagePath = path.join(staging, manifest.runtime.packagePath); const sitePackagesPath = path.join(staging, manifest.runtime.sitePackagesPath); const packageDigest = treeDigest(packagePath); const sitePackagesDigest = treeDigest(sitePackagesPath); const closure = actualClosureDigest(staging, manifest);
+    if (packageDigest !== manifest.runtime.packageTreeSha256 || sitePackagesDigest !== manifest.runtime.sitePackagesTreeSha256 || closure !== manifest.runtime.closureSha256) throw new Error("attestation");
     // `venv` console launchers contain an absolute interpreter shebang. The
     // staging name must never escape into an active generation after rename.
     const stagedInterpreter = path.join(staging, manifest.runtime.venvInterpreterPath);
@@ -220,7 +258,7 @@ export async function provisionManagedWrenRuntime(options: { readonly packageRoo
     const finalLauncher = path.join(destination, manifest.runtime.launcherPath);
     writeFileSync(finalLauncher, `#!${finalInterpreter}\n${launcherText.slice(stagedInterpreter.length + 3)}`, { mode: 0o700 });
     rmSync(stagingMarker(destination), { force: true });
-    writeFileSync(ownershipMarker(destination), JSON.stringify({ manifestDigest: digest, packageDigest, closureDigest: closure, interpreterDigest: sha256(readFileSync(finalInterpreter)), launcherDigest: sha256(readFileSync(finalLauncher)) }) + "\n", { mode: 0o600, flag: "wx" });
+    writeFileSync(ownershipMarker(destination), JSON.stringify({ manifestDigest: digest, packageDigest, sitePackagesDigest, closureDigest: closure, interpreterDigest: sha256(readFileSync(finalInterpreter)), launcherDigest: sha256(readFileSync(finalLauncher)) }) + "\n", { mode: 0o600, flag: "wx" });
     return resolveManagedWrenRuntime({ ...(options.packageRoot ? { packageRoot: options.packageRoot } : {}), runtimeRoot: root });
   } catch (error) { if (descriptor !== undefined) cleanupRecognisedStaging(root, digest); if (error instanceof ManagedWrenRuntimeError) throw error; return failure("codex_wren_provision_failed");
   } finally { if (descriptor !== undefined) { try { rmSync(lock, { force: true }); } catch { /* next run reports unavailable */ } } }

@@ -28,7 +28,10 @@ describe("installed-package and vendor-contract CI wiring", () => {
   it("keeps managed-Wren publication and manifest activation behind the protected approval job", () => {
     const workflow = readFileSync(path.join(repositoryRoot, ".github", "workflows", "managed-wren-runtime.yml"), "utf8");
     expect(workflow).toContain("managed-wren-license-approved");
-    expect(workflow).toContain("if: ${{ inputs.license_approval == 'approved' }}");
+    expect(workflow).not.toContain("license_approval");
+    expect(workflow).toContain("secrets.MANAGED_WREN_APPROVAL_SHA256");
+    expect(workflow).toContain("test -n \"$APPROVAL_DIGEST\"");
+    expect(workflow).toContain("managed-wren-review-metadata");
     expect(workflow).toContain("managed-wren-manifest.candidate.json");
     expect(workflow).toContain("--no-index --no-deps --require-hashes");
     expect(workflow).toContain("gh release create");

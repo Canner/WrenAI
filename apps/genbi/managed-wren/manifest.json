@@ -37,7 +37,9 @@
     "launcherPath": "venv/bin/wren",
     "module": "wren.cli:app",
     "packagePath": "venv/lib/python3.11/site-packages/wren",
+    "sitePackagesPath": "venv/lib/python3.11/site-packages",
     "packageTreeSha256": "staged",
+    "sitePackagesTreeSha256": "staged",
     "closureSha256": "staged"
   },
   "licenseApproval": { "state": "pending" }

@@ -36,14 +36,16 @@ const wheels = wheelInputs.map((wheel) => {
 const wrenIndex = wheels.findIndex((wheel) => wheel.distribution === "wrenai" && wheel.version === inputs.wrenai.version);
 if (wrenIndex < 0) throw new Error("wrenai is absent from the selected wheel closure");
 const [wrenai] = wheels.splice(wrenIndex, 1); wheels.unshift(wrenai);
-const packageTreeSha256 = await treeDigest(path.join(output, "runtime", "venv", "lib", "python3.11", "site-packages", "wren"));
+const sitePackagesPath = path.join(output, "runtime", "venv", "lib", "python3.11", "site-packages");
+const packageTreeSha256 = await treeDigest(path.join(sitePackagesPath, "wren"));
+const sitePackagesTreeSha256 = await treeDigest(sitePackagesPath);
 const closureSha256 = digest(wheels.map((wheel) => wheel.filename + "\0" + wheel.sha256).sort().join("\n"));
 const manifest = {
   schema: 1, activation: "staged", platform: "darwin-arm64",
   compatibility: { genbi: inputs.compatibility.genbi, profile: inputs.compatibility.profile, wren: inputs.wrenai.version },
   python: { implementation: "cpython", version: inputs.python.version, upstream: { release: inputs.python.release, url: inputs.python.url, sha256: inputs.python.sha256 }, mirror: { url: "https://github.com/Canner/WrenAI/releases/download/" + runtimeTag + "/" + inputs.python.filename, sha256: inputs.python.sha256 }, interpreterPath: "python/install/bin/python3.11" },
   wheels,
-  runtime: { pythonArchivePath: "python.tar.gz", venvInterpreterPath: "venv/bin/python", launcherPath: "venv/bin/wren", module: "wren.cli:app", packagePath: "venv/lib/python3.11/site-packages/wren", packageTreeSha256, closureSha256 },
+  runtime: { pythonArchivePath: "python.tar.gz", venvInterpreterPath: "venv/bin/python", launcherPath: "venv/bin/wren", module: "wren.cli:app", packagePath: "venv/lib/python3.11/site-packages/wren", sitePackagesPath: "venv/lib/python3.11/site-packages", packageTreeSha256, sitePackagesTreeSha256, closureSha256 },
   licenseApproval: { state: "pending" },
 };
 const inventory = { schema: 1, status: "pending-explicit-approval", components: [{ name: "python-build-standalone", version: "cpython-" + inputs.python.release, declaredLicense: "MPL-2.0", artifact: inputs.python.filename }, { name: "CPython", version: inputs.python.version, declaredLicense: "PSF-2.0", artifact: inputs.python.filename }, ...wheels.map((wheel) => ({ name: wheel.distribution, version: wheel.version, declaredLicense: wheelLicenses.get(wheel.filename) ?? "UNKNOWN", artifact: wheel.filename }))], note: "The protected release environment must approve the completed expanded wheel and bundled-library inventory before public assets or an approved manifest can be emitted." };
