@@ -8,6 +8,11 @@
 
 
 
+<p>
+  <a href="README.md"><strong>English</strong></a> ·
+  <a href="README.ru.md">Русский</a>
+</p>
+
 ### Open-source GenBI: generative BI for AI agents.
 
 *Your agents generate, deploy, and govern dashboards from any database, grounded in a context layer they can actually trust.*
