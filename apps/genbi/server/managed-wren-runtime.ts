@@ -58,7 +58,12 @@ function failure(code: ManagedWrenFailureCode): never { throw new ManagedWrenRun
 function sha256(value: Uint8Array | string): string { return createHash("sha256").update(value).digest("hex"); }
 function contained(root: string, target: string): boolean { const relative = path.relative(root, target); return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative)); }
 function platform(): "darwin-arm64" | undefined { return process.platform === "darwin" && process.arch === "arm64" ? "darwin-arm64" : undefined; }
-function packageRoot(): string { return path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."); }
+function packageRoot(): string {
+  const parent = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  // Source runs from <package>/server; the packed server runs from
+  // <package>/dist-server/server. Both must read the package-owned manifest.
+  return path.basename(parent) === "dist-server" ? path.resolve(parent, "..") : parent;
+}
 export function defaultManagedWrenRoot(): string { return path.join(os.homedir(), "Library", "Application Support", "WrenAI", "genbi", "managed-wren"); }
 export function managedWrenManifestPath(root = packageRoot()): string { return path.join(root, "managed-wren", "manifest.json"); }
 
@@ -161,6 +166,53 @@ function reclaimStaleLock(lock: string): boolean {
 function assertSafeArchive(archive: string): void {
   const listing = execFileSync("/usr/bin/tar", ["-tzf", archive], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
   for (const member of listing.split("\n").filter(Boolean)) if (member.startsWith("/") || member.split("/").includes("..")) throw new Error("unsafe archive member");
+}
+
+/**
+ * Remove only records that were previously returned by this module and that
+ * the caller has established are neither active nor required for rollback.
+ *
+ * Generation selection belongs to the host/session lifecycle, not to a
+ * directory sweep: accepting arbitrary paths here would make cleanup an
+ * unsafe deletion primitive.  A concurrent provisioner conservatively blocks
+ * cleanup altogether; it can retry after the writer releases its lock.
+ */
+export function cleanupManagedWrenGenerations(options: {
+  readonly runtimeRoot?: string;
+  readonly candidates: readonly ManagedWrenRuntimeRecord[];
+  readonly retainManifestDigests: readonly string[];
+}): readonly string[] {
+  const root = options.runtimeRoot ?? defaultManagedWrenRoot();
+  try { assertPrivateDirectory(root); } catch { return []; }
+  if (existsSync(path.join(root, ".provision.lock"))) return [];
+  const retained = new Set(options.retainManifestDigests);
+  const removed: string[] = [];
+  for (const record of options.candidates) {
+    if (retained.has(record.manifest_digest) || removed.includes(record.manifest_digest)) continue;
+    const generation = immutableDirectory(root, record.manifest_digest);
+    if (record.generation_root !== generation) continue;
+    try {
+      assertPrivateDirectory(generation);
+      const markerPath = ownershipMarker(generation);
+      const markerEntry = lstatSync(markerPath);
+      if (!markerEntry.isFile() || markerEntry.isSymbolicLink() || (markerEntry.mode & 0o777) !== 0o600) continue;
+      const marker = JSON.parse(readFileSync(markerPath, "utf8")) as Record<string, unknown>;
+      if (marker.manifestDigest !== record.manifest_digest || marker.closureDigest !== record.closure_digest || marker.packageDigest !== record.package_digest) continue;
+      // Re-check every executable/path the record would hand to a session
+      // before removing it. This makes a stale or caller-forged record a no-op.
+      if (!contained(generation, record.launcher) || !contained(generation, record.interpreter) ||
+        !contained(generation, record.venv_python) || !contained(generation, record.source_root)) continue;
+      regularExecutable(generation, record.launcher, "codex_wren_launcher_mismatch");
+      regularExecutable(generation, record.interpreter, "codex_wren_interpreter_mismatch");
+      regularExecutable(generation, record.venv_python, "codex_wren_interpreter_mismatch");
+      assertContainedRealpath(generation, record.source_root, "codex_wren_package_mismatch");
+      rmSync(generation, { recursive: true, force: false });
+      removed.push(record.manifest_digest);
+    } catch {
+      // An unrecognised, changed, or concurrently replaced entry is retained.
+    }
+  }
+  return Object.freeze(removed);
 }
 
 /** Revalidate a record before every native Codex launch. */

@@ -11,7 +11,7 @@
  */
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { chmod, cp, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import os from "node:os";
@@ -67,6 +67,10 @@ try {
     }
   }
 
+  markPhase("managed-wren-provision");
+  await writeFile(sourceAuditHook, createSourceAuditHook(), { mode: 0o600 });
+  await verifyInstalledManagedWrenProvision({ installRoot, installedPackageRoot, sourceAuditHook, workspaceRoot, port, fixtureEndpoint: fixtureProvider.endpoint, tempRoot });
+
   markPhase("start");
   await writeFile(sourceAuditHook, createSourceAuditHook(), { mode: 0o600 });
   const childEnv = controlledEnvironment({ installRoot, workspaceRoot, port, sourceAuditHook, fixtureEndpoint: fixtureProvider.endpoint });
@@ -89,6 +93,7 @@ try {
     ok: true,
     checks: [
       { name: "tarball excludes checkout-only scripts, tests, fixtures, and examples", ok: true },
+      { name: "fresh installed package rejects its staged managed-Wren manifest by default, then provisions only exact local fixture mirror bytes without checkout, ambient Python, or index resolution", ok: true },
       { name: "fresh install launches through npx with package-manager PATH", ok: true },
       { name: "first-run Setup connect terminal flow works without checkout access or development escapes", ok: true },
       { name: "fresh install binds through a verified package-local context loader with no Rust toolchain or checkout access", ok: true },
@@ -147,6 +152,13 @@ function controlledEnvironment({ installRoot, workspaceRoot, port: selectedPort,
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
     "AZURE_OPENAI_API_KEY",
+    "PYTHONHOME",
+    "PYTHONPATH",
+    "VIRTUAL_ENV",
+    "PIP_INDEX_URL",
+    "PIP_EXTRA_INDEX_URL",
+    "PIP_FIND_LINKS",
+    "PIP_REQUIRE_VIRTUALENV",
   ];
   for (const key of developmentEscapes) delete environment[key];
   if (developmentEscapes.some((key) => environment[key] !== undefined)) {
@@ -209,6 +221,71 @@ async function verifyInstalledProjectBind({ installRoot, workspaceRoot, sourceAu
     failed = /could not resolve the "wren-context-loader" binary/.test(String(error));
   }
   if (!failed) throw new Error("tampered package-local context loader did not fail closed");
+}
+
+/**
+ * Runner-only fixture seam: production sees the packaged staged manifest and
+ * fails closed. This mutates only the disposable npm installation, while the
+ * installed module still derives its own package root and accepts no env
+ * selector for artifacts or interpreters.
+ */
+async function verifyInstalledManagedWrenProvision({ installRoot, installedPackageRoot, sourceAuditHook, workspaceRoot: selectedWorkspaceRoot, port: selectedPort, fixtureEndpoint, tempRoot: selectedTempRoot }) {
+  const manifestPath = path.join(installedPackageRoot, "managed-wren", "manifest.json");
+  const packaged = JSON.parse(await readFile(manifestPath, "utf8"));
+  if (packaged.activation !== "staged" || packaged.licenseApproval?.state !== "pending") throw new Error("packed managed-Wren manifest unexpectedly enables provisioning by default");
+  const requestedRuntimeRoot = path.join(installRoot, "managed-wren-runtime");
+  await mkdir(requestedRuntimeRoot, { mode: 0o700 });
+  const runtimeRoot = await realpath(requestedRuntimeRoot);
+  const moduleUrl = pathToFileURL(path.join(installedPackageRoot, "dist-server", "server", "managed-wren-runtime.js")).href;
+  const childEnv = controlledEnvironment({ installRoot, workspaceRoot: selectedWorkspaceRoot, port: selectedPort, sourceAuditHook, fixtureEndpoint });
+  const defaultProbe = await run(process.execPath, ["--input-type=module", "--eval", `import { provisionManagedWrenRuntime } from ${JSON.stringify(moduleUrl)}; try { await provisionManagedWrenRuntime({ runtimeRoot: ${JSON.stringify(runtimeRoot)} }); process.exitCode = 9; } catch (error) { console.log(error?.code ?? "unknown"); }`], { cwd: installRoot, env: childEnv });
+  if (defaultProbe.stdout.trim() !== "codex_wren_runtime_unprovisioned") throw new Error(`staged installed manifest did not fail closed: ${defaultProbe.stdout}${defaultProbe.stderr}`);
+
+  const fixture = await managedWrenFixture(selectedTempRoot);
+  await writeFile(manifestPath, JSON.stringify(fixture.manifest), { mode: 0o600 });
+  const provision = await run(process.execPath, ["--input-type=module", "--eval", `
+    import { readFileSync } from "node:fs";
+    import { provisionManagedWrenRuntime, resolveManagedWrenRuntime } from ${JSON.stringify(moduleUrl)};
+    const fixtures = new Map(${JSON.stringify([[fixture.manifest.python.mirror.url, fixture.archive], [fixture.manifest.wheels[0].url, fixture.wheel]])});
+    const calls = [];
+    globalThis.fetch = async (input) => { const url = String(input); calls.push(url); const asset = fixtures.get(url); return asset ? new Response(readFileSync(asset), { status: 200 }) : new Response("not found", { status: 404 }); };
+    const first = await provisionManagedWrenRuntime({ runtimeRoot: ${JSON.stringify(runtimeRoot)} });
+    const second = resolveManagedWrenRuntime({ runtimeRoot: ${JSON.stringify(runtimeRoot)} });
+    console.log(JSON.stringify({ first: first.generation_root, second: second.generation_root, calls, pip: readFileSync(first.generation_root + "/pip-args", "utf8") }));
+  `], { cwd: installRoot, env: childEnv });
+  let observed;
+  try { observed = JSON.parse(provision.stdout); } catch { throw new Error(`installed managed-Wren fixture did not produce JSON: ${provision.stdout}${provision.stderr}`); }
+  if (observed.first !== observed.second || JSON.stringify(observed.calls) !== JSON.stringify([fixture.manifest.python.mirror.url, fixture.manifest.wheels[0].url])) throw new Error(`installed managed-Wren provision used an unexpected generation or URL: ${JSON.stringify(observed)}`);
+  if (typeof observed.pip !== "string" || !observed.pip.includes("--no-index --no-deps --require-hashes")) throw new Error(`installed managed-Wren provision did not use offline hash-locked install: ${JSON.stringify(observed)}`);
+}
+
+async function managedWrenFixture(root) {
+  const fixtureRoot = path.join(root, "managed-wren-fixture"); const source = path.join(fixtureRoot, "source");
+  const python = path.join(source, "python", "install", "bin", "python3.11"); await mkdir(path.dirname(python), { recursive: true });
+  await writeFile(python, [
+    "#!/bin/sh", 'if [ "$1" = "-m" ] && [ "$2" = "venv" ]; then', '  target="$3"',
+    '  /bin/mkdir -p "$target/bin" "$target/lib/python3.11/site-packages/wren" "$target/lib/python3.11/site-packages/dependency"',
+    '  /bin/cp "$0" "$target/bin/python"', '  /bin/chmod 700 "$target/bin/python"',
+    "  /usr/bin/printf '#!%s\\nfrom wren.cli import app\\n' \"$target/bin/python\" > \"$target/bin/wren\"", '  /bin/chmod 700 "$target/bin/wren"',
+    "  /usr/bin/printf \"__version__ = '0.13.0'\\n\" > \"$target/lib/python3.11/site-packages/wren/__init__.py\"", "  /usr/bin/printf 'dependency = 1\\n' > \"$target/lib/python3.11/site-packages/dependency/__init__.py\"", '  /bin/chmod 600 "$target/lib/python3.11/site-packages/wren/__init__.py"', "  exit 0", "fi",
+    'if [ "$1" = "-m" ] && [ "$2" = "pip" ]; then', '  /usr/bin/printf "%s\\n" "$*" > "$HOME/pip-args"', "  exit 0", "fi", "exit 1", "",
+  ].join("\n"), { mode: 0o700 });
+  await chmod(python, 0o700);
+  const archive = path.join(fixtureRoot, "python.tar.gz"); await run("tar", ["-czf", archive, "-C", source, "."]);
+  const archiveSha256 = createHash("sha256").update(await readFile(archive)).digest("hex");
+  const wheel = path.join(fixtureRoot, "wrenai-0.13.0-py3-none-any.whl"); await writeFile(wheel, "fixture wheel\n", { mode: 0o600 });
+  const wheelSha256 = createHash("sha256").update(await readFile(wheel)).digest("hex");
+  const digestFile = (contents) => createHash("sha256").update(contents).digest("hex");
+  const packageDigest = digestFile(`__init__.py\0${digestFile("__version__ = '0.13.0'\n")}`);
+  const sitePackagesDigest = digestFile([`dependency/__init__.py\0${digestFile("dependency = 1\n")}`, `wren/__init__.py\0${digestFile("__version__ = '0.13.0'\n")}`].join("\n"));
+  const wheelName = path.basename(wheel); const closureSha256 = digestFile(`${wheelName}\0${wheelSha256}`); const release = "https://github.com/Canner/WrenAI/releases/download/managed-wren-fixture";
+  return { archive, wheel, manifest: {
+    schema: 1, activation: "approved", platform: "darwin-arm64", compatibility: { genbi: "0.0.4", profile: "genbi-native-v4", wren: "0.13.0" },
+    python: { implementation: "cpython", version: "3.11.16", upstream: { release: "20260901", url: "https://example.invalid/python.tar.gz", sha256: archiveSha256 }, mirror: { url: `${release}/python.tar.gz`, sha256: archiveSha256 }, interpreterPath: "python/install/bin/python3.11" },
+    wheels: [{ distribution: "wrenai", version: "0.13.0", filename: wheelName, url: `${release}/${wheelName}`, sourceUrl: "https://files.pythonhosted.org/fixture/wrenai-0.13.0-py3-none-any.whl", sha256: wheelSha256 }],
+    runtime: { pythonArchivePath: "python.tar.gz", venvInterpreterPath: "venv/bin/python", launcherPath: "venv/bin/wren", module: "wren.cli:app", packagePath: "venv/lib/python3.11/site-packages/wren", sitePackagesPath: "venv/lib/python3.11/site-packages", packageTreeSha256: packageDigest, sitePackagesTreeSha256: sitePackagesDigest, closureSha256 },
+    licenseApproval: { state: "approved", evidence: "packed-fixture-only" },
+  } };
 }
 
 function createSourceAuditHook() {

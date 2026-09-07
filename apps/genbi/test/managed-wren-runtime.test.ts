@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ManagedWrenRuntimeError, managedWrenClosureDigest, manifestDigest, provisionManagedWrenRuntime, readManagedWrenManifest, resolveManagedWrenRuntime } from "../server/managed-wren-runtime.js";
+import { ManagedWrenRuntimeError, cleanupManagedWrenGenerations, managedWrenClosureDigest, manifestDigest, provisionManagedWrenRuntime, readManagedWrenManifest, resolveManagedWrenRuntime } from "../server/managed-wren-runtime.js";
 
 const roots: string[] = [];
 const digest = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
@@ -180,6 +180,28 @@ describe("managed Wren runtime", () => {
     expect(updated.generation_root).not.toBe(active.generation_root);
     expect(lstatSync(active.generation_root).isDirectory()).toBe(true);
     expect(resolveManagedWrenRuntime({ packageRoot: old.packageRoot, runtimeRoot: old.runtimeRoot }).launcher).toBe(active.launcher);
+  });
+
+  it("cleans only an explicitly validated inactive generation while preserving active and rollback records", async () => {
+    const activeFixture = provisionFixture("0.13.0"); activeFixture.installFetch();
+    const active = await provisionManagedWrenRuntime({ packageRoot: activeFixture.packageRoot, runtimeRoot: activeFixture.runtimeRoot });
+    const rollbackFixture = provisionFixture("0.13.1"); rollbackFixture.installFetch();
+    const rollback = await provisionManagedWrenRuntime({ packageRoot: rollbackFixture.packageRoot, runtimeRoot: activeFixture.runtimeRoot });
+    const eligibleFixture = provisionFixture("0.13.2"); eligibleFixture.installFetch();
+    const eligible = await provisionManagedWrenRuntime({ packageRoot: eligibleFixture.packageRoot, runtimeRoot: activeFixture.runtimeRoot });
+    const untrustedDigest = "f".repeat(64);
+    const untrusted = path.join(activeFixture.runtimeRoot, untrustedDigest);
+    mkdirSync(untrusted, { mode: 0o700 }); chmodSync(untrusted, 0o700); writeFileSync(path.join(untrusted, "keep"), "not a runtime", { mode: 0o600 });
+
+    expect(cleanupManagedWrenGenerations({
+      runtimeRoot: activeFixture.runtimeRoot,
+      candidates: [active, rollback, eligible, { ...eligible, manifest_digest: untrustedDigest, generation_root: untrusted }],
+      retainManifestDigests: [active.manifest_digest, rollback.manifest_digest],
+    })).toEqual([eligible.manifest_digest]);
+    expect(existsSync(active.generation_root)).toBe(true);
+    expect(existsSync(rollback.generation_root)).toBe(true);
+    expect(existsSync(eligible.generation_root)).toBe(false);
+    expect(readFileSync(path.join(untrusted, "keep"), "utf8")).toBe("not a runtime");
   });
 
   it("rejects retained archive and wheel tampering after a successful provision", async () => {

@@ -16,7 +16,8 @@ import { RuntimeHost } from "../server/runtime-host/local.js";
 import { runtimeReady } from "../server/runtime-host/policy.js";
 import type { PtyFactory } from "../server/interactive-terminal.js";
 import { attestNativeExecutable, type NativeChildEnvironment } from "../server/native-runtime-spec.js";
-import { resolveNativeWrenRuntime } from "../server/native-wren-runtime.js";
+import { resolveNativeWrenRuntime, type NativeWrenRuntime } from "../server/native-wren-runtime.js";
+import { createEmptyCodexWrenHome } from "../server/native-wren-home.js";
 
 const dirs: string[] = [];
 const NATIVE_MCP_URL = "http://127.0.0.1:4787/api/native-sessions/mcp";
@@ -127,6 +128,7 @@ if (args.includes("--help")) {
   console.log("dispatch --target --purpose --native-scope --native-mcp --out");
   process.exit(0);
 }
+
 const value = (flag) => { const index = args.indexOf(flag); if (index < 0 || !args[index + 1]) process.exit(91); return args[index + 1]; };
 const scopePath = value("--native-scope");
 const mcpPath = value("--native-mcp");
@@ -183,9 +185,56 @@ if (purpose === "context_enrichment" && !String(scope.scope_id).startsWith("pref
   return executable;
 }
 
+/** A closed executable-shaped runtime fixture for production composition tests. */
+function managedRuntimeFixture(dir: string, generation: string): NativeWrenRuntime {
+  const requestedRoot = path.join(dir, `managed-${generation}`);
+  const bin = path.join(requestedRoot, "bin"); const source = path.join(requestedRoot, "site-packages", "wren");
+  mkdirSync(bin, { recursive: true, mode: 0o700 }); mkdirSync(source, { recursive: true, mode: 0o700 });
+  const root = realpathSync(requestedRoot);
+  const python = path.join(bin, "python"); const launcher = path.join(bin, "wren");
+  writeFileSync(python, "#!/bin/sh\nexit 0\n", { mode: 0o700 }); writeFileSync(launcher, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+  return { version: "1", shim: launcher, launcher, venv_python: python, tool_root: root, site_packages: path.dirname(source), source_root: source, interpreter: python, interpreter_root: root };
+}
+
 afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
 
 describe("native session persistence", () => {
+  it("pins a validated managed generation for an active production Codex session while the approved generation advances", async () => {
+    const { dir, binding } = fixture("analysis", "codex");
+    const state = materializationState(); const store = new Store(":memory:");
+    writeFileSync(path.join(dir, "analysis.json"), "{}");
+    const runtimeA = managedRuntimeFixture(dir, "A"); const runtimeB = managedRuntimeFixture(dir, "B");
+    let current: NativeWrenRuntime = runtimeA;
+    const prepared: NativeWrenRuntime[] = []; const spawnEnvs: NativeChildEnvironment[] = [];
+    const artifacts = new NativeArtifactService({ store, artifactsRoot: path.join(dir, "artifacts"), expectedMcpUrl: NATIVE_MCP_URL, mcpUrl: NATIVE_MCP_URL, getBinding: () => binding });
+    const pty: PtyFactory = { spawn: (_file, _args, options) => {
+      if (options.env) spawnEnvs.push(options.env);
+      return { onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} };
+    } };
+    const service = new NativeSessionService({
+      store, terminalManager: async () => new InteractiveTerminalManager(pty), getBinding: () => binding,
+      workspaceRoot: undefined, materializationState: state,
+      irPaths: { analysis: path.join(dir, "analysis.json"), setup: undefined, context_enrichment: undefined },
+      warbleBin: fakeV4Producer(dir), artifactService: artifacts,
+      runtimeHost: new RuntimeHost({ selected: "local", deployment: "development", localAvailable: () => true, vendorProbes: { "codex-app-server": async () => ({ readiness: runtimeReady("fixture-managed", ["pty"]), diagnostic: { phase: "provisioning" } }) } }),
+      resolveManagedCodexWrenRuntime: () => current,
+      vendorExecutables: { codex: attestNativeExecutable("vendor", process.execPath) },
+      prepareCodexWrenHome: ({ runtime, cwd }) => { prepared.push(runtime); current = runtimeB; return createEmptyCodexWrenHome(cwd); },
+    });
+
+    const active = await service.create({ purpose: "analysis", vendor: "codex" });
+    expect(active.row.status).toBe("running");
+    expect(prepared).toEqual([runtimeA]);
+    expect(spawnEnvs[0]?.PATH.split(path.delimiter)).toContain(path.join(runtimeA.tool_root, "bin"));
+    expect(spawnEnvs[0]?.PATH.split(path.delimiter)).not.toContain(path.join(runtimeB.tool_root, "bin"));
+
+    const next = await service.create({ purpose: "analysis", vendor: "codex" });
+    expect(next.row.status).toBe("running");
+    expect(prepared).toEqual([runtimeA, runtimeB]);
+    expect(spawnEnvs[1]?.PATH.split(path.delimiter)).toContain(path.join(runtimeB.tool_root, "bin"));
+    store.close();
+  });
+
   it.each([
     ["setup", "claude"], ["setup", "codex"],
     ["analysis", "claude"], ["analysis", "codex"],
