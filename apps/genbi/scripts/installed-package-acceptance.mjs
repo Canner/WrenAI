@@ -278,8 +278,8 @@ async function managedWrenFixture(root) {
   const wheelSha256 = createHash("sha256").update(await readFile(wheel)).digest("hex");
   const digestFile = (contents) => createHash("sha256").update(contents).digest("hex");
   const pythonTreeSha256 = digestFile(`install/bin/python3.11\0${digestFile(await readFile(python))}`);
-  const packageDigest = digestFile(`__init__.py\0${digestFile("__version__ = '0.13.0'\n")}`);
-  const sitePackagesDigest = digestFile([`dependency/__init__.py\0${digestFile("dependency = 1\n")}`, `wren/__init__.py\0${digestFile("__version__ = '0.13.0'\n")}`].join("\n"));
+  const packageDigest = digestFile(`__init__.py\0${"600"}\0file\0${digestFile("__version__ = '0.13.0'\n")}`);
+  const sitePackagesDigest = digestFile([`dependency/__init__.py\0${"644"}\0file\0${digestFile("dependency = 1\n")}`, `wren/__init__.py\0${"600"}\0file\0${digestFile("__version__ = '0.13.0'\n")}`].join("\n"));
   const wheelName = path.basename(wheel); const closureSha256 = digestFile(`${wheelName}\0${wheelSha256}`); const release = "https://github.com/Canner/WrenAI/releases/download/managed-wren-fixture";
   return { archive, wheel, manifest: {
     schema: 1, activation: "approved", platform: "darwin-arm64", compatibility: { genbi: "0.0.4", profile: "genbi-native-v4", wren: "0.13.0" },

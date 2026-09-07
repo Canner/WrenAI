@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Generate and verify exact managed-Wren release evidence; it never publishes. */
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, readlink, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,8 +17,9 @@ const treeDigest = async (root) => {
   const visit = async (directory) => {
     for (const name of (await readdir(directory)).sort()) {
       if (name === "__pycache__") continue;
-      const target = path.join(directory, name); const metadata = await stat(target);
-      if (metadata.isDirectory()) await visit(target); else if (metadata.isFile()) entries.push(path.relative(root, target) + "\0" + await fileDigest(target)); else throw new Error("unsupported runtime entry: " + target);
+      const target = path.join(directory, name); const metadata = await lstat(target); const mode = (metadata.mode & 0o777).toString(8);
+      if (metadata.isSymbolicLink()) { const canonical = await realpath(target); const relative = path.relative(root, canonical); if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("runtime link escapes tree"); entries.push(path.relative(root, target) + "\0" + mode + "\0link\0" + await readlink(target)); }
+      else if (metadata.isDirectory()) await visit(target); else if (metadata.isFile()) entries.push(path.relative(root, target) + "\0" + mode + "\0file\0" + await fileDigest(target)); else throw new Error("unsupported runtime entry: " + target);
     }
   };
   await visit(root); return digest(entries.join("\n"));
