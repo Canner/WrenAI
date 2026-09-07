@@ -10,6 +10,7 @@
 use warble::{Additivity, ContextLoader, DimensionInfo, LineageGraph, MetricInfo, ModelInfo};
 use wren_core_base::mdl::manifest::Manifest;
 
+use crate::impact::{Impact, ImpactGraph};
 use crate::lineage;
 use crate::project::{assemble, LoadError, ProjectSources};
 
@@ -171,6 +172,23 @@ impl MdlContext {
             lineage,
             lineage_diagnostics,
         }
+    }
+
+    /// This project's lineage as an [`ImpactGraph`], ready for Wren's own impact analysis.
+    ///
+    /// The entry point for a caller that wants the analysis rather than a bound context — it can
+    /// ask what a change reaches without Warble appearing in its call path. See
+    /// [`crate::impact`] for why the classification lives on this side.
+    pub fn impact_graph(&self) -> ImpactGraph {
+        ImpactGraph::from(&self.lineage)
+    }
+
+    /// What a change to `seed` reaches, with the worst severity across it.
+    ///
+    /// Convenience for the single-seed question; [`ImpactGraph::impact_all`] answers it for every
+    /// node at once without rebuilding the graph per seed.
+    pub fn impact(&self, seed: &str) -> Impact {
+        self.impact_graph().impact(seed)
     }
 }
 

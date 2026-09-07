@@ -21,12 +21,24 @@
 //!   over a Rust trait object.
 //!
 //! Both go through the same projection, so the two cannot disagree about what the project says.
+//!
+//! # Impact analysis
+//!
+//! [`impact`] adds the other half of the same argument. Warble compares severity *ranks* without
+//! interpreting them, because deciding that a silently shifted metric is worse than a loudly
+//! broken model is a judgement about what MDL objects mean — Wren's judgement, not the
+//! framework's. So the ontology, the severity model and the traversal live here, in this crate's
+//! own types, and a caller can ask what a change reaches without Warble in its call path:
+//! [`MdlContext::impact_graph`] → [`ImpactGraph::impact`].
+
+pub mod impact;
 
 mod consumers;
 mod introspect;
 mod lineage;
 mod project;
 
+pub use impact::{ConsumerCounts, Impact, ImpactEdge, ImpactGraph, ImpactNode, NodeKind, Severity};
 pub use introspect::{infer_additivity, MdlContext};
 pub use lineage::{cube_id, dashboard_id, dim_id, metric_id, model_id, query_id, rel_id, view_id};
 pub use project::{assemble, KnowledgeRules, LoadError, LoadedProject, ProjectSources};
