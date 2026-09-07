@@ -303,6 +303,9 @@ describe("managed Wren runtime", () => {
     expect(candidate).toMatchObject({ activation: "staged", wheels: [{ distribution: wheel.distribution, version: wheel.version, filename: wheel.filename, url: "https://github.com/Canner/WrenAI/releases/download/managed-wren-fixture/wrenai-0.13.0-py3-none-any.whl" }] });
     expect(candidate.runtime.packageTreeSha256).not.toBe("staged"); expect(candidate.runtime.closureSha256).not.toBe("staged");
     expect(candidate.runtime.pythonTreeSha256).toBe(managedWrenTreeDigest(pythonRoot));
+    symlinkSync("/bin/sh", path.join(pythonRoot, "escape"));
+    expect(() => execFileSync(process.execPath, [path.resolve("scripts", "managed-wren-release.mjs"), root, "managed-wren-fixture"], { cwd: path.resolve("."), stdio: "pipe" })).toThrow(/runtime link escapes tree/);
+    rmSync(path.join(pythonRoot, "escape"));
     wheel.sha256 = "a".repeat(64); writeFileSync(path.join(root, "wheel-inputs.json"), JSON.stringify([wheel]));
     expect(() => execFileSync(process.execPath, [path.resolve("scripts", "managed-wren-release.mjs"), root, "managed-wren-fixture"], { cwd: path.resolve("."), stdio: "pipe" })).toThrow(/selected wrenai wheel differs/);
   });
