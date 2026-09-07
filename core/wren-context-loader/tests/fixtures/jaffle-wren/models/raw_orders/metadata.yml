@@ -1,0 +1,26 @@
+name: raw_orders
+properties:
+  description: "Raw source order records as loaded from the source system. Use the orders mart model for analytics."
+table_reference:
+  catalog: jaffle_shop
+  schema: main
+  table: raw_orders
+primary_key: id
+columns:
+  - name: id
+    type: INT
+    not_null: true
+    properties:
+      description: "Source system order ID."
+  - name: user_id
+    type: INT
+    properties:
+      description: "Foreign key to raw_customers.id."
+  - name: order_date
+    type: DATE
+    properties:
+      description: "Date the order was placed."
+  - name: status
+    type: TEXT
+    properties:
+      description: "Order status from source system."
