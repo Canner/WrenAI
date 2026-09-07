@@ -59,5 +59,35 @@ def test_limited_query_wraps_after_strip(monkeypatch):
     connector.query("SELECT 1 AS x;", limit=9)
 
     cursor.execute.assert_called_once_with(
-        "SELECT * FROM (SELECT 1 AS x) AS _sub LIMIT 9"
+        "SELECT * FROM (\nSELECT 1 AS x\n) AS _sub LIMIT 9"
+    )
+
+
+def test_query_limit_survives_trailing_line_comment(monkeypatch):
+    """Trailing `--` must not eat the wrap (same shape as athena.py #2457)."""
+    connector = PostgresConnector.__new__(PostgresConnector)
+    connector.connection = MagicMock()
+    cursor = MagicMock()
+    connector.connection.cursor.return_value.__enter__.return_value = cursor
+    monkeypatch.setattr(
+        postgres_mod, "_build_pg_arrow_table", lambda cur: pa.table({"x": [1]})
+    )
+
+    connector.query("SELECT 1 AS x -- pick", limit=9)
+
+    cursor.execute.assert_called_once_with(
+        "SELECT * FROM (\nSELECT 1 AS x -- pick\n) AS _sub LIMIT 9"
+    )
+
+
+def test_dry_run_limit_survives_trailing_line_comment():
+    connector = PostgresConnector.__new__(PostgresConnector)
+    connector.connection = MagicMock()
+    cursor = MagicMock()
+    connector.connection.cursor.return_value.__enter__.return_value = cursor
+
+    connector.dry_run("SELECT 1 AS x -- pick")
+
+    cursor.execute.assert_called_once_with(
+        "SELECT * FROM (\nSELECT 1 AS x -- pick\n) AS _sub LIMIT 0"
     )
