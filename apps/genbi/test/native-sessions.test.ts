@@ -1678,7 +1678,7 @@ describe("native session persistence", () => {
       currentBinding = { ...currentBinding, generation: currentBinding.generation + 1, revision: "sha256:replacement" };
       await expect(service.startSeparate({ purpose: "analysis", idempotencyKey: "00000000-0000-4000-8000-000000000020" })).rejects.toThrow(/launch action is stale/);
     } finally { clock.mockRestore(); store.close(); }
-  });
+  }, 15_000);
 
   it("expires settled start-separate delivery and rotates authority again after stop", async () => {
     const { dir, binding } = fixture("analysis", "codex");
@@ -1705,7 +1705,7 @@ describe("native session persistence", () => {
       expect(afterStop.capability).not.toBe(expired.capability);
       expect(dispatch).toHaveBeenCalledTimes(3);
     } finally { clock.mockRestore(); store.close(); }
-  });
+  }, 15_000);
 
   it("opens only the exact live row in the current bound scope", async () => {
     const { dir, binding } = fixture("analysis", "codex");

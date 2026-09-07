@@ -3,13 +3,22 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ManagedWrenRuntimeError, cleanupManagedWrenGenerations, managedWrenClosureDigest, managedWrenReadinessFailure, managedWrenTreeDigest, manifestDigest, provisionManagedWrenRuntime, readManagedWrenManifest, resolveManagedWrenRuntime } from "../server/managed-wren-runtime.js";
 import { RuntimeHost } from "../server/runtime-host/local.js";
 import { runtimeNotReady } from "../server/runtime-host/policy.js";
 
 const roots: string[] = [];
 const digest = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
+const hostPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+const hostArch = Object.getOwnPropertyDescriptor(process, "arch")!;
+
+beforeEach(() => {
+  // The managed runtime is deliberately macOS arm64-only. Keep these contract
+  // fixtures deterministic when the repository's general test job runs on Linux.
+  Object.defineProperty(process, "platform", { ...hostPlatform, value: "darwin" });
+  Object.defineProperty(process, "arch", { ...hostArch, value: "arm64" });
+});
 
 function fixture() {
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), "genbi-managed-wren-"))); roots.push(root);
@@ -38,7 +47,12 @@ function fixture() {
   return { packageRoot, runtimeRoot, generation, launcher, manifest: approved };
 }
 
-afterEach(() => { vi.unstubAllGlobals(); while (roots.length) rmSync(roots.pop()!, { recursive: true, force: true }); });
+afterEach(() => {
+  Object.defineProperty(process, "platform", hostPlatform);
+  Object.defineProperty(process, "arch", hostArch);
+  vi.unstubAllGlobals();
+  while (roots.length) rmSync(roots.pop()!, { recursive: true, force: true });
+});
 
 function provisionFixture(version = "0.13.0") {
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), "genbi-managed-wren-provision-"))); roots.push(root);
