@@ -46,7 +46,7 @@ function provisionFixture(version = "0.13.0") {
   const fakePython = [
     "#!/bin/sh",
     "if [ \"$1\" = \"-m\" ] && [ \"$2\" = \"venv\" ]; then",
-    "  target=\"$3\"",
+    "  target=\"$3\"; if [ \"$target\" = \"--copies\" ]; then target=\"$4\"; fi",
     "  /bin/mkdir -p \"$target/bin\" \"$target/lib/python3.11/site-packages/wren\" \"$target/lib/python3.11/site-packages/dependency\"",
     "  /bin/cp \"$0\" \"$target/bin/python\"",
     "  /bin/chmod 700 \"$target/bin/python\"",

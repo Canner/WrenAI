@@ -295,7 +295,11 @@ export async function provisionManagedWrenRuntime(options: { readonly packageRoo
     for (const wheel of manifest.wheels) await download(wheel.url, path.join(wheels, wheel.filename), wheel.sha256);
     const requirements = manifest.wheels.map((wheel) => `${wheel.distribution}==${wheel.version} --hash=sha256:${wheel.sha256}`).join("\n") + "\n";
     writeFileSync(path.join(staging, "requirements.txt"), requirements, { mode: 0o600, flag: "wx" });
-    const venv = path.join(staging, "venv"); execFileSync(python, ["-m", "venv", venv], { stdio: "ignore", env: { PATH: path.dirname(python), HOME: staging, PYTHONNOUSERSITE: "1" } });
+    const venv = path.join(staging, "venv"); execFileSync(python, ["-m", "venv", "--copies", venv], { stdio: "ignore", env: { PATH: path.dirname(python), HOME: staging, PYTHONNOUSERSITE: "1" } });
+    const venvInterpreter = path.join(venv, "bin", "python");
+    // PBS may still emit an absolute staging symlink despite --copies. Replace
+    // only that resolved interpreter with a private copy before promotion.
+    if (lstatSync(venvInterpreter).isSymbolicLink()) { const resolved = realpathSync(venvInterpreter); if (!contained(staging, resolved)) return failure("codex_wren_interpreter_mismatch"); unlinkSync(venvInterpreter); writeFileSync(venvInterpreter, readFileSync(resolved), { mode: 0o700 }); }
     execFileSync(path.join(venv, "bin", "python"), ["-m", "pip", "install", "--no-index", "--no-deps", "--require-hashes", "--find-links", wheels, "-r", path.join(staging, "requirements.txt")], { stdio: "ignore", env: { PATH: path.join(venv, "bin"), HOME: staging, PYTHONNOUSERSITE: "1" } });
     const packagePath = path.join(staging, manifest.runtime.packagePath); const sitePackagesPath = path.join(staging, manifest.runtime.sitePackagesPath); const packageDigest = treeDigest(packagePath); const sitePackagesDigest = treeDigest(sitePackagesPath); const closure = actualClosureDigest(staging, manifest);
     if (packageDigest !== manifest.runtime.packageTreeSha256 || sitePackagesDigest !== manifest.runtime.sitePackagesTreeSha256 || closure !== manifest.runtime.closureSha256) throw new Error("attestation");
