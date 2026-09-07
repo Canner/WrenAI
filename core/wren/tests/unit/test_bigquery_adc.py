@@ -1,10 +1,14 @@
 """BigQuery connector: Application Default Credentials fallback.
 
 Stubs ``google.cloud.bigquery``, ``google.oauth2.service_account`` and
-``google.auth`` before importing the connector under test, same pattern as
-``test_athena_connector.py`` uses for ``pyathena``/``boto3``. The real
-``google-*`` packages are only installed under the optional ``bigquery``
-extra, which CI's unit-test job does not install.
+``google.auth`` for the duration of each test, via ``monkeypatch.setitem``
+so a prior real import of ``google`` (e.g. from ``protobuf``/``grpc``, which
+also occupy that namespace package) is overridden rather than left in place
+by ``setdefault``, and is restored afterward. ``BigQueryConnector.__init__``
+imports these lazily, so the stub only needs to be live while a test runs,
+not at collection time. The real ``google-*`` packages are only installed
+under the optional ``bigquery`` extra, which CI's unit-test job does not
+install.
 """
 
 from __future__ import annotations
@@ -80,21 +84,23 @@ _google_mod.oauth2 = _google_oauth2_mod
 _google_oauth2_mod.service_account = _google_oauth2_service_account_mod
 _google_mod.auth = _google_auth_mod
 
-sys.modules.setdefault("google", _google_mod)
-sys.modules.setdefault("google.cloud", _google_cloud_mod)
-sys.modules.setdefault("google.cloud.bigquery", _google_cloud_bigquery_mod)
-sys.modules.setdefault("google.oauth2", _google_oauth2_mod)
-sys.modules.setdefault(
-    "google.oauth2.service_account", _google_oauth2_service_account_mod
-)
-sys.modules.setdefault("google.auth", _google_auth_mod)
+_GOOGLE_STUBS = {
+    "google": _google_mod,
+    "google.cloud": _google_cloud_mod,
+    "google.cloud.bigquery": _google_cloud_bigquery_mod,
+    "google.oauth2": _google_oauth2_mod,
+    "google.oauth2.service_account": _google_oauth2_service_account_mod,
+    "google.auth": _google_auth_mod,
+}
 
 from wren.connector.bigquery import BigQueryConnector  # noqa: E402
 from wren.model import BigQueryDatasetConnectionInfo  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
-def _reset_calls():
+def _reset_calls(monkeypatch):
+    for name, module in _GOOGLE_STUBS.items():
+        monkeypatch.setitem(sys.modules, name, module)
     _client_calls.clear()
     _service_account_calls.clear()
     _default_calls.clear()
