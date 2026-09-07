@@ -56,3 +56,8 @@ jobs:
 
       - name: cargo test
         run: cargo test
+
+      # Not cosmetic: with warnings denied, rustdoc fails on a public doc link to a private item,
+      # which neither clippy nor the tests see. It caught one in this crate.
+      - name: cargo doc
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
