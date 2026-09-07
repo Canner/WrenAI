@@ -52,7 +52,9 @@ fn main() -> ExitCode {
                 return ExitCode::from(1);
             }
         }
-        None => println!("{document}"),
+        // `print!`, not `println!`: the `-o` path writes the document verbatim, and a consumer
+        // that hashes what it reads would see the two routes disagree by one byte.
+        None => print!("{document}"),
     }
     ExitCode::SUCCESS
 }
