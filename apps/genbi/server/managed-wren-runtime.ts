@@ -160,12 +160,15 @@ function reclaimStaleLock(lock: string): boolean {
     const entry = lstatSync(lock); if (!entry.isFile() || entry.isSymbolicLink() || (entry.mode & 0o777) !== 0o600) return false;
     const record = JSON.parse(readFileSync(lock, "utf8")); if (!Number.isInteger(record.pid) || record.pid <= 0) return false;
     try { process.kill(record.pid, 0); return false; } catch (error: any) { if (error?.code !== "ESRCH") return false; }
-    const before = statSync(lock); unlinkSync(lock); return before.ino > 0;
+    const before = statSync(lock); const quarantine = `${lock}.stale-${process.pid}-${Date.now()}`;
+    renameSync(lock, quarantine); const claimed = statSync(quarantine); if (claimed.ino !== before.ino) return false;
+    const claimedRecord = JSON.parse(readFileSync(quarantine, "utf8")); if (claimedRecord.pid !== record.pid) return false;
+    unlinkSync(quarantine); return true;
   } catch { return false; }
 }
 function assertSafeArchive(archive: string): void {
-  const listing = execFileSync("/usr/bin/tar", ["-tzf", archive], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-  for (const member of listing.split("\n").filter(Boolean)) if (member.startsWith("/") || member.split("/").includes("..")) throw new Error("unsafe archive member");
+  const listing = execFileSync("/usr/bin/tar", ["-tvzf", archive], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  for (const line of listing.split("\n").filter(Boolean)) { const match = line.match(/\s([^\s]+)(?: -> | link to )?(.+)?$/); const target = match?.[1]; const link = match?.[2]; if (!target || target.startsWith("/") || target.split("/").includes("..") || (link && (link.startsWith("/") || link.split("/").includes("..")))) throw new Error("unsafe archive member"); }
 }
 
 /**
