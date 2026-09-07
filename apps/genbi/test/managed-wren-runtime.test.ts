@@ -152,18 +152,58 @@ describe("managed Wren runtime", () => {
     await expect(provisionManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot })).resolves.toMatchObject({ launcher: expect.any(String) });
   });
 
-  it("activates only a byte-identical approved manifest anchored by the staged package", async () => {
+  it("provisions from a byte-identical approved manifest anchored by the staged package, then reuses its cache before fetch", async () => {
     const value = provisionFixture(); const approved = JSON.stringify(value.manifest); const approvedUrl = "https://github.com/Canner/WrenAI/releases/download/fixture/manifest.json";
     const staged = { ...value.manifest, activation: "staged", licenseApproval: { state: "pending" }, approvedManifest: { url: approvedUrl, sha256: digest(approved) } };
     writeFileSync(path.join(value.packageRoot, "managed-wren", "manifest.json"), JSON.stringify(staged));
+    const requests: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
-      const url = String(input); if (url === approvedUrl) return new Response(approved);
-      if (url === value.manifest.python.mirror.url) return new Response("missing", { status: 404 });
+      const url = String(input); requests.push(url);
+      if (url === approvedUrl) return new Response(approved);
+      if (url === value.manifest.python.mirror.url) return new Response(readFileSync(path.join(value.runtimeRoot, "..", "python.tar.gz")));
+      if (url === value.manifest.wheels[0].url) return new Response(Buffer.from("fixture wheel 0.13.0\n"));
       return new Response("missing", { status: 404 });
     }));
-    await expect(provisionManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot })).rejects.toMatchObject({ code: "codex_wren_provision_failed" });
+    // The fixture archive is retained beside its runtime root by provisionFixture.
+    const first = await provisionManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot });
+    expect(first.generation_root).toContain(first.manifest_digest);
     expect(existsSync(path.join(value.runtimeRoot, "attestations", `${digest(approved)}.json`))).toBe(true);
-  });
+    const count = requests.length;
+    expect(resolveManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot }).generation_root).toBe(first.generation_root);
+    await expect(provisionManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot })).resolves.toMatchObject({ generation_root: first.generation_root });
+    expect(requests).toHaveLength(count);
+  }, 20_000);
+
+  it("serializes staged first use and rejects a malicious approved-manifest cache without network recovery", async () => {
+    const value = provisionFixture(); const approved = JSON.stringify(value.manifest); const approvedUrl = "https://github.com/Canner/WrenAI/releases/download/fixture/manifest.json";
+    const staged = { ...value.manifest, activation: "staged", licenseApproval: { state: "pending" }, approvedManifest: { url: approvedUrl, sha256: digest(approved) } };
+    writeFileSync(path.join(value.packageRoot, "managed-wren", "manifest.json"), JSON.stringify(staged));
+    let release!: () => void; const paused = new Promise<void>((resolve) => { release = resolve; }); let manifestFetch = true;
+    const archive = readFileSync(path.join(value.runtimeRoot, "..", "python.tar.gz"));
+    const fetch = vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      if (url === approvedUrl) { if (manifestFetch) { manifestFetch = false; await paused; } return new Response(approved); }
+      if (url === value.manifest.python.mirror.url) return new Response(archive);
+      if (url === value.manifest.wheels[0].url) return new Response(Buffer.from("fixture wheel 0.13.0\n"));
+      return new Response("missing", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const owner = provisionManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const waiter = provisionManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot });
+    release();
+    const [a, b] = await Promise.all([owner, waiter]);
+    expect(a.generation_root).toBe(b.generation_root);
+    expect(fetch.mock.calls.filter(([url]) => String(url) === approvedUrl)).toHaveLength(1);
+
+    const poisoned = provisionFixture();
+    writeFileSync(path.join(poisoned.packageRoot, "managed-wren", "manifest.json"), JSON.stringify(staged));
+    mkdirSync(path.join(poisoned.runtimeRoot, "attestations"), { mode: 0o700 }); chmodSync(path.join(poisoned.runtimeRoot, "attestations"), 0o700);
+    writeFileSync(path.join(poisoned.runtimeRoot, "attestations", `${digest(approved)}.json`), "malicious", { mode: 0o600 });
+    const poisonedFetch = vi.fn(async () => new Response(approved)); vi.stubGlobal("fetch", poisonedFetch);
+    await expect(provisionManagedWrenRuntime({ packageRoot: poisoned.packageRoot, runtimeRoot: poisoned.runtimeRoot })).rejects.toMatchObject({ code: "codex_wren_manifest_invalid" });
+    expect(poisonedFetch).not.toHaveBeenCalled();
+  }, 20_000);
 
   it("recovers only marked stale staging and preserves untrusted or rollback state", async () => {
     const value = provisionFixture(); const digestValue = manifestDigest(readManagedWrenManifest(value.packageRoot));

@@ -123,12 +123,36 @@ function activatedManifest(base: ManagedWrenManifest, root: string): ManagedWren
   if (base.activation === "approved") return base;
   if (!base.approvedManifest) return failure("codex_wren_runtime_unprovisioned");
   try {
-    const bytes = readFileSync(approvedManifestCache(root, base.approvedManifest.sha256));
+    const cache = approvedManifestCache(root, base.approvedManifest.sha256);
+    assertPrivateDirectory(path.dirname(cache));
+    const entry = lstatSync(cache);
+    if (!entry.isFile() || entry.isSymbolicLink() || (entry.mode & 0o777) !== 0o600) return failure("codex_wren_manifest_invalid");
+    const bytes = readFileSync(cache);
     if (sha256(bytes) !== base.approvedManifest.sha256) return failure("codex_wren_manifest_invalid");
     const parsed = managedWrenManifestSchema.safeParse(JSON.parse(bytes.toString("utf8")));
     if (!parsed.success || parsed.data.activation !== "approved" || parsed.data.platform !== base.platform) return failure("codex_wren_manifest_invalid");
     return Object.freeze(parsed.data);
-  } catch { return failure("codex_wren_runtime_unprovisioned"); }
+  } catch (error) { if (error instanceof ManagedWrenRuntimeError) throw error; return failure("codex_wren_runtime_unprovisioned"); }
+}
+async function cacheApprovedManifest(base: ManagedWrenManifest, root: string): Promise<ManagedWrenManifest> {
+  if (base.activation === "approved") return base;
+  // A byte-identical cached record is the first choice.  Do not turn a local
+  // cache corruption into a network recovery path: the package anchor is the
+  // authority, and a bad cache is an integrity failure.
+  try { return activatedManifest(base, root); } catch (error) {
+    if (!(error instanceof ManagedWrenRuntimeError) || error.code !== "codex_wren_runtime_unprovisioned") throw error;
+  }
+  if (!base.approvedManifest) return failure("codex_wren_runtime_unprovisioned");
+  const response = await fetch(base.approvedManifest.url); if (!response.ok) return failure("codex_wren_provision_failed");
+  const bytes = Buffer.from(await response.arrayBuffer()); if (sha256(bytes) !== base.approvedManifest.sha256) return failure("codex_wren_manifest_invalid");
+  const cache = approvedManifestCache(root, base.approvedManifest.sha256); mkdirSync(path.dirname(cache), { recursive: true, mode: 0o700 }); chmodSync(path.dirname(cache), 0o700); assertPrivateDirectory(path.dirname(cache));
+  try { writeFileSync(cache, bytes, { mode: 0o600, flag: "wx" }); } catch (error: any) {
+    // The provision lock prevents this in normal operation.  Preserve this
+    // compare-and-accept branch for a cross-version contender that already
+    // populated the same exact anchor while this process was starting.
+    if (error?.code !== "EEXIST") throw error;
+  }
+  return activatedManifest(base, root);
 }
 function stagingMarker(root: string): string { return path.join(root, ".genbi-managed-wren-staging.json"); }
 function actualClosureDigest(root: string, manifest: ManagedWrenManifest): string {
@@ -254,32 +278,29 @@ export function resolveManagedWrenRuntime(options: { readonly packageRoot?: stri
 export async function provisionManagedWrenRuntime(options: { readonly packageRoot?: string; readonly runtimeRoot?: string } = {}): Promise<ManagedWrenRuntimeRecord> {
   const root = options.runtimeRoot ?? defaultManagedWrenRoot();
   mkdirSync(root, { recursive: true, mode: 0o700 }); chmodSync(root, 0o700); assertPrivateDirectory(root);
-  const base = readManagedWrenManifest(options.packageRoot); let manifest: ManagedWrenManifest;
-  if (base.activation === "approved") manifest = base;
-  else {
-    if (!base.approvedManifest) return failure("codex_wren_runtime_unprovisioned");
-    try {
-      const response = await fetch(base.approvedManifest.url); if (!response.ok) return failure("codex_wren_provision_failed");
-      const bytes = Buffer.from(await response.arrayBuffer()); if (sha256(bytes) !== base.approvedManifest.sha256) return failure("codex_wren_manifest_invalid");
-      const cache = approvedManifestCache(root, base.approvedManifest.sha256); mkdirSync(path.dirname(cache), { recursive: true, mode: 0o700 }); writeFileSync(cache, bytes, { mode: 0o600, flag: "wx" });
-      manifest = activatedManifest(base, root);
-    } catch (error) { if (error instanceof ManagedWrenRuntimeError) throw error; return failure("codex_wren_provision_failed"); }
+  const base = readManagedWrenManifest(options.packageRoot);
+  // An approved package can avoid the lock entirely.  A staged package takes
+  // the same lock for cache population and provision, so concurrent first use
+  // cannot observe an absent/half-written approved-manifest cache.
+  if (base.activation === "approved") {
+    try { return resolveManagedWrenRuntime({ ...(options.packageRoot ? { packageRoot: options.packageRoot } : {}), runtimeRoot: root }); } catch (error) { if (!(error instanceof ManagedWrenRuntimeError) || error.code !== "codex_wren_runtime_unprovisioned") throw error; }
   }
-  const digest = manifestDigest(manifest); const destination = immutableDirectory(root, digest);
-  try { return resolveManagedWrenRuntime({ ...(options.packageRoot ? { packageRoot: options.packageRoot } : {}), runtimeRoot: root }); } catch (error) { if (!(error instanceof ManagedWrenRuntimeError) || error.code !== "codex_wren_runtime_unprovisioned") throw error; }
-  const lock = path.join(root, ".provision.lock"); let descriptor: number | undefined;
+  const lock = path.join(root, ".provision.lock"); let descriptor: number | undefined; let provisionDigest: string | undefined;
   try {
     // A second first-use caller waits for the owner instead of falling through
     // to a partial directory or declaring a separate runtime valid.
     const deadline = Date.now() + 10_000;
     while (descriptor === undefined && Date.now() < deadline) {
-      try { descriptor = openSync(lock, "wx", 0o600); writeFileSync(descriptor, JSON.stringify({ pid: process.pid, manifestDigest: digest }) + "\n"); } catch (error: unknown) {
+      try { descriptor = openSync(lock, "wx", 0o600); writeFileSync(descriptor, JSON.stringify({ pid: process.pid, manifestDigest: base.activation === "approved" ? manifestDigest(base) : base.approvedManifest?.sha256 ?? "pending" }) + "\n"); } catch (error: unknown) {
         if (!(error && typeof error === "object" && "code" in error && error.code === "EEXIST")) throw error;
         if (reclaimStaleLock(lock)) continue;
         await new Promise((resolve) => setTimeout(resolve, 25));
       }
     }
     if (descriptor === undefined) return failure("codex_wren_provision_failed");
+    let manifest: ManagedWrenManifest;
+    try { manifest = await cacheApprovedManifest(base, root); } catch (error) { if (error instanceof ManagedWrenRuntimeError) throw error; return failure("codex_wren_provision_failed"); }
+    const digest = manifestDigest(manifest); provisionDigest = digest; const destination = immutableDirectory(root, digest);
     // A waiter must re-check after it owns the lock: the original owner may
     // have completed while this caller was waiting.
     try { return resolveManagedWrenRuntime({ ...(options.packageRoot ? { packageRoot: options.packageRoot } : {}), runtimeRoot: root }); } catch (error) { if (!(error instanceof ManagedWrenRuntimeError) || error.code !== "codex_wren_runtime_unprovisioned") throw error; }
@@ -319,7 +340,7 @@ export async function provisionManagedWrenRuntime(options: { readonly packageRoo
     rmSync(stagingMarker(destination), { force: true });
     writeFileSync(ownershipMarker(destination), JSON.stringify({ manifestDigest: digest, packageDigest, sitePackagesDigest, closureDigest: closure, interpreterDigest: sha256(readFileSync(finalInterpreter)), launcherDigest: sha256(readFileSync(finalLauncher)) }) + "\n", { mode: 0o600, flag: "wx" });
     return resolveManagedWrenRuntime({ ...(options.packageRoot ? { packageRoot: options.packageRoot } : {}), runtimeRoot: root });
-  } catch (error) { if (descriptor !== undefined) cleanupRecognisedStaging(root, digest); if (error instanceof ManagedWrenRuntimeError) throw error; return failure("codex_wren_provision_failed");
+  } catch (error) { if (descriptor !== undefined && provisionDigest) cleanupRecognisedStaging(root, provisionDigest); if (error instanceof ManagedWrenRuntimeError) throw error; return failure("codex_wren_provision_failed");
   } finally { if (descriptor !== undefined) { try { rmSync(lock, { force: true }); } catch { /* next run reports unavailable */ } } }
 }
 

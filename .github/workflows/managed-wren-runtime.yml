@@ -29,13 +29,17 @@ jobs:
           mkdir -p release/wheels release/runtime
           python -m pip download --only-binary=:all: --platform macosx_11_0_arm64 --python-version 3.11 --implementation cp --dest release/wheels 'wrenai==0.13.0'
           python - <<'PY'
-          import hashlib, json, pathlib, zipfile
+          import hashlib, json, pathlib, urllib.request, zipfile
           rows = []
           for wheel in sorted(pathlib.Path('release/wheels').glob('*.whl')):
             with zipfile.ZipFile(wheel) as z:
               meta = next(n for n in z.namelist() if n.endswith('.dist-info/METADATA'))
               values = dict(line.split(': ', 1) for line in z.read(meta).decode('utf8', 'replace').splitlines() if ': ' in line)
-            rows.append({'filename': wheel.name, 'sha256': hashlib.sha256(wheel.read_bytes()).hexdigest(), 'distribution': values['Name'].lower().replace('-', '_'), 'version': values['Version'], 'license': values.get('License', 'UNKNOWN'), 'sourceUrl': 'https://pypi.org/project/' + values['Name'] + '/' + values['Version'] + '/'})
+            sha256 = hashlib.sha256(wheel.read_bytes()).hexdigest()
+            release = json.load(urllib.request.urlopen('https://pypi.org/pypi/{}/{}/json'.format(values['Name'], values['Version'])))
+            source = next((item['url'] for item in release['urls'] if item['filename'] == wheel.name and item['digests']['sha256'] == sha256), None)
+            if not source: raise SystemExit('could not establish exact source identity for ' + wheel.name)
+            rows.append({'filename': wheel.name, 'sha256': sha256, 'distribution': values['Name'].lower().replace('-', '_'), 'version': values['Version'], 'license': values.get('License', 'UNKNOWN'), 'sourceUrl': source})
           pathlib.Path('release/wheel-inputs.json').write_text(json.dumps(rows))
           pathlib.Path('release/wheel-license-inventory.json').write_text(json.dumps({'schema': 1, 'wheels': rows}, indent=2))
           PY
@@ -79,13 +83,8 @@ jobs:
       - name: Re-fetch and verify exact release assets
         run: |
           mkdir -p release/assets
-          curl --fail --location --proto '=https' --tlsv1.2 -o release/assets/python.tar.gz 'https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-3.11.16%2B20260901-aarch64-apple-darwin-install_only.tar.gz'
-          test "$(shasum -a 256 release/assets/python.tar.gz | awk '{print $1}')" = 50424fa409e8ae84b82a3052522f64695b47dff2158b70bb7358e0ebd6c085c9
-          python -m pip download --only-binary=:all: --platform macosx_11_0_arm64 --python-version 3.11 --implementation cp --dest release/assets/wheels 'wrenai==0.13.0'
-      - name: Emit approved immutable manifest
-        run: |
-          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('release/managed-wren-manifest.candidate.json'));m.activation='approved';m.licenseApproval={state:'approved',evidence:'protected-environment-digest'};fs.writeFileSync('release/managed-wren-manifest.json',JSON.stringify(m,null,2)+'\\n')"
+          node apps/genbi/scripts/managed-wren-release.mjs verify-publish release release/assets
       - name: Publish verified assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ inputs.runtime_tag }}" release/assets/python.tar.gz release/assets/wheels/*.whl release/*.json
+        run: gh release create "${{ inputs.runtime_tag }}" release/assets/* release/*.json

@@ -263,7 +263,7 @@ async function managedWrenFixture(root) {
   const fixtureRoot = path.join(root, "managed-wren-fixture"); const source = path.join(fixtureRoot, "source");
   const python = path.join(source, "python", "install", "bin", "python3.11"); await mkdir(path.dirname(python), { recursive: true });
   await writeFile(python, [
-    "#!/bin/sh", 'if [ "$1" = "-m" ] && [ "$2" = "venv" ]; then', '  target="$3"',
+    "#!/bin/sh", 'if [ "$1" = "-m" ] && [ "$2" = "venv" ]; then', '  target="$3"; if [ "$target" = "--copies" ]; then target="$4"; fi',
     '  /bin/mkdir -p "$target/bin" "$target/lib/python3.11/site-packages/wren" "$target/lib/python3.11/site-packages/dependency"',
     '  /bin/cp "$0" "$target/bin/python"', '  /bin/chmod 700 "$target/bin/python"',
     "  /usr/bin/printf '#!%s\\nfrom wren.cli import app\\n' \"$target/bin/python\" > \"$target/bin/wren\"", '  /bin/chmod 700 "$target/bin/wren"',
