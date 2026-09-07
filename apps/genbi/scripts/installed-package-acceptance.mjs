@@ -277,7 +277,7 @@ async function managedWrenFixture(root) {
   const wheel = path.join(fixtureRoot, "wrenai-0.13.0-py3-none-any.whl"); await writeFile(wheel, "fixture wheel\n", { mode: 0o600 });
   const wheelSha256 = createHash("sha256").update(await readFile(wheel)).digest("hex");
   const digestFile = (contents) => createHash("sha256").update(contents).digest("hex");
-  const pythonTreeSha256 = digestFile(`install/bin/python3.11\0${"644"}\0file\0${digestFile(await readFile(python))}`);
+  const pythonTreeSha256 = digestFile(`install/bin/python3.11\0${"700"}\0file\0${digestFile(await readFile(python))}`);
   const packageDigest = digestFile(`__init__.py\0${"600"}\0file\0${digestFile("__version__ = '0.13.0'\n")}`);
   const sitePackagesDigest = digestFile([`dependency/__init__.py\0${"644"}\0file\0${digestFile("dependency = 1\n")}`, `wren/__init__.py\0${"600"}\0file\0${digestFile("__version__ = '0.13.0'\n")}`].join("\n"));
   const wheelName = path.basename(wheel); const closureSha256 = digestFile(`${wheelName}\0${wheelSha256}`); const release = "https://github.com/Canner/WrenAI/releases/download/managed-wren-fixture";
