@@ -144,7 +144,7 @@ import { NativeSessionService } from "./native-sessions.js";
 import { NativeArtifactService } from "./native-artifacts.js";
 import { RuntimeHost } from "./runtime-host/local.js";
 import { runtimeNotReady } from "./runtime-host/policy.js";
-import { ManagedWrenRuntimeError, provisionManagedWrenRuntime, resolveManagedWrenRuntime } from "./managed-wren-runtime.js";
+import { managedWrenReadinessFailure, resolveManagedWrenRuntime } from "./managed-wren-runtime.js";
 import { assertNativeExecutableIdentity, assertNativeRuntimeSpec, attestNativeExecutable, buildNativeChildEnvironment, buildNativeRuntimeSpec, resolveNativeExecutable } from "./native-runtime-spec.js";
 import type { NativeExecutableIdentity } from "./native-runtime-spec.js";
 import { initializeNativeSessionStateBase, legacyInteractiveWorkspace, validateLegacyInteractiveWorkspace } from "./native-session-workspace.js";
@@ -581,23 +581,18 @@ async function main(): Promise<void> {
   // This is the sole production composition of the Phase-1 policy. Browser
   // requests never reach this selection or its executable/policy inputs.
   const managedCodexRuntimeProbe = async () => {
-    try {
-      const record = await provisionManagedWrenRuntime({ packageRoot });
-      // Provisioning is only one Codex readiness input. This phase must not
-      // enable the local PTY as a production Codex adapter before the future
-      // app-server capability/identity contract is certified.
-      void record;
-      return {
-        readiness: runtimeNotReady("codex-app-server", "unprovisioned", "codex_app_server_unprovisioned"),
-        diagnostic: { phase: "provisioning" as const },
-      };
-    } catch (error) {
-      const code = error instanceof ManagedWrenRuntimeError ? error.code : "codex_wren_runtime_unprovisioned";
+    const code = managedWrenReadinessFailure({ packageRoot });
+    if (code !== undefined) {
       return {
         readiness: runtimeNotReady("codex-app-server", "unprovisioned", code),
         diagnostic: { phase: "provisioning" as const },
       };
     }
+    // A verified runtime alone does not enable the future app-server adapter.
+    return {
+      readiness: runtimeNotReady("codex-app-server", "unprovisioned", "codex_app_server_unprovisioned"),
+      diagnostic: { phase: "provisioning" as const },
+    };
   };
   const nativeRuntimeHost = new RuntimeHost({
     selected: "local",

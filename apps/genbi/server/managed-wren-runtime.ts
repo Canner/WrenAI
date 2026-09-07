@@ -38,7 +38,7 @@ const managedWrenManifestSchema = z.object({
   if (new Set(value.wheels.map((wheel) => wheel.filename)).size !== value.wheels.length) context.addIssue({ code: "custom", message: "duplicate wheel filename" });
   if (value.wheels[0]?.distribution !== "wrenai" || value.wheels[0].version !== value.compatibility.wren) context.addIssue({ code: "custom", message: "wrenai must be the first exact wheel" });
   const approved = value.activation === "approved";
-  if (approved !== (value.licenseApproval.state === "approved") || (approved && (!value.licenseApproval.evidence || value.runtime.pythonTreeSha256 === "staged" || value.runtime.packageTreeSha256 === "staged" || value.runtime.closureSha256 === "staged"))) {
+  if (approved !== (value.licenseApproval.state === "approved") || (approved && (!value.licenseApproval.evidence || value.runtime.pythonTreeSha256 === "staged" || value.runtime.packageTreeSha256 === "staged" || value.runtime.sitePackagesTreeSha256 === "staged" || value.runtime.closureSha256 === "staged"))) {
     context.addIssue({ code: "custom", message: "activation requires approved licence evidence and attested digests" });
   }
 });
@@ -310,6 +310,20 @@ export function resolveManagedWrenRuntime(options: { readonly packageRoot?: stri
 }
 
 /**
+ * Readiness is deliberately resolve-only: checking any RuntimeHost backend
+ * must neither create the GenBI runtime root nor fetch/install managed bytes.
+ * An explicit future first-use path may call the exported provisioner below.
+ */
+export function managedWrenReadinessFailure(options: { readonly packageRoot?: string; readonly runtimeRoot?: string } = {}): ManagedWrenFailureCode | undefined {
+  try {
+    resolveManagedWrenRuntime(options);
+    return undefined;
+  } catch (error) {
+    return error instanceof ManagedWrenRuntimeError ? error.code : "codex_wren_runtime_unprovisioned";
+  }
+}
+
+/**
  * Provision is intentionally unavailable for a staged manifest. A release can
  * only turn this on after the protected licence approval job writes an approved
  * manifest with release-attested digests.
@@ -352,7 +366,7 @@ export async function provisionManagedWrenRuntime(options: { readonly packageRoo
     // Fetching any other URL, index, or dependency resolver is intentionally absent.
     const archive = path.join(staging, manifest.runtime.pythonArchivePath); const download = async (url: string, target: string, expected: string) => { const response = await fetch(url); if (!response.ok) throw new Error("download"); const bytes = Buffer.from(await response.arrayBuffer()); if (sha256(bytes) !== expected) throw new Error("digest"); writeFileSync(target, bytes, { mode: 0o600, flag: "wx" }); };
     await download(manifest.python.mirror.url, archive, manifest.python.mirror.sha256);
-    assertSafeArchive(archive); execFileSync("/usr/bin/tar", ["-xzf", archive, "-C", staging], { stdio: "ignore" });
+    assertSafeArchive(archive); execFileSync("/usr/bin/tar", ["-xpzf", archive, "-C", staging], { stdio: "ignore" }); chmodSync(staging, 0o700);
     const python = path.join(staging, manifest.python.interpreterPath); regularExecutable(staging, python, "codex_wren_interpreter_mismatch");
     const wheels = path.join(staging, "wheels"); mkdirSync(wheels, { mode: 0o700 });
     for (const wheel of manifest.wheels) await download(wheel.url, path.join(wheels, wheel.filename), wheel.sha256);

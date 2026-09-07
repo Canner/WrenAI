@@ -4,7 +4,9 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ManagedWrenRuntimeError, cleanupManagedWrenGenerations, managedWrenClosureDigest, managedWrenTreeDigest, manifestDigest, provisionManagedWrenRuntime, readManagedWrenManifest, resolveManagedWrenRuntime } from "../server/managed-wren-runtime.js";
+import { ManagedWrenRuntimeError, cleanupManagedWrenGenerations, managedWrenClosureDigest, managedWrenReadinessFailure, managedWrenTreeDigest, manifestDigest, provisionManagedWrenRuntime, readManagedWrenManifest, resolveManagedWrenRuntime } from "../server/managed-wren-runtime.js";
+import { RuntimeHost } from "../server/runtime-host/local.js";
+import { runtimeNotReady } from "../server/runtime-host/policy.js";
 
 const roots: string[] = [];
 const digest = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
@@ -122,6 +124,42 @@ describe("managed Wren runtime", () => {
       const changed = JSON.parse(JSON.stringify(original)); mutate(changed); writeFileSync(manifestPath, JSON.stringify(changed));
       expect(() => resolveManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot })).toThrow(ManagedWrenRuntimeError);
     }
+  });
+
+  it("rejects every staged attestation placeholder in an approved manifest", () => {
+    const value = fixture(); const manifestPath = path.join(value.packageRoot, "managed-wren", "manifest.json");
+    for (const field of ["pythonTreeSha256", "packageTreeSha256", "sitePackagesTreeSha256", "closureSha256"] as const) {
+      const changed = JSON.parse(JSON.stringify(value.manifest)); changed.runtime[field] = "staged"; writeFileSync(manifestPath, JSON.stringify(changed));
+      try { readManagedWrenManifest(value.packageRoot); throw new Error("approved staged digest was accepted"); } catch (error) { expect(error).toMatchObject({ code: "codex_wren_manifest_invalid" }); }
+    }
+  });
+
+  it("keeps production RuntimeHost composition resolve-only across local, Codex, and Claude probes", async () => {
+    const value = provisionFixture(); rmSync(value.runtimeRoot, { recursive: true, force: true });
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+    const localAvailable = vi.fn(() => true);
+    const host = new RuntimeHost({
+      selected: "local",
+      deployment: "development",
+      localAvailable,
+      vendorProbes: {
+        "codex-app-server": async () => {
+          const code = managedWrenReadinessFailure({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot });
+          return { readiness: runtimeNotReady("codex-app-server", "unprovisioned", code ?? "codex_app_server_unprovisioned"), diagnostic: { phase: "provisioning" as const } };
+        },
+      },
+    });
+    await expect(host.probe()).resolves.toMatchObject({
+      selectedReadiness: { state: "ready" },
+      backends: {
+        "codex-app-server": { state: "unprovisioned", code: "codex_wren_runtime_unprovisioned" },
+        "claude-sandbox-runtime": { state: "unprovisioned", code: "claude_sandbox_runtime_unprovisioned" },
+      },
+    });
+    expect(localAvailable).toHaveBeenCalledTimes(1); expect(fetch).not.toHaveBeenCalled(); expect(existsSync(value.runtimeRoot)).toBe(false);
+    const productionComposition = readFileSync(path.resolve("server", "bin.ts"), "utf8");
+    expect(productionComposition).toContain("managedWrenReadinessFailure({ packageRoot })");
+    expect(productionComposition).not.toContain("provisionManagedWrenRuntime");
   });
 
   it("provisions deterministic fixture assets offline and then reuses the immutable generation", async () => {
