@@ -268,6 +268,19 @@ fn a_cyclic_graph_terminates_and_still_agrees() {
     );
 }
 
+/// A seed that is an edge *source* but not a declared node. Distinct from a dangling endpoint:
+/// here the undeclared id has outgoing edges, so "unknown seed" and "leaf seed" come apart, and
+/// whether the traversal short-circuits on an undeclared seed becomes observable.
+#[test]
+fn a_dangling_edge_source_agrees_too() {
+    let graph = LineageGraph {
+        nodes: vec![node("dashboard:sales", LineageKind::Dashboard)],
+        edges: vec![edge("model:missing", "dashboard:sales")],
+    };
+    assert_agrees_on(&graph, "model:missing");
+    assert_agrees_everywhere(&graph);
+}
+
 #[test]
 fn a_dangling_edge_endpoint_carries_no_severity() {
     // `is_resolvable` is what reports a dangling reference; the impact analysis must not invent a
