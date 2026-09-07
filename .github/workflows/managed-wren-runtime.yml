@@ -1,0 +1,134 @@
+name: Stage managed Wren runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_tag:
+        description: Immutable managed-Wren release tag
+        required: true
+        type: string
+      license_approval:
+        description: Must be approved after legal review; protected environment is the authority
+        required: true
+        default: pending
+        type: choice
+        options: [pending, approved]
+
+permissions:
+  contents: read
+
+jobs:
+  stage:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Resolve and download the exact darwin-arm64 wheel closure
+        run: |
+          mkdir -p release/wheels
+          python -m pip download --only-binary=:all: --platform macosx_11_0_arm64 --python-version 3.11 --implementation cp --dest release/wheels 'wrenai==0.13.0'
+          python - <<'PY'
+          import hashlib, pathlib
+          target = pathlib.Path('release/wheels/wrenai-0.13.0-py3-none-any.whl')
+          assert target.is_file()
+          assert hashlib.sha256(target.read_bytes()).hexdigest() == '1cb14927c9a1e1925a7295c2772e5852254c6cc370db640ccc33b6cd04e95dae'
+          PY
+      - name: Verify and stage the exact CPython archive
+        run: |
+          python - <<'PY'
+          import hashlib, pathlib, urllib.request
+          target = pathlib.Path('release/cpython-3.11.16+20260901-aarch64-apple-darwin-install_only.tar.gz')
+          urllib.request.urlretrieve('https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-3.11.16%2B20260901-aarch64-apple-darwin-install_only.tar.gz', target)
+          assert hashlib.sha256(target.read_bytes()).hexdigest() == '50424fa409e8ae84b82a3052522f64695b47dff2158b70bb7358e0ebd6c085c9'
+          PY
+      - name: Inventory every selected wheel licence and digest
+        run: |
+          python - <<'PY'
+          import hashlib, json, pathlib, urllib.request, zipfile
+          rows = []
+          for wheel in sorted(pathlib.Path('release/wheels').glob('*.whl')):
+            with zipfile.ZipFile(wheel) as archive:
+              metadata = next(name for name in archive.namelist() if name.endswith('.dist-info/METADATA'))
+              fields = {}
+              for line in archive.read(metadata).decode('utf-8', 'replace').splitlines():
+                if ': ' in line:
+                  key, value = line.split(': ', 1)
+                  if key in ('Name', 'Version', 'License'): fields[key] = value
+            if not fields.get('Name') or not fields.get('Version'):
+              raise SystemExit(f'missing wheel identity: {wheel.name}')
+            sha256 = hashlib.sha256(wheel.read_bytes()).hexdigest()
+            project = json.load(urllib.request.urlopen(f"https://pypi.org/pypi/{fields['Name']}/{fields['Version']}/json"))
+            match = next((item for item in project['urls'] if item['filename'] == wheel.name and item['digests']['sha256'] == sha256), None)
+            if match is None:
+              raise SystemExit(f'missing immutable source identity: {wheel.name}')
+            rows.append({'filename': wheel.name, 'sha256': sha256, 'distribution': fields['Name'].lower().replace('-', '_'), 'version': fields['Version'], 'license': fields.get('License', 'UNKNOWN'), 'sourceUrl': match['url']})
+          pathlib.Path('release/wheel-license-inventory.json').write_text(json.dumps({'schema': 1, 'platform': 'darwin-arm64', 'wheels': rows}, indent=2) + '\n')
+          pathlib.Path('release/wheel-inputs.json').write_text(json.dumps(rows, indent=2) + '\n')
+          PY
+      - name: Build the selected runtime without an index or dependency resolver
+        run: |
+          mkdir -p release/runtime
+          tar -xzf release/cpython-*.tar.gz -C release/runtime
+          release/runtime/python/install/bin/python3.11 -m venv release/runtime/venv
+          python - <<'PY'
+          import json, pathlib
+          wheels = json.loads(pathlib.Path('release/wheel-inputs.json').read_text())
+          pathlib.Path('release/requirements.txt').write_text(''.join(f"{wheel['distribution']}=={wheel['version']} --hash=sha256:{wheel['sha256']}\n" for wheel in wheels))
+          PY
+          release/runtime/venv/bin/python -m pip install --no-index --no-deps --require-hashes --find-links release/wheels -r release/requirements.txt
+      - name: Generate attested candidate manifest and preliminary licence inventory
+        run: node apps/genbi/scripts/managed-wren-release.mjs release "${{ inputs.runtime_tag }}"
+      - name: Upload review-only release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: managed-wren-staged-evidence
+          path: release/
+
+  publish-approved-runtime:
+    needs: stage
+    if: ${{ inputs.license_approval == 'approved' }}
+    environment: managed-wren-license-approved
+    permissions:
+      contents: write
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: managed-wren-staged-evidence
+          path: release
+      - name: Require protected-environment approval evidence
+        run: |
+          test "${{ inputs.license_approval }}" = approved
+          test -s release/license-inventory.json
+          test -s release/wheel-license-inventory.json
+          test -s release/provenance.json
+          test -s release/managed-wren-manifest.candidate.json
+      - name: Emit the approval-bound immutable manifest
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const manifest = JSON.parse(fs.readFileSync('release/managed-wren-manifest.candidate.json', 'utf8'));
+          manifest.activation = 'approved';
+          manifest.licenseApproval = { state: 'approved', evidence: `protected-environment:${process.env.RUNTIME_TAG}` };
+          fs.writeFileSync('release/managed-wren-manifest.json', JSON.stringify(manifest, null, 2) + '\n', { mode: 0o600 });
+          NODE
+        env:
+          RUNTIME_TAG: ${{ inputs.runtime_tag }}
+      - name: Publication is release-only and must be completed by the approved release job
+        run: |
+          gh release create "${{ inputs.runtime_tag }}" \
+            --title "Managed Wren runtime ${{ inputs.runtime_tag }}" \
+            release/cpython-*.tar.gz release/wheels/*.whl release/*.json
+          echo "The staging job cannot publish assets or activate a package manifest."

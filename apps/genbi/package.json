@@ -89,7 +89,8 @@
     "dist-server/server",
     "dist-server/harness",
     "dist-server/providers",
-    "profiles"
+    "profiles",
+    "managed-wren"
   ],
   "publishConfig": {
     "access": "public"

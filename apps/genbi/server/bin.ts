@@ -42,9 +42,6 @@
  *                               binding reads. Falls back to this repo's own Rust build; resolution
  *                               loud-fails rather than degrading to Warble's built-in MDL adapter
  *                               (see harness/compile/context-loader.ts)
- *   WREN_HARNESS_WREN_SHIM      optional absolute server-owned Wren shim for
- *                               native Codex runtime permissions; defaults to
- *                               the fixed local installation when unset
  *   WREN_HARNESS_AGENT_SDK_BIN  path to the agent-sdk CLI binary (dispatched)
  *   WREN_HARNESS_CODEX_LOCAL_BIN path to the warble-codex-local dispatcher CLI
  *   WREN_HARNESS_CODEX_BIN       optional path to the Codex CLI used by that dispatcher
@@ -146,6 +143,8 @@ import { createProbedPtyFactory, ensureDarwinNodePtySpawnHelper } from "./node-p
 import { NativeSessionService } from "./native-sessions.js";
 import { NativeArtifactService } from "./native-artifacts.js";
 import { RuntimeHost } from "./runtime-host/local.js";
+import { runtimeNotReady } from "./runtime-host/policy.js";
+import { ManagedWrenRuntimeError, provisionManagedWrenRuntime, resolveManagedWrenRuntime } from "./managed-wren-runtime.js";
 import { assertNativeExecutableIdentity, assertNativeRuntimeSpec, attestNativeExecutable, buildNativeChildEnvironment, buildNativeRuntimeSpec, resolveNativeExecutable } from "./native-runtime-spec.js";
 import type { NativeExecutableIdentity } from "./native-runtime-spec.js";
 import { initializeNativeSessionStateBase, legacyInteractiveWorkspace, validateLegacyInteractiveWorkspace } from "./native-session-workspace.js";
@@ -581,10 +580,30 @@ async function main(): Promise<void> {
   };
   // This is the sole production composition of the Phase-1 policy. Browser
   // requests never reach this selection or its executable/policy inputs.
+  const managedCodexRuntimeProbe = async () => {
+    try {
+      const record = await provisionManagedWrenRuntime({ packageRoot });
+      // Provisioning is only one Codex readiness input. This phase must not
+      // enable the local PTY as a production Codex adapter before the future
+      // app-server capability/identity contract is certified.
+      void record;
+      return {
+        readiness: runtimeNotReady("codex-app-server", "unprovisioned", "codex_app_server_unprovisioned"),
+        diagnostic: { phase: "provisioning" as const },
+      };
+    } catch (error) {
+      const code = error instanceof ManagedWrenRuntimeError ? error.code : "codex_wren_runtime_unprovisioned";
+      return {
+        readiness: runtimeNotReady("codex-app-server", "unprovisioned", code),
+        diagnostic: { phase: "provisioning" as const },
+      };
+    }
+  };
   const nativeRuntimeHost = new RuntimeHost({
     selected: "local",
     deployment: process.env["NODE_ENV"] === "production" ? "production" : "development",
     localAvailable: nativeTerminalHostAvailable,
+    vendorProbes: { "codex-app-server": managedCodexRuntimeProbe },
   });
   const nativeSessions = new NativeSessionService({
     store,
@@ -612,9 +631,9 @@ async function main(): Promise<void> {
     // The service's option is a required string; when resolution failed the bare
     // name is what the preflight will report as unresolvable, with its reason.
     warbleBin: producerExecutable?.executable ?? "warble",
-    ...(process.env["WREN_HARNESS_WREN_SHIM"] !== undefined ? { wrenShim: process.env["WREN_HARNESS_WREN_SHIM"] } : {}),
     terminalHostAvailable: nativeTerminalHostAvailable,
     runtimeHost: nativeRuntimeHost,
+    resolveManagedCodexWrenRuntime: () => resolveManagedWrenRuntime({ packageRoot }),
     nativeHome,
     sourceWrenHome: nativeSourceWrenHome,
     ...(baseRouteOptions.codexHome ? { codexHome: baseRouteOptions.codexHome } : {}),

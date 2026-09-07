@@ -17,6 +17,23 @@ describe("installed-package and vendor-contract CI wiring", () => {
     expect(packageJson.scripts["check:installed-package"]).toBe("node scripts/installed-package-acceptance.mjs");
   });
 
+  it("ships the staged managed-Wren manifest but never treats its release input as an active runtime", () => {
+    expect(packageJson.files).toContain("managed-wren");
+    const manifest = JSON.parse(readFileSync(path.join(packageRoot, "managed-wren", "manifest.json"), "utf8"));
+    expect(manifest).toMatchObject({ schema: 1, platform: "darwin-arm64", activation: "staged", licenseApproval: { state: "pending" } });
+    expect(manifest.python.mirror.url).toMatch(/^https:\/\/github\.com\/Canner\/WrenAI\/releases\/download\//);
+    expect(manifest.wheels[0]).toMatchObject({ distribution: "wrenai", version: "0.13.0" });
+  });
+
+  it("keeps managed-Wren publication and manifest activation behind the protected approval job", () => {
+    const workflow = readFileSync(path.join(repositoryRoot, ".github", "workflows", "managed-wren-runtime.yml"), "utf8");
+    expect(workflow).toContain("managed-wren-license-approved");
+    expect(workflow).toContain("if: ${{ inputs.license_approval == 'approved' }}");
+    expect(workflow).toContain("managed-wren-manifest.candidate.json");
+    expect(workflow).toContain("--no-index --no-deps --require-hashes");
+    expect(workflow).toContain("gh release create");
+  });
+
   it("pins the context loader exactly and runs its no-checkout acceptance on the certified macOS target", () => {
     expect(packageJson.dependencies["@wrenai/context-loader"]).toBe("0.1.0");
     const workflow = readFileSync(path.join(repositoryRoot, ".github", "workflows", "genbi-ci.yml"), "utf8");

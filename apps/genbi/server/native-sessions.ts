@@ -19,6 +19,7 @@ import { createNativeSessionWorkspace, initializeNativeSessionStateBase, nativeS
 import type { NativeSessionStateBase } from "./native-session-workspace.js";
 import { NativeWrenRuntimeError, resolveNativeWrenRuntime } from "./native-wren-runtime.js";
 import type { NativeWrenRuntime } from "./native-wren-runtime.js";
+import { ManagedWrenRuntimeError } from "./managed-wren-runtime.js";
 import { assertNativeExecutableIdentity, assertNativeRuntimeSpec, attestNativeExecutable, buildNativeChildEnvironment, buildNativeRuntimeSpec, nativeProcessEnvironment, resolveNativeExecutable } from "./native-runtime-spec.js";
 import type { NativeChildEnvironment, NativeExecutableIdentity, NativeRuntimeSpec } from "./native-runtime-spec.js";
 import { createEmptyCodexWrenHome, materializeCodexWrenHome } from "./native-wren-home.js";
@@ -674,6 +675,8 @@ export async function probeNativeSessionProducer(input: {
   readonly warbleBin: string;
   readonly irPaths: Readonly<Record<NativePurpose, string | undefined>>;
   readonly wrenShim?: string;
+  /** Production Codex probes receive the same immutable-record resolver used at launch. */
+  readonly resolveManagedCodexWrenRuntime?: () => NativeWrenRuntime;
   readonly nativeHome?: string;
   readonly nodeExecutable?: NativeExecutableIdentity;
   readonly childToolDirectories?: readonly string[];
@@ -725,7 +728,14 @@ export async function probeNativeSessionProducer(input: {
         const scopeId = `preflight-${purpose}-${vendor}`;
         const scopePath = path.join(root, "scope.json");
         const mcpPath = path.join(root, "mcp.json");
-        const wrenRuntime = vendor === "codex" ? resolveNativeWrenRuntime(input.wrenShim) : undefined;
+        // Production passes the sealed managed record. The legacy resolver is a
+        // compatibility seam for deterministic fixture tests only; bin.ts does
+        // not provide a shim and so can never select an editable installation.
+        const wrenRuntime = vendor === "codex"
+          ? input.resolveManagedCodexWrenRuntime
+            ? input.resolveManagedCodexWrenRuntime()
+            : resolveNativeWrenRuntime(input.wrenShim)
+          : undefined;
         const binding = NATIVE_DISPATCH_REGISTRY[purpose].scopeKind === "bound_project"
           ? { project_identity: "native-preflight-project", generation: "1", revision: "native-preflight-revision" }
           : undefined;
@@ -742,7 +752,7 @@ export async function probeNativeSessionProducer(input: {
           break;
         }
       } catch (error) {
-        outcome = error instanceof NativeWrenRuntimeError
+        outcome = error instanceof NativeWrenRuntimeError || error instanceof ManagedWrenRuntimeError
           ? fail(`result=wren_runtime_unavailable (${error.message})`, error.message)
           : fail("result=preflight_workspace_unavailable", "the preflight could not create its temporary workspace");
         break;
@@ -1010,6 +1020,7 @@ export class NativeSessionService {
       nativeHome: this.nativeHome,
       nodeExecutable: this.nodeExecutable,
       childToolDirectories: this.childToolDirectories,
+      ...(this.options.resolveManagedCodexWrenRuntime ? { resolveManagedCodexWrenRuntime: this.options.resolveManagedCodexWrenRuntime } : {}),
       ...(this.options.pathValue !== undefined ? { pathValue: this.options.pathValue } : {}),
       wrenShim: this.wrenShim,
     });
