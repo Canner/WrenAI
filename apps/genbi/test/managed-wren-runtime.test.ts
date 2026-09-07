@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ManagedWrenRuntimeError, cleanupManagedWrenGenerations, managedWrenClosureDigest, manifestDigest, provisionManagedWrenRuntime, readManagedWrenManifest, resolveManagedWrenRuntime } from "../server/managed-wren-runtime.js";
+import { ManagedWrenRuntimeError, cleanupManagedWrenGenerations, managedWrenClosureDigest, managedWrenTreeDigest, manifestDigest, provisionManagedWrenRuntime, readManagedWrenManifest, resolveManagedWrenRuntime } from "../server/managed-wren-runtime.js";
 
 const roots: string[] = [];
 const digest = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
@@ -294,7 +294,7 @@ describe("managed Wren runtime", () => {
 
   it("derives a closed staged candidate manifest from the selected release closure", () => {
     const root = realpathSync(mkdtempSync(path.join(tmpdir(), "genbi-managed-wren-release-"))); roots.push(root);
-    const packagePath = path.join(root, "runtime", "venv", "lib", "python3.11", "site-packages", "wren"); mkdirSync(packagePath, { recursive: true, mode: 0o700 }); mkdirSync(path.join(root, "runtime", "python", "bin"), { recursive: true, mode: 0o700 }); writeFileSync(path.join(root, "runtime", "python", "bin", "python3.11"), "fixture-python\n", { mode: 0o600 }); writeFileSync(path.join(packagePath, "__init__.py"), "__version__ = '0.13.0'\n", { mode: 0o600 });
+    const packagePath = path.join(root, "runtime", "venv", "lib", "python3.11", "site-packages", "wren"); const pythonRoot = path.join(root, "runtime", "python"); mkdirSync(packagePath, { recursive: true, mode: 0o700 }); mkdirSync(path.join(pythonRoot, "bin"), { recursive: true, mode: 0o700 }); writeFileSync(path.join(pythonRoot, "bin", "python3.11"), "fixture-python\n", { mode: 0o600 }); symlinkSync("bin/python3.11", path.join(pythonRoot, "python")); writeFileSync(path.join(packagePath, "__init__.py"), "__version__ = '0.13.0'\n", { mode: 0o600 });
     const exact = JSON.parse(readFileSync(path.resolve("managed-wren", "release-inputs.json"), "utf8")).wrenai;
     const wheel = { distribution: "wrenai", version: exact.version, filename: exact.filename, sourceUrl: exact.url, sha256: exact.sha256, license: "Apache-2.0" };
     writeFileSync(path.join(root, "wheel-inputs.json"), JSON.stringify([wheel]));
@@ -302,6 +302,7 @@ describe("managed Wren runtime", () => {
     const candidate = JSON.parse(readFileSync(path.join(root, "managed-wren-manifest.candidate.json"), "utf8"));
     expect(candidate).toMatchObject({ activation: "staged", wheels: [{ distribution: wheel.distribution, version: wheel.version, filename: wheel.filename, url: "https://github.com/Canner/WrenAI/releases/download/managed-wren-fixture/wrenai-0.13.0-py3-none-any.whl" }] });
     expect(candidate.runtime.packageTreeSha256).not.toBe("staged"); expect(candidate.runtime.closureSha256).not.toBe("staged");
+    expect(candidate.runtime.pythonTreeSha256).toBe(managedWrenTreeDigest(pythonRoot));
     wheel.sha256 = "a".repeat(64); writeFileSync(path.join(root, "wheel-inputs.json"), JSON.stringify([wheel]));
     expect(() => execFileSync(process.execPath, [path.resolve("scripts", "managed-wren-release.mjs"), root, "managed-wren-fixture"], { cwd: path.resolve("."), stdio: "pipe" })).toThrow(/selected wrenai wheel differs/);
   });
