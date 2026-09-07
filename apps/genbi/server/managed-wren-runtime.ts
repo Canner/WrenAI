@@ -103,8 +103,11 @@ function assertSecureTree(root: string, code: ManagedWrenFailureCode): void {
     const visit = (directory: string) => {
       for (const name of readdirSync(directory)) {
         const target = path.join(directory, name); const entry = lstatSync(target);
-        if ((entry.mode & 0o022) !== 0) failure(code);
+        // Symlink permission bits are not an access-control surface and differ by
+        // host filesystem (Linux commonly reports 0777). Validate their resolved
+        // target instead; enforce write bits on the actual files/directories.
         if (entry.isSymbolicLink()) { assertContainedRealpath(root, target, code); continue; }
+        if ((entry.mode & 0o022) !== 0) failure(code);
         if (entry.isDirectory()) visit(target); else if (!entry.isFile()) failure(code);
       }
     };
