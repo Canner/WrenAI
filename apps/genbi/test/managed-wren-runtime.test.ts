@@ -19,7 +19,7 @@ function fixture() {
     compatibility: { genbi: "0.0.4", profile: "genbi-native-v4", wren: "0.13.0" },
     python: { implementation: "cpython", version: "3.11.16", upstream: { release: "20260901", url: "https://example.invalid/upstream", sha256: archiveDigest }, mirror: { url: "https://github.com/Canner/WrenAI/releases/download/managed-wren-v0.0.4/python.tar.gz", sha256: archiveDigest }, interpreterPath: "python/install/bin/python3.11" },
     wheels: [{ distribution: "wrenai", version: "0.13.0", filename: "wrenai-0.13.0-py3-none-any.whl", url: "https://github.com/Canner/WrenAI/releases/download/managed-wren-v0.0.4/wrenai-0.13.0-py3-none-any.whl", sourceUrl: "https://files.pythonhosted.org/wrenai-0.13.0-py3-none-any.whl", sha256: wheelDigest }],
-    runtime: { pythonArchivePath: "python.tar.gz", venvInterpreterPath: "venv/bin/python", launcherPath: "venv/bin/wren", module: "wren.cli:app", packagePath: "venv/lib/python3.11/site-packages/wren", sitePackagesPath: "venv/lib/python3.11/site-packages", packageTreeSha256: "staged", sitePackagesTreeSha256: "staged", closureSha256: "staged" },
+    runtime: { pythonArchivePath: "python.tar.gz", venvInterpreterPath: "venv/bin/python", launcherPath: "venv/bin/wren", module: "wren.cli:app", packagePath: "venv/lib/python3.11/site-packages/wren", sitePackagesPath: "venv/lib/python3.11/site-packages", pythonTreeSha256: digest(`install/bin/python3.11\0${digest("#!/bin/sh\nexit 0\n")}`), packageTreeSha256: "staged", sitePackagesTreeSha256: "staged", closureSha256: "staged" },
     licenseApproval: { state: "approved", evidence: "release-evidence" },
   } as const;
   const closure = managedWrenClosureDigest(manifest as never);
@@ -32,7 +32,7 @@ function fixture() {
   writeFileSync(path.join(generation, "python.tar.gz"), "python-archive", { mode: 0o600 });
   writeFileSync(path.join(generation, "wheels", manifest.wheels[0].filename), "wheel", { mode: 0o600 });
   writeFileSync(python, "#!/bin/sh\nexit 0\n", { mode: 0o700 }); writeFileSync(venvPython, "#!/bin/sh\nexit 0\n", { mode: 0o700 }); writeFileSync(path.join(generation, "venv", "pyvenv.cfg"), `home = ${path.join(generation, "python", "install", "bin")}\nexecutable = ${python}\n`, { mode: 0o600 }); writeFileSync(launcher, `#!${venvPython}\nfrom wren.cli import app\n`, { mode: 0o700 }); writeFileSync(path.join(generation, "venv", "lib", "python3.11", "site-packages", "wren", "__init__.py"), "__version__ = '0.13.0'\n", { mode: 0o600 });
-  writeFileSync(path.join(generation, ".genbi-managed-wren.json"), JSON.stringify({ manifestDigest: manifestDigest(parsed), packageDigest, sitePackagesDigest, closureDigest: closure, interpreterDigest: digest("#!/bin/sh\nexit 0\n"), launcherDigest: digest(`#!${venvPython}\nfrom wren.cli import app\n`) }), { mode: 0o600 }); chmodSync(generation, 0o700);
+  writeFileSync(path.join(generation, ".genbi-managed-wren.json"), JSON.stringify({ manifestDigest: manifestDigest(parsed), pythonTreeDigest: approved.runtime.pythonTreeSha256, packageDigest, sitePackagesDigest, closureDigest: closure, interpreterDigest: digest("#!/bin/sh\nexit 0\n"), launcherDigest: digest(`#!${venvPython}\nfrom wren.cli import app\n`) }), { mode: 0o600 }); chmodSync(generation, 0o700);
   return { packageRoot, runtimeRoot, generation, launcher, manifest: approved };
 }
 
@@ -73,7 +73,7 @@ function provisionFixture(version = "0.13.0") {
     compatibility: { genbi: "0.0.4", profile: "genbi-native-v4", wren: version },
     python: { implementation: "cpython", version: "3.11.16", upstream: { release: "20260901", url: "https://example.invalid/upstream", sha256: digest(archiveBytes) }, mirror: { url: `https://github.com/Canner/WrenAI/releases/download/fixture-${version}/python.tar.gz`, sha256: digest(archiveBytes) }, interpreterPath: "python/install/bin/python3.11" },
     wheels: [{ distribution: "wrenai", version, filename: `wrenai-${version}-py3-none-any.whl`, url: `https://github.com/Canner/WrenAI/releases/download/fixture-${version}/wrenai-${version}-py3-none-any.whl`, sourceUrl: `https://files.pythonhosted.org/fixture/wrenai-${version}-py3-none-any.whl`, sha256: digest(wheelBytes) }],
-    runtime: { pythonArchivePath: "python.tar.gz", venvInterpreterPath: "venv/bin/python", launcherPath: "venv/bin/wren", module: "wren.cli:app", packagePath: "venv/lib/python3.11/site-packages/wren", sitePackagesPath: "venv/lib/python3.11/site-packages", packageTreeSha256: digest(`__init__.py\0${digest(`__version__ = '${version}'\n`)}`), sitePackagesTreeSha256: digest([`dependency/__init__.py\0${digest("dependency = 1\n")}`, `wren/__init__.py\0${digest(`__version__ = '${version}'\n`)}`].join("\n")), closureSha256: "staged" },
+    runtime: { pythonArchivePath: "python.tar.gz", venvInterpreterPath: "venv/bin/python", launcherPath: "venv/bin/wren", module: "wren.cli:app", packagePath: "venv/lib/python3.11/site-packages/wren", sitePackagesPath: "venv/lib/python3.11/site-packages", pythonTreeSha256: digest(`install/bin/python3.11\0${digest(fakePython)}`), packageTreeSha256: digest(`__init__.py\0${digest(`__version__ = '${version}'\n`)}`), sitePackagesTreeSha256: digest([`dependency/__init__.py\0${digest("dependency = 1\n")}`, `wren/__init__.py\0${digest(`__version__ = '${version}'\n`)}`].join("\n")), closureSha256: "staged" },
     licenseApproval: { state: "approved", evidence: "fixture" },
   } as const;
   const manifest = { ...base, runtime: { ...base.runtime, closureSha256: managedWrenClosureDigest(base as never) } };
@@ -294,7 +294,7 @@ describe("managed Wren runtime", () => {
 
   it("derives a closed staged candidate manifest from the selected release closure", () => {
     const root = realpathSync(mkdtempSync(path.join(tmpdir(), "genbi-managed-wren-release-"))); roots.push(root);
-    const packagePath = path.join(root, "runtime", "venv", "lib", "python3.11", "site-packages", "wren"); mkdirSync(packagePath, { recursive: true, mode: 0o700 }); writeFileSync(path.join(packagePath, "__init__.py"), "__version__ = '0.13.0'\n", { mode: 0o600 });
+    const packagePath = path.join(root, "runtime", "venv", "lib", "python3.11", "site-packages", "wren"); mkdirSync(packagePath, { recursive: true, mode: 0o700 }); mkdirSync(path.join(root, "runtime", "python", "bin"), { recursive: true, mode: 0o700 }); writeFileSync(path.join(root, "runtime", "python", "bin", "python3.11"), "fixture-python\n", { mode: 0o600 }); writeFileSync(path.join(packagePath, "__init__.py"), "__version__ = '0.13.0'\n", { mode: 0o600 });
     const exact = JSON.parse(readFileSync(path.resolve("managed-wren", "release-inputs.json"), "utf8")).wrenai;
     const wheel = { distribution: "wrenai", version: exact.version, filename: exact.filename, sourceUrl: exact.url, sha256: exact.sha256, license: "Apache-2.0" };
     writeFileSync(path.join(root, "wheel-inputs.json"), JSON.stringify([wheel]));

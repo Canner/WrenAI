@@ -31,14 +31,14 @@ const managedWrenManifestSchema = z.object({
     mirror: z.object({ url: URL, sha256: SHA256 }).strict(), interpreterPath: RELATIVE,
   }).strict(),
   wheels: z.array(z.object({ distribution: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/), version: z.string().regex(/^[A-Za-z0-9!+._-]+$/), filename: RELATIVE, url: URL, sourceUrl: z.string().url(), sha256: SHA256 }).strict()).min(1),
-  runtime: z.object({ pythonArchivePath: RELATIVE, venvInterpreterPath: RELATIVE, launcherPath: RELATIVE, module: z.literal("wren.cli:app"), packagePath: RELATIVE, sitePackagesPath: RELATIVE, packageTreeSha256: stagedDigest, sitePackagesTreeSha256: stagedDigest, closureSha256: stagedDigest }).strict(),
+  runtime: z.object({ pythonArchivePath: RELATIVE, venvInterpreterPath: RELATIVE, launcherPath: RELATIVE, module: z.literal("wren.cli:app"), packagePath: RELATIVE, sitePackagesPath: RELATIVE, pythonTreeSha256: stagedDigest, packageTreeSha256: stagedDigest, sitePackagesTreeSha256: stagedDigest, closureSha256: stagedDigest }).strict(),
   licenseApproval: z.object({ state: z.enum(["pending", "approved"]), evidence: z.string().min(1).optional() }).strict(),
   approvedManifest: z.object({ url: URL, sha256: SHA256 }).strict().optional(),
 }).strict().superRefine((value, context) => {
   if (new Set(value.wheels.map((wheel) => wheel.filename)).size !== value.wheels.length) context.addIssue({ code: "custom", message: "duplicate wheel filename" });
   if (value.wheels[0]?.distribution !== "wrenai" || value.wheels[0].version !== value.compatibility.wren) context.addIssue({ code: "custom", message: "wrenai must be the first exact wheel" });
   const approved = value.activation === "approved";
-  if (approved !== (value.licenseApproval.state === "approved") || (approved && (!value.licenseApproval.evidence || value.runtime.packageTreeSha256 === "staged" || value.runtime.closureSha256 === "staged"))) {
+  if (approved !== (value.licenseApproval.state === "approved") || (approved && (!value.licenseApproval.evidence || value.runtime.pythonTreeSha256 === "staged" || value.runtime.packageTreeSha256 === "staged" || value.runtime.closureSha256 === "staged"))) {
     context.addIssue({ code: "custom", message: "activation requires approved licence evidence and attested digests" });
   }
 });
@@ -193,14 +193,16 @@ function reclaimStaleLock(lock: string): boolean {
     // unlinking its public name; another provisioner cannot create a new O_EXCL
     // lock until that unlink, and a live replacement is never renamed/deleted.
     const claim = `${lock}.reclaim`;
+    try { const old = JSON.parse(readFileSync(claim, "utf8")); process.kill(old.pid, 0); return false; } catch (error: any) { if (error?.code === "ESRCH") try { unlinkSync(claim); } catch {} else if (error?.code !== "ENOENT") return false; }
     let claimDescriptor: number | undefined;
-    try { claimDescriptor = openSync(claim, "wx", 0o600); writeFileSync(claimDescriptor, JSON.stringify({ pid: process.pid }) + "\n"); } catch (error: any) { if (error?.code === "EEXIST") return false; throw error; }
+    const nonce = sha256(`${process.pid}\0${Date.now()}\0${Math.random()}`);
+    try { claimDescriptor = openSync(claim, "wx", 0o600); writeFileSync(claimDescriptor, JSON.stringify({ pid: process.pid, nonce }) + "\n"); } catch (error: any) { if (error?.code === "EEXIST") return false; throw error; }
     const linked = `${claim}.lock`;
     try {
       linkSync(lock, linked);
       const claimed = statSync(linked); const current = statSync(lock);
       const claimedRecord = JSON.parse(readFileSync(linked, "utf8"));
-      if (claimed.ino !== current.ino || claimedRecord.pid !== record.pid) return false;
+      if (claimed.ino !== current.ino || claimedRecord.pid !== record.pid || JSON.parse(readFileSync(claim, "utf8")).nonce !== nonce) return false;
       unlinkSync(lock); return true;
     } finally { try { unlinkSync(linked); } catch {} try { unlinkSync(claim); } catch {} }
   } catch { return false; }
@@ -287,11 +289,12 @@ export function resolveManagedWrenRuntime(options: { readonly packageRoot?: stri
   const digest = manifestDigest(manifest); const generation = immutableDirectory(root, digest);
   assertPrivateDirectory(root); assertPrivateDirectory(generation);
   assertSecureTree(generation, "codex_wren_closure_mismatch");
-  let marker: { manifestDigest?: unknown; closureDigest?: unknown; packageDigest?: unknown; sitePackagesDigest?: unknown; interpreterDigest?: unknown; launcherDigest?: unknown };
+  let marker: { manifestDigest?: unknown; closureDigest?: unknown; pythonTreeDigest?: unknown; packageDigest?: unknown; sitePackagesDigest?: unknown; interpreterDigest?: unknown; launcherDigest?: unknown };
   try { const markerPath = ownershipMarker(generation); const entry = lstatSync(markerPath); if (!entry.isFile() || entry.isSymbolicLink() || (entry.mode & 0o777) !== 0o600) return failure("codex_wren_runtime_unprovisioned"); marker = JSON.parse(readFileSync(markerPath, "utf8")); } catch { return failure("codex_wren_runtime_unprovisioned"); }
   if (marker.manifestDigest !== digest) return failure("codex_wren_closure_mismatch");
   const archive = regularFile(generation, path.join(generation, manifest.runtime.pythonArchivePath), "codex_wren_interpreter_mismatch");
   if (sha256(readFileSync(archive)) !== manifest.python.mirror.sha256) return failure("codex_wren_interpreter_mismatch");
+  if (treeDigest(path.join(generation, "python")) !== manifest.runtime.pythonTreeSha256 || marker.pythonTreeDigest !== manifest.runtime.pythonTreeSha256) return failure("codex_wren_interpreter_mismatch");
   const interpreter = regularExecutable(generation, path.join(generation, manifest.runtime.venvInterpreterPath), "codex_wren_interpreter_mismatch");
   assertRelocatedVenvConfig(generation);
   const launcher = regularExecutable(generation, path.join(generation, manifest.runtime.launcherPath), "codex_wren_launcher_mismatch");
@@ -365,8 +368,8 @@ export async function provisionManagedWrenRuntime(options: { readonly packageRoo
     // only that resolved interpreter with a private copy before promotion.
     if (lstatSync(venvInterpreter).isSymbolicLink()) { const resolved = realpathSync(venvInterpreter); if (!contained(staging, resolved)) return failure("codex_wren_interpreter_mismatch"); unlinkSync(venvInterpreter); writeFileSync(venvInterpreter, readFileSync(resolved), { mode: 0o700 }); }
     execFileSync(path.join(venv, "bin", "python"), ["-m", "pip", "install", "--no-index", "--no-deps", "--require-hashes", "--find-links", wheels, "-r", path.join(staging, "requirements.txt")], { stdio: "ignore", env: { PATH: path.join(venv, "bin"), HOME: staging, PYTHONNOUSERSITE: "1" } });
-    const packagePath = path.join(staging, manifest.runtime.packagePath); const sitePackagesPath = path.join(staging, manifest.runtime.sitePackagesPath); const packageDigest = treeDigest(packagePath); const sitePackagesDigest = treeDigest(sitePackagesPath); const closure = actualClosureDigest(staging, manifest);
-    if (packageDigest !== manifest.runtime.packageTreeSha256 || sitePackagesDigest !== manifest.runtime.sitePackagesTreeSha256 || closure !== manifest.runtime.closureSha256) throw new Error("attestation");
+    const packagePath = path.join(staging, manifest.runtime.packagePath); const sitePackagesPath = path.join(staging, manifest.runtime.sitePackagesPath); const pythonTreeDigest = treeDigest(path.join(staging, "python")); const packageDigest = treeDigest(packagePath); const sitePackagesDigest = treeDigest(sitePackagesPath); const closure = actualClosureDigest(staging, manifest);
+    if (pythonTreeDigest !== manifest.runtime.pythonTreeSha256 || packageDigest !== manifest.runtime.packageTreeSha256 || sitePackagesDigest !== manifest.runtime.sitePackagesTreeSha256 || closure !== manifest.runtime.closureSha256) throw new Error("attestation");
     // `venv` console launchers contain an absolute interpreter shebang. The
     // staging name must never escape into an active generation after rename.
     const stagedInterpreter = path.join(staging, manifest.runtime.venvInterpreterPath);
@@ -379,7 +382,7 @@ export async function provisionManagedWrenRuntime(options: { readonly packageRoo
     const finalLauncher = path.join(destination, manifest.runtime.launcherPath);
     writeFileSync(finalLauncher, `#!${finalInterpreter}\n${launcherText.slice(stagedInterpreter.length + 3)}`, { mode: 0o700 });
     rmSync(stagingMarker(destination), { force: true });
-    writeFileSync(ownershipMarker(destination), JSON.stringify({ manifestDigest: digest, packageDigest, sitePackagesDigest, closureDigest: closure, interpreterDigest: sha256(readFileSync(finalInterpreter)), launcherDigest: sha256(readFileSync(finalLauncher)) }) + "\n", { mode: 0o600, flag: "wx" });
+    writeFileSync(ownershipMarker(destination), JSON.stringify({ manifestDigest: digest, pythonTreeDigest, packageDigest, sitePackagesDigest, closureDigest: closure, interpreterDigest: sha256(readFileSync(finalInterpreter)), launcherDigest: sha256(readFileSync(finalLauncher)) }) + "\n", { mode: 0o600, flag: "wx" });
     return resolveManagedWrenRuntime({ ...(options.packageRoot ? { packageRoot: options.packageRoot } : {}), runtimeRoot: root });
   } catch (error) { if (descriptor !== undefined && provisionDigest) cleanupRecognisedStaging(root, provisionDigest); if (error instanceof ManagedWrenRuntimeError) throw error; return failure("codex_wren_provision_failed");
   } finally { if (descriptor !== undefined) { try { rmSync(lock, { force: true }); } catch { /* next run reports unavailable */ } } }

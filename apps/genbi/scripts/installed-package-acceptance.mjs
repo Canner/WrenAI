@@ -277,6 +277,7 @@ async function managedWrenFixture(root) {
   const wheel = path.join(fixtureRoot, "wrenai-0.13.0-py3-none-any.whl"); await writeFile(wheel, "fixture wheel\n", { mode: 0o600 });
   const wheelSha256 = createHash("sha256").update(await readFile(wheel)).digest("hex");
   const digestFile = (contents) => createHash("sha256").update(contents).digest("hex");
+  const pythonTreeSha256 = digestFile(`install/bin/python3.11\0${digestFile(await readFile(python))}`);
   const packageDigest = digestFile(`__init__.py\0${digestFile("__version__ = '0.13.0'\n")}`);
   const sitePackagesDigest = digestFile([`dependency/__init__.py\0${digestFile("dependency = 1\n")}`, `wren/__init__.py\0${digestFile("__version__ = '0.13.0'\n")}`].join("\n"));
   const wheelName = path.basename(wheel); const closureSha256 = digestFile(`${wheelName}\0${wheelSha256}`); const release = "https://github.com/Canner/WrenAI/releases/download/managed-wren-fixture";
@@ -284,7 +285,7 @@ async function managedWrenFixture(root) {
     schema: 1, activation: "approved", platform: "darwin-arm64", compatibility: { genbi: "0.0.4", profile: "genbi-native-v4", wren: "0.13.0" },
     python: { implementation: "cpython", version: "3.11.16", upstream: { release: "20260901", url: "https://example.invalid/python.tar.gz", sha256: archiveSha256 }, mirror: { url: `${release}/python.tar.gz`, sha256: archiveSha256 }, interpreterPath: "python/install/bin/python3.11" },
     wheels: [{ distribution: "wrenai", version: "0.13.0", filename: wheelName, url: `${release}/${wheelName}`, sourceUrl: "https://files.pythonhosted.org/fixture/wrenai-0.13.0-py3-none-any.whl", sha256: wheelSha256 }],
-    runtime: { pythonArchivePath: "python.tar.gz", venvInterpreterPath: "venv/bin/python", launcherPath: "venv/bin/wren", module: "wren.cli:app", packagePath: "venv/lib/python3.11/site-packages/wren", sitePackagesPath: "venv/lib/python3.11/site-packages", packageTreeSha256: packageDigest, sitePackagesTreeSha256: sitePackagesDigest, closureSha256 },
+    runtime: { pythonArchivePath: "python.tar.gz", venvInterpreterPath: "venv/bin/python", launcherPath: "venv/bin/wren", module: "wren.cli:app", packagePath: "venv/lib/python3.11/site-packages/wren", sitePackagesPath: "venv/lib/python3.11/site-packages", pythonTreeSha256, packageTreeSha256: packageDigest, sitePackagesTreeSha256: sitePackagesDigest, closureSha256 },
     licenseApproval: { state: "approved", evidence: "packed-fixture-only" },
   } };
 }

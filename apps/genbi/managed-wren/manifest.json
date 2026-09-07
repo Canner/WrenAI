@@ -38,6 +38,7 @@
     "module": "wren.cli:app",
     "packagePath": "venv/lib/python3.11/site-packages/wren",
     "sitePackagesPath": "venv/lib/python3.11/site-packages",
+    "pythonTreeSha256": "staged",
     "packageTreeSha256": "staged",
     "sitePackagesTreeSha256": "staged",
     "closureSha256": "staged"
