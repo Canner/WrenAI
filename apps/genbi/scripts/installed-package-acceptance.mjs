@@ -266,6 +266,7 @@ async function managedWrenFixture(root) {
     "#!/bin/sh", 'if [ "$1" = "-m" ] && [ "$2" = "venv" ]; then', '  target="$3"; if [ "$target" = "--copies" ]; then target="$4"; fi',
     '  /bin/mkdir -p "$target/bin" "$target/lib/python3.11/site-packages/wren" "$target/lib/python3.11/site-packages/dependency"',
     '  /bin/cp "$0" "$target/bin/python"', '  /bin/chmod 700 "$target/bin/python"',
+    '  /usr/bin/printf "home = %s\\nexecutable = %s\\n" "$(/usr/bin/dirname \"$0\")" "$0" > "$target/pyvenv.cfg"',
     "  /usr/bin/printf '#!%s\\nfrom wren.cli import app\\n' \"$target/bin/python\" > \"$target/bin/wren\"", '  /bin/chmod 700 "$target/bin/wren"',
     "  /usr/bin/printf \"__version__ = '0.13.0'\\n\" > \"$target/lib/python3.11/site-packages/wren/__init__.py\"", "  /usr/bin/printf 'dependency = 1\\n' > \"$target/lib/python3.11/site-packages/dependency/__init__.py\"", '  /bin/chmod 600 "$target/lib/python3.11/site-packages/wren/__init__.py"', "  exit 0", "fi",
     'if [ "$1" = "-m" ] && [ "$2" = "pip" ]; then', '  /usr/bin/printf "%s\\n" "$*" > "$HOME/pip-args"', "  exit 0", "fi", "exit 1", "",

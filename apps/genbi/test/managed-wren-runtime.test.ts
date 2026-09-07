@@ -31,7 +31,7 @@ function fixture() {
   const python = path.join(generation, "python", "install", "bin", "python3.11"); const venvPython = path.join(generation, "venv", "bin", "python"); const launcher = path.join(generation, "venv", "bin", "wren");
   writeFileSync(path.join(generation, "python.tar.gz"), "python-archive", { mode: 0o600 });
   writeFileSync(path.join(generation, "wheels", manifest.wheels[0].filename), "wheel", { mode: 0o600 });
-  writeFileSync(python, "#!/bin/sh\nexit 0\n", { mode: 0o700 }); writeFileSync(venvPython, "#!/bin/sh\nexit 0\n", { mode: 0o700 }); writeFileSync(launcher, `#!${venvPython}\nfrom wren.cli import app\n`, { mode: 0o700 }); writeFileSync(path.join(generation, "venv", "lib", "python3.11", "site-packages", "wren", "__init__.py"), "__version__ = '0.13.0'\n", { mode: 0o600 });
+  writeFileSync(python, "#!/bin/sh\nexit 0\n", { mode: 0o700 }); writeFileSync(venvPython, "#!/bin/sh\nexit 0\n", { mode: 0o700 }); writeFileSync(path.join(generation, "venv", "pyvenv.cfg"), `home = ${path.join(generation, "python", "install", "bin")}\nexecutable = ${python}\n`, { mode: 0o600 }); writeFileSync(launcher, `#!${venvPython}\nfrom wren.cli import app\n`, { mode: 0o700 }); writeFileSync(path.join(generation, "venv", "lib", "python3.11", "site-packages", "wren", "__init__.py"), "__version__ = '0.13.0'\n", { mode: 0o600 });
   writeFileSync(path.join(generation, ".genbi-managed-wren.json"), JSON.stringify({ manifestDigest: manifestDigest(parsed), packageDigest, sitePackagesDigest, closureDigest: closure, interpreterDigest: digest("#!/bin/sh\nexit 0\n"), launcherDigest: digest(`#!${venvPython}\nfrom wren.cli import app\n`) }), { mode: 0o600 }); chmodSync(generation, 0o700);
   return { packageRoot, runtimeRoot, generation, launcher, manifest: approved };
 }
@@ -50,6 +50,7 @@ function provisionFixture(version = "0.13.0") {
     "  /bin/mkdir -p \"$target/bin\" \"$target/lib/python3.11/site-packages/wren\" \"$target/lib/python3.11/site-packages/dependency\"",
     "  /bin/cp \"$0\" \"$target/bin/python\"",
     "  /bin/chmod 700 \"$target/bin/python\"",
+    "  /usr/bin/printf 'home = %s\\nexecutable = %s\\n' \"$(/usr/bin/dirname \"$0\")\" \"$0\" > \"$target/pyvenv.cfg\"",
     "  /usr/bin/printf '#!%s\\nfrom wren.cli import app\\n' \"$target/bin/python\" > \"$target/bin/wren\"",
     "  /bin/chmod 700 \"$target/bin/wren\"",
     `  /usr/bin/printf \"__version__ = '${version}'\\n\" > \"$target/lib/python3.11/site-packages/wren/__init__.py\"`,
@@ -127,6 +128,8 @@ describe("managed Wren runtime", () => {
     const value = provisionFixture(); value.installFetch();
     const first = await provisionManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot });
     expect(first.generation_root).toContain(first.manifest_digest);
+    const config = readFileSync(path.join(first.generation_root, "venv", "pyvenv.cfg"), "utf8");
+    expect(config).toContain(first.generation_root); expect(config).not.toContain(".staging-");
     expect(value.requests).toEqual([value.manifest.python.mirror.url, value.manifest.wheels[0].url]);
     expect(readFileSync(path.join(first.generation_root, "pip-args"), "utf8")).toContain("--no-index --no-deps --require-hashes");
     const requestCount = value.requests.length;
@@ -151,6 +154,17 @@ describe("managed Wren runtime", () => {
     writeFileSync(path.join(value.runtimeRoot, ".provision.lock"), JSON.stringify({ pid: 999999, manifestDigest: "dead" }), { mode: 0o600 });
     await expect(provisionManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot })).resolves.toMatchObject({ launcher: expect.any(String) });
   });
+
+  it("elects one stale-lock reclaimer while a second contender waits for the resulting live owner", async () => {
+    const value = provisionFixture(); let release!: () => void; const paused = new Promise<void>((resolve) => { release = resolve; }); let first = true;
+    value.installFetch(async () => { if (first) { first = false; await paused; } });
+    writeFileSync(path.join(value.runtimeRoot, ".provision.lock"), JSON.stringify({ pid: 999999, manifestDigest: "dead" }), { mode: 0o600 });
+    const a = provisionManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const b = provisionManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot });
+    release(); const [left, right] = await Promise.all([a, b]);
+    expect(left.generation_root).toBe(right.generation_root);
+  }, 20_000);
 
   it("provisions from a byte-identical approved manifest anchored by the staged package, then reuses its cache before fetch", async () => {
     const value = provisionFixture(); const approved = JSON.stringify(value.manifest); const approvedUrl = "https://github.com/Canner/WrenAI/releases/download/fixture/manifest.json";
@@ -204,6 +218,26 @@ describe("managed Wren runtime", () => {
     await expect(provisionManagedWrenRuntime({ packageRoot: poisoned.packageRoot, runtimeRoot: poisoned.runtimeRoot })).rejects.toMatchObject({ code: "codex_wren_manifest_invalid" });
     expect(poisonedFetch).not.toHaveBeenCalled();
   }, 20_000);
+
+  it("rejects an approved manifest whose compatibility or immutable release identity differs from its staged anchor", async () => {
+    const value = provisionFixture(); const approved = JSON.parse(JSON.stringify(value.manifest)); approved.compatibility.wren = "0.13.1";
+    const bytes = JSON.stringify(approved); const url = "https://github.com/Canner/WrenAI/releases/download/fixture/manifest.json";
+    const staged = { ...value.manifest, activation: "staged", licenseApproval: { state: "pending" }, approvedManifest: { url, sha256: digest(bytes) } };
+    writeFileSync(path.join(value.packageRoot, "managed-wren", "manifest.json"), JSON.stringify(staged));
+    const fetch = vi.fn(async () => new Response(bytes)); vi.stubGlobal("fetch", fetch);
+    await expect(provisionManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot })).rejects.toMatchObject({ code: "codex_wren_manifest_invalid" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects archive traversal and escaping link members before extraction", async () => {
+    for (const linkTarget of ["/etc/passwd", "../../escape"] as const) {
+      const value = provisionFixture(); const source = path.join(path.dirname(value.runtimeRoot), `unsafe-${linkTarget.startsWith("/") ? "absolute" : "relative"}`); mkdirSync(source, { mode: 0o700 }); symlinkSync(linkTarget, path.join(source, "bad-link"));
+      const archive = path.join(path.dirname(value.runtimeRoot), `unsafe-${linkTarget.startsWith("/") ? "absolute" : "relative"}.tar.gz`); execFileSync("tar", ["-czf", archive, "-C", source, "."]); const bytes = readFileSync(archive);
+      const manifest = JSON.parse(JSON.stringify(value.manifest)); manifest.python.mirror.sha256 = digest(bytes); manifest.python.upstream.sha256 = digest(bytes); writeFileSync(path.join(value.packageRoot, "managed-wren", "manifest.json"), JSON.stringify(manifest));
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => String(input) === manifest.python.mirror.url ? new Response(bytes) : new Response("unexpected", { status: 404 })));
+      await expect(provisionManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot })).rejects.toMatchObject({ code: "codex_wren_provision_failed" });
+    }
+  });
 
   it("recovers only marked stale staging and preserves untrusted or rollback state", async () => {
     const value = provisionFixture(); const digestValue = manifestDigest(readManagedWrenManifest(value.packageRoot));
@@ -261,11 +295,14 @@ describe("managed Wren runtime", () => {
   it("derives a closed staged candidate manifest from the selected release closure", () => {
     const root = realpathSync(mkdtempSync(path.join(tmpdir(), "genbi-managed-wren-release-"))); roots.push(root);
     const packagePath = path.join(root, "runtime", "venv", "lib", "python3.11", "site-packages", "wren"); mkdirSync(packagePath, { recursive: true, mode: 0o700 }); writeFileSync(path.join(packagePath, "__init__.py"), "__version__ = '0.13.0'\n", { mode: 0o600 });
-    const wheel = { distribution: "wrenai", version: "0.13.0", filename: "wrenai-0.13.0-py3-none-any.whl", sourceUrl: "https://files.pythonhosted.org/fixture/wrenai-0.13.0-py3-none-any.whl", sha256: "b".repeat(64), license: "Apache-2.0" };
+    const exact = JSON.parse(readFileSync(path.resolve("managed-wren", "release-inputs.json"), "utf8")).wrenai;
+    const wheel = { distribution: "wrenai", version: exact.version, filename: exact.filename, sourceUrl: exact.url, sha256: exact.sha256, license: "Apache-2.0" };
     writeFileSync(path.join(root, "wheel-inputs.json"), JSON.stringify([wheel]));
     execFileSync(process.execPath, [path.resolve("scripts", "managed-wren-release.mjs"), root, "managed-wren-fixture"], { cwd: path.resolve("."), stdio: "pipe" });
     const candidate = JSON.parse(readFileSync(path.join(root, "managed-wren-manifest.candidate.json"), "utf8"));
     expect(candidate).toMatchObject({ activation: "staged", wheels: [{ distribution: wheel.distribution, version: wheel.version, filename: wheel.filename, url: "https://github.com/Canner/WrenAI/releases/download/managed-wren-fixture/wrenai-0.13.0-py3-none-any.whl" }] });
     expect(candidate.runtime.packageTreeSha256).not.toBe("staged"); expect(candidate.runtime.closureSha256).not.toBe("staged");
+    wheel.sha256 = "a".repeat(64); writeFileSync(path.join(root, "wheel-inputs.json"), JSON.stringify([wheel]));
+    expect(() => execFileSync(process.execPath, [path.resolve("scripts", "managed-wren-release.mjs"), root, "managed-wren-fixture"], { cwd: path.resolve("."), stdio: "pipe" })).toThrow(/selected wrenai wheel differs/);
   });
 });

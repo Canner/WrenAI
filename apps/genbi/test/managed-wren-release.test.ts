@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -56,5 +57,13 @@ describe("managed Wren protected publish exactness", () => {
     value.wheelInputs[0]!.sha256 = "e".repeat(64);
     await expect(refetchExactPublishAssets(value.candidate, value.wheelInputs, target, async () => new Response("unreachable"))).rejects.toThrow();
     expect(existsSync(path.join(target, python))).toBe(false);
+  });
+
+  it("refuses to anchor an approved manifest whose release identity differs from the staged package", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "genbi-managed-wren-anchor-")); roots.push(root); const packageRoot = path.join(root, "package"); mkdirSync(path.join(packageRoot, "managed-wren"), { recursive: true });
+    const staged = JSON.parse(readFileSync(path.resolve("managed-wren", "manifest.json"), "utf8"));
+    const approved = { ...staged, activation: "approved", licenseApproval: { state: "approved", evidence: "fixture" }, compatibility: { ...staged.compatibility, wren: "0.13.1" } };
+    writeFileSync(path.join(packageRoot, "managed-wren", "manifest.json"), JSON.stringify(staged)); const approvedPath = path.join(root, "approved.json"); writeFileSync(approvedPath, JSON.stringify(approved));
+    expect(() => execFileSync(process.execPath, [path.resolve("scripts", "anchor-managed-wren-manifest.mjs"), approvedPath, packageRoot], { cwd: path.resolve("."), stdio: "pipe" })).toThrow(/release identity differs/);
   });
 });

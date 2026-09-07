@@ -8,7 +8,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -119,6 +119,11 @@ function treeDigest(root: string): string {
 function closureDigest(manifest: ManagedWrenManifest): string { return sha256(manifest.wheels.map((wheel) => `${wheel.filename}\0${wheel.sha256}`).sort().join("\n")); }
 function ownershipMarker(root: string): string { return path.join(root, ".genbi-managed-wren.json"); }
 function approvedManifestCache(root: string, digest: string): string { return path.join(root, "attestations", `${digest}.json`); }
+function sameReleaseIdentity(staged: ManagedWrenManifest, approved: ManagedWrenManifest): boolean {
+  return JSON.stringify(staged.compatibility) === JSON.stringify(approved.compatibility) &&
+    JSON.stringify(staged.python) === JSON.stringify(approved.python) &&
+    staged.wheels.length === approved.wheels.length && staged.wheels.every((wheel, index) => JSON.stringify(wheel) === JSON.stringify(approved.wheels[index]));
+}
 function activatedManifest(base: ManagedWrenManifest, root: string): ManagedWrenManifest {
   if (base.activation === "approved") return base;
   if (!base.approvedManifest) return failure("codex_wren_runtime_unprovisioned");
@@ -130,7 +135,7 @@ function activatedManifest(base: ManagedWrenManifest, root: string): ManagedWren
     const bytes = readFileSync(cache);
     if (sha256(bytes) !== base.approvedManifest.sha256) return failure("codex_wren_manifest_invalid");
     const parsed = managedWrenManifestSchema.safeParse(JSON.parse(bytes.toString("utf8")));
-    if (!parsed.success || parsed.data.activation !== "approved" || parsed.data.platform !== base.platform) return failure("codex_wren_manifest_invalid");
+    if (!parsed.success || parsed.data.activation !== "approved" || parsed.data.platform !== base.platform || !sameReleaseIdentity(base, parsed.data)) return failure("codex_wren_manifest_invalid");
     return Object.freeze(parsed.data);
   } catch (error) { if (error instanceof ManagedWrenRuntimeError) throw error; return failure("codex_wren_runtime_unprovisioned"); }
 }
@@ -184,15 +189,49 @@ function reclaimStaleLock(lock: string): boolean {
     const entry = lstatSync(lock); if (!entry.isFile() || entry.isSymbolicLink() || (entry.mode & 0o777) !== 0o600) return false;
     const record = JSON.parse(readFileSync(lock, "utf8")); if (!Number.isInteger(record.pid) || record.pid <= 0) return false;
     try { process.kill(record.pid, 0); return false; } catch (error: any) { if (error?.code !== "ESRCH") return false; }
-    const before = statSync(lock); const quarantine = `${lock}.stale-${process.pid}-${Date.now()}`;
-    renameSync(lock, quarantine); const claimed = statSync(quarantine); if (claimed.ino !== before.ino) return false;
-    const claimedRecord = JSON.parse(readFileSync(quarantine, "utf8")); if (claimedRecord.pid !== record.pid) return false;
-    unlinkSync(quarantine); return true;
+    // O_EXCL elects one reclaimer. It then hard-links the *current* lock before
+    // unlinking its public name; another provisioner cannot create a new O_EXCL
+    // lock until that unlink, and a live replacement is never renamed/deleted.
+    const claim = `${lock}.reclaim`;
+    let claimDescriptor: number | undefined;
+    try { claimDescriptor = openSync(claim, "wx", 0o600); writeFileSync(claimDescriptor, JSON.stringify({ pid: process.pid }) + "\n"); } catch (error: any) { if (error?.code === "EEXIST") return false; throw error; }
+    const linked = `${claim}.lock`;
+    try {
+      linkSync(lock, linked);
+      const claimed = statSync(linked); const current = statSync(lock);
+      const claimedRecord = JSON.parse(readFileSync(linked, "utf8"));
+      if (claimed.ino !== current.ino || claimedRecord.pid !== record.pid) return false;
+      unlinkSync(lock); return true;
+    } finally { try { unlinkSync(linked); } catch {} try { unlinkSync(claim); } catch {} }
   } catch { return false; }
 }
 function assertSafeArchive(archive: string): void {
-  const listing = execFileSync("/usr/bin/tar", ["-tvzf", archive], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-  for (const line of listing.split("\n").filter(Boolean)) { const match = line.match(/\s([^\s]+)(?: -> | link to )?(.+)?$/); const target = match?.[1]; const link = match?.[2]; if (!target || target.startsWith("/") || target.split("/").includes("..") || (link && (link.startsWith("/") || link.split("/").includes("..")))) throw new Error("unsafe archive member"); }
+  const verifier = "import posixpath,sys,tarfile\ndef safe(value):\n return value not in ('.','') and not value.startswith('/') and value != '..' and not value.startswith('../')\nwith tarfile.open(sys.argv[1],'r:gz') as archive:\n for member in archive.getmembers():\n  name=posixpath.normpath(member.name)\n  if name == '.': continue\n  if not safe(name): raise SystemExit('unsafe archive member')\n  if member.issym(): target=posixpath.normpath(posixpath.join(posixpath.dirname(name),member.linkname))\n  elif member.islnk(): target=posixpath.normpath(member.linkname)\n  else: continue\n  if not safe(target): raise SystemExit('unsafe archive link')\n";
+  execFileSync("/usr/bin/python3", ["-c", verifier, archive], { stdio: "ignore" });
+}
+function relocateVenvConfig(staging: string, destination: string): void {
+  const config = path.join(destination, "venv", "pyvenv.cfg");
+  const entry = lstatSync(config); if (!entry.isFile() || entry.isSymbolicLink()) failure("codex_wren_interpreter_mismatch");
+  const original = readFileSync(config, "utf8");
+  if (!/^home\s*=\s*.+$/m.test(original) || !/^executable\s*=\s*.+$/m.test(original)) failure("codex_wren_interpreter_mismatch");
+  const updated = original.split(staging).join(destination);
+  if (updated.includes(staging)) failure("codex_wren_interpreter_mismatch");
+  for (const key of ["home", "executable"]) {
+    const value = updated.match(new RegExp(`^${key}\\s*=\\s*(.+)$`, "m"))?.[1]?.trim();
+    if (!value || !contained(destination, value)) failure("codex_wren_interpreter_mismatch");
+  }
+  writeFileSync(config, updated, { mode: 0o600 });
+}
+function assertRelocatedVenvConfig(destination: string): void {
+  const config = path.join(destination, "venv", "pyvenv.cfg");
+  try {
+    const entry = lstatSync(config); if (!entry.isFile() || entry.isSymbolicLink() || (entry.mode & 0o022) !== 0) failure("codex_wren_interpreter_mismatch");
+    const text = readFileSync(config, "utf8");
+    for (const key of ["home", "executable"]) {
+      const value = text.match(new RegExp(`^${key}\\s*=\\s*(.+)$`, "m"))?.[1]?.trim();
+      if (!value || !contained(destination, value)) failure("codex_wren_interpreter_mismatch");
+    }
+  } catch (error) { if (error instanceof ManagedWrenRuntimeError) throw error; failure("codex_wren_interpreter_mismatch"); }
 }
 
 /**
@@ -254,6 +293,7 @@ export function resolveManagedWrenRuntime(options: { readonly packageRoot?: stri
   const archive = regularFile(generation, path.join(generation, manifest.runtime.pythonArchivePath), "codex_wren_interpreter_mismatch");
   if (sha256(readFileSync(archive)) !== manifest.python.mirror.sha256) return failure("codex_wren_interpreter_mismatch");
   const interpreter = regularExecutable(generation, path.join(generation, manifest.runtime.venvInterpreterPath), "codex_wren_interpreter_mismatch");
+  assertRelocatedVenvConfig(generation);
   const launcher = regularExecutable(generation, path.join(generation, manifest.runtime.launcherPath), "codex_wren_launcher_mismatch");
   if (marker.interpreterDigest !== sha256(readFileSync(interpreter))) return failure("codex_wren_interpreter_mismatch");
   if (marker.launcherDigest !== sha256(readFileSync(launcher))) return failure("codex_wren_launcher_mismatch");
@@ -334,6 +374,7 @@ export async function provisionManagedWrenRuntime(options: { readonly packageRoo
     const launcherText = readFileSync(stagedLauncher, "utf8");
     if (!launcherText.startsWith(`#!${stagedInterpreter}\n`) || !launcherText.includes("from wren.cli import app")) return failure("codex_wren_launcher_mismatch");
     renameSync(staging, destination);
+    relocateVenvConfig(staging, destination);
     const finalInterpreter = path.join(destination, manifest.runtime.venvInterpreterPath);
     const finalLauncher = path.join(destination, manifest.runtime.launcherPath);
     writeFileSync(finalLauncher, `#!${finalInterpreter}\n${launcherText.slice(stagedInterpreter.length + 3)}`, { mode: 0o700 });

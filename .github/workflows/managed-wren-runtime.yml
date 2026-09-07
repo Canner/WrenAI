@@ -47,7 +47,7 @@ jobs:
           test "$(shasum -a 256 release/python.tar.gz | awk '{print $1}')" = 50424fa409e8ae84b82a3052522f64695b47dff2158b70bb7358e0ebd6c085c9
           /usr/bin/tar -tzf release/python.tar.gz | python -c "import json,sys; paths=[p.strip() for p in sys.stdin if any(x in p.upper() for x in ('LICENSE','COPYING','NOTICE'))]; print(json.dumps({'schema':1,'archiveSha256':'50424fa409e8ae84b82a3052522f64695b47dff2158b70bb7358e0ebd6c085c9','bundledLicenseEvidence':[{'path':p,'declaredLicense':'REVIEW_REQUIRED'} for p in paths]},indent=2))" > release/pbs-license-inventory.json
           /usr/bin/tar -xzf release/python.tar.gz -C release/runtime
-          release/runtime/python/install/bin/python3.11 -m venv release/runtime/venv
+          release/runtime/python/bin/python3.11 -m venv release/runtime/venv
           python - <<'PY'
           import json, pathlib
           rows = json.loads(pathlib.Path('release/wheel-inputs.json').read_text())

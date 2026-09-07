@@ -19,7 +19,7 @@
       "url": "https://github.com/Canner/WrenAI/releases/download/managed-wren-v0.0.4/cpython-3.11.16%2B20260901-aarch64-apple-darwin-install_only.tar.gz",
       "sha256": "50424fa409e8ae84b82a3052522f64695b47dff2158b70bb7358e0ebd6c085c9"
     },
-    "interpreterPath": "python/install/bin/python3.11"
+    "interpreterPath": "python/bin/python3.11"
   },
   "wheels": [
     {
