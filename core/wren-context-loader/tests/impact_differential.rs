@@ -205,8 +205,17 @@ fn every_kind_classifies_the_same_on_both_sides() {
             "{kind:?} downstream should be {expected_label}"
         );
         assert_eq!(ours.severity.label(), expected_label);
+        // Pin the set as well, for the same reason and in the same order: the severity above is
+        // only meaningful because `target` is what the seed reaches, so a case that stopped
+        // reaching it would assert nothing while still passing.
+        assert_eq!(
+            ours.downstream,
+            vec!["target".to_string()],
+            "{kind:?} case must actually reach its target"
+        );
         // ...and that the framework still agrees while it computes its own copy.
-        assert_agrees_on(&graph, "model:root");
+        let downstream = assert_agrees_on(&graph, "model:root");
+        assert_eq!(downstream, ours.downstream);
         assert_agrees_everywhere(&graph);
     }
 }
@@ -277,7 +286,25 @@ fn a_dangling_edge_source_agrees_too() {
         nodes: vec![node("dashboard:sales", LineageKind::Dashboard)],
         edges: vec![edge("model:missing", "dashboard:sales")],
     };
-    assert_agrees_on(&graph, "model:missing");
+    // Pin the answer *before* checking agreement, deliberately. Agreement alone is not enough:
+    // if both sides ever treated an undeclared source as a leaf they would agree on an empty
+    // result and this case would pass while the property it exists to pin had gone. Asserting the
+    // value first also keeps it from being shadowed — a one-sided regression would otherwise trip
+    // the agreement check and this assertion would never run.
+    let ours = ImpactGraph::from(&graph).impact("model:missing");
+    assert_eq!(
+        ours.downstream,
+        vec!["dashboard:sales".to_string()],
+        "an undeclared seed's edges are still followed"
+    );
+    assert_eq!(
+        ours.severity,
+        Severity::Semantic,
+        "and the dashboard it reaches still sets the class"
+    );
+
+    let downstream = assert_agrees_on(&graph, "model:missing");
+    assert_eq!(downstream, ours.downstream);
     assert_agrees_everywhere(&graph);
 }
 
