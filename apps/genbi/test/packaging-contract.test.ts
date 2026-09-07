@@ -35,6 +35,9 @@ describe("installed-package and vendor-contract CI wiring", () => {
     expect(workflow).toContain("managed-wren-manifest.candidate.json");
     expect(workflow).toContain("--no-index --no-deps --require-hashes");
     expect(workflow).toContain("gh release create");
+    const handoff = readFileSync(path.join(packageRoot, "scripts", "anchor-managed-wren-manifest.mjs"), "utf8");
+    expect(handoff).toContain("approvedManifest");
+    expect(handoff).toContain("approved manifest required");
   });
 
   it("pins the context loader exactly and runs its no-checkout acceptance on the certified macOS target", () => {

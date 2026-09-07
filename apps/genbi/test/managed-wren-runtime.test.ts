@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -99,6 +99,14 @@ describe("managed Wren runtime", () => {
       if (mutation === "marker") writeFileSync(path.join(next.generation, ".genbi-managed-wren.json"), "{}", { mode: 0o600 });
       expect(() => resolveManagedWrenRuntime({ packageRoot: next.packageRoot, runtimeRoot: next.runtimeRoot })).toThrow(ManagedWrenRuntimeError);
     }
+  });
+
+  it("accepts a contained PBS/venv-style link and rejects a replacement that escapes generation", () => {
+    const value = fixture();
+    symlinkSync("python", path.join(value.generation, "venv", "bin", "python3"));
+    expect(resolveManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot }).launcher).toBe(value.launcher);
+    rmSync(value.launcher); symlinkSync("/bin/sh", value.launcher);
+    expect(() => resolveManagedWrenRuntime({ packageRoot: value.packageRoot, runtimeRoot: value.runtimeRoot })).toThrow(ManagedWrenRuntimeError);
   });
 
   it("rejects mutable, unapproved, or non-mirror manifest input before provisioning", () => {
