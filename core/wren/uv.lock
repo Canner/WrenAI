@@ -3593,7 +3593,7 @@ wheels = [
 
 [[package]]
 name = "wrenai"
-version = "0.13.4"
+version = "0.14.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
