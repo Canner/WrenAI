@@ -149,6 +149,7 @@ def _register_query_tools(mcp: FastMCP, ctx: ServeContext) -> None:
             dimensions: list[str] | None = None,
             time_dimension: str | None = None,
             filters: list[str] | None = None,
+            order_by: list[str] | None = None,
             limit: int | None = None,
             offset: int | None = None,
             sql_only: bool = False,
@@ -157,7 +158,10 @@ def _register_query_tools(mcp: FastMCP, ctx: ServeContext) -> None:
 
             Mirrors ``wren cube query``. ``time_dimension`` uses the CLI spec
             format ``name:granularity[:start,end]``; ``filters`` use
-            ``dim:op[:value]`` (comma-separated values for ``in``/``not_in``).
+            ``dim:op[:value]`` (comma-separated values for ``in``/``not_in``);
+            ``order_by`` uses ``member:direction`` where direction is ``asc``
+            or ``desc`` and the member must be selected by the query. Pair it
+            with ``limit`` to get a genuine top-N rather than an arbitrary one.
             Set ``sql_only=True`` to see the generated SQL without executing it.
             """
             from wren_core import cube_query_to_sql  # noqa: PLC0415
@@ -184,6 +188,7 @@ def _register_query_tools(mcp: FastMCP, ctx: ServeContext) -> None:
                     ",".join(dimensions or []),
                     time_dimension,
                     filters or [],
+                    order_by or [],
                     row_limit,
                     offset,
                 )

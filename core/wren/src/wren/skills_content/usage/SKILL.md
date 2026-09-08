@@ -289,6 +289,7 @@ wren --sql "SELECT * FROM <changed_model> LIMIT 1"
 ```text
 Get data back           → wren --sql "..."
 Aggregation across dims → wren cube query --cube <name> --measures <m> (if cube defined)
+Ranked / top-N          → wren cube query ... --order-by "<measure>:desc" --limit N
 See translated SQL only → wren dry-plan --sql "..." (accepts -d <datasource> if no active profile)
 Validate against DB     → wren dry-run --sql "..."
 Schema context          → wren memory fetch -q "..."
@@ -337,7 +338,9 @@ time dimensions, and hierarchies.
 | "by month" | `--time-dimension "order_date:month"` |
 | "in 2024" | `--time-dimension "order_date:month:2024-01-01,2025-01-01"` |
 | "for completed orders" | `--filter "status:eq:completed"` |
-| "top N customers" | `--dimensions customer --limit N` |
+| "top N customers" | `--dimensions customer --order-by "total:desc" --limit N` |
+| "worst / lowest / bottom N" | `--order-by "<measure>:asc" --limit N` |
+| "sorted by name" | `--order-by "<dimension>:asc"` |
 
 ### Step 4: Execute via CLI flags OR JSON input
 
@@ -349,8 +352,21 @@ wren cube query \
   --measures total,order_count \
   --time-dimension "order_date:month:2024-01-01,2025-01-01" \
   --filter "status:eq:completed" \
+  --order-by "total:desc" \
   --limit 100
 ```
+
+**`--limit` without `--order-by` is not a top-N.** It returns an arbitrary N rows
+(or the earliest N by the time dimension when one is present). Whenever the user
+asks for "top", "best", "worst", or "largest", add `--order-by`.
+
+Ordering rules: the member must be one this query already selects (a measure,
+dimension, or time dimension); direction is lowercase `asc` or `desc`; each member
+may appear once. Omitting `--order-by` keeps the previous default ordering.
+
+Name the member as the cube declares it. A time dimension appears in the generated
+SQL as `<name>__<granularity>`, but `--order-by` wants the declared name:
+`--time-dimension "order_date:month" --order-by "order_date:desc"`.
 
 JSON input (good for agent-generated structured queries):
 
@@ -368,6 +384,9 @@ verification before paying for execution on a remote warehouse.
 | `Unknown measure 'X'` | `wren cube describe <cube>` for available measures |
 | `Unknown dimension 'X'` | `wren cube describe <cube>` for available dimensions |
 | `Cube 'X' not found` | `wren cube list` |
+| `Cannot order by member 'X': member is not selected by the query` | Add `X` to `--measures` / `--dimensions`, or order by a member already selected |
+| `Cannot order by member 'X' more than once` | Drop the duplicate — each member may appear once in `--order-by` |
+| `` unknown variant `DESC`, expected `asc` or `desc` `` | Directions are lowercase: use `desc`, not `DESC` |
 | `Circular dependency detected` | Derived measure references itself — inspect the cube YAML |
 
 ### When NOT to use cube query

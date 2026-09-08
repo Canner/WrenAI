@@ -495,3 +495,314 @@ def test_cube_list_null_member_list_fails_loud(tmp_path):
     assert "malformed cubes" in result.output
     assert "dimensions is null" in result.output
     assert "cubes/*/metadata.yml" in result.output
+
+
+# ── query --order-by ────────────────────────────────────────────────────────
+#
+# Ordering is validated in wren-core, so these assert two things Python owns:
+# the spec grammar, and that core's errors reach the user unchanged. The SQL
+# orders by *output ordinal*, not member name — see wren-core's cube tests.
+
+
+def test_cube_query_sql_only_order_by(tmp_path):
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--dimensions",
+            "status",
+            "--order-by",
+            "revenue:desc",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "ORDER BY 2 DESC" in result.output
+
+
+def test_cube_query_order_by_comma_separated(tmp_path):
+    """Comma-separated keys order left to right, like --measures."""
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--dimensions",
+            "status",
+            "--order-by",
+            "revenue:desc,status:asc",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "ORDER BY 2 DESC, 1 ASC" in result.output
+
+
+def test_cube_query_order_by_repeatable_matches_comma_form(tmp_path):
+    """Repeating the flag (like --filter) must produce identical SQL."""
+    mdl = _make_mdl(tmp_path)
+
+    def run(*order_by_args):
+        return runner.invoke(
+            app,
+            [
+                "cube",
+                "query",
+                "--cube",
+                "order_metrics",
+                "--measures",
+                "revenue",
+                "--dimensions",
+                "status",
+                *order_by_args,
+                "--sql-only",
+                "--mdl",
+                str(mdl),
+            ],
+        )
+
+    comma = run("--order-by", "revenue:desc,status:asc")
+    repeated = run("--order-by", "revenue:desc", "--order-by", "status:asc")
+    assert comma.exit_code == 0, comma.output
+    assert repeated.exit_code == 0, repeated.output
+    assert repeated.output == comma.output
+
+
+def test_cube_query_without_order_by_omits_ordering(tmp_path):
+    """No --order-by must leave the pre-existing SQL untouched."""
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--dimensions",
+            "status",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "ORDER BY" not in result.output
+
+
+def test_cube_query_order_by_bad_spec(tmp_path):
+    """A spec without a direction is a clean CLI error, not a core error."""
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--order-by",
+            "revenue",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "member:direction" in result.output
+
+
+def test_cube_query_order_by_empty_direction_rejected(tmp_path):
+    """`revenue:` would send direction="" to core; reject it where it is typed."""
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--order-by",
+            "revenue:",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "member:direction" in result.output
+
+
+def test_cube_query_order_by_unselected_member_surfaces_core_error(tmp_path):
+    """Validation lives in core; the CLI must pass its message through."""
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--order-by",
+            "order_count:desc",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "is not selected by the query" in result.output
+
+
+def test_cube_query_order_by_uppercase_direction_rejected(tmp_path):
+    """Direction is a lowercase-only enum in core; the CLI must not normalise."""
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--dimensions",
+            "status",
+            "--order-by",
+            "revenue:DESC",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "unknown variant" in result.output
+
+
+def test_cube_query_order_by_duplicate_member_surfaces_core_error(tmp_path):
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--dimensions",
+            "status",
+            "--order-by",
+            "revenue:desc,revenue:asc",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "more than once" in result.output
+
+
+def test_cube_query_order_by_time_dimension(tmp_path):
+    """Time dimensions are orderable members too — "newest first"."""
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--time-dimension",
+            "order_date:month",
+            "--order-by",
+            "order_date:desc",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "ORDER BY 1 DESC" in result.output
+
+
+def test_cube_query_order_by_time_dimension_rejects_sql_alias(tmp_path):
+    """The member is the declared name, not the ``name__granularity`` alias.
+
+    The alias is what shows up in the generated SQL, so copying it back into
+    --order-by is the obvious mistake to make; core rejects it.
+    """
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--time-dimension",
+            "order_date:month",
+            "--order-by",
+            "order_date__month:desc",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "is not selected by the query" in result.output
+
+
+def test_cube_query_order_by_empty_value_rejected(tmp_path):
+    """An --order-by that contributes no spec must not run unordered.
+
+    Dropping it silently would hand back an arbitrary N rows — the exact
+    failure ordering exists to prevent — so it is a clean CLI error instead.
+    """
+    mdl = _make_mdl(tmp_path)
+    for empty in ("", ","):
+        result = runner.invoke(
+            app,
+            [
+                "cube",
+                "query",
+                "--cube",
+                "order_metrics",
+                "--measures",
+                "revenue",
+                "--dimensions",
+                "status",
+                "--order-by",
+                empty,
+                "--sql-only",
+                "--mdl",
+                str(mdl),
+            ],
+        )
+        assert result.exit_code != 0, result.output
+        assert "empty value" in result.output
