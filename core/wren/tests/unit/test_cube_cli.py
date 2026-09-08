@@ -505,6 +505,7 @@ def test_cube_list_null_member_list_fails_loud(tmp_path):
 
 
 def test_cube_query_sql_only_order_by(tmp_path):
+    """Ordering reaches the generated SQL, keyed by output ordinal."""
     mdl = _make_mdl(tmp_path)
     result = runner.invoke(
         app,
@@ -701,6 +702,7 @@ def test_cube_query_order_by_uppercase_direction_rejected(tmp_path):
 
 
 def test_cube_query_order_by_duplicate_member_surfaces_core_error(tmp_path):
+    """A member listed twice is core's error to raise, not the CLI's."""
     mdl = _make_mdl(tmp_path)
     result = runner.invoke(
         app,
@@ -805,4 +807,64 @@ def test_cube_query_order_by_empty_value_rejected(tmp_path):
             ],
         )
         assert result.exit_code != 0, result.output
-        assert "empty value" in result.output
+        assert "member:direction" in result.output
+
+
+def test_cube_query_order_by_rejects_empty_among_valid_values(tmp_path):
+    """One empty value must not be swallowed because another one parses.
+
+    The repeatable form is validated per value, like --filter: dropping the
+    blank would silently discard part of the user's ordering intent.
+    """
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--dimensions",
+            "status",
+            "--order-by",
+            "",
+            "--order-by",
+            "revenue:desc",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code != 0, result.output
+    assert "member:direction" in result.output
+
+
+def test_cube_query_order_by_tolerates_trailing_comma(tmp_path):
+    """A blank segment *inside* a value is tolerated, as in --measures.
+
+    Deliberate, and pinned here so it is not mistaken for the bug the test
+    above guards: the value still contributes a spec, so it is not empty.
+    """
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--dimensions",
+            "status",
+            "--order-by",
+            "revenue:desc,",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "ORDER BY 2 DESC" in result.output

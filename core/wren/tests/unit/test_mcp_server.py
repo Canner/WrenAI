@@ -514,3 +514,13 @@ def test_query_cube_order_by_bad_spec_is_readable():
             order_by=["total_revenue"],
             sql_only=True,
         )
+
+    # An empty entry alongside a valid one is rejected, not dropped.
+    with pytest.raises(Exception, match="member:direction"):
+        query_cube(
+            cube="order_metrics",
+            measures=["total_revenue"],
+            dimensions=["customer_id"],
+            order_by=["", "total_revenue:desc"],
+            sql_only=True,
+        )

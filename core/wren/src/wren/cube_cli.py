@@ -107,16 +107,20 @@ def _parse_order_by_specs(specs: list[str]) -> list[dict]:
     """Parse ``--order-by`` values into CubeQuery ``orderBy`` entries.
 
     Accepts the comma-separated form (like ``--measures``) and the repeatable
-    form (like ``--filter``) by flattening one into the other. A value that
-    contributes no spec at all is rejected rather than dropped: silently
-    returning an unordered query is the failure ordering exists to prevent.
+    form (like ``--filter``). Blank segments inside a value are tolerated, as
+    in ``--measures``; a value that contributes no spec at all is rejected, as
+    in ``--filter`` — silently dropping it would hand back an unordered query,
+    the failure ordering exists to prevent.
     """
-    items = [s.strip() for spec in specs for s in spec.split(",") if s.strip()]
-    if not items:
-        raise typer.BadParameter(
-            "--order-by expects 'member:direction', got an empty value"
-        )
-    return [_parse_order_by(item) for item in items]
+    entries: list[dict] = []
+    for spec in specs:
+        items = [s.strip() for s in spec.split(",") if s.strip()]
+        if not items:
+            raise typer.BadParameter(
+                f"--order-by expects 'member:direction', got '{spec}'"
+            )
+        entries.extend(_parse_order_by(item) for item in items)
+    return entries
 
 
 def _build_cube_query(
