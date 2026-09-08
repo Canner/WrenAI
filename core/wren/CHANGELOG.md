@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.14.0](https://github.com/Canner/WrenAI/compare/wren-v0.13.4...wren-v0.14.0) (2026-09-08)
+
+
+### Features
+
+* **wren:** add `wren cloud` to bind a local project to a Wren Cloud git remote ([#2706](https://github.com/Canner/WrenAI/issues/2706)) ([8e532b4](https://github.com/Canner/WrenAI/commit/8e532b497da8131d3d90abbfab5752d592eba4e2))
+* **wren:** add a torch-free onnx embedding backend for wren memory ([#2707](https://github.com/Canner/WrenAI/issues/2707)) ([308a0dd](https://github.com/Canner/WrenAI/commit/308a0ddb36706bf7248bd8a06ad6193a27eb78fe))
+
+
+### Bug Fixes
+
+* **wren:** connect MSSqlConnector with autocommit so statements are not left in an open transaction ([#2705](https://github.com/Canner/WrenAI/issues/2705)) ([4d167fc](https://github.com/Canner/WrenAI/commit/4d167fc0c3678abcbdd7120d912788305fbfe51b))
+* **wren:** forget query_history rows deleted from knowledge/sql on reindex ([#2703](https://github.com/Canner/WrenAI/issues/2703)) ([10a6432](https://github.com/Canner/WrenAI/commit/10a6432afb24c5ba92f87d13693393e8b0a66401))
+* **wren:** make resolve_model_name's case-insensitive fallback deterministic ([#2719](https://github.com/Canner/WrenAI/issues/2719)) ([c59ec23](https://github.com/Canner/WrenAI/commit/c59ec230d2a117bb85313efeb24a5107342322c0))
+
 ## [0.13.4](https://github.com/Canner/WrenAI/compare/wren-v0.13.3...wren-v0.13.4) (2026-09-02)
 
 
