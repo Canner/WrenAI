@@ -299,6 +299,18 @@ def init(
     )
     (project_path / "relationships.yml").write_text(rels)
 
+    # `wren context build` writes target/mdl.json — compiled output, derived
+    # from the YAML beside it. Without this, a project pushed to a git remote
+    # carries its own build artifact: observed with `wren cloud create`, which
+    # pushes the directory, so `target/mdl.json` ended up committed to the
+    # project's repository. Only written when absent, so a project that already
+    # has one keeps whatever it says.
+    gitignore = project_path / ".gitignore"
+    if not gitignore.exists():
+        gitignore.write_text(
+            "# Compiled MDL — rebuild with `wren context build`\ntarget/\n"
+        )
+
     if not empty:
         # Scaffold example model (table_reference mode)
         example_model_dir = project_path / "models" / "example"

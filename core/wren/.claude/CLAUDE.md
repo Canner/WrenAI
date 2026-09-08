@@ -33,6 +33,8 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 - `wren utils parse-type` — SQL type normalization
 - `wren memory index|fetch|store|recall` — Semantic memory (when `wren[memory]` installed)
 - `wren serve mcp` — Serve query/schema/knowledge tools as an MCP server (in-process engine, when `wrenai[mcp]` installed)
+- `wren cloud auth add|remove` — Store/remove the credential git authenticates to a Wren Cloud project with (touches no directory)
+- `wren cloud create|link|unlink` — Bind a local directory to a Wren Cloud project's git remote. The binding *is* the git remote; after binding, plain `git push`/`git pull` are the commands
 
 ## Key Design Points
 
