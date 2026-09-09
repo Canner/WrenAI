@@ -75,6 +75,12 @@ Both formats are accepted. The CLI auto-flattens the envelope format.
 }
 ```
 
+`credentials` is optional: if omitted, the connector falls back to
+Application Default Credentials (`gcloud auth application-default login`,
+workload identity, or the GCE/Cloud Run metadata server). ADC obtained via
+`gcloud auth application-default login` does not carry the Drive scope;
+BigQuery external tables over Drive/Sheets still need a service account.
+
 ## Snowflake
 
 ```json

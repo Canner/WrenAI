@@ -43,7 +43,10 @@ class BigQueryConnectionInfo(BaseConnectionInfo):
         description=(
             "Base64 encode `credentials.json`. Omit to use Application Default "
             "Credentials (gcloud auth application-default login, workload "
-            "identity, or the GCE/Cloud Run metadata server)."
+            "identity, or the GCE/Cloud Run metadata server). ADC obtained via "
+            "gcloud auth application-default login does not carry the Drive "
+            "scope; BigQuery external tables over Drive/Sheets still require a "
+            "service account."
         ),
         examples=["eyJ..."],
     )

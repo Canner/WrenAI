@@ -32,7 +32,7 @@ class BigQueryConnector(ConnectorABC):
         from google.cloud import bigquery  # noqa: PLC0415
 
         self.connection_info = connection_info
-        if connection_info.credentials is not None:
+        if connection_info.credentials:
             from google.oauth2 import service_account  # noqa: PLC0415
 
             credits_json = loads(

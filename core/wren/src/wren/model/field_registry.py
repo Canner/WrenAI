@@ -94,14 +94,14 @@ _MODEL_UI_OVERRIDES: dict[str, dict[str, dict]] = {
         "credentials": {
             "input_type": "file_base64",
             "accept": ".json",
-            "hint": "Upload your GCP service account credentials.json file. It will be base64-encoded automatically.",
+            "hint": "Upload your GCP service account credentials.json file (it will be base64-encoded automatically), or leave blank to use Application Default Credentials.",
         },
     },
     "BigQueryProjectConnectionInfo": {
         "credentials": {
             "input_type": "file_base64",
             "accept": ".json",
-            "hint": "Upload your GCP service account credentials.json file. It will be base64-encoded automatically.",
+            "hint": "Upload your GCP service account credentials.json file (it will be base64-encoded automatically), or leave blank to use Application Default Credentials.",
         },
     },
     "SnowflakeConnectionInfo": {

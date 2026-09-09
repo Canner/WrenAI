@@ -155,3 +155,21 @@ def test_connector_falls_back_to_adc_when_credentials_absent() -> None:
     ]
     assert _client_calls[0]["credentials"] is _adc_credentials
     assert _client_calls[0]["project"] == "my-project"
+
+
+def test_connector_falls_back_to_adc_when_credentials_is_empty_string() -> None:
+    """Root cause: ``is not None`` treated a set-but-empty ``credentials``
+    (e.g. an expanded env var like ``${SOME_VAR}`` that resolves to "") as
+    "use a service account", so the value went straight into base64/JSON
+    decoding and raised ``json.decoder.JSONDecodeError`` instead of falling
+    back to ADC. ``SecretStr("")`` is falsy, so the fix is the truthy check
+    on ``connection_info.credentials`` in ``BigQueryConnector.__init__``.
+    """
+    info = BigQueryDatasetConnectionInfo(
+        project_id="my-project", dataset_id="my_dataset", credentials=""
+    )
+    BigQueryConnector(info)
+    assert not _service_account_calls
+    assert len(_default_calls) == 1
+    assert _client_calls[0]["credentials"] is _adc_credentials
+    assert _client_calls[0]["project"] == "my-project"
