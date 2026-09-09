@@ -29,8 +29,16 @@ def test_query_pushes_limit_and_strips_semicolon() -> None:
     connector, client = _make_mock_connector()
     connector.query("SELECT 1;", limit=5)
     (sent,), _ = client.query.call_args
-    assert sent == "SELECT * FROM (SELECT 1) AS _sub LIMIT 5"
-    assert ";)" not in sent and not sent.rstrip().endswith(";")
+    assert sent == "SELECT * FROM (\nSELECT 1\n) AS _sub LIMIT 5"
+    assert ";\n)" not in sent and not sent.rstrip().endswith(";")
+
+
+def test_query_limit_survives_trailing_line_comment() -> None:
+    """Trailing `--` must not eat the wrap (same shape as postgres.py #2728)."""
+    connector, client = _make_mock_connector()
+    connector.query("SELECT 1 AS x -- pick", limit=5)
+    (sent,), _ = client.query.call_args
+    assert sent == "SELECT * FROM (\nSELECT 1 AS x -- pick\n) AS _sub LIMIT 5"
 
 
 def test_query_without_limit_still_strips_semicolon() -> None:
@@ -45,7 +53,7 @@ def test_query_with_inner_limit_outer_wrap_still_enforces_caller_limit() -> None
     connector, client = _make_mock_connector()
     connector.query("SELECT 1 LIMIT 100", limit=5)
     (sent,), _ = client.query.call_args
-    assert sent == "SELECT * FROM (SELECT 1 LIMIT 100) AS _sub LIMIT 5"
+    assert sent == "SELECT * FROM (\nSELECT 1 LIMIT 100\n) AS _sub LIMIT 5"
 
 
 def test_dry_run_strips_trailing_semicolon() -> None:
@@ -80,4 +88,4 @@ def test_dry_run_strips_trailing_semicolon() -> None:
 
 def test_helper_preserves_literal_semicolon() -> None:
     assert strip_trailing_semicolon("SELECT ';' AS x") == "SELECT ';' AS x"
-    assert _apply_limit("SELECT 1;", 3) == "SELECT * FROM (SELECT 1) AS _sub LIMIT 3"
+    assert _apply_limit("SELECT 1;", 3) == "SELECT * FROM (\nSELECT 1\n) AS _sub LIMIT 3"
