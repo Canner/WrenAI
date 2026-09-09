@@ -461,15 +461,15 @@ def test_query_strips_trailing_semicolon_before_subquery_wrap() -> None:
     connector, cursor = _make_mock_connector()
     connector.query("SELECT 1;", limit=5)
     (sent,), _ = cursor.execute.call_args
-    assert sent == "SELECT * FROM (SELECT 1) AS _sub LIMIT 5"
-    assert ";)" not in sent
+    assert sent == "SELECT * FROM (\nSELECT 1\n) AS _sub LIMIT 5"
+    assert ";\n)" not in sent
 
 
 def test_dry_run_strips_trailing_semicolon() -> None:
     connector, cursor = _make_mock_connector()
     connector.dry_run("SELECT 1;  ")
     (sent,), _ = cursor.execute.call_args
-    assert sent == "SELECT * FROM (SELECT 1) AS _sub LIMIT 0"
+    assert sent == "SELECT * FROM (\nSELECT 1\n) AS _sub LIMIT 0"
 
 
 def test_helper_preserves_semicolon_inside_string_literal() -> None:

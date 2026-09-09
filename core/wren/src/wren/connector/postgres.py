@@ -317,7 +317,10 @@ class PostgresConnector(ConnectorABC):
         # client-pasted statements match dry_run / limited composition rules.
         sql = strip_trailing_semicolon(sql)
         if limit is not None:
-            sql = f"SELECT * FROM ({sql}) AS _sub LIMIT {limit}"
+            # Multiline wrap so a trailing `-- line comment` in the inner SQL
+            # is terminated by the newline instead of swallowing the closing
+            # `) AS _sub LIMIT n` (same technique as athena.py/snowflake.py).
+            sql = f"SELECT * FROM (\n{sql}\n) AS _sub LIMIT {limit}"
 
         try:
             with self.connection.cursor() as cursor:
@@ -336,7 +339,7 @@ class PostgresConnector(ConnectorABC):
             ) from e
 
     def dry_run(self, sql: str) -> None:
-        wrapped = f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT 0"
+        wrapped = f"SELECT * FROM (\n{strip_trailing_semicolon(sql)}\n) AS _sub LIMIT 0"
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(wrapped)
