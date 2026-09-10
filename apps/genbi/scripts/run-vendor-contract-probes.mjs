@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 
 const expected = { codex: "0.146.0", claude: "2.1.259", sandboxRuntime: "0.0.75" };
 const spikeDirectory = path.join(process.cwd(), "scripts", "runtime-sandbox-spike");
@@ -39,6 +40,12 @@ try {
   ]) {
     await run(process.execPath, [path.join(spikeDirectory, probe)], probeEnv);
   }
+  // The typed production transport accepts an attested native executable, not
+  // an env-node npm wrapper whose runtime would depend on ambient PATH.
+  const vendorRequire = createRequire(path.join(toolRoot, "node_modules", "@openai", "codex", "package.json"));
+  const nativePackage = path.dirname(vendorRequire.resolve("@openai/codex-darwin-arm64/package.json"));
+  const nativeCodex = path.join(nativePackage, "vendor", "aarch64-apple-darwin", "bin", "codex");
+  await run(process.execPath, [path.join(process.cwd(), "scripts", "codex-backend-probe.mjs")], { ...probeEnv, CODEX_BIN: nativeCodex });
   process.stdout.write(`${JSON.stringify({
     ok: true,
     evidenceState: "tested_baseline",
@@ -46,6 +53,7 @@ try {
     checks: [
       { name: "exact vendor versions selected before deterministic probes", ok: true },
       { name: "RPC, Codex lifecycle/schema/cleanup, and Claude SRT probes passed", ok: true },
+      { name: "compiled Codex driver named-profile, PTY and process-tree contracts passed", ok: true },
       { name: "no authenticated or model-backed probe was selected", ok: true },
     ],
   }, null, 2)}\n`);

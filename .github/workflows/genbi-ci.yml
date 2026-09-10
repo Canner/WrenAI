@@ -135,6 +135,16 @@ jobs:
         with:
           node-version: 24
 
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install workspace dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+
+      - name: Build typed backend for contract probes
+        run: pnpm run build
+
       - name: Install exact vendor tested baseline
         env:
           GENBI_VENDOR_TOOL_ROOT: ${{ runner.temp }}/genbi-vendor-tools

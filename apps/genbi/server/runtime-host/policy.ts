@@ -22,6 +22,7 @@ const MESSAGES: Record<RuntimeBackendReasonCode, string> = {
   codex_cli_version_unsupported: "The installed Codex CLI version is not supported by this GenBI release.",
   codex_identity_uncertified: "This Codex version has test evidence, but this installed identity is not certified.",
   codex_app_server_unreachable: "The Codex app-server runtime is unavailable.",
+  codex_app_server_cleanup_failed: "Codex runtime cleanup could not be confirmed. The runtime generation has been retained.",
   codex_app_server_protocol_incompatible: "The Codex app-server protocol is incompatible with this GenBI release.",
   codex_sandbox_policy_unavailable: "The required Codex sandbox policy is unavailable.",
   codex_permission_profile_unavailable: "The required Codex permission profile is unavailable.",

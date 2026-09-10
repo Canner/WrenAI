@@ -69,6 +69,7 @@ try {
 
   markPhase("managed-wren-provision");
   await writeFile(sourceAuditHook, createSourceAuditHook(), { mode: 0o600 });
+  await verifyInstalledCodexBackend({ installRoot, installedPackageRoot, sourceAuditHook, workspaceRoot, port, fixtureEndpoint: fixtureProvider.endpoint });
   await verifyInstalledManagedWrenProvision({ installRoot, installedPackageRoot, sourceAuditHook, workspaceRoot, port, fixtureEndpoint: fixtureProvider.endpoint, tempRoot });
 
   markPhase("start");
@@ -95,6 +96,7 @@ try {
       { name: "tarball excludes checkout-only scripts, tests, fixtures, and examples", ok: true },
       { name: "fresh installed package rejects its staged managed-Wren manifest by default, then provisions only exact local fixture mirror bytes without checkout, ambient Python, or index resolution", ok: true },
       { name: "fresh install launches through npx with package-manager PATH", ok: true },
+      { name: "installed Codex driver handles deterministic command events while the production backend remains unavailable", ok: true },
       { name: "first-run Setup connect terminal flow works without checkout access or development escapes", ok: true },
       { name: "fresh install binds through a verified package-local context loader with no Rust toolchain or checkout access", ok: true },
     ],
@@ -456,12 +458,63 @@ async function tarJson(tarball, entry) {
   return JSON.parse(result.stdout);
 }
 
+async function verifyInstalledCodexBackend(input) {
+  const { installRoot, installedPackageRoot } = input;
+  const moduleUrl = (name) => pathToFileURL(path.join(installedPackageRoot, "dist-server", "server", "runtime-host", name + ".js")).href;
+  const runtimeRoot = path.join(installRoot, "must-not-be-created");
+  const code = `
+    import assert from 'node:assert/strict';
+    import { existsSync } from 'node:fs';
+    import { CodexAppServerBackend } from ${JSON.stringify(moduleUrl("codex-app-server"))};
+    import { CODEX_CERTIFIED_ROWS } from ${JSON.stringify(moduleUrl("codex-compatibility"))};
+    import { CodexSession } from ${JSON.stringify(moduleUrl("codex-session"))};
+    assert.equal(CODEX_CERTIFIED_ROWS.length, 0);
+    const backend = new CodexAppServerBackend({ executable: '/not-installed/codex', source: 'https://example.invalid/fixture', runtimeRoot: ${JSON.stringify(runtimeRoot)} });
+    const readiness = (await backend.probe()).readiness;
+    assert.notEqual(readiness.state, 'ready');
+    assert.throws(() => backend.prepareLaunch());
+    assert.equal(existsSync(${JSON.stringify(runtimeRoot)}), false);
+    const messages = []; let handlers; let closes = 0; const events = [];
+    const transport = {
+      listen(value) { handlers = value; },
+      close: async () => { closes++; },
+      write(line) {
+        const message = JSON.parse(line); messages.push(message);
+        if (!message.id) return;
+        let result;
+        if (message.method === 'initialize') result = { codexHome: '/login', platformFamily: 'unix', platformOs: 'macos', userAgent: 'codex_cli_rs/0.146.0 fixture' };
+        else if (message.method === 'config/read') result = { config: {} };
+        else if (message.method === 'permissionProfile/list') result = { data: [{ id: 'genbi-scoped', allowed: true }], nextCursor: null };
+        else if (message.method === 'command/exec') {
+          assert.equal(message.params.permissionProfile, 'genbi-scoped');
+          assert.equal(message.params.env.CODEX_HOME, null);
+          assert.equal('sandboxPolicy' in message.params, false);
+          handlers.data(Buffer.from(JSON.stringify({ method: 'command/exec/outputDelta', params: { processId: message.params.processId, stream: 'stdout', deltaBase64: 'b2s=', capReached: false } }) + '\\n'));
+          result = { exitCode: 0, stdout: '', stderr: '' };
+        } else throw new Error('unexpected method');
+        handlers.data(Buffer.from(JSON.stringify({ id: message.id, result }) + '\\n'));
+      }
+    };
+    const session = await CodexSession.connect(transport, { cwd: '/scope', codexHome: '/login', profile: 'genbi-scoped', args: [], environment: {}, commandEnvironment: { CODEX_HOME: null }, configuration: {} }, () => {}, event => events.push(event));
+    const command = session.startCommand({ command: ['/bin/echo', 'ok'] });
+    assert.deepEqual(await command.completed, { exitCode: 0 });
+    assert.equal(events.length, 1);
+    handlers.data(Buffer.from(JSON.stringify({ method: 'unknown/event', params: {} }) + '\\n'));
+    assert.throws(() => session.startCommand({ command: ['/bin/echo'] }));
+    await session.close(); assert.equal(closes, 1);
+    assert.notEqual((await backend.probe()).readiness.state, 'ready');
+    await backend.shutdown(); console.log('installed-codex-contract-ok');
+  `;
+  const result = await run("npx", ["--no-install", "--", "node", "--input-type=module", "--eval", code], { cwd: installRoot, env: controlledEnvironment(input) });
+  if (result.stdout.trim() !== "installed-codex-contract-ok") throw new Error("installed Codex contract failed");
+}
+
 function assertPublishedFiles(files) {
   if (files.length === 0) throw new Error("package tarball is empty");
   const forbidden = /(^|\/)(scripts|test|tests|fixtures|examples|\.git)(\/|$)|(^|\/)node_modules(\/|$)/;
   const unexpected = files.filter((file) => forbidden.test(file));
   if (unexpected.length > 0) throw new Error(`package tarball contains repository-only files: ${JSON.stringify(unexpected)}`);
-  for (const required of ["package/bin/genbi.mjs", "package/dist/index.html", "package/dist-server/server/bin.js", "package/managed-wren/manifest.json"]) {
+  for (const required of ["package/bin/genbi.mjs", "package/dist/index.html", "package/dist-server/server/bin.js", "package/managed-wren/manifest.json", "package/dist-server/server/runtime-host/codex-app-server.js", "package/dist-server/server/runtime-host/codex-session.js"]) {
     if (!files.includes(required)) throw new Error(`package tarball is missing ${required}`);
   }
 }
