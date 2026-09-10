@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -118,7 +118,6 @@ test("workflow is manual-only, data-binds user input and exposes no raw pre-appr
 
 test("actual workflow approval commands reject missing or stale approval and bind all three review files", async (t) => {
   const root = await temp(t);
-  const { mkdir } = await import("node:fs/promises");
   await mkdir(path.join(root, "release"));
   const names = ["managed-wren-manifest.candidate.json", "pbs-license-inventory.json", "wheel-license-inventory.json"];
   const bytes = names.map((name) => JSON.stringify({ fixture: name }) + "\n");
@@ -137,4 +136,64 @@ test("actual workflow approval commands reject missing or stale approval and bin
     assert.notEqual(run(approval).status, 0);
     await writeFile(path.join(root, "release", names[i]), bytes[i]);
   }
+});
+
+test("actual staging commands derive source identities from the exact input file", async (t) => {
+  const root = await temp(t);
+  const inputDir = path.join(root, "apps/genbi/managed-wren");
+  await mkdir(inputDir, { recursive: true });
+  const changed = { python: { url: "https://example.invalid/changed.tar.gz", sha256: "e".repeat(64) }, wrenai: { version: "99.1.2" } };
+  await writeFile(path.join(inputDir, "release-inputs.json"), JSON.stringify(changed));
+  const workflow = await readFile(path.join(repo, ".github/workflows/managed-wren-runtime.yml"), "utf8");
+  const prelude = workflow.slice(workflow.indexOf("          set -euo pipefail"), workflow.indexOf("          mkdir -p release/wheels"));
+  assert.ok(prelude.includes("release-inputs.json"));
+  const output = execFileSync("/bin/bash", ["-c", prelude + '\nnode -e \'console.log(JSON.stringify(process.argv.slice(1)))\' "$PYTHON_URL" "$PYTHON_SHA256" "$WRENAI_VERSION"'], { cwd: root, encoding: "utf8" });
+  assert.deepEqual(JSON.parse(output), [changed.python.url, changed.python.sha256, changed.wrenai.version]);
+  assert.match(workflow, /--dest release\/wheels "wrenai==\$WRENAI_VERSION"/);
+  assert.match(workflow, /-o release\/python.tar.gz "\$PYTHON_URL"/);
+  assert.match(workflow, /= "\$PYTHON_SHA256"/);
+  assert.match(workflow, /'archiveSha256':os.environ\['PYTHON_SHA256'\]/);
+  assert.doesNotMatch(workflow, /50424fa4|wrenai==0\.13\.0|releases\/download\/20260901/);
+});
+
+test("actual wheel inventory parser respects header boundaries and modern, folded and repeated license fields", async (t) => {
+  const root = await temp(t);
+  const workflow = await readFile(path.join(repo, ".github/workflows/managed-wren-runtime.yml"), "utf8");
+  const snippet = workflow.match(/          python - <<'PY'\n([\s\S]*?)          PY/)[1].split("\n").map((line) => line.slice(10)).join("\n");
+  const bootstrap = `
+import hashlib, io, json, pathlib, urllib.request, zipfile
+root = pathlib.Path('release/wheels')
+root.mkdir(parents=True)
+headers = {
+  'modern': 'License-Expression: MIT OR Apache-2.0\\nLicense: ignored',
+  'folded': 'License: first line\\n  second line',
+  'classified': 'License: UNKNOWN\\nClassifier: Topic :: Database\\nClassifier: License :: OSI Approved :: MIT License\\nClassifier: License :: OSI Approved :: BSD License',
+  'repeated': 'License: first\\nLicense: second',
+  'unknown': '',
+}
+responses = {}
+for name, license_headers in headers.items():
+    filename = name + '-1.0-py3-none-any.whl'
+    target = root / filename
+    metadata = 'Metadata-Version: 2.4\\nName: ' + name + '\\nVersion: 1.0\\n' + license_headers + '\\n\\nName: spoofed\\nVersion: 9.9\\nLicense: SPOOFED\\n'
+    with zipfile.ZipFile(target, 'w') as z:
+        z.writestr(name + '-1.0.dist-info/METADATA', metadata)
+    sha = hashlib.sha256(target.read_bytes()).hexdigest()
+    responses['https://pypi.org/pypi/' + name + '/1.0/json'] = {'urls': [{'url': 'https://files.pythonhosted.org/fixture/' + filename, 'filename': filename, 'digests': {'sha256': sha}}]}
+def fake_urlopen(url, timeout):
+    assert timeout == 30
+    assert url in responses, 'unexpected source identity: ' + url
+    return io.BytesIO(json.dumps(responses[url]).encode())
+urllib.request.urlopen = fake_urlopen
+`;
+  execFileSync("python3", ["-c", bootstrap + "\n" + snippet], { cwd: root });
+  const rows = JSON.parse(await readFile(path.join(root, "release/wheel-inputs.json"), "utf8"));
+  const licenses = Object.fromEntries(rows.map((row) => [row.distribution, row.license]));
+  assert.equal(licenses.modern, "MIT OR Apache-2.0");
+  assert.match(licenses.folded, /first line\n\s+second line/);
+  assert.equal(licenses.repeated, "first; second");
+  assert.match(licenses.classified, /MIT License; License :: OSI Approved :: BSD License/);
+  assert.equal(licenses.unknown, "UNKNOWN");
+  assert.equal(rows.length, 5);
+  assert.ok(rows.every((row) => row.version === "1.0" && !row.license.includes("SPOOFED")));
 });
