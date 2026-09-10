@@ -9,6 +9,8 @@ interface BuildBundleOptions {
   readonly componentType?: string;
   readonly trigger?: string;
   readonly outcome?: string;
+  /** Optional component-level `brief` (IR 0.5). Omitted by default, matching every pre-existing caller. */
+  readonly brief?: string;
   readonly tools?: readonly { readonly name: string; readonly source: string }[];
   readonly guardrails?: Record<string, Guardrail>;
   /** Defaults to `"vercel:headless"` (the vercel dispatch target). Pass `"claude-agent-sdk:local"` for a manifest-flavored synthetic bundle. */
@@ -28,6 +30,7 @@ export function buildSyntheticBundle(options: BuildBundleOptions = {}): unknown 
     componentType = "analytical",
     trigger = "one_shot",
     outcome = "none",
+    brief,
     tools = [],
     guardrails = {},
     target = "vercel:headless",
@@ -47,6 +50,7 @@ export function buildSyntheticBundle(options: BuildBundleOptions = {}): unknown 
         realization_kind: "skill",
         trigger,
         outcome,
+        ...(brief !== undefined ? { brief } : {}),
         steps: [
           {
             name: "only_step",

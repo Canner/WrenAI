@@ -10,7 +10,28 @@ context:
   project: ./context/binding.yml
 
 components:
+  # Each mount's `brief` carries this binding's concrete data-access framing — the wren CLI
+  # invocations the underlying Hub component prompts used to name directly before they were
+  # neutralized. It replaces the component's own `brief` wholesale and is assembled into every
+  # step's system prompt for that component (see Warble's docs/spec/authoring.md, "brief").
   - use: explore_model
+    brief: |
+      Data access in this deployment goes through the `wren` CLI. Introspect the semantic layer
+      with `wren context show` (and, where available, `wren cube list`) to read models, columns,
+      relationships, and metrics/cubes — do not assume the schema.
   - use: answer_query
+    brief: |
+      Data access in this deployment goes through the `wren` CLI. If you need to introspect the
+      schema, run `wren context show`. Query the semantic layer with `wren -q -o json -s '<SQL>'`,
+      which returns JSON; object-shaped rows are also valid — preserve their values exactly. Never
+      hand-write SQL against raw tables outside the model.
   - use: generate_dashboard
+    brief: |
+      Data access in this deployment goes through the `wren` CLI. Discover the schema at query
+      time with `wren context show`, `wren cube list`, and `wren cube describe <cube>` — do not
+      assume it. Run each panel query with `wren -q -o json -s '<SQL>'`; every query goes through
+      `wren`, never hand-written SQL against raw tables outside the model.
   - use: explain_change
+    brief: |
+      Data access in this deployment goes through the `wren` CLI. Introspect the layer as needed
+      with `wren context show`. Run the decomposition queries with `wren -q -o json -s '<SQL>'`.

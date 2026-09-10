@@ -275,6 +275,50 @@ describe("executeAgent (loop executor)", () => {
     expect(artifacts.get("result")).toBe("synthetic answer");
     // The user's question is threaded through even for a `consumes: []` step.
     expect(JSON.stringify(calls[0]!.prompt)).toContain("do the thing please");
+    // Byte-identical to today: with no `brief` authored, nothing sits between
+    // the question and the step's own prompt — exact adjacency of the two
+    // `sections.join("\n\n")` segments, not just "both are present somewhere".
+    expect(JSON.stringify(calls[0]!.prompt)).toContain(
+      "User's question: do the thing please\\n\\ndo the thing",
+    );
+  });
+
+  it("loads a bundle carrying a component-level `brief` via loadBundle without error", () => {
+    const bundle = loadBundle(buildSyntheticBundle({ brief: "Always cite the source table." }));
+    const agent = bundle.agents[0]!;
+    const brief = "brief" in agent ? agent.brief : undefined;
+    expect(brief).toBe("Always cite the source table.");
+  });
+
+  it("threads the component's `brief` into the rendered prompt, positioned after the question and before the step's own prompt", async () => {
+    const bundle = loadBundle(buildSyntheticBundle({ brief: "Always cite the source table." }));
+    const agent = bundle.agents[0]!;
+
+    const calls: LanguageModelV4CallOptions[] = [];
+    const registry = createDefaultProviderRegistry();
+    const binding: TierBinding = {
+      tiers: {
+        cheap: {
+          adapter: MOCK_ADAPTER_ID,
+          config: {
+            doGenerate: async (options: LanguageModelV4CallOptions) => {
+              calls.push(options);
+              return textResult("synthetic answer");
+            },
+          },
+        },
+      },
+    };
+
+    await executeAgent(agent, { binding, registry, tools: {}, userInput: "do the thing please" });
+
+    expect(calls).toHaveLength(1);
+    // Exact section order: question, then brief, then the step's own prompt —
+    // matching where every Warble back-end places `brief` relative to its own
+    // preamble/context (after preamble, before body).
+    expect(JSON.stringify(calls[0]!.prompt)).toContain(
+      "User's question: do the thing please\\n\\nAlways cite the source table.\\n\\ndo the thing",
+    );
   });
 
   it("invokes the guard-eval hook seam for every runnable step, even though it is currently a no-op", async () => {

@@ -48,15 +48,12 @@ const outputSchemaSchema = z.record(z.string(), z.unknown());
 // silently discard an `availability` marker: doing so would turn a redacted
 // unavailable declaration into an executable-looking component downstream.
 //
-// Strictness has a cost worth naming, because it has already been paid once.
-// IR 0.5 added an optional component-level `brief`, and no key for it is
-// declared below. Warble omits the field entirely while no profile sets one, so
-// nothing fails today — but the first time a profile author writes `brief:` on a
-// component, the next dispatch emits that key, `loadBundle` rejects the bundle,
-// and `GET /api/harness` starts returning 500 for a reason that has nothing to
-// do with the annotation someone just added. That is a deliberate deferral, not
-// an oversight: adding a key for a field nothing populates would be guessing at
-// its shape. Declare it here when a profile first needs it.
+// IR 0.5 added an optional component-level `brief`: free-form framing text a
+// profile author writes on a mounted component, shared across every one of
+// its steps (Warble's `docs/spec/authoring.md`, "brief — authored framing
+// shared across every step"). It is declared only on the available variant
+// below — an unavailable component (see `unavailableAgentSchema`) has no
+// executable steps for it to frame, so there is nothing for it to reach.
 const availableAgentSchema = z.object({
   id: z.string(),
   verb: z.string(),
@@ -64,6 +61,7 @@ const availableAgentSchema = z.object({
   realization_kind: z.string(),
   trigger: z.string(),
   outcome: z.string(),
+  brief: z.string().optional(),
   steps: z.array(stepSchema),
   guardrails: z.record(z.string(), guardrailSchema),
   tools: z.array(toolSchema),
@@ -71,7 +69,11 @@ const availableAgentSchema = z.object({
   capabilities: z.array(capabilitySchema),
 }).strict();
 
-/** Read-only manifest variant for a declared component this target cannot execute. */
+/**
+ * Read-only manifest variant for a declared component this target cannot
+ * execute. Carries no `brief`: this branch has no executable steps and no
+ * rendering path for framing text to reach.
+ */
 const unavailableAgentSchema = z.object({
   id: z.string(),
   verb: z.string(),

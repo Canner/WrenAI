@@ -144,6 +144,10 @@ export async function executeAgent(
   // target's step name.
   const repairByTarget = buildRepairFoldMap(agent, hasTools);
 
+  // Component-level, not per-step: read once and thread the same value into
+  // every step's rendered prompt below.
+  const brief = agentBrief(agent);
+
   const pending = agent.steps.filter((step) => step.realization.kind !== "repair_fold");
 
   while (pending.length > 0) {
@@ -162,7 +166,7 @@ export async function executeAgent(
       continue;
     }
 
-    const prompt = renderStepPrompt(step, ctx.userInput, artifacts);
+    const prompt = renderStepPrompt(step, ctx.userInput, artifacts, brief);
     const model = resolveStepModel(step, ctx.binding, ctx.registry);
     const repairStep = repairByTarget.get(step.name);
     const stepId = step.name;
@@ -295,6 +299,18 @@ function assertV1Scope(agent: Agent): void {
   ) {
     throw new AgentScopeError(agent.id, agent.component_type, agent.trigger, agent.outcome);
   }
+}
+
+/**
+ * `brief` is declared only on the available branch of the `Agent` union
+ * (see `bundle/schema.ts`), so a plain `agent.brief` doesn't type-check on
+ * the union itself. This is the one narrowing site for it: `executeAgent`
+ * only ever runs the available branch (the unavailable manifest variant has
+ * no executable steps to run), so this always resolves to the authored
+ * value when one exists.
+ */
+function agentBrief(agent: Agent): string | undefined {
+  return "brief" in agent ? agent.brief : undefined;
 }
 
 function isConsumesSatisfied(step: Step, artifacts: DataflowArtifacts): boolean {
@@ -528,12 +544,24 @@ function basenameOf(filePath: string): string {
 
 /**
  * Builds the message sent for a step: the user's question (always present,
- * so steps with `consumes: []` like `resolve_intent` can still see it),
- * the step's own prompt, and the resolved values of every artifact it
- * consumes.
+ * so steps with `consumes: []` like `resolve_intent` can still see it), the
+ * component's authored `brief` when the profile sets one (framing shared
+ * across every step — placed after the question, before the step's own
+ * prompt body, matching where every Warble back-end places it relative to
+ * its own preamble/context), the step's own prompt, and the resolved values
+ * of every artifact it consumes.
  */
-function renderStepPrompt(step: Step, userInput: string, artifacts: DataflowArtifacts): string {
-  const sections = [`User's question: ${userInput}`, step.prompt];
+function renderStepPrompt(
+  step: Step,
+  userInput: string,
+  artifacts: DataflowArtifacts,
+  brief: string | undefined,
+): string {
+  const sections = [`User's question: ${userInput}`];
+  if (brief !== undefined) {
+    sections.push(brief);
+  }
+  sections.push(step.prompt);
 
   if (step.consumes.length > 0) {
     const consumedSection = step.consumes
