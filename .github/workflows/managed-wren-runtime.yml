@@ -1,0 +1,109 @@
+name: Stage managed Wren runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_tag:
+        description: Immutable managed-Wren release tag
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: managed-wren-${{ inputs.runtime_tag }}
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate immutable release tag before fetching
+        env:
+          RUNTIME_TAG: ${{ inputs.runtime_tag }}
+        run: node apps/genbi/scripts/managed-wren-release.mjs validate-tag "$RUNTIME_TAG"
+      - name: Resolve exact closure and emit review metadata only
+        env:
+          RUNTIME_TAG: ${{ inputs.runtime_tag }}
+        run: |
+          mkdir -p release/wheels release/runtime
+          python -m pip download --only-binary=:all: --platform macosx_11_0_arm64 --python-version 3.11 --implementation cp --dest release/wheels 'wrenai==0.13.0'
+          python - <<'PY'
+          import hashlib, json, pathlib, urllib.request, zipfile
+          rows = []
+          for wheel in sorted(pathlib.Path('release/wheels').glob('*.whl')):
+            with zipfile.ZipFile(wheel) as z:
+              meta = next(n for n in z.namelist() if n.endswith('.dist-info/METADATA'))
+              values = dict(line.split(': ', 1) for line in z.read(meta).decode('utf8', 'replace').splitlines() if ': ' in line)
+            sha256 = hashlib.sha256(wheel.read_bytes()).hexdigest()
+            release = json.load(urllib.request.urlopen('https://pypi.org/pypi/{}/{}/json'.format(values['Name'], values['Version'])))
+            source = next((item['url'] for item in release['urls'] if item['filename'] == wheel.name and item['digests']['sha256'] == sha256), None)
+            if not source: raise SystemExit('could not establish exact source identity for ' + wheel.name)
+            rows.append({'filename': wheel.name, 'sha256': sha256, 'distribution': values['Name'].lower().replace('-', '_'), 'version': values['Version'], 'license': values.get('License', 'UNKNOWN'), 'sourceUrl': source})
+          pathlib.Path('release/wheel-inputs.json').write_text(json.dumps(rows))
+          pathlib.Path('release/wheel-license-inventory.json').write_text(json.dumps({'schema': 1, 'wheels': rows}, indent=2))
+          PY
+          curl --fail --location --proto '=https' --tlsv1.2 -o release/python.tar.gz 'https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-3.11.16%2B20260901-aarch64-apple-darwin-install_only.tar.gz'
+          test "$(shasum -a 256 release/python.tar.gz | awk '{print $1}')" = 50424fa409e8ae84b82a3052522f64695b47dff2158b70bb7358e0ebd6c085c9
+          /usr/bin/tar -tzf release/python.tar.gz | python -c "import json,sys; paths=[p.strip() for p in sys.stdin if any(x in p.upper() for x in ('LICENSE','COPYING','NOTICE'))]; print(json.dumps({'schema':1,'archiveSha256':'50424fa409e8ae84b82a3052522f64695b47dff2158b70bb7358e0ebd6c085c9','bundledLicenseEvidence':[{'path':p,'declaredLicense':'REVIEW_REQUIRED'} for p in paths]},indent=2))" > release/pbs-license-inventory.json
+          /usr/bin/tar -xpzf release/python.tar.gz -C release/runtime
+          /bin/chmod 700 release/runtime
+          release/runtime/python/bin/python3.11 -m venv release/runtime/venv
+          python - <<'PY'
+          import json, pathlib
+          rows = json.loads(pathlib.Path('release/wheel-inputs.json').read_text())
+          pathlib.Path('release/requirements.txt').write_text(''.join('{}=={} --hash=sha256:{}\n'.format(row['distribution'], row['version'], row['sha256']) for row in rows))
+          PY
+          release/runtime/venv/bin/python -m pip install --no-index --no-deps --require-hashes --find-links release/wheels -r release/requirements.txt
+          node apps/genbi/scripts/managed-wren-release.mjs release "$RUNTIME_TAG"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: managed-wren-review-metadata
+          path: release/*.json
+
+  publish-approved-runtime:
+    needs: stage
+    environment: managed-wren-license-approved
+    permissions:
+      contents: write
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: managed-wren-review-metadata
+          path: release
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require protected-environment digest approval
+        env:
+          APPROVAL_DIGEST: ${{ secrets.MANAGED_WREN_APPROVAL_SHA256 }}
+        run: |
+          test -n "$APPROVAL_DIGEST"
+          test "$APPROVAL_DIGEST" = "$(cat release/managed-wren-manifest.candidate.json release/pbs-license-inventory.json release/wheel-license-inventory.json | shasum -a 256 | awk '{print $1}')"
+      - name: Re-fetch and verify exact release assets
+        run: |
+          mkdir -p release/assets
+          node apps/genbi/scripts/managed-wren-release.mjs verify-publish release release/assets
+      - name: Publish verified assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_TAG: ${{ inputs.runtime_tag }}
+        run: |
+          node apps/genbi/scripts/managed-wren-release.mjs validate-tag "$RUNTIME_TAG"
+          gh release create "$RUNTIME_TAG" --target "$GITHUB_SHA" --latest=false release/assets/* release/*.json

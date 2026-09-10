@@ -1,0 +1,36 @@
+name: Managed Wren release contracts
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/managed-wren-runtime.yml'
+      - '.github/workflows/managed-wren-release-ci.yml'
+      - 'apps/genbi/scripts/managed-wren-release*'
+      - 'apps/genbi/managed-wren/release-inputs.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/managed-wren-runtime.yml'
+      - '.github/workflows/managed-wren-release-ci.yml'
+      - 'apps/genbi/scripts/managed-wren-release*'
+      - 'apps/genbi/managed-wren/release-inputs.json'
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Release contracts (no runtime downloads or publication)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check standalone helper syntax
+        run: node --check apps/genbi/scripts/managed-wren-release.mjs
+      - name: Test exact inventory, approval and workflow boundaries
+        run: node --test apps/genbi/scripts/managed-wren-release.test.mjs
