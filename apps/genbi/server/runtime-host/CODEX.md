@@ -104,6 +104,45 @@ integration and browser event UI remain later composition work.
 
 ## Direct events versus command/PTY
 
+`CodexConversation` is the process-local Sessions bridge above this driver.
+The host passes the existing backend, a previously obtained single-use permit,
+and its materialized scope/Wren-home inputs. Await `ready` before presenting an
+interactive conversation; construction begins an asynchronous open and one
+ephemeral thread, never a turn. The host must guard durable writes and scope
+materialization with the permit before constructing the bridge.
+
+An attachment requires the host-generated capability and grants only prompt,
+interrupt and detach operations. One attachment controls a conversation at a
+time; detached handles lose authority even when another attachment reconnects.
+Detach does not cancel an already accepted turn. The existing Sessions owner
+must enforce its initial-attachment/detach lease and invoke/await `close()`.
+Do not persist or log capabilities, backend inputs, or driver objects.
+
+Replay starts with explicit cursor/truncation/state metadata, followed by
+strictly sequenced event/state frames. Retention is process-local, limited to
+256 frames and 1 MiB of serialized UTF-8; it is not durable history or a complete
+snapshot. Consumers must show truncation and must not assume retained deltas
+contain the start of an item. Listener payloads are isolated copies. Listener
+failure closes the owned backend; browser transport backpressure must be
+bounded separately by the API/WebSocket owner. Vendor transcript content remains
+untrusted user-facing data, never diagnostic text.
+
+Only one turn may run at once. Interrupt waits for turn completion, not merely
+the interrupt acknowledgement. Before a turn ID exists, cancellation closes the
+connection instead of guessing an ID. Close also settles the bridge's pending
+turn if the underlying driver has not yet settled it; cleanup failure is still
+reported and generation retention remains the backend's responsibility.
+Idle transport failure is observed through `CodexSession.onFailure()`.
+Command/PTY events are rejected by this bridge, not rendered as conversation
+text. After close, a capability can read the retained tail only if the enclosing
+Sessions authorization still permits it; revocation and durable lifecycle state
+belong to that owner.
+
+This bridge is not registered in the current application composition. Scoped
+producer/Wren/MCP materialization, durable Sessions/API/UI wiring, and structured
+Ask/Setup injection still need their own acceptance before activation. In
+particular, it does not enable MCP or bypass the project `.codex` rejection.
+
 `startThread()` creates one ephemeral thread. `runTurn(text, { timeoutMs, signal })`
 resolves on `turn/completed`, **not** the start acknowledgement. Turn statuses are
 `completed`, `interrupted`, or `failed`; raw vendor error details are omitted.

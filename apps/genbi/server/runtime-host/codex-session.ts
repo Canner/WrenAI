@@ -262,6 +262,10 @@ export class CodexSession {
     this.emit(event);
   }
   /** Disconnect and BFF shutdown use the same bounded, connection-owned close. */
+  onFailure(listener: (error: CodexRpcError) => void): () => void {
+    return this.rpc.onFailure(listener);
+  }
+
   close(): Promise<void> {
     this.closed = true;
     this.closePromise ??= this.rpc.close();

@@ -466,6 +466,7 @@ async function verifyInstalledCodexBackend(input) {
     import assert from 'node:assert/strict';
     import { existsSync } from 'node:fs';
     import { CodexAppServerBackend } from ${JSON.stringify(moduleUrl("codex-app-server"))};
+    import { CodexConversation } from ${JSON.stringify(moduleUrl("codex-conversation"))};
     import { CODEX_CERTIFIED_ROWS } from ${JSON.stringify(moduleUrl("codex-compatibility"))};
     import { CodexSession } from ${JSON.stringify(moduleUrl("codex-session"))};
     assert.equal(CODEX_CERTIFIED_ROWS.length, 0);
@@ -474,6 +475,29 @@ async function verifyInstalledCodexBackend(input) {
     assert.notEqual(readiness.state, 'ready');
     assert.throws(() => backend.prepareLaunch());
     assert.equal(existsSync(${JSON.stringify(runtimeRoot)}), false);
+    let bridgeClosed = 0;
+    const bridgeFrames = [];
+    const bridge = new CodexConversation({ open: async (_permit, input) => ({
+      startThread: async () => 'fixture-thread',
+      runTurn: async (text) => {
+        assert.equal(text, 'fixture prompt');
+        const turn = { id: 'fixture-turn', status: 'completed', items: [] };
+        input.onEvent({ method: 'turn/completed', params: { threadId: 'fixture-thread', turn } });
+        return turn;
+      },
+      interruptTurn: async () => {},
+      onFailure: () => () => {},
+      close: async () => { bridgeClosed++; },
+    }) }, { assertActive() {}, release() {}, runtime: {} }, { spec: {}, wrenHome: {}, assertScopeActive() {} });
+    await bridge.ready;
+    const attachment = bridge.attach(bridge.capability, frame => bridgeFrames.push(frame));
+    assert.deepEqual(await attachment.submit('fixture prompt'), { turnId: 'fixture-turn', status: 'completed' });
+    assert.equal(bridgeFrames[0].type, 'replay');
+    assert.equal(bridgeFrames.some(frame => frame.type === 'event'), true);
+    attachment.detach();
+    assert.throws(() => attachment.submit('stale'));
+    await bridge.close();
+    assert.equal(bridgeClosed, 1);
     const messages = []; let handlers; let closes = 0; const events = [];
     const transport = {
       listen(value) { handlers = value; },
@@ -514,7 +538,7 @@ function assertPublishedFiles(files) {
   const forbidden = /(^|\/)(scripts|test|tests|fixtures|examples|\.git)(\/|$)|(^|\/)node_modules(\/|$)/;
   const unexpected = files.filter((file) => forbidden.test(file));
   if (unexpected.length > 0) throw new Error(`package tarball contains repository-only files: ${JSON.stringify(unexpected)}`);
-  for (const required of ["package/bin/genbi.mjs", "package/dist/index.html", "package/dist-server/server/bin.js", "package/managed-wren/manifest.json", "package/dist-server/server/runtime-host/codex-app-server.js", "package/dist-server/server/runtime-host/codex-session.js"]) {
+  for (const required of ["package/bin/genbi.mjs", "package/dist/index.html", "package/dist-server/server/bin.js", "package/managed-wren/manifest.json", "package/dist-server/server/runtime-host/codex-app-server.js", "package/dist-server/server/runtime-host/codex-session.js", "package/dist-server/server/runtime-host/codex-conversation.js"]) {
     if (!files.includes(required)) throw new Error(`package tarball is missing ${required}`);
   }
 }
