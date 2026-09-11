@@ -90,12 +90,46 @@ def _parse_time_dimension(spec: str) -> dict:
     return td
 
 
+def _parse_order_by(spec: str) -> dict:
+    """Parse a single ``--order-by`` spec ``member:direction``.
+
+    Surrounding whitespace is trimmed. The spelling and case of ``direction``
+    are wren-core's to judge — it owns the closed ``asc`` / ``desc`` enum — so
+    they are passed through unchanged.
+    """
+    parts = spec.split(":")
+    if len(parts) != 2 or not parts[0].strip() or not parts[1].strip():
+        raise typer.BadParameter(f"--order-by expects 'member:direction', got '{spec}'")
+    return {"member": parts[0].strip(), "direction": parts[1].strip()}
+
+
+def _parse_order_by_specs(specs: list[str]) -> list[dict]:
+    """Parse ``--order-by`` values into CubeQuery ``orderBy`` entries.
+
+    Accepts the comma-separated form (like ``--measures``) and the repeatable
+    form (like ``--filter``). Blank segments inside a value are tolerated, as
+    in ``--measures``; a value that contributes no spec at all is rejected, as
+    in ``--filter`` — silently dropping it would hand back an unordered query,
+    the failure ordering exists to prevent.
+    """
+    entries: list[dict] = []
+    for spec in specs:
+        items = [s.strip() for s in spec.split(",") if s.strip()]
+        if not items:
+            raise typer.BadParameter(
+                f"--order-by expects 'member:direction', got '{spec}'"
+            )
+        entries.extend(_parse_order_by(item) for item in items)
+    return entries
+
+
 def _build_cube_query(
     cube: str,
     measures: str,
     dimensions: str,
     time_dimension: str | None,
     filters: list[str],
+    order_by: list[str],
     limit: int | None,
     offset: int | None,
 ) -> dict:
@@ -109,6 +143,8 @@ def _build_cube_query(
         q["timeDimensions"] = [_parse_time_dimension(time_dimension)]
     if filters:
         q["filters"] = [_parse_filter(f) for f in filters]
+    if order_by:
+        q["orderBy"] = _parse_order_by_specs(order_by)
     if limit is not None:
         q["limit"] = limit
     if offset is not None:
@@ -304,6 +340,16 @@ def query(
             ),
         ),
     ] = None,
+    order_by: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            "--order-by",
+            help=(
+                "Repeatable. Format: member:direction (asc|desc). "
+                "Comma-separated for multiple: 'revenue:desc,status:asc'."
+            ),
+        ),
+    ] = None,
     limit: Annotated[
         Optional[int], typer.Option("--limit", "-l", help="Max rows to return")
     ] = None,
@@ -359,6 +405,7 @@ def query(
             dimensions or "",
             time_dimension,
             filter_ or [],
+            order_by or [],
             limit,
             offset,
         )

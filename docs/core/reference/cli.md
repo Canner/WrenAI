@@ -345,6 +345,7 @@ wren cube query \
   --dimensions status \
   --time-dimension "order_date:month:2024-01-01,2025-01-01" \
   --filter "status:eq:completed" \
+  --order-by "total:desc" \
   --limit 100
 ```
 
@@ -361,8 +362,9 @@ cat query.json | wren cube query --from -
 | `--dimensions` | Comma-separated dimension names |
 | `--time-dimension` | `<name>:<granularity>[:start,end]` — one time dimension with optional date range |
 | `--filter` | Repeatable. `<dimension>:<operator>[:value]`. For `in` / `not_in`, value is comma-separated. |
+| `--order-by` | Repeatable. `<member>:<direction>` where direction is `asc` or `desc`; comma-separated for multiple. The member must be selected by the query. |
 | `--limit` / `--offset` | Pagination |
-| `--from <file\|->` | Load CubeQuery as JSON from a file or stdin |
+| `--from <file\|->` | Load CubeQuery as JSON from a file or stdin. It supplies the whole query, so the query-building flags above — `--order-by` included — are ignored. |
 | `--sql-only` | Print the generated SQL and exit without executing |
 | `--mdl` | Path to MDL JSON (defaults to `<project>/target/mdl.json`) |
 | `--output` | `table` (default), `json`, `csv` |
@@ -371,6 +373,11 @@ cat query.json | wren cube query --from -
 
 **Supported filter operators:** `eq`, `neq`, `in`, `not_in`, `gt`, `gte`, `lt`,
 `lte`, `contains`, `starts_with`, `is_null`, `is_not_null`.
+
+**Ordering:** `--order-by` sorts by the query's selected members, so pair it with
+`--limit` for a genuine top-N. Omitting it keeps the default ordering (by the time
+dimension when one is present). Directions are lowercase only, and a member listed
+twice — or one the query does not select — is rejected by wren-core.
 
 See the [Cube guide](../guides/cubes.md) for YAML structure and
 validation rules.
