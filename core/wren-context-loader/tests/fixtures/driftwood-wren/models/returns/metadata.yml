@@ -1,0 +1,29 @@
+name: returns
+properties:
+  description: "Merchandise returns (RMA) at the order-line level. Distinct from refunds: returns track physical items coming back; refunds track money."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: returns
+primary_key: rma_id
+columns:
+  - name: rma_id
+    type: INTEGER
+    properties:
+      description: "Unique return authorization id."
+  - name: order_item_id
+    type: INTEGER
+    properties:
+      description: "FK to order_items.id."
+  - name: qty_returned
+    type: INTEGER
+    properties:
+      description: "Units physically returned on this RMA."
+  - name: received_at
+    type: TIMESTAMP
+    properties:
+      description: "When the returned items were received (UTC)."
+  - name: disposition
+    type: VARCHAR
+    properties:
+      description: "restock, damaged, or disposed."

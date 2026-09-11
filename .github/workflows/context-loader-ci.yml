@@ -1,0 +1,68 @@
+name: Context Loader
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'core/wren-context-loader/**'
+      - 'core/wren-core-base/**'
+      - '.github/workflows/context-loader-ci.yml'
+  pull_request:
+    paths:
+      - 'core/wren-context-loader/**'
+      - 'core/wren-core-base/**'
+      - '.github/workflows/context-loader-ci.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: core/wren-context-loader
+
+jobs:
+  check:
+    name: fmt, clippy, test
+    runs-on: ubuntu-latest
+    steps:
+      # No credentials persisted: this job builds and tests pull-request-authored code, and a
+      # build script or test could otherwise read the token out of the checkout. Nothing here
+      # touches git beyond the checkout itself.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # `core/wren-core-base` is a path dependency, so a change there breaks this crate without
+      # touching it — which is why this workflow watches that path too.
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            core/wren-context-loader/target/
+          key: context-loader-${{ hashFiles('core/wren-context-loader/Cargo.toml') }}
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cargo test
+
+      # Not cosmetic: with warnings denied, rustdoc fails on a public doc link to a private item,
+      # which neither clippy nor the tests see. It caught one in this crate.
+      - name: cargo doc
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps

@@ -1,0 +1,16 @@
+# Declarative dashboard specs — the git-native consumer convention Warble's lineage reads
+# (`docs/spec/blast-radius.md` §3). Each dashboard becomes a `dashboard:<name>` lineage node;
+# a panel references the semantic layer either by raw SQL (references discovered by parsing)
+# or by declared `cube` + `measures`.
+dashboards:
+  - name: exec-weekly
+    title: Executive weekly
+    panels:
+      - name: mrr-trend
+        cube: mrr_metrics
+        measures: [mrr]
+      - name: revenue-by-country
+        sql: >
+          SELECT c.country, SUM(o.order_total) AS revenue
+          FROM orders o JOIN customers c ON o.customer_id = c.id
+          GROUP BY c.country

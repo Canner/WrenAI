@@ -1,0 +1,24 @@
+name: subscription_snapshots
+properties:
+  description: "Month-end point-in-time snapshots of active subscriptions. mrr_amount is a BALANCE as of snapshot_date — it is not additive across dates."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: subscription_snapshots
+columns:
+  - name: snapshot_date
+    type: DATE
+    properties:
+      description: "Snapshot date; always the last day of a calendar month."
+  - name: subscription_id
+    type: INTEGER
+    properties:
+      description: "FK to subscriptions.id."
+  - name: mrr_amount
+    type: "DECIMAL(12,2)"
+    properties:
+      description: "Monthly recurring revenue attributed to this subscription as of the snapshot date (USD). Point-in-time balance; never sum across snapshot dates."
+  - name: status
+    type: VARCHAR
+    properties:
+      description: "Subscription status at snapshot time."

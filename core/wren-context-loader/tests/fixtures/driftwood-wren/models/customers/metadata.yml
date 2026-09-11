@@ -1,0 +1,41 @@
+name: customers
+properties:
+  description: "New-platform customers (2023-03 onward). One row per account, including soft-deleted and internal test accounts."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: customers
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+    properties:
+      description: "Unique customer id (new platform)."
+  - name: email
+    type: VARCHAR
+    properties:
+      description: "Account email as entered; casing/whitespace not normalized."
+  - name: full_name
+    type: VARCHAR
+    properties:
+      description: "Customer display name."
+  - name: country
+    type: VARCHAR
+    properties:
+      description: "ISO-ish country code: US, DE, FR, GB."
+  - name: created_at
+    type: TIMESTAMP
+    properties:
+      description: "Account creation time (UTC)."
+  - name: deleted_at
+    type: TIMESTAMP
+    properties:
+      description: "Soft-delete timestamp (UTC); NULL = active. Deleted rows remain in the table."
+  - name: is_test
+    type: BOOLEAN
+    properties:
+      description: "TRUE for internal test accounts (emails with '+test' or @driftwood.example)."
+  - name: marketing_channel
+    type: VARCHAR
+    properties:
+      description: "Free-text acquisition channel; contains historical spelling variants (e.g. 'fb' / 'facebook' / 'Facebook Ads' are the same channel) and NULLs."

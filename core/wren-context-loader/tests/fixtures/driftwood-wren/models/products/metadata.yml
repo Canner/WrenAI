@@ -1,0 +1,41 @@
+name: products
+properties:
+  description: "Product catalog. One row per SKU."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: products
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+    properties:
+      description: "Unique product id."
+  - name: sku
+    type: VARCHAR
+    properties:
+      description: "Stock keeping unit code."
+  - name: name
+    type: VARCHAR
+    properties:
+      description: "Product display name."
+  - name: category
+    type: VARCHAR
+    properties:
+      description: "Hierarchical category as a single string, e.g. 'Camping > Tents'."
+  - name: current_price
+    type: "DECIMAL(12,2)"
+    properties:
+      description: "Current list price in USD."
+  - name: cost
+    type: "DECIMAL(12,2)"
+    properties:
+      description: "Unit cost in USD."
+  - name: introduced_at
+    type: TIMESTAMP
+    properties:
+      description: "When the product entered the catalog (UTC)."
+  - name: discontinued_at
+    type: TIMESTAMP
+    properties:
+      description: "Non-NULL = discontinued at this time (UTC)."

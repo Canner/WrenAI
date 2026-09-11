@@ -1,0 +1,20 @@
+name: mrr_metrics
+base_object: subscription_snapshots
+measures:
+  # Semi-additive: additive across subscriptions AT one snapshot_date, never across dates.
+  - name: mrr
+    expression: SUM(mrr_amount)
+    type: DOUBLE
+  - name: active_subscriptions
+    expression: COUNT(*)
+    type: BIGINT
+dimensions:
+  - name: status
+    expression: status
+    type: VARCHAR
+time_dimensions:
+  - name: snapshot_date
+    expression: snapshot_date
+    type: DATE
+properties:
+  description: "Point-in-time MRR from month-end snapshots. ALWAYS pin one snapshot_date (or take an average of month-end totals); summing across snapshot dates is meaningless."

@@ -1,0 +1,25 @@
+name: legacy_customers
+properties:
+  description: "Customers from the legacy platform. Many are the same people as new-platform customers, with email casing/whitespace variants; customer_xref maps only part of them."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: legacy_customers
+primary_key: cust_ref
+columns:
+  - name: cust_ref
+    type: VARCHAR
+    properties:
+      description: "Legacy customer key, e.g. 'C-04217'."
+  - name: email
+    type: VARCHAR
+    properties:
+      description: "Email as entered in the legacy system; casing/whitespace may differ from the same person's new-platform email."
+  - name: signup_dt
+    type: DATE
+    properties:
+      description: "Legacy signup date."
+  - name: region
+    type: VARCHAR
+    properties:
+      description: "Legacy sales region: west, east, or eu."

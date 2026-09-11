@@ -1,0 +1,20 @@
+{
+  "format_version": 1,
+  "id": "driftwood-seed42-v1",
+  "repository": "Canner/Warble",
+  "release_tag": "eval-fixtures-v1",
+  "asset_name": "driftwood-seed42-2026-06-30-v1.duckdb",
+  "sha256": "3adbf0d7d7cb82331667a2cb2c37d66bc1a46f8f3bb4f5658df70a1449a277dd",
+  "size_bytes": 22032384,
+  "generator": {
+    "base_fixture_version": 1,
+    "seed": 42,
+    "reference_date": "2026-06-30",
+    "source_commit": "cdd42438af417bd2ccba854aac87a0617c9a47d1"
+  },
+  "expectations": {
+    "table_count": 18,
+    "total_rows": 693531,
+    "subscription_snapshots_max_date": "2026-06-30"
+  }
+}

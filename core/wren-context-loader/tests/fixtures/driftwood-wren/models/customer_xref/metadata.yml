@@ -1,0 +1,16 @@
+name: customer_xref
+properties:
+  description: "Cross-reference mapping legacy customers to new-platform customers. INCOMPLETE: covers only ~87% of the true overlap; email normalization finds the rest."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: customer_xref
+columns:
+  - name: cust_ref
+    type: VARCHAR
+    properties:
+      description: "FK to legacy_customers.cust_ref."
+  - name: customer_id
+    type: INTEGER
+    properties:
+      description: "FK to customers.id."

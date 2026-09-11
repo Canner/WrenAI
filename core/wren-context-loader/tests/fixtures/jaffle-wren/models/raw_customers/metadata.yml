@@ -1,0 +1,22 @@
+name: raw_customers
+properties:
+  description: "Raw source customer records as loaded from the source system. Use the customers mart model for analytics."
+table_reference:
+  catalog: jaffle_shop
+  schema: main
+  table: raw_customers
+primary_key: id
+columns:
+  - name: id
+    type: INT
+    not_null: true
+    properties:
+      description: "Source system customer ID."
+  - name: first_name
+    type: TEXT
+    properties:
+      description: "Customer's first name."
+  - name: last_name
+    type: TEXT
+    properties:
+      description: "Customer's last name."
