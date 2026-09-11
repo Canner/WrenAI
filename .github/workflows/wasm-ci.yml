@@ -24,6 +24,7 @@ jobs:
   build:
     name: Build WASM + TypeScript SDK
     runs-on: ubuntu-latest
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 20 || 40 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +34,7 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Cache Cargo
+        id: cargo-cache
         uses: actions/cache@v4
         with:
           path: |
@@ -58,9 +60,28 @@ jobs:
         working-directory: core/wren-core-wasm
         run: npm install
 
-      - name: Build WASM (wasm-pack)
+      - name: Record build start
+        run: echo "WASM_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Build WASM (PR fast path, release --no-opt)
+        if: github.event_name == 'pull_request'
+        working-directory: core/wren-core-wasm
+        run: wasm-pack build --target web --release --no-opt
+
+      - name: Build WASM (optimized)
+        if: github.event_name != 'pull_request'
         working-directory: core/wren-core-wasm
         run: wasm-pack build --target web --release
+
+      - name: Report build metrics
+        if: ${{ !cancelled() && env.WASM_BUILD_START != '' }}
+        run: |
+          {
+            echo "### WASM build"
+            echo "- Mode: ${{ github.event_name == 'pull_request' && 'release --no-opt (PR fast path)' || 'release + wasm-opt (optimized)' }}"
+            echo "- Cargo cache exact hit: ${{ steps.cargo-cache.outputs.cache-hit == 'true' }}"
+            echo "- wasm-pack phase: $(( $(date +%s) - WASM_BUILD_START ))s"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build dist (TypeScript + copy)
         working-directory: core/wren-core-wasm
@@ -70,21 +91,10 @@ jobs:
         working-directory: core/wren-core-wasm
         run: npm run typecheck
 
-      - name: WASM binary size check
+      - name: WASM binary size check (optimized artifact only)
+        if: github.event_name != 'pull_request'
         working-directory: core/wren-core-wasm
-        run: |
-          raw_size=$(stat -c%s dist/wren_core_wasm_bg.wasm)
-          gzip_size=$(gzip -c dist/wren_core_wasm_bg.wasm | wc -c)
-          raw_mb=$(echo "scale=1; $raw_size / 1048576" | bc)
-          gzip_mb=$(echo "scale=1; $gzip_size / 1048576" | bc)
-          echo "WASM binary: ${raw_mb} MB raw, ${gzip_mb} MB gzip"
-
-          # Fail if gzip > 15 MB
-          max_gzip=$((15 * 1048576))
-          if [ "$gzip_size" -gt "$max_gzip" ]; then
-            echo "::error::WASM binary gzip size (${gzip_mb} MB) exceeds 15 MB limit"
-            exit 1
-          fi
+        run: npm run check:size
 
       - name: Run integration tests
         working-directory: core/wren-core-wasm
