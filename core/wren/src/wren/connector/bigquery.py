@@ -15,10 +15,13 @@ def _apply_limit(sql: str, limit: int) -> str:
     (after stripping a trailing semicolon) short-circuits the engine and
     correctly enforces the caller's limit even when *sql* already contains an
     inner ``LIMIT`` (the outer limit always wins / can only reduce rows).
-    Avoids comment-sensitive outer-LIMIT detection heuristics.
+    Avoids comment-sensitive outer-LIMIT detection heuristics. The wrap
+    itself is multiline so a trailing ``-- line comment`` in *sql* is
+    terminated by the newline instead of swallowing the closing paren,
+    alias and LIMIT clause (same technique as postgres.py/athena.py).
     """
     cleaned = strip_trailing_semicolon(sql)
-    return f"SELECT * FROM ({cleaned}) AS _sub LIMIT {limit}"
+    return f"SELECT * FROM (\n{cleaned}\n) AS _sub LIMIT {limit}"
 
 
 _SCOPES = [
