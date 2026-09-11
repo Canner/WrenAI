@@ -40,3 +40,24 @@ def test_query_with_limit_strips_inside_wrap(connector) -> None:
     sent = cursor.execute.call_args[0][0]
     assert "SELECT 1;" not in sent
     assert "LIMIT 5" in sent
+
+
+def test_query_limit_survives_trailing_line_comment(connector) -> None:
+    """Trailing `--` must not eat the wrap (same shape as postgres.py #2728)."""
+    c, _mod = connector
+    cursor = MagicMock()
+    c.connection.cursor.return_value = cursor
+    with patch("wren.connector.trino._build_trino_arrow_table", return_value=pa.table({"x": [1]})):
+        c.query("SELECT 1 AS x -- pick", limit=5)
+    sent = cursor.execute.call_args[0][0]
+    assert sent == "SELECT * FROM (\nSELECT 1 AS x -- pick\n) AS _sub LIMIT 5"
+
+
+def test_dry_run_limit_survives_trailing_line_comment(connector) -> None:
+    c, _mod = connector
+    cursor = MagicMock()
+    c.connection.cursor.return_value = cursor
+    cursor.fetchall.return_value = []
+    c.dry_run("SELECT 1 AS x -- pick")
+    sent = cursor.execute.call_args[0][0]
+    assert sent == "SELECT * FROM (\nSELECT 1 AS x -- pick\n) AS _sub LIMIT 0"
