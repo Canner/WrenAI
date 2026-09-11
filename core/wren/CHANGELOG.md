@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.15.0](https://github.com/Canner/WrenAI/compare/wren-v0.14.0...wren-v0.15.0) (2026-09-11)
+
+
+### Features
+
+* **wren:** reach cube orderBy from the CLI and the MCP query_cube tool ([#2730](https://github.com/Canner/WrenAI/issues/2730)) ([be1f9b5](https://github.com/Canner/WrenAI/commit/be1f9b57d2664aeb8287eef3eae3d931d90da3b9))
+
+
+### Bug Fixes
+
+* **bigquery:** support Application Default Credentials ([#2726](https://github.com/Canner/WrenAI/issues/2726)) ([19495ee](https://github.com/Canner/WrenAI/commit/19495eedbe3ba934310f65ee6f320abd12da9007))
+* **wren:** postgres LIMIT pushdown breaks on SQL ending in a trailing comment ([#2728](https://github.com/Canner/WrenAI/issues/2728)) ([9ff9649](https://github.com/Canner/WrenAI/commit/9ff9649f91c8a84f721fcbecb33cc9f71ca2d1a5))
+
 ## [0.14.0](https://github.com/Canner/WrenAI/compare/wren-v0.13.4...wren-v0.14.0) (2026-09-08)
 
 
