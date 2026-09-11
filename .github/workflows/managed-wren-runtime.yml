@@ -44,40 +44,14 @@ jobs:
           export PYTHON_SHA256
           mkdir -p release/wheels release/runtime
           python -m pip download --only-binary=:all: --platform macosx_11_0_arm64 --python-version 3.11 --implementation cp --dest release/wheels "wrenai==$WRENAI_VERSION"
-          python - <<'PY'
-          import email.parser, hashlib, json, pathlib, urllib.request, zipfile
-          rows = []
-          for wheel in sorted(pathlib.Path('release/wheels').glob('*.whl')):
-            with zipfile.ZipFile(wheel) as z:
-              entries = [n for n in z.namelist() if n.endswith('.dist-info/METADATA')]
-              if len(entries) != 1: raise SystemExit('wheel must have exactly one METADATA entry')
-              meta = email.parser.BytesParser().parsebytes(z.read(entries[0]))
-            if len(meta.get_all('Name', [])) != 1 or len(meta.get_all('Version', [])) != 1:
-              raise SystemExit('wheel must declare one Name and Version')
-            expressions = meta.get_all('License-Expression', [])
-            if len(expressions) > 1: raise SystemExit('wheel has ambiguous License-Expression')
-            licenses = [v for v in meta.get_all('License', []) if v.strip() and v.strip() != 'UNKNOWN']
-            classifiers = [v for v in meta.get_all('Classifier', []) if v.startswith('License ::')]
-            license_value = '; '.join(expressions or licenses or classifiers) or 'UNKNOWN'
-            sha256 = hashlib.sha256(wheel.read_bytes()).hexdigest()
-            release = json.load(urllib.request.urlopen('https://pypi.org/pypi/{}/{}/json'.format(meta['Name'], meta['Version']), timeout=30))
-            source = next((item['url'] for item in release['urls'] if item['filename'] == wheel.name and item['digests']['sha256'] == sha256), None)
-            if not source: raise SystemExit('could not establish exact source identity for ' + wheel.name)
-            rows.append({'filename': wheel.name, 'sha256': sha256, 'distribution': meta['Name'].lower().replace('-', '_'), 'version': meta['Version'], 'license': license_value, 'sourceUrl': source})
-          pathlib.Path('release/wheel-inputs.json').write_text(json.dumps(rows))
-          pathlib.Path('release/wheel-license-inventory.json').write_text(json.dumps({'schema': 1, 'wheels': rows}, indent=2))
-          PY
+          python apps/genbi/scripts/managed-wren-release.py wheels
           curl --fail --location --proto '=https' --tlsv1.2 -o release/python.tar.gz "$PYTHON_URL"
           test "$(shasum -a 256 release/python.tar.gz | awk '{print $1}')" = "$PYTHON_SHA256"
-          /usr/bin/tar -tzf release/python.tar.gz | python -c "import json,os,sys; paths=[p.strip() for p in sys.stdin if any(x in p.upper() for x in ('LICENSE','COPYING','NOTICE'))]; print(json.dumps({'schema':1,'archiveSha256':os.environ['PYTHON_SHA256'],'bundledLicenseEvidence':[{'path':p,'declaredLicense':'REVIEW_REQUIRED'} for p in paths]},indent=2))" > release/pbs-license-inventory.json
+          /usr/bin/tar -tzf release/python.tar.gz | python apps/genbi/scripts/managed-wren-release.py pbs > release/pbs-license-inventory.json
           /usr/bin/tar -xpzf release/python.tar.gz -C release/runtime
           /bin/chmod 700 release/runtime
           release/runtime/python/bin/python3.11 -m venv release/runtime/venv
-          python - <<'PY'
-          import json, pathlib
-          rows = json.loads(pathlib.Path('release/wheel-inputs.json').read_text())
-          pathlib.Path('release/requirements.txt').write_text(''.join('{}=={} --hash=sha256:{}\n'.format(row['distribution'], row['version'], row['sha256']) for row in rows))
-          PY
+          python apps/genbi/scripts/managed-wren-release.py requirements
           release/runtime/venv/bin/python -m pip install --no-index --no-deps --require-hashes --find-links release/wheels -r release/requirements.txt
           node apps/genbi/scripts/managed-wren-release.mjs release "$RUNTIME_TAG"
       - uses: actions/upload-artifact@v4

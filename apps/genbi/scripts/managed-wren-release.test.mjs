@@ -152,48 +152,14 @@ test("actual staging commands derive source identities from the exact input file
   assert.match(workflow, /--dest release\/wheels "wrenai==\$WRENAI_VERSION"/);
   assert.match(workflow, /-o release\/python.tar.gz "\$PYTHON_URL"/);
   assert.match(workflow, /= "\$PYTHON_SHA256"/);
-  assert.match(workflow, /'archiveSha256':os.environ\['PYTHON_SHA256'\]/);
+  assert.match(workflow, /export PYTHON_SHA256/);
+  for (const command of ["wheels", "pbs", "requirements"]) {
+    assert.ok(workflow.includes(`python apps/genbi/scripts/managed-wren-release.py ${command}`));
+  }
+  assert.doesNotMatch(workflow, /python(?:3)?\s+(?:-c\b|-\s*<<)/);
   assert.doesNotMatch(workflow, /50424fa4|wrenai==0\.13\.0|releases\/download\/20260901/);
 });
 
-test("actual wheel inventory parser respects header boundaries and modern, folded and repeated license fields", async (t) => {
-  const root = await temp(t);
-  const workflow = await readFile(path.join(repo, ".github/workflows/managed-wren-runtime.yml"), "utf8");
-  const snippet = workflow.match(/          python - <<'PY'\n([\s\S]*?)          PY/)[1].split("\n").map((line) => line.slice(10)).join("\n");
-  const bootstrap = `
-import hashlib, io, json, pathlib, urllib.request, zipfile
-root = pathlib.Path('release/wheels')
-root.mkdir(parents=True)
-headers = {
-  'modern': 'License-Expression: MIT OR Apache-2.0\\nLicense: ignored',
-  'folded': 'License: first line\\n  second line',
-  'classified': 'License: UNKNOWN\\nClassifier: Topic :: Database\\nClassifier: License :: OSI Approved :: MIT License\\nClassifier: License :: OSI Approved :: BSD License',
-  'repeated': 'License: first\\nLicense: second',
-  'unknown': '',
-}
-responses = {}
-for name, license_headers in headers.items():
-    filename = name + '-1.0-py3-none-any.whl'
-    target = root / filename
-    metadata = 'Metadata-Version: 2.4\\nName: ' + name + '\\nVersion: 1.0\\n' + license_headers + '\\n\\nName: spoofed\\nVersion: 9.9\\nLicense: SPOOFED\\n'
-    with zipfile.ZipFile(target, 'w') as z:
-        z.writestr(name + '-1.0.dist-info/METADATA', metadata)
-    sha = hashlib.sha256(target.read_bytes()).hexdigest()
-    responses['https://pypi.org/pypi/' + name + '/1.0/json'] = {'urls': [{'url': 'https://files.pythonhosted.org/fixture/' + filename, 'filename': filename, 'digests': {'sha256': sha}}]}
-def fake_urlopen(url, timeout):
-    assert timeout == 30
-    assert url in responses, 'unexpected source identity: ' + url
-    return io.BytesIO(json.dumps(responses[url]).encode())
-urllib.request.urlopen = fake_urlopen
-`;
-  execFileSync("python3", ["-c", bootstrap + "\n" + snippet], { cwd: root });
-  const rows = JSON.parse(await readFile(path.join(root, "release/wheel-inputs.json"), "utf8"));
-  const licenses = Object.fromEntries(rows.map((row) => [row.distribution, row.license]));
-  assert.equal(licenses.modern, "MIT OR Apache-2.0");
-  assert.match(licenses.folded, /first line\n\s+second line/);
-  assert.equal(licenses.repeated, "first; second");
-  assert.match(licenses.classified, /MIT License; License :: OSI Approved :: BSD License/);
-  assert.equal(licenses.unknown, "UNKNOWN");
-  assert.equal(rows.length, 5);
-  assert.ok(rows.every((row) => row.version === "1.0" && !row.license.includes("SPOOFED")));
+test("standalone Python metadata helper passes its offline contracts", () => {
+  execFileSync("python3", ["-B", path.join(here, "managed-wren-release.test.py")], { stdio: "pipe" });
 });
