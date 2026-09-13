@@ -162,6 +162,30 @@ wren ask "<question>" --direct     # wrap a question for a stronger agent
 
 Fast at first. Deep when you need it. Always reviewable and Git-friendly.
 
+## From your laptop to production, with `git push`
+
+Everything Wren writes on your machine is already plain YAML and Markdown in a repo you own. **Git Sync** turns that same repo into a governed, team-wide GenBI deployment: a zero-loss migration from open source, with nothing to export and nothing to re-model.
+
+- **No new CLI to learn.** Bind a directory to a cloud project once with `wren cloud create` or `wren cloud link`. After that, `git push` and `git pull` are the entire interface. There is deliberately no `wren push` and no `wren diff`.
+- **Metrics reviewed like code.** A change to how `net_revenue` is defined shows up as a readable diff in a pull request on GitHub, GitLab, Bitbucket, or your own remote. Run CI on it before it merges. Promote from staging to production like application code.
+- **You keep the repo, always.** Open MDL as YAML, knowledge as Markdown, full git history. Clone it, diff it, back it up, feed it to another tool, or leave with it, any time.
+- **No reusable credential on disk.** Every push authenticates with a fresh token that dies in 600 seconds. The durable key stays in `~/.wren/cloud.yml` (mode `0600`) and is never handed to git.
+
+```bash
+$ git push
+To cloud.getwren.ai/acme/wren-analytics.git
+   9f2c1a4..b71e0d3  main -> main
+✔ deploy queued · model queryable in Wren Cloud
+```
+
+Same files, same review workflow, in Wren Cloud or a self-hosted deployment inside your own network, including air-gapped.
+
+<div align="center">
+
+**[See how Git Sync works →](https://www.getwren.ai/git-sync)** · [CLI reference: `wren cloud`](./docs/core/reference/cli.md#wren-cloud--connect-a-project-to-wren-cloud)
+
+</div>
+
 ## Semantic layer (MDL)
 
 Wren **is** a governed semantic layer, expressed in the **Modeling Definition Language (MDL)** — a Git-friendly, reviewable definition of what your data *means*, not just where it lives. Every text-to-SQL answer and dashboard is planned against it, so agents inherit your business truth instead of guessing.
@@ -229,6 +253,8 @@ The following are **commercial**, delivered as **Wren AI Cloud** or self-hosted 
 
 Same engine underneath, and your MDL stays in your git either way. The full boundary is published — see **[Open core: what's OSS vs. commercial →](https://www.getwren.ai/en/open-core)**.
 
+Ready to take an open-source project to a team? [Git Sync](https://www.getwren.ai/git-sync) moves it with a plain `git push`, as the same YAML and Markdown you already author. No export, no re-modeling, and the repo stays yours.
+
 ## A note on the "GenBI" name
 
 "GenBI" now refers to this open-source generative-BI capability: agents that
@@ -246,6 +272,7 @@ experience, see [Wren AI Commercial](https://getwren.ai).
 - [Concepts](https://docs.getwren.ai/oss/concepts/what_is_context): what context is, what MDL is, how memory works
 - [Connect a database](https://docs.getwren.ai/oss/guides/connect): Postgres, BigQuery, Snowflake, DuckDB, and more
 - [Agent SDKs](https://docs.getwren.ai/oss/sdk/overview): what's shipping today, what's next
+- [Git Sync](https://www.getwren.ai/git-sync): `git push` your open-source project to governed, team-wide GenBI
 
 ## Community
 
