@@ -1,9 +1,6 @@
 <div align="center" id="top">
 <a href="https://getwren.ai">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./misc/wrenai_logo_white.png">
-    <img src="./misc/wrenai_logo.png" width="300px" alt="WrenAI">
-  </picture>
+  <img src="./misc/wren-ai-banner.png" width="100%" alt="WrenAI: open-source GenBI for AI agents">
 </a>
 
 
