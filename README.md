@@ -1,6 +1,9 @@
 <div align="center" id="top">
 <a href="https://getwren.ai">
-  <img src="./misc/wren-ai-banner.png" width="100%" alt="WrenAI: open-source GenBI for AI agents">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./misc/wren-ai-banner-dark.png">
+    <img src="./misc/wren-ai-banner.png" width="100%" alt="WrenAI: open-source GenBI for AI agents">
+  </picture>
 </a>
 
 
@@ -36,7 +39,10 @@ WrenAI is the **open-source generative BI (GenBI) engine**: it lets AI agents **
 
 What makes the output trustworthy is the layer underneath: an open **AI context layer** plus a governed **semantic layer (MDL)** that gives agents what schemas don't. That means business semantics, approved definitions, examples, memory, and governance, plus the unstructured company knowledge that lives in your docs, wikis, and chat threads. Generative BI is only as good as the context it stands on, and Wren is that context, made reviewable and reusable by every agent you already run.
 
-![Wren AI generative BI architecture — semantic layer and AI context layer for AI agents](./misc/wren-ai-architecture.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./misc/wren-ai-architecture-dark.png">
+  <img src="./misc/wren-ai-architecture.png" width="100%" alt="Wren AI generative BI architecture — semantic layer and AI context layer for AI agents">
+</picture>
 
 ## GenBI in three beats: Generate · Deploy · Know
 
