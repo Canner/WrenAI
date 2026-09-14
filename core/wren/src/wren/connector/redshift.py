@@ -45,14 +45,15 @@ class RedshiftConnector(ConnectorABC):
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         limit = coerce_limit(limit)
+        stripped = strip_trailing_semicolon(sql)
         if limit is not None:
             # Multiline wrap so a trailing line comment in the inner SQL is
             # terminated by the newline instead of eating the closing paren.
-            sql = f"SELECT * FROM (\n{strip_trailing_semicolon(sql)}\n) AS _q LIMIT {limit}"
+            sql = f"SELECT * FROM (\n{stripped}\n) AS _q LIMIT {limit}"
         else:
             # Unlimited path also rejects trailing ``;`` for single statements
             # depending on driver/session settings — strip for consistency.
-            sql = strip_trailing_semicolon(sql)
+            sql = stripped
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(sql)
             cols = [desc[0] for desc in cursor.description]
