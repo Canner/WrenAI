@@ -184,7 +184,10 @@ class OracleConnector(ConnectorABC):
         # though engines accept multi-statement scripts elsewhere.
         sql = strip_trailing_semicolon(sql)
         if limit is not None:
-            sql = f"SELECT * FROM ({sql}) t WHERE ROWNUM <= {limit}"
+            # Multiline wrap so a trailing `-- line comment` in the inner SQL
+            # is terminated by the newline instead of swallowing the closing
+            # `) t WHERE ROWNUM <= n` (same technique as postgres.py).
+            sql = f"SELECT * FROM (\n{sql}\n) t WHERE ROWNUM <= {limit}"
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(sql)
@@ -202,7 +205,7 @@ class OracleConnector(ConnectorABC):
             try:
                 with self.connection.cursor() as cursor:
                     cursor.execute(
-                        f"SELECT * FROM ({strip_trailing_semicolon(sql)}) t "
+                        f"SELECT * FROM (\n{strip_trailing_semicolon(sql)}\n) t "
                         f"WHERE ROWNUM <= 0"
                     )
             except oracledb.DatabaseError as e:

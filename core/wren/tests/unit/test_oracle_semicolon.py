@@ -45,16 +45,34 @@ def test_query_strips_trailing_semicolon_before_subquery_wrap(monkeypatch) -> No
     )
     connector.query("SELECT 1;", limit=5)
     (sent,), _ = cursor.execute.call_args
-    assert sent == "SELECT * FROM (SELECT 1) t WHERE ROWNUM <= 5"
-    assert ";)" not in sent
+    assert sent == "SELECT * FROM (\nSELECT 1\n) t WHERE ROWNUM <= 5"
+    assert ";\n)" not in sent
 
 
 def test_dry_run_strips_trailing_semicolon() -> None:
     connector, cursor = _make_mock_connector()
     connector.dry_run("SELECT 1;  ")
     (sent,), _ = cursor.execute.call_args
-    assert sent == "SELECT * FROM (SELECT 1) t WHERE ROWNUM <= 0"
-    assert ";)" not in sent
+    assert sent == "SELECT * FROM (\nSELECT 1\n) t WHERE ROWNUM <= 0"
+    assert ";\n)" not in sent
+
+
+def test_query_limit_survives_trailing_line_comment(monkeypatch) -> None:
+    """Trailing `--` must not eat the wrap (same shape as postgres.py #2728)."""
+    connector, cursor = _make_mock_connector()
+    monkeypatch.setattr(
+        oracle_mod, "_build_oracle_arrow_table", lambda c: pa.table({})
+    )
+    connector.query("SELECT 1 AS x -- pick", limit=5)
+    (sent,), _ = cursor.execute.call_args
+    assert sent == "SELECT * FROM (\nSELECT 1 AS x -- pick\n) t WHERE ROWNUM <= 5"
+
+
+def test_dry_run_limit_survives_trailing_line_comment() -> None:
+    connector, cursor = _make_mock_connector()
+    connector.dry_run("SELECT 1 AS x -- pick")
+    (sent,), _ = cursor.execute.call_args
+    assert sent == "SELECT * FROM (\nSELECT 1 AS x -- pick\n) t WHERE ROWNUM <= 0"
 
 
 def test_helper_preserves_semicolon_inside_string_literal() -> None:
