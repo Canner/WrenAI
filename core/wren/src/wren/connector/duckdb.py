@@ -85,7 +85,10 @@ class DuckDBConnector(ConnectorABC):
         stripped = strip_trailing_semicolon(sql)
         if limit is not None:
             # Subquery wrap rejects an interior terminator after strip.
-            sql = f"SELECT * FROM ({stripped}) AS _q LIMIT {limit}"
+            # Multiline so a trailing `-- line comment` in `stripped` is
+            # terminated by the newline instead of swallowing the closing
+            # `) AS _q LIMIT n` (same technique as postgres.py/athena.py).
+            sql = f"SELECT * FROM (\n{stripped}\n) AS _q LIMIT {limit}"
         else:
             sql = stripped
         return self.connection.execute(sql).fetch_arrow_table()
@@ -102,7 +105,7 @@ class DuckDBConnector(ConnectorABC):
         no rows are materialized.
         """
         stripped = strip_trailing_semicolon(sql)
-        self.connection.execute(f"SELECT * FROM ({stripped}) AS _q LIMIT 0")
+        self.connection.execute(f"SELECT * FROM (\n{stripped}\n) AS _q LIMIT 0")
 
     def _attach_database(self, connection_info) -> None:
         """Attach every discovered DuckDB file as a read-only database.

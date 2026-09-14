@@ -34,5 +34,31 @@ def test_limited_query_still_wraps_after_strip():
     connector.query("SELECT 1 AS x;", limit=2)
 
     connector.connection.execute.assert_called_once_with(
-        "SELECT * FROM (SELECT 1 AS x) AS _q LIMIT 2"
+        "SELECT * FROM (\nSELECT 1 AS x\n) AS _q LIMIT 2"
+    )
+
+
+def test_query_limit_survives_trailing_line_comment():
+    """Trailing `--` must not eat the wrap (same shape as postgres.py #2728)."""
+    connector = DuckDBConnector.__new__(DuckDBConnector)
+    connector.connection = MagicMock()
+    connector.connection.execute.return_value.fetch_arrow_table.return_value = (
+        pa.table({"x": [1]})
+    )
+
+    connector.query("SELECT 1 AS x -- pick", limit=2)
+
+    connector.connection.execute.assert_called_once_with(
+        "SELECT * FROM (\nSELECT 1 AS x -- pick\n) AS _q LIMIT 2"
+    )
+
+
+def test_dry_run_survives_trailing_line_comment():
+    connector = DuckDBConnector.__new__(DuckDBConnector)
+    connector.connection = MagicMock()
+
+    connector.dry_run("SELECT 1 AS x -- pick")
+
+    connector.connection.execute.assert_called_once_with(
+        "SELECT * FROM (\nSELECT 1 AS x -- pick\n) AS _q LIMIT 0"
     )
