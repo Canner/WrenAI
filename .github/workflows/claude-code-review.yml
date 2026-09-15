@@ -1,0 +1,111 @@
+name: Claude Code Review
+
+on:
+  # Manual trigger only: comment '/review' or '@claude review' on a PR.
+  issue_comment:
+    types: [created]
+
+jobs:
+  claude-review:
+    # Run on PR comments that start with '/review' or contain '@claude review'
+    # (every other '@claude' mention is handled by claude.yml).
+    if: |
+      github.event.issue.pull_request &&
+      (startsWith(github.event.comment.body, '/review') ||
+       contains(github.event.comment.body, '@claude review'))
+
+    # Job level, NOT workflow level: issue_comment fires this workflow on every
+    # comment repo-wide (all filtering is in the if: above), so a workflow-level
+    # group would let a skipped human-comment run cancel PR #N's real in-flight
+    # review. At job level, a skipped job never claims the group.
+    concurrency:
+      group: claude-review-${{ github.event.issue.number }}
+      cancel-in-progress: true
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # Delete prior bot INLINE review comments (diff comments) so each run
+      # starts clean and stale findings don't pile up across pushes. The action
+      # posts as the claude[bot] GitHub App; github-actions[bot] is kept as a
+      # fallback. This only queries pulls/comments, so the action's top-level
+      # "Claude Code is working…" tracking comment (a claude[bot] *issue*
+      # comment it updates in place) is never touched. Roots that someone has
+      # replied under are preserved, so a "fixed" / "n/a" reply thread survives
+      # the next push. Best-effort: continue-on-error keeps a cleanup hiccup
+      # (e.g. a transient API 5xx) from skipping the review step via if:success.
+      # NOTE: claude.yml (@claude) posts as the same claude[bot] App, so its
+      # inline comments on the PR are eligible for deletion here too — acceptable
+      # today; a body marker would be the only way to separate them.
+      - name: Clean up previous bot review comments
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          echo "Cleaning prior bot inline review comments on PR #${PR_NUMBER}"
+          comments=$(gh api --paginate --slurp \
+            "repos/${REPO}/pulls/${PR_NUMBER}/comments" | jq 'flatten') || {
+              echo "::warning::could not list review comments; skipping cleanup"
+              comments='[]'
+            }
+          echo "authors seen: $(echo "$comments" | jq -c '[.[].user.login] | unique')"
+          echo "$comments" | jq -r '
+              (map(.in_reply_to_id) | map(select(. != null)) | unique) as $replied
+            | .[]
+            | select(.user.login == "claude[bot]" or .user.login == "github-actions[bot]")
+            | select(.in_reply_to_id == null)
+            | select((.id | IN($replied[])) | not)
+            | .id
+          ' | while read -r id; do
+              [ -n "$id" ] || continue
+              if gh api -X DELETE "repos/${REPO}/pulls/comments/${id}"; then
+                echo "deleted review comment ${id}"
+              else
+                echo "::warning::failed to delete review comment ${id}"
+              fi
+            done
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          display_report: true
+          # --allowedTools sets the session allowlist. Listing only the MCP tool
+          # replaced (not extended) the default set, so the code-review plugin's
+          # own tools — gh pr diff/view/comment, etc. — fell outside the allowlist
+          # and were denied: the reviewer couldn't read the diff or post anything.
+          # Mirror the plugin's declared allowed-tools AND add the inline-comment
+          # MCP tool (which also triggers install of the github_inline_comment
+          # server; without it the tool doesn't exist and reviews fall back to a
+          # single top-level summary).
+          claude_args: |
+            --model claude-opus-5
+            --effort high
+            --allowedTools "Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),mcp__github_inline_comment__create_inline_comment"
+          # Only ever interpolate trusted fields (repo, PR number) here. Never
+          # put event data like a PR title/body/comment into prompt: — actionlint
+          # does not scan with: inputs for untrusted input, so it would not warn.
+          prompt: |
+            /code-review:code-review ${{ github.repository }}/pull/${{ github.event.issue.number }} --comment
+
+            Additional instructions for this run:
+            - Re-review is expected. If Claude has already commented on this PR, do not skip; review the commits pushed since Claude's last comment and do not repeat issues that were already posted.
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # or https://code.claude.com/docs/en/cli-reference for available options
