@@ -1,0 +1,26 @@
+name: raw_payments
+properties:
+  description: "Raw source payment records. Each row is a single payment transaction; one order can have multiple payments via different methods."
+table_reference:
+  catalog: jaffle_shop
+  schema: main
+  table: raw_payments
+primary_key: id
+columns:
+  - name: id
+    type: INT
+    not_null: true
+    properties:
+      description: "Unique payment transaction ID."
+  - name: order_id
+    type: INT
+    properties:
+      description: "Foreign key to raw_orders.id."
+  - name: payment_method
+    type: TEXT
+    properties:
+      description: "Payment method used: credit_card, coupon, bank_transfer, or gift_card."
+  - name: amount
+    type: INT
+    properties:
+      description: "Payment amount in cents."

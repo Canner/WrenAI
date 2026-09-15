@@ -1,0 +1,20 @@
+name: fx_rates
+properties:
+  description: "Daily FX rates to USD, BUSINESS DAYS ONLY (no weekend rows) — for a weekend date use the latest prior business day."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: fx_rates
+columns:
+  - name: date
+    type: DATE
+    properties:
+      description: "Rate date (weekdays only)."
+  - name: currency
+    type: VARCHAR
+    properties:
+      description: "Quoted currency: EUR or GBP."
+  - name: usd_rate
+    type: "DECIMAL(12,6)"
+    properties:
+      description: "USD per 1 unit of the quoted currency."
