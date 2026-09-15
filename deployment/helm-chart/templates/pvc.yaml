@@ -1,0 +1,21 @@
+{{- if .Values.engine.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "wren-ai.fullname" . }}-data-pvc
+  labels:
+    {{- include "wren-ai.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.engine.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.engine.persistence.size }}
+  {{- if .Values.engine.persistence.storageClass }}
+  {{- if (eq "-" .Values.engine.persistence.storageClass) }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ .Values.engine.persistence.storageClass | quote }}
+  {{- end }}
+  {{- end }}
+{{- end }}
