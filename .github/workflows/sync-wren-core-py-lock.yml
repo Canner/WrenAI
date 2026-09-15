@@ -66,17 +66,22 @@ jobs:
         working-directory: core/wren
         run: |
           # uv add rewrites the pyproject floor in place and relocks in one step;
-          # --no-sync skips the heavy env. Retry for PyPI index lag after publish.
-          for attempt in 1 2 3 4 5; do
+          # --no-sync skips the heavy env. Retry for PyPI index lag after publish:
+          # the release is only resolvable once the new version reaches the index
+          # uv reads, which has taken longer than the old ~80s window (0.7.6 saw
+          # five straight "only wren-core-py<=0.7.5 is available" failures).
+          attempts=10
+          delay=60
+          for attempt in $(seq 1 "${attempts}"); do
             if uv add --no-sync "wren-core-py>=${VERSION}"; then
               exit 0
             fi
-            if [ "${attempt}" -lt 5 ]; then
-              echo "uv add attempt ${attempt} failed; retrying after PyPI propagation delay"
-              sleep 20
+            if [ "${attempt}" -lt "${attempts}" ]; then
+              echo "uv add attempt ${attempt}/${attempts} failed; retrying in ${delay}s for PyPI propagation"
+              sleep "${delay}"
             fi
           done
-          echo "::error::uv add did not succeed after retries"
+          echo "::error::uv add did not succeed after ${attempts} attempts"
           exit 1
 
       - name: Validate lockfile is consistent
