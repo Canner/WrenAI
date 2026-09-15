@@ -1084,27 +1084,49 @@ class CTERewriter:
         """Detect models selected via ``*`` before column qualification.
 
         A bare ``SELECT *`` marks all models; ``SELECT t.*`` marks only
-        the referenced model. *alias_to_model* is the case-aware mapping
+        the referenced model. Checks every top-level branch of a
+        UNION/INTERSECT/EXCEPT, not just the first, so a star anywhere in
+        the set operation still routes that model through wren-core's own
+        ``SELECT *`` (letting CLAC control column visibility) instead of an
+        explicit column list. *alias_to_model* is the case-aware mapping
         produced by ``_build_alias_map``.
         """
         star_models: set[str] = set()
-        select = ast.find(exp.Select)
-        if not select:
-            return star_models
 
-        for sel_expr in select.expressions:
-            if isinstance(sel_expr, exp.Star):
-                # Bare * → all models
-                star_models.update(alias_to_model.values())
-            elif isinstance(sel_expr, exp.Column) and isinstance(
-                sel_expr.this, exp.Star
-            ):
-                # table.* → specific model
-                table_ref = sel_expr.table
-                if table_ref and table_ref in alias_to_model:
-                    star_models.add(alias_to_model[table_ref])
+        for select in self._iter_top_level_selects(ast):
+            for sel_expr in select.expressions:
+                if isinstance(sel_expr, exp.Star):
+                    # Bare * marks all models
+                    star_models.update(alias_to_model.values())
+                elif isinstance(sel_expr, exp.Column) and isinstance(
+                    sel_expr.this, exp.Star
+                ):
+                    # table.* marks the specific model
+                    table_ref = sel_expr.table
+                    if table_ref and table_ref in alias_to_model:
+                        star_models.add(alias_to_model[table_ref])
 
         return star_models
+
+    @classmethod
+    def _iter_top_level_selects(cls, node: exp.Expression) -> list[exp.Select]:
+        """Yield every top-level SELECT branch of a set-operation chain.
+
+        A plain query is one branch. Recurses through ``UNION``/``INTERSECT``/
+        ``EXCEPT`` (``exp.SetOperation.this``/``.expression``) and through a
+        parenthesized branch (``exp.Subquery``), but does not descend into a
+        branch's own nested subqueries: those are a separate alias_to_model
+        scope, resolved on their own recursive call in ``_collect_model_columns``.
+        """
+        if isinstance(node, exp.Select):
+            return [node]
+        if isinstance(node, exp.SetOperation):
+            return cls._iter_top_level_selects(node.this) + cls._iter_top_level_selects(
+                node.expression
+            )
+        if isinstance(node, exp.Subquery):
+            return cls._iter_top_level_selects(node.this)
+        return []
 
     @staticmethod
     def _collect_user_cte_names(ast: exp.Expression) -> set[str]:
