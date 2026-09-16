@@ -470,9 +470,10 @@ pub fn create_wren_ctx(
     SessionContext::new_with_state(builder.build())
 }
 
-/// Transform the SQL based on the MDL (sync wrapper, requires multi-thread tokio runtime).
+/// Transform SQL using MDL rules in a newly created multi-thread Tokio runtime.
 ///
 /// Not available on WASM — use [`transform_sql_with_ctx`] directly in async context.
+/// Returns an error when called from an active Tokio runtime.
 #[cfg(feature = "multi-thread")]
 pub fn transform_sql(
     analyzed_mdl: Arc<AnalyzedWrenMDL>,
@@ -489,8 +490,11 @@ pub fn transform_sql(
     )
 }
 
-/// Synchronous SQL generation with an explicit provider. Requires a multi-thread
-/// Tokio runtime; the async counterpart is available on all targets.
+/// Synchronous SQL generation with an explicit provider in a new Tokio runtime.
+///
+/// Returns an error if a Tokio runtime is already active, runtime creation fails,
+/// or SQL planning fails. Async callers should use
+/// [`transform_sql_with_ctx_with_access_control`], which is available on all targets.
 #[cfg(feature = "multi-thread")]
 pub fn transform_sql_with_access_control(
     analyzed_mdl: Arc<AnalyzedWrenMDL>,
@@ -499,7 +503,14 @@ pub fn transform_sql_with_access_control(
     sql: &str,
     access_control: Arc<dyn AccessControlProvider>,
 ) -> Result<String> {
-    let runtime = tokio::runtime::Runtime::new().unwrap();
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return plan_err!(
+            "Synchronous SQL generation cannot run inside an active Tokio runtime; \
+             use transform_sql_with_ctx_with_access_control instead"
+        );
+    }
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|error| DataFusionError::External(Box::new(error)))?;
     runtime.block_on(transform_sql_with_ctx_with_access_control(
         &create_wren_ctx(None, analyzed_mdl.wren_mdl().data_source().as_ref()),
         analyzed_mdl,
