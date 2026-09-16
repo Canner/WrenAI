@@ -36,3 +36,22 @@ def test_apply_ssl_verify_alias():
     out = _apply_trino_ssl_overrides({"host": "h", "ssl_verify": "false"})
     assert out["verify"] is False
     assert "ssl_verify" not in out
+
+
+def test_apply_relative_verify_path_resolved_against_cwd(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    out = _apply_trino_ssl_overrides({"host": "h", "verify": "certs/ca-chain.pem"})
+    assert out["verify"] == str(tmp_path / "certs/ca-chain.pem")
+
+
+def test_apply_relative_ssl_verify_alias_path_resolved_against_cwd(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    out = _apply_trino_ssl_overrides({"host": "h", "ssl_verify": "certs/ca.pem"})
+    assert out["verify"] == str(tmp_path / "certs/ca.pem")
+
+
+def test_apply_absolute_verify_path_untouched():
+    out = _apply_trino_ssl_overrides({"host": "h", "verify": "/etc/ssl/ca.pem"})
+    assert out["verify"] == "/etc/ssl/ca.pem"

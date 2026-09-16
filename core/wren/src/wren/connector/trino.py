@@ -11,6 +11,7 @@ import contextlib
 import datetime as dtlib
 import json
 from decimal import Decimal as PyDecimal
+from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlparse
 
 import pyarrow as pa
@@ -321,6 +322,11 @@ def _apply_trino_ssl_overrides(connect_kwargs: dict) -> dict:
             connect_kwargs["verify"] = True
     elif "insecure" in connect_kwargs:
         connect_kwargs.pop("insecure", None)
+    verify = connect_kwargs.get("verify")
+    if isinstance(verify, str) and not Path(verify).is_absolute():
+        # requests resolves a relative cert path against cwd at connect time,
+        # not against wherever this config was built; anchor it here instead.
+        connect_kwargs["verify"] = str(Path(verify).resolve())
     if connect_kwargs.get("verify") is False:
         logger.warning(
             "Trino SSL certificate verification is disabled (verify=false); "
