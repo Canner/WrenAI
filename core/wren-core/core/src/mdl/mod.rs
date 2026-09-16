@@ -2,7 +2,7 @@ use crate::logical_plan::analyze::access_control::validate_clac_rule;
 use crate::logical_plan::error::WrenError;
 use crate::logical_plan::utils::{from_qualified_name_str, try_map_data_type};
 use crate::mdl::builder::ManifestBuilder;
-use crate::mdl::context::{apply_wren_on_ctx, Mode, WrenDataSource};
+use crate::mdl::context::{apply_wren_on_ctx_with_access_control, Mode, WrenDataSource};
 use crate::mdl::dialect::inner_dialect::get_inner_dialect;
 use crate::mdl::function::{
     ByPassAggregateUDF, ByPassScalarUDF, ByPassWindowFunction, FunctionType,
@@ -11,6 +11,7 @@ use crate::mdl::function::{
 use crate::mdl::manifest::{Column, Manifest, Model, View};
 use crate::mdl::utils::{dequote_identifier, quoted, to_field};
 use crate::DataFusionError;
+use crate::{AccessControlProvider, WrenAccessControlProvider};
 use context::SessionPropertiesRef;
 use datafusion::arrow::datatypes::Field;
 use datafusion::common::{internal_datafusion_err, plan_err};
@@ -87,6 +88,17 @@ impl AnalyzedWrenMDL {
         lineage::validate_cubes(&wren_mdl)?;
         let lineage = Arc::new(lineage::Lineage::new(&wren_mdl)?);
         Ok(AnalyzedWrenMDL { wren_mdl, lineage })
+    }
+
+    /// Infer the complete physical source schema for custom access control.
+    ///
+    /// This only prepares types and lineage; it does not authorize queries.
+    /// Apply a provider using `apply_wren_on_ctx_with_access_control` or
+    /// `transform_sql_with_ctx_with_access_control` before planning a query.
+    /// Keeping physical columns here lets the selected provider replace MDL
+    /// column rules, instead of inheriting columns removed by those rules.
+    pub fn analyze_with_unfiltered_schema(manifest: Manifest) -> Result<Self> {
+        Self::analyze(manifest, Arc::new(HashMap::new()), Mode::PermissionAnalyze)
     }
 
     pub fn analyze_with_tables(
@@ -458,9 +470,10 @@ pub fn create_wren_ctx(
     SessionContext::new_with_state(builder.build())
 }
 
-/// Transform the SQL based on the MDL (sync wrapper, requires multi-thread tokio runtime).
+/// Transform SQL using MDL rules in a newly created multi-thread Tokio runtime.
 ///
 /// Not available on WASM — use [`transform_sql_with_ctx`] directly in async context.
+/// Returns an error when called from an active Tokio runtime.
 #[cfg(feature = "multi-thread")]
 pub fn transform_sql(
     analyzed_mdl: Arc<AnalyzedWrenMDL>,
@@ -468,13 +481,43 @@ pub fn transform_sql(
     properties: HashMap<String, Option<String>>,
     sql: &str,
 ) -> Result<String> {
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-    runtime.block_on(transform_sql_with_ctx(
+    transform_sql_with_access_control(
+        analyzed_mdl,
+        remote_functions,
+        properties,
+        sql,
+        Arc::new(WrenAccessControlProvider),
+    )
+}
+
+/// Synchronous SQL generation with an explicit provider in a new Tokio runtime.
+///
+/// Returns an error if a Tokio runtime is already active, runtime creation fails,
+/// or SQL planning fails. Async callers should use
+/// [`transform_sql_with_ctx_with_access_control`], which is available on all targets.
+#[cfg(feature = "multi-thread")]
+pub fn transform_sql_with_access_control(
+    analyzed_mdl: Arc<AnalyzedWrenMDL>,
+    remote_functions: &[RemoteFunction],
+    properties: HashMap<String, Option<String>>,
+    sql: &str,
+    access_control: Arc<dyn AccessControlProvider>,
+) -> Result<String> {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return plan_err!(
+            "Synchronous SQL generation cannot run inside an active Tokio runtime; \
+             use transform_sql_with_ctx_with_access_control instead"
+        );
+    }
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|error| DataFusionError::External(Box::new(error)))?;
+    runtime.block_on(transform_sql_with_ctx_with_access_control(
         &create_wren_ctx(None, analyzed_mdl.wren_mdl().data_source().as_ref()),
         analyzed_mdl,
         remote_functions,
         Arc::new(properties),
         sql,
+        access_control,
     ))
 }
 
@@ -486,17 +529,43 @@ pub async fn transform_sql_with_ctx(
     properties: SessionPropertiesRef,
     sql: &str,
 ) -> Result<String> {
+    transform_sql_with_ctx_with_access_control(
+        ctx,
+        analyzed_mdl,
+        remote_functions,
+        properties,
+        sql,
+        Arc::new(WrenAccessControlProvider),
+    )
+    .await
+}
+
+/// Generate SQL with the same provider in normal planning and permission diagnostics.
+///
+/// Use [`AnalyzedWrenMDL::analyze_with_unfiltered_schema`] for inferred sources,
+/// or supply actual tables with [`AnalyzedWrenMDL::analyze_with_tables`].
+/// Unlike the default transform entrypoint, this explicitly preserves the caller's
+/// provider when rebuilding the planning context.
+pub async fn transform_sql_with_ctx_with_access_control(
+    ctx: &SessionContext,
+    analyzed_mdl: Arc<AnalyzedWrenMDL>,
+    remote_functions: &[RemoteFunction],
+    properties: SessionPropertiesRef,
+    sql: &str,
+    access_control: Arc<dyn AccessControlProvider>,
+) -> Result<String> {
     info!("wren-core received SQL: {sql}");
     remote_functions.iter().try_for_each(|remote_function| {
         debug!("Registering remote function: {remote_function:?}");
         register_remote_function(ctx, remote_function)?;
         Ok::<_, DataFusionError>(())
     })?;
-    let ctx = apply_wren_on_ctx(
+    let ctx = apply_wren_on_ctx_with_access_control(
         ctx,
         Arc::clone(&analyzed_mdl),
         Arc::clone(&properties),
         Mode::Unparse,
+        Arc::clone(&access_control),
     )
     .await?;
     let plan = match ctx.state().create_logical_plan(sql).await {
@@ -508,6 +577,7 @@ pub async fn transform_sql_with_ctx(
                 sql,
                 remote_functions,
                 properties,
+                Arc::clone(&access_control),
             )
             .await
             {
@@ -555,6 +625,7 @@ async fn permission_analyze(
     sql: &str,
     remote_functions: &[RemoteFunction],
     properties: SessionPropertiesRef,
+    access_control: Arc<dyn AccessControlProvider>,
 ) -> Result<()> {
     let ctx = create_wren_ctx(None, manifest.data_source.as_ref());
     let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
@@ -567,8 +638,14 @@ async fn permission_analyze(
         register_remote_function(&ctx, remote_function)?;
         Ok::<_, DataFusionError>(())
     })?;
-    let ctx = apply_wren_on_ctx(&ctx, analyzed_mdl, properties, Mode::PermissionAnalyze)
-        .await?;
+    let ctx = apply_wren_on_ctx_with_access_control(
+        &ctx,
+        analyzed_mdl,
+        properties,
+        Mode::PermissionAnalyze,
+        access_control,
+    )
+    .await?;
 
     let plan = match ctx.state().create_logical_plan(sql).await {
         Ok(plan) => plan,

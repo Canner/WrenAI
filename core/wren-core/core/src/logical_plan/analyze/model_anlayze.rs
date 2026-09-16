@@ -1,9 +1,13 @@
-use crate::logical_plan::analyze::plan::ModelPlanNode;
+use crate::logical_plan::analyze::plan::{
+    CalculationPlanNode, ModelPlanNode, PartialModelPlanNode,
+};
 use crate::logical_plan::analyze::scope::{ScopeId, ScopeManager};
+use crate::logical_plan::analyze::RelationChain;
 use crate::logical_plan::utils::{belong_to_mdl, expr_to_columns};
 use crate::mdl::context::SessionPropertiesRef;
 use crate::mdl::utils::quoted;
 use crate::mdl::{AnalyzedWrenMDL, Dataset, SessionStateRef};
+use crate::{AccessControlProvider, AccessScope, WrenAccessControlProvider};
 use datafusion::common::tree_node::{
     Transformed, TransformedResult, TreeNode, TreeNodeRecursion, TreeNodeRewriter,
 };
@@ -45,10 +49,13 @@ thread_local! {
 /// (a bare `TableScan` never does: filter pushdown is an optimizer rule, so `filters`
 /// is always empty at analyzer time). Elsewhere, the traverse path of step 1 and step 2 should be same.
 /// The corresponding scope will be pushed to or popped from the childs of [Scope] sequentially.
+#[derive(Clone)]
 pub struct ModelAnalyzeRule {
     analyzed_wren_mdl: Arc<AnalyzedWrenMDL>,
     session_state: SessionStateRef,
     properties: SessionPropertiesRef,
+    access_control: Arc<dyn AccessControlProvider>,
+    access_scope: AccessScope,
 }
 
 /// RLAC cycle-detection state for recursive resolution (A's RLAC referencing
@@ -177,10 +184,26 @@ impl ModelAnalyzeRule {
         session_state: SessionStateRef,
         properties: SessionPropertiesRef,
     ) -> Self {
+        Self::new_with_access_control(
+            analyzed_wren_mdl,
+            session_state,
+            properties,
+            Arc::new(WrenAccessControlProvider),
+        )
+    }
+
+    pub fn new_with_access_control(
+        analyzed_wren_mdl: Arc<AnalyzedWrenMDL>,
+        session_state: SessionStateRef,
+        properties: SessionPropertiesRef,
+        access_control: Arc<dyn AccessControlProvider>,
+    ) -> Self {
         Self {
             analyzed_wren_mdl,
             session_state,
             properties,
+            access_control,
+            access_scope: AccessScope::DirectQuery,
         }
     }
 
@@ -576,13 +599,58 @@ impl ModelAnalyzeRule {
             Arc::clone(&self.analyzed_wren_mdl),
             Arc::clone(&self.session_state),
             Arc::clone(&self.properties),
+            Arc::clone(&self.access_control),
+            self.access_scope,
         )?;
 
+        self.analyze_relation_filters(&mut plan_node.relation_chain, cycle_stack)?;
         if let Some(filter) = plan_node.rlac_filter.take() {
             plan_node.rlac_filter =
                 Some(self.analyze_rlac_subqueries(filter, cycle_stack)?);
         }
         Ok(plan_node)
+    }
+
+    /// Relationship and calculation plans hold nested model nodes outside
+    /// DataFusion's ordinary `inputs()` traversal. Analyze their filters too,
+    /// using the same query-local cycle stack as the enclosing model.
+    fn analyze_relation_filters(
+        &self,
+        chain: &mut RelationChain,
+        cycle_stack: &ModelStack,
+    ) -> Result<()> {
+        let plan = match chain {
+            RelationChain::Start(plan) => plan,
+            RelationChain::Chain(plan, _, _, next) => {
+                self.analyze_relation_filters(next, cycle_stack)?;
+                plan
+            }
+        };
+        *plan = plan.clone().transform_up(|plan| {
+            let LogicalPlan::Extension(extension) = &plan else {
+                return Ok(Transformed::no(plan));
+            };
+            if let Some(partial) = extension.node.as_any().downcast_ref::<PartialModelPlanNode>() {
+                let mut partial = partial.clone();
+                let model_name = partial.model_node.model.name().to_string();
+                if !cycle_stack.borrow_mut().insert(model_name.clone()) {
+                    return plan_err!("Detected a cycle in row level access control conditions for model `{}`", model_name);
+                }
+                let _guard = ModelStackGuard { stack: cycle_stack, name: model_name };
+                self.analyze_relation_filters(&mut partial.model_node.relation_chain, cycle_stack)?;
+                if let Some(filter) = partial.model_node.rlac_filter.take() {
+                    partial.model_node.rlac_filter = Some(self.analyze_rlac_subqueries(filter, cycle_stack)?);
+                }
+                Ok(Transformed::yes(LogicalPlan::Extension(Extension { node: Arc::new(partial) })))
+            } else if let Some(calculation) = extension.node.as_any().downcast_ref::<CalculationPlanNode>() {
+                let mut calculation = calculation.clone();
+                self.analyze_relation_filters(&mut calculation.relation_chain, cycle_stack)?;
+                Ok(Transformed::yes(LogicalPlan::Extension(Extension { node: Arc::new(calculation) })))
+            } else {
+                Ok(Transformed::no(plan))
+            }
+        }).data()?;
+        Ok(())
     }
 
     /// Walk `expr` and analyze the inner plan of every embedded subquery
@@ -655,11 +723,16 @@ impl ModelAnalyzeRule {
         plan: LogicalPlan,
         cycle_stack: &ModelStack,
     ) -> Result<LogicalPlan> {
+        let internal_rule = Self {
+            access_scope: AccessScope::InternalSubquery,
+            ..self.clone()
+        };
         let mut scope_manager = ScopeManager::new();
         let root_scope_id = scope_manager.create_root_scope();
         self.analyze_scope(plan, &mut scope_manager, root_scope_id)?
             .map_data(|p| {
-                self.analyze_model(p, &mut scope_manager, root_scope_id, cycle_stack)
+                internal_rule
+                    .analyze_model(p, &mut scope_manager, root_scope_id, cycle_stack)
                     .data()
             })?
             .map_data(|p| {

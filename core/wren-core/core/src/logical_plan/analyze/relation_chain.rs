@@ -13,6 +13,7 @@ use crate::mdl::utils::{collect_join_keys, qualify_name_from_column_name, quoted
 use crate::mdl::Dataset;
 use crate::mdl::{AnalyzedWrenMDL, SessionStateRef};
 use crate::DataFusionError;
+use crate::{AccessControlProvider, AccessScope, WrenAccessControlProvider};
 use datafusion::common::alias::AliasGenerator;
 use datafusion::common::{internal_err, plan_err, DFSchema, DFSchemaRef, Result};
 use datafusion::common::{plan_datafusion_err, TableReference};
@@ -44,6 +45,7 @@ impl RelationChain {
         analyzed_wren_mdl: Arc<AnalyzedWrenMDL>,
         session_state_ref: SessionStateRef,
         session_properties: SessionPropertiesRef,
+        access_control: Arc<dyn AccessControlProvider>,
     ) -> Result<Self> {
         let Dataset::Model(source_model) = dataset;
         Ok(Start(LogicalPlan::Extension(Extension {
@@ -54,6 +56,7 @@ impl RelationChain {
                 session_state_ref,
                 session_properties,
                 None,
+                access_control,
             )?),
         })))
     }
@@ -68,6 +71,33 @@ impl RelationChain {
         analyzed_wren_mdl: Arc<AnalyzedWrenMDL>,
         session_state_ref: SessionStateRef,
         properties: SessionPropertiesRef,
+    ) -> Result<Self> {
+        Self::with_chain_with_access_control(
+            source,
+            start,
+            iter,
+            directed_graph,
+            model_required_fields,
+            analyzed_wren_mdl,
+            session_state_ref,
+            properties,
+            Arc::new(WrenAccessControlProvider),
+            AccessScope::DirectQuery,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_chain_with_access_control(
+        source: Self,
+        start: NodeIndex,
+        iter: impl Iterator<Item = NodeIndex>,
+        directed_graph: Graph<Dataset, DatasetLink>,
+        model_required_fields: &HashMap<TableReference, BTreeSet<OrdExpr>>,
+        analyzed_wren_mdl: Arc<AnalyzedWrenMDL>,
+        session_state_ref: SessionStateRef,
+        properties: SessionPropertiesRef,
+        access_control: Arc<dyn AccessControlProvider>,
+        access_scope: AccessScope,
     ) -> Result<Self> {
         let mut relation_chain = source;
         // Track the most recently visited node so that we can walk both linear
@@ -119,6 +149,8 @@ impl RelationChain {
                 Arc::clone(&analyzed_wren_mdl),
                 Arc::clone(&session_state_ref),
                 Arc::clone(&properties),
+                Arc::clone(&access_control),
+                access_scope,
             )?;
 
             let df_schema = DFSchemaRef::from(DFSchema::try_from(schema)?);
