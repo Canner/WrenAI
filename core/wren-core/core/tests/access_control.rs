@@ -155,6 +155,42 @@ fn properties() -> SessionPropertiesRef {
     ]))
 }
 
+#[cfg(feature = "multi-thread")]
+#[tokio::test]
+async fn synchronous_provider_api_rejects_active_runtime() -> Result<()> {
+    let mdl = Arc::new(AnalyzedWrenMDL::analyze_with_unfiltered_schema(manifest())?);
+    let error = wren_core::mdl::transform_sql_with_access_control(
+        mdl,
+        &[],
+        HashMap::new(),
+        "select id from items",
+        Arc::new(RecordingProvider::default()),
+    )
+    .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("use transform_sql_with_ctx_with_access_control"));
+    Ok(())
+}
+
+#[cfg(feature = "multi-thread")]
+#[test]
+fn synchronous_provider_api_applies_filter() -> Result<()> {
+    let mdl = Arc::new(AnalyzedWrenMDL::analyze_with_unfiltered_schema(manifest())?);
+    let sql = wren_core::mdl::transform_sql_with_access_control(
+        mdl,
+        &[],
+        HashMap::new(),
+        "select id from items",
+        Arc::new(RecordingProvider {
+            conditions: HashMap::from([("items".into(), "tenant_id = 7".into())]),
+            ..Default::default()
+        }),
+    )?;
+    assert!(sql.contains("tenant_id = 7"), "{sql}");
+    Ok(())
+}
+
 async fn transform(
     manifest: Manifest,
     sql: &str,

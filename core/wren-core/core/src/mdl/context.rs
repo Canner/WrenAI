@@ -100,6 +100,28 @@ pub async fn apply_wren_on_ctx(
 /// already removed physical columns. Explicit table registrations are also supported.
 /// This context supports direct planning/execution; use the provider-aware SQL
 /// transform entrypoint when generating remote SQL.
+///
+/// # Example
+///
+/// ```no_run
+/// use std::{collections::HashMap, sync::Arc};
+/// use wren_core::{AccessControlProvider, AnalyzedWrenMDL};
+/// use wren_core::mdl::{create_wren_ctx, manifest::Manifest};
+/// use wren_core::mdl::context::{apply_wren_on_ctx_with_access_control, Mode};
+///
+/// async fn plan_query(
+///     manifest: Manifest,
+///     provider: Arc<dyn AccessControlProvider>,
+/// ) -> datafusion::common::Result<()> {
+///     let mdl = Arc::new(AnalyzedWrenMDL::analyze_with_unfiltered_schema(manifest)?);
+///     let ctx = apply_wren_on_ctx_with_access_control(
+///         &create_wren_ctx(None, None), mdl, Arc::new(HashMap::new()),
+///         Mode::Unparse, provider,
+///     ).await?;
+///     let _plan = ctx.sql("SELECT id FROM items").await?.into_optimized_plan()?;
+///     Ok(())
+/// }
+/// ```
 pub async fn apply_wren_on_ctx_with_access_control(
     ctx: &SessionContext,
     analyzed_mdl: Arc<AnalyzedWrenMDL>,
@@ -230,6 +252,13 @@ impl Mode {
         )
     }
 
+    /// Build the mode's analyzer rules using the supplied shared provider.
+    ///
+    /// Reuse this provider for table registration and permission diagnostics.
+    /// [`Mode::PermissionAnalyze`] expands views and checks model permissions
+    /// without generating source plans. Construction is infallible; provider
+    /// errors propagate when the rules analyze a query.
+    /// See [`apply_wren_on_ctx_with_access_control`] for the common setup workflow.
     pub fn get_analyze_rules_with_access_control(
         &self,
         analyzed_mdl: Arc<AnalyzedWrenMDL>,
@@ -423,6 +452,13 @@ pub async fn register_table_with_mdl(
     .await
 }
 
+/// Register model and view schemas using the same provider as the analyzer rules.
+///
+/// Denied columns are omitted except in [`Mode::PermissionAnalyze`], where the
+/// full schema lets the analyzer report explicit permission errors. This function
+/// does not install analyzer rules or apply row filters; use
+/// [`apply_wren_on_ctx_with_access_control`] for the complete setup workflow.
+/// Returns provider, schema, registration, or view-planning errors.
 pub async fn register_table_with_mdl_with_access_control(
     ctx: &SessionContext,
     analyzed_mdl: Arc<AnalyzedWrenMDL>,
@@ -481,6 +517,14 @@ impl WrenDataSource {
         )
     }
 
+    /// Create a model schema, omitting columns denied by the supplied provider.
+    ///
+    /// [`Mode::PermissionAnalyze`] retains all columns without calling the provider
+    /// so subsequent analysis can diagnose permission errors. Otherwise, provider
+    /// errors propagate; schema conversion errors are returned in every mode.
+    /// The provider is borrowed only to build the schema. Reuse it in analyzer
+    /// rules to enforce row and column access during planning, normally through
+    /// [`apply_wren_on_ctx_with_access_control`].
     pub fn new_with_access_control(
         model: Arc<Model>,
         properties: &SessionPropertiesRef,
