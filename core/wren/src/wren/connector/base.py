@@ -1,23 +1,67 @@
 from __future__ import annotations
 
-import re
 from abc import ABC, abstractmethod
 
 import pyarrow as pa
 
-_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
-
 
 def strip_trailing_semicolon(sql: str) -> str:
-    """Strip any trailing ``;`` characters and surrounding whitespace.
+    """Strip the terminating ``;`` and anything after it (whitespace/comments).
 
     Connectors often subquery-wrap or EXPLAIN user SQL. Engines reject a
     trailing semicolon inside those forms (e.g. ``SELECT * FROM (SELECT 1;)``
-    or ``EXPLAIN SELECT 1;``). Only the *terminating* run of semicolons and
-    whitespace is removed, so semicolons inside string literals
-    (``SELECT 'a;b'``) are preserved.
+    or ``EXPLAIN SELECT 1;``), and a comment after the semicolon used to
+    defeat stripping, leaving the ``;`` inside the wrapped subquery. Only the
+    *terminating* semicolon is removed: ``;`` inside string literals
+    (``SELECT 'a;b'``) or inside comments is preserved, and SQL without a
+    trailing semicolon is returned unchanged.
     """
-    return _TRAILING_SEMICOLONS_RE.sub("", sql)
+    NORMAL, SINGLE_QUOTED, DOUBLE_QUOTED, LINE_COMMENT, BLOCK_COMMENT = range(5)
+    state = NORMAL
+    cut: int | None = None
+    i = 0
+    while i < len(sql):
+        ch = sql[i]
+        if state == NORMAL:
+            if ch == ";":
+                if cut is None:
+                    cut = i
+            elif ch.isspace():
+                pass
+            elif ch == "-" and sql.startswith("--", i):
+                i += 1
+                state = LINE_COMMENT
+            elif ch == "/" and sql.startswith("/*", i):
+                i += 1
+                state = BLOCK_COMMENT
+            elif ch == "'":
+                state = SINGLE_QUOTED
+            elif ch == '"':
+                state = DOUBLE_QUOTED
+            else:
+                cut = None
+        elif state == SINGLE_QUOTED:
+            if ch == "'":
+                # Doubled '' is an escape, not a string end.
+                if sql.startswith("''", i):
+                    i += 1
+                else:
+                    state = NORMAL
+        elif state == DOUBLE_QUOTED:
+            if ch == '"':
+                if sql.startswith('""', i):
+                    i += 1
+                else:
+                    state = NORMAL
+        elif state == LINE_COMMENT:
+            if ch == "\n":
+                state = NORMAL
+        else:  # BLOCK_COMMENT
+            if ch == "*" and sql.startswith("*/", i):
+                i += 1
+                state = NORMAL
+        i += 1
+    return sql[:cut].rstrip() if cut is not None else sql
 
 
 def coerce_limit(limit: int | None) -> int | None:
