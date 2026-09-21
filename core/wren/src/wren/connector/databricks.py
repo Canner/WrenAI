@@ -61,7 +61,7 @@ class DatabricksConnector(ConnectorABC):
     def dry_run(self, sql: str) -> None:
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS sub LIMIT 0"
+                f"SELECT * FROM (\n{strip_trailing_semicolon(sql)}\n) AS sub LIMIT 0"
             )
 
     def close(self) -> None:

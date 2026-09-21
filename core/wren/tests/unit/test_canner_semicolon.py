@@ -70,5 +70,29 @@ def test_query_limited_strips_before_wrap(monkeypatch, fake_psycopg):
     connector.query("SELECT 1 AS x;", limit=3)
 
     cursor.execute.assert_called_once_with(
-        "SELECT * FROM (SELECT 1 AS x) AS _t LIMIT 3"
+        "SELECT * FROM (\nSELECT 1 AS x\n) AS _t LIMIT 3"
+    )
+
+
+def test_query_limit_survives_trailing_line_comment(monkeypatch, fake_psycopg):
+    """Trailing `--` must not eat the wrap (same shape as postgres.py #2728)."""
+    connector, cursor = _make_connector()
+    monkeypatch.setattr(
+        "wren.connector.canner._build_arrow_table",
+        lambda cur: pa.table({"x": [1]}),
+    )
+
+    connector.query("SELECT 1 AS x -- pick", limit=3)
+
+    cursor.execute.assert_called_once_with(
+        "SELECT * FROM (\nSELECT 1 AS x -- pick\n) AS _t LIMIT 3"
+    )
+
+
+def test_dry_run_limit_survives_trailing_line_comment(fake_psycopg):
+    connector, cursor = _make_connector()
+    connector.dry_run("SELECT 1 AS x -- pick")
+
+    cursor.execute.assert_called_once_with(
+        "SELECT * FROM (\nSELECT 1 AS x -- pick\n) AS _t LIMIT 0"
     )

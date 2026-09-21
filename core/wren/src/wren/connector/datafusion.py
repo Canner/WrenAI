@@ -32,7 +32,9 @@ class DataFusionConnector(ConnectorABC):
         limit = coerce_limit(limit)
         stripped = strip_trailing_semicolon(sql)
         if limit is not None:
-            sql = f"SELECT * FROM ({stripped}) AS _q LIMIT {limit}"
+            # Multiline wrap so a trailing line comment in the inner SQL is
+            # terminated by the newline instead of swallowing the closing paren.
+            sql = f"SELECT * FROM (\n{stripped}\n) AS _q LIMIT {limit}"
         else:
             sql = stripped
         ipc_bytes = self.ctx.query(sql)
