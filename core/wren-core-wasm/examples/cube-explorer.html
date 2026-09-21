@@ -86,6 +86,19 @@
                 <button id="add-filter" type="button">+ Add filter</button>
             </div>
 
+            <div class="field">
+                <label>Order by (optional)</label>
+                <div class="filter-row" style="grid-template-columns: 1fr 130px;">
+                    <select id="order-by-member">
+                        <option value="">(default / none)</option>
+                    </select>
+                    <select id="order-by-dir">
+                        <option value="asc">ASC</option>
+                        <option value="desc">DESC</option>
+                    </select>
+                </div>
+            </div>
+
             <div class="field" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5em;">
                 <div>
                     <label>Limit</label>
@@ -302,6 +315,12 @@
             const filters = readFilterRows();
             if (filters.length) q.filters = filters;
 
+            const orderMember = $('order-by-member').value;
+            if (orderMember) {
+                const direction = $('order-by-dir').value || 'asc';
+                q.orderBy = [{ member: orderMember, direction }];
+            }
+
             const limit = $('limit').value;
             if (limit !== '') q.limit = Number(limit);
             const offset = $('offset').value;
@@ -354,6 +373,22 @@
             $('query-json').textContent = q ? JSON.stringify(q, null, 2) : '{}';
         }
 
+        function updateOrderByOptions() {
+            const sel = $('order-by-member');
+            if (!sel || !currentCube) return;
+            const currentVal = sel.value;
+            const members = [
+                ...currentCube.measures.map(m => m.name),
+                ...currentCube.dimensions.map(d => d.name),
+                ...currentCube.timeDimensions.map(td => td.name),
+            ];
+            sel.innerHTML = '<option value="">(default / none)</option>' +
+                members.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+            if (members.includes(currentVal)) {
+                sel.value = currentVal;
+            }
+        }
+
         function loadCube(cube) {
             currentCube = cube;
             $('cube-schema').textContent = JSON.stringify(cube, null, 2);
@@ -369,6 +404,7 @@
 
             filterRows = [];
             renderFilters();
+            updateOrderByOptions();
 
             // Sensible default: first measure + first dimension.
             const firstMeasure = $('measures').querySelector('input');
@@ -381,7 +417,7 @@
         function attachAutoSync() {
             for (const ev of ['change', 'input']) {
                 document.addEventListener(ev, e => {
-                    if (e.target.closest('#measures, #dimensions, #filters, #td-name, #td-granularity, #td-range, #limit, #offset')) {
+                    if (e.target.closest('#measures, #dimensions, #filters, #td-name, #td-granularity, #td-range, #limit, #offset, #order-by-member, #order-by-dir')) {
                         syncQueryDisplay();
                     }
                 });
@@ -396,7 +432,11 @@
             });
             $('add-filter').addEventListener('click', () => { addFilter(); syncQueryDisplay(); });
             $('run').addEventListener('click', runQuery);
-            $('reset').addEventListener('click', () => { loadCube(currentCube); });
+            $('reset').addEventListener('click', () => {
+                $('order-by-member').value = '';
+                $('order-by-dir').value = 'asc';
+                loadCube(currentCube);
+            });
         }
 
         // ── Boot ──

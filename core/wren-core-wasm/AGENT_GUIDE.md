@@ -161,6 +161,9 @@ const rows = await engine.cubeQuery({
   filters: [
     { dimension: "status", operator: "eq", value: "completed" },
   ],
+  orderBy: [
+    { member: "revenue", direction: "desc" },
+  ],
   limit: 100,
 });
 ```
