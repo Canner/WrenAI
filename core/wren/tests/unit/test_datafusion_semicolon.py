@@ -14,11 +14,10 @@ from unittest.mock import MagicMock
 import pyarrow as pa
 import pyarrow.ipc as ipc
 
+from wren.connector.base import strip_trailing_semicolon as _strip_trailing_semicolon
 from wren.connector.datafusion import (
     DataFusionConnector,
-    
 )
-from wren.connector.base import strip_trailing_semicolon as _strip_trailing_semicolon
 
 
 def _make_mock_connector() -> tuple[DataFusionConnector, MagicMock]:
@@ -41,8 +40,16 @@ def test_query_strips_trailing_semicolon_before_subquery_wrap() -> None:
     connector, ctx = _make_mock_connector()
     connector.query("SELECT 1;", limit=5)
     (sent,), _ = ctx.query.call_args
-    assert sent == "SELECT * FROM (SELECT 1) AS _q LIMIT 5"
-    assert ";)" not in sent
+    assert sent == "SELECT * FROM (\nSELECT 1\n) AS _q LIMIT 5"
+    assert ";\n)" not in sent
+
+
+def test_query_limit_survives_trailing_line_comment() -> None:
+    """Trailing `--` must not eat the wrap (same shape as postgres.py #2728)."""
+    connector, ctx = _make_mock_connector()
+    connector.query("SELECT 1 AS x -- pick", limit=5)
+    (sent,), _ = ctx.query.call_args
+    assert sent == "SELECT * FROM (\nSELECT 1 AS x -- pick\n) AS _q LIMIT 5"
 
 
 def test_query_without_limit_is_unwrapped() -> None:
