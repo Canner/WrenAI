@@ -67,9 +67,7 @@ def test_clickhouse_url_preserves_literal_plus_in_credentials() -> None:
     ``+`` in a password into a space and corrupted the credential. In a URL,
     ``+`` only means space inside a query string — never in userinfo/path.
     """
-    info = _FakeConnInfoFromUrl(
-        "clickhouse://svc+etl:pw+1@clickhouse-host:9000/an+db"
-    )
+    info = _FakeConnInfoFromUrl("clickhouse://svc+etl:pw+1@clickhouse-host:9000/an+db")
 
     out = _build_clickhouse_client_kwargs(info)
 
@@ -80,9 +78,7 @@ def test_clickhouse_url_preserves_literal_plus_in_credentials() -> None:
 
 def test_clickhouse_url_decodes_percent_encoded_database() -> None:
     """A percent-encoded database name in the path must be decoded too."""
-    info = _FakeConnInfoFromUrl(
-        "clickhouse://clickhouse-host:9000/my%20analytics"
-    )
+    info = _FakeConnInfoFromUrl("clickhouse://clickhouse-host:9000/my%20analytics")
 
     out = _build_clickhouse_client_kwargs(info)
 
@@ -126,7 +122,7 @@ def test_clickhouse_query_strips_trailing_semicolon_before_subquery_wrap() -> No
     connector.query("SELECT 1;", limit=5)
 
     (sent,), _ = mock_conn.query.call_args
-    assert sent == "SELECT * FROM (SELECT 1) AS _wren_sub LIMIT 5"
+    assert sent == "SELECT * FROM (\nSELECT 1\n) AS _wren_sub LIMIT 5"
 
 
 def test_clickhouse_query_strips_multiple_trailing_semicolons_and_whitespace() -> None:
@@ -136,7 +132,7 @@ def test_clickhouse_query_strips_multiple_trailing_semicolons_and_whitespace() -
     connector.query("SELECT 1 ;  ", limit=3)
 
     (sent,), _ = mock_conn.query.call_args
-    assert sent == "SELECT * FROM (SELECT 1) AS _wren_sub LIMIT 3"
+    assert sent == "SELECT * FROM (\nSELECT 1\n) AS _wren_sub LIMIT 3"
 
 
 def test_clickhouse_query_without_limit_still_strips_semicolon() -> None:
@@ -156,7 +152,26 @@ def test_clickhouse_dry_run_strips_trailing_semicolon() -> None:
     connector.dry_run("SELECT 1;")
 
     (sent,), _ = mock_conn.query.call_args
-    assert sent == "SELECT * FROM (SELECT 1) AS _wren_sub LIMIT 0"
+    assert sent == "SELECT * FROM (\nSELECT 1\n) AS _wren_sub LIMIT 0"
+
+
+def test_clickhouse_query_limit_survives_trailing_line_comment() -> None:
+    """Trailing `--` must not eat the wrap (same shape as postgres.py #2728)."""
+    connector, mock_conn = _make_connector_with_mock_query()
+
+    connector.query("SELECT 1 AS x -- pick", limit=5)
+
+    (sent,), _ = mock_conn.query.call_args
+    assert sent == "SELECT * FROM (\nSELECT 1 AS x -- pick\n) AS _wren_sub LIMIT 5"
+
+
+def test_clickhouse_dry_run_limit_survives_trailing_line_comment() -> None:
+    connector, mock_conn = _make_connector_with_mock_query()
+
+    connector.dry_run("SELECT 1 AS x -- pick")
+
+    (sent,), _ = mock_conn.query.call_args
+    assert sent == "SELECT * FROM (\nSELECT 1 AS x -- pick\n) AS _wren_sub LIMIT 0"
 
 
 # ---------------------------------------------------------------------------

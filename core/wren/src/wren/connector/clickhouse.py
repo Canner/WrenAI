@@ -399,7 +399,9 @@ class ClickHouseConnector(ConnectorABC):
         stripped = strip_trailing_semicolon(sql)
         statement = stripped
         if limit is not None:
-            statement = f"SELECT * FROM ({stripped}) AS _wren_sub LIMIT {limit}"
+            # Multiline wrap so a trailing line comment in the inner SQL is
+            # terminated by the newline instead of swallowing the closing paren.
+            statement = f"SELECT * FROM (\n{stripped}\n) AS _wren_sub LIMIT {limit}"
         try:
             result = self.connection.query(statement)
         except _ClickHouseDbError as e:
@@ -416,7 +418,9 @@ class ClickHouseConnector(ConnectorABC):
     def dry_run(self, sql: str) -> None:
         stripped = strip_trailing_semicolon(sql)
         try:
-            self.connection.query(f"SELECT * FROM ({stripped}) AS _wren_sub LIMIT 0")
+            self.connection.query(
+                f"SELECT * FROM (\n{stripped}\n) AS _wren_sub LIMIT 0"
+            )
         except _ClickHouseDbError as e:
             if "TIMEOUT_EXCEEDED" in str(e):
                 raise DatabaseTimeoutError(str(e)) from e
