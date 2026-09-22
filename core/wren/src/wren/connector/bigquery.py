@@ -7,7 +7,7 @@ from loguru import logger
 from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 
 
-def _apply_limit(sql: str, limit: int) -> str:
+def _apply_limit(sql: str, limit: int, dialect: str | None = None) -> str:
     """Push LIMIT into SQL via outer subquery wrap.
 
     ``max_results`` only caps the page size of job results-reading; it does
@@ -20,7 +20,7 @@ def _apply_limit(sql: str, limit: int) -> str:
     terminated by the newline instead of swallowing the closing paren,
     alias and LIMIT clause (same technique as postgres.py/athena.py).
     """
-    cleaned = strip_trailing_semicolon(sql)
+    cleaned = strip_trailing_semicolon(sql, dialect)
     return f"SELECT * FROM (\n{cleaned}\n) AS _sub LIMIT {limit}"
 
 
@@ -63,16 +63,16 @@ class BigQueryConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         limit = coerce_limit(limit)
         if limit is not None:
-            sql = _apply_limit(sql, limit)
+            sql = _apply_limit(sql, limit, self.dialect)
         else:
-            sql = strip_trailing_semicolon(sql)
+            sql = self._strip(sql)
         return self.connection.query(sql).result().to_arrow()
 
     def dry_run(self, sql: str) -> None:
         from google.cloud import bigquery  # noqa: PLC0415
 
         self.connection.query(
-            strip_trailing_semicolon(sql),
+            self._strip(sql),
             job_config=bigquery.QueryJobConfig(dry_run=True, use_query_cache=False),
         )
 

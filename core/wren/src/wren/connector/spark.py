@@ -1,6 +1,6 @@
 import pyarrow as pa
 
-from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit
 from wren.model import SparkConnectionInfo
 
 
@@ -27,7 +27,7 @@ class SparkConnector(ConnectorABC):
         # SQL subquery wraps — both unnecessary on the DataFrame API and the
         # latter breaks SHOW/DESCRIBE-style statements.
         coerced = coerce_limit(limit)
-        frame = self.connection.sql(strip_trailing_semicolon(sql))
+        frame = self.connection.sql(self._strip(sql))
         if coerced is not None:
             frame = frame.limit(coerced)
         df = frame.toPandas()
@@ -40,7 +40,7 @@ class SparkConnector(ConnectorABC):
         return pa.Table.from_pandas(df)
 
     def dry_run(self, sql: str) -> None:
-        self.connection.sql(strip_trailing_semicolon(sql)).limit(0).count()
+        self.connection.sql(self._strip(sql)).limit(0).count()
 
     def close(self) -> None:
         if self._closed:

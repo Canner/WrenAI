@@ -101,7 +101,7 @@ class MSSqlConnector(ConnectorABC):
         ``OFFSET 0 ROWS FETCH NEXT n ROWS ONLY`` clause."""
         # Unlimited path: strip trailing terminators so client-pasted SQL
         # matches dry_run / limit composition (connector consistency; see #2595).
-        sql = strip_trailing_semicolon(sql)
+        sql = strip_trailing_semicolon(sql, input_dialect)
         if limit is None:
             return sql
 
@@ -121,7 +121,7 @@ class MSSqlConnector(ConnectorABC):
     ) -> str:
         """Collapse an outer ``LIMIT`` wrapped around a single subquery into
         the inner Select's ``LIMIT`` — undoes the v4 paginate-wrap pattern."""
-        sql_query = strip_trailing_semicolon(sql_query)
+        sql_query = strip_trailing_semicolon(sql_query, input_dialect)
         try:
             parsed = parse_one(sql_query, dialect=input_dialect)
             if not isinstance(parsed, exp.Select) or not parsed.args.get("limit"):

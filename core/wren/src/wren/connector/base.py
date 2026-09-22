@@ -1,66 +1,51 @@
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 
 import pyarrow as pa
+from sqlglot import Dialect
+from sqlglot.errors import TokenError
+from sqlglot.tokens import TokenType
+
+_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
 
 
-def strip_trailing_semicolon(sql: str) -> str:
+def strip_trailing_semicolon(sql: str, dialect: str | None = None) -> str:
     """Strip the terminating ``;`` and anything after it (whitespace/comments).
 
     Connectors often subquery-wrap or EXPLAIN user SQL. Engines reject a
     trailing semicolon inside those forms (e.g. ``SELECT * FROM (SELECT 1;)``
-    or ``EXPLAIN SELECT 1;``), and a comment after the semicolon used to
-    defeat stripping, leaving the ``;`` inside the wrapped subquery. Only the
-    *terminating* semicolon is removed: ``;`` inside string literals
-    (``SELECT 'a;b'``) or inside comments is preserved, and SQL without a
-    trailing semicolon is returned unchanged.
+    or ``EXPLAIN SELECT 1;``), and a comment after the semicolon defeats an
+    end-anchored strip, leaving the ``;`` inside the wrapped subquery.
+
+    Lexing is delegated to sqlglot's dialect-aware tokenizer rather than a
+    hand-written scanner: which escapes (``\\'``), quote styles (``$$..$$``,
+    backticks, ``[brackets]``, ``q'[..]'``) and comment markers exist is a
+    per-dialect property, and a scanner in this file would have to re-encode
+    it for every connector. Comments attach to the preceding token, so "only
+    comments after the ``;``" needs no special handling — the last token is
+    simply ``SEMICOLON``.
+
+    Only the *terminating* run of semicolons is removed: ``;`` inside string
+    literals (``SELECT 'a;b'``) or inside comments is preserved, and SQL
+    without a trailing semicolon is returned unchanged.
+
+    Raises no error for input the tokenizer cannot lex (an unterminated string
+    or block comment): those fall back to the previous end-anchored behaviour,
+    which is never worse than what this function replaced.
     """
-    NORMAL, SINGLE_QUOTED, DOUBLE_QUOTED, LINE_COMMENT, BLOCK_COMMENT = range(5)
-    state = NORMAL
-    cut: int | None = None
-    i = 0
-    while i < len(sql):
-        ch = sql[i]
-        if state == NORMAL:
-            if ch == ";":
-                if cut is None:
-                    cut = i
-            elif ch.isspace():
-                pass
-            elif ch == "-" and sql.startswith("--", i):
-                i += 1
-                state = LINE_COMMENT
-            elif ch == "/" and sql.startswith("/*", i):
-                i += 1
-                state = BLOCK_COMMENT
-            elif ch == "'":
-                state = SINGLE_QUOTED
-            elif ch == '"':
-                state = DOUBLE_QUOTED
-            else:
-                cut = None
-        elif state == SINGLE_QUOTED:
-            if ch == "'":
-                # Doubled '' is an escape, not a string end.
-                if sql.startswith("''", i):
-                    i += 1
-                else:
-                    state = NORMAL
-        elif state == DOUBLE_QUOTED:
-            if ch == '"':
-                if sql.startswith('""', i):
-                    i += 1
-                else:
-                    state = NORMAL
-        elif state == LINE_COMMENT:
-            if ch == "\n":
-                state = NORMAL
-        else:  # BLOCK_COMMENT
-            if ch == "*" and sql.startswith("*/", i):
-                i += 1
-                state = NORMAL
-        i += 1
+    try:
+        tokens = Dialect.get_or_raise(dialect).tokenize(sql)
+    except TokenError:
+        # Unterminated string/comment or a form the tokenizer rejects:
+        # degrade to the previous end-anchored strip, never worse than before.
+        return _TRAILING_SEMICOLONS_RE.sub("", sql)
+    cut = None
+    for token in reversed(tokens):
+        if token.token_type is not TokenType.SEMICOLON:
+            break
+        cut = token.start
     return sql[:cut].rstrip() if cut is not None else sql
 
 
@@ -103,6 +88,16 @@ def coerce_limit(limit: int | None) -> int | None:
 
 
 class ConnectorABC(ABC):
+    #: sqlglot dialect name for this connector, assigned by
+    #: ``wren.connector.factory.get_connector`` from the ``DataSource``. Left
+    #: ``None`` for connectors built directly (tests, ad-hoc use), which makes
+    #: ``_strip`` fall back to sqlglot's default dialect.
+    dialect: str | None = None
+
+    def _strip(self, sql: str) -> str:
+        """``strip_trailing_semicolon`` using this connector's dialect."""
+        return strip_trailing_semicolon(sql, self.dialect)
+
     @abstractmethod
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         pass

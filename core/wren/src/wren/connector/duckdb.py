@@ -4,7 +4,7 @@ import opendal
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit
 from wren.model import (
     GcsFileConnectionInfo,
     MinioFileConnectionInfo,
@@ -82,7 +82,7 @@ class DuckDBConnector(ConnectorABC):
         ``SELECT …;`` behaves the same on limited and unlimited paths.
         """
         limit = coerce_limit(limit)
-        stripped = strip_trailing_semicolon(sql)
+        stripped = self._strip(sql)
         if limit is not None:
             # Subquery wrap rejects an interior terminator after strip.
             # Multiline so a trailing `-- line comment` in `stripped` is
@@ -104,7 +104,7 @@ class DuckDBConnector(ConnectorABC):
         statement then becomes a natural syntax error inside the subquery, and
         no rows are materialized.
         """
-        stripped = strip_trailing_semicolon(sql)
+        stripped = self._strip(sql)
         self.connection.execute(f"SELECT * FROM (\n{stripped}\n) AS _q LIMIT 0")
 
     def _attach_database(self, connection_info) -> None:

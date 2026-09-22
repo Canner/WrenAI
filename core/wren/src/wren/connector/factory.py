@@ -1,5 +1,6 @@
 import importlib
 
+from wren.mdl.cte_rewriter import get_sqlglot_dialect
 from wren.model.data_source import DataSource
 from wren.model.error import ErrorCode, WrenError
 
@@ -62,5 +63,13 @@ def get_connector(data_source: DataSource, connection_info):
         ) from e
 
     if data_source in _NEEDS_DATA_SOURCE:
-        return module.create_connector(data_source, connection_info)
-    return module.create_connector(connection_info)
+        connector = module.create_connector(data_source, connection_info)
+    else:
+        connector = module.create_connector(connection_info)
+
+    # Which lexical forms exist is a per-dialect property (`\'` is an escape in
+    # MySQL/BigQuery but not in standard SQL), and the DataSource is only known
+    # here -- so the strip helpers get the dialect from the factory rather than
+    # hard-coding it per connector.
+    connector.dialect = get_sqlglot_dialect(data_source)
+    return connector

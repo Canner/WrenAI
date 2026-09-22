@@ -7,7 +7,7 @@ import pyarrow as pa
 import pyarrow.ipc as ipc
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit
 from wren.model import DataFusionConnectionInfo
 from wren.model.error import ErrorCode, WrenError
 
@@ -30,7 +30,7 @@ class DataFusionConnector(ConnectorABC):
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         limit = coerce_limit(limit)
-        stripped = strip_trailing_semicolon(sql)
+        stripped = self._strip(sql)
         if limit is not None:
             sql = f"SELECT * FROM ({stripped}) AS _q LIMIT {limit}"
         else:
@@ -44,7 +44,7 @@ class DataFusionConnector(ConnectorABC):
         # break the LIMIT subquery wrap (``SELECT 1;`` is a multi-statement batch
         # the planner rejects). Strip only the terminating run so ';' inside
         # string literals stays intact — same helper already used by ``query``.
-        self.ctx.dry_run(strip_trailing_semicolon(sql))
+        self.ctx.dry_run(self._strip(sql))
 
     def close(self) -> None:
         pass

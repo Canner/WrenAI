@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pyarrow as pa
 
-from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 
@@ -58,7 +58,7 @@ class SnowflakeConnector(ConnectorABC):
         limit = coerce_limit(limit)
         # Align unlimited execute with dry_run and other connectors (mysql/
         # bigquery/duckdb/redshift): strip a terminating `;` before send.
-        executed = strip_trailing_semicolon(sql)
+        executed = self._strip(sql)
         # Push LIMIT into Snowflake when requested so we do not download a
         # full result set only to slice it in Python. Wrap as a subquery so
         # statements that already contain an ORDER BY keep their ordering
@@ -86,7 +86,7 @@ class SnowflakeConnector(ConnectorABC):
     def dry_run(self, sql: str) -> None:
         # ``describe`` still fails when the statement is terminated with ``;``
         # (ProgrammingError: unexpected ';'). Strip only the trailing run.
-        cleaned = strip_trailing_semicolon(sql)
+        cleaned = self._strip(sql)
         try:
             with self.connection.cursor() as cursor:
                 cursor.describe(cleaned)
