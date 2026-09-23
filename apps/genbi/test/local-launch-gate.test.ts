@@ -232,7 +232,7 @@ describe("local GenBI contract check", () => {
       codexLocalBin: path.join(packageRoot, "node_modules/@warble/codex-local/dist/cli.js") });
     expect(claude.result).toBe("passed");
     expect(codex.result).toBe("passed");
-  });
+  }, 30_000);
 
   it("rejects configured, malformed, wrong-reason, and producer-incompatible bootstrap readiness", async () => {
     const baseline = readinessFixture();

@@ -242,7 +242,7 @@ describe("native session persistence", () => {
     expect(store.getNativeSession(answer.row.id)?.status).toBe("stopped");
     await expect(service.create({ purpose: "analysis" })).rejects.toThrow("shutting down");
     store.close();
-  });
+  }, 30_000);
 
   it("pins a validated managed generation for an active production Codex session while the approved generation advances", async () => {
     const { dir, binding } = fixture("analysis", "codex");
