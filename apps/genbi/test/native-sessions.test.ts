@@ -756,21 +756,22 @@ describe("native session persistence", () => {
     expect(() => readNativeLaunchSpec(dir, "analysis", "claude", "fixture-scope", binding, { version: "1", url: "http://127.0.0.1:4787/api/native-sessions/mcp", credential: "credential" })).toThrow(/incompatible/);
   });
 
-  it("revokes issued artifact credentials on PTY exit, initial attachment lease expiry, and creation failure", async () => {
-    const materializeV4 = (purpose: "analysis" | "setup" | "context_enrichment", vendor: "claude" | "codex") => async ({ cwd, scope }: { cwd: string; scope: Record<string, unknown> }) => writeNativeLaunchSpec(cwd, purpose, vendor, scope, true);
+  it("revokes issued artifact credentials on PTY exit", async () => {
     const exited = fixture("analysis", "codex");
     const exitStore = new Store(":memory:");
     const exitArtifacts = new NativeArtifactService({ store: exitStore, artifactsRoot: path.join(exited.dir, "artifacts"), expectedMcpUrl: NATIVE_MCP_URL, mcpUrl: NATIVE_MCP_URL, getBinding: () => exited.binding });
     const exitIssue = vi.spyOn(exitArtifacts, "issue");
     let exit!: (event: { exitCode: number }) => void;
     const exitPty: PtyFactory = { spawn: () => ({ onData: () => ({ dispose() {} }), onExit: (listener) => { exit = listener; return { dispose() {} }; }, write() {}, resize() {}, kill() {} }) };
-    const exitService = new NativeSessionService({ store: exitStore, terminalManager: async () => new InteractiveTerminalManager(exitPty), getBinding: () => exited.binding, workspaceRoot: undefined, irPaths: { analysis: path.join(exited.dir, "analysis.json"), setup: undefined, context_enrichment: undefined }, warbleBin: "unused", artifactService: exitArtifacts, dispatch: materializeV4("analysis", "codex") });
+    const exitService = new NativeSessionService({ store: exitStore, terminalManager: async () => new InteractiveTerminalManager(exitPty), getBinding: () => exited.binding, workspaceRoot: undefined, irPaths: { analysis: path.join(exited.dir, "analysis.json"), setup: undefined, context_enrichment: undefined }, warbleBin: "unused", artifactService: exitArtifacts, dispatch: async ({ cwd, scope }) => writeNativeLaunchSpec(cwd, "analysis", "codex", scope, true) });
     await exitService.create({ purpose: "analysis", vendor: "codex" });
     const exitCredential = exitIssue.mock.results[0]?.value as { credential: string };
     exit({ exitCode: 1 });
     expect(exitArtifacts.hasCredential(exitCredential.credential)).toBe(false);
     exitStore.close();
+  });
 
+  it("revokes issued artifact credentials on initial attachment lease expiry", async () => {
     vi.useFakeTimers();
     try {
       const leased = fixture("analysis", "claude");
@@ -778,14 +779,16 @@ describe("native session persistence", () => {
       const leaseArtifacts = new NativeArtifactService({ store: leaseStore, artifactsRoot: path.join(leased.dir, "artifacts"), expectedMcpUrl: NATIVE_MCP_URL, mcpUrl: NATIVE_MCP_URL, getBinding: () => leased.binding });
       const leaseIssue = vi.spyOn(leaseArtifacts, "issue");
       const idle: PtyFactory = { spawn: () => ({ onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} }) };
-      const leaseService = new NativeSessionService({ store: leaseStore, terminalManager: async () => new InteractiveTerminalManager(idle), getBinding: () => leased.binding, workspaceRoot: undefined, irPaths: { analysis: path.join(leased.dir, "analysis.json"), setup: undefined, context_enrichment: undefined }, warbleBin: "unused", artifactService: leaseArtifacts, dispatch: materializeV4("analysis", "claude") });
+      const leaseService = new NativeSessionService({ store: leaseStore, terminalManager: async () => new InteractiveTerminalManager(idle), getBinding: () => leased.binding, workspaceRoot: undefined, irPaths: { analysis: path.join(leased.dir, "analysis.json"), setup: undefined, context_enrichment: undefined }, warbleBin: "unused", artifactService: leaseArtifacts, dispatch: async ({ cwd, scope }) => writeNativeLaunchSpec(cwd, "analysis", "claude", scope, true) });
       const created = await leaseService.create({ purpose: "analysis", vendor: "claude" });
       const leaseCredential = leaseIssue.mock.results[0]?.value as { credential: string };
       vi.advanceTimersByTime(NATIVE_SESSION_INITIAL_ATTACHMENT_GRACE_MS);
       expect(leaseArtifacts.hasCredential(leaseCredential.credential)).toBe(false);
       leaseStore.close();
     } finally { vi.useRealTimers(); }
+  });
 
+  it("revokes issued artifact credentials on creation failure", async () => {
     const failed = fixture("analysis", "codex");
     const failedStore = new Store(":memory:");
     const failedArtifacts = new NativeArtifactService({ store: failedStore, artifactsRoot: path.join(failed.dir, "artifacts"), expectedMcpUrl: NATIVE_MCP_URL, mcpUrl: NATIVE_MCP_URL, getBinding: () => failed.binding });
