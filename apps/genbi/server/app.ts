@@ -1057,17 +1057,19 @@ export function createApp(deps: TurnDeps) {
   // Native Sessions use their own durable namespace. Ask's `/api/sessions`
   // remains structured conversation storage and is never overloaded with PTYs.
   app.post("/api/native-sessions", async (c) => {
-    const body = await c.req.json().catch(() => ({})) as { purpose?: unknown; intent?: unknown; idempotencyKey?: unknown; sessionId?: unknown };
+    const body = await c.req.json().catch(() => ({})) as { purpose?: unknown; intent?: unknown; idempotencyKey?: unknown; sessionId?: unknown; entryVerb?: unknown };
+    if (!body || typeof body !== "object" || Array.isArray(body)) return c.json({ error: "native session launch request is invalid" }, 400);
     const intent = body.intent === undefined ? "open_existing" : body.intent;
     const requiresAction = intent === "start_separate" || intent === "resume";
-    const allowedKeys = intent === "start_separate" ? ["purpose", "intent", "idempotencyKey"] : intent === "resume" ? ["purpose", "intent", "sessionId", "idempotencyKey"] : ["purpose", "intent", "sessionId"];
+    const allowedKeys = intent === "start_separate" ? ["purpose", "intent", "idempotencyKey", "entryVerb"] : intent === "resume" ? ["purpose", "intent", "sessionId", "idempotencyKey"] : ["purpose", "intent", "sessionId"];
     if (!NATIVE_PURPOSES.includes(body.purpose as NativePurpose) || (intent !== "open_existing" && intent !== "start_separate" && intent !== "resume") || !Object.keys(body).every((key) => allowedKeys.includes(key)) || (requiresAction && (typeof body.idempotencyKey !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.idempotencyKey))) || ((intent === "resume" && (typeof body.sessionId !== "string" || !/^native-session-[0-9a-f-]{36}$/i.test(body.sessionId))) || (intent === "open_existing" && body.sessionId !== undefined && (typeof body.sessionId !== "string" || !/^native-session-[0-9a-f-]{36}$/i.test(body.sessionId))))) return c.json({ error: "native session launch request is invalid" }, 400);
+    if (body.entryVerb !== undefined && (body.purpose !== "analysis" || typeof body.entryVerb !== "string" || !["answer_query", "generate_dashboard"].includes(body.entryVerb))) return c.json({ error: "native session entry is invalid" }, 400);
     if (!deps.nativeSessions) return c.json({ error: "native sessions are not configured" }, 503);
     const runtimeCorrection = persistedRuntimeCorrection(deps);
     if (runtimeCorrection) return c.json({ error: runtimeCorrection, code: "runtime_correction_required" }, 409);
     try {
       const created = intent === "start_separate"
-        ? await deps.nativeSessions.startSeparate({ purpose: body.purpose as NativePurpose, idempotencyKey: body.idempotencyKey as string })
+        ? await deps.nativeSessions.startSeparate({ purpose: body.purpose as NativePurpose, idempotencyKey: body.idempotencyKey as string, ...(body.entryVerb !== undefined ? { entryVerb: body.entryVerb as string } : {}) })
         : intent === "resume"
           ? await deps.nativeSessions.resume({ id: body.sessionId as string, idempotencyKey: body.idempotencyKey as string })
         : typeof body.sessionId === "string"
@@ -1218,10 +1220,14 @@ export function createApp(deps: TurnDeps) {
     };
     if (request.method === "tools/list") return isNotification ? invalidRequest() : c.json({
       jsonrpc: "2.0", id,
-      result: { tools: nativeToolsForPurpose(nativeSession.purpose) },
+      result: { tools: [...nativeToolsForPurpose(nativeSession.purpose), ...(deps.nativeSessions?.componentTools(nativeSession.id) ?? [])] },
     });
     if (request.method !== "tools/call" || isNotification || !isRecord(request.params) || !Object.hasOwn(request.params, "arguments")) return methodNotFound();
     try {
+      if (typeof request.params.name === "string" && request.params.name.startsWith("warble_run_") && deps.nativeSessions && id !== null) {
+        const result = await deps.nativeSessions.callComponent(nativeSession.id, request.params.name, request.params.arguments, id, c.req.raw.signal);
+        return c.json({ jsonrpc: "2.0", id, result: { isError: result.status !== "ok", content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result } });
+      }
       if (nativeSession.purpose === "setup" && request.params.name === NATIVE_SETUP_RECOVERY_MCP_TOOL_NAME && deps.nativeSessions) {
         const recovery = deps.nativeSessions.reportSetupRecovery(nativeSession.id, request.params.arguments, isRecord(request.params.arguments) && request.params.arguments.state === "reported_complete" && validateNativeSetupCompletion(deps, request.params.arguments.phase === "context" ? "context" : "connect"));
         return c.json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify({ accepted: true, version: recovery.version }) }], structuredContent: { accepted: true, version: recovery.version } } });

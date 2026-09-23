@@ -106,6 +106,7 @@ export async function route(options: RouteOptions): Promise<RouteResult> {
   }
 
   const result = await runInProcess({
+    ...(options.signal !== undefined ? { signal: options.signal } : {}),
     authChoice,
     profileSource: options.profileSource,
     userProject: options.userProject,

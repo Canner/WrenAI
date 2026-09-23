@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtempSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -11,7 +11,7 @@ import { WARBLE_REPO } from "./warble-checkout.js";
 /** This package's own `profiles/` tree — the GenBI profiles now live here, not in a Warble checkout. */
 const PROFILES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "profiles");
 
-const WARBLE_BIN = path.join(WARBLE_REPO, "target", "release", "warble");
+const WARBLE_BIN = process.env.WARBLE_TEST_CLI ?? path.join(WARBLE_REPO, "target", "release", "warble");
 const SETUP_IR = path.join(PROFILES_DIR, "genbi-setup", "ir.golden.json");
 const canRun = existsSync(WARBLE_BIN) && existsSync(SETUP_IR);
 
@@ -31,7 +31,10 @@ describe.skipIf(!canRun)("native launch spec helper matches the real dispatcher 
   it("reproduces the v4 spec warble emits for a setup session", () => {
     const out = mkdtempSync(path.join(tmpdir(), "genbi-launch-contract-"));
     const bootstrapRoot = realpathSync(mkdtempSync(path.join(tmpdir(), "genbi-launch-bootstrap-")));
+    try {
     const scopePath = path.join(out, "scope.json");
+    const mcpPath = path.join(out, "mcp.json");
+    writeFileSync(mcpPath, JSON.stringify({ version: "1", url: "http://127.0.0.1:0/api/native-sessions/mcp", credential: "synthetic-nonsecret" }));
     const entryVerb = "connect_source";
     const welcome = "Contract-test first turn.";
     const scope = {
@@ -47,13 +50,13 @@ describe.skipIf(!canRun)("native launch spec helper matches the real dispatcher 
 
     execFileSync(WARBLE_BIN, [
       "dispatch", SETUP_IR, "--target", "claude-code:interactive",
-      "--out", realpathSync(out), "--purpose", "setup", "--native-scope", scopePath,
+      "--out", realpathSync(out), "--purpose", "setup", "--native-scope", scopePath, "--native-mcp", mcpPath,
     ], { stdio: "pipe" });
 
     const emitted = JSON.parse(readFileSync(path.join(realpathSync(out), ".warble", "interactive-launch.json"), "utf-8"));
     const expected = buildNativeLaunchSpec({
-      version: "2", target: "claude-code:interactive", purpose: "setup",
-      out: realpathSync(out), scope: emitted.scope, entryVerb,
+      version: "4", target: "claude-code:interactive", purpose: "setup",
+      out: realpathSync(out), scope: { ...scope, bootstrap_root: bootstrapRoot }, entryVerb, welcome,
     });
 
     // argv and agent are the contract the host validates byte-for-byte; comparing them alone keeps
@@ -61,5 +64,6 @@ describe.skipIf(!canRun)("native launch spec helper matches the real dispatcher 
     expect(emitted.argv).toEqual(expected.argv);
     expect(emitted.agent).toEqual(expected.agent);
     expect(emitted.version).toEqual(expected.version);
+    } finally { rmSync(out, { recursive: true, force: true }); rmSync(bootstrapRoot, { recursive: true, force: true }); }
   });
 });

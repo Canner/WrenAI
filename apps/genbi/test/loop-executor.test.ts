@@ -12,7 +12,7 @@ import {
 } from "../harness/loop/index.js";
 import { createDefaultProviderRegistry, MOCK_ADAPTER_ID } from "../harness/providers/index.js";
 import type { TierBinding } from "../harness/providers/index.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 import { buildSyntheticBundle } from "./synthetic-bundle.js";
 
 // Captures every `settings` object handed to the real `ToolLoopAgent`
@@ -75,7 +75,7 @@ function wentThroughToolLoop(call: LanguageModelV4CallOptions): boolean {
 
 describe("executeAgent (loop executor)", () => {
   it("sequences answer_query's steps by dataflow (consumes/produces), threading query_intent into generate_sql", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const agent = bundle.agents.find((candidate) => candidate.id === "answer_query")!;
 
     const cheapCalls: LanguageModelV4CallOptions[] = [];

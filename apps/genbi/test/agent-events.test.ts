@@ -18,7 +18,7 @@ import { runDispatchedDefault } from "../harness/route/index.js";
 import { runAgent } from "../harness/session/index.js";
 import type { RunAgentContext } from "../harness/session/index.js";
 import { WRITE_ARTIFACT_TOOL_NAME } from "../harness/tools/index.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 import { mockWrenServerConfig } from "./mock-mcp-server.js";
 import { buildSyntheticBundle } from "./synthetic-bundle.js";
 
@@ -260,7 +260,7 @@ describe("executeAgent: step.*/tool.*/artifact events", () => {
 
 describe("runAgent: run.start/answer/refusal/run.finish/error events, runId+seq bookkeeping", () => {
   it("emits a fully-stamped run.start -> ... -> answer -> run.finish(status: answer) sequence on the happy path", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const binding = buildAnswerQueryBinding([
       toolCallResult("query", "call-1", { sql: "select * from customers" }),
       textResult(VERIFIED_QUERY_RESULT_TEXT),
@@ -302,7 +302,7 @@ describe("runAgent: run.start/answer/refusal/run.finish/error events, runId+seq 
     // satisfied by a real successful `query` tool call, regardless of what
     // the render output separately claims about "verified" (see the matching
     // test in test/run-agent.test.ts for the full rationale).
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const binding = buildAnswerQueryBinding([
       toolCallResult("query", "call-1", { sql: "select * from customers" }),
       textResult(UNVERIFIED_QUERY_RESULT_TEXT),
@@ -323,7 +323,7 @@ describe("runAgent: run.start/answer/refusal/run.finish/error events, runId+seq 
   });
 
   it("emits error + run.finish(status: error) and still rethrows when the rendered envelope fails output_schema validation", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const malformedEnvelopeJson = JSON.stringify({ summary: "no blocks here", verified: true });
     // Not a flat table shape (no JSON at all), so the direct fast path skips
     // it and the render-LLM path actually runs, hitting the malformed JSON
@@ -349,7 +349,7 @@ describe("runAgent: run.start/answer/refusal/run.finish/error events, runId+seq 
 
 describe("runAgent: FLOOR StepTrace", () => {
   it("accumulates a populated StepTrace from tool call outcomes, independent of whether onEvent is set", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const binding = buildAnswerQueryBinding([
       toolCallResult("query", "call-1", { sql: "select * from customers" }),
       textResult(VERIFIED_QUERY_RESULT_TEXT),
@@ -372,7 +372,7 @@ describe("runAgent: FLOOR StepTrace", () => {
   });
 
   it("a SQL-repair retry's TraceSteps carry input + a compact detail — the error step shows the failing SQL and why it failed, the success step shows the retried SQL and a compact result summary", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const finalText = JSON.stringify({
       columns: ["customer", "revenue"],
       rows: [["Acme", 1000]],
@@ -417,7 +417,7 @@ describe("runAgent: FLOOR StepTrace", () => {
 
 describe("mode-parity: in-process vs dispatched emit the same shape for the kinds both can drive hermetically", () => {
   it("run.start/run.finish/error share the same field set across modes, differing only in mode/status/content", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const binding = buildAnswerQueryBinding([
       toolCallResult("query", "call-1", { sql: "select * from customers" }),
       textResult(VERIFIED_QUERY_RESULT_TEXT),

@@ -1,13 +1,12 @@
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult, LanguageModelV4Usage } from "@ai-sdk/provider";
 import { describe, expect, it } from "vitest";
-import { loadBundle } from "../harness/bundle/loader.js";
 import { MOCK_ADAPTER_ID } from "../harness/providers/index.js";
 import { buildHybridTierBinding } from "../harness/route/index.js";
 import { filterTierBindingForAgent } from "../harness/route/in-process.js";
 import { route } from "../harness/route/index.js";
 import type { AuthChoice } from "../harness/auth/index.js";
 import { mockWrenServerConfig } from "./mock-mcp-server.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 
 const EMPTY_USAGE: LanguageModelV4Usage = {
   inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
@@ -58,7 +57,7 @@ function scriptedTurns(turns: LanguageModelV4GenerateResult[]) {
 }
 
 describe("buildHybridTierBinding", () => {
-  const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+  const bundle = loadLegacyFixture("genbi-default.bundle.json");
   const answerQuery = bundle.agents.find((agent) => agent.id === "answer_query")!;
 
   it("builds a TierBinding as-is when every agent tier is bound exactly once", () => {
@@ -100,7 +99,7 @@ describe("buildHybridTierBinding", () => {
 
 describe("hybrid in-process: route() with a non-uniform tierBinding", () => {
   it("routes each step to its own bound adapter — cheap and strong hit distinctly scripted mocks", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
 
     const { calls: cheapCalls, doGenerate: cheapGenerate } = scriptedTurns([
       textResult("intent: top customer by revenue"),
@@ -135,7 +134,7 @@ describe("hybrid in-process: route() with a non-uniform tierBinding", () => {
   });
 
   it("loud-fails before running anything when a declared tier is left unbound", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const authChoice: AuthChoice = { mode: "api-key", adapter: MOCK_ADAPTER_ID };
 
     await expect(

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { shutdownNativeResources } from "./native-shutdown.js";
 /**
  * The BFF's process entrypoint. This is the ONLY file
  * in `server/` that wires real production values (env vars, a real `Store`
@@ -730,6 +731,19 @@ async function main(): Promise<void> {
   const server = serve({ fetch: app.fetch, websocket: { server: websocket as never }, hostname: "127.0.0.1", port }, (info) => {
     process.stdout.write(`wren-harness BFF listening on http://127.0.0.1:${info.port} (db: ${dbPath})\n`);
   });
+  const shutdown = () => {
+    const deadline = setTimeout(() => process.exit(1), 12_000);
+    void shutdownNativeResources({
+      shutdownSessions: () => nativeSessions.shutdown(),
+      closeTerminals: () => interactiveTerminal?.closeAll(),
+      closeServer: () => { server.close(); },
+    }).then((code) => {
+      if (code) process.stderr.write("error: native session cleanup did not complete\n");
+      clearTimeout(deadline); process.exit(code);
+    });
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
   // Without this, a port that is already taken surfaces as an unhandled 'error' event and a raw
   // Node stack trace -- the first thing a new user is likely to hit, and the least readable.
   server.on("error", (error: NodeJS.ErrnoException) => {

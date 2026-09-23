@@ -1,10 +1,9 @@
 import type { LanguageModelV4CallOptions } from "@ai-sdk/provider";
 import { describe, expect, it } from "vitest";
-import { loadBundle } from "../harness/bundle/loader.js";
 import { createDefaultProviderRegistry, MOCK_ADAPTER_ID } from "../harness/providers/index.js";
 import type { TierBinding } from "../harness/providers/index.js";
 import { getAllowedBlockTypes, isTableOnlySchema, renderEnvelope } from "../harness/render/index.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 
 /**
  * Blocker 2: the `toolTable` seed (table-only) used to fire
@@ -48,7 +47,7 @@ function bindingForText(responses: readonly string[]): { binding: TierBinding; c
   return { binding, calls };
 }
 
-const bundle = loadBundle(readFixture("genbi-default.native.bundle.json"));
+const bundle = loadLegacyFixture("genbi-default.native.bundle.json");
 function agentOf(id: string) {
   const agent = bundle.agents.find((candidate) => candidate.id === id);
   if (!agent) throw new Error(`fixture missing "${id}" agent`);

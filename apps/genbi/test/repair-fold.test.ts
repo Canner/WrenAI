@@ -7,7 +7,7 @@ import { createDefaultProviderRegistry, MOCK_ADAPTER_ID } from "../harness/provi
 import type { TierBinding } from "../harness/providers/index.js";
 import { resolveTools } from "../harness/tools/index.js";
 import { mockWrenServerConfig } from "./mock-mcp-server.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 import { buildSyntheticBundle } from "./synthetic-bundle.js";
 
 const EMPTY_USAGE: LanguageModelV4Usage = {
@@ -75,7 +75,7 @@ function buildBinding(
 
 describe("executeAgent repair_fold", () => {
   it("recovers after exactly one repair attempt when the tool fails once then succeeds", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const agent = bundle.agents.find((candidate) => candidate.id === "answer_query")!;
 
     const resolved = await resolveTools(agent, {
@@ -123,7 +123,7 @@ describe("executeAgent repair_fold", () => {
   });
 
   it("loud-fails with RepairExhaustedError when the tool keeps failing past max_attempts", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const agent = bundle.agents.find((candidate) => candidate.id === "answer_query")!;
 
     const resolved = await resolveTools(agent, {

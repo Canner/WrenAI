@@ -326,6 +326,12 @@ QuietOpt = Annotated[
         help="Suppress informational tips (e.g. store hints after query).",
     ),
 ]
+ReadOnlyOpt = Annotated[
+    bool,
+    typer.Option(
+        "--read-only", help="Require one governed read-only analytical query."
+    ),
+]
 
 
 def _print_store_tip(sql: str) -> None:
@@ -380,6 +386,7 @@ def main(
     limit: LimitOpt = None,
     output: OutputOpt = "table",
     quiet: QuietOpt = False,
+    read_only: ReadOnlyOpt = False,
     version: Annotated[
         Optional[bool],
         typer.Option(
@@ -427,7 +434,9 @@ def main(
         return
     with _build_engine(mdl, connection_info, connection_file) as engine:
         try:
-            result = engine.query(sql, limit=limit)
+            result = engine.query(
+                sql, limit=limit, **({"read_only": True} if read_only else {})
+            )
         except Exception as e:
             typer.echo(f"Error: {e}", err=True)
             raise typer.Exit(1)
@@ -436,6 +445,20 @@ def main(
 
 
 # ── Subcommands ────────────────────────────────────────────────────────────
+
+
+@app.command(name="governed-stdio", hidden=True)
+def governed_stdio(
+    project: Annotated[Path, typer.Option("--project")],
+):
+    """Serve typed, read-only operations for a host-selected project."""
+    from wren.governed_stdio import serve  # noqa: PLC0415
+
+    try:
+        serve(project)
+    except Exception:
+        typer.echo("Governed Wren access is unavailable.", err=True)
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -447,11 +470,14 @@ def query(
     limit: LimitOpt = None,
     output: OutputOpt = "table",
     quiet: QuietOpt = False,
+    read_only: ReadOnlyOpt = False,
 ):
     """Execute a SQL query through the Wren semantic layer."""
     with _build_engine(mdl, connection_info, connection_file) as engine:
         try:
-            result = engine.query(sql, limit=limit)
+            result = engine.query(
+                sql, limit=limit, **({"read_only": True} if read_only else {})
+            )
         except Exception as e:
             typer.echo(f"Error: {e}", err=True)
             raise typer.Exit(1)

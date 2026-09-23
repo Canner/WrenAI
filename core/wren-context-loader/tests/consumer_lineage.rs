@@ -8,7 +8,7 @@
 use std::fs;
 use std::path::Path;
 
-use warble::{ContextLoader, Severity};
+use warble::ContextLoader;
 use wren_context_loader::{read_project_dir, MdlContext};
 
 fn write(dir: &Path, rel: &str, contents: &str) {
@@ -95,9 +95,7 @@ fn no_consumer_files_means_no_consumer_nodes_and_no_diagnostics() {
         "a project without consumer artifacts must not grow consumer nodes"
     );
     // A metric is still a leaf here — the pre-consumer behavior, unchanged.
-    let radius = ctx
-        .lineage()
-        .blast_radius("metric:order_metrics.total_value");
+    let radius = impact(&ctx, "metric:order_metrics.total_value");
     assert!(radius.downstream.is_empty());
 }
 
@@ -116,22 +114,17 @@ fn confirmed_query_over_a_cube_makes_the_metric_reach_the_query() {
     assert!(ctx.lineage().contains("query:total-by-day"));
     // The query references the cube as a relation → cube edge; it mentions the measure and the
     // time dimension by name → metric/dim edges.
-    let radius = ctx
-        .lineage()
-        .blast_radius("metric:order_metrics.total_value");
+    let radius = impact(&ctx, "metric:order_metrics.total_value");
     assert_eq!(
         radius.downstream,
         vec!["query:total-by-day".to_string()],
         "the declared metric is no longer a leaf"
     );
     assert_eq!(
-        radius.severity,
-        Severity::Semantic,
+        radius.severity.rank, 3,
         "hitting a consumer is a silent number shift for the end user"
     );
-    assert!(ctx
-        .lineage()
-        .blast_radius("dim:order_metrics.placed_at")
+    assert!(impact(&ctx, "dim:order_metrics.placed_at")
         .downstream
         .contains(&"query:total-by-day".to_string()));
 }
@@ -149,8 +142,7 @@ fn confirmed_query_over_models_hangs_off_each_referenced_model() {
 
     for model in ["model:orders", "model:customers"] {
         assert!(
-            ctx.lineage()
-                .blast_radius(model)
+            impact(&ctx, model)
                 .downstream
                 .contains(&"query:orders-per-country".to_string()),
             "{model} must reach the confirmed query"
@@ -182,17 +174,13 @@ fn dashboard_declared_cube_panel_links_cube_and_measures() {
     assert!(ctx.lineage().is_resolvable());
 
     // Declared cube panel: metric → dashboard.
-    let radius = ctx
-        .lineage()
-        .blast_radius("metric:order_metrics.total_value");
+    let radius = impact(&ctx, "metric:order_metrics.total_value");
     assert_eq!(radius.downstream, vec!["dashboard:exec-weekly".to_string()]);
-    assert_eq!(radius.severity, Severity::Semantic);
+    assert_eq!(radius.severity.rank, 3);
 
     // SQL panel: model → dashboard. And the full chain: the base model reaches the dashboard
     // through the cube AND directly counts it once (deduplicated edges).
-    assert!(ctx
-        .lineage()
-        .blast_radius("model:customers")
+    assert!(impact(&ctx, "model:customers")
         .downstream
         .contains(&"dashboard:exec-weekly".to_string()));
 }
@@ -230,8 +218,7 @@ fn unparseable_consumer_sql_falls_back_to_whole_word_scan_and_is_recorded() {
     let ctx = load(tmp.path());
 
     assert!(
-        ctx.lineage()
-            .blast_radius("model:orders")
+        impact(&ctx, "model:orders")
             .downstream
             .contains(&"query:broken".to_string()),
         "fallback whole-word scan must still bind the query to `orders`"
@@ -276,7 +263,7 @@ fn driftwood_metric_reaches_its_query_and_dashboard() {
         ctx.lineage_diagnostics().is_empty(),
         "driftwood consumer fixtures parse cleanly"
     );
-    let radius = ctx.lineage().blast_radius("metric:mrr_metrics.mrr");
+    let radius = impact(&ctx, "metric:mrr_metrics.mrr");
     assert!(
         radius.downstream.contains(&"query:mrr-trend".to_string()),
         "downstream was: {:?}",
@@ -289,15 +276,35 @@ fn driftwood_metric_reaches_its_query_and_dashboard() {
         "downstream was: {:?}",
         radius.downstream
     );
-    assert_eq!(radius.severity, Severity::Semantic);
+    assert_eq!(radius.severity.rank, 3);
 
     // The SQL panel binds the dashboard to the models it queries.
-    assert!(ctx
-        .lineage()
-        .blast_radius("model:orders")
+    assert!(impact(&ctx, "model:orders")
         .downstream
         .contains(&"dashboard:exec-weekly".to_string()));
 
     // And the whole graph still resolves (no dangling consumer references in the fixtures).
     assert!(ctx.lineage().is_resolvable());
+}
+
+fn impact(ctx: &MdlContext, seed: &str) -> warble::HostImpact {
+    ctx.host_analysis()
+        .expect("Wren supplies impact analysis")
+        .impact
+        .get(seed)
+        .expect("declared seed")
+        .clone()
+}
+
+#[test]
+fn prepared_v2_preserves_host_analysis_and_consumer_totals() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/driftwood-wren");
+    let ctx = load(&dir);
+    let document = wren_context_loader::prepared_document(&ctx).unwrap();
+    let parsed = warble::PreparedContext::from_json(&document).unwrap();
+    assert_eq!(parsed.host_analysis(), ctx.host_analysis());
+    let counts = parsed.host_analysis().unwrap().consumers.unwrap();
+    assert!(counts.queries >= 2);
+    assert_eq!(counts.dashboards, 1);
+    assert!(MdlContext::unparseable().host_analysis().is_none());
 }

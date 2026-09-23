@@ -1,10 +1,9 @@
 import type { LanguageModelV4CallOptions } from "@ai-sdk/provider";
 import { describe, expect, it } from "vitest";
-import { loadBundle } from "../harness/bundle/loader.js";
 import { createDefaultProviderRegistry, MOCK_ADAPTER_ID } from "../harness/providers/index.js";
 import type { TierBinding } from "../harness/providers/index.js";
 import { EnvelopeParseError, EnvelopeSchemaError, renderEnvelope } from "../harness/render/index.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 
 /**
  * `renderEnvelope` now synthesizes via `generateText` (provider-agnostic,
@@ -60,7 +59,7 @@ const NON_RENDERABLE_ARTIFACTS = new Map<string, unknown>([
 ]);
 
 describe("renderEnvelope (generateText + robust JSON extraction)", () => {
-  const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+  const bundle = loadLegacyFixture("genbi-default.bundle.json");
   const agent = bundle.agents.find((candidate) => candidate.id === "answer_query");
   if (!agent) throw new Error("fixture missing answer_query agent");
 
@@ -164,7 +163,7 @@ describe("renderEnvelope (generateText + robust JSON extraction)", () => {
  * shape (no LLM call at all) is covered separately below.
  */
 describe("renderEnvelope (flat answer_query shape -> {blocks} normalization)", () => {
-  const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+  const bundle = loadLegacyFixture("genbi-default.bundle.json");
   const agent = bundle.agents.find((candidate) => candidate.id === "answer_query");
   if (!agent) throw new Error("fixture missing answer_query agent");
 
@@ -264,7 +263,7 @@ describe("renderEnvelope (flat answer_query shape -> {blocks} normalization)", (
  * the fast path is to skip that call.
  */
 describe("renderEnvelope (deterministic direct-render fast path)", () => {
-  const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+  const bundle = loadLegacyFixture("genbi-default.bundle.json");
   const agent = bundle.agents.find((candidate) => candidate.id === "answer_query");
   if (!agent) throw new Error("fixture missing answer_query agent");
 
@@ -360,7 +359,7 @@ describe("renderEnvelope (deterministic direct-render fast path)", () => {
  * the render LLM is never called — asserted via the mock's call log.
  */
 describe("renderEnvelope (deterministic tool-result render seed)", () => {
-  const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+  const bundle = loadLegacyFixture("genbi-default.bundle.json");
   const agent = bundle.agents.find((candidate) => candidate.id === "answer_query");
   if (!agent) throw new Error("fixture missing answer_query agent");
 

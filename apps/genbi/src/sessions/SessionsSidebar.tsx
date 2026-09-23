@@ -22,12 +22,14 @@ function NewSessionControl({ live, readiness }: { live: boolean; readiness?: Nat
   const sessions = useNativeSessions((state) => state.sessions);
   const [open, setOpen] = useState(false);
   const [purpose, setPurpose] = useState<NativeSessionPurpose>('analysis');
+  const [entryVerb, setEntryVerb] = useState<'answer_query' | 'generate_dashboard'>('answer_query');
   const [error, setError] = useState<string>();
   const [creating, setCreating] = useState(false);
   const [refreshingExisting, setRefreshingExisting] = useState(false);
   const purposeMap = readiness?.purposes ?? (readiness as unknown as Record<NativeSessionPurpose, NativeSessionReadiness['purposes'][NativeSessionPurpose]> | undefined);
   const purposeReadiness = purposeMap?.[purpose];
   const available = Boolean(purposeReadiness?.available);
+  const selectEntry = purpose === 'analysis' && purposeReadiness?.target === 'codex:interactive';
   // Do not render a cached detached row as reopenable while the authoritative
   // BFF list is being refreshed. This is a one-shot popover-open check, not a
   // poll; an idle TTL must be able to remove the action immediately.
@@ -43,7 +45,7 @@ function NewSessionControl({ live, readiness }: { live: boolean; readiness?: Nat
     if (reason) { setError(reason); return; }
     setCreating(true); setError(undefined);
     try {
-      const session = await createSession(purpose, undefined, 'sessions-new');
+      const session = await createSession(purpose, undefined, 'sessions-new', selectEntry ? entryVerb : undefined);
       setOpen(false); navigate(`/sessions/${session.id}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'A native session could not be started.');
@@ -83,6 +85,13 @@ function NewSessionControl({ live, readiness }: { live: boolean; readiness?: Nat
           {newSessionPurposes.map((item) => <Radio key={item} value={item}>{purposeLabels[item]}</Radio>)}
         </Space>
       </Radio.Group>
+      {selectEntry ? <fieldset disabled={creating}>
+        <legend>Start with</legend>
+        <Radio.Group name="native-session-entry" value={entryVerb} onChange={(event) => setEntryVerb(event.target.value)} aria-label="Session entry">
+          <Space orientation="vertical"><Radio value="answer_query">Answer a question</Radio><Radio value="generate_dashboard">Build a dashboard</Radio></Space>
+        </Radio.Group>
+        <Typography.Paragraph type="secondary">This session keeps the selected entry. Start another session to change it.</Typography.Paragraph>
+      </fieldset> : null}
       <Typography.Text type="secondary">Runtime target: {purposeReadiness?.targetLabel ?? 'not configured'} · {purposeReadiness?.profile ?? 'no dispatch profile'}</Typography.Text>
       {purposeReadiness?.reason ? <Typography.Text type="secondary">{purposeReadiness.reason}</Typography.Text> : null}
       {existing.length ? <section className="sessions-new-existing" aria-label="Open existing native sessions">

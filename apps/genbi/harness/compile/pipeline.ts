@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +11,7 @@ import { hashDirectory, hashFiles } from "./fingerprint.js";
 import { resolveHubDir, resolveWarbleBinary } from "./resolve-binary.js";
 import type { CompileCacheKey, CompileProfileOptions, CompileProfileResult, CompileRawProfileOptions } from "./types.js";
 import { getBinaryIdentity, getWarbleIdentity } from "./warble-identity.js";
+import { planDigest, VERCEL_HOST_CONTRACT } from "../components/plan.js";
 
 /** Fixed `providerFragmentHash` for `"native"` mode, which never reads `--provider` fragments at all. */
 const NATIVE_MODE_PROVIDER_HASH = "native:no-providers";
@@ -142,7 +143,7 @@ async function compileProfileSource(
   const profileHash = await hashDirectory(path.resolve(options.profileSource));
 
   const providerPaths = options.providers ?? [DEFAULT_WREN_PROVIDER_PATH];
-  const providerFragmentHash = options.mode === "agnostic" ? await hashFiles(providerPaths) : NATIVE_MODE_PROVIDER_HASH;
+  const providerFragmentHash = options.mode === "agnostic" ? `${await hashFiles(providerPaths)}:${planDigest(VERCEL_HOST_CONTRACT)}` : NATIVE_MODE_PROVIDER_HASH;
 
   // Resolving `warble` is memoized here so it happens at most once per call no matter how many of
   // the two spots below need it (identity computation, and — on a miss — actually running it).
@@ -208,7 +209,12 @@ async function compileProfileSource(
     if (options.mode === "agnostic") {
       const bundleOutDir = path.join(workDir, "bundle");
       const providerArgs = providerPaths.flatMap((provider) => ["--provider", provider]);
-      await runWarble(warbleBin, ["dispatch", "--target", "vercel", ...providerArgs, irPath, "--out", bundleOutDir]);
+      const ir = JSON.parse(await readFile(irPath, "utf8")) as { components: { llm_calls: { component_calls?: unknown[] }[] }[] };
+      const composed = ir.components.some((component) => component.llm_calls.some((step) => (step.component_calls?.length ?? 0) > 0));
+      const hostPath = path.join(workDir, "component-host.json");
+      if (composed) await writeFile(hostPath, JSON.stringify(VERCEL_HOST_CONTRACT), { mode: 0o600 });
+      await runWarble(warbleBin, ["dispatch", "--target", "vercel", ...providerArgs,
+        ...(composed ? ["--host-contract", hostPath] : []), irPath, "--out", bundleOutDir]);
       bundlePath = path.join(bundleOutDir, "bundle.json");
     }
 

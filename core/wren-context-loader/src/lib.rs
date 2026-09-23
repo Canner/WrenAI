@@ -23,6 +23,7 @@
 //! Both go through the same projection, so the two cannot disagree about what the project says.
 
 mod consumers;
+mod impact;
 mod introspect;
 mod lineage;
 mod project;

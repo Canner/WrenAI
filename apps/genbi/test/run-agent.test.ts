@@ -1,13 +1,12 @@
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult, LanguageModelV4Usage } from "@ai-sdk/provider";
 import { describe, expect, it } from "vitest";
-import { loadBundle } from "../harness/bundle/loader.js";
 import { createDefaultCapabilityRegistry } from "../harness/capability/registry.js";
 import { createDefaultProviderRegistry, MOCK_ADAPTER_ID } from "../harness/providers/index.js";
 import type { TierBinding } from "../harness/providers/index.js";
 import { runAgent } from "../harness/session/index.js";
 import type { RunAgentContext } from "../harness/session/index.js";
 import { mockWrenServerConfig } from "./mock-mcp-server.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 
 const EMPTY_USAGE: LanguageModelV4Usage = {
   inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
@@ -99,7 +98,7 @@ const UNVERIFIED_QUERY_RESULT_TEXT = JSON.stringify({
 
 describe("runAgent (end-to-end)", () => {
   it("returns an AnswerResult whose envelope validates against output_schema on the happy path", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
 
     const { binding, strongCalls } = buildBinding([
       toolCallResult("query", "call-1", { sql: "select * from customers" }),
@@ -134,7 +133,7 @@ describe("runAgent (end-to-end)", () => {
     // gate requires) — regardless of what the render output separately
     // claims about "verified". The still-refuses case (no successful query
     // call at all) is covered by the test right below.
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
 
     const { binding } = buildBinding([
       toolCallResult("query", "call-1", { sql: "select * from customers" }),
@@ -154,7 +153,7 @@ describe("runAgent (end-to-end)", () => {
   });
 
   it("forces a refusal on a fabricated verified:true when the run had zero successful query tool calls", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
 
     // The model never calls the `query` tool at all — generate_sql's tool-loop
     // turn finishes on plain text — yet the render stage still asserts
@@ -184,7 +183,7 @@ describe("runAgent (end-to-end)", () => {
   });
 
   it("rejects when the model's envelope response doesn't validate against output_schema", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
 
     // Missing the required "blocks" property entirely.
     const malformedEnvelopeJson = JSON.stringify({ summary: "no blocks here", verified: true });
@@ -204,7 +203,7 @@ describe("runAgent (end-to-end)", () => {
   });
 
   it("explain_change earns verified:true from a real successful query call, even when the render LLM doesn't self-attest it", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
 
     // explain_change's output_schema is narrative-only ({blocks: [{type: "narrative", ...}]}),
     // so the toolTable seed (which is table-shaped) never validates against it and the run
@@ -240,7 +239,7 @@ describe("runAgent (end-to-end)", () => {
   });
 
   it("explain_change still refuses when the run has zero successful query tool calls, even if the render LLM fabricates verified:true", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
 
     const fabricatedEnvelopeJson = JSON.stringify({
       blocks: [{ type: "narrative", text: "Revenue dropped due to seasonality." }],
@@ -288,7 +287,7 @@ describe("runAgent (end-to-end)", () => {
     // "panel_results" entry, so the fixture now loads directly with no
     // in-memory patch and the scenario this test targets (a real query
     // failure, `build_dashboard` never called) is reachable as-is.
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
 
     let strongIndex = 0;
     const strongTurns: LanguageModelV4GenerateResult[] = [

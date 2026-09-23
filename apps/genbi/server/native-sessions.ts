@@ -1,3 +1,5 @@
+import { runNativeDispatchProcess } from "./native-dispatch-process.js";
+import { NativeComponentAdmission, nativeComponentHostContract, readNativeComponentPlans, type NativeComponentPreparation, type NativeComponentReceipt } from "./native-components.js";
 /**
  * Durable native-session control plane.  SQLite owns identity/lifecycle;
  * the PTY remains deliberately process-local and contains the only replay.
@@ -7,6 +9,7 @@ import { spawn } from "node:child_process";
 import { accessSync, chmodSync, constants, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { WarbleBinaryNotFoundError } from "../harness/compile/errors.js";
 import type { EnrichmentBinding } from "./enrichment.js";
 import { InteractiveLaunchError, InteractiveTerminalManager, NO_INTERACTIVE_TERMINAL_LEASES } from "./interactive-terminal.js";
@@ -243,6 +246,14 @@ export type NativeSessionReadiness = {
 const entryVerbFor = (purpose: NativePurpose): string =>
   purpose === "analysis" ? "answer_query" : purpose === "setup" ? "connect_source" : "draft_enrichment";
 
+/** User-selected analysis entry is a single pin; it never widens Claude scope. */
+export function selectedNativeEntry(purpose: NativePurpose, vendor: NativeVendor, entryVerb?: string | null): string | undefined {
+  if (entryVerb != null && (vendor !== "codex" || purpose !== "analysis" || !["answer_query", "generate_dashboard"].includes(entryVerb))) {
+    throw new InteractiveLaunchError("native session entry is invalid");
+  }
+  return vendor === "codex" && purpose === "analysis" ? entryVerb ?? "answer_query" : undefined;
+}
+
 const agentFor = (purpose: NativePurpose, vendor: NativeVendor): string =>
   vendor === "claude" ? entryVerbFor(purpose) : `genbi-${purpose === "context_enrichment" ? "enrich-context" : purpose}`;
 
@@ -279,10 +290,11 @@ const claudeScopeEntry = (purpose: NativePurpose, vendor: NativeVendor): boolean
 const nativeEntryFor = (
   purpose: NativePurpose,
   vendor: NativeVendor,
+  entryVerb?: string,
 ): { readonly kind: "scope"; readonly prompt: string } | { readonly verb: string; readonly prompt: string } =>
   claudeScopeEntry(purpose, vendor)
     ? { kind: "scope", prompt: welcomePromptFor(purpose) }
-    : { verb: entryVerbFor(purpose), prompt: welcomePromptFor(purpose) };
+    : { verb: selectedNativeEntry(purpose, vendor, entryVerb) ?? entryVerbFor(purpose), prompt: welcomePromptFor(purpose) };
 
 /** Closed producer/host contract for the one initial native TUI prompt. */
 const welcomePromptFor = (purpose: NativePurpose): string => {
@@ -371,7 +383,19 @@ export interface NativeSessionServiceOptions {
   readonly startSeparateReplayLimit?: number;
   /** Test seam for the fixed, server-owned Warble dispatch only. */
   readonly dispatch?: (input: NativeDispatchInput) => Promise<void>;
+  /** File-only producer probe. Supplied together with a certified component provisioner. */
+  readonly prepareComponentProbe?: NativeComponentProbe;
+  /** No production default: a separately certified same-account step runtime is required. */
+  readonly prepareComponents?: (input: {
+    readonly session: NativeSessionRow; readonly binding: EnrichmentBinding;
+    readonly irDocument: string; readonly scope: Readonly<Record<string, unknown>>;
+  }) => Promise<NativeComponentPreparation | undefined>;
 }
+
+export type NativeComponentProbe = (input: {
+  readonly vendor: NativeVendor; readonly purpose: NativePurpose;
+  readonly irDocument: string; readonly scope: Readonly<Record<string, unknown>>;
+}) => NativeComponentPreparation | undefined;
 
 export interface NativeDispatchInput {
   readonly warbleBin: string;
@@ -386,6 +410,8 @@ export interface NativeDispatchInput {
   /** Exact v4 MCP descriptor, transported separately through --native-mcp. */
   readonly mcp?: NativeMcpDescriptor;
   readonly env: NativeChildEnvironment;
+  readonly componentHost?: Readonly<Record<string, unknown>>;
+  readonly signal?: AbortSignal;
 }
 
 interface StartSeparateReplay {
@@ -405,6 +431,7 @@ function resumeScopeFingerprint(row: NativeSessionRow): string {
     row.id, row.purpose, row.vendor, row.scopeKind, row.projectIdentity,
     row.bindingGeneration, row.projectRevision, row.dispatchProfile,
     row.dispatchTarget, row.runtimeGeneration,
+    ...(row.entryVerb && row.entryVerb !== "answer_query" ? [row.entryVerb] : []),
   ])).digest("hex");
 }
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -672,6 +699,7 @@ function runNativeProbe(command: NativeExecutableIdentity, args: readonly string
  * validator used just before a PTY starts.
  */
 export async function probeNativeSessionProducer(input: {
+  readonly prepareComponents?: NativeComponentProbe;
   readonly warbleBin: string;
   readonly irPaths: Readonly<Record<NativePurpose, string | undefined>>;
   readonly wrenShim?: string;
@@ -711,10 +739,14 @@ export async function probeNativeSessionProducer(input: {
   const vendors = {} as Record<NativeVendor, NativeProducerVendorProbe>;
   for (const vendor of NATIVE_PROBE_TARGETS) {
     let outcome: NativeProducerVendorProbe = { available: true, diagnostic: producerDiagnostic(identity, `complete_${vendor}`, "result=compatible") };
-    for (const purpose of NATIVE_PURPOSES) {
+    const probes = NATIVE_PURPOSES.flatMap<{ purpose: NativePurpose; entryVerb: string | undefined }>((purpose) =>
+      purpose === "analysis" && vendor === "codex" && input.prepareComponents
+        ? [{ purpose, entryVerb: "answer_query" }, { purpose, entryVerb: "generate_dashboard" }]
+        : [{ purpose, entryVerb: undefined }]);
+    for (const { purpose, entryVerb } of probes) {
       const irPath = input.irPaths[purpose];
       if (!irPath || !configuredIrPath(irPath)) continue;
-      const phase = `dispatch_${purpose}_${vendor}`;
+      const phase = `dispatch_${purpose}_${vendor}${entryVerb ? `_${entryVerb}` : ""}`;
       const fail = (detail: string, reason: string): NativeProducerVendorProbe => ({ available: false, reason, diagnostic: producerDiagnostic(identity, phase, detail) });
       let root: string | undefined;
       try {
@@ -739,14 +771,26 @@ export async function probeNativeSessionProducer(input: {
         const binding = NATIVE_DISPATCH_REGISTRY[purpose].scopeKind === "bound_project"
           ? { project_identity: "native-preflight-project", generation: "1", revision: "native-preflight-revision" }
           : undefined;
-        writeFileSync(scopePath, JSON.stringify({ version: "3", kind: NATIVE_DISPATCH_REGISTRY[purpose].scopeKind, scope_id: scopeId, cwd: outputRoot, entry: nativeEntryFor(purpose, vendor), ...(purpose === "setup" ? { bootstrap_root: bootstrapRoot } : {}), ...(wrenRuntime ? { wren_runtime: wrenRuntime } : {}), ...(binding ? { binding } : {}) }), { encoding: "utf8", mode: 0o600, flag: "wx" });
+        const scope = { version: "3", kind: NATIVE_DISPATCH_REGISTRY[purpose].scopeKind, scope_id: scopeId, cwd: outputRoot, entry: nativeEntryFor(purpose, vendor, entryVerb), ...(purpose === "setup" ? { bootstrap_root: bootstrapRoot } : {}), ...(wrenRuntime ? { wren_runtime: wrenRuntime } : {}), ...(binding ? { binding } : {}) };
+        const scopeDocument = JSON.stringify(scope);
+        writeFileSync(scopePath, scopeDocument, { encoding: "utf8", mode: 0o600, flag: "wx" });
+        const irDocument = input.prepareComponents && purpose === "analysis" ? readFileSync(irPath, "utf8") : undefined;
+        const prepared = irDocument ? input.prepareComponents?.({ vendor, purpose, irDocument, scope }) : undefined;
+        const hostPath = path.join(root, "component-host.json");
+        let receipt: NativeComponentReceipt | undefined;
+        if (prepared && irDocument) {
+          if (prepared.identity.vendor !== vendor || !isDeepStrictEqual(prepared.identity.binding, binding)) throw new Error("Incompatible component probe identity");
+          writeFileSync(hostPath, JSON.stringify(nativeComponentHostContract(prepared)), { encoding: "utf8", mode: 0o600, flag: "wx" });
+          receipt = { identity: structuredClone(prepared.identity), irDocument, scopeDocument,
+            hostRoots: structuredClone(prepared.hostRoots), contexts: structuredClone(prepared.contexts) };
+        }
         writeFileSync(mcpPath, JSON.stringify({ version: "1", url: "http://127.0.0.1:0/api/native-sessions/mcp", credential: "native-preflight-nonsecret" }), { encoding: "utf8", mode: 0o600, flag: "wx" });
-        const dispatched = await runNativeProbe(producerExecutable, ["dispatch", irPath, "--target", targetForProvider(vendor), "--purpose", purpose, "--native-scope", scopePath, "--native-mcp", mcpPath, "--out", outputRoot], probeEnv);
+        const dispatched = await runNativeProbe(producerExecutable, ["dispatch", irPath, "--target", targetForProvider(vendor), "--purpose", purpose, "--native-scope", scopePath, "--native-mcp", mcpPath, ...(prepared ? ["--native-host", hostPath] : []), "--out", outputRoot], probeEnv);
         if (dispatched.spawnFailed) { outcome = fail("result=spawn_failed", "the Warble binary could not be started for this vendor"); break; }
         if (dispatched.timedOut) { outcome = fail("result=timed_out", "the Warble binary did not respond for this vendor"); break; }
         if (dispatched.exitCode !== 0) { outcome = fail(`result=exit_code_${dispatched.exitCode ?? "signal"}`, "Warble could not dispatch this profile for this vendor"); break; }
         try {
-          readNativeLaunchSpec(outputRoot, purpose, vendor, scopeId, undefined, { version: "1", url: "http://127.0.0.1:0/api/native-sessions/mcp", credential: "native-preflight-nonsecret" });
+          readNativeLaunchSpec(outputRoot, purpose, vendor, scopeId, undefined, { version: "1", url: "http://127.0.0.1:0/api/native-sessions/mcp", credential: "native-preflight-nonsecret" }, undefined, undefined, undefined, receipt);
         } catch {
           outcome = fail("result=launch_spec_incompatible", "Warble emitted a launch spec this build cannot run");
           break;
@@ -805,7 +849,7 @@ function parseNativeSetupRecoveryReport(value: unknown): NativeSetupRecoveryRepo
  * omits the host-issued scope; Setup exposes only its separately authorized
  * bootstrap root, which is revalidated against the durable host configuration.
  */
-export function readNativeLaunchSpec(cwd: string, purpose: NativePurpose, vendor: NativeVendor, scopeId: string, binding?: EnrichmentBinding, mcp?: NativeMcpDescriptor, materializationState?: NativeSessionStateBase, authorizedWorkspace?: string, providerLaunch?: NativeProviderLaunch): InteractiveLaunchSpec {
+export function readNativeLaunchSpec(cwd: string, purpose: NativePurpose, vendor: NativeVendor, scopeId: string, binding?: EnrichmentBinding, mcp?: NativeMcpDescriptor, materializationState?: NativeSessionStateBase, authorizedWorkspace?: string, providerLaunch?: NativeProviderLaunch, componentReceipt?: NativeComponentReceipt): InteractiveLaunchSpec {
   const ownershipRoot = binding?.path ?? authorizedWorkspace;
   const root = materializationState && ownershipRoot
     ? validateNativeSessionWorkspace(materializationState, ownershipRoot, cwd)
@@ -815,18 +859,25 @@ export function readNativeLaunchSpec(cwd: string, purpose: NativePurpose, vendor
   let raw: unknown;
   try { raw = JSON.parse(readFileSync(specPath, "utf8")); } catch { throw new InteractiveLaunchError("native session launch specification is invalid"); }
   const value = record(raw);
+  const isV5 = componentReceipt !== undefined;
+  if (isV5 && (!mcp || purpose !== "analysis")) throw new InteractiveLaunchError("native component launch requires a bound analysis session");
   const isV4 = mcp !== undefined;
   const isSetupV4 = isV4 && purpose === "setup";
-  const keys = ["version", "target", "purpose", "executable", "argv", "agent", ...(isV4 ? ["mcp", ...(isSetupV4 ? ["bootstrap_root"] : [])] : ["scope"]), "cwd", "artifact_root", "handoff_path"];
+  const keys = ["version", "target", "purpose", "executable", "argv", "agent", ...(isV5 ? ["component_host"] : []), ...(isV4 ? ["mcp", ...(isSetupV4 ? ["bootstrap_root"] : [])] : ["scope"]), "cwd", "artifact_root", "handoff_path"];
   const target = targetForProvider(vendor);
   const executable = vendor === "claude" ? "claude" : "codex";
   const expectedAgent = agentFor(purpose, vendor);
   const scopeEntry = claudeScopeEntry(purpose, vendor);
   if (!value || !hasExactlyKeys(value, keys) ||
-    value.version !== (isV4 ? "4" : "2") || value.target !== target || value.purpose !== purpose || value.executable !== executable ||
+    value.version !== (isV5 ? "5" : isV4 ? "4" : "2") || value.target !== target || value.purpose !== purpose || value.executable !== executable ||
     !Array.isArray(value.argv) || !value.argv.every((arg) => typeof arg === "string") || !record(value.agent) ||
     (!isV4 && !record(value.scope)) || (isV4 && !record(value.mcp)) || (isSetupV4 && typeof value.bootstrap_root !== "string") || typeof value.cwd !== "string" || typeof value.artifact_root !== "string" || typeof value.handoff_path !== "string") {
     throw new InteractiveLaunchError("native session launch specification is incompatible");
+  }
+  if (componentReceipt) {
+    const planPath = path.join(root, ".warble", "component-plans.json");
+    if (lstatSync(planPath).isSymbolicLink() || !contained(root, realpathSync(planPath))) throw new InteractiveLaunchError("native component plan is outside its scope");
+    readNativeComponentPlans(readFileSync(planPath, "utf8"), value.component_host, componentReceipt);
   }
   const welcome = welcomePromptFor(purpose);
   const baseArgv = scopeEntry
@@ -880,7 +931,7 @@ export function readNativeLaunchSpec(cwd: string, purpose: NativePurpose, vendor
         ? [...(scopeEntry ? [] : ["--agent", expectedAgent]), "--resume", providerLaunch.handle, ...(isV4 ? [welcome] : [])]
         : ["--dangerously-bypass-hook-trust", "-c", 'tui.resume_cwd="current"', "resume", providerLaunch.handle, ...(isV4 ? [welcome] : [])]
       : spawnBaseArgv;
-  return { version: isV4 ? "4" : "2", target, executable, argv, cwd: root, artifact_root: root, handoff_path: handoffPath, ...(bootstrapRoot ? { bootstrap_root: bootstrapRoot } : {}) };
+  return { version: isV5 ? "5" : isV4 ? "4" : "2", target, executable, argv, cwd: root, artifact_root: root, handoff_path: handoffPath, ...(bootstrapRoot ? { bootstrap_root: bootstrapRoot } : {}) };
 }
 
 /**
@@ -895,6 +946,7 @@ export async function dispatchNativeArtifacts(input: NativeDispatchInput): Promi
   const dir = mkdtempSync(path.join(tempRoot, "genbi-native-dispatch-"));
   const scopePath = path.join(dir, "scope.json");
   const mcpPath = path.join(dir, "mcp.json");
+  const hostPath = path.join(dir, "host.json");
   try {
     const directory = lstatSync(dir);
     if (!directory.isDirectory() || directory.isSymbolicLink() || !contained(tempRoot, dir)) throw new InteractiveLaunchError("native session materialization failed");
@@ -906,17 +958,18 @@ export async function dispatchNativeArtifacts(input: NativeDispatchInput): Promi
       const metadata = lstatSync(file);
       if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o777) !== 0o600) throw new InteractiveLaunchError("native session materialization failed");
     };
+    if (input.componentHost) {
+      writeFileSync(hostPath, JSON.stringify(input.componentHost), { encoding: "utf8", mode: 0o600, flag: "wx" });
+      validateDescriptorFile(hostPath);
+    }
     validateDescriptorFile(scopePath);
     if (input.mcp) validateDescriptorFile(mcpPath);
     assertNativeProducerIdentity(input.producer);
     if (input.producer.executable !== input.warbleBin) throw new InteractiveLaunchError("native session materialization failed");
     const executable = input.producer.executable;
-    const args = ["dispatch", input.irPath, "--target", input.target, "--purpose", input.purpose, "--native-scope", scopePath, ...(input.mcp ? ["--native-mcp", mcpPath] : []), "--out", input.cwd];
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn(executable, args, { cwd: input.cwd, env: nativeProcessEnvironment(input.env), shell: false, stdio: "ignore" });
-      child.once("error", () => reject(new InteractiveLaunchError("native session materialization failed")));
-      child.once("exit", (code) => code === 0 ? resolve() : reject(new InteractiveLaunchError("native session materialization failed")));
-    });
+    const args = ["dispatch", input.irPath, "--target", input.target, "--purpose", input.purpose, "--native-scope", scopePath, ...(input.mcp ? ["--native-mcp", mcpPath] : []), ...(input.componentHost ? ["--native-host", hostPath] : []), "--out", input.cwd];
+    await runNativeDispatchProcess({ executable, args, cwd: input.cwd, env: nativeProcessEnvironment(input.env),
+      ...(input.signal ? { signal: input.signal } : {}) }).catch(() => { throw new InteractiveLaunchError("native session materialization failed"); });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
@@ -930,6 +983,16 @@ export class NativeSessionService {
   private readonly vendorExecutables: Readonly<Partial<Record<NativeVendor, NativeExecutableIdentity>>>;
   private readonly childToolDirectories: readonly string[];
   private readonly sessions = new Map<string, InteractiveTerminalSession>();
+  private readonly componentAdmissions = new Map<string, NativeComponentAdmission>();
+  private readonly componentCleanups = new Set<Promise<void>>();
+  private componentCleanupFailed = false;
+  private runtimeCleanupFailed = false;
+  private readonly pendingTerminalCleanup = new Set<InteractiveTerminalSession>();
+  private readonly pendingHomeCleanup = new Set<() => void>();
+  private shuttingDown = false;
+  private readonly shutdownController = new AbortController();
+  private shutdownPromise?: Promise<void>;
+  private readonly pendingCreates = new Set<Promise<NativeSessionLaunch>>();
   private readonly runtimeSpecs = new Map<string, NativeRuntimeSpec>();
   private readonly codexWrenHomes = new Map<string, CodexWrenHome>();
   private readonly leaseTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -947,6 +1010,7 @@ export class NativeSessionService {
   private readonly startSeparateReplayLimit: number;
   private fixtureMaterializationState: NativeSessionStateBase | undefined;
   constructor(private readonly options: NativeSessionServiceOptions) {
+    if (options.prepareComponents && !options.prepareComponentProbe) throw new Error("Native component execution requires a producer probe");
     this.runtimeHost = options.runtimeHost ?? new RuntimeHost({
       // Compatibility default for server-side unit seams only. The real BFF
       // composes and injects its one policy-owned host in `bin.ts`.
@@ -1017,6 +1081,7 @@ export class NativeSessionService {
     const result = await probeNativeSessionProducer({
       warbleBin: this.options.warbleBin,
       irPaths: this.options.irPaths,
+      ...(this.options.prepareComponents && this.options.prepareComponentProbe ? { prepareComponents: this.options.prepareComponentProbe } : {}),
       nativeHome: this.nativeHome,
       nodeExecutable: this.nodeExecutable,
       childToolDirectories: this.childToolDirectories,
@@ -1076,6 +1141,7 @@ export class NativeSessionService {
 
   /** A legacy persisted Runtime must be repaired before it can authorize a PTY. */
   private assertRuntimeDispatchable(): void {
+    if (this.shuttingDown) throw new InteractiveLaunchError("native session host is shutting down");
     if (!this.options.store.hasExplicitRuntimeSettings()) return;
     const correction = runtimeSettingsCorrection(this.options.store.getRuntimeSettings());
     if (correction) throw new InteractiveLaunchError(correction);
@@ -1086,7 +1152,7 @@ export class NativeSessionService {
    * particular, a setup session never inherits the active project binding,
    * while a bound-purpose session cannot cross a generation or revision.
    */
-  async openOrCreate(input: { purpose: NativePurpose; vendor?: NativeVendor }): Promise<NativeSessionLaunch> {
+  async openOrCreate(input: { purpose: NativePurpose; vendor?: NativeVendor; entryVerb?: string | undefined }): Promise<NativeSessionLaunch> {
     this.assertRuntimeDispatchable();
     const storedRuntime = this.options.store.getNativeRuntimeBinding();
     // Compatibility seam for existing server-side callers/tests only. Browser
@@ -1097,14 +1163,16 @@ export class NativeSessionService {
     const dispatch = dispatchForPurpose(input.purpose, runtime);
     if (!dispatch) throw new InteractiveLaunchError("native sessions require a saved Runtime & authentication binding");
     const binding = input.purpose === "setup" ? undefined : this.options.getBinding();
-    const reusable = this.list().find((row) => this.matchesOpenScope(row, input.purpose, dispatch.target, runtime.generation, binding));
+    const entryVerb = selectedNativeEntry(input.purpose, dispatch.provider, input.entryVerb);
+    const reusable = this.list().find((row) => this.matchesOpenScope(row, input.purpose, dispatch.target, runtime.generation, binding) && selectedNativeEntry(row.purpose, row.vendor, row.entryVerb) === entryVerb);
     if (reusable) {
       const recoveryCapability = this.recoveryCapabilities.get(reusable.id);
       return { row: reusable, capability: this.sessions.get(reusable.id)!.capability, ...(recoveryCapability ? { recoveryCapability } : {}) };
     }
+    const selectedEntry = selectedNativeEntry(input.purpose, dispatch.provider, input.entryVerb);
     const scopeKey = input.purpose === "setup"
       ? JSON.stringify([input.purpose, dispatch.target, runtime.generation, "bootstrap"])
-      : JSON.stringify([input.purpose, dispatch.target, runtime.generation, binding?.identity ?? "unbound", binding?.generation ?? null, binding?.revision ?? null]);
+      : JSON.stringify([input.purpose, dispatch.target, runtime.generation, binding?.identity ?? "unbound", binding?.generation ?? null, binding?.revision ?? null, selectedEntry]);
     return this.singleFlight(`open:${scopeKey}`, scopeKey, input, binding, runtime);
   }
 
@@ -1130,7 +1198,7 @@ export class NativeSessionService {
    * click coalesce, while a later intentional launch receives new durable and
    * browser-scoped authority.
    */
-  async startSeparate(input: { purpose: NativePurpose; idempotencyKey: string; vendor?: NativeVendor }): Promise<NativeSessionLaunch> {
+  async startSeparate(input: { purpose: NativePurpose; idempotencyKey: string; vendor?: NativeVendor; entryVerb?: string | undefined }): Promise<NativeSessionLaunch> {
     this.assertRuntimeDispatchable();
     const storedRuntime = this.options.store.getNativeRuntimeBinding();
     const runtime = !storedRuntime.configured && input.vendor
@@ -1139,9 +1207,10 @@ export class NativeSessionService {
     const dispatch = dispatchForPurpose(input.purpose, runtime);
     if (!dispatch) throw new InteractiveLaunchError("native sessions require a saved Runtime & authentication binding");
     const binding = input.purpose === "setup" ? undefined : this.options.getBinding();
+    const selectedEntry = selectedNativeEntry(input.purpose, dispatch.provider, input.entryVerb);
     const scopeKey = input.purpose === "setup"
       ? JSON.stringify([input.purpose, dispatch.target, runtime.generation, "bootstrap"])
-      : JSON.stringify([input.purpose, dispatch.target, runtime.generation, binding?.identity ?? "unbound", binding?.generation ?? null, binding?.revision ?? null]);
+      : JSON.stringify([input.purpose, dispatch.target, runtime.generation, binding?.identity ?? "unbound", binding?.generation ?? null, binding?.revision ?? null, selectedEntry]);
     return this.replayStartSeparate(`start:${input.idempotencyKey}`, scopeKey, input, binding, runtime);
   }
 
@@ -1268,14 +1337,14 @@ export class NativeSessionService {
     const reserved = this.options.store.reserveNativeSessionResume({
       sourceSessionId: source.id, idempotencyKey, scopeFingerprint: fingerprint, sealedHandle: sealedChild,
       child: {
-        id: childId, purpose: source.purpose, vendor: source.vendor, agent: agentFor(source.purpose, source.vendor), scopeKind: source.scopeKind, scopeId: childScopeId,
+        id: childId, purpose: source.purpose, vendor: source.vendor, agent: agentFor(source.purpose, source.vendor), entryVerb: selectedNativeEntry(source.purpose, source.vendor, source.entryVerb), scopeKind: source.scopeKind, scopeId: childScopeId,
         dispatchProfile: scope.dispatch.profile, dispatchTarget: scope.dispatch.target, runtimeGeneration: scope.runtime.generation,
         ...(scope.binding ? { projectIdentity: scope.binding.identity, bindingGeneration: scope.binding.generation, projectRevision: scope.binding.revision } : {}),
       },
     });
     if (!reserved) throw new InteractiveLaunchError("native session resume is unavailable");
     if (!reserved.created) return this.recoverReservedResume(reserved.row.id, scope);
-    return this.create({ purpose: source.purpose, ...(this.legacyFixtureMode() ? { vendor: source.vendor } : {}) }, scope.binding, scope.runtime, { row: reserved.row, handle });
+    return this.create({ purpose: source.purpose, entryVerb: selectedNativeEntry(source.purpose, source.vendor, source.entryVerb), ...(this.legacyFixtureMode() ? { vendor: source.vendor } : {}) }, scope.binding, scope.runtime, { row: reserved.row, handle });
   }
 
   private async recoverReservedResume(id: string, scope: { readonly binding: EnrichmentBinding | undefined; readonly runtime: NativeRuntimeBinding; readonly dispatch: NonNullable<ReturnType<typeof dispatchForPurpose>> }): Promise<NativeSessionLaunch> {
@@ -1299,7 +1368,7 @@ export class NativeSessionService {
       this.failReservedResume(row.id, "native session resume reservation cannot be recovered");
       throw error;
     }
-    return this.create({ purpose: row.purpose, ...(this.legacyFixtureMode() ? { vendor: row.vendor } : {}) }, scope.binding, scope.runtime, { row, handle });
+    return this.create({ purpose: row.purpose, entryVerb: selectedNativeEntry(row.purpose, row.vendor, row.entryVerb), ...(this.legacyFixtureMode() ? { vendor: row.vendor } : {}) }, scope.binding, scope.runtime, { row, handle });
   }
 
   private failReservedResume(id: string, failure: string): void {
@@ -1324,7 +1393,7 @@ export class NativeSessionService {
   private replayStartSeparate(
     launchKey: string,
     scopeKey: string,
-    input: { purpose: NativePurpose; vendor?: NativeVendor },
+    input: { purpose: NativePurpose; vendor?: NativeVendor; entryVerb?: string | undefined },
     binding: EnrichmentBinding | undefined,
     runtime: NativeRuntimeBinding,
   ): Promise<NativeSessionLaunch> {
@@ -1369,7 +1438,7 @@ export class NativeSessionService {
   private async singleFlight(
     launchKey: string,
     scopeKey: string,
-    input: { purpose: NativePurpose; vendor?: NativeVendor },
+    input: { purpose: NativePurpose; vendor?: NativeVendor; entryVerb?: string | undefined },
     binding: EnrichmentBinding | undefined,
     runtime: NativeRuntimeBinding,
   ): Promise<NativeSessionLaunch> {
@@ -1518,7 +1587,15 @@ export class NativeSessionService {
     };
   }
 
-  async create(input: { purpose: NativePurpose; vendor?: NativeVendor }, binding = input.purpose === "setup" ? undefined : this.options.getBinding(), capturedRuntime = this.options.store.getNativeRuntimeBinding(), resumed?: { readonly row: NativeSessionRow; readonly handle: string }): Promise<NativeSessionLaunch> {
+  async create(input: { purpose: NativePurpose; vendor?: NativeVendor; entryVerb?: string | undefined }, binding = input.purpose === "setup" ? undefined : this.options.getBinding(), capturedRuntime = this.options.store.getNativeRuntimeBinding(), resumed?: { readonly row: NativeSessionRow; readonly handle: string }): Promise<NativeSessionLaunch> {
+    this.assertRuntimeDispatchable();
+    const pending = this.createCaptured(input, binding, capturedRuntime, resumed);
+    this.pendingCreates.add(pending);
+    void pending.finally(() => this.pendingCreates.delete(pending)).catch(() => {});
+    return pending;
+  }
+
+  private async createCaptured(input: { purpose: NativePurpose; vendor?: NativeVendor; entryVerb?: string | undefined }, binding = input.purpose === "setup" ? undefined : this.options.getBinding(), capturedRuntime = this.options.store.getNativeRuntimeBinding(), resumed?: { readonly row: NativeSessionRow; readonly handle: string }): Promise<NativeSessionLaunch> {
     this.assertRuntimeDispatchable();
     const runtimeReadiness = await this.assertSelectedRuntimeReady();
     const purpose = input.purpose;
@@ -1527,6 +1604,8 @@ export class NativeSessionService {
       : capturedRuntime;
     const dispatchDefinition = dispatchForPurpose(purpose, legacyRuntime);
     if (!dispatchDefinition) throw new InteractiveLaunchError("native sessions require a saved Runtime & authentication binding");
+    const entryVerb = selectedNativeEntry(purpose, dispatchDefinition.provider, input.entryVerb);
+    if (resumed && selectedNativeEntry(purpose, dispatchDefinition.provider, resumed.row.entryVerb) !== entryVerb) throw new InteractiveLaunchError("native session entry changed during resume");
     let managedCodexWrenRuntime: NativeWrenRuntime | undefined;
     if (dispatchDefinition.provider === "codex" && !this.legacyFixtureMode()) {
       const codexReadiness = runtimeReadiness.backends["codex-app-server"];
@@ -1575,7 +1654,8 @@ export class NativeSessionService {
       initialSealedHandle = sealNativeClaudeResumeHandle(state, id, sessionId);
       providerLaunch = { kind: "initial", sessionId };
     }
-    const row = resumed?.row ?? this.options.store.createNativeSession({ id, purpose, vendor: dispatchDefinition.provider, agent: agentFor(purpose, dispatchDefinition.provider), scopeKind: dispatchDefinition.scopeKind, scopeId,
+    this.assertRuntimeDispatchable();
+    const row = resumed?.row ?? this.options.store.createNativeSession({ id, purpose, vendor: dispatchDefinition.provider, agent: agentFor(purpose, dispatchDefinition.provider), entryVerb, scopeKind: dispatchDefinition.scopeKind, scopeId,
       dispatchProfile: dispatchDefinition.profile, dispatchTarget: dispatchDefinition.target, runtimeGeneration: legacyRuntime.generation,
       ...(binding ? { projectIdentity: binding.identity, bindingGeneration: binding.generation, projectRevision: binding.revision } : {}) });
     if (initialSealedHandle) this.options.store.saveNativeSessionResumeHandle(id, "claude", initialSealedHandle);
@@ -1627,7 +1707,18 @@ export class NativeSessionService {
         ...(mcp ? { mcpCredential: mcp.credential } : {}),
         ...(purpose === "setup" ? { setupBootstrapRoot: authorizedWorkspace } : {}),
       });
-      const scope: Record<string, unknown> = { version: "3", kind: row.scopeKind, scope_id: scopeId, cwd, entry: nativeEntryFor(purpose, dispatchDefinition.provider), ...(purpose === "setup" ? { bootstrap_root: authorizedWorkspace } : {}), ...(wrenRuntime ? { wren_runtime: wrenRuntime } : {}), ...(binding ? { binding: { project_identity: binding.identity, generation: String(binding.generation), revision: binding.revision } } : {}) };
+      const scope: Record<string, unknown> = { version: "3", kind: row.scopeKind, scope_id: scopeId, cwd, entry: nativeEntryFor(purpose, dispatchDefinition.provider, entryVerb), ...(purpose === "setup" ? { bootstrap_root: authorizedWorkspace } : {}), ...(wrenRuntime ? { wren_runtime: wrenRuntime } : {}), ...(binding ? { binding: { project_identity: binding.identity, generation: String(binding.generation), revision: binding.revision } } : {}) };
+      const componentIr = this.options.prepareComponents && binding && purpose === "analysis" ? readFileSync(irPath, "utf8") : undefined;
+      const preparedComponents = componentIr && binding ? await this.options.prepareComponents!({ session: row, binding, irDocument: componentIr, scope }) : undefined;
+      if (preparedComponents) {
+        const identity = preparedComponents.identity;
+        if (!mcp || identity.session_id !== id || identity.vendor !== row.vendor || identity.runtime_generation !== String(row.runtimeGeneration)
+          || identity.binding.project_identity !== binding?.identity || identity.binding.generation !== String(binding?.generation) || identity.binding.revision !== binding?.revision) throw new InteractiveLaunchError("native component execution identity is incompatible");
+      }
+      const componentReceipt: NativeComponentReceipt | undefined = preparedComponents && componentIr ? {
+        identity: structuredClone(preparedComponents.identity), irDocument: componentIr, scopeDocument: JSON.stringify(scope),
+        hostRoots: structuredClone(preparedComponents.hostRoots), contexts: structuredClone(preparedComponents.contexts),
+      } : undefined;
       const dispatch = this.options.dispatch ?? dispatchNativeArtifacts;
       validateNativeSessionWorkspace(materializationState, authorizedWorkspace, cwd);
       launchPhase = "dispatch";
@@ -1639,8 +1730,10 @@ export class NativeSessionService {
         cwd,
         purpose,
         scope,
+        ...(preparedComponents ? { componentHost: nativeComponentHostContract(preparedComponents) } : {}),
         ...(mcp ? { mcp } : {}),
         env: dispatchEnvironment,
+        signal: this.shutdownController.signal,
       });
       if (!input.vendor && !sameNativeRuntimeBinding(capturedRuntime, this.options.store.getNativeRuntimeBinding())) {
         this.options.store.transitionNativeSession(id, "stale", { failure: "native runtime binding changed before launch", ended: true });
@@ -1651,8 +1744,24 @@ export class NativeSessionService {
         throw new InteractiveLaunchError("native session is stale because the bound project changed");
       }
       launchPhase = "launch_spec";
-      const launchSpec = readNativeLaunchSpec(cwd, purpose, dispatchDefinition.provider, scopeId, binding, mcp, materializationState, authorizedWorkspace, providerLaunch);
+      const launchSpec = readNativeLaunchSpec(cwd, purpose, dispatchDefinition.provider, scopeId, binding, mcp, materializationState, authorizedWorkspace, providerLaunch, componentReceipt);
+      if (componentReceipt && preparedComponents) {
+        const launch = JSON.parse(readFileSync(path.join(cwd, ".warble", "interactive-launch.json"), "utf8"));
+        const plans = readNativeComponentPlans(readFileSync(path.join(cwd, ".warble", "component-plans.json"), "utf8"), launch.component_host, componentReceipt);
+        const current = () => {
+          const live = this.options.store.getNativeSession(id);
+          if (!live || !["creating", "running", "detached"].includes(live.status) || !sameBinding(binding!, this.options.getBinding())
+            || (!input.vendor && !sameNativeRuntimeBinding(capturedRuntime, this.options.store.getNativeRuntimeBinding()))) return undefined;
+          try { preparedComponents.assertCurrent(); } catch { return undefined; }
+          return componentReceipt.identity;
+        };
+        this.assertRuntimeDispatchable();
+        this.componentAdmissions.set(id, new NativeComponentAdmission(plans, current, (root, plan, signal) => preparedComponents.host(root, plan, signal)));
+      }
       let codexWrenHome: CodexWrenHome | undefined;
+      // Hosted v5 entries route work through fixed MCP roots. Their outer Codex
+      // session retains the producer's read-only, network-disabled profile; only
+      // the direct v4 route receives a Wren home and bound-project read grant.
       if (launchSpec.version === "4" && dispatchDefinition.provider === "codex") {
         if (wrenRuntime && binding) {
           launchPhase = "codex_wren_home";
@@ -1708,6 +1817,7 @@ export class NativeSessionService {
       validateNativeSessionWorkspace(materializationState, authorizedWorkspace, cwd);
       codexWrenHome?.assertActive?.();
       assertNativeRuntimeSpec(runtimeSpec);
+      this.assertRuntimeDispatchable();
       launchPhase = "terminal_start";
       const terminal = terminalManager.start({ ...launchSpec, hostExecutable: vendorExecutable.executable }, { id, capability }, runtimeSpec.childEnvironment, NO_INTERACTIVE_TERMINAL_LEASES);
       this.sessions.set(id, terminal);
@@ -1768,6 +1878,7 @@ export class NativeSessionService {
     return terminal;
   }
   detach(id: string): void {
+    this.componentAdmissions.get(id)?.cancelActive();
     this.sessions.get(id)?.detach();
     if (this.sessions.has(id)) {
       this.options.store.transitionNativeSession(id, "detached");
@@ -1796,9 +1907,12 @@ export class NativeSessionService {
       this.cleanupRuntime(id);
       try {
         terminal?.close();
+        if (terminal) this.pendingTerminalCleanup.delete(terminal);
       } catch {
         // A process kill may fail after the durable session fence committed.
         // Capabilities are already unreachable; continue revoking every id.
+        this.runtimeCleanupFailed = true;
+        if (terminal) this.pendingTerminalCleanup.add(terminal);
         console.warn("[native-sessions] terminal close failed during capability revocation");
       }
     }
@@ -1810,13 +1924,61 @@ export class NativeSessionService {
   /** Called after the store advances the bound-project generation. */
   revokeBindingCapabilities(ids: readonly string[]): void { this.revokeCapabilities(ids); }
 
+  componentTools(id: string) { return this.componentAdmissions.get(id)?.list() ?? []; }
+
+  async callComponent(id: string, tool: string, input: unknown, requestId: string | number, signal: AbortSignal) {
+    const admission = this.componentAdmissions.get(id);
+    if (!admission) throw new InteractiveLaunchError("native component execution is unavailable");
+    return admission.call(tool, input, requestId, signal);
+  }
+
+  async drainComponentCleanup(): Promise<void> {
+    const cleanup = await Promise.allSettled([...this.componentCleanups]);
+    if (this.componentCleanupFailed || cleanup.some((result) => result.status === "rejected")) throw new InteractiveLaunchError("native component cleanup failed");
+  }
+
+  shutdown(): Promise<void> {
+    this.shuttingDown = true;
+    this.shutdownController.abort();
+    return this.shutdownPromise ??= (async () => {
+      const ids = [...new Set([...this.sessions.keys(), ...this.componentAdmissions.keys()])];
+      for (const id of ids) this.options.store.stopNativeSessionAndRevokeRecoveryAction(id);
+      this.revokeCapabilities(ids);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([Promise.allSettled([...this.pendingCreates]), new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new InteractiveLaunchError("native launch cleanup timed out")), 5_000);
+        })]);
+      } finally { clearTimeout(timer); }
+      this.revokeCapabilities([...this.componentAdmissions.keys()]);
+      // Failed resources remain owned after capability revocation, for one final retry.
+      for (const terminal of this.pendingTerminalCleanup) {
+        try { terminal.close(); this.pendingTerminalCleanup.delete(terminal); } catch { this.runtimeCleanupFailed = true; }
+      }
+      for (const cleanup of this.pendingHomeCleanup) {
+        try { cleanup(); this.pendingHomeCleanup.delete(cleanup); } catch { this.runtimeCleanupFailed = true; }
+      }
+      await this.drainComponentCleanup();
+      if (this.runtimeCleanupFailed) throw new InteractiveLaunchError("native runtime cleanup failed");
+    })();
+  }
+
   private cleanupRuntime(id: string): void {
+    const admission = this.componentAdmissions.get(id);
+    this.componentAdmissions.delete(id);
+    if (admission) {
+      const cleanup = admission.close();
+      this.componentCleanups.add(cleanup);
+      void cleanup.catch(() => { this.componentCleanupFailed = true; console.warn("[native-sessions] component cleanup failed"); }).finally(() => this.componentCleanups.delete(cleanup));
+    }
     const home = this.codexWrenHomes.get(id);
     this.codexWrenHomes.delete(id);
     this.runtimeSpecs.delete(id);
     try {
       home?.cleanup?.();
     } catch {
+      this.runtimeCleanupFailed = true;
+      if (home?.cleanup) this.pendingHomeCleanup.add(home.cleanup.bind(home));
       console.warn("[native-sessions] Wren session home cleanup failed");
     }
   }

@@ -46,6 +46,8 @@ try {
   const nativePackage = path.dirname(vendorRequire.resolve("@openai/codex-darwin-arm64/package.json"));
   const nativeCodex = path.join(nativePackage, "vendor", "aarch64-apple-darwin", "bin", "codex");
   await run(process.execPath, [path.join(process.cwd(), "scripts", "codex-backend-probe.mjs")], { ...probeEnv, CODEX_BIN: nativeCodex });
+  await run(process.execPath, [path.join(process.cwd(), "scripts", "codex-component-probe.mjs")], { ...probeEnv, CODEX_BIN: nativeCodex });
+  await run(process.execPath, [path.join(process.cwd(), "scripts", "claude-component-probe.mjs")], probeEnv);
   process.stdout.write(`${JSON.stringify({
     ok: true,
     evidenceState: "tested_baseline",

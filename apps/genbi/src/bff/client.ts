@@ -161,6 +161,7 @@ export interface NativeSession {
   purpose: NativeSessionPurpose;
   vendor: NativeSessionVendor;
   agent: string;
+  entryVerb?: 'answer_query' | 'generate_dashboard' | null;
   scopeKind: 'bootstrap' | 'bound_project';
   scopeId: string;
   projectIdentity: string | null;
@@ -244,12 +245,12 @@ export function getNativeSession(id: string): Promise<{ session: NativeSession }
   return request(`/api/native-sessions/${encodeURIComponent(id)}`);
 }
 
-export function createNativeSession(purpose: NativeSessionPurpose, launch: { intent: 'start_separate'; idempotencyKey: string }, signal?: AbortSignal): Promise<NativeSessionLaunchResult>;
+export function createNativeSession(purpose: NativeSessionPurpose, launch: { intent: 'start_separate'; idempotencyKey: string; entryVerb?: 'answer_query' | 'generate_dashboard' }, signal?: AbortSignal): Promise<NativeSessionLaunchResult>;
 export function createNativeSession(purpose: NativeSessionPurpose, launch: { intent: 'resume'; sessionId: string; idempotencyKey: string }, signal?: AbortSignal): Promise<NativeSessionLaunchResult>;
 export function createNativeSession(purpose: NativeSessionPurpose, launch: { intent: 'open_existing'; sessionId?: string }, signal?: AbortSignal): Promise<NativeSessionLaunchResult>;
 export function createNativeSession(purpose: NativeSessionPurpose, vendor: NativeSessionVendor, signal?: AbortSignal): Promise<NativeSessionLaunchResult>;
 export function createNativeSession(purpose: NativeSessionPurpose, signal?: AbortSignal): Promise<NativeSessionLaunchResult>;
-export function createNativeSession(purpose: NativeSessionPurpose, launchOrVendorOrSignal?: { intent: NativeSessionLaunchIntent; idempotencyKey?: string; sessionId?: string } | NativeSessionVendor | AbortSignal, signal?: AbortSignal): Promise<NativeSessionLaunchResult> {
+export function createNativeSession(purpose: NativeSessionPurpose, launchOrVendorOrSignal?: { intent: NativeSessionLaunchIntent; idempotencyKey?: string; sessionId?: string; entryVerb?: 'answer_query' | 'generate_dashboard' } | NativeSessionVendor | AbortSignal, signal?: AbortSignal): Promise<NativeSessionLaunchResult> {
   const requestSignal = launchOrVendorOrSignal instanceof AbortSignal ? launchOrVendorOrSignal : signal;
   // Legacy vendor arguments are intentionally ignored: Runtime owns the
   // provider/target, and the public request payload must not override it.

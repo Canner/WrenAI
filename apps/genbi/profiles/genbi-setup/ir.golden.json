@@ -16,6 +16,7 @@
         },
         "render_blocks": []
       },
+      "entrypoint": true,
       "eval": {
         "metrics": [
           "connect_success"
@@ -75,6 +76,7 @@
         },
         "render_blocks": []
       },
+      "entrypoint": true,
       "eval": {
         "metrics": [
           "build_success"
@@ -136,5 +138,5 @@
     }
   },
   "profile": "genbi-setup",
-  "warble_ir_version": "0.6"
+  "warble_ir_version": "0.8"
 }

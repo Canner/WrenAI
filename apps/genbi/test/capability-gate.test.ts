@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { loadBundle } from "../harness/bundle/loader.js";
 import { assertCapabilities, CapabilityGateError } from "../harness/capability/gate.js";
 import { createDefaultCapabilityRegistry, createRegistry } from "../harness/capability/registry.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 import { buildSyntheticBundle } from "./synthetic-bundle.js";
 
 describe("assertCapabilities: second gate", () => {
   it("passes for the golden bundle against the default registry", () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     expect(() => assertCapabilities(bundle, createDefaultCapabilityRegistry())).not.toThrow();
   });
 

@@ -3,7 +3,6 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadBundle } from "../harness/bundle/loader.js";
 import { createLocalExecutionEnv } from "../harness/exec/index.js";
 import type { ExecutionPolicy } from "../harness/exec/index.js";
 import { MOCK_ADAPTER_ID } from "../harness/providers/index.js";
@@ -12,7 +11,7 @@ import { route } from "../harness/route/index.js";
 import type { AuthChoice } from "../harness/auth/index.js";
 import { createWrenNativeToolRegistry, WREN_QUERY_TOOL_NAME, WrenBinaryNotFoundError, WRITE_ARTIFACT_TOOL_NAME } from "../harness/tools/index.js";
 import { mockWrenServerConfig } from "./mock-mcp-server.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 
 const EMPTY_USAGE: LanguageModelV4Usage = {
   inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
@@ -79,7 +78,7 @@ function scriptedTurns(turns: LanguageModelV4GenerateResult[]) {
 
 describe("in-process wiring (route -> runInProcessDefault -> runAgent)", () => {
   it("assembles a RunAgentContext from an ApiKeyAuthChoice and returns an AnswerResult", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
 
     const { calls, doGenerate } = scriptedTurns([
       textResult("intent: top customer by revenue"),
@@ -118,7 +117,7 @@ describe("in-process wiring (route -> runInProcessDefault -> runAgent)", () => {
     // satisfied by a real successful `query` tool call, regardless of what
     // the render output separately claims about "verified" (see the matching
     // test in test/run-agent.test.ts for the full rationale).
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
 
     const { doGenerate } = scriptedTurns([
       textResult("intent: top customer by revenue"),
@@ -144,7 +143,7 @@ describe("in-process wiring (route -> runInProcessDefault -> runAgent)", () => {
   });
 
   it("uses options.agentId instead of the answer_query default when set — proven by looking up the agent it names", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const authChoice: AuthChoice = {
       mode: "api-key",
       adapter: MOCK_ADAPTER_ID,
@@ -171,7 +170,7 @@ describe("in-process wiring (route -> runInProcessDefault -> runAgent)", () => {
   });
 
   it("preflights the wren binary before wiring the native tool registry, surfacing WrenBinaryNotFoundError when missing", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const authChoice: AuthChoice = { mode: "api-key", adapter: MOCK_ADAPTER_ID, config: { doGenerate: async () => {
       throw new Error("must not be reached — the preflight should fail first");
     } } };

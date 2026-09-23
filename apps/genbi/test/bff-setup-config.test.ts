@@ -14,7 +14,7 @@ import type { ContextFileNode, ContextOverview, EvalRun, RuntimeSettings, Runtim
 import { parseSse } from "./bff-sse-helpers.js";
 import type { ParsedSseFrame } from "./bff-sse-helpers.js";
 import { buildSyntheticBundle } from "./synthetic-bundle.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 
 // The "context + eval read endpoints" describe block below is the only place in this file that
 // hits the context routes, which now shell out to `wren context show` via context-source.ts. Mock
@@ -655,7 +655,7 @@ describe("config/runtime + setup wizard endpoints", () => {
   });
 
   it("derives the UI tier list from the compiled bundle and rejects an invalid full map without changing store or live auth", async () => {
-    const describeBundle = vi.fn(async () => loadBundle(readFixture("genbi-default.bundle.json")));
+    const describeBundle = vi.fn(async () => loadLegacyFixture("genbi-default.bundle.json"));
     const getRuntimeTierNames = vi.fn(async () => ["cheap", "strong"]);
     let liveAuth: AuthChoice = { mode: "subscription", provider: "claude" };
     const { app, store } = buildApp(describeBundle, {

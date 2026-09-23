@@ -166,7 +166,7 @@ export function SessionsPage() {
   const recoveryCanRetryWithoutReport = session.purpose === 'setup' && session.status === 'failed' && !recovery;
   return <main className={`sessions-workbench${compact ? ' is-compact' : ''}`} data-testid="sessions-workbench">
     <header className="sessions-toolbar">
-      <div className="sessions-toolbar-title"><strong>{purposeLabels[session.purpose]}</strong><span>{session.dispatchProfile ?? session.agent} · {session.dispatchTarget ? targetLabels[session.vendor] : session.vendor}</span></div>
+      <div className="sessions-toolbar-title"><strong>{session.entryVerb === 'generate_dashboard' ? 'Build a dashboard' : purposeLabels[session.purpose]}</strong><span>{session.dispatchProfile ?? session.agent} · {session.dispatchTarget ? targetLabels[session.vendor] : session.vendor}</span></div>
       <Tag variant="filled" color={session.status === 'running' ? 'processing' : session.status === 'failed' || session.status === 'stale' ? 'error' : 'default'}>{status}</Tag>
       <div className="sessions-toolbar-actions">
         {canReconnect ? <Button size="small" icon={<ReloadOutlined />} loading={reconnecting} disabled={reconnecting} onClick={() => { setReconnecting(true); setTerminalDisconnected(false); setReconnectNonce((value) => value + 1); }}>Reconnect</Button> : null}

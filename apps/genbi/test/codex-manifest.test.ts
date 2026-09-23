@@ -1,13 +1,44 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildCodexAskManifestArgs, buildCodexBootstrapManifestArgs, buildCodexEnrichmentManifestArgs, describeCodexAskManifest } from "../harness/route/codex-local-manifest.js";
+import { resolveWarbleBinary } from "../harness/compile/resolve-binary.js";
+import { resolveCodexLocalCli } from "../harness/route/codex-local-cli.js";
+import { describeBundle } from "../harness/route/describe.js";
 
 const dirs: string[] = [];
 afterEach(async () => Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))));
 
 describe("Codex manifest adapter", () => {
+  it("accepts the installed composed dispatcher and refuses missing or mismatched callee context", async () => {
+    const irPath = path.resolve("profiles/genbi-default/ir.golden.json");
+    const ir = JSON.parse(await readFile(irPath, "utf8"));
+    const snapshot = JSON.parse(await readFile(path.resolve("profiles/genbi-default/context/context.json"), "utf8"));
+    const cli = await resolveCodexLocalCli();
+    const models = { orchestrator: "fixture", cheap: "fixture", strong: "fixture" };
+    const contexts = Object.fromEntries(ir.components.map((node: { id: string; context_binding: unknown }) => [node.id, { binding: node.context_binding, snapshot }]));
+    const context = { warbleBin: await resolveWarbleBinary(), contexts };
+    const bundle = await describeCodexAskManifest(cli, irPath, models, context);
+    expect(bundle.agents.map((agent) => agent.id)).toEqual(["answer_query", "generate_dashboard"]);
+    expect(bundle.agents[0]!.tools.map((tool) => tool.name)).toContain("run_sql");
+    expect(bundle.agents[1]!.tools).toEqual([]);
+    expect(bundle.agents[1]!.capabilities.some((cap) => cap.capability === "component_invocation")).toBe(true);
+    expect(bundle.agents[1]!.steps[1]!.consumes).toContain("dashboard_plan");
+    await expect(describeCodexAskManifest(cli, irPath, models)).rejects.toThrow(/prepared context/);
+    await expect(describeCodexAskManifest(cli, irPath, models, { ...context, contexts: { ...contexts, answer_query: { binding: { project: "wrong" }, snapshot } } })).rejects.toThrow(/binding mismatch/);
+    await expect(describeCodexAskManifest(cli, irPath, models, { ...context, contexts: { ...contexts, answer_query: { ...contexts.answer_query!, snapshot: { context_version: 2, parseable: false } } } })).rejects.toThrow();
+  });
+
+  it("captures the actual bound project for the product Codex description", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "codex-bound-description-")); dirs.push(dir);
+    const bundle = await describeBundle({ authChoice: { mode: "subscription", provider: "codex" },
+      profileSource: path.resolve("profiles/genbi-default"), userProject: path.resolve("../../examples/v5-jaffle"), workDir: dir,
+      warbleBin: await resolveWarbleBinary(), codexModels: { orchestrator: "fixture", cheap: "fixture", strong: "fixture" } });
+    expect(bundle.agents.map((agent) => agent.id)).toEqual(["answer_query", "generate_dashboard"]);
+    expect(bundle.agents[1]!.tools).toEqual([]);
+  });
+
   it("uses the generic manifest command while retaining the component and MCP tool contract", () => {
     expect(buildCodexAskManifestArgs(
       { command: "warble-codex-local", prefixArgs: ["--quiet"] },
@@ -17,7 +48,9 @@ describe("Codex manifest adapter", () => {
     )).toEqual([
       "--quiet", "manifest", "/tmp/ir.json", "--component", "generate_dashboard",
       "--orchestrator-model", "driver", "--cheap-model", "cheap", "--strong-model", "strong",
-      "--server-command", process.execPath, "--inspect-tool", "get_context", "--query-tool", "run_sql",
+      "--server-command", process.execPath, "--transport", "orchestrate",
+      "--step-tool", "plan_dashboard=get_context", "--step-tool", "compose_layout=run_sql",
+      "--require-tool", "plan_dashboard", "--require-tool", "compose_layout",
     ]);
   });
 
@@ -26,11 +59,13 @@ describe("Codex manifest adapter", () => {
     const models = { orchestrator: "driver", cheap: "cheap", strong: "strong" };
     expect(buildCodexBootstrapManifestArgs(cli, "/tmp/setup.json")).toEqual([
       "--quiet", "manifest", "/tmp/setup.json", "--server-command", process.execPath,
-      "--source-tool", "setup_execution", "--context-tool", "setup_execution",
+      "--transport", "exec", "--step-tool", "connect=setup_execution", "--step-tool", "build=setup_execution",
+      "--require-tool", "connect", "--require-tool", "build",
     ]);
     expect(buildCodexEnrichmentManifestArgs(cli, "/tmp/enrich.json", models, "inspect_context")).toEqual([
       "--quiet", "manifest", "/tmp/enrich.json", "--component", "inspect_context", "--model", "cheap",
-      "--server-command", process.execPath, "--semantic-tool", "get_context", "--raw-material-tool", "get_context",
+      "--server-command", process.execPath, "--transport", "turn",
+      "--step-tool", "inspect=get_context", "--require-tool", "inspect",
     ]);
     expect(buildCodexEnrichmentManifestArgs(cli, "/tmp/enrich.json", models, "draft_enrichment")).toContain("strong");
     expect(buildCodexEnrichmentManifestArgs(cli, "/tmp/enrich.json", models, "draft_enrichment")).not.toContain("answer_query");
@@ -95,7 +130,7 @@ describe("Codex manifest adapter", () => {
 const dashboard = component === "generate_dashboard";
 console.log(JSON.stringify({
   manifest_version: "0.1",
-  compat: { min_ir_version: "0.6", max_ir_version: "0.6" },
+  compat: { min_ir_version: "0.8", max_ir_version: "0.8" },
   profile: "genbi-default",
   target: "codex:local",
   agents: [{

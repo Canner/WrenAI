@@ -24,6 +24,7 @@
         },
         "render_blocks": []
       },
+      "entrypoint": true,
       "eval": {
         "metrics": [
           "coverage"
@@ -96,24 +97,9 @@
         "outcome": {
           "kind": "none"
         },
-        "render_blocks": [
-          {
-            "fields": {
-              "columns": "string[]",
-              "rows": "row[]"
-            },
-            "type": "table"
-          },
-          {
-            "fields": {
-              "filters": "string[]",
-              "source_tables": "string[]",
-              "sql": "string"
-            },
-            "type": "definition"
-          }
-        ]
+        "render_blocks": []
       },
+      "entrypoint": true,
       "eval": {
         "metrics": [
           "execution_accuracy",
@@ -222,7 +208,7 @@
       "context_requirements": [
         "a bound semantic context (semantic layer) to build dashboards over"
       ],
-      "description": "Build a multi-panel dashboard on a topic: plan which panels answer it, run each panel's query read-only, and compose them into one laid-out result of KPI cards, tables and charts. Use it when someone wants an overview of a subject from several angles rather than one specific answer.",
+      "description": "Build a multi-panel dashboard on a topic: plan which panel questions answer it, obtain a verified result for each panel through the profile's bound answer behavior, and compose them into one laid-out result of KPI cards, tables and charts. Use it when someone wants an overview of a subject from several angles rather than one specific answer.",
       "effect": {
         "outcome": {
           "kind": "none"
@@ -263,6 +249,7 @@
           }
         ]
       },
+      "entrypoint": true,
       "eval": {
         "metrics": [
           "panel_validity",
@@ -294,18 +281,24 @@
           "consumes": [],
           "name": "plan_dashboard",
           "produces": "dashboard_plan",
-          "prompt": "You build data dashboards over the bound semantic context `v5-jaffle` (a semantic layer at\n`../../../../examples/v5-jaffle`).\n\nGiven the user's topic, plan the dashboard:\n\n- If the request doesn't name a fresh topic of its own — it refers back to a dashboard already in\n  play (\"the dashboard,\" \"it,\" \"that dashboard\"), or is a bare \"create an artifact for it\" /\n  \"build it\" follow-up — do NOT stop here to ask what dashboard or what topic. Take the topic from\n  the conversation so far (whatever dashboard/topic was most recently discussed); if there is\n  truly none, fall back to an overview of the project's key metrics. Either way, keep planning:\n  this step always ends with a `dashboard_plan`, never a clarifying question.\n- Discover available models, columns, and cubes **at query time** using the bound introspection\n  capability. Do not assume the schema — introspect it.\n- Decide which metrics and dimensions answer the topic, and what panels are needed\n  (KPI cards for headline numbers, a chart for trends/breakdowns, a table for detail).\n- Produce `dashboard_plan`: for each panel, the panel type (kpi_card | table | chart) and the exact\n  query (through the semantic layer) that populates it. Every query goes through the bound query\n  capability; never hand-write SQL against raw tables outside the model.",
+          "prompt": "You build data dashboards over the bound semantic context `v5-jaffle` (a semantic layer at\n`../../../../examples/v5-jaffle`).\n\nGiven the user's topic, plan the dashboard:\n\n- If the request doesn't name a fresh topic of its own — it refers back to a dashboard already in\n  play (\"the dashboard,\" \"it,\" \"that dashboard\"), or is a bare \"create an artifact for it\" /\n  \"build it\" follow-up — do NOT stop here to ask what dashboard or what topic. Take the topic from\n  the conversation so far (whatever dashboard/topic was most recently discussed); if there is\n  truly none, fall back to an overview of the project's key metrics. Either way, keep planning:\n  this step always ends with a `dashboard_plan`, never a clarifying question.\n- Decide which business questions answer the topic, and what panels are needed\n  (KPI cards for headline numbers, a chart for trends/breakdowns, a table for detail).\n- Produce `dashboard_plan`: for each panel, give its title, panel type (kpi_card | table | chart),\n  and one self-contained natural-language data question whose verified answer will populate it.\n  Do not inspect the schema, write a query, or invent data in this step; the bound answer behavior\n  resolves each panel question against its own semantic context and query authority.",
           "tier": "strong",
           "when": null
         },
         {
+          "component_calls": [
+            {
+              "alias": "answer",
+              "component": "answer_query"
+            }
+          ],
           "conditional": false,
           "consumes": [
             "dashboard_plan"
           ],
           "name": "compose_layout",
           "produces": "dashboard",
-          "prompt": "Given the `dashboard_plan`, run each panel's query and compose the dashboard.\n\n- Run each planned panel query through the bound query capability and collect the results — these\n  are the `panel_results` you consume. (This inlines the query behavior; it does not call a\n  separate query component.)\n- Assemble each panel into a typed render block conforming to the render contract:\n  `kpi_card` for headline numbers, `chart` for trends/breakdowns, `table` for detail.\n- Produce `dashboard`: follow the \"Render output\" instructions the dispatcher appends below for the\n  active render flavor — emit the `{ blocks, summary }` envelope (programmatic) or write the HTML\n  (prompt). The blocks must carry real values from `panel_results`, not placeholders.\n- The rendered dashboard IS the artifact. Never ask the user what kind of artifact they want, and\n  never offer alternatives — saving the plan/JSON to a file, exporting to CSV, \"something else?\",\n  etc. Whatever the user called it (\"an artifact,\" \"a report,\" \"the dashboard\"), this step's only\n  job is to compose it and produce `dashboard` per the render flavor above; don't stop to\n  clarify format, and don't do anything else instead (no writing files outside what \"Render\n  output\" already directs).",
+          "prompt": "Given the `dashboard_plan`, obtain each panel's verified answer and compose the dashboard.\n\n- For every planned panel, call the logical `answer` alias once with a concise request to answer\n  that panel's natural-language data question. Include the panel title and type in the optional\n  structured input. Call the same alias again for every additional panel; do not combine unrelated\n  panels into one request merely to avoid repeated calls.\n- Accept a panel result only when the call returns `status: \"ok\"`, `output.kind: \"value\"`, and a\n  value containing `verified: true`, `columns`, `rows`, `summary`, and `definition`. Refuse the\n  dashboard rather than using a refused, failed, unverified, malformed, or placeholder result.\n- Assemble each panel into a typed render block conforming to the render contract:\n  `kpi_card` for headline numbers, `chart` for trends/breakdowns, `table` for detail. Derive the\n  dashboard's definition block from the accepted panel definitions; do not invent provenance.\n- Produce `dashboard`: follow the \"Render output\" instructions the dispatcher appends below for the\n  active render flavor — emit the `{ blocks, summary }` envelope (programmatic) or write the HTML\n  (prompt). The blocks must carry real values from the accepted panel results, not placeholders.\n- The rendered dashboard IS the artifact. Never ask the user what kind of artifact they want, and\n  never offer alternatives — saving the plan/JSON to a file, exporting to CSV, \"something else?\",\n  etc. Whatever the user called it (\"an artifact,\" \"a report,\" \"the dashboard\"), this step's only\n  job is to compose it and produce `dashboard` per the render flavor above; don't stop to\n  clarify format, and don't do anything else instead (no writing files outside what \"Render\n  output\" already directs).",
           "tier": "cheap",
           "when": null
         }
@@ -321,16 +314,15 @@
         "checks": [],
         "status": "pass"
       },
-      "prompt_fragment": "## plan_dashboard\n\nYou build data dashboards over the bound semantic context `v5-jaffle` (a semantic layer at\n`../../../../examples/v5-jaffle`).\n\nGiven the user's topic, plan the dashboard:\n\n- If the request doesn't name a fresh topic of its own — it refers back to a dashboard already in\n  play (\"the dashboard,\" \"it,\" \"that dashboard\"), or is a bare \"create an artifact for it\" /\n  \"build it\" follow-up — do NOT stop here to ask what dashboard or what topic. Take the topic from\n  the conversation so far (whatever dashboard/topic was most recently discussed); if there is\n  truly none, fall back to an overview of the project's key metrics. Either way, keep planning:\n  this step always ends with a `dashboard_plan`, never a clarifying question.\n- Discover available models, columns, and cubes **at query time** using the bound introspection\n  capability. Do not assume the schema — introspect it.\n- Decide which metrics and dimensions answer the topic, and what panels are needed\n  (KPI cards for headline numbers, a chart for trends/breakdowns, a table for detail).\n- Produce `dashboard_plan`: for each panel, the panel type (kpi_card | table | chart) and the exact\n  query (through the semantic layer) that populates it. Every query goes through the bound query\n  capability; never hand-write SQL against raw tables outside the model.\n\n## compose_layout\n\nGiven the `dashboard_plan`, run each panel's query and compose the dashboard.\n\n- Run each planned panel query through the bound query capability and collect the results — these\n  are the `panel_results` you consume. (This inlines the query behavior; it does not call a\n  separate query component.)\n- Assemble each panel into a typed render block conforming to the render contract:\n  `kpi_card` for headline numbers, `chart` for trends/breakdowns, `table` for detail.\n- Produce `dashboard`: follow the \"Render output\" instructions the dispatcher appends below for the\n  active render flavor — emit the `{ blocks, summary }` envelope (programmatic) or write the HTML\n  (prompt). The blocks must carry real values from `panel_results`, not placeholders.\n- The rendered dashboard IS the artifact. Never ask the user what kind of artifact they want, and\n  never offer alternatives — saving the plan/JSON to a file, exporting to CSV, \"something else?\",\n  etc. Whatever the user called it (\"an artifact,\" \"a report,\" \"the dashboard\"), this step's only\n  job is to compose it and produce `dashboard` per the render flavor above; don't stop to\n  clarify format, and don't do anything else instead (no writing files outside what \"Render\n  output\" already directs).",
+      "prompt_fragment": "## plan_dashboard\n\nYou build data dashboards over the bound semantic context `v5-jaffle` (a semantic layer at\n`../../../../examples/v5-jaffle`).\n\nGiven the user's topic, plan the dashboard:\n\n- If the request doesn't name a fresh topic of its own — it refers back to a dashboard already in\n  play (\"the dashboard,\" \"it,\" \"that dashboard\"), or is a bare \"create an artifact for it\" /\n  \"build it\" follow-up — do NOT stop here to ask what dashboard or what topic. Take the topic from\n  the conversation so far (whatever dashboard/topic was most recently discussed); if there is\n  truly none, fall back to an overview of the project's key metrics. Either way, keep planning:\n  this step always ends with a `dashboard_plan`, never a clarifying question.\n- Decide which business questions answer the topic, and what panels are needed\n  (KPI cards for headline numbers, a chart for trends/breakdowns, a table for detail).\n- Produce `dashboard_plan`: for each panel, give its title, panel type (kpi_card | table | chart),\n  and one self-contained natural-language data question whose verified answer will populate it.\n  Do not inspect the schema, write a query, or invent data in this step; the bound answer behavior\n  resolves each panel question against its own semantic context and query authority.\n\n## compose_layout\n\nGiven the `dashboard_plan`, obtain each panel's verified answer and compose the dashboard.\n\n- For every planned panel, call the logical `answer` alias once with a concise request to answer\n  that panel's natural-language data question. Include the panel title and type in the optional\n  structured input. Call the same alias again for every additional panel; do not combine unrelated\n  panels into one request merely to avoid repeated calls.\n- Accept a panel result only when the call returns `status: \"ok\"`, `output.kind: \"value\"`, and a\n  value containing `verified: true`, `columns`, `rows`, `summary`, and `definition`. Refuse the\n  dashboard rather than using a refused, failed, unverified, malformed, or placeholder result.\n- Assemble each panel into a typed render block conforming to the render contract:\n  `kpi_card` for headline numbers, `chart` for trends/breakdowns, `table` for detail. Derive the\n  dashboard's definition block from the accepted panel definitions; do not invent provenance.\n- Produce `dashboard`: follow the \"Render output\" instructions the dispatcher appends below for the\n  active render flavor — emit the `{ blocks, summary }` envelope (programmatic) or write the HTML\n  (prompt). The blocks must carry real values from the accepted panel results, not placeholders.\n- The rendered dashboard IS the artifact. Never ask the user what kind of artifact they want, and\n  never offer alternatives — saving the plan/JSON to a file, exporting to CSV, \"something else?\",\n  etc. Whatever the user called it (\"an artifact,\" \"a report,\" \"the dashboard\"), this step's only\n  job is to compose it and produce `dashboard` per the render flavor above; don't stop to\n  clarify format, and don't do anything else instead (no writing files outside what \"Render\n  output\" already directs).",
       "realization_kind": "skill",
       "required_capabilities": [
-        "sql_execution:read_only",
-        "genbi_build",
         "render_contract",
         "artifact_write",
         "llm:per_step_tier",
         "llm:strong",
-        "llm:cheap"
+        "llm:cheap",
+        "component_invocation"
       ],
       "trigger": {
         "kind": "one_shot"
@@ -364,6 +356,7 @@
           }
         ]
       },
+      "entrypoint": true,
       "eval": {
         "metrics": [
           "driver_correctness",
@@ -460,10 +453,6 @@
         }
       ],
       "lineage": {
-        "consumers": {
-          "dashboards": 0,
-          "queries": 1
-        },
         "edges": 7,
         "nodes": 8,
         "resolvable": true
@@ -506,5 +495,5 @@
     }
   },
   "profile": "genbi-default",
-  "warble_ir_version": "0.6"
+  "warble_ir_version": "0.8"
 }

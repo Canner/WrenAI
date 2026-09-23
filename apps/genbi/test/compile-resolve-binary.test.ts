@@ -55,6 +55,16 @@ describe("resolveWarbleBinary", () => {
 });
 
 describe("resolveHubDir", () => {
+  it("does not pair an installed CLI with an unrelated sibling Hub", async () => {
+    const key = "WREN_HARNESS_ALLOW_WARBLE_SIBLING_CHECKOUT";
+    const original = process.env[key];
+    delete process.env[key];
+    try {
+      expect(resolveHubDir(await resolveWarbleBinary())).toBeUndefined();
+    } finally {
+      if (original === undefined) delete process.env[key]; else process.env[key] = original;
+    }
+  });
   it("derives the Hub root from the resolved binary's own checkout", async () => {
     const scratch = await mkdtemp(path.join(os.tmpdir(), "wren-harness-hub-dir-"));
     const checkout = path.join(scratch, "warble");
@@ -66,7 +76,7 @@ describe("resolveHubDir", () => {
     expect(resolveHubDir(path.join(checkout, "target", "release", "warble"))).toBe(hubDir);
   });
 
-  it("falls through to the sibling-checkout walk when the binary's own checkout has no hub/components", async () => {
+  it("never reports a nonexistent Hub under the binary's own directory", async () => {
     const scratch = await mkdtemp(path.join(os.tmpdir(), "wren-harness-hub-dir-none-"));
     await mkdir(path.join(scratch, "target", "release"), { recursive: true });
 

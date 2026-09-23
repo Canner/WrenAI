@@ -78,7 +78,9 @@ describe("Codex Ask CLI contract", () => {
       "--server", "wren", "--server-command", "/opt/wren",
       "--server-arg", "serve", "--server-arg", "mcp", "--server-arg=--project",
       "--server-arg", "/tmp/project", "--server-arg=--quiet",
-      "--inspect-tool", "get_context", "--query-tool", "run_sql",
+      "--transport", "orchestrate", "--step-tool", "resolve_intent=get_context",
+      "--step-tool", "generate_sql=run_sql", "--step-tool", "repair_sql=run_sql",
+      "--require-tool", "generate_sql", "--require-tool", "repair_sql",
       "--timeout", "123", "--stream-json",
     ]);
   });

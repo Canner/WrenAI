@@ -1,3 +1,7 @@
+import { execFileSync } from "node:child_process";
+import { resolveWarbleBinary } from "../harness/compile/resolve-binary.js";
+import { prepareNativeComponentHost } from "../server/native-component-preparation.js";
+import { normalizeComponentEvidence } from "../harness/components/normalize.js";
 import { buildNativeLaunchSpec } from "./native-launch-spec.js";
 import { chmodSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -199,6 +203,47 @@ function managedRuntimeFixture(dir: string, generation: string): NativeWrenRunti
 afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
 
 describe("native session persistence", () => {
+  it("pins the selected entry across persistence, coalescing and delivery retries", async () => {
+    const { dir, binding } = fixture("analysis", "codex");
+    const state = materializationState(); const store = new Store(":memory:");
+    store.setRuntimeSettings({ ...store.getRuntimeSettings(), subscriptionProvider: "codex", subscriptionDriverModel: "driver", tierModels: [{ tier: "cheap", model: "cheap" }, { tier: "strong", model: "strong" }] });
+    const entries: unknown[] = [];
+    let pauseDispatch = false;
+    let releaseDispatch!: () => void;
+    let enteredDispatch!: () => void;
+    const dispatchEntered = new Promise<void>((resolve) => { enteredDispatch = resolve; });
+    const dispatchReleased = new Promise<void>((resolve) => { releaseDispatch = resolve; });
+    const service = new NativeSessionService({
+      store, terminalManager: async () => new InteractiveTerminalManager({ spawn: () => ({ onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} }) }), getBinding: () => binding,
+      workspaceRoot: undefined, materializationState: state,
+      irPaths: { analysis: path.join(dir, "analysis.json"), setup: undefined, context_enrichment: undefined }, warbleBin: "unused",
+      dispatch: async ({ cwd, scope }) => { if (pauseDispatch) { enteredDispatch(); await dispatchReleased; } entries.push(scope.entry); writeNativeLaunchSpec(cwd, "analysis", "codex", scope); },
+    });
+    const dashboard = await service.startSeparate({ purpose: "analysis", entryVerb: "generate_dashboard", idempotencyKey: "one" });
+    expect(store.getNativeSession(dashboard.row.id)?.entryVerb).toBe("generate_dashboard");
+    expect(entries[0]).toMatchObject({ verb: "generate_dashboard" });
+    await expect(service.startSeparate({ purpose: "analysis", entryVerb: "answer_query", idempotencyKey: "one" })).rejects.toThrow("stale");
+    expect((await service.openOrCreate({ purpose: "analysis", entryVerb: "generate_dashboard" })).row.id).toBe(dashboard.row.id);
+    const answer = await service.openOrCreate({ purpose: "analysis" });
+    expect(answer.row.id).not.toBe(dashboard.row.id); expect(answer.row.entryVerb).toBe("answer_query");
+    await expect(service.startSeparate({ purpose: "analysis", entryVerb: "run_sql", idempotencyKey: "bad" })).rejects.toThrow("entry is invalid");
+    await expect(service.startSeparate({ purpose: "setup", entryVerb: "generate_dashboard", idempotencyKey: "bad" })).rejects.toThrow("entry is invalid");
+    expect(entries).toHaveLength(2);
+    pauseDispatch = true;
+    const lateLaunch = service.startSeparate({ purpose: "analysis", entryVerb: "generate_dashboard", idempotencyKey: "late" });
+    const rejectedLaunch = expect(lateLaunch).rejects.toThrow("shutting down");
+    await dispatchEntered;
+    let drained = false;
+    const shutdown = service.shutdown().then(() => { drained = true; });
+    await Promise.resolve(); expect(drained).toBe(false);
+    releaseDispatch(); await rejectedLaunch; await shutdown;
+    expect(store.listNativeSessions().filter((row) => row.status === "running")).toEqual([]);
+    expect(store.getNativeSession(dashboard.row.id)?.status).toBe("stopped");
+    expect(store.getNativeSession(answer.row.id)?.status).toBe("stopped");
+    await expect(service.create({ purpose: "analysis" })).rejects.toThrow("shutting down");
+    store.close();
+  });
+
   it("pins a validated managed generation for an active production Codex session while the approved generation advances", async () => {
     const { dir, binding } = fixture("analysis", "codex");
     const state = materializationState(); const store = new Store(":memory:");
@@ -820,6 +865,7 @@ describe("native session persistence", () => {
       try {
         vi.advanceTimersByTime(timeoutMs);
         expect(warning).toHaveBeenCalledWith("[native-sessions] terminal close failed during capability revocation");
+        await expect(service.shutdown()).rejects.toThrow("native runtime cleanup failed");
       } finally {
         warning.mockRestore();
       }
@@ -1527,6 +1573,7 @@ describe("native session persistence", () => {
       expect(service.attach(first.row.id, first.capability!)).toBeUndefined();
       service.revokeBindingCapabilities(revoked.revokedNativeSessionIds);
       expect(warning).toHaveBeenCalledWith("[native-sessions] terminal close failed during capability revocation");
+        await expect(service.shutdown()).rejects.toThrow("native runtime cleanup failed");
     } finally {
       warning.mockRestore();
     }
@@ -2107,5 +2154,86 @@ describe("native launch-spec v2/v4", () => {
     (spec.mcp as Record<string, unknown>).tool = "persist_answer";
     writeFileSync(specPath, JSON.stringify(spec));
     expect(() => readNativeLaunchSpec(dir, "analysis", "claude", "fixture-scope", binding, { version: "1", url: NATIVE_MCP_URL, credential: "credential" })).toThrow(/incompatible/);
+  });
+});
+
+
+describe("native session component MCP integration", () => {
+  it.each(["claude", "codex"] as const)("routes %s v5 host execution through the owning session and revokes on stop", async (vendor) => {
+    const binary = await resolveWarbleBinary(process.env.WARBLE_TEST_CLI);
+    const { dir, binding } = fixture("analysis", vendor);
+    const state = materializationState(); const store = new Store(":memory:");
+    store.setRuntimeSettings({ ...store.getRuntimeSettings(), subscriptionProvider: vendor,
+      subscriptionDriverModel: "driver", tierModels: vendor === "claude" ? [{ tier: "cheap", model: "haiku" }, { tier: "strong", model: "sonnet" }] : [{ tier: "cheap", model: "cheap" }, { tier: "strong", model: "strong" }] });
+    const irPath = path.resolve("profiles/genbi-default/ir.golden.json");
+    const ir = JSON.parse(readFileSync(irPath, "utf8"));
+    const snapshot = JSON.parse(readFileSync(path.resolve("profiles/genbi-default/context/context.json"), "utf8"));
+    const contexts = Object.fromEntries(ir.components.map((node: { id: string; context_binding: Record<string, unknown> }) => [node.id, { binding: node.context_binding, snapshot }]));
+    const artifacts = new NativeArtifactService({ store, artifactsRoot: path.join(dir, "artifacts"), expectedMcpUrl: NATIVE_MCP_URL, mcpUrl: NATIVE_MCP_URL, getBinding: () => binding });
+    const spawn = vi.fn(() => ({ onData: () => ({ dispose() {} }), onExit: () => ({ dispose() {} }), write() {}, resize() {}, kill() {} }));
+    const persist = vi.fn(async () => {}); const query = vi.fn(async () => ({ columns: ["n"], rows: [{ n: 7 }], definition: { sql: "SELECT 7 AS n", source_tables: [], filters: [] } }));
+    let credential = "";
+    const service = new NativeSessionService({
+      store, terminalManager: async () => new InteractiveTerminalManager({ spawn }), getBinding: () => binding,
+      workspaceRoot: undefined, materializationState: state, irPaths: { analysis: irPath, setup: undefined, context_enrichment: undefined },
+      warbleBin: binary, artifactService: artifacts, producerAvailable: () => true, executableAvailable: () => true,
+      vendorExecutables: { [vendor]: attestNativeExecutable("vendor", process.execPath) },
+      ...(vendor === "codex" ? { ...managedCodexRuntimeOptions(), resolveManagedCodexWrenRuntime: () => managedRuntimeFixture(dir, "synthetic"), prepareCodexWrenHome: ({ cwd }) => createEmptyCodexWrenHome(cwd) } : {}),
+      // Producer preflight has its own real-CLI tests; this seam tests creation/MCP/lifecycle.
+      prepareComponentProbe: () => undefined,
+      async prepareComponents({ session, scope, irDocument }) {
+        const identity = { session_id: session.id, vendor, auth_identity: "synthetic", runtime_generation: String(session.runtimeGeneration), binding: scope.binding as { project_identity: string; generation: string; revision: string } };
+        return prepareNativeComponentHost(irDocument, scope, { identity, contexts, verifierBinary: binary, currentIdentity: () => identity, assertCurrent() {},
+          async prepare(component) { return { async query() { expect(component.id).toBe("answer_query"); return query(); }, async inspect() { return snapshot; }, async close() {} }; },
+          async step(run, component) {
+            if (component.id === "generate_dashboard") {
+              if (!run.terminal) { expect(Object.keys(run.tools)).toEqual([]); return { value: "one panel" }; }
+              expect(Object.keys(run.tools)).toEqual(["answer"]);
+              await run.tools.answer!({ request: "panel" });
+              return { value: { blocks: [{ type: "table", columns: ["n"], rows: [[7]] }] } };
+            }
+            if (!Object.hasOwn(run.consumes, "query_intent")) return { value: "intent" };
+            const sqlTool = Object.entries(run.toolSchemas).find(([, schema]) => JSON.stringify(schema).includes('"sql"'))![0];
+            await run.tools[sqlTool]!({ sql: "SELECT 7 AS n" }); return { value: "queried" };
+          },
+          async normalize(component, evidence, _signal, context) { return normalizeComponentEvidence(component, evidence, context); }, persistRoot: persist,
+        });
+      },
+      async dispatch({ cwd, scope, mcp, componentHost }) {
+        expect(componentHost).toBeDefined(); credential = mcp!.credential;
+        const scopePath = path.join(cwd, "scope-input.json"), mcpPath = path.join(cwd, "mcp-input.json"), hostPath = path.join(cwd, "host-input.json");
+        writeFileSync(scopePath, JSON.stringify(scope)); writeFileSync(mcpPath, JSON.stringify(mcp)); writeFileSync(hostPath, JSON.stringify(componentHost));
+        try { execFileSync(binary, ["dispatch", irPath, "--target", vendor === "claude" ? "claude-code:interactive" : "codex:interactive", "--purpose", "analysis", "--native-scope", scopePath, "--native-mcp", mcpPath, "--native-host", hostPath, "--out", cwd], { timeout: 30_000, stdio: "pipe" }); }
+        finally { for (const file of [scopePath, mcpPath, hostPath]) rmSync(file); }
+      },
+    });
+    try {
+      const created = await service.create({ purpose: "analysis", vendor, ...(vendor === "codex" ? { entryVerb: "generate_dashboard" } : {}) });
+      expect(created.row.status, created.row.failure ?? "launch").toBe("running"); expect(spawn).toHaveBeenCalledOnce();
+      if (vendor === "codex") {
+        const config = readFileSync(path.join(state.root, "native", created.row.id, ".codex", "config.toml"), "utf8");
+        expect(config).toContain('default_permissions = "warble-hosted"');
+        expect(config).toContain('enabled = false');
+        expect(config).not.toContain('warble_native_wren');
+        expect(config).not.toContain(JSON.stringify(realpathSync(dir)) + ' = "read"');
+      }
+      const app = createApp({ store, nativeSessions: service, nativeArtifacts: artifacts,
+        route: async () => ({ backend: "agent", warnings: [], kind: "answer", envelope: { blocks: [] }, trace: { steps: [] } }),
+        baseRouteOptions: { authChoice: { mode: "api-key", adapter: "mock" }, profileSource: "fixture", userProject: dir, outDir: dir },
+      });
+      const rpc = (id: number, method: string, params?: unknown) => app.request("/api/native-sessions/mcp", { method: "POST", headers: { authorization: `Bearer ${credential}`, "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id, method, ...(params ? { params } : {}) }) });
+      const listResponse = await rpc(1, "tools/list"); expect(listResponse.status).toBe(200);
+      const listed = await listResponse.json() as { result: { tools: { name: string }[] } };
+      const tools = listed.result.tools.filter((tool) => tool.name.startsWith("warble_run_")); expect(tools).toHaveLength(1);
+      const name = tools[0]!.name;
+      const forged = await rpc(2, "tools/call", { name, arguments: { request: "panel", component: "answer_query", step: "generate_sql" } });
+      expect(forged.status).toBe(500); expect(query).not.toHaveBeenCalled(); expect(persist).not.toHaveBeenCalled();
+      const called = await rpc(3, "tools/call", { name, arguments: { request: "overview" } });
+      expect(called.status).toBe(200); expect(await called.json()).toMatchObject({ id: 3, result: { isError: false, structuredContent: { status: "ok", output: { kind: "render" } } } });
+      expect(query).toHaveBeenCalledOnce(); expect(persist).toHaveBeenCalledOnce();
+      expect(service.stop(created.row.id, created.capability!)).toBe(true);
+      expect((await rpc(4, "tools/call", { name, arguments: { request: "again" } })).status).toBe(401);
+      expect(service.componentTools(created.row.id)).toEqual([]); expect(query).toHaveBeenCalledOnce();
+    } finally { await service.shutdown(); store.close(); }
   });
 });

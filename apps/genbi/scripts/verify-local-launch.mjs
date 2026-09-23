@@ -16,6 +16,7 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -185,7 +186,7 @@ async function loadHarnessBundleLoader() {
   }
 }
 
-async function probeNativeSessionProducer({ bin, irPaths }) {
+async function probeNativeSessionProducer({ bin, irPaths, analysisContext }) {
   const module = regularFile(path.join(packageRoot, "dist-server", "server", "native-sessions.js"), "fresh dist-server native-session producer");
   let producer;
   try {
@@ -194,9 +195,13 @@ async function probeNativeSessionProducer({ bin, irPaths }) {
     throw new GateError("build", "could not load the freshly built BFF native-session producer");
   }
   if (typeof producer !== "function") throw new GateError("build", "fresh dist-server does not export the BFF native-session producer");
+  const analysis = JSON.parse(readFileSync(irPaths.analysis, "utf8"));
+  const composed = analysis.components?.some((node) => node.llm_calls?.some((step) => step.component_calls?.length));
+  const { prepareNativeComponentHost } = await builtModule("server/native-component-preparation.js");
   const result = await producer({
     warbleBin: bin,
     irPaths,
+    ...(composed ? { prepareComponents: createComponentProbe(bin, analysisContext, prepareNativeComponentHost) } : {}),
     ...(process.env.WREN_HARNESS_WREN_SHIM !== undefined ? { wrenShim: process.env.WREN_HARNESS_WREN_SHIM } : {}),
   });
   // This gate claims evidence for every purpose x vendor below, so every vendor
@@ -211,6 +216,23 @@ async function probeNativeSessionProducer({ bin, irPaths }) {
     throw new GateError("contract", `Warble native producer preflight failed for the selected runtime closure (${detail})`);
   }
   return { available: true, evidence: nativePurposes.flatMap((purpose) => nativeVendors.map((vendor) => `dispatch:native(${purpose}/${vendor})`)) };
+}
+
+function createComponentProbe(bin, snapshot, componentPreparation) {
+  return ({ vendor, scope, irDocument }) => {
+    const ir = JSON.parse(irDocument);
+    if (!ir.components?.some((node) => node.llm_calls?.some((step) => step.component_calls?.length))) return undefined;
+    if (!snapshot || !componentPreparation) throw new GateError("contract", "composed native probe requires prepared analysis context");
+    const identity = { session_id: "launch-contract-probe", vendor, auth_identity: "synthetic-probe", runtime_generation: "1", binding: scope.binding };
+    const forbidden = () => { throw new Error("component execution is forbidden in the launch contract probe"); };
+    return componentPreparation(irDocument, scope, { identity, verifierBinary: bin,
+      contexts: Object.fromEntries(ir.components.map((node) => [node.id, { binding: node.context_binding, snapshot }])),
+      currentIdentity: () => identity, assertCurrent() {}, prepare: forbidden, step: forbidden, normalize: forbidden });
+  };
+}
+
+async function builtModule(relative) {
+  return import(pathToFileURL(regularFile(path.join(packageRoot, "dist-server", relative), "built contract module")).href);
 }
 
 async function runWarbleContractProbe({ bin, profile, setupIr, enrichIr, analysisIr }) {
@@ -234,20 +256,34 @@ async function runWarbleContractProbe({ bin, profile, setupIr, enrichIr, analysi
     // fixture. A stale harness-declared IR version against a newer Warble
     // pin fails here, not silently at the first live describe request.
     const { loadBundle } = await loadHarnessBundleLoader();
+    const { VERCEL_HOST_CONTRACT, readExecutionPlan, planDigest } = await builtModule("harness/components/plan.js");
+    const { describeComponentPlan } = await builtModule("harness/components/display.js");
     for (const [label, ir, provider] of [
       ["profile", compiledIr, path.join(packageRoot, "providers", "wren.provider.yaml")],
       ["setup", setupIr, path.join(packageRoot, "providers", "setup.provider.yaml")],
     ]) {
       const out = path.join(probeRoot, `${label}-vercel`);
-      result = run(bin, ["dispatch", "--target", "vercel", "--provider", provider, ir, "--out", out], { capture: true });
+      const irDocument = JSON.parse(readFileSync(ir, "utf8"));
+      const composed = irDocument.components?.some((node) => node.llm_calls?.some((step) => step.component_calls?.length));
+      const host = path.join(probeRoot, `${label}-host.json`);
+      if (composed) writeFileSync(host, JSON.stringify(VERCEL_HOST_CONTRACT));
+      result = run(bin, ["dispatch", "--target", "vercel", "--provider", provider, ...(composed ? ["--host-contract", host] : []), ir, "--out", out], { capture: true });
       const bundlePath = path.join(out, "bundle.json");
       if (result.code !== 0 || !existsSync(bundlePath)) throw new GateError("contract", `Warble Vercel dispatch probe failed for ${label}`);
       let bundleJson;
       try { bundleJson = JSON.parse(readFileSync(bundlePath, "utf8")); } catch { throw new GateError("contract", `Warble Vercel dispatch probe for ${label} did not produce valid JSON`); }
-      try { loadBundle(bundleJson); } catch (error) { throw new GateError("describe", `Warble Vercel bundle for ${label} failed the harness describe/compat check: ${error instanceof Error ? error.message : String(error)}`); }
+      try {
+        if (composed) {
+          const plan = readExecutionPlan(JSON.stringify(bundleJson), { digest: bundleJson.bundle_sha256, inputIrDigest: planDigest(irDocument),
+            declarations: Object.fromEntries(irDocument.components.map((node) => [node.id, node])), contextBinding: irDocument.context_binding });
+          loadBundle(describeComponentPlan(plan, bundleJson.profile), { irVersion: "0.8", bundleVersions: ["0.2"] });
+        } else loadBundle(bundleJson);
+      } catch (error) { throw new GateError("describe", `Warble Vercel bundle for ${label} failed the harness describe/compat check: ${error instanceof Error ? error.message : String(error)}`); }
     }
 
-    const native = await probeNativeSessionProducer({ bin, irPaths: { analysis: analysisIr, setup: setupIr, context_enrichment: enrichIr } });
+    const contextPath = path.join(profile, "context", "context.json");
+    const analysisContext = existsSync(contextPath) ? JSON.parse(readFileSync(contextPath, "utf8")) : undefined;
+    const native = await probeNativeSessionProducer({ bin, irPaths: { analysis: analysisIr, setup: setupIr, context_enrichment: enrichIr }, analysisContext });
     return { tiers: [...tiers].sort(), native };
   } finally { rmSync(probeRoot, { recursive: true, force: true }); }
 }
@@ -260,7 +296,7 @@ function runAgentSdkContractProbe({ bin, analysisIr, setupIr, enrichIr }) {
     const result = run(bin, ["manifest", ir, "--include-unavailable"], { capture: true });
     let manifest;
     try { manifest = JSON.parse(result.stdout); } catch { throw new GateError("contract", `agent-sdk manifest probe did not return valid JSON for ${label}`); }
-    if (result.code !== 0 || !manifest || typeof manifest !== "object" || Array.isArray(manifest) || manifest.manifest_version !== "0.1" || manifest.target !== "claude-agent-sdk:local" || manifest.profile !== profile || !Array.isArray(manifest.agents)) {
+    if (result.code !== 0 || !manifest || typeof manifest !== "object" || Array.isArray(manifest) || !["0.1", "0.3"].includes(manifest.manifest_version) || manifest.target !== "claude-agent-sdk:local" || manifest.profile !== profile || !Array.isArray(manifest.agents)) {
       throw new GateError("contract", `agent-sdk manifest probe is incompatible for ${label}`);
     }
     const agents = new Map(manifest.agents.map((agent) => [agent?.id, agent]));
@@ -297,15 +333,39 @@ function runAgentSdkContractProbe({ bin, analysisIr, setupIr, enrichIr }) {
   return evidence;
 }
 
-function runCodexLocalContractProbe({ bin, analysisIr, setupIr, enrichIr }) {
+async function runCodexLocalContractProbe({ bin, analysisIr, setupIr, enrichIr, warbleBin, profile }) {
   const evidence = [];
+  const analysis = JSON.parse(readFileSync(analysisIr, "utf8"));
+  const composed = analysis.components?.some((node) => node.llm_calls?.some((step) => step.component_calls?.length));
+  if (composed) {
+    const { describeCodexAskManifest } = await builtModule("harness/route/codex-local-manifest.js");
+    const snapshot = JSON.parse(readFileSync(path.join(profile, "context", "context.json"), "utf8"));
+    const bundle = await describeCodexAskManifest({ command: bin, prefixArgs: [] }, analysisIr,
+      { orchestrator: "fixture", cheap: "fixture", strong: "fixture" }, { warbleBin,
+        contexts: Object.fromEntries(analysis.components.map((node) => [node.id, { binding: node.context_binding, snapshot }])) });
+    if (bundle.target !== "codex:local" || bundle.agents.map((agent) => agent.id).join(",") !== "answer_query,generate_dashboard") {
+      throw new GateError("contract", "Codex composed manifest did not retain both analysis entries");
+    }
+    evidence.push("codex-local:manifest(analysis)");
+  }
   for (const [label, ir, profile, components, extra] of [
-    ["analysis", analysisIr, "genbi-default", ["answer_query", "generate_dashboard"], ["--orchestrator-model", "fixture", "--cheap-model", "fixture", "--strong-model", "fixture", "--inspect-tool", "get_context", "--query-tool", "run_sql"]],
-    ["setup", setupIr, "genbi-setup", [undefined], ["--source-tool", "setup_execution", "--context-tool", "setup_execution"]],
-    ["context_enrichment", enrichIr, "genbi-enrich-context", ["inspect_context", "draft_enrichment"], ["--model", "fixture", "--semantic-tool", "get_context", "--raw-material-tool", "get_context"]],
+    ["analysis", analysisIr, "genbi-default", ["answer_query", "generate_dashboard"], ["--transport", "orchestrate", "--orchestrator-model", "fixture", "--cheap-model", "fixture", "--strong-model", "fixture"]],
+    ["setup", setupIr, "genbi-setup", [undefined], ["--transport", "exec", "--step-tool", "connect=setup_execution", "--step-tool", "build=setup_execution", "--require-tool", "connect", "--require-tool", "build"]],
+    ["context_enrichment", enrichIr, "genbi-enrich-context", ["inspect_context", "draft_enrichment"], ["--transport", "turn", "--model", "fixture"]],
   ]) {
+    if (label === "analysis" && composed) continue;
     for (const component of components) {
       const args = ["manifest", ir, "--server-command", process.execPath, ...(component ? ["--component", component] : []), ...extra];
+      if (label === "analysis") {
+        const bindings = component === "answer_query"
+          ? ["resolve_intent=get_context", "generate_sql=run_sql", "repair_sql=run_sql"]
+          : ["plan_dashboard=get_context", "compose_layout=run_sql"];
+        const required = component === "answer_query" ? ["generate_sql", "repair_sql"] : ["plan_dashboard", "compose_layout"];
+        args.push(...bindings.flatMap((binding) => ["--step-tool", binding]), ...required.flatMap((step) => ["--require-tool", step]));
+      } else if (label === "context_enrichment") {
+        const step = component === "inspect_context" ? "inspect" : "draft";
+        args.push("--step-tool", `${step}=get_context`, "--require-tool", step);
+      }
       const result = run(bin, args, { capture: true });
       let manifest;
       try { manifest = JSON.parse(result.stdout); } catch { throw new GateError("contract", `codex-local manifest probe did not return valid JSON for ${label}`); }
@@ -370,7 +430,7 @@ export async function verifyLocalLaunch(options) {
   const contracts = await runWarbleContractProbe({ bin: warbleBin, profile, setupIr, enrichIr, analysisIr });
   const runtimeProbes = options.runtime === "subscription:claude"
     ? runAgentSdkContractProbe({ bin: agentSdkBin, analysisIr, setupIr, enrichIr })
-    : runCodexLocalContractProbe({ bin: codexLocalBin, analysisIr, setupIr, enrichIr });
+    : await runCodexLocalContractProbe({ bin: codexLocalBin, analysisIr, setupIr, enrichIr, warbleBin, profile });
   const codexIdentity = codexBin ? codexExecutableIdentity(codexBin) : undefined;
   return {
     result: "passed",

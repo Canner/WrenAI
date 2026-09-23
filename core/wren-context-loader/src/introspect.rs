@@ -196,6 +196,11 @@ impl ContextLoader for MdlContext {
     fn lineage(&self) -> &LineageGraph {
         &self.lineage
     }
+    fn host_analysis(&self) -> Option<warble::HostAnalysis> {
+        self.parseable
+            .then(|| crate::impact::analyze(&self.lineage))
+            .flatten()
+    }
     fn lineage_diagnostics(&self) -> &[String] {
         &self.lineage_diagnostics
     }

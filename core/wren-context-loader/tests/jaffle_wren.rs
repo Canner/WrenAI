@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use warble::{Additivity, ContextLoader, Severity};
+use warble::{Additivity, ContextLoader};
 use wren_context_loader::{read_project_dir, MdlContext};
 
 fn jaffle_wren() -> MdlContext {
@@ -100,12 +100,21 @@ fn lineage_is_resolvable() {
 #[test]
 fn blast_radius_of_orders_reaches_the_revenue_cube_and_is_semantic() {
     let ctx = jaffle_wren();
-    let radius = ctx.lineage().blast_radius("model:orders");
+    let radius = impact(&ctx, "model:orders");
     // The revenue cube sits on orders, so changing orders reaches the cube + its measures.
     assert!(radius.downstream.contains(&"cube:revenue".to_string()));
     assert!(radius
         .downstream
         .contains(&"metric:revenue.total_revenue".to_string()));
     // A downstream metric ⇒ the worst impact is a silent number shift ⇒ semantic.
-    assert_eq!(radius.severity, Severity::Semantic);
+    assert_eq!(radius.severity.rank, 3);
+}
+
+fn impact(ctx: &MdlContext, seed: &str) -> warble::HostImpact {
+    ctx.host_analysis()
+        .expect("Wren supplies impact analysis")
+        .impact
+        .get(seed)
+        .expect("declared seed")
+        .clone()
 }

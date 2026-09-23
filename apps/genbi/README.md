@@ -136,6 +136,39 @@ against real projects and depend on how well the configured model behaves. If a
 test you didn't touch fails and mentions a real query, check whether it's one of
 these before going looking for your own bug.
 
+## Component execution contracts
+
+Composed execution uses the versioned Vercel bundle or native host plan. The host owns
+component selection, reachable children, semantic context, model tiers and tool grants.
+The default dashboard calls `answer_query` for each panel; only the answer component has
+query authority. Child calls receive independent inputs, products and evidence. Successful
+root results are persisted only after all component resources have closed.
+
+The shared host limits an execution to depth 8, 32 child-component invocations per root
+execution, 40 executed steps globally, 12 executed steps per child invocation and 120 seconds. These are host call, step and time limits;
+they do not promise a hard cap on internal model requests made by a vendor runtime.
+
+Result verification uses observed tool/child data. Locked additivity and drill guards
+require query provenance derived by the governed Wren process and matching prepared context.
+The conservative SQL subset includes canonical cube measures, dimensions and simple literal
+filters. Unsupported expressions receive no semantic proof, so guarded execution refuses
+rather than inferring validity from model prose. Filter and order dimensions count toward
+the drill limit. Guarded parents currently refuse child evidence without semantic provenance.
+
+Native composition requires a separately certified, server-provided runtime for the same
+approved account, with fresh per-step resources and revocation checks. The default server
+composition does not configure that provider. Native host interfaces and passing deterministic
+probes do not activate this capability. Claude retains its scope entry; Codex Analysis selects
+one answer or dashboard entry before session creation and keeps that pin for the session.
+A compatible CLI/package tuple and runtime certification are required before enabling the
+native path; the pinned 0.13.0 CLI alone does not provide the new host contracts.
+
+`test/component-default-parity.test.ts` compares the real default profile across Vercel and
+both native producer formats using deterministic model/database responses. It exercises the
+host broker, context verifier, result normalizer and native admission, including repeated
+child calls, caller tool isolation, root persistence and correlated events. It does not
+perform account-backed runtime certification.
+
 ## Architecture
 
 ```

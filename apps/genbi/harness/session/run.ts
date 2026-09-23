@@ -74,11 +74,15 @@ export async function runAgent(
   userInput: string,
   ctx: RunAgentContext,
 ): Promise<RunAgentResult> {
+  if (bundle.vercel_bundle_version === "0.2") throw new Error("Composed plans require the component host runner");
   assertCapabilities(bundle, ctx.capabilityRegistry);
 
   const agent = bundle.agents.find((candidate) => candidate.id === agentId);
   if (!agent) {
     throw new UnknownAgentError(agentId);
+  }
+  if (agent.entrypoint === false || (agent.dependencies?.length ?? 0) > 0 || bundle.manifest_version === "0.3") {
+    throw new Error("This manifest requires its owning component runtime");
   }
 
   const emitter = createAgentEventEmitter(ctx.onEvent);
