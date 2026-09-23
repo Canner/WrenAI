@@ -26,14 +26,14 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 
 ## CLI Command Groups
 
-- `wren query` / `wren dry-plan` / `wren validate` — Core query operations
-- `wren context init|build|validate|show` — YAML MDL project management
-- `wren profile add|list|show|remove|activate` — Named connection profiles
+- `wren query` / `wren dry-plan` / `wren dry-run` — Core query operations. `dry-plan` expands SQL through the MDL with no DB; `dry-run` parses and validates against the data source. MDL validation is `wren context validate` — there is no top-level `wren validate`
+- `wren context init|import|validate|build|show|instructions|set-profile|upgrade` — YAML MDL project management
+- `wren profile add|list|import|rm|switch|debug` — Named connection profiles. `rm` removes a profile, `switch` activates one; there is no `show`, `remove`, or `activate`
 - `wren docs connection-info` — Generate connection field docs
-- `wren utils parse-type` — SQL type normalization
-- `wren memory index|fetch|store|recall` — Semantic memory (when `wren[memory]` installed)
+- `wren utils parse-type|parse-types|translate-type|translate-types` — SQL type normalization and dialect translation
+- `wren memory index|describe|fetch|store|recall|list|forget|dump|load|status|check|reset|watch|export` — Semantic memory (when `wren[memory]` installed)
 - `wren serve mcp` — Serve query/schema/knowledge tools as an MCP server (in-process engine, when `wrenai[mcp]` installed)
-- `wren cloud auth add|remove` — Store/remove the credential git authenticates to a Wren Cloud project with (touches no directory)
+- `wren cloud auth add|list|remove` — Store/remove the credential git authenticates to a Wren Cloud project with (touches no directory)
 - `wren cloud create|link|unlink` — Bind a local directory to a Wren Cloud project's git remote. The binding *is* the git remote; after binding, plain `git push`/`git pull` are the commands
 
 ## Key Design Points
@@ -52,10 +52,10 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 
 ## Connectors
 
-`connector/factory.py` dispatches on `DataSource` to return the right connector. Each connector wraps an Ibis backend and exposes `.query(sql, limit)` and `.dry_run(sql)`. Base class in `connector/base.py`; Ibis-backed connectors share `connector/ibis.py`.
+`connector/factory.py` dispatches on `DataSource` to return the right connector. Each connector wraps an Ibis backend and exposes `.query(sql, limit)` and `.dry_run(sql)`. Base class in `connector/base.py` (`ConnectorABC`, plus the shared `coerce_limit` helper). There is **no `connector/ibis.py`** — every data source gets its own module under `connector/`, and `doris` is a `DorisConnector` subclass inside `mysql.py`.
 
 - **Dedicated modules**: `postgres.py`, `mysql.py`, `mssql.py`, `bigquery.py`, `duckdb.py`, `oracle.py` (native oracledb, not Ibis), `redshift.py`, `spark.py`, `databricks.py`, `canner.py`
-- **Shared Ibis module** (`ibis.py`): trino, clickhouse, snowflake, athena
+- **More dedicated modules**: `trino.py`, `clickhouse.py`, `snowflake.py`, `athena.py`, `datafusion.py`
 - **File connectors**: `local_file`, `s3_file`, `minio_file`, `gcs_file` all map to duckdb
 - **doris** maps to mysql connector (MySQL-compatible protocol)
 - **canner** maps to postgres connector
@@ -67,7 +67,7 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 - **`WrenMemory`** — Main API: `index_manifest()`, `get_context()`, `store_query()`, `recall_queries()`, `describe_schema()`, `schema_is_current()`, `status()`, `reset()`
 - Uses sentence-transformers for embedding MDL schema items and NL↔SQL query pairs
 - **Seed queries** (`seed_queries.py`): On index, generates canonical NL-SQL pairs from the MDL manifest to bootstrap the query history
-- CLI: `wren memory index|fetch|store|recall` subcommands (auto-registered when extras installed)
+- CLI: `wren memory index|describe|fetch|store|recall|list|forget|dump|load|status|check|reset|watch|export` subcommands (auto-registered when extras installed)
 - Backing store: LanceDB (local or remote via opendal)
 
 ## Optional Extras
