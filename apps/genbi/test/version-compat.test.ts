@@ -7,12 +7,12 @@ import { buildSyntheticBundle } from "./synthetic-bundle.js";
 describe("loadBundle: version/compat check", () => {
   it("loud-fails when the compat IR window excludes the harness's supported version", () => {
     // 0.5–0.5 is the exact stale-checkout scenario this ticket fixed: a compat window one warble
-    // IR bump behind the harness's current "0.6" (harness/bundle/version.ts's HARNESS_SUPPORT).
+    // IR bump behind the harness's current "0.8" (harness/bundle/version.ts's HARNESS_SUPPORT).
     const bundle = buildSyntheticBundle({ minIrVersion: "0.5", maxIrVersion: "0.5" });
     expect(() => loadBundle(bundle)).toThrow(BundleCompatError);
     // Names both sides: the bundle's own window and the harness's version.
     expect(() => loadBundle(bundle)).toThrow(/\[0\.5, 0\.5\]/);
-    expect(() => loadBundle(bundle)).toThrow(/harness IR version "0\.6"/);
+    expect(() => loadBundle(bundle)).toThrow(/harness IR version "0\.8"/);
   });
 
   it("loud-fails on an unknown vercel_bundle_version", () => {
@@ -26,7 +26,7 @@ describe("loadBundle: version/compat check", () => {
   });
 
   it("accepts a bundle whose window includes the harness IR version", () => {
-    const bundle = buildSyntheticBundle({ minIrVersion: "0.1", maxIrVersion: "0.6" });
+    const bundle = buildSyntheticBundle({ minIrVersion: "0.1", maxIrVersion: "0.8" });
     expect(() => loadBundle(bundle)).not.toThrow();
   });
 

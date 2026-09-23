@@ -71,6 +71,7 @@ export interface NativeSessionRow {
   readonly purpose: NativeSessionPurpose;
   readonly vendor: NativeSessionVendor;
   readonly agent: string;
+  readonly entryVerb?: string | null;
   readonly scopeKind: NativeSessionScopeKind;
   readonly scopeId: string;
   readonly projectIdentity: string | null;
@@ -804,6 +805,7 @@ export class Store {
     this.addColumnIfMissing("enrichment_approvals", "evidence_ref", "TEXT NOT NULL DEFAULT ''");
     this.addColumnIfMissing("enrichment_approvals", "nonce", "TEXT NOT NULL DEFAULT ''");
     this.addColumnIfMissing("enrichment_approvals", "expires_at", "TEXT NOT NULL DEFAULT ''");
+    this.addColumnIfMissing("native_sessions", "entry_verb", "TEXT");
     this.addColumnIfMissing("native_sessions", "dispatch_profile", "TEXT");
     this.addColumnIfMissing("native_sessions", "dispatch_target", "TEXT");
     this.addColumnIfMissing("native_sessions", "runtime_generation", "INTEGER");
@@ -847,16 +849,16 @@ export class Store {
   // ---------------------------------------------------------------------
 
   createNativeSession(params: {
-    id: string; purpose: NativeSessionPurpose; vendor: NativeSessionVendor; agent: string;
+    id: string; purpose: NativeSessionPurpose; vendor: NativeSessionVendor; agent: string; entryVerb?: string | undefined;
     scopeKind: NativeSessionScopeKind; scopeId: string; projectIdentity?: string;
     bindingGeneration?: number; projectRevision?: string;
     dispatchProfile?: string; dispatchTarget?: string; runtimeGeneration?: number;
   }): NativeSessionRow {
     const now = this.now().toISOString();
     this.db.prepare(
-      `INSERT INTO native_sessions (id, purpose, vendor, agent, scope_kind, scope_id, project_identity, binding_generation, project_revision, dispatch_profile, dispatch_target, runtime_generation, status, created_at, updated_at, started_at, ended_at, exit_code, failure)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'creating', ?, ?, NULL, NULL, NULL, NULL)`,
-    ).run(params.id, params.purpose, params.vendor, params.agent, params.scopeKind, params.scopeId,
+      `INSERT INTO native_sessions (id, purpose, vendor, agent, entry_verb, scope_kind, scope_id, project_identity, binding_generation, project_revision, dispatch_profile, dispatch_target, runtime_generation, status, created_at, updated_at, started_at, ended_at, exit_code, failure)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'creating', ?, ?, NULL, NULL, NULL, NULL)`,
+    ).run(params.id, params.purpose, params.vendor, params.agent, params.entryVerb ?? null, params.scopeKind, params.scopeId,
       params.projectIdentity ?? null, params.bindingGeneration ?? null, params.projectRevision ?? null, params.dispatchProfile ?? null, params.dispatchTarget ?? null, params.runtimeGeneration ?? null, now, now);
     return this.getNativeSession(params.id)!;
   }
@@ -913,7 +915,7 @@ export class Store {
     readonly idempotencyKey: string;
     readonly scopeFingerprint: string;
     readonly child: {
-      readonly id: string; readonly purpose: NativeSessionPurpose; readonly vendor: NativeSessionVendor; readonly agent: string;
+      readonly id: string; readonly purpose: NativeSessionPurpose; readonly vendor: NativeSessionVendor; readonly agent: string; readonly entryVerb?: string | undefined;
       readonly scopeKind: NativeSessionScopeKind; readonly scopeId: string; readonly projectIdentity?: string;
       readonly bindingGeneration?: number; readonly projectRevision?: string;
       readonly dispatchProfile?: string; readonly dispatchTarget?: string; readonly runtimeGeneration?: number;
@@ -944,9 +946,9 @@ export class Store {
       const now = this.now().toISOString();
       const child = params.child;
       this.db.prepare(
-        `INSERT INTO native_sessions (id, purpose, vendor, agent, scope_kind, scope_id, project_identity, binding_generation, project_revision, dispatch_profile, dispatch_target, runtime_generation, status, created_at, updated_at, started_at, ended_at, exit_code, failure)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'creating', ?, ?, NULL, NULL, NULL, NULL)`,
-      ).run(child.id, child.purpose, child.vendor, child.agent, child.scopeKind, child.scopeId,
+        `INSERT INTO native_sessions (id, purpose, vendor, agent, entry_verb, scope_kind, scope_id, project_identity, binding_generation, project_revision, dispatch_profile, dispatch_target, runtime_generation, status, created_at, updated_at, started_at, ended_at, exit_code, failure)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'creating', ?, ?, NULL, NULL, NULL, NULL)`,
+      ).run(child.id, child.purpose, child.vendor, child.agent, child.entryVerb ?? null, child.scopeKind, child.scopeId,
         child.projectIdentity ?? null, child.bindingGeneration ?? null, child.projectRevision ?? null, child.dispatchProfile ?? null, child.dispatchTarget ?? null, child.runtimeGeneration ?? null, now, now);
       this.db.prepare(`INSERT INTO native_session_resume_actions (session_id, idempotency_key, scope_fingerprint, resumed_session_id, created_at) VALUES (?, ?, ?, ?, ?)`).run(
         params.sourceSessionId, params.idempotencyKey, params.scopeFingerprint, child.id, now,
@@ -2351,7 +2353,7 @@ function rowToSession(row: Record<string, unknown>): SessionRow {
 function rowToNativeSession(row: Record<string, unknown>): NativeSessionRow {
   return {
     id: str(row, "id"), purpose: str(row, "purpose") as NativeSessionPurpose,
-    vendor: str(row, "vendor") as NativeSessionVendor, agent: str(row, "agent"),
+    vendor: str(row, "vendor") as NativeSessionVendor, agent: str(row, "agent"), entryVerb: strOrNull(row, "entry_verb"),
     scopeKind: str(row, "scope_kind") as NativeSessionScopeKind, scopeId: str(row, "scope_id"),
     projectIdentity: strOrNull(row, "project_identity"),
     bindingGeneration: row["binding_generation"] === null ? null : num(row, "binding_generation"),

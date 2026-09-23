@@ -14,8 +14,7 @@ import { createDefaultProviderRegistry, MOCK_ADAPTER_ID } from "../harness/provi
 import type { TierBinding } from "../harness/providers/index.js";
 import { runAgent } from "../harness/session/index.js";
 import { createWrenNativeToolRegistry } from "../harness/tools/index.js";
-import { readFixture } from "./fixtures.js";
-import { loadBundle } from "../harness/bundle/loader.js";
+import { loadLegacyFixture } from "./fixtures.js";
 import { WARBLE_REPO } from "./warble-checkout.js";
 
 /**
@@ -140,7 +139,7 @@ describe.skipIf(!canQuery)("runAgent against a real wren project (native query t
     // providers/wren.provider.yaml` (the wren provider fragment realizes the genbi analytical
     // domain capabilities natively), so its `query` tool source is already `native` — no inline
     // override needed.
-    const bundle = loadBundle(readFixture("genbi-default.native.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.native.bundle.json");
     const env = createLocalExecutionEnv();
     const policy = { readOnly: true };
     const nativeTools = createWrenNativeToolRegistry({ env, policy, projectDir });
@@ -210,7 +209,7 @@ describe.skipIf(!canIntrospect)("runAgent(explore_model) against a real wren pro
       },
     };
 
-    const bundle = loadBundle(readFixture("genbi-default.native.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.native.bundle.json");
     const env = createLocalExecutionEnv();
     const policy = { readOnly: true };
     const nativeTools = createWrenNativeToolRegistry({ env, policy, projectDir });

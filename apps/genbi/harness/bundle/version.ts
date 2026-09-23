@@ -13,7 +13,7 @@ export interface HarnessSupport {
 }
 
 export const HARNESS_SUPPORT: HarnessSupport = {
-  irVersion: "0.6",
+  irVersion: "0.8",
   bundleVersions: ["0.1"],
 };
 

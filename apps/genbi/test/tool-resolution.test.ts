@@ -10,13 +10,13 @@ import {
   UnknownNativeToolError,
   WRITE_ARTIFACT_TOOL_NAME,
 } from "../harness/tools/index.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 import { mockWrenServerConfig } from "./mock-mcp-server.js";
 import { buildSyntheticBundle } from "./synthetic-bundle.js";
 
 describe("resolveTools (tool binding)", () => {
   it("resolves mcp:sample/query from the connected mock MCP server into a callable ToolSet entry", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const agent = bundle.agents.find((candidate) => candidate.id === "answer_query")!;
 
     const resolved = await resolveTools(agent, { mcpServers: { sample: mockWrenServerConfig() } });
@@ -29,7 +29,7 @@ describe("resolveTools (tool binding)", () => {
   });
 
   it("executes the resolved query tool against the mock MCP server, returning canned rows with no LLM call", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const agent = bundle.agents.find((candidate) => candidate.id === "answer_query")!;
 
     const resolved = await resolveTools(agent, { mcpServers: { sample: mockWrenServerConfig() } });
@@ -116,7 +116,7 @@ describe("resolveTools (tool binding)", () => {
    * run failed before the loop executor ever ran a step.
    */
   it("resolves generate_dashboard's full native tool set (query + build_dashboard + write_artifact), no UnknownNativeToolError", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.native.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.native.bundle.json");
     const agent = bundle.agents.find((candidate) => candidate.id === "generate_dashboard")!;
 
     const nativeTools = createWrenNativeToolRegistry({
@@ -141,7 +141,7 @@ describe("resolveTools (tool binding)", () => {
    * loop executor ever ran its step.
    */
   it("resolves explore_model's native tool set (semantic_introspect), no UnknownNativeToolError", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.native.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.native.bundle.json");
     const agent = bundle.agents.find((candidate) => candidate.id === "explore_model")!;
 
     const nativeTools = createWrenNativeToolRegistry({

@@ -25,10 +25,14 @@ export class CodexRpcClient {
   private failure?: CodexRpcError;
   private closing?: Promise<void>;
   private failureListeners = new Set<(error: CodexRpcError) => void>();
+  private readonly serverIds = new Set<string>();
+  private readonly serverTimers = new Set<ReturnType<typeof setTimeout>>();
   constructor(
     private readonly transport: RpcTransport,
     private readonly notification: (message: RpcNotification) => void,
     private readonly maxLineBytes = 1_048_576,
+    /** Opt-in governed tools only. Existing session clients still reject all server requests. */
+    private readonly serverRequest?: (request: RpcNotification) => Promise<unknown>,
   ) {
     transport.listen({
       data: (chunk) => this.receive(chunk),
@@ -87,8 +91,20 @@ export class CodexRpcClient {
       const message: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(line));
       if (!object(message)) return this.fail("protocol");
       if ("id" in message) {
-        // No unsolicited approval/tool requests are supported by this backend.
-        if ("method" in message || !Number.isSafeInteger(message.id)) return this.fail("protocol");
+        if ("method" in message) {
+          if (!this.serverRequest || typeof message.method !== "string" || !("params" in message) || "result" in message || "error" in message
+            || !(Number.isSafeInteger(message.id) || (typeof message.id === "string" && message.id.length > 0 && message.id.length <= 256))) return this.fail("protocol");
+          const key = JSON.stringify(message.id);
+          if (this.serverIds.has(key) || this.serverIds.size >= 512) return this.fail("protocol");
+          this.serverIds.add(key);
+          const timer = setTimeout(() => this.fail("timeout"), 120_000);
+          this.serverTimers.add(timer);
+          void Promise.resolve().then(() => { if (this.failure) throw this.failure; return this.serverRequest!({ method: message.method as string, params: message.params }); })
+            .then((result) => { if (!this.failure) this.send({ id: message.id, result }); })
+            .catch(() => this.fail("protocol")).finally(() => { clearTimeout(timer); this.serverTimers.delete(timer); });
+          return;
+        }
+        if (!Number.isSafeInteger(message.id)) return this.fail("protocol");
         if (("result" in message) === ("error" in message)) return this.fail("protocol");
         const pending = this.pending.get(message.id as number);
         if (!pending) return this.fail("protocol"); // duplicates and unknown/late ids
@@ -112,6 +128,8 @@ export class CodexRpcClient {
       clearTimeout(pending.timer); pending.removeAbort(); pending.reject(this.failure);
     }
     this.pending.clear();
+    for (const timer of this.serverTimers) clearTimeout(timer);
+    this.serverTimers.clear();
     this.closing = Promise.resolve().then(() => this.transport.close()).catch(() => { throw new CodexRpcError("cleanup"); });
     // Failures remain observable through close(), without an unhandled rejection.
     void this.closing.catch(() => {});

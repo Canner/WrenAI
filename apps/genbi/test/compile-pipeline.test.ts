@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { loadBundle } from "../harness/bundle/loader.js";
 import { createFileSystemCompileCache } from "../harness/compile/cache.js";
 import { resolveContextLoaderBinary } from "../harness/compile/context-loader.js";
 import { compileProfile } from "../harness/compile/pipeline.js";
@@ -13,6 +12,8 @@ import { getBinaryIdentity, getWarbleIdentity } from "../harness/compile/warble-
 import { WarbleBinaryNotFoundError } from "../harness/compile/errors.js";
 import type { CompileCache } from "../harness/compile/types.js";
 import { WARBLE_REPO } from "./warble-checkout.js";
+import { planDigest, readExecutionPlan } from "../harness/components/plan.js";
+import { describeComponentPlan } from "../harness/components/display.js";
 
 /** This package's own `profiles/` tree — the GenBI profiles now live here, not in a Warble checkout. */
 const PROFILES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "profiles");
@@ -78,7 +79,9 @@ describe.skipIf(!canRun)("compileProfile against the real warble binary + genbi-
     }
 
     const bundleJson = JSON.parse(await readFile(result.bundlePath!, "utf-8"));
-    const bundle = loadBundle(bundleJson); // throws on malformed structure — the sanity check
+    const plan = readExecutionPlan(JSON.stringify(bundleJson), { digest: bundleJson.bundle_sha256, inputIrDigest: planDigest(ir),
+      declarations: Object.fromEntries(ir.components.map((node: { id: string }) => [node.id, node])), contextBinding: ir.context_binding });
+    const bundle = describeComponentPlan(plan, bundleJson.profile);
     expect(bundle.profile).toBe("genbi-default");
     expect(bundle.agents.length).toBeGreaterThan(0);
   });
@@ -92,7 +95,7 @@ describe.skipIf(!canRun)("compileProfile against the real warble binary + genbi-
     const resolvedBin = await resolveWarbleBinary();
     const warbleIdentity = await getWarbleIdentity(resolvedBin);
     const contextLoaderIdentity = await getBinaryIdentity(resolveContextLoaderBinary());
-    const hubDir = resolveHubDir(resolvedBin);
+    const hubDir = resolveHubDir(resolvedBin) ?? path.join(WARBLE_REPO, "hub", "components");
     const options = {
       profileSource: PROFILE_SOURCE,
       userProject: JAFFLE_WREN,

@@ -16,6 +16,7 @@ import type { CodexManifestModels } from "./codex-local-manifest.js";
  * tool through the real `wren` CLI (native tools) against `userProject`.
  */
 export interface InProcessOptions {
+  readonly signal?: AbortSignal;
   readonly authChoice: Extract<AuthChoice, { mode: "api-key" | "local" | "gateway" }>;
   readonly profileSource: string;
   readonly userProject: string;

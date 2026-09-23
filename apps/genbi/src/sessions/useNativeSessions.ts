@@ -13,7 +13,7 @@ interface NativeSessionsState {
   load: () => Promise<void>;
   refreshReadiness: () => Promise<NativeSessionReadiness | undefined>;
   refresh: (id: string) => Promise<NativeSession | undefined>;
-  createSession: (purpose: NativeSessionPurpose, returnSource: NativeSessionReturnSource | undefined, actionOwner: NativeSessionCreateOwner) => Promise<NativeSession>;
+  createSession: (purpose: NativeSessionPurpose, returnSource: NativeSessionReturnSource | undefined, actionOwner: NativeSessionCreateOwner, entryVerb?: NonNullable<NativeSession["entryVerb"]>) => Promise<NativeSession>;
   openSession: (purpose: NativeSessionPurpose, id: string, returnSource?: NativeSessionReturnSource) => Promise<NativeSession>;
   resumeSession: (source: NativeSession, returnSource?: NativeSessionReturnSource, signal?: AbortSignal) => Promise<NativeSession>;
   restartSession: (source: NativeSession, returnSource?: NativeSessionReturnSource, signal?: AbortSignal) => Promise<NativeSession>;
@@ -95,6 +95,7 @@ function restartActionScope(session: NativeSession): string {
     session.bindingGeneration,
     session.projectRevision,
     session.runtimeGeneration ?? null,
+    session.entryVerb ?? null,
   ]);
 }
 
@@ -201,11 +202,11 @@ export const useNativeSessions = create<NativeSessionsState>((set, get) => ({
       return undefined;
     }
   },
-  createSession(purpose, returnSource, actionOwner) {
-    const actionKey = createActionKey(purpose, actionOwner);
+  createSession(purpose, returnSource, actionOwner, entryVerb) {
+    const actionKey = `${createActionKey(purpose, actionOwner)}:${entryVerb ?? "default"}`;
     const action = createActionFor(actionKey);
     if (action.request) return action.request;
-    const request = createNativeSession(purpose, { intent: 'start_separate', idempotencyKey: action.idempotencyKey })
+    const request = createNativeSession(purpose, { intent: 'start_separate', idempotencyKey: action.idempotencyKey, ...(entryVerb ? { entryVerb } : {}) })
       .then(({ session, capability, recoveryCapability }) => {
         clearCreateAction(actionKey, action);
         if (capability) saveNativeSessionCapability(session.id, capability);
@@ -250,7 +251,7 @@ export const useNativeSessions = create<NativeSessionsState>((set, get) => ({
     // ambiguous response-loss retry idempotent at the BFF process seam.
     const action = restartActionFor(source);
     try {
-      const launch = { intent: 'start_separate' as const, idempotencyKey: action.idempotencyKey };
+      const launch = { intent: 'start_separate' as const, idempotencyKey: action.idempotencyKey, ...(source.entryVerb ? { entryVerb: source.entryVerb } : {}) };
       const { session, capability, recoveryCapability } = signal
         ? await createNativeSession(source.purpose, launch, signal)
         : await createNativeSession(source.purpose, launch);

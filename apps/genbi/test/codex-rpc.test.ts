@@ -130,3 +130,65 @@ describe("Codex RPC lifecycle", () => {
     await expect(rpc.close()).rejects.toThrow("Codex RPC cleanup");
   });
 });
+
+
+describe("opt-in server requests", () => {
+  it("correlates string and numeric ids independently of outgoing requests", async () => {
+    const peer = new Peer(); const handler = vi.fn(async ({ params }) => ({ accepted: params }));
+    const rpc = new CodexRpcClient(peer, () => {}, 1024, handler);
+    const outbound = rpc.request("turn/start", {});
+    peer.line({ id: "1", method: "item/tool/call", params: "one" });
+    peer.line({ id: 1, method: "item/tool/call", params: "two" });
+    peer.line({ id: 1, result: "started" });
+    await expect(outbound).resolves.toBe("started");
+    await vi.waitFor(() => expect(peer.writes).toHaveLength(3));
+    expect(peer.writes.slice(1)).toEqual([{ id: "1", result: { accepted: "one" } }, { id: 1, result: { accepted: "two" } }]);
+    await rpc.close();
+  });
+
+  it("rejects replay before invoking a tool twice", async () => {
+    const peer = new Peer(); const handler = vi.fn(async () => true);
+    const rpc = new CodexRpcClient(peer, () => {}, 1024, handler);
+    peer.line({ id: "call", method: "item/tool/call", params: {} });
+    await vi.waitFor(() => expect(peer.writes).toHaveLength(1));
+    peer.line({ id: "call", method: "item/tool/call", params: {} });
+    await expect(rpc.request("later", {})).rejects.toThrow("Codex RPC protocol");
+    expect(handler).toHaveBeenCalledTimes(1); await rpc.close();
+  });
+
+  it.each([null, true, {}, "", "x".repeat(257), 1.5])("rejects invalid server id %j", async (id) => {
+    const peer = new Peer(); const handler = vi.fn(async () => true);
+    const rpc = new CodexRpcClient(peer, () => {}, 1024, handler);
+    peer.line({ id, method: "item/tool/call", params: {} });
+    await expect(rpc.request("later", {})).rejects.toThrow("Codex RPC protocol");
+    expect(handler).not.toHaveBeenCalled(); await rpc.close();
+  });
+
+  it.each(["timeout", "close"])("discards a late tool response after %s", async (cause) => {
+    vi.useFakeTimers(); const peer = new Peer();
+    let finish!: (value: unknown) => void;
+    const rpc = new CodexRpcClient(peer, () => {}, 1024, () => new Promise((resolve) => { finish = resolve; }));
+    peer.line({ id: 9, method: "item/tool/call", params: {} });
+    await Promise.resolve();
+    if (cause === "timeout") await vi.advanceTimersByTimeAsync(120_000);
+    else await rpc.close();
+    finish("late"); await Promise.resolve(); await Promise.resolve();
+    expect(peer.writes).toHaveLength(0); await rpc.close();
+    expect(peer.close).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("redacts handler exceptions and bounds replay memory", async () => {
+    const peer = new Peer();
+    const rpc = new CodexRpcClient(peer, () => {}, 1024, async () => { throw new Error("private token"); });
+    peer.line({ id: 1, method: "item/tool/call", params: {} });
+    await vi.waitFor(() => expect(peer.close).toHaveBeenCalledTimes(1));
+    await expect(rpc.request("later", {})).rejects.toThrow("Codex RPC protocol"); await rpc.close();
+    const other = new Peer(); const handler = vi.fn(async () => true);
+    const bounded = new CodexRpcClient(other, () => {}, 1024, handler);
+    for (let id = 0; id < 512; id++) other.line({ id, method: "item/tool/call", params: {} });
+    await vi.waitFor(() => expect(other.writes).toHaveLength(512));
+    other.line({ id: 513, method: "item/tool/call", params: {} });
+    await expect(bounded.request("later", {})).rejects.toThrow("Codex RPC protocol");
+    expect(handler).toHaveBeenCalledTimes(512); await bounded.close();
+  });
+});

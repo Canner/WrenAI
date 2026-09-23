@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
+import { userInfo } from "node:os";
 import type { EnrichmentBinding } from "./enrichment.js";
 import { InteractiveLaunchError } from "./native-session-workspace.js";
 import type { RuntimeBackendId } from "./runtime-host/types.js";
@@ -25,6 +26,8 @@ export interface NativeExecutableIdentity {
 export interface NativeChildEnvironment {
   readonly PATH: string;
   readonly HOME: string;
+  readonly USER?: string;
+  readonly LOGNAME?: string;
   readonly TERM: "xterm-256color";
   readonly COLORTERM: "truecolor";
   readonly WREN_PROJECT_HOME?: string;
@@ -148,6 +151,9 @@ export function buildNativeChildEnvironment(input: NativeChildEnvironmentInput):
   const environment: NativeChildEnvironment = {
     PATH: toolDirectories.join(path.delimiter),
     HOME: canonicalDirectory(input.home),
+    // Claude locates the macOS login keychain account by username. Derive it
+    // from the OS, never from mutable shell or browser-provided environment.
+    ...(process.platform === "darwin" ? { USER: userInfo().username, LOGNAME: userInfo().username } : {}),
     TERM: "xterm-256color",
     COLORTERM: "truecolor",
     ...(input.projectPath ? { WREN_PROJECT_HOME: canonicalDirectory(input.projectPath) } : {}),

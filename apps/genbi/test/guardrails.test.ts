@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { loadBundle } from "../harness/bundle/loader.js";
 import { deriveEnforcement } from "../harness/guardrails/index.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 
 describe("deriveEnforcement (guardrail -> enforcement mapping)", () => {
-  const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+  const bundle = loadLegacyFixture("genbi-default.bundle.json");
 
   function agentPolicy(agentId: string) {
     const agent = bundle.agents.find((candidate) => candidate.id === agentId);

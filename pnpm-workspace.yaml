@@ -7,6 +7,7 @@ allowBuilds:
   '@warble/cli': true
   node-pty: true
 minimumReleaseAgeExclude:
-  - '@warble/claude-agent-sdk@0.10.0'
-  - '@warble/cli@0.10.0'
-  - '@warble/codex-local@0.10.0'
+  - '@warble/claude-agent-sdk@0.14.0'
+  - '@warble/cli@0.14.0'
+  - '@warble/codex-local@0.14.0'
+  - '@warble/ir-spec@0.8.0'

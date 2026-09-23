@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { loadBundle } from "../harness/bundle/loader.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 
 describe("loadBundle: golden genbi-default bundle", () => {
-  const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+  const bundle = loadLegacyFixture("genbi-default.bundle.json");
 
   it("gives typed access to every agent", () => {
     expect(bundle.agents).toHaveLength(4);

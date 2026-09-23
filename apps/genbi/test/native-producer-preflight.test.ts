@@ -16,6 +16,9 @@ import { runtimeReady } from "../server/runtime-host/policy.js";
 import type { PtyFactory } from "../server/interactive-terminal.js";
 import { attestNativeExecutable } from "../server/native-runtime-spec.js";
 import { createEmptyCodexWrenHome } from "../server/native-wren-home.js";
+import { prepareNativeComponentHost } from "../server/native-component-preparation.js";
+import { resolveWarbleBinary } from "../harness/compile/resolve-binary.js";
+import type { NativeComponentProbe, NativeSessionServiceOptions } from "../server/native-sessions.js";
 import { resolveNativeWrenRuntime } from "../server/native-wren-runtime.js";
 
 const dirs: string[] = [];
@@ -106,7 +109,7 @@ function irPaths(dir: string) {
   return { analysis: path.join(dir, "analysis.json"), setup: path.join(dir, "setup.json"), context_enrichment: path.join(dir, "context.json") } as const;
 }
 
-function productionService(dir: string, producer: string, wrenShim: string, terminalManager?: () => Promise<InteractiveTerminalManager>, subscriptionProvider: "claude" | "codex" = "codex", runtimeHost?: RuntimeHost, managedRuntimeAvailable = true) {
+function productionService(dir: string, producer: string, wrenShim: string, terminalManager?: () => Promise<InteractiveTerminalManager>, subscriptionProvider: "claude" | "codex" = "codex", runtimeHost?: RuntimeHost, managedRuntimeAvailable = true, componentOptions: Pick<NativeSessionServiceOptions, "prepareComponents" | "prepareComponentProbe"> = {}) {
   const store = new Store(":memory:");
   store.setRuntimeSettings({ ...store.getRuntimeSettings(), subscriptionProvider, subscriptionDriverModel: "driver", tierModels: subscriptionProvider === "claude" ? [{ tier: "cheap", model: "haiku" }, { tier: "strong", model: "sonnet" }] : [{ tier: "cheap", model: "cheap" }, { tier: "strong", model: "strong" }] });
   const binding = store.activateEnrichmentBinding(resolveEnrichmentBinding(dir));
@@ -150,6 +153,7 @@ function productionService(dir: string, producer: string, wrenShim: string, term
     store,
     state,
     service: new NativeSessionService({
+      ...componentOptions,
       store,
       terminalManager: terminalManager ?? (async () => new InteractiveTerminalManager(pty)),
       getBinding: () => binding,
@@ -181,7 +185,7 @@ describe("native producer compatibility preflight", () => {
     const producer = fakeProducer(dir, "compatible");
     const result = await probeNativeSessionProducer({ warbleBin: producer, irPaths: irPaths(dir), wrenShim });
     expect(result).toMatchObject({ available: true, diagnostic: expect.stringMatching(/^identity=sha256:[a-f0-9]{64} phase=complete result=compatible_claude\+codex$/) });
-    expect(result.vendors).toMatchObject({ claude: { available: true }, codex: { available: true } });
+    expect(result.vendors, JSON.stringify(result.vendors)).toMatchObject({ claude: { available: true }, codex: { available: true } });
     expect(readFileSync(path.join(dir, "producer-compatible.calls"), "utf8").trim().split("\n").sort()).toEqual([
       "claude-code:interactive:analysis",
       "claude-code:interactive:context_enrichment",
@@ -198,6 +202,91 @@ describe("native producer compatibility preflight", () => {
     }
     await expect(service.openOrCreate({ purpose: "analysis" })).resolves.toMatchObject({ row: { status: "running", purpose: "analysis" } });
     store.close();
+  });
+
+  it("keeps setup and enrichment launchable when analysis lacks a component host", async () => {
+    const dir = fixtureDir();
+    const wrenShim = runtimeFixture(dir);
+    const producer = fakeProducer(dir, "compatible", { finalAction: `
+if (purpose === 'analysis') {
+  console.error('component_invocation: no trusted invocation handler is installed; token=never-log-this');
+  process.exit(1);
+}` });
+    const { service, store } = productionService(dir, producer, wrenShim, undefined, "claude");
+    try {
+      const readiness = await service.readiness();
+      expect(readiness.purposes.analysis).toMatchObject({ available: false,
+        reason: "Native component execution has not been provisioned for this profile.",
+        producer: { available: false, diagnostic: expect.stringContaining("component_runtime_unprovisioned") } });
+      for (const purpose of ["setup", "context_enrichment"] as const) {
+        expect(readiness.purposes[purpose]).toMatchObject({ available: true, producer: { available: true } });
+        await expect(service.openOrCreate({ purpose })).resolves.toMatchObject({ row: { status: "running", purpose } });
+      }
+      await expect(service.openOrCreate({ purpose: "analysis" })).rejects.toThrow("Native component execution has not been provisioned");
+      expect(store.listNativeSessions()).toHaveLength(2);
+      expect(JSON.stringify(readiness)).not.toContain("never-log-this");
+    } finally {
+      await service.shutdown();
+      store.close();
+    }
+  });
+
+  it("validates actual composed host receipts and both Codex pins without executing components", async () => {
+    const dir = fixtureDir();
+    const binary = await resolveWarbleBinary(process.env.WARBLE_TEST_CLI);
+    const wrenShim = runtimeFixture(dir);
+    const prepare = vi.fn(() => { throw Error("component execution is forbidden in preflight"); });
+    const entries: string[] = [];
+    const prepareComponents: NativeComponentProbe = ({ vendor, purpose, scope, irDocument }) => {
+      expect(purpose).toBe("analysis");
+      const entry = scope.entry as { verb?: string };
+      entries.push(`${vendor}:${entry.verb ?? "scope"}`);
+      const identity = { session_id: "synthetic-preflight", vendor, auth_identity: "synthetic-account", runtime_generation: "1",
+        binding: scope.binding as { project_identity: string; generation: string; revision: string } };
+      const ir = JSON.parse(irDocument);
+      return prepareNativeComponentHost(irDocument, scope, { identity, verifierBinary: binary,
+        contexts: Object.fromEntries(ir.components.map((node: { id: string; context_binding: Record<string, unknown> }) =>
+          [node.id, { binding: node.context_binding, snapshot: { context_version: 2, parseable: true } }])),
+        currentIdentity: () => identity, assertCurrent() {}, prepare, step: prepare, normalize: prepare });
+    };
+    const result = await probeNativeSessionProducer({ warbleBin: binary, wrenShim,
+      irPaths: { analysis: path.resolve("profiles/genbi-default/ir.golden.json"), setup: undefined, context_enrichment: undefined }, prepareComponents });
+    expect(result.vendors, JSON.stringify(result.vendors)).toMatchObject({ claude: { available: true }, codex: { available: true } });
+    expect(entries).toEqual(["claude:scope", "codex:answer_query", "codex:generate_dashboard"]);
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("rejects a forged component probe receipt (identity mismatch=%s)", async (mismatchIdentity) => {
+    const dir = fixtureDir(); const wrenShim = runtimeFixture(dir);
+    const binary = await resolveWarbleBinary(process.env.WARBLE_TEST_CLI);
+    const result = await probeNativeSessionProducer({ warbleBin: binary, wrenShim,
+      irPaths: { analysis: path.resolve("profiles/genbi-default/ir.golden.json"), setup: undefined, context_enrichment: undefined },
+      prepareComponents: ({ vendor, scope, irDocument }) => {
+        const identity = { session_id: "synthetic", vendor, auth_identity: "synthetic", runtime_generation: "1",
+          binding: scope.binding as { project_identity: string; generation: string; revision: string } };
+        const ir = JSON.parse(irDocument);
+        const prepared = prepareNativeComponentHost(irDocument, scope, { identity, verifierBinary: binary,
+          contexts: Object.fromEntries(ir.components.map((node: { id: string; context_binding: Record<string, unknown> }) =>
+            [node.id, { binding: node.context_binding, snapshot: { context_version: 2, parseable: true } }])),
+          currentIdentity: () => identity, assertCurrent() {},
+          async prepare() { throw Error("not executed"); }, async step() { throw Error("not executed"); }, async normalize() { throw Error("not executed"); } });
+        if (!prepared) return undefined;
+        return mismatchIdentity ? { ...prepared, identity: { ...identity, vendor: vendor === "claude" ? "codex" : "claude" } } : { ...prepared, contexts: {} };
+      } });
+    expect(result.available).toBe(false);
+    expect(result.vendors.claude.available).toBe(false); expect(result.vendors.codex.available).toBe(false);
+  });
+
+  it("rejects component execution configuration without the matching producer probe", () => {
+    expect(() => new NativeSessionService({ prepareComponents: async () => undefined } as unknown as NativeSessionServiceOptions)).toThrow("requires a producer probe");
+  });
+
+  it("does not call a host probe without an execution provisioner", async () => {
+    const dir = fixtureDir(); const wrenShim = runtimeFixture(dir);
+    const probe = vi.fn(() => { throw Error("must not advertise host support"); });
+    const { service, store } = productionService(dir, fakeProducer(dir, "compatible"), wrenShim, undefined, "codex", undefined, true, { prepareComponentProbe: probe });
+    try { expect((await service.readiness()).purposes.analysis.available).toBe(true); expect(probe).not.toHaveBeenCalled(); }
+    finally { await service.shutdown(); store.close(); }
   });
 
   it("keeps production Codex unprovisioned when the local PTY host is ready but no managed Wren record exists", async () => {

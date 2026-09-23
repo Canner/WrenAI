@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { homedir, tmpdir } from 'node:os';
+import { userInfo, homedir, tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { dispatchInteractiveArtifacts, getInteractiveTerminalReadiness, InteractiveLaunchError, InteractiveTerminalManager, interactiveExecutableAvailable, legacyInteractiveWorkspace, nativeTerminalEnvironment, prepareInteractiveHandoff, readInteractiveLaunchSpec, TERMINAL_OUTPUT_RETENTION_LIMIT_BYTES, type PtyFactory } from '../server/interactive-terminal.js';
 import { initializeNativeSessionStateBase } from '../server/native-session-workspace.js';
@@ -136,7 +136,7 @@ describe('interactive launch specification', () => {
       cwd: realpathSync(project),
       cols: 100,
       rows: 30,
-      env: { PATH: '/fixed/bin', HOME: homedir(), TERM: 'xterm-256color', COLORTERM: 'truecolor', WREN_PROJECT_HOME: project },
+      env: { PATH: '/fixed/bin', HOME: homedir(), ...(process.platform === 'darwin' ? { USER: userInfo().username, LOGNAME: userInfo().username } : {}), TERM: 'xterm-256color', COLORTERM: 'truecolor', WREN_PROJECT_HOME: project },
     });
   });
 

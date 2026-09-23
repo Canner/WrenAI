@@ -11,6 +11,8 @@ import { deriveAdapterSpec } from "./adapter-spec.js";
 import { describeBundle } from "./describe.js";
 import { buildHybridTierBinding, buildUniformTierBinding } from "./tier-binding.js";
 import type { InProcessOptions } from "./types.js";
+import { executionPlanFor } from "../components/display.js";
+import { runInProcessComponents } from "../components/in-process.js";
 
 const ANSWER_QUERY_AGENT_ID = "answer_query";
 
@@ -68,6 +70,11 @@ export function resolveArtifactsDir(outDir: string | undefined): string {
  */
 export async function runInProcessDefault(options: InProcessOptions): Promise<RunAgentResult> {
   const bundle = options.bundle ?? (await describeBundle(options));
+  if (bundle.vercel_bundle_version === "0.2") {
+    const plan = executionPlanFor(bundle);
+    if (!plan) throw new Error("Composed display has no trusted execution plan");
+    return runInProcessComponents(plan, options);
+  }
   // Intent routing (server/turn.ts) picks the agent id when present; falls back to answer_query,
   // the original default from before intent routing existed.
   const agentId = options.agentId ?? ANSWER_QUERY_AGENT_ID;

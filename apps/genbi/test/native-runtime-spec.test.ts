@@ -1,5 +1,5 @@
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { homedir, tmpdir, userInfo } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -57,6 +57,8 @@ describe("NativeRuntimeSpec", () => {
 
     vi.stubEnv("PATH", poisonRoot);
     vi.stubEnv("HOME", poisonRoot);
+    vi.stubEnv("USER", "poison-user");
+    vi.stubEnv("LOGNAME", "poison-user");
     vi.stubEnv("WREN_HOME", poisonRoot);
     vi.stubEnv("WREN_PROJECT_HOME", poisonRoot);
     vi.stubEnv("CODEX_HOME", poisonRoot);
@@ -93,6 +95,7 @@ describe("NativeRuntimeSpec", () => {
     expect(spec.childEnvironment).toEqual({
       PATH: value.bin,
       HOME: safeHome,
+      ...(process.platform === "darwin" ? { USER: userInfo().username, LOGNAME: userInfo().username } : {}),
       TERM: "xterm-256color",
       COLORTERM: "truecolor",
       WREN_PROJECT_HOME: value.project,
@@ -101,6 +104,7 @@ describe("NativeRuntimeSpec", () => {
       WARBLE_MCP_CONNECTION_CREDENTIAL: "session-credential",
     });
     expect(JSON.stringify(spec)).not.toContain(poisonRoot);
+    expect(JSON.stringify(spec)).not.toContain("poison-user");
     expect("NODE_PATH" in spec.childEnvironment).toBe(false);
     expect(spawnSync(process.execPath, ["-e", "require('genbi-poison-package')"], {
       cwd: value.workspace,

@@ -1,8 +1,14 @@
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { generatePreparedContext, resolveContextLoaderBinary } from "../compile/context-loader.js";
+import { resolveWarbleBinary } from "../compile/resolve-binary.js";
 import type { AuthChoice } from "../auth/index.js";
 import type { Bundle } from "../bundle/schema.js";
 import { loadBundleWithProvenance } from "../bundle/loader.js";
 import { compileProfile, compileRawProfile } from "../compile/pipeline.js";
+import { planDigest, readExecutionPlan } from "../components/plan.js";
+import { describeComponentPlan } from "../components/display.js";
 import { buildAgentSdkManifestArgs, runAgentSdkManifest } from "./agent-sdk-manifest.js";
 import { resolveAgentSdkCli } from "./agent-sdk-cli.js";
 import { resolveCodexLocalCli } from "./codex-local-cli.js";
@@ -81,15 +87,40 @@ async function describeCodexManifest(options: DescribeBundleOptions): Promise<Bu
     throw new Error("Codex manifest requires orchestrator, cheap, and strong model bindings");
   }
   const cli = await resolveCodexLocalCli(options.codexLocalBin);
-  return purpose === "context_enrichment"
-    ? describeCodexEnrichmentManifest(cli, compiled.irPath, models)
-    : describeCodexAskManifest(cli, compiled.irPath, models);
+  if (purpose === "context_enrichment") return describeCodexEnrichmentManifest(cli, compiled.irPath, models);
+  const ir = JSON.parse(await readFile(compiled.irPath, "utf8"));
+  if (!ir.components.some((node: { llm_calls: { component_calls?: unknown[] }[] }) => node.llm_calls.some((step) => step.component_calls?.length))) {
+    return describeCodexAskManifest(cli, compiled.irPath, models);
+  }
+  const dir = await mkdtemp(path.join(os.tmpdir(), "genbi-manifest-context-"));
+  try {
+    if (options.context === "bootstrap") throw new Error("Composed analysis requires a bound project");
+    const project = await realpath(options.userProject);
+    for (const id of ["answer_query", "generate_dashboard"]) {
+      const binding = ir.components.find((node: { id: string }) => node.id === id)?.context_binding;
+      if (!binding || typeof binding.project !== "string" || !path.isAbsolute(binding.project) || await realpath(binding.project) !== project) {
+        throw new Error(`Codex manifest cannot capture context for ${id} from a different project`);
+      }
+    }
+    const file = path.join(dir, "context.json");
+    await generatePreparedContext(resolveContextLoaderBinary(), project, file);
+    const snapshot = JSON.parse(await readFile(file, "utf8"));
+    return await describeCodexAskManifest(cli, compiled.irPath, models, {
+      warbleBin: await resolveWarbleBinary(options.warbleBin),
+      contexts: Object.fromEntries(ir.components.map((node: { id: string; context_binding: unknown }) => [node.id, { binding: node.context_binding, snapshot }])),
+    });
+  } finally { await rm(dir, { recursive: true, force: true }); }
 }
 
 async function describeVercelBundle(options: DescribeBundleOptions): Promise<Bundle> {
   const compiled = await compileForDescription(options, "agnostic");
   // `mode: "agnostic"` always produces a bundle — see `compileProfile`'s doc comment.
   const bundleJson = JSON.parse(await readFile(compiled.bundlePath!, "utf-8"));
+  if (bundleJson.vercel_bundle_version === "0.2") {
+    const ir = JSON.parse(await readFile(compiled.irPath, "utf8"));
+    const plan = readExecutionPlan(JSON.stringify(bundleJson), { digest: bundleJson.bundle_sha256, inputIrDigest: planDigest(ir), declarations: Object.fromEntries(ir.components.map((node: { id: string }) => [node.id, node])), contextBinding: ir.context_binding });
+    return describeComponentPlan(plan, bundleJson.profile);
+  }
   return loadBundleWithProvenance(bundleJson, {
     ...(compiled.warbleBin !== undefined ? { warbleBin: compiled.warbleBin } : {}),
     profileSource: options.profileSource,
@@ -104,10 +135,12 @@ async function describeAgentSdkManifest(options: DescribeBundleOptions): Promise
     ...(options.context !== "bootstrap" ? { userProject: options.userProject } : {}),
   });
   const stdout = await runAgentSdkManifest(command, args);
-  return loadBundleWithProvenance(JSON.parse(stdout), {
+  const manifest = JSON.parse(stdout);
+  if (manifest.target !== "claude-agent-sdk:local") throw new Error("Unexpected SDK manifest target");
+  return loadBundleWithProvenance(manifest, {
     ...(compiled.warbleBin !== undefined ? { warbleBin: compiled.warbleBin } : {}),
     profileSource: options.profileSource,
-  });
+  }, { irVersion: "0.8", bundleVersions: ["0.1", "0.3"] });
 }
 
 function compileForDescription(

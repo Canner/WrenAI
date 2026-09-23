@@ -219,10 +219,10 @@ function findInRepoBuild(): string | undefined {
  * Shells with `execFile` (argv array, no shell interpolation), matching the convention `runWarble`
  * and `harness/exec/local.ts` already use.
  */
-export function generatePreparedContext(bin: string, projectDir: string, outPath: string): Promise<void> {
+export function generatePreparedContext(bin: string, projectDir: string, outPath: string, signal?: AbortSignal): Promise<void> {
   const args = [projectDir, "-o", outPath];
   return new Promise((resolve, reject) => {
-    execFile(bin, args, { maxBuffer: 32 * 1024 * 1024, timeout: CONTEXT_LOADER_TIMEOUT_MS }, (error, stdout, stderr) => {
+    execFile(bin, args, { maxBuffer: 32 * 1024 * 1024, timeout: CONTEXT_LOADER_TIMEOUT_MS, ...(signal ? { signal } : {}) }, (error, stdout, stderr) => {
       if (error) {
         const exitCode = typeof error.code === "number" ? error.code : 1;
         const clarifiedStderr =

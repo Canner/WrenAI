@@ -40,6 +40,7 @@
           }
         ]
       },
+      "entrypoint": true,
       "eval": {
         "metrics": [
           "detection_accuracy",
@@ -61,13 +62,22 @@
       "id": "monitor_freshness",
       "llm_calls": [
         {
+          "conditional": false,
+          "consumes": [],
+          "name": "read_freshness",
+          "produces": "freshness_reading",
+          "prompt": "You are the `read_freshness` step of the `monitor_freshness` assertion, bound to the semantic\ncontext `v5-jaffle`.\n\nRun the deterministic freshness assert through the bound query capability — `SELECT\nmax(<timestamp column>)` on the bound model — and compare the observed lag against the expected\ncadence (the `expected_cadence` param, or the MDL's declared cadence). Fresh iff the newest row is\nwithin the cadence; stale otherwise. This is a SQL comparison, not a judgment call: do NOT ask an\nLLM to decide fresh-vs-stale, and do not estimate or guess at a reading you did not query for.\n\nYour one job is to report the reading, not to grade it — severity classification belongs entirely\nto `assess_severity`, which runs next and only when this step finds the data stale.\n\nProduce `freshness_reading`: the observed newest timestamp, the observed lag (against now), the\nexpected cadence, and a `stale` boolean (`true` iff the observed lag exceeds the expected cadence).\nEvery field must come from the query result; never fabricate a reading.",
+          "tier": "cheap",
+          "when": null
+        },
+        {
           "conditional": true,
           "consumes": [
             "freshness_reading"
           ],
           "name": "assess_severity",
           "produces": "severity_verdict",
-          "prompt": "You are the `assess_severity` step of the `monitor_freshness` assertion, bound to the\n`v5-jaffle` wren project.\n\nYou run ONLY when the deterministic freshness assert has already decided the data is **stale** —\ni.e. `max(<timestamp>)` on the monitored model is older than the expected cadence. The fresh-vs-stale\ndecision is not yours; it was a SQL comparison. You never re-run it, and when the data is fresh this\nstep does not run at all.\n\nYour one job: given the `freshness_reading` (the observed newest timestamp, the observed lag, and the\nexpected cadence), classify how bad the breach is:\n\n- `warn` — modestly overdue (roughly within ~2× the cadence), no compounding signal. The pipeline is\n  probably just late.\n- `critical` — badly overdue (well beyond ~2× the cadence), or the lag is still growing across recent\n  readings, or this model feeds known-critical downstreams. Someone should be paged.\n\nJudge from the lag magnitude relative to the cadence and any history in the reading; do not invent\nnumbers you were not given. Keep it to a reproducible, conservative call — when genuinely on the\nboundary, prefer `warn` and say why.\n\nProduce `severity_verdict` as a compact judgement: the chosen `severity` (`warn` | `critical`) and a\none-line rationale grounded in the lag vs cadence. This feeds the `status` block's `severity` field\nin the verdict envelope; it does not change the fresh/stale verdict itself.",
+          "prompt": "You are the `assess_severity` step of the `monitor_freshness` assertion, bound to the semantic\ncontext `v5-jaffle`.\n\nYou run ONLY when the deterministic freshness assert has already decided the data is **stale** —\ni.e. `max(<timestamp>)` on the monitored model is older than the expected cadence. The fresh-vs-stale\ndecision is not yours; it was a SQL comparison. You never re-run it, and when the data is fresh this\nstep does not run at all.\n\nYour one job: given the `freshness_reading` (the observed newest timestamp, the observed lag, and the\nexpected cadence), classify how bad the breach is:\n\n- `warn` — modestly overdue (roughly within ~2× the cadence), no compounding signal. The pipeline is\n  probably just late.\n- `critical` — badly overdue (well beyond ~2× the cadence), or the lag is still growing across recent\n  readings, or this model feeds known-critical downstreams. Someone should be paged.\n\nJudge from the lag magnitude relative to the cadence and any history in the reading; do not invent\nnumbers you were not given. Keep it to a reproducible, conservative call — when genuinely on the\nboundary, prefer `warn` and say why.\n\nProduce `severity_verdict` as a compact judgement: the chosen `severity` (`warn` | `critical`) and a\none-line rationale grounded in the lag vs cadence. This feeds the `status` block's `severity` field\nin the verdict envelope; it does not change the fresh/stale verdict itself.",
           "tier": "cheap",
           "when": {
             "guard": "on_flag",
@@ -103,7 +113,7 @@
         ],
         "status": "pass"
       },
-      "prompt_fragment": "## assess_severity\n\nYou are the `assess_severity` step of the `monitor_freshness` assertion, bound to the\n`v5-jaffle` wren project.\n\nYou run ONLY when the deterministic freshness assert has already decided the data is **stale** —\ni.e. `max(<timestamp>)` on the monitored model is older than the expected cadence. The fresh-vs-stale\ndecision is not yours; it was a SQL comparison. You never re-run it, and when the data is fresh this\nstep does not run at all.\n\nYour one job: given the `freshness_reading` (the observed newest timestamp, the observed lag, and the\nexpected cadence), classify how bad the breach is:\n\n- `warn` — modestly overdue (roughly within ~2× the cadence), no compounding signal. The pipeline is\n  probably just late.\n- `critical` — badly overdue (well beyond ~2× the cadence), or the lag is still growing across recent\n  readings, or this model feeds known-critical downstreams. Someone should be paged.\n\nJudge from the lag magnitude relative to the cadence and any history in the reading; do not invent\nnumbers you were not given. Keep it to a reproducible, conservative call — when genuinely on the\nboundary, prefer `warn` and say why.\n\nProduce `severity_verdict` as a compact judgement: the chosen `severity` (`warn` | `critical`) and a\none-line rationale grounded in the lag vs cadence. This feeds the `status` block's `severity` field\nin the verdict envelope; it does not change the fresh/stale verdict itself.",
+      "prompt_fragment": "## read_freshness\n\nYou are the `read_freshness` step of the `monitor_freshness` assertion, bound to the semantic\ncontext `v5-jaffle`.\n\nRun the deterministic freshness assert through the bound query capability — `SELECT\nmax(<timestamp column>)` on the bound model — and compare the observed lag against the expected\ncadence (the `expected_cadence` param, or the MDL's declared cadence). Fresh iff the newest row is\nwithin the cadence; stale otherwise. This is a SQL comparison, not a judgment call: do NOT ask an\nLLM to decide fresh-vs-stale, and do not estimate or guess at a reading you did not query for.\n\nYour one job is to report the reading, not to grade it — severity classification belongs entirely\nto `assess_severity`, which runs next and only when this step finds the data stale.\n\nProduce `freshness_reading`: the observed newest timestamp, the observed lag (against now), the\nexpected cadence, and a `stale` boolean (`true` iff the observed lag exceeds the expected cadence).\nEvery field must come from the query result; never fabricate a reading.\n\n## assess_severity\n\nYou are the `assess_severity` step of the `monitor_freshness` assertion, bound to the semantic\ncontext `v5-jaffle`.\n\nYou run ONLY when the deterministic freshness assert has already decided the data is **stale** —\ni.e. `max(<timestamp>)` on the monitored model is older than the expected cadence. The fresh-vs-stale\ndecision is not yours; it was a SQL comparison. You never re-run it, and when the data is fresh this\nstep does not run at all.\n\nYour one job: given the `freshness_reading` (the observed newest timestamp, the observed lag, and the\nexpected cadence), classify how bad the breach is:\n\n- `warn` — modestly overdue (roughly within ~2× the cadence), no compounding signal. The pipeline is\n  probably just late.\n- `critical` — badly overdue (well beyond ~2× the cadence), or the lag is still growing across recent\n  readings, or this model feeds known-critical downstreams. Someone should be paged.\n\nJudge from the lag magnitude relative to the cadence and any history in the reading; do not invent\nnumbers you were not given. Keep it to a reproducible, conservative call — when genuinely on the\nboundary, prefer `warn` and say why.\n\nProduce `severity_verdict` as a compact judgement: the chosen `severity` (`warn` | `critical`) and a\none-line rationale grounded in the lag vs cadence. This feeds the `status` block's `severity` field\nin the verdict envelope; it does not change the fresh/stale verdict itself.",
       "realization_kind": "tool",
       "required_capabilities": [
         "scheduler",
@@ -138,10 +148,6 @@
         }
       ],
       "lineage": {
-        "consumers": {
-          "dashboards": 0,
-          "queries": 1
-        },
         "edges": 7,
         "nodes": 8,
         "resolvable": true
@@ -184,5 +190,5 @@
     }
   },
   "profile": "genbi-monitor",
-  "warble_ir_version": "0.6"
+  "warble_ir_version": "0.8"
 }

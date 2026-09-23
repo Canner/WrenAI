@@ -16,9 +16,9 @@ import type { RuntimeSettings } from "../server/wire-types.js";
 import { Store } from "../server/db.js";
 import { effectiveRouteOptions } from "../server/turn.js";
 import type { TurnDeps } from "../server/turn.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 
-const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+const bundle = loadLegacyFixture("genbi-default.bundle.json");
 const tiers = collectBundleTierNames(bundle);
 
 function settings(overrides: Partial<RuntimeSettings> = {}): RuntimeSettings {

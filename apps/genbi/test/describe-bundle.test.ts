@@ -1,6 +1,4 @@
 import { existsSync } from "node:fs";
-import { chmod, mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -16,39 +14,13 @@ const PROFILES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..
 const PROFILE_SOURCE = path.join(PROFILES_DIR, "genbi-default");
 const ENRICH_PROFILE_SOURCE = path.join(PROFILES_DIR, "genbi-enrich-context");
 const JAFFLE_WREN = path.join(WARBLE_REPO, "examples", "jaffle-wren");
-const AGENT_SDK_DIR = path.join(WARBLE_REPO, "dispatcher", "claude-agent-sdk");
-const AGENT_SDK_TSX = path.join(AGENT_SDK_DIR, "node_modules", ".bin", "tsx");
-const AGENT_SDK_ENTRY = path.join(AGENT_SDK_DIR, "src", "cli.ts");
-// `resolveWarbleBinary`'s sibling ancestor-walk (see `resolve-binary.ts`) is a fixed-depth
-// walk that fails from THIS worktree's location (it's one level shallower than the
-// `repos/<repo>` convention the walk assumes) — same story as `AGENT_SDK_TSX` above. Point
-// straight at the real release binary rather than depending on PATH or the walk succeeding.
-const WARBLE_BIN = path.join(WARBLE_REPO, "target", "release", "warble");
-
-/**
- * `resolveAgentSdkCli`'s `explicit` tier treats its argument as a single,
- * directly-executable command with no prefix args (see `agent-sdk-cli.ts`) —
- * it has no way to express "tsx + a script path" as one string. This
- * worktree sits one directory level too shallow for that resolver's sibling
- * ancestor-walk to find `repos/warble` on its own (see
- * `resolve-binary.ts`/`agent-sdk-cli.ts`'s fixed-depth walk), so tests that
- * need the REAL dispatcher pass a tiny generated wrapper script as
- * `agentSdkBin` instead of relying on PATH or the sibling walk.
- */
-async function writeAgentSdkWrapper(): Promise<string> {
-  const dir = await mkdtemp(path.join(tmpdir(), "wren-harness-agent-sdk-wrapper-"));
-  const wrapper = path.join(dir, "warble-agent-sdk");
-  await writeFile(wrapper, `#!/bin/sh\nexec "${AGENT_SDK_TSX}" "${AGENT_SDK_ENTRY}" "$@"\n`);
-  await chmod(wrapper, 0o755);
-  return wrapper;
-}
+// Candidate override is explicit; manifests use the pinned installed SDK package.
+const WARBLE_BIN = process.env.WARBLE_TEST_CLI ?? path.join(WARBLE_REPO, "target", "release", "warble");
 
 const canRun =
   existsSync(PROFILE_SOURCE) &&
   existsSync(ENRICH_PROFILE_SOURCE) &&
   existsSync(JAFFLE_WREN) &&
-  existsSync(AGENT_SDK_TSX) &&
-  existsSync(AGENT_SDK_ENTRY) &&
   existsSync(WARBLE_BIN);
 
 /**
@@ -67,14 +39,12 @@ describe.skipIf(!canRun)(
   () => {
     it("subscription authChoice (dispatched) sources the claude-agent-sdk manifest, agreeing with runtimeDispatcher", async () => {
       const authChoice: AuthChoice = { mode: "subscription", provider: "claude" };
-      const agentSdkBin = await writeAgentSdkWrapper();
 
       const bundle = await describeBundle({
         authChoice,
         profileSource: PROFILE_SOURCE,
         userProject: JAFFLE_WREN,
         warbleBin: WARBLE_BIN,
-        agentSdkBin,
       });
 
       expect(bundle.target).toBe("claude-agent-sdk:local");
@@ -103,13 +73,11 @@ describe.skipIf(!canRun)(
 
     it("promotes an enrichment component unavailable on the compiled dispatch target to ready via the native session, through the real manifest, loader, and DTO", async () => {
       const authChoice: AuthChoice = { mode: "subscription", provider: "claude" };
-      const agentSdkBin = await writeAgentSdkWrapper();
       const bundle = await describeBundle({
         authChoice,
         profileSource: ENRICH_PROFILE_SOURCE,
         userProject: JAFFLE_WREN,
         warbleBin: WARBLE_BIN,
-        agentSdkBin,
       });
 
       // `describeBundle` runs the actual manifest command and validates its

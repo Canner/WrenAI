@@ -1,13 +1,12 @@
 import type { LanguageModelV4CallOptions, LanguageModelV4GenerateResult, LanguageModelV4Usage } from "@ai-sdk/provider";
 import { describe, expect, it } from "vitest";
-import { loadBundle } from "../harness/bundle/loader.js";
 import { MOCK_ADAPTER_ID } from "../harness/providers/index.js";
 import { collectJsonSchemaErrors } from "../harness/render/index.js";
 import { route } from "../harness/route/index.js";
 import type { AuthChoice } from "../harness/auth/index.js";
 import { GOLDEN_ENVELOPE, matchesGolden, PARITY_QUESTION } from "./golden-envelope.js";
 import { mockWrenServerConfig } from "./mock-mcp-server.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 
 /**
  * Hermetic cross-back-end OUTPUT parity (item B): both in-process and
@@ -66,7 +65,7 @@ function scriptedTurns(turns: LanguageModelV4GenerateResult[]) {
 
 describe("cross-back-end OUTPUT parity — hermetic contract check (item B)", () => {
   it("in-process's rendered envelope both satisfies answer_query.output_schema and matchesGolden", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const agent = bundle.agents.find((candidate) => candidate.id === "answer_query");
     if (!agent) throw new Error("fixture missing answer_query agent");
 

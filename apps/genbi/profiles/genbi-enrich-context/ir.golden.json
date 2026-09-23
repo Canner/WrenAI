@@ -20,6 +20,7 @@
         },
         "render_blocks": []
       },
+      "entrypoint": true,
       "eval": {
         "metrics": [
           "enrichment_gap_coverage"
@@ -93,6 +94,7 @@
           }
         ]
       },
+      "entrypoint": true,
       "eval": {
         "metrics": [
           "enrichment_proposal_soundness",
@@ -172,6 +174,7 @@
           }
         ]
       },
+      "entrypoint": true,
       "eval": {
         "metrics": [
           "enrichment_apply_safety",
@@ -252,10 +255,6 @@
         }
       ],
       "lineage": {
-        "consumers": {
-          "dashboards": 0,
-          "queries": 1
-        },
         "edges": 7,
         "nodes": 8,
         "resolvable": true
@@ -298,5 +297,5 @@
     }
   },
   "profile": "genbi-enrich-context",
-  "warble_ir_version": "0.6"
+  "warble_ir_version": "0.8"
 }

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { loadBundle } from "../harness/bundle/loader.js";
 import {
   createLocalExecutionEnv,
   EgressNotAllowedError,
@@ -12,7 +11,7 @@ import {
 } from "../harness/exec/index.js";
 import { deriveEnforcement } from "../harness/guardrails/index.js";
 import { createWrenQueryTool, createWriteArtifactTool } from "../harness/tools/native.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 
 /**
  * Permission-enforcement regression (item C, in-process / harness-owned):
@@ -74,7 +73,7 @@ describe("permission enforcement (item C)", () => {
   });
 
   it("blocks a destructive write-mode command under a read-only policy with ReadOnlyViolationError", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const agent = bundle.agents.find((candidate) => candidate.id === "answer_query");
     if (!agent) throw new Error("fixture missing answer_query agent");
 
@@ -92,7 +91,7 @@ describe("permission enforcement (item C)", () => {
   });
 
   it("blocks writing an artifact outside the granted scope with PathTraversalError", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const agent = bundle.agents.find((candidate) => candidate.id === "generate_dashboard");
     if (!agent) throw new Error("fixture missing generate_dashboard agent");
 
@@ -111,7 +110,7 @@ describe("permission enforcement (item C)", () => {
   });
 
   it("blocks any artifact write for an agent whose guardrails grant no write scope with WriteScopeNotGrantedError", async () => {
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const agent = bundle.agents.find((candidate) => candidate.id === "answer_query");
     if (!agent) throw new Error("fixture missing answer_query agent");
 

@@ -108,8 +108,8 @@ function isExecutableOnPath(bin: string): Promise<boolean> {
  * 1. The binary's own checkout — a `<root>/target/release/warble` puts the Hub at
  *    `<root>/hub/components`. Skipped for a bare `"warble"` resolved off `PATH`, which names no
  *    directory to walk up from.
- * 2. A sibling `warble` checkout's `hub/components`, via the same ancestor walk tier 3 of
- *    {@link resolveWarbleBinary} uses.
+ * 2. A sibling `warble` checkout's `hub/components`, only when the explicit sibling-checkout
+ *    development mode is enabled. An installed release must use its own default Hub.
  *
  * Returns `undefined` when neither resolves; callers then pass no `--hub-dir` at all, leaving
  * today's compiled-in default in charge rather than pointing warble at a directory we guessed.
@@ -122,7 +122,7 @@ export function resolveHubDir(warbleBin: string): string | undefined {
     const candidate = path.resolve(warbleBin, "..", "..", "..", "hub", "components");
     if (existsSync(candidate)) return candidate;
   }
-  return findSiblingWarbleEntry("hub", "components");
+  return isWarbleSiblingCheckoutDevModeEnabled() ? findSiblingWarbleEntry("hub", "components") : undefined;
 }
 
 /**

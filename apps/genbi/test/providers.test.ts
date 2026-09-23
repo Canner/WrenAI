@@ -1,7 +1,6 @@
 import { generateText, type LanguageModel } from "ai";
 import type { LanguageModelV4, LanguageModelV4GenerateResult, LanguageModelV4Usage } from "@ai-sdk/provider";
 import { describe, expect, it } from "vitest";
-import { loadBundle } from "../harness/bundle/loader.js";
 import {
   ANTHROPIC_ADAPTER_ID,
   createDefaultProviderRegistry,
@@ -14,7 +13,7 @@ import {
   UnknownTierError,
 } from "../harness/providers/index.js";
 import type { TierBinding } from "../harness/providers/index.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 
 const EMPTY_USAGE: LanguageModelV4Usage = {
   inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
@@ -118,7 +117,7 @@ describe("provider registry + tier binding resolver", () => {
     // Even when a real bundle *is* loaded, its steps only carry an open-string
     // `tier` name — never adapter/model info — so resolution for one of its
     // steps still comes entirely from the runtime binding.
-    const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+    const bundle = loadLegacyFixture("genbi-default.bundle.json");
     const agent = bundle.agents.find((candidate) => candidate.id === "answer_query");
     expect(agent).toBeDefined();
     const step = agent!.steps[0]!;

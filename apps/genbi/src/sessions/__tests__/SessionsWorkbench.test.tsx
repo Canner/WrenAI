@@ -126,6 +126,22 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Sessions workbench', () => {
+  it('chooses a single Codex entry before launch and retains it on restart', async () => {
+    client.list.mockResolvedValue({ sessions: [] });
+    client.readiness.mockResolvedValue({ ...ready, purposes: { ...ready.purposes, analysis: { ...ready.purposes.analysis, target: 'codex:interactive', targetLabel: 'Codex CLI' } } });
+    const session = { ...native('dashboard'), vendor: 'codex' as const, entryVerb: 'generate_dashboard' as const };
+    client.create.mockResolvedValue({ session, capability: 'cap' });
+    const user = userEvent.setup();
+    renderWithProviders(<Surface />, { route: '/sessions' });
+    await screen.findByText(/No native sessions yet/);
+    await user.click(screen.getByRole('button', { name: /new session/i }));
+    await user.click(await screen.findByRole('radio', { name: 'Build a dashboard' }));
+    await user.click(screen.getByRole('button', { name: 'Start separate native terminal' }));
+    await waitFor(() => expect(client.create).toHaveBeenCalledWith('analysis', expect.objectContaining({ entryVerb: 'generate_dashboard' })));
+    await act(async () => { await useNativeSessions.getState().restartSession({ ...session, status: 'exited' }); });
+    expect(client.create.mock.calls[1]?.[1]).toMatchObject({ intent: 'start_separate', entryVerb: 'generate_dashboard' });
+  });
+
   it('creates only the Runtime-bound target and retains the browser-scoped capability', async () => {
     client.list.mockResolvedValue({ sessions: [] });
     client.create.mockResolvedValue({ session: native('new-one'), capability: 'capability-one' });

@@ -837,9 +837,9 @@ checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
 name = "warble"
-version = "0.10.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0b0cf38ace3173e284c7f9c97f3f6806d2ea54ff6a1734212f8da45b90dea73"
+checksum = "71dd3f2f88bea7fad5435c68e42de736cff9a5c42c8f31446299f43051d63a49"
 dependencies = [
  "serde",
  "serde_json",

@@ -6,7 +6,7 @@ import { Store } from "../server/db.js";
 import { loadBundle } from "../harness/index.js";
 import type { RouteOptions } from "../harness/index.js";
 import { buildSyntheticBundle } from "./synthetic-bundle.js";
-import { readFixture } from "./fixtures.js";
+import { loadLegacyFixture } from "./fixtures.js";
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.join(testDir, "fixtures");
@@ -18,7 +18,7 @@ const BASE_ROUTE_OPTIONS: Omit<RouteOptions, "question" | "onEvent"> = {
 };
 
 describe("buildHarnessDto — real genbi-default bundle", () => {
-  const bundle = loadBundle(readFixture("genbi-default.bundle.json"));
+  const bundle = loadLegacyFixture("genbi-default.bundle.json");
 
   it("maps profile identity, including a verifyGate derived from answer_query's locked gated_check and a not-yet-bound status", () => {
     const store = new Store(":memory:");

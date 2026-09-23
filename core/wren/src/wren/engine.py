@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import base64
 import json
+from dataclasses import replace
 from typing import Any
 
 import pyarrow as pa
@@ -34,6 +35,7 @@ from wren.mdl.cte_rewriter import CTERewriter, get_sqlglot_dialect
 from wren.model.data_source import DataSource
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 from wren.policy import resolve_model_name, validate_sql_policy
+from wren.read_only import validate_read_only_query
 
 
 class WrenEngine:
@@ -109,8 +111,23 @@ class WrenEngine:
         sql: str,
         limit: int | None = None,
         properties: dict | None = None,
+        *,
+        read_only: bool = False,
     ) -> pa.Table:
         """Transpile and execute SQL, return results as an Arrow table."""
+        if read_only:
+            validate_read_only_query(sql, get_sqlglot_dialect(self.data_source))
+            manifest = json.loads(base64.b64decode(self.manifest_str))
+            names = {
+                m["name"] for key in ("models", "views") for m in manifest.get(key, [])
+            }
+            validate_sql_policy(
+                parse_one(sql, dialect=get_sqlglot_dialect(self.data_source)),
+                names,
+                replace(
+                    self._config, strict_mode=True, allowed_source_functions=frozenset()
+                ),
+            )
         dialect_sql = self.dry_plan(sql, properties)
         connector = self._get_connector()
         try:

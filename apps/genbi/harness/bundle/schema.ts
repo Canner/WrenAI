@@ -39,6 +39,7 @@ const capabilitySchema = z.object({
   provided_by: z.string(),
   criticality: z.string(),
 });
+const dependencySchema = z.object({ step: z.string(), alias: z.string(), component: z.string() }).strict();
 
 // output_schema is a nested JSON Schema document. The harness stores it as-is
 // and does not interpret it until a later milestone validates output against it.
@@ -56,6 +57,8 @@ const outputSchemaSchema = z.record(z.string(), z.unknown());
 // executable steps for it to frame, so there is nothing for it to reach.
 const availableAgentSchema = z.object({
   id: z.string(),
+  entrypoint: z.boolean().optional(),
+  dependencies: z.array(dependencySchema).optional(),
   verb: z.string(),
   component_type: z.string(),
   realization_kind: z.string(),
@@ -76,6 +79,9 @@ const availableAgentSchema = z.object({
  */
 const unavailableAgentSchema = z.object({
   id: z.string(),
+  entrypoint: z.boolean().optional(),
+  dependencies: z.array(dependencySchema).optional(),
+  capability_inspection: z.array(capabilitySchema).optional(),
   verb: z.string(),
   component_type: z.string(),
   realization_kind: z.string(),

@@ -11,10 +11,10 @@ categories = ["database"]
 
 [dependencies]
 # `PreparedContext` and `prepared_document_from` — the wire contract this crate produces documents
-# for — ship in warble 0.10.0. A published version, not a git ref: a branch dep here died when the
+# for — use the version 2 contract in warble 0.13.0. A published version, not a git ref: a branch dep here died when the
 # source branch was deleted on merge, and a deleted ref fails only on a cold cache, so the break
 # surfaces on someone else's machine rather than the author's.
-warble = "0.10"
+warble = "=0.13.0"
 wren-core-base = { path = "../wren-core-base", version = "0.2.0" }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"

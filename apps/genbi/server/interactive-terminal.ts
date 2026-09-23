@@ -24,7 +24,7 @@ const EXECUTABLE: Record<InteractiveTarget, "claude" | "codex"> = {
 };
 
 export interface InteractiveLaunchSpec {
-  readonly version: "1" | "2" | "3" | "4";
+  readonly version: "1" | "2" | "3" | "4" | "5";
   readonly target: InteractiveTarget;
   readonly executable: "claude" | "codex";
   readonly argv: readonly string[];
@@ -69,6 +69,7 @@ export function nativeTerminalEnvironment(base?: NodeJS.ProcessEnv | NativeChild
   return Object.freeze({
     PATH: pathValue,
     HOME: home,
+    ...(process.platform === "darwin" ? { USER: os.userInfo().username, LOGNAME: os.userInfo().username } : {}),
     TERM: "xterm-256color",
     COLORTERM: "truecolor",
     ...(environment.WREN_PROJECT_HOME ? { WREN_PROJECT_HOME: environment.WREN_PROJECT_HOME } : {}),

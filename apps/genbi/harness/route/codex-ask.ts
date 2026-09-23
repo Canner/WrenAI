@@ -10,6 +10,7 @@ import { CodexAskEventMapper } from "./codex-ask-events.js";
 import { resolveCodexLocalCli } from "./codex-local-cli.js";
 import {
   CODEX_ASK_COMPONENTS,
+  codexAnalysisToolArgs,
   type CodexAskComponent,
   type CodexManifestModels,
 } from "./codex-local-manifest.js";
@@ -74,10 +75,7 @@ export function buildCodexAskArgs(
     "--server-arg",
     options.userProject,
     "--server-arg=--quiet",
-    "--inspect-tool",
-    "get_context",
-    "--query-tool",
-    "run_sql",
+    ...codexAnalysisToolArgs(options.component ?? "answer_query"),
     "--timeout",
     String(options.timeoutMs),
     ...(options.codexBin ? ["--codex-bin", options.codexBin] : []),

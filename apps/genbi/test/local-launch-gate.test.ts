@@ -138,6 +138,12 @@ if (vendor === 'codex') {
 }
 `);
   chmodSync(bin, 0o700);
+  // These identity/legacy-format fixtures implement v4 only. Composed v5
+  // acceptance is exercised separately with the installed real dispatcher.
+  const legacyAnalysis = JSON.parse(readFileSync(path.join(packageRoot, "profiles/genbi-default/ir.golden.json"), "utf8"));
+  for (const node of legacyAnalysis.components) for (const step of node.llm_calls) step.component_calls = [];
+  writeFileSync(path.join(warble, "analysis.json"), JSON.stringify(legacyAnalysis));
+
   writeFileSync(agentSdk, `#!/usr/bin/env node
 const args = process.argv.slice(2);
 if (args.includes('--help')) { console.log(${JSON.stringify(dispatcher === "old-verb" ? "usage: warble-agent-sdk dispatch-ask" : "usage: warble-agent-sdk manifest")}); process.exit(0); }
@@ -198,24 +204,35 @@ function warbleCliPackageInstall(root: string, executableSource: string) {
 }
 
 function run(args: string[], warble: string, env: Record<string, string> = {}) {
-  return spawnSync(process.execPath, [verifier, ...args, "--runtime", "subscription:claude", "--agent-sdk-bin", path.join(warble, "warble-agent-sdk")], { encoding: "utf8", env: { ...process.env, NODE_ENV: "test", ...env } });
+  return spawnSync(process.execPath, [verifier, ...args, "--analysis-ir", path.join(warble, "analysis.json"), "--runtime", "subscription:claude", "--agent-sdk-bin", path.join(warble, "warble-agent-sdk")], { encoding: "utf8", env: { ...process.env, NODE_ENV: "test", ...env } });
 }
 
 function runCodex(args: string[], value: ReturnType<typeof fixture>, env: Record<string, string> = {}) {
-  return spawnSync(process.execPath, [verifier, ...args, "--runtime", "subscription:codex", "--codex-local-bin", value.codexLocal, "--codex-bin", value.codexBin], { encoding: "utf8", env: { ...process.env, NODE_ENV: "test", ...env } });
+  return spawnSync(process.execPath, [verifier, ...args, "--analysis-ir", path.join(value.warble, "analysis.json"), "--runtime", "subscription:codex", "--codex-local-bin", value.codexLocal, "--codex-bin", value.codexBin], { encoding: "utf8", env: { ...process.env, NODE_ENV: "test", ...env } });
 }
 
 function gateOptions(options: Record<string, unknown>, warble: string) {
-  return { ...options, runtime: "subscription:claude", agentSdkBin: path.join(warble, "warble-agent-sdk") };
+  return { ...options, analysisIr: path.join(warble, "analysis.json"), runtime: "subscription:claude", agentSdkBin: path.join(warble, "warble-agent-sdk") };
 }
 
 function codexGateOptions(options: Record<string, unknown>, value: ReturnType<typeof fixture>) {
-  return { ...options, runtime: "subscription:codex", codexLocalBin: value.codexLocal, codexBin: value.codexBin };
+  return { ...options, analysisIr: path.join(value.warble, "analysis.json"), runtime: "subscription:codex", codexLocalBin: value.codexLocal, codexBin: value.codexBin };
 }
 
 afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
 
 describe("local GenBI contract check", () => {
+  it("accepts the installed release across both runtimes with composed default-profile contracts", async () => {
+    const value = fixture();
+    const shared = { skipBuild: true, workspaceRoot: path.join(value.root, "released-bootstrap"),
+      warbleBin: path.join(packageRoot, "node_modules/@warble/cli/run-warble.js") };
+    const claude = await verifyLocalLaunch({ ...shared, runtime: "subscription:claude",
+      agentSdkBin: path.join(packageRoot, "node_modules/@warble/claude-agent-sdk/dist/cli.js") });
+    const codex = await verifyLocalLaunch({ ...shared, runtime: "subscription:codex", codexBin: value.codexBin,
+      codexLocalBin: path.join(packageRoot, "node_modules/@warble/codex-local/dist/cli.js") });
+    expect(claude.result).toBe("passed");
+    expect(codex.result).toBe("passed");
+  }, 30_000);
 
   it("rejects configured, malformed, wrong-reason, and producer-incompatible bootstrap readiness", async () => {
     const baseline = readinessFixture();
@@ -387,13 +404,13 @@ describe("local GenBI contract check", () => {
     // Same claim as above (AC: dispatcher binaries get the same treatment as the Warble CLI
     // binary) but for the Claude dispatcher: verify-local-launch.mjs resolves it with only
     // an executability check, never a containment/git check.
-    const { root, bin, agentSdk } = fixture();
+    const { root, warble, bin, agentSdk } = fixture();
     const packageBinDir = path.join(root, "node_modules", ".bin");
     mkdirSync(packageBinDir, { recursive: true });
     const packageAgentSdk = path.join(packageBinDir, "warble-agent-sdk");
     writeFileSync(packageAgentSdk, readFileSync(agentSdk));
     chmodSync(packageAgentSdk, 0o700);
-    const result = spawnSync(process.execPath, [verifier, "--skip-build", "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin, "--runtime", "subscription:claude", "--agent-sdk-bin", packageAgentSdk], { encoding: "utf8", env: { ...process.env, NODE_ENV: "test" } });
+    const result = spawnSync(process.execPath, [verifier, "--skip-build", "--analysis-ir", path.join(warble, "analysis.json"), "--workspace-root", path.join(root, "bootstrap"), "--warble-bin", bin, "--runtime", "subscription:claude", "--agent-sdk-bin", packageAgentSdk], { encoding: "utf8", env: { ...process.env, NODE_ENV: "test" } });
     expect(result.status, `${result.stderr}${result.stdout}`.trim() || "(no gate output)").toBe(0);
     expect(result.stdout).toContain("contract check PASSED");
   });

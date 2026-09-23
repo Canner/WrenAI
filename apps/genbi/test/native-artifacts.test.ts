@@ -143,6 +143,7 @@ describe("native-session artifact service", () => {
       get: (id: string) => id === row.id ? store.getNativeSession(id) : undefined,
       recovery: () => undefined,
       reportSetupRecovery,
+      componentTools: () => [],
     } as never });
     const headers = { authorization: `Bearer ${descriptor.credential}`, "content-type": "application/json" };
     const listed = await app.request("/api/native-sessions/mcp", { method: "POST", headers, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });

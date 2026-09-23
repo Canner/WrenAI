@@ -13,6 +13,8 @@ on:
     paths:
       - 'apps/genbi/**'
       - 'apps/context-loader/**'
+      - 'core/wren-context-loader/**'
+      - 'core/wren-core-base/**'
       - 'package.json'
       - 'pnpm-workspace.yaml'
       - 'pnpm-lock.yaml'
@@ -24,6 +26,8 @@ on:
     paths:
       - 'apps/genbi/**'
       - 'apps/context-loader/**'
+      - 'core/wren-context-loader/**'
+      - 'core/wren-core-base/**'
       - 'package.json'
       - 'pnpm-workspace.yaml'
       - 'pnpm-lock.yaml'
@@ -77,6 +81,24 @@ jobs:
       - name: Test context-loader installer contract
         working-directory: .
         run: pnpm --dir apps/context-loader test
+
+      # The bound-project manifest regression executes the real context producer.
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache context producer build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            core/wren-context-loader/target/
+          key: context-loader-${{ hashFiles('core/wren-context-loader/Cargo.toml') }}
+
+      - name: Build context producer
+        working-directory: .
+        run: cargo build --locked --manifest-path core/wren-context-loader/Cargo.toml
 
       - name: Typecheck
         run: pnpm run typecheck
