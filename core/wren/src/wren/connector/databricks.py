@@ -3,7 +3,7 @@ from contextlib import closing
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC
 from wren.model import (
     DatabricksConnectionUnion,
     DatabricksServicePrincipalConnectionInfo,
@@ -51,7 +51,7 @@ class DatabricksConnector(ConnectorABC):
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         # Strip terminating ;/whitespace before execute (matches dry_run).
-        sql = strip_trailing_semicolon(sql)
+        sql = self._strip(sql)
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(sql)
             if limit is not None:
@@ -60,9 +60,7 @@ class DatabricksConnector(ConnectorABC):
 
     def dry_run(self, sql: str) -> None:
         with closing(self.connection.cursor()) as cursor:
-            cursor.execute(
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS sub LIMIT 0"
-            )
+            cursor.execute(f"SELECT * FROM ({self._strip(sql)}) AS sub LIMIT 0")
 
     def close(self) -> None:
         try:

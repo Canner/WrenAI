@@ -17,7 +17,7 @@ from typing import Any
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 # Postgres OID → Arrow type. Canner publishes Trino-style values over the
@@ -251,7 +251,7 @@ class CannerConnector(ConnectorABC):
         # empty trailing statements can produce Protocol/syntax noise/door. More
         # importantly we keep composition consistent with the limited path so
         # callers can always end SQL with ``;`` without branching.
-        sql = strip_trailing_semicolon(sql)
+        sql = self._strip(sql)
         if limit is not None:
             sql = f"SELECT * FROM ({sql}) AS _t LIMIT {limit}"
 
@@ -274,7 +274,7 @@ class CannerConnector(ConnectorABC):
     def dry_run(self, sql: str) -> None:
         import psycopg  # noqa: PLC0415
 
-        wrapped = f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _t LIMIT 0"
+        wrapped = f"SELECT * FROM ({self._strip(sql)}) AS _t LIMIT 0"
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(wrapped)

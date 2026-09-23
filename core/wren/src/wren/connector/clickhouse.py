@@ -20,7 +20,7 @@ import sqlglot.errors
 from loguru import logger
 from sqlglot.expressions import DataType
 
-from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit
 from wren.model.error import (
     DIALECT_SQL,
     DatabaseTimeoutError,
@@ -396,7 +396,7 @@ class ClickHouseConnector(ConnectorABC):
         # Strip the terminating run of ``;`` / whitespace before wrapping —
         # ``SELECT * FROM (SELECT 1;) AS _wren_sub LIMIT N`` is invalid SQL.
         # Semicolons inside string literals are preserved.
-        stripped = strip_trailing_semicolon(sql)
+        stripped = self._strip(sql)
         statement = stripped
         if limit is not None:
             statement = f"SELECT * FROM ({stripped}) AS _wren_sub LIMIT {limit}"
@@ -414,7 +414,7 @@ class ClickHouseConnector(ConnectorABC):
         return _build_clickhouse_arrow_table(result)
 
     def dry_run(self, sql: str) -> None:
-        stripped = strip_trailing_semicolon(sql)
+        stripped = self._strip(sql)
         try:
             self.connection.query(f"SELECT * FROM ({stripped}) AS _wren_sub LIMIT 0")
         except _ClickHouseDbError as e:

@@ -4,7 +4,7 @@ import pandas as pd
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit
 from wren.model import (
     RedshiftConnectionInfo,
     RedshiftConnectionUnion,
@@ -45,7 +45,7 @@ class RedshiftConnector(ConnectorABC):
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         limit = coerce_limit(limit)
-        stripped = strip_trailing_semicolon(sql)
+        stripped = self._strip(sql)
         if limit is not None:
             # Multiline wrap so a trailing line comment in the inner SQL is
             # terminated by the newline instead of eating the closing paren.
@@ -63,9 +63,7 @@ class RedshiftConnector(ConnectorABC):
 
     def dry_run(self, sql: str) -> None:
         with closing(self.connection.cursor()) as cursor:
-            cursor.execute(
-                f"SELECT * FROM (\n{strip_trailing_semicolon(sql)}\n) AS sub LIMIT 0"
-            )
+            cursor.execute(f"SELECT * FROM (\n{self._strip(sql)}\n) AS sub LIMIT 0")
 
     def close(self) -> None:
         try:

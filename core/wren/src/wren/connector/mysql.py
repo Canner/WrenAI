@@ -28,7 +28,7 @@ from wren.model.data_source import DataSource
 from wren.model.error import ErrorCode, WrenError
 
 
-def _apply_limit(sql: str, limit: int) -> str:
+def _apply_limit(sql: str, limit: int, dialect: str | None = None) -> str:
     """Append ``LIMIT n`` to a user-supplied SQL string.
 
     Strips any trailing semicolon and whitespace, then appends ``LIMIT n``.
@@ -40,7 +40,7 @@ def _apply_limit(sql: str, limit: int) -> str:
     SELECT projects two columns with the same name (e.g. a join that selects
     ``a.id`` and ``b.id``).
     """
-    return f"{strip_trailing_semicolon(sql)}\nLIMIT {limit}"
+    return f"{strip_trailing_semicolon(sql, dialect)}\nLIMIT {limit}"
 
 
 class MySqlConnector(ConnectorABC):
@@ -79,11 +79,11 @@ class MySqlConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         limit = coerce_limit(limit)
         if limit is not None:
-            sql = _apply_limit(sql, limit)
+            sql = _apply_limit(sql, limit, self.dialect)
         else:
             # Unlimited path: strip trailing terminators so client-pasted SQL
             # matches EXPLAIN / limit composition.
-            sql = strip_trailing_semicolon(sql)
+            sql = self._strip(sql)
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(sql)
             return _build_mysql_arrow_table(cursor)
@@ -94,7 +94,7 @@ class MySqlConnector(ConnectorABC):
         # subquery-wrapping side-steps ``ER_DUP_FIELDNAME`` for queries that
         # surface duplicate column names. We strip a trailing semicolon to
         # match the same compose-ability we use for ``query``'s LIMIT path.
-        explain_sql = f"EXPLAIN {strip_trailing_semicolon(sql)}"
+        explain_sql = f"EXPLAIN {self._strip(sql)}"
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(explain_sql)
             cursor.fetchall()

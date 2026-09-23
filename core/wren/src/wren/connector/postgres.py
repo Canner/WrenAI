@@ -20,7 +20,7 @@ import psycopg
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 # Map of well-known PostgreSQL OIDs to Arrow types. OIDs that we have not
@@ -315,7 +315,7 @@ class PostgresConnector(ConnectorABC):
         limit = coerce_limit(limit)
         # Strip terminating ``;`` even when no LIMIT wrapper is applied so
         # client-pasted statements match dry_run / limited composition rules.
-        sql = strip_trailing_semicolon(sql)
+        sql = self._strip(sql)
         if limit is not None:
             # Multiline wrap so a trailing `-- line comment` in the inner SQL
             # is terminated by the newline instead of swallowing the closing
@@ -339,7 +339,7 @@ class PostgresConnector(ConnectorABC):
             ) from e
 
     def dry_run(self, sql: str) -> None:
-        wrapped = f"SELECT * FROM (\n{strip_trailing_semicolon(sql)}\n) AS _sub LIMIT 0"
+        wrapped = f"SELECT * FROM (\n{self._strip(sql)}\n) AS _sub LIMIT 0"
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(wrapped)
