@@ -18,7 +18,9 @@ def wheel_inventory(release):
             entries = [n for n in archive.namelist() if n.endswith(".dist-info/METADATA")]
             if len(entries) != 1:
                 raise SystemExit("wheel must have exactly one METADATA entry")
-            meta = email.parser.BytesParser().parsebytes(archive.read(entries[0]))
+            # Wheel core metadata is UTF-8. Parsing bytes with compat32 wraps
+            # non-ASCII values in Header objects instead of returning strings.
+            meta = email.parser.Parser().parsestr(archive.read(entries[0]).decode("utf-8"))
         if len(meta.get_all("Name", [])) != 1 or len(meta.get_all("Version", [])) != 1:
             raise SystemExit("wheel must declare one Name and Version")
         expressions = meta.get_all("License-Expression", [])

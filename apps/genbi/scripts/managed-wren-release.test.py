@@ -106,6 +106,25 @@ class ReleaseMetadataTests(unittest.TestCase):
                     runpy.run_path(str(SCRIPT), run_name="__main__")
                 self.assertFalse((self.release / "wheel-inputs.json").exists())
 
+    def test_utf8_license_text_is_preserved(self):
+        license_text = "Copyright © 2026 Example\n  Permission accordée — 使用許可"
+        self.wheel("unicode_license", "License: " + license_text)
+        self.inventory()
+        rows = json.loads((self.release / "wheel-inputs.json").read_text())
+        self.assertEqual(rows[0]["license"], license_text)
+        self.assertNotIn("SPOOFED", rows[0]["license"])
+
+    def test_invalid_utf8_is_rejected_before_network(self):
+        target = self.release / "wheels" / "invalid-1.0-py3-none-any.whl"
+        with zipfile.ZipFile(target, "w") as archive:
+            archive.writestr("invalid-1.0.dist-info/METADATA",
+                             b"Name: invalid\nVersion: 1.0\nLicense: \xff\n\n")
+        with patch("urllib.request.urlopen", side_effect=AssertionError("must not fetch")), patch.object(
+            sys, "argv", [str(SCRIPT), "wheels", "--release-dir", str(self.release)]
+        ), self.assertRaises(UnicodeDecodeError):
+            runpy.run_path(str(SCRIPT), run_name="__main__")
+        self.assertFalse((self.release / "wheel-inputs.json").exists())
+
     def test_source_mismatch_cannot_emit_inventory(self):
         for field in ("filename", "sha256"):
             with self.subTest(field=field):

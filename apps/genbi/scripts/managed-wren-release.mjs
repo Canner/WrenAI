@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /** Generate and verify exact managed-Wren release evidence; it never publishes. */
 import { createHash } from "node:crypto";
-import { lstat, mkdir, readFile, readdir, readlink, realpath, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { runtimeTreeDigest } from "../managed-wren/runtime-tree.cjs";
+
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const digest = (value) => createHash("sha256").update(value).digest("hex");
-const fileDigest = async (target) => digest(await readFile(target));
 const stableJson = (value) => Array.isArray(value) ? "[" + value.map(stableJson).join(",") + "]" : value && typeof value === "object" ? "{" + Object.keys(value).sort().map((key) => JSON.stringify(key) + ":" + stableJson(value[key])).join(",") + "}" : JSON.stringify(value);
 const filenameFromUrl = (url) => decodeURIComponent(new URL(url).pathname.split("/").at(-1) ?? "");
 const exactName = (value) => /^[A-Za-z0-9._+%-]+$/.test(value);
@@ -18,18 +19,7 @@ export function validateRuntimeTag(value) {
   }
   return value;
 }
-const treeDigest = async (root) => {
-  const entries = [];
-  const visit = async (directory) => {
-    for (const name of (await readdir(directory)).sort()) {
-      if (name === "__pycache__") continue;
-      const target = path.join(directory, name); const metadata = await lstat(target); const mode = (metadata.mode & 0o777).toString(8);
-      if (metadata.isSymbolicLink()) { const canonical = await realpath(target); const relative = path.relative(root, canonical); if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("runtime link escapes tree"); entries.push(path.relative(root, target) + "\0" + mode + "\0link\0" + await readlink(target)); }
-      else if (metadata.isDirectory()) await visit(target); else if (metadata.isFile()) entries.push(path.relative(root, target) + "\0" + mode + "\0file\0" + await fileDigest(target)); else throw new Error("unsupported runtime entry: " + target);
-    }
-  };
-  await visit(root); return digest(entries.join("\n"));
-};
+const treeDigest = runtimeTreeDigest;
 
 /** The protected job consumes this exact inventory; it never resolves PyPI. */
 export function verifyExactPublishInventory(candidate, wheelInputs) {

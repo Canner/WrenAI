@@ -1,3 +1,4 @@
+import "./managed-wren-release-tree.test.mjs";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
