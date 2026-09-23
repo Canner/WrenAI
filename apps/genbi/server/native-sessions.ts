@@ -590,6 +590,8 @@ export interface NativeProducerPreflightResult {
    * let that failure take Claude down with it.
    */
   readonly vendors: Readonly<Record<NativeVendor, NativeProducerVendorProbe>>;
+  /** Purpose-specific results; a composed analysis failure cannot veto setup or enrichment. */
+  readonly purposes?: Readonly<Record<NativePurpose, Readonly<Record<NativeVendor, NativeProducerVendorProbe>>>>;
 }
 
 interface NativeProbeProcessResult {
@@ -737,74 +739,86 @@ export async function probeNativeSessionProducer(input: {
   // reported the producer incompatible even for a Claude-only install, which is
   // exactly what an installed package produces.
   const vendors = {} as Record<NativeVendor, NativeProducerVendorProbe>;
+  const purposes = Object.fromEntries(NATIVE_PURPOSES.map((purpose) => [purpose, {}])) as Record<NativePurpose, Record<NativeVendor, NativeProducerVendorProbe>>;
   for (const vendor of NATIVE_PROBE_TARGETS) {
-    let outcome: NativeProducerVendorProbe = { available: true, diagnostic: producerDiagnostic(identity, `complete_${vendor}`, "result=compatible") };
-    const probes = NATIVE_PURPOSES.flatMap<{ purpose: NativePurpose; entryVerb: string | undefined }>((purpose) =>
-      purpose === "analysis" && vendor === "codex" && input.prepareComponents
-        ? [{ purpose, entryVerb: "answer_query" }, { purpose, entryVerb: "generate_dashboard" }]
-        : [{ purpose, entryVerb: undefined }]);
-    for (const { purpose, entryVerb } of probes) {
-      const irPath = input.irPaths[purpose];
-      if (!irPath || !configuredIrPath(irPath)) continue;
-      const phase = `dispatch_${purpose}_${vendor}${entryVerb ? `_${entryVerb}` : ""}`;
-      const fail = (detail: string, reason: string): NativeProducerVendorProbe => ({ available: false, reason, diagnostic: producerDiagnostic(identity, phase, detail) });
-      let root: string | undefined;
-      try {
-        root = mkdtempSync(path.join(os.tmpdir(), "genbi-native-preflight-"));
-        chmodSync(root, 0o700);
-        root = realpathSync(root);
-        const outputRoot = path.join(root, "out");
-        mkdirSync(outputRoot, { mode: 0o700 });
-        const bootstrapRoot = path.join(root, "bootstrap");
-        mkdirSync(bootstrapRoot, { mode: 0o700 });
-        const scopeId = `preflight-${purpose}-${vendor}`;
-        const scopePath = path.join(root, "scope.json");
-        const mcpPath = path.join(root, "mcp.json");
-        // Production passes the sealed managed record. The legacy resolver is a
-        // compatibility seam for deterministic fixture tests only; bin.ts does
-        // not provide a shim and so can never select an editable installation.
-        const wrenRuntime = vendor === "codex"
-          ? input.resolveManagedCodexWrenRuntime
-            ? input.resolveManagedCodexWrenRuntime()
-            : resolveNativeWrenRuntime(input.wrenShim)
-          : undefined;
-        const binding = NATIVE_DISPATCH_REGISTRY[purpose].scopeKind === "bound_project"
-          ? { project_identity: "native-preflight-project", generation: "1", revision: "native-preflight-revision" }
-          : undefined;
-        const scope = { version: "3", kind: NATIVE_DISPATCH_REGISTRY[purpose].scopeKind, scope_id: scopeId, cwd: outputRoot, entry: nativeEntryFor(purpose, vendor, entryVerb), ...(purpose === "setup" ? { bootstrap_root: bootstrapRoot } : {}), ...(wrenRuntime ? { wren_runtime: wrenRuntime } : {}), ...(binding ? { binding } : {}) };
-        const scopeDocument = JSON.stringify(scope);
-        writeFileSync(scopePath, scopeDocument, { encoding: "utf8", mode: 0o600, flag: "wx" });
-        const irDocument = input.prepareComponents && purpose === "analysis" ? readFileSync(irPath, "utf8") : undefined;
-        const prepared = irDocument ? input.prepareComponents?.({ vendor, purpose, irDocument, scope }) : undefined;
-        const hostPath = path.join(root, "component-host.json");
-        let receipt: NativeComponentReceipt | undefined;
-        if (prepared && irDocument) {
-          if (prepared.identity.vendor !== vendor || !isDeepStrictEqual(prepared.identity.binding, binding)) throw new Error("Incompatible component probe identity");
-          writeFileSync(hostPath, JSON.stringify(nativeComponentHostContract(prepared)), { encoding: "utf8", mode: 0o600, flag: "wx" });
-          receipt = { identity: structuredClone(prepared.identity), irDocument, scopeDocument,
-            hostRoots: structuredClone(prepared.hostRoots), contexts: structuredClone(prepared.contexts) };
-        }
-        writeFileSync(mcpPath, JSON.stringify({ version: "1", url: "http://127.0.0.1:0/api/native-sessions/mcp", credential: "native-preflight-nonsecret" }), { encoding: "utf8", mode: 0o600, flag: "wx" });
-        const dispatched = await runNativeProbe(producerExecutable, ["dispatch", irPath, "--target", targetForProvider(vendor), "--purpose", purpose, "--native-scope", scopePath, "--native-mcp", mcpPath, ...(prepared ? ["--native-host", hostPath] : []), "--out", outputRoot], probeEnv);
-        if (dispatched.spawnFailed) { outcome = fail("result=spawn_failed", "the Warble binary could not be started for this vendor"); break; }
-        if (dispatched.timedOut) { outcome = fail("result=timed_out", "the Warble binary did not respond for this vendor"); break; }
-        if (dispatched.exitCode !== 0) { outcome = fail(`result=exit_code_${dispatched.exitCode ?? "signal"}`, "Warble could not dispatch this profile for this vendor"); break; }
+    for (const selectedPurpose of NATIVE_PURPOSES) {
+      let outcome: NativeProducerVendorProbe = { available: true, diagnostic: producerDiagnostic(identity, `complete_${vendor}`, "result=compatible") };
+      const probes = [selectedPurpose].flatMap<{ purpose: NativePurpose; entryVerb: string | undefined }>((purpose) =>
+        purpose === "analysis" && vendor === "codex" && input.prepareComponents
+          ? [{ purpose, entryVerb: "answer_query" }, { purpose, entryVerb: "generate_dashboard" }]
+          : [{ purpose, entryVerb: undefined }]);
+      for (const { purpose, entryVerb } of probes) {
+        const irPath = input.irPaths[purpose];
+        if (!irPath || !configuredIrPath(irPath)) continue;
+        const phase = `dispatch_${purpose}_${vendor}${entryVerb ? `_${entryVerb}` : ""}`;
+        const fail = (detail: string, reason: string): NativeProducerVendorProbe => ({ available: false, reason, diagnostic: producerDiagnostic(identity, phase, detail) });
+        let root: string | undefined;
         try {
-          readNativeLaunchSpec(outputRoot, purpose, vendor, scopeId, undefined, { version: "1", url: "http://127.0.0.1:0/api/native-sessions/mcp", credential: "native-preflight-nonsecret" }, undefined, undefined, undefined, receipt);
-        } catch {
-          outcome = fail("result=launch_spec_incompatible", "Warble emitted a launch spec this build cannot run");
+          root = mkdtempSync(path.join(os.tmpdir(), "genbi-native-preflight-"));
+          chmodSync(root, 0o700);
+          root = realpathSync(root);
+          const outputRoot = path.join(root, "out");
+          mkdirSync(outputRoot, { mode: 0o700 });
+          const bootstrapRoot = path.join(root, "bootstrap");
+          mkdirSync(bootstrapRoot, { mode: 0o700 });
+          const scopeId = `preflight-${purpose}-${vendor}`;
+          const scopePath = path.join(root, "scope.json");
+          const mcpPath = path.join(root, "mcp.json");
+          // Production passes the sealed managed record. The legacy resolver is a
+          // compatibility seam for deterministic fixture tests only; bin.ts does
+          // not provide a shim and so can never select an editable installation.
+          const wrenRuntime = vendor === "codex"
+            ? input.resolveManagedCodexWrenRuntime
+              ? input.resolveManagedCodexWrenRuntime()
+              : resolveNativeWrenRuntime(input.wrenShim)
+            : undefined;
+          const binding = NATIVE_DISPATCH_REGISTRY[purpose].scopeKind === "bound_project"
+            ? { project_identity: "native-preflight-project", generation: "1", revision: "native-preflight-revision" }
+            : undefined;
+          const scope = { version: "3", kind: NATIVE_DISPATCH_REGISTRY[purpose].scopeKind, scope_id: scopeId, cwd: outputRoot, entry: nativeEntryFor(purpose, vendor, entryVerb), ...(purpose === "setup" ? { bootstrap_root: bootstrapRoot } : {}), ...(wrenRuntime ? { wren_runtime: wrenRuntime } : {}), ...(binding ? { binding } : {}) };
+          const scopeDocument = JSON.stringify(scope);
+          writeFileSync(scopePath, scopeDocument, { encoding: "utf8", mode: 0o600, flag: "wx" });
+          const irDocument = input.prepareComponents && purpose === "analysis" ? readFileSync(irPath, "utf8") : undefined;
+          const prepared = irDocument ? input.prepareComponents?.({ vendor, purpose, irDocument, scope }) : undefined;
+          const hostPath = path.join(root, "component-host.json");
+          let receipt: NativeComponentReceipt | undefined;
+          if (prepared && irDocument) {
+            if (prepared.identity.vendor !== vendor || !isDeepStrictEqual(prepared.identity.binding, binding)) throw new Error("Incompatible component probe identity");
+            writeFileSync(hostPath, JSON.stringify(nativeComponentHostContract(prepared)), { encoding: "utf8", mode: 0o600, flag: "wx" });
+            receipt = { identity: structuredClone(prepared.identity), irDocument, scopeDocument,
+              hostRoots: structuredClone(prepared.hostRoots), contexts: structuredClone(prepared.contexts) };
+          }
+          writeFileSync(mcpPath, JSON.stringify({ version: "1", url: "http://127.0.0.1:0/api/native-sessions/mcp", credential: "native-preflight-nonsecret" }), { encoding: "utf8", mode: 0o600, flag: "wx" });
+          const dispatched = await runNativeProbe(producerExecutable, ["dispatch", irPath, "--target", targetForProvider(vendor), "--purpose", purpose, "--native-scope", scopePath, "--native-mcp", mcpPath, ...(prepared ? ["--native-host", hostPath] : []), "--out", outputRoot], probeEnv);
+          if (dispatched.spawnFailed) { outcome = fail("result=spawn_failed", "the Warble binary could not be started for this vendor"); break; }
+          if (dispatched.timedOut) { outcome = fail("result=timed_out", "the Warble binary did not respond for this vendor"); break; }
+          if (dispatched.exitCode !== 0) {
+            const missingHost = !prepared && dispatched.output.includes("component_invocation")
+              && dispatched.output.includes("no trusted invocation handler is installed");
+            outcome = missingHost
+              ? fail("result=component_runtime_unprovisioned", "Native component execution has not been provisioned for this profile.")
+              : fail(`result=exit_code_${dispatched.exitCode ?? "signal"}`, "Warble could not dispatch this profile for this vendor");
+            break;
+          }
+          try {
+            readNativeLaunchSpec(outputRoot, purpose, vendor, scopeId, undefined, { version: "1", url: "http://127.0.0.1:0/api/native-sessions/mcp", credential: "native-preflight-nonsecret" }, undefined, undefined, undefined, receipt);
+          } catch {
+            outcome = fail("result=launch_spec_incompatible", "Warble emitted a launch spec this build cannot run");
+            break;
+          }
+        } catch (error) {
+          outcome = error instanceof NativeWrenRuntimeError || error instanceof ManagedWrenRuntimeError
+            ? fail(`result=wren_runtime_unavailable (${error.message})`, error.message)
+            : fail("result=preflight_workspace_unavailable", "the preflight could not create its temporary workspace");
           break;
+        } finally {
+          if (root) rmSync(root, { recursive: true, force: true });
         }
-      } catch (error) {
-        outcome = error instanceof NativeWrenRuntimeError || error instanceof ManagedWrenRuntimeError
-          ? fail(`result=wren_runtime_unavailable (${error.message})`, error.message)
-          : fail("result=preflight_workspace_unavailable", "the preflight could not create its temporary workspace");
-        break;
-      } finally {
-        if (root) rmSync(root, { recursive: true, force: true });
       }
+      purposes[selectedPurpose][vendor] = outcome;
     }
-    vendors[vendor] = outcome;
+    vendors[vendor] = NATIVE_PURPOSES.map((purpose) => purposes[purpose][vendor]).find((probe) => !probe.available)
+      ?? { available: true, diagnostic: producerDiagnostic(identity, `complete_${vendor}`, "result=compatible") };
   }
 
   const usable = NATIVE_PROBE_TARGETS.filter((vendor) => vendors[vendor].available);
@@ -821,6 +835,7 @@ export async function probeNativeSessionProducer(input: {
     producer,
     diagnostic: producerDiagnostic(identity, "complete", available ? `result=compatible_${usable.join("+")}` : `result=no_compatible_vendor ${vendorResults}`),
     vendors,
+    purposes,
   };
 }
 
@@ -1502,7 +1517,7 @@ export class NativeSessionService {
       // Only the configured vendor's own probe may block this purpose. Probing
       // both and collapsing them into one boolean let an unselected vendor veto
       // the selected one.
-      const selectedProducer = producer && dispatch ? producer.vendors[dispatch.provider] : undefined;
+      const selectedProducer = producer && dispatch ? (producer.purposes?.[purpose][dispatch.provider] ?? producer.vendors[dispatch.provider]) : undefined;
       const sharedReason = !dispatch && !legacyFixture
         ? "native sessions require a saved Runtime & authentication binding"
         : !cwd
@@ -1528,7 +1543,7 @@ export class NativeSessionService {
       // Production readiness now reports every vendor, so the UI can say which
       // one is unusable and why instead of only that "the producer" is.
       if (!legacyFixture && producer) for (const vendor of NATIVE_VENDORS) {
-        const probe = producer.vendors[vendor];
+        const probe = producer.purposes?.[purpose][vendor] ?? producer.vendors[vendor];
         vendorReadiness[vendor] = vendor === "codex" && codexWrenRuntimeUnavailable
           ? { available: false, reason: codexWrenRuntimeUnavailable }
           : probe?.available === false
@@ -1638,7 +1653,7 @@ export class NativeSessionService {
       throw error;
     }
     const producer = this.legacyFixtureMode() ? undefined : await this.productionProducerPreflight();
-    const launchProducer = producer ? producer.vendors[dispatchDefinition.provider] : undefined;
+    const launchProducer = producer ? (producer.purposes?.[purpose][dispatchDefinition.provider] ?? producer.vendors[dispatchDefinition.provider]) : undefined;
     if (producer && (!launchProducer?.available || !producer.producer)) {
       throw new InteractiveLaunchError(launchProducer?.reason ?? "native session producer is incompatible");
     }
@@ -1791,6 +1806,10 @@ export class NativeSessionService {
           attestNativeExecutable("python", wrenRuntime.interpreter),
         );
       }
+      // Legacy Claude tools use the same server-selected profile store as Setup.
+      // Hosted v5 entries receive only their broker and must not inherit this store.
+      const claudeWrenHome = launchSpec.version === "4" && dispatchDefinition.provider === "claude"
+        && binding && this.options.sourceWrenHome ? this.sourceWrenHome() : undefined;
       const runtimeSpec = buildNativeRuntimeSpec({
         backend: runtimeReadiness.selected,
         vendor: dispatchDefinition.provider,
@@ -1799,7 +1818,7 @@ export class NativeSessionService {
         workspace: cwd,
         home: this.nativeHome,
         ...(binding ? { binding } : {}),
-        ...(codexWrenHome ? { sessionWrenHome: codexWrenHome.home } : {}),
+        ...(codexWrenHome ? { sessionWrenHome: codexWrenHome.home } : claudeWrenHome ? { sessionWrenHome: claudeWrenHome } : {}),
         ...(dispatchDefinition.provider === "codex" && this.options.codexHome ? { codexHome: this.options.codexHome } : {}),
         ...(mcp ? { mcpCredential: mcp.credential } : {}),
         ...(launchSpec.bootstrap_root ? { setupBootstrapRoot: launchSpec.bootstrap_root } : {}),

@@ -69,6 +69,7 @@ export function nativeTerminalEnvironment(base?: NodeJS.ProcessEnv | NativeChild
   return Object.freeze({
     PATH: pathValue,
     HOME: home,
+    ...(process.platform === "darwin" ? { USER: os.userInfo().username, LOGNAME: os.userInfo().username } : {}),
     TERM: "xterm-256color",
     COLORTERM: "truecolor",
     ...(environment.WREN_PROJECT_HOME ? { WREN_PROJECT_HOME: environment.WREN_PROJECT_HOME } : {}),

@@ -287,6 +287,8 @@ describe("native session persistence", () => {
   ] as const)("validates and materializes the loopback MCP launch contract for %s/%s", async (purpose, vendor) => {
     const { dir, binding } = fixture(purpose, vendor);
     const state = materializationState();
+    const configuredWrenHome = path.join(dir, "selected-wren-home");
+    mkdirSync(configuredWrenHome);
     const store = new Store(":memory:");
     const artifacts = new NativeArtifactService({ store, artifactsRoot: path.join(dir, "artifacts"), expectedMcpUrl: NATIVE_MCP_URL, mcpUrl: NATIVE_MCP_URL, getBinding: () => binding });
     const spawned: Array<{ file: string; args: readonly string[] }> = [];
@@ -301,6 +303,7 @@ describe("native session persistence", () => {
       store, terminalManager: async () => new InteractiveTerminalManager(pty), getBinding: () => binding,
       workspaceRoot: purpose === "setup" ? dir : undefined,
       materializationState: state,
+      sourceWrenHome: () => configuredWrenHome,
       irPaths: { analysis: purpose === "analysis" ? path.join(dir, "analysis.json") : undefined, setup: purpose === "setup" ? path.join(dir, "setup.json") : undefined, context_enrichment: purpose === "context_enrichment" ? path.join(dir, "enrich.json") : undefined },
       warbleBin: "unused", producerAvailable: () => true, executableAvailable: () => true, artifactService: artifacts,
       dispatch: async ({ cwd, scope }) => {
@@ -331,6 +334,7 @@ describe("native session persistence", () => {
     expect(spawnEnvs[0]).toMatchObject({ TERM: "xterm-256color", COLORTERM: "truecolor" });
     expect(spawnEnvs[0] && "NO_COLOR" in spawnEnvs[0]).toBe(false);
     expect(spawnEnvs[0]?.[NATIVE_SETUP_BOOTSTRAP_ROOT_ENV_VAR]).toBe(purpose === "setup" ? realpathSync(dir) : undefined);
+    if (vendor === "claude") expect(spawnEnvs[0]?.WREN_HOME).toBe(binding ? realpathSync(configuredWrenHome) : undefined);
     if (vendor === "codex" && binding) {
       expect(readFileSync(path.join(materializationRoot, ".codex", "config.toml"), "utf8")).toContain(`${JSON.stringify(realpathSync(binding.path))} = "read"`);
     }

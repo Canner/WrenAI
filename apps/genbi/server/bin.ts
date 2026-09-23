@@ -243,8 +243,12 @@ async function main(): Promise<void> {
     ...(claudeExecutable ? { claude: claudeExecutable } : {}),
     ...(codexExecutable ? { codex: codexExecutable } : {}),
   });
+  const nativeWrenExecutable = resolveNativeExecutable("wren", "wren", bootPath);
   const nativeToolDirectories = Object.freeze([...new Set([
     path.dirname(nodeExecutable.executable),
+    // Native auth and CLI tools need fixed OS utilities, even with a sanitized PATH.
+    ...(["darwin", "linux"].includes(process.platform) ? ["/usr/bin", "/bin", "/usr/sbin", "/sbin"].map((directory) => realpathSync(directory)) : []),
+    ...(nativeWrenExecutable ? [path.dirname(nativeWrenExecutable.executable)] : []),
     ...Object.values(vendorExecutables).filter((value): value is NativeExecutableIdentity => value !== undefined).map((value) => path.dirname(value.executable)),
     ...(producerExecutable ? [path.dirname(producerExecutable.executable)] : []),
   ])]);

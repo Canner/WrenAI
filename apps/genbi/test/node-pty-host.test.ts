@@ -1,5 +1,5 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { userInfo, tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createProbedPtyFactory, ensureDarwinNodePtySpawnHelper } from "../server/node-pty-host.js";
@@ -86,10 +86,10 @@ describe("node-pty host", () => {
     factory.spawn("claude", [], { cwd: "/bound/project", cols: 100, rows: 30 });
 
     expect(spawn).toHaveBeenNthCalledWith(1, "/fixed/node", ["--version"], {
-      cwd: "/fixed/cwd", cols: 80, rows: 24, name: "xterm-256color", env: { PATH: "/fixed/bin", HOME: "/fixed/home", TERM: "xterm-256color", COLORTERM: "truecolor" },
+      cwd: "/fixed/cwd", cols: 80, rows: 24, name: "xterm-256color", env: { PATH: "/fixed/bin", HOME: "/fixed/home", ...(process.platform === "darwin" ? { USER: userInfo().username, LOGNAME: userInfo().username } : {}), TERM: "xterm-256color", COLORTERM: "truecolor" },
     });
     expect(spawn).toHaveBeenNthCalledWith(2, "claude", [], {
-      cwd: "/bound/project", cols: 100, rows: 30, name: "xterm-256color", env: { PATH: "/fixed/bin", HOME: "/fixed/home", TERM: "xterm-256color", COLORTERM: "truecolor" },
+      cwd: "/bound/project", cols: 100, rows: 30, name: "xterm-256color", env: { PATH: "/fixed/bin", HOME: "/fixed/home", ...(process.platform === "darwin" ? { USER: userInfo().username, LOGNAME: userInfo().username } : {}), TERM: "xterm-256color", COLORTERM: "truecolor" },
     });
   });
 

@@ -204,6 +204,33 @@ describe("native producer compatibility preflight", () => {
     store.close();
   });
 
+  it("keeps setup and enrichment launchable when analysis lacks a component host", async () => {
+    const dir = fixtureDir();
+    const wrenShim = runtimeFixture(dir);
+    const producer = fakeProducer(dir, "compatible", { finalAction: `
+if (purpose === 'analysis') {
+  console.error('component_invocation: no trusted invocation handler is installed; token=never-log-this');
+  process.exit(1);
+}` });
+    const { service, store } = productionService(dir, producer, wrenShim, undefined, "claude");
+    try {
+      const readiness = await service.readiness();
+      expect(readiness.purposes.analysis).toMatchObject({ available: false,
+        reason: "Native component execution has not been provisioned for this profile.",
+        producer: { available: false, diagnostic: expect.stringContaining("component_runtime_unprovisioned") } });
+      for (const purpose of ["setup", "context_enrichment"] as const) {
+        expect(readiness.purposes[purpose]).toMatchObject({ available: true, producer: { available: true } });
+        await expect(service.openOrCreate({ purpose })).resolves.toMatchObject({ row: { status: "running", purpose } });
+      }
+      await expect(service.openOrCreate({ purpose: "analysis" })).rejects.toThrow("Native component execution has not been provisioned");
+      expect(store.listNativeSessions()).toHaveLength(2);
+      expect(JSON.stringify(readiness)).not.toContain("never-log-this");
+    } finally {
+      await service.shutdown();
+      store.close();
+    }
+  });
+
   it("validates actual composed host receipts and both Codex pins without executing components", async () => {
     const dir = fixtureDir();
     const binary = await resolveWarbleBinary(process.env.WARBLE_TEST_CLI);
