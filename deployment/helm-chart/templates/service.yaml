@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wren-ai.fullname" . }}-ui-svc
+  labels:
+    {{- include "wren-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  type: {{ .Values.ui.service.type }}
+  ports:
+    - port: {{ .Values.ui.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http-ui
+  selector:
+    {{- include "wren-ai.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wren-ai.fullname" . }}-engine-svc
+  labels:
+    {{- include "wren-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: engine
+spec:
+  type: {{ .Values.engine.service.type }}
+  ports:
+    - port: {{ .Values.engine.service.ports.engine }}
+      targetPort: http
+      protocol: TCP
+      name: wren-engine
+    - port: {{ .Values.engine.service.ports.sql }}
+      targetPort: sql
+      protocol: TCP
+      name: wren-engine-sql
+  selector:
+    {{- include "wren-ai.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: engine
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wren-ai.fullname" . }}-ai-service-svc
+  labels:
+    {{- include "wren-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ai-service
+spec:
+  type: {{ .Values.aiService.service.type }}
+  ports:
+    - port: {{ .Values.aiService.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "wren-ai.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: ai-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wren-ai.fullname" . }}-ibis-server-svc
+  labels:
+    {{- include "wren-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ibis-server
+spec:
+  type: {{ .Values.ibisServer.service.type }}
+  ports:
+    - port: {{ .Values.ibisServer.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: wren-ibis
+  selector:
+    {{- include "wren-ai.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: ibis-server
