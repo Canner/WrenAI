@@ -2774,28 +2774,8 @@ mod test {
     /// model is added conditionally, and `with_chain` prefers an edge from the
     /// previously visited node (falling back to the start node) so star
     /// fan-outs across multiple relationships plan correctly.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    #[tokio::test]
     async fn test_multiple_relationship_calculated_columns() -> Result<()> {
-        // Run the transform on a dedicated thread with an enlarged stack:
-        // wren-core's plan analyzer uses deep recursion and can exceed the
-        // default 2 MiB test-thread stack when joining several relationships.
-        // Production tokio worker threads have a larger stack and are
-        // unaffected; this is not infinite recursion.
-        std::thread::Builder::new()
-            .stack_size(8 * 1024 * 1024)
-            .spawn(|| {
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap();
-                rt.block_on(test_multiple_relationship_calculated_columns_inner())
-            })
-            .unwrap()
-            .join()
-            .unwrap()
-    }
-
-    async fn test_multiple_relationship_calculated_columns_inner() -> Result<()> {
         let ctx = create_wren_ctx(None, None);
 
         // dc_inventory has two distinct relationships: one to `product`, one to
