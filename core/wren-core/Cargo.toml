@@ -9,12 +9,12 @@ homepage = "https://getwren.ai"
 license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/Canner/WrenAI"
-rust-version = "1.78"
+rust-version = "1.94"
 version = "0.4.0"
 
 [workspace.dependencies]
 async-trait = "0.1.89"
-datafusion = { version = "53", default-features = false, features = [
+datafusion = { version = "55.1", default-features = false, features = [
     "nested_expressions",
     "crypto_expressions",
     "datetime_expressions",
@@ -24,7 +24,7 @@ datafusion = { version = "53", default-features = false, features = [
     "parquet",
     "sql",
 ] }
-datafusion-session = { version = "53", default-features = false }
+datafusion-session = { version = "55.1", default-features = false }
 env_logger = "0.11.10"
 hashbrown = "0.17.0"
 insta = { version = "1.41.1" }

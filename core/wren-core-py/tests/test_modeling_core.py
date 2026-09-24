@@ -144,7 +144,7 @@ def test_read_function_list():
     path = "tests/functions.csv"
     session_context = SessionContext(manifest_str, path)
     functions = session_context.get_available_functions()
-    assert len(functions) == 290
+    assert len(functions) == 291
 
     rewritten_sql = session_context.transform_sql(
         "SELECT add_two(c_custkey, c_custkey) FROM my_catalog.my_schema.customer"
@@ -156,7 +156,7 @@ def test_read_function_list():
 
     session_context = SessionContext(manifest_str, None)
     functions = session_context.get_available_functions()
-    assert len(functions) == 283
+    assert len(functions) == 284
 
 
 def test_get_available_functions():

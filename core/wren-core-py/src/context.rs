@@ -635,6 +635,8 @@ impl PySessionContext {
                 r.description
             FROM
                 information_schema.routines r
+            WHERE
+                r.function_type IN ('SCALAR', 'AGGREGATE', 'WINDOW')
         "#;
         let batches = ctx
             .sql(sql)
@@ -742,6 +744,7 @@ impl PySessionContext {
                 inputs i ON r.specific_name = i.specific_name
             WHERE
                 r.routine_name = '{}'
+                AND r.function_type IN ('SCALAR', 'AGGREGATE', 'WINDOW')
         "#,
             function_name
         );

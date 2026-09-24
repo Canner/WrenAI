@@ -13,6 +13,7 @@ use crate::mdl::utils::{dequote_identifier, quoted, to_field};
 use crate::DataFusionError;
 use context::SessionPropertiesRef;
 use datafusion::arrow::datatypes::Field;
+use datafusion::common::TableReference;
 use datafusion::common::{internal_datafusion_err, plan_err};
 use datafusion::datasource::TableProvider;
 use datafusion::error::Result;
@@ -24,7 +25,6 @@ use datafusion::sql::parser::DFParser;
 use datafusion::sql::sqlparser::ast::{Expr, ExprWithAlias, Ident};
 use datafusion::sql::sqlparser::dialect::dialect_from_str;
 use datafusion::sql::unparser::Unparser;
-use datafusion::sql::TableReference;
 pub use dataset::Dataset;
 use dialect::WrenDialect;
 use log::{debug, info, warn};
@@ -945,6 +945,56 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_in_list_mixed_string_numeric_prefers_string() -> Result<()> {
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("customer")
+                    .table_reference("customer")
+                    .column(ColumnBuilder::new("c_custkey", "int").build())
+                    .column(ColumnBuilder::new("c_name", "varchar").build())
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let ctx = create_wren_ctx(None, analyzed_mdl.wren_mdl().data_source().as_ref());
+
+        let sql = "select c_custkey from customer where c_name in (1, 2)";
+        let actual = mdl::transform_sql_with_ctx(
+            &ctx,
+            Arc::clone(&analyzed_mdl),
+            &[],
+            Arc::new(HashMap::new()),
+            sql,
+        )
+        .await?;
+        assert_snapshot!(actual,
+            @"SELECT customer.c_custkey FROM (SELECT customer.c_custkey, customer.c_name FROM \
+            (SELECT __source.c_custkey AS c_custkey, __source.c_name AS c_name FROM customer AS __source) AS customer) AS customer \
+            WHERE customer.c_name IN (CAST(1 AS VARCHAR), CAST(2 AS VARCHAR))");
+
+        let sql = "select c_custkey from customer where c_custkey in ('1', '2')";
+        let actual = mdl::transform_sql_with_ctx(
+            &ctx,
+            Arc::clone(&analyzed_mdl),
+            &[],
+            Arc::new(HashMap::new()),
+            sql,
+        )
+        .await?;
+        assert_snapshot!(actual,
+            @"SELECT customer.c_custkey FROM (SELECT customer.c_custkey FROM \
+            (SELECT __source.c_custkey AS c_custkey FROM customer AS __source) AS customer) AS customer \
+            WHERE CAST(customer.c_custkey AS VARCHAR) IN ('1', '2')");
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_remote_function() -> Result<()> {
         env_logger::init();
         let test_data: PathBuf =
@@ -1210,7 +1260,10 @@ mod test {
             .await.map_err(|e| {
                 assert_snapshot!(
                     e.to_string(),
-                    @"Schema error: No field named \"名字\". Valid fields are wren.test.artist.\"串接名字\"."
+                    @r#"
+                Schema error: No field named "名字". Did you mean 'wren.test.artist."串接名字"'?
+                Valid fields are wren.test.artist."串接名字".
+                "#
                 )
             });
         Ok(())
@@ -3076,7 +3129,10 @@ mod test {
                 panic!("whitelist_name is hidden, it should not be selected directly")
             }
             Err(e) => {
-                assert_snapshot!(e.to_string(), @"Schema error: No field named whitelist_name. Valid fields are customer.c_custkey, customer.mock_id.")
+                assert_snapshot!(e.to_string(), @r"
+                Schema error: No field named whitelist_name.
+                Valid fields are customer.c_custkey, customer.mock_id.
+                ")
             }
         }
 
@@ -3227,7 +3283,10 @@ mod test {
             Err(e) => {
                 assert_snapshot!(
                     e.to_string(),
-                    @"Schema error: No field named c_name. Valid fields are customer.c_custkey."
+                    @r"
+                Schema error: No field named c_name.
+                Valid fields are customer.c_custkey.
+                "
                 )
             }
         }
@@ -5235,7 +5294,7 @@ mod test {
         use datafusion::catalog::memory::MemoryCatalogProvider;
         use datafusion::catalog::CatalogProvider;
         use datafusion::catalog::SchemaProvider;
-        use datafusion::sql::TableReference;
+        use datafusion::common::TableReference;
         use std::sync::Barrier;
         use std::thread;
 

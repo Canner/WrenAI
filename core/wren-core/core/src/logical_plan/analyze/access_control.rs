@@ -8,13 +8,13 @@ use datafusion::{
     arrow::datatypes::{DataType, SchemaRef},
     common::{
         config::ConfigOptions, file_options::file_type::FileType, plan_datafusion_err,
-        plan_err, Result, Spans,
+        plan_err, Result, Spans, TableReference,
     },
     error::DataFusionError,
     logical_expr::{
         builder::LogicalTableSource,
         planner::{ContextProvider, ExprPlanner, TypePlanner},
-        AggregateUDF, ScalarUDF, TableSource, WindowUDF,
+        AggregateUDF, HigherOrderUDF, ScalarUDF, TableSource, WindowUDF,
     },
     prelude::Expr,
     sql::{
@@ -27,7 +27,6 @@ use datafusion::{
             },
             dialect::GenericDialect,
         },
-        TableReference,
     },
 };
 use wren_core_base::mdl::RowLevelAccessControl;
@@ -395,6 +394,14 @@ impl ContextProvider for RlacContextProvider {
             .cloned()
     }
 
+    fn get_higher_order_meta(&self, name: &str) -> Option<Arc<HigherOrderUDF>> {
+        self.session_state
+            .read()
+            .higher_order_functions()
+            .get(name)
+            .cloned()
+    }
+
     fn get_aggregate_meta(&self, name: &str) -> Option<Arc<AggregateUDF>> {
         self.session_state
             .read()
@@ -423,6 +430,15 @@ impl ContextProvider for RlacContextProvider {
         self.session_state
             .read()
             .scalar_functions()
+            .keys()
+            .cloned()
+            .collect()
+    }
+
+    fn higher_order_function_names(&self) -> Vec<String> {
+        self.session_state
+            .read()
+            .higher_order_functions()
             .keys()
             .cloned()
             .collect()
