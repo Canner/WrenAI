@@ -1,6 +1,7 @@
 """Shared pytest fixtures for wren-langchain tests."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -32,3 +33,28 @@ def fake_active_profile(monkeypatch):
         "wren_langchain._providers.connection.get_active_profile",
         lambda: ("test", {"datasource": "duckdb", "path": ":memory:"}),
     )
+
+
+@pytest.fixture
+def simulate_cp936_default_encoding(monkeypatch):
+    """Make text reads without an encoding behave like a Windows CP936 locale."""
+    original_open = Path.open
+
+    def apply():
+        def open_with_cp936_default(
+            path, mode="r", buffering=-1, encoding=None, errors=None, newline=None
+        ):
+            if "b" not in mode and encoding is None:
+                encoding = "cp936"
+            return original_open(
+                path,
+                mode=mode,
+                buffering=buffering,
+                encoding=encoding,
+                errors=errors,
+                newline=newline,
+            )
+
+        monkeypatch.setattr(Path, "open", open_with_cp936_default)
+
+    return apply
