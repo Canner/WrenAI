@@ -200,6 +200,82 @@ def test_watch_loop_survives_transient_reindex_failure(tmp_path):
     assert "error" in events
 
 
+# ── failure reporting ──────────────────────────────────────────────────────
+
+
+def test_poll_once_reports_reindex_reason_to_on_error(tmp_path):
+    """``on_event`` can only name the failure; ``on_error`` carries the reason.
+
+    The reason is what a user needs: it is the same message ``wren memory
+    index`` prints, and the watcher is the command left running unattended.
+    """
+    _touch_mdl(tmp_path, '{"v": 1}')
+    reason = RuntimeError("the onnx backend implements mean pooling")
+    seen: list[tuple[str, BaseException]] = []
+
+    def reindex():
+        raise reason
+
+    with pytest.raises(RuntimeError):
+        poll_once(
+            tmp_path,
+            WatchState(fingerprint=""),
+            reindex,
+            on_error=lambda event, exc: seen.append((event, exc)),
+        )
+
+    assert seen == [("reindex-error", reason)]
+
+
+def test_watch_loop_reports_reindex_reason_once_per_attempt(tmp_path):
+    """Each retry explains itself exactly once — no silent loop, no duplicate."""
+    _touch_mdl(tmp_path, '{"v": 1}')
+    messages: list[str] = []
+    attempts: list[int] = []
+
+    def always_fail():
+        attempts.append(1)
+        raise RuntimeError(f"attempt {len(attempts)}: bad embedding config")
+
+    state = watch_loop(
+        tmp_path,
+        always_fail,
+        interval=5.0,
+        max_polls=2,
+        reindex_on_start=True,
+        on_error=lambda event, exc: messages.append(f"{event}: {exc}"),
+        sleep=lambda _s: None,
+    )
+
+    assert state.errors == 2
+    assert messages == [
+        "reindex-error: attempt 1: bad embedding config",
+        "reindex-error: attempt 2: bad embedding config",
+    ]
+
+
+def test_watch_loop_on_event_still_works_without_on_error(tmp_path):
+    """The new callback is opt-in: a one-argument ``on_event`` keeps working."""
+    _touch_mdl(tmp_path, '{"v": 1}')
+    events: list[str] = []
+
+    def always_fail():
+        raise RuntimeError("boom")
+
+    state = watch_loop(
+        tmp_path,
+        always_fail,
+        interval=5.0,
+        max_polls=2,
+        reindex_on_start=True,
+        on_event=events.append,
+        sleep=lambda _s: None,
+    )
+
+    assert state.errors == 2
+    assert "reindex-error" in events
+
+
 def test_watch_loop_reindex_on_start(tmp_path):
     _touch_mdl(tmp_path)
     calls = []

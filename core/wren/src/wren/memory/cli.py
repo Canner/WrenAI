@@ -723,13 +723,18 @@ def watch(
     def _on_event(event: str) -> None:
         if event == "change-detected":
             typer.echo("Change detected — reindexing...", err=True)
-        elif event == "reindex-error":
-            typer.echo(
-                "Reindex failed; change kept pending, will retry next poll.",
-                err=True,
-            )
         elif event == "stopped":
             typer.echo("Stopped watching.", err=True)
+
+    def _on_error(event: str, exc: BaseException) -> None:
+        if event == "reindex-error":
+            # The reason is the actionable half of this message, and the only
+            # half the event name cannot carry.
+            typer.echo(
+                f"Reindex failed: {str(exc) or type(exc).__name__}; "
+                "change kept pending, will retry next poll.",
+                err=True,
+            )
 
     typer.echo(
         f"Watching {project_path} every {max(interval, 1.0):g}s "
@@ -743,6 +748,7 @@ def watch(
         max_polls=max_polls,
         reindex_on_start=reindex_on_start,
         on_event=_on_event,
+        on_error=_on_error,
     )
     if max_polls is not None:
         typer.echo(
