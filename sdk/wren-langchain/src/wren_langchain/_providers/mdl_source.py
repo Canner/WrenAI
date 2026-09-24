@@ -27,7 +27,7 @@ class ProjectMDLSource:
                 "Run `wren context build` first."
             )
         try:
-            return json.loads(self._mdl_path.read_text())
+            return json.loads(self._mdl_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             # Normalize malformed manifest into the common init-error contract
             # so callers don't need to special-case JSON errors.

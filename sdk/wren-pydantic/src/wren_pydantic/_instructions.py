@@ -237,7 +237,7 @@ def _build_instructions_section(project_path: Path) -> str:
     instructions_file = project_path / "instructions.md"
     if not instructions_file.exists():
         return ""
-    body = instructions_file.read_text().strip()
+    body = instructions_file.read_text(encoding="utf-8").strip()
     if not body:
         return ""
     return f"## Project-specific instructions\n\n{body}"

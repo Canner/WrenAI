@@ -72,6 +72,17 @@ def test_instructions_appends_project_instructions_when_present(
     assert "Project-specific instructions" in prompt
 
 
+def test_instructions_reads_utf8_file_with_non_utf8_locale(
+    tmp_project, fake_active_profile, simulate_cp936_default_encoding
+):
+    project_instructions = "Use the 订单📈 café model for revenue questions."
+    (tmp_project / "instructions.md").write_text(project_instructions, encoding="utf-8")
+    toolkit = WrenToolkit.from_project(tmp_project)
+    simulate_cp936_default_encoding()
+
+    assert project_instructions in toolkit.instructions()
+
+
 def test_instructions_silently_skips_instructions_when_absent(
     tmp_project, fake_active_profile
 ):

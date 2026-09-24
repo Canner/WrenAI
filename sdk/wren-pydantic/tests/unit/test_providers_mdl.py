@@ -20,6 +20,21 @@ def test_project_mdl_source_reads_target_mdl_json(tmp_path):
     assert source.load_manifest() == manifest
 
 
+def test_project_mdl_source_reads_utf8_with_non_utf8_locale(
+    tmp_path, simulate_cp936_default_encoding
+):
+    target = tmp_path / "target"
+    target.mkdir()
+    manifest = {"models": [{"name": "订单📈 café"}]}
+    (target / "mdl.json").write_text(
+        json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+    )
+    source = ProjectMDLSource(project_path=tmp_path)
+    simulate_cp936_default_encoding()
+
+    assert source.load_manifest() == manifest
+
+
 def test_project_mdl_source_picks_up_file_changes_between_calls(tmp_path):
     """Subsequent load_manifest() calls reflect on-disk changes (read-through)."""
     target = tmp_path / "target"
