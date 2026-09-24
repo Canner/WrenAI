@@ -48,12 +48,20 @@ export interface CubeFilterInput {
   value?: FilterValue;
 }
 
+export type SortDirection = "asc" | "desc";
+
+export interface CubeOrderByInput {
+  member: string;
+  direction: SortDirection;
+}
+
 export interface CubeQueryInput {
   cube: string;
   measures: string[];
   dimensions?: string[];
   timeDimensions?: TimeDimensionInput[];
   filters?: CubeFilterInput[];
+  orderBy?: CubeOrderByInput[];
   limit?: number;
   offset?: number;
 }

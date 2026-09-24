@@ -264,10 +264,20 @@ interface CubeQueryInput {
   dimensions?: string[];
   timeDimensions?: TimeDimensionInput[];
   filters?: CubeFilterInput[];
+  orderBy?: CubeOrderByInput[];
   limit?: number;
   offset?: number;
 }
+
+export type SortDirection = "asc" | "desc";
+
+export interface CubeOrderByInput {
+  member: string;
+  direction: SortDirection;
+}
 ```
+
+Omitting `orderBy` (or passing an empty array) preserves the default behavior of ordering by the first time dimension. When specified, `member` must name a measure, dimension, or time dimension selected by the query, and each member may appear at most once.
 
 See [`docs/co../guides/cubes.md`](../guides/cubes.md) for the
 full input shape and filter operator list.

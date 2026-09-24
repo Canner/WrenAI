@@ -664,4 +664,42 @@ describe("cubeQuery + listCubes", () => {
     assert.deepEqual(values, [7, 35]);
     engine.free();
   });
+
+  it("cubeQuery supports orderBy ascending and descending", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await engine.registerJson("orders", [
+      { amount: 10, status: "open", created_at: "2024-01-15" },
+      { amount: 25, status: "open", created_at: "2024-02-20" },
+      { amount: 7, status: "closed", created_at: "2024-01-05" },
+    ]);
+    await engine.loadMDL(cubeMDL(), { source: "" });
+
+    const ascRows = await engine.cubeQuery({
+      cube: "order_metrics",
+      measures: ["total"],
+      dimensions: ["status"],
+      orderBy: [{ member: "total", direction: "asc" }],
+    });
+
+    assert.equal(ascRows.length, 2);
+    assert.equal(ascRows[0].status, "closed");
+    assert.equal(ascRows[0].total, 7);
+    assert.equal(ascRows[1].status, "open");
+    assert.equal(ascRows[1].total, 35);
+
+    const descRows = await engine.cubeQuery({
+      cube: "order_metrics",
+      measures: ["total"],
+      dimensions: ["status"],
+      orderBy: [{ member: "total", direction: "desc" }],
+    });
+
+    assert.equal(descRows.length, 2);
+    assert.equal(descRows[0].status, "open");
+    assert.equal(descRows[0].total, 35);
+    assert.equal(descRows[1].status, "closed");
+    assert.equal(descRows[1].total, 7);
+
+    engine.free();
+  });
 });
