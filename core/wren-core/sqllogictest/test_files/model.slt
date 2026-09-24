@@ -72,7 +72,7 @@ select "Customer_id" from wrenai.public."Orders" where exists (select 1 from wre
 04eafb40a16989307464f27f1fed8907
 0732c0881c70ebcda536a4b14e9db106
 
-query RIITRTTT
+query RIITRTTT rowsort
 select * from "Order_items" where "Order_id" in ('03c83b31dbc387f83f1b5579b53182fb', '08cbb1d4cd574b126569b208fd4b26ea')
 ----
 14.68 1 1 03c83b31dbc387f83f1b5579b53182fb 119.8 a04087ab6a96ffa041f8a2701a72b616 2023/1/15 7:26 CA

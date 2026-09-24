@@ -4,7 +4,7 @@ Wren Engine compiled to WebAssembly for browser-native analytics. Runs SQL queri
 
 ## Why a Separate Crate?
 
-Uses **upstream DataFusion** (crates.io v53), not the Canner fork. The WASM version executes queries directly via DataFusion — no SQL unparser or dialect transpilation needed. Kept outside the `wren-core/` workspace to avoid dependency conflicts.
+Uses **upstream DataFusion** (crates.io v55), not the Canner fork. The WASM version executes queries directly via DataFusion — no SQL unparser or dialect transpilation needed. Kept outside the `wren-core/` workspace to avoid dependency conflicts.
 
 Shared code: `wren-core-base` (manifest types, no DataFusion dependency) and `wren-core` semantic layer (MDL analysis rules).
 
@@ -51,10 +51,10 @@ just clean           # Remove pkg/, dist/, target/
 
 ## Dependencies
 
-- **DataFusion v53** (upstream, crates.io) — query engine, `default-features = false` + selected features
-- **Arrow v58.1** — `json` feature for JSON reader
-- **Parquet v58.1** — `snap` + `lz4` only (no zstd — requires C library, can't compile to WASM)
-- **object_store v0.13.1** — `aws` + `http` features for URL mode (HttpStore)
+- **DataFusion v55** (upstream, crates.io) — query engine, `default-features = false` + selected features
+- **Arrow v59.2** — `json` feature for JSON reader
+- **Parquet v59.2** — `snap` + `lz4` only (no zstd — requires C library, can't compile to WASM)
+- **object_store v0.13.2** — `aws` + `http` features for URL mode (HttpStore)
 - **wren-core** (path: `../wren-core/core`) — semantic layer, `default-features = false`
 - **wren-core-base** (path: `../wren-core-base`) — shared manifest types
 - **wasm-bindgen / js-sys / web-sys** — WASM ↔ JS bindings
@@ -69,7 +69,7 @@ just clean           # Remove pkg/, dist/, target/
 - **No SystemTime**: chrono `wasmbind` feature required
 - **getrandom**: All three major versions (0.2, 0.3, 0.4) in the dep tree need explicit WASM JS backend
 - **macOS build**: Needs LLVM (`brew install llvm`) for C deps — justfile handles env vars automatically
-- **Binary size**: ~68 MB raw / ~14 MB gzip (target: < 15 MB gzip)
+- **Binary size**: ~57 MB raw / ~14 MB gzip (target: < 15 MB gzip); the release profile uses fat LTO + `codegen-units = 1` to stay under budget
 
 ## npm Package (wren-core-wasm)
 

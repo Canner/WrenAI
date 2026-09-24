@@ -7,6 +7,7 @@ use crate::mdl::{AnalyzedWrenMDL, Dataset, SessionStateRef};
 use datafusion::common::tree_node::{
     Transformed, TransformedResult, TreeNode, TreeNodeRecursion, TreeNodeRewriter,
 };
+use datafusion::common::TableReference;
 use datafusion::common::{internal_err, plan_err, Column, DFSchemaRef, Result, Spans};
 use datafusion::config::ConfigOptions;
 use datafusion::error::DataFusionError;
@@ -17,7 +18,6 @@ use datafusion::logical_expr::{
     Window,
 };
 use datafusion::optimizer::AnalyzerRule;
-use datafusion::sql::TableReference;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fmt::Debug;

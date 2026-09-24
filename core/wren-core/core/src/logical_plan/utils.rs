@@ -13,6 +13,7 @@ use datafusion::common::types::{
     logical_binary, logical_boolean, logical_date, logical_float16, logical_float32,
     logical_float64, logical_string,
 };
+use datafusion::common::TableReference;
 use datafusion::common::{plan_err, DFSchema, DFSchemaRef};
 use datafusion::datasource::DefaultTableSource;
 use datafusion::error::Result;
@@ -22,7 +23,6 @@ use datafusion::logical_expr::{builder::LogicalTableSource, Expr, TableSource};
 use datafusion::logical_expr::{Coercion, TypeSignatureClass};
 use datafusion::sql::sqlparser::ast;
 use datafusion::sql::sqlparser::parser::Parser;
-use datafusion::sql::TableReference;
 use log::debug;
 use petgraph::dot::{Config, Dot};
 use petgraph::Graph;
@@ -406,7 +406,10 @@ pub fn expr_to_columns(
             | Expr::InSubquery(_)
             | Expr::ScalarSubquery(_)
             | Expr::Wildcard { .. }
-            | Expr::Placeholder(_) => {}
+            | Expr::Placeholder(_)
+            | Expr::HigherOrderFunction(_)
+            | Expr::Lambda(_)
+            | Expr::LambdaVariable(_) => {}
             Expr::SetComparison(_) => {}
         }
         Ok(TreeNodeRecursion::Continue)

@@ -25,32 +25,35 @@ use datafusion::{
     common::{
         exec_err, internal_err, not_impl_err, plan_datafusion_err, plan_err,
         tree_node::{Transformed, TreeNode, TreeNodeRewriter},
-        Column, DFSchema, DFSchemaRef,
+        Column, DFSchema, DFSchemaRef, TableReference,
     },
     config::ConfigOptions,
     error::{DataFusionError, Result},
     logical_expr::{
-        binary::{comparison_coercion, like_coercion, BinaryTypeCoercer},
+        binary::{
+            comparison_coercion, like_coercion, type_union_coercion, BinaryTypeCoercer,
+        },
         expr::{
-            self, AggregateFunction, AggregateFunctionParams, Alias, Exists, InList,
-            InSubquery, ScalarFunction, SetComparison, WindowFunction,
-            WindowFunctionParams,
+            self, AggregateFunction, AggregateFunctionParams, Alias, Exists,
+            HigherOrderFunction, InList, InSubquery, ScalarFunction, SetComparison,
+            WindowFunction, WindowFunctionParams,
         },
         expr_rewriter::coerce_plan_expr_for_schema,
         expr_schema::cast_subquery,
         type_coercion::{
-            functions::fields_with_udf,
+            functions::{
+                fields_with_udf, value_fields_with_higher_order_udf_and_lambdas,
+            },
             is_datetime,
-            other::{get_coerce_type_for_case_expression, get_coerce_type_for_list},
+            other::{get_coerce_type_for_case_expression, get_coerce_type_for_case_when},
         },
         utils::merge_schema,
         Between, BinaryExpr, Case, ExprSchemable, Join, Like, Limit, LogicalPlan,
-        Operator, Projection, Subquery, Union, WindowFunctionDefinition,
+        Operator, Projection, Subquery, Union, ValueOrLambda, WindowFunctionDefinition,
     },
     optimizer::{utils::NamePreserver, AnalyzerRule},
     prelude::Expr,
     scalar::ScalarValue,
-    sql::TableReference,
 };
 
 use datafusion::logical_expr::{
@@ -535,8 +538,15 @@ impl TreeNodeRewriter for TypeCoercionRewriter<'_> {
                     .iter()
                     .map(|list_expr| list_expr.get_type(self.schema))
                     .collect::<Result<Vec<_>>>()?;
-                let result_type =
-                    get_coerce_type_for_list(&expr_data_type, &list_data_types);
+                // DataFusion coerces IN lists with the numeric-preferring
+                // `comparison_coercion`, which would cast a string column to a number
+                // (`CAST(s AS BIGINT) IN (1, 2)`) and fail in the target database on
+                // non-numeric values. Keep the string-preferring coercion instead.
+                let result_type = list_data_types
+                    .iter()
+                    .try_fold(expr_data_type.clone(), |left_type, right_type| {
+                        type_union_coercion(&left_type, right_type)
+                    });
                 match result_type {
                     None => plan_err!(
                         "Can not find compatible types to compare {expr_data_type:?} with {list_data_types:?}"
@@ -641,6 +651,41 @@ impl TreeNodeRewriter for TypeCoercionRewriter<'_> {
                     },
                 })))
             }
+            Expr::HigherOrderFunction(HigherOrderFunction { func, args }) => {
+                let current_fields = args
+                    .iter()
+                    .map(|arg| match arg {
+                        Expr::Lambda(lambda) => Ok(ValueOrLambda::Lambda(
+                            lambda.body.to_field(self.schema)?.1,
+                        )),
+                        _ => Ok(ValueOrLambda::Value(arg.to_field(self.schema)?.1)),
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                let new_fields = value_fields_with_higher_order_udf_and_lambdas(
+                    &current_fields,
+                    func.as_ref(),
+                )?;
+
+                let new_args = std::iter::zip(args, new_fields)
+                    .map(|(arg, new_field)| match (&arg, new_field) {
+                        (Expr::Lambda(_), ValueOrLambda::Lambda(_)) => Ok(arg),
+                        (Expr::Lambda(_), ValueOrLambda::Value(_)) => internal_err!(
+                            "value_fields_with_higher_order_udf returned a value for a lambda argument"
+                        ),
+                        (_, ValueOrLambda::Value(new_field)) => {
+                            arg.cast_to(new_field.data_type(), self.schema)
+                        }
+                        (_, ValueOrLambda::Lambda(_)) => internal_err!(
+                            "value_fields_with_higher_order_udf returned a lambda for a value argument"
+                        ),
+                    })
+                    .collect::<Result<_>>()?;
+
+                Ok(Transformed::yes(Expr::HigherOrderFunction(
+                    HigherOrderFunction::new(func, new_args),
+                )))
+            }
             // TODO: remove the next line after `Expr::Wildcard` is removed
             #[expect(deprecated)]
             Expr::Alias(_)
@@ -656,7 +701,9 @@ impl TreeNodeRewriter for TypeCoercionRewriter<'_> {
             | Expr::Wildcard { .. }
             | Expr::GroupingSet(_)
             | Expr::Placeholder(_)
-            | Expr::OuterReferenceColumn(_, _) => Ok(Transformed::no(expr)),
+            | Expr::OuterReferenceColumn(_, _)
+            | Expr::Lambda(_)
+            | Expr::LambdaVariable(_) => Ok(Transformed::no(expr)),
         }
     }
 }
@@ -967,8 +1014,7 @@ fn coerce_case_expression(case: Case, schema: &DFSchema) -> Result<Case> {
                 .iter()
                 .map(|(when, _then)| when.get_type(schema))
                 .collect::<Result<Vec<_>>>()?;
-            let coerced_type =
-                get_coerce_type_for_case_expression(&when_types, Some(case_type));
+            let coerced_type = get_coerce_type_for_case_when(&when_types, case_type);
             coerced_type.ok_or_else(|| {
                 plan_datafusion_err!(
                     "Failed to coerce case ({case_type:?}) and when ({when_types:?}) \
@@ -1072,7 +1118,7 @@ fn coerce_union_schema_with_schema(
             plan_schema.fields().iter()
         ) {
             let coerced_type =
-                comparison_coercion(union_datatype, plan_field.data_type()).ok_or_else(
+                type_union_coercion(union_datatype, plan_field.data_type()).ok_or_else(
                     || {
                         plan_datafusion_err!(
                             "Incompatible inputs for Union: Previous inputs were \

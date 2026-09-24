@@ -79,7 +79,7 @@ impl TimestampSimplify {
         } else {
             Arc::new(DFSchema::empty())
         };
-        let info = SimplifyContext::default().with_schema(schema);
+        let info = SimplifyContext::builder().with_schema(schema).build();
 
         // Inputs have already been rewritten (due to bottom-up traversal handled by Optimizer)
         // Just need to rewrite our own expressions
@@ -123,13 +123,13 @@ impl TreeNodeRewriter for ExprRewriter<'_> {
         match &expr {
             // we only simplify the cast expression for the literal value
             Expr::Cast(Cast {
-                data_type,
+                field,
                 expr: sub_expr,
             })
             | Expr::TryCast(TryCast {
-                data_type,
+                field,
                 expr: sub_expr,
-            }) if is_timestamp(data_type)
+            }) if is_timestamp(field.data_type())
                 && matches!(sub_expr.as_ref(), Expr::Literal(_, _)) =>
             {
                 let original_name = self.name_preserver.save(&expr);

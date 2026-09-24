@@ -10,7 +10,6 @@ use datafusion::logical_expr::{
     Signature, TypeSignature, Volatility, WindowUDFImpl,
 };
 use serde::{Deserialize, Serialize};
-use std::any::Any;
 use std::fmt::Display;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -288,10 +287,6 @@ fn build_document(func: &RemoteFunction) -> Documentation {
 }
 
 impl ScalarUDFImpl for ByPassScalarUDF {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn name(&self) -> &str {
         &self.name
     }
@@ -389,10 +384,6 @@ impl From<RemoteFunction> for ByPassAggregateUDF {
 }
 
 impl AggregateUDFImpl for ByPassAggregateUDF {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn name(&self) -> &str {
         &self.name
     }
@@ -470,10 +461,6 @@ impl From<RemoteFunction> for ByPassWindowFunction {
 }
 
 impl WindowUDFImpl for ByPassWindowFunction {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn name(&self) -> &str {
         &self.name
     }
