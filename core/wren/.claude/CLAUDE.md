@@ -31,10 +31,15 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 - `wren profile add|list|import|rm|switch|debug` — Named connection profiles. `rm` removes a profile, `switch` activates one; there is no `show`, `remove`, or `activate`
 - `wren docs connection-info` — Generate connection field docs
 - `wren utils parse-type|parse-types|translate-type|translate-types` — SQL type normalization and dialect translation
-- `wren memory index|describe|fetch|store|recall|list|forget|dump|load|status|check|reset|watch|export` — Semantic memory (when `wren[memory]` installed)
+- `wren memory index|describe|fetch|store|recall|list|forget|dump|load|status|check|reset|watch|export` — Semantic memory. The group is always registered (`store` writes `knowledge/sql/*.md` without the `memory` extra); the lancedb-backed commands print an install hint when `wren[memory]` is missing
 - `wren serve mcp` — Serve query/schema/knowledge tools as an MCP server (in-process engine, when `wrenai[mcp]` installed)
 - `wren cloud auth add|list|remove` — Store/remove the credential git authenticates to a Wren Cloud project with (touches no directory)
 - `wren cloud create|link|unlink` — Bind a local directory to a Wren Cloud project's git remote. The binding *is* the git remote; after binding, plain `git push`/`git pull` are the commands
+- `wren cube list|describe|query` — Structured measure/dimension queries over cubes
+- `wren genbi build|deploy|list|open|register|remove|verify` — Build and deploy GenBI apps from this project's context layer
+- `wren skills get|list` — Serve Wren agent skill guides
+- `wren ask` — Wrap a prompt into a processed prompt for an agent
+- `wren version` — Print the wrenai version
 
 ## Key Design Points
 
@@ -52,13 +57,10 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 
 ## Connectors
 
-`connector/factory.py` dispatches on `DataSource` to return the right connector. Each connector wraps an Ibis backend and exposes `.query(sql, limit)` and `.dry_run(sql)`. Base class in `connector/base.py` (`ConnectorABC`, plus the shared `coerce_limit` helper). There is **no `connector/ibis.py`** — every data source gets its own module under `connector/`, and `doris` is a `DorisConnector` subclass inside `mysql.py`.
+`connector/factory.py` dispatches on `DataSource` to return the right connector. Each connector wraps a native driver/client and returns Arrow tables, exposing `.query(sql, limit)` and `.dry_run(sql)`. Base class in `connector/base.py` (`ConnectorABC`, plus the shared `coerce_limit` helper). There is **no `connector/ibis.py`**, and no module under `connector/` imports `ibis` — `ibis-framework` is not a dependency of this package. Most data sources have their own module; the exceptions are `doris`, which shares `mysql.py` as `DorisConnector(MySqlConnector)` (MySQL-compatible protocol), and the file sources `local_file`, `s3_file`, `minio_file` and `gcs_file`, which share `duckdb.py`.
 
-- **Dedicated modules**: `postgres.py`, `mysql.py`, `mssql.py`, `bigquery.py`, `duckdb.py`, `oracle.py` (native oracledb, not Ibis), `redshift.py`, `spark.py`, `databricks.py`, `canner.py`
-- **More dedicated modules**: `trino.py`, `clickhouse.py`, `snowflake.py`, `athena.py`, `datafusion.py`
-- **File connectors**: `local_file`, `s3_file`, `minio_file`, `gcs_file` all map to duckdb
-- **doris** maps to mysql connector (MySQL-compatible protocol)
-- **canner** maps to postgres connector
+- **Dedicated modules**: `postgres.py`, `mysql.py`, `mssql.py`, `bigquery.py`, `duckdb.py`, `oracle.py`, `redshift.py`, `spark.py`, `databricks.py`, `trino.py`, `clickhouse.py`, `snowflake.py`, `athena.py`, `datafusion.py`, `canner.py`
+- **canner** dispatches to its own `canner.py` (Postgres wire protocol over `psycopg`). The `canner: postgres` entry in `factory._INSTALL_EXTRA` is only the pip extra to suggest when an import fails — it is not a dispatch target
 
 ## Memory Module (Optional)
 
@@ -67,7 +69,7 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 - **`WrenMemory`** — Main API: `index_manifest()`, `get_context()`, `store_query()`, `recall_queries()`, `describe_schema()`, `schema_is_current()`, `status()`, `reset()`
 - Uses sentence-transformers for embedding MDL schema items and NL↔SQL query pairs
 - **Seed queries** (`seed_queries.py`): On index, generates canonical NL-SQL pairs from the MDL manifest to bootstrap the query history
-- CLI: `wren memory index|describe|fetch|store|recall|list|forget|dump|load|status|check|reset|watch|export` subcommands (auto-registered when extras installed)
+- CLI: `wren memory index|describe|fetch|store|recall|list|forget|dump|load|status|check|reset|watch|export` subcommands (always registered; see CLI Command Groups above)
 - Backing store: LanceDB (local or remote via opendal)
 
 ## Optional Extras
