@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/Canner/WrenAI/compare/wren-core-wasm-v0.4.1...wren-core-wasm-v0.5.0) (2026-09-24)
+
+
+### Features
+
+* **wasm:** expose cube orderBy in TypeScript SDK types ([#2700](https://github.com/Canner/WrenAI/issues/2700)) ([#2753](https://github.com/Canner/WrenAI/issues/2753)) ([af1269f](https://github.com/Canner/WrenAI/commit/af1269f749cbd0ca5bd4e2ce87d02e44e9bb754d))
+
+
+### Bug Fixes
+
+* **bindings:** build against wren-core 0.3.2 ([#2708](https://github.com/Canner/WrenAI/issues/2708)) ([2b0543d](https://github.com/Canner/WrenAI/commit/2b0543d586d9a0d2ab23236ac8f93aaa325ea911))
+
 ## [0.4.1](https://github.com/Canner/WrenAI/compare/wren-core-wasm-v0.4.0...wren-core-wasm-v0.4.1) (2026-05-15)
 
 
