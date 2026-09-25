@@ -1,0 +1,27 @@
+name: order_metrics
+base_object: orders
+measures:
+  - name: order_count
+    expression: COUNT(*)
+    type: BIGINT
+  # Additive across orders; header-grain (see knowledge: line-item grain is canonical for merchandise value).
+  - name: total_order_value
+    expression: SUM(order_total)
+    type: DOUBLE
+  # Non-additive: an average of parts is not the average of the whole.
+  - name: avg_order_value
+    expression: AVG(order_total)
+    type: DOUBLE
+dimensions:
+  - name: status
+    expression: status
+    type: VARCHAR
+  - name: currency
+    expression: currency
+    type: VARCHAR
+time_dimensions:
+  - name: placed_at
+    expression: placed_at
+    type: TIMESTAMP
+properties:
+  description: "New-platform order counts and header-grain value in order currency. Includes migrated legacy copies (legacy_ord_id NOT NULL) — dedup per cross-system rules for all-time counts."

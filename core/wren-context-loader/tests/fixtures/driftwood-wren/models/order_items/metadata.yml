@@ -1,0 +1,33 @@
+name: order_items
+properties:
+  description: "Order line items (new platform). One row per product line within an order."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: order_items
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+    properties:
+      description: "Surrogate line-item id."
+  - name: order_id
+    type: INTEGER
+    properties:
+      description: "FK to orders.id."
+  - name: product_id
+    type: INTEGER
+    properties:
+      description: "FK to products.id."
+  - name: quantity
+    type: INTEGER
+    properties:
+      description: "Units ordered on this line."
+  - name: unit_price
+    type: "DECIMAL(12,2)"
+    properties:
+      description: "Per-unit price in the order's currency."
+  - name: discount_amount
+    type: "DECIMAL(12,2)"
+    properties:
+      description: "Line-level discount in the order's currency (0 if none)."

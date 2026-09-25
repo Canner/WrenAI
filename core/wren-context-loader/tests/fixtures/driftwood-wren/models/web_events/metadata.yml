@@ -1,0 +1,29 @@
+name: web_events
+properties:
+  description: "Website behavioral events. High-volume append-only log."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: web_events
+primary_key: id
+columns:
+  - name: id
+    type: BIGINT
+    properties:
+      description: "Unique event id."
+  - name: event_time
+    type: BIGINT
+    properties:
+      description: "Event timestamp as EPOCH MILLISECONDS (BIGINT, UTC)."
+  - name: customer_id
+    type: INTEGER
+    properties:
+      description: "FK to customers.id; NULL for anonymous sessions."
+  - name: event_type
+    type: VARCHAR
+    properties:
+      description: "page_view, add_to_cart, checkout, or search."
+  - name: session_id
+    type: VARCHAR
+    properties:
+      description: "Browser session identifier."
