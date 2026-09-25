@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/Canner/WrenAI/compare/wren-v0.15.0...wren-v0.15.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* **wren:** strip semicolon before trailing comment in strip_trailing_semicolon ([#2752](https://github.com/Canner/WrenAI/issues/2752)) ([4d55c52](https://github.com/Canner/WrenAI/commit/4d55c52a223c641dacb2fbd3c6a6cfcdb37d9a85))
+
 ## [0.15.0](https://github.com/Canner/WrenAI/compare/wren-v0.14.0...wren-v0.15.0) (2026-09-16)
 
 
