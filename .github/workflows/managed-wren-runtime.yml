@@ -1,0 +1,96 @@
+name: Stage managed Wren runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_tag:
+        description: Immutable managed-Wren release tag
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: managed-wren-${{ inputs.runtime_tag }}
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate immutable release tag before fetching
+        env:
+          RUNTIME_TAG: ${{ inputs.runtime_tag }}
+        run: node apps/genbi/scripts/managed-wren-release.mjs validate-tag "$RUNTIME_TAG"
+      - name: Resolve exact closure and emit review metadata only
+        env:
+          RUNTIME_TAG: ${{ inputs.runtime_tag }}
+        run: |
+          set -euo pipefail
+          PYTHON_URL="$(node -p "require('./apps/genbi/managed-wren/release-inputs.json').python.url")"
+          PYTHON_SHA256="$(node -p "require('./apps/genbi/managed-wren/release-inputs.json').python.sha256")"
+          WRENAI_VERSION="$(node -p "require('./apps/genbi/managed-wren/release-inputs.json').wrenai.version")"
+          export PYTHON_SHA256
+          mkdir -p release/wheels release/runtime
+          python -m pip download --only-binary=:all: --platform macosx_11_0_arm64 --python-version 3.11 --implementation cp --dest release/wheels "wrenai==$WRENAI_VERSION"
+          python apps/genbi/scripts/managed-wren-release.py wheels
+          curl --fail --location --proto '=https' --tlsv1.2 -o release/python.tar.gz "$PYTHON_URL"
+          test "$(shasum -a 256 release/python.tar.gz | awk '{print $1}')" = "$PYTHON_SHA256"
+          /usr/bin/tar -tzf release/python.tar.gz | python apps/genbi/scripts/managed-wren-release.py pbs > release/pbs-license-inventory.json
+          /usr/bin/tar -xpzf release/python.tar.gz -C release/runtime
+          /bin/chmod 700 release/runtime
+          release/runtime/python/bin/python3.11 -m venv release/runtime/venv
+          python apps/genbi/scripts/managed-wren-release.py requirements
+          release/runtime/venv/bin/python -m pip install --no-index --no-deps --require-hashes --find-links release/wheels -r release/requirements.txt
+          node apps/genbi/scripts/managed-wren-release.mjs release "$RUNTIME_TAG"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: managed-wren-review-metadata
+          path: release/*.json
+
+  publish-approved-runtime:
+    needs: stage
+    environment: managed-wren-license-approved
+    permissions:
+      contents: write
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: managed-wren-review-metadata
+          path: release
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require protected-environment digest approval
+        env:
+          APPROVAL_DIGEST: ${{ secrets.MANAGED_WREN_APPROVAL_SHA256 }}
+        run: |
+          test -n "$APPROVAL_DIGEST"
+          test "$APPROVAL_DIGEST" = "$(cat release/managed-wren-manifest.candidate.json release/pbs-license-inventory.json release/wheel-license-inventory.json | shasum -a 256 | awk '{print $1}')"
+      - name: Re-fetch and verify exact release assets
+        run: |
+          mkdir -p release/assets
+          node apps/genbi/scripts/managed-wren-release.mjs verify-publish release release/assets
+      - name: Publish verified assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_TAG: ${{ inputs.runtime_tag }}
+        run: |
+          node apps/genbi/scripts/managed-wren-release.mjs validate-tag "$RUNTIME_TAG"
+          gh release create "$RUNTIME_TAG" --target "$GITHUB_SHA" --latest=false release/assets/* release/*.json
