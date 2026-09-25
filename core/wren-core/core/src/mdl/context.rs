@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use crate::logical_plan::analyze::access_control::validate_clac_rule;
 use crate::logical_plan::analyze::expand_view::ExpandWrenViewRule;
 use crate::logical_plan::analyze::model_anlayze::ModelAnalyzeRule;
 use crate::logical_plan::analyze::model_generation::ModelGenerationRule;
@@ -13,6 +12,7 @@ use crate::logical_plan::utils::create_schema;
 use crate::mdl::manifest::Model;
 use crate::mdl::type_planner::WrenTypePlanner;
 use crate::mdl::{AnalyzedWrenMDL, SessionStateRef};
+use crate::{AccessControlProvider, ColumnAccessDecision, WrenAccessControlProvider};
 use async_trait::async_trait;
 use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::catalog::memory::{MemoryCatalogProvider, MemoryCatalogProviderList};
@@ -84,6 +84,51 @@ pub async fn apply_wren_on_ctx(
     properties: SessionPropertiesRef,
     mode: Mode,
 ) -> Result<SessionContext> {
+    apply_wren_on_ctx_with_access_control(
+        ctx,
+        analyzed_mdl,
+        properties,
+        mode,
+        Arc::new(WrenAccessControlProvider),
+    )
+    .await
+}
+
+/// Apply Wren rules using an explicit provider for schema visibility and planning.
+/// For inferred sources, prepare the MDL with
+/// [`AnalyzedWrenMDL::analyze_with_unfiltered_schema`] so another provider has not
+/// already removed physical columns. Explicit table registrations are also supported.
+/// This context supports direct planning/execution; use the provider-aware SQL
+/// transform entrypoint when generating remote SQL.
+///
+/// # Example
+///
+/// ```no_run
+/// use std::{collections::HashMap, sync::Arc};
+/// use wren_core::{AccessControlProvider, AnalyzedWrenMDL};
+/// use wren_core::mdl::{create_wren_ctx, manifest::Manifest};
+/// use wren_core::mdl::context::{apply_wren_on_ctx_with_access_control, Mode};
+///
+/// async fn plan_query(
+///     manifest: Manifest,
+///     provider: Arc<dyn AccessControlProvider>,
+/// ) -> datafusion::common::Result<()> {
+///     let mdl = Arc::new(AnalyzedWrenMDL::analyze_with_unfiltered_schema(manifest)?);
+///     let ctx = apply_wren_on_ctx_with_access_control(
+///         &create_wren_ctx(None, None), mdl, Arc::new(HashMap::new()),
+///         Mode::Unparse, provider,
+///     ).await?;
+///     let _plan = ctx.sql("SELECT id FROM items").await?.into_optimized_plan()?;
+///     Ok(())
+/// }
+/// ```
+pub async fn apply_wren_on_ctx_with_access_control(
+    ctx: &SessionContext,
+    analyzed_mdl: Arc<AnalyzedWrenMDL>,
+    properties: SessionPropertiesRef,
+    mode: Mode,
+    access_control: Arc<dyn AccessControlProvider>,
+) -> Result<SessionContext> {
     let session_timezone = properties
         .get("x-wren-timezone")
         .map(|v| v.as_ref().map(|s| s.as_str()).unwrap_or("UTC").to_string());
@@ -140,11 +185,13 @@ pub async fn apply_wren_on_ctx(
             .collect::<HashMap<_, _>>(),
     );
 
-    let new_state = new_state.with_analyzer_rules(mode.get_analyze_rules(
-        Arc::clone(&analyzed_mdl),
-        Arc::clone(&reset_default_catalog_schema),
-        Arc::clone(&properties),
-    ));
+    let new_state =
+        new_state.with_analyzer_rules(mode.get_analyze_rules_with_access_control(
+            Arc::clone(&analyzed_mdl),
+            Arc::clone(&reset_default_catalog_schema),
+            Arc::clone(&properties),
+            Arc::clone(&access_control),
+        ));
     let new_state = if let Some(optimize_rules) = mode.get_optimize_rules() {
         new_state.with_optimizer_rules(optimize_rules)
     } else {
@@ -166,7 +213,14 @@ pub async fn apply_wren_on_ctx(
         );
     }
     let ctx = SessionContext::new_with_state(new_state);
-    register_table_with_mdl(&ctx, analyzed_mdl, properties, mode).await?;
+    register_table_with_mdl_with_access_control(
+        &ctx,
+        analyzed_mdl,
+        properties,
+        mode,
+        access_control.as_ref(),
+    )
+    .await?;
     Ok(ctx)
 }
 
@@ -190,21 +244,46 @@ impl Mode {
         session_state_ref: SessionStateRef,
         properties: SessionPropertiesRef,
     ) -> Vec<Arc<dyn AnalyzerRule + Send + Sync>> {
+        self.get_analyze_rules_with_access_control(
+            analyzed_mdl,
+            session_state_ref,
+            properties,
+            Arc::new(WrenAccessControlProvider),
+        )
+    }
+
+    /// Build the mode's analyzer rules using the supplied shared provider.
+    ///
+    /// Reuse this provider for table registration and permission diagnostics.
+    /// [`Mode::PermissionAnalyze`] expands views and checks model permissions
+    /// without generating source plans. Construction is infallible; provider
+    /// errors propagate when the rules analyze a query.
+    /// See [`apply_wren_on_ctx_with_access_control`] for the common setup workflow.
+    pub fn get_analyze_rules_with_access_control(
+        &self,
+        analyzed_mdl: Arc<AnalyzedWrenMDL>,
+        session_state_ref: SessionStateRef,
+        properties: SessionPropertiesRef,
+        access_control: Arc<dyn AccessControlProvider>,
+    ) -> Vec<Arc<dyn AnalyzerRule + Send + Sync>> {
         match self {
             Mode::LocalRuntime => analyze_rule_for_local_runtime(
                 Arc::clone(&analyzed_mdl),
                 Arc::clone(&session_state_ref),
                 Arc::clone(&properties),
+                access_control,
             ),
             Mode::Unparse => analyze_rule_for_unparsing(
                 Arc::clone(&analyzed_mdl),
                 Arc::clone(&session_state_ref),
                 Arc::clone(&properties),
+                access_control,
             ),
             Mode::PermissionAnalyze => analyze_rule_for_permission(
                 Arc::clone(&analyzed_mdl),
                 Arc::clone(&session_state_ref),
                 Arc::clone(&properties),
+                access_control,
             ),
         }
     }
@@ -229,6 +308,7 @@ fn analyze_rule_for_local_runtime(
     analyzed_mdl: Arc<AnalyzedWrenMDL>,
     session_state_ref: SessionStateRef,
     properties: SessionPropertiesRef,
+    access_control: Arc<dyn AccessControlProvider>,
 ) -> Vec<Arc<dyn AnalyzerRule + Send + Sync>> {
     vec![
         // expand the view should be the first rule
@@ -236,15 +316,17 @@ fn analyze_rule_for_local_runtime(
             Arc::clone(&analyzed_mdl),
             Arc::clone(&session_state_ref),
         )),
-        Arc::new(ModelAnalyzeRule::new(
+        Arc::new(ModelAnalyzeRule::new_with_access_control(
             Arc::clone(&analyzed_mdl),
             Arc::clone(&session_state_ref),
             Arc::clone(&properties),
+            Arc::clone(&access_control),
         )),
-        Arc::new(ModelGenerationRule::new(
+        Arc::new(ModelGenerationRule::new_with_access_control(
             Arc::clone(&analyzed_mdl),
             session_state_ref,
             properties,
+            access_control,
         )),
         // Use DataFusion TypeCoercion for the executing purpose
         Arc::new(TypeCoercion::new()),
@@ -256,6 +338,7 @@ fn analyze_rule_for_unparsing(
     analyzed_mdl: Arc<AnalyzedWrenMDL>,
     session_state_ref: SessionStateRef,
     properties: SessionPropertiesRef,
+    access_control: Arc<dyn AccessControlProvider>,
 ) -> Vec<Arc<dyn AnalyzerRule + Send + Sync>> {
     vec![
         // expand the view should be the first rule
@@ -263,15 +346,17 @@ fn analyze_rule_for_unparsing(
             Arc::clone(&analyzed_mdl),
             Arc::clone(&session_state_ref),
         )),
-        Arc::new(ModelAnalyzeRule::new(
+        Arc::new(ModelAnalyzeRule::new_with_access_control(
             Arc::clone(&analyzed_mdl),
             Arc::clone(&session_state_ref),
             Arc::clone(&properties),
+            Arc::clone(&access_control),
         )),
-        Arc::new(ModelGenerationRule::new(
+        Arc::new(ModelGenerationRule::new_with_access_control(
             Arc::clone(&analyzed_mdl),
             session_state_ref,
             properties,
+            access_control,
         )),
         // TimestampSimplify should be placed before TypeCoercion because the simplified timestamp should
         // be casted to the target type if needed
@@ -334,6 +419,7 @@ fn analyze_rule_for_permission(
     analyzed_mdl: Arc<AnalyzedWrenMDL>,
     session_state_ref: SessionStateRef,
     properties: SessionPropertiesRef,
+    access_control: Arc<dyn AccessControlProvider>,
 ) -> Vec<Arc<dyn AnalyzerRule + Send + Sync>> {
     vec![
         // expand the view should be the first rule
@@ -341,10 +427,11 @@ fn analyze_rule_for_permission(
             Arc::clone(&analyzed_mdl),
             Arc::clone(&session_state_ref),
         )),
-        Arc::new(ModelAnalyzeRule::new(
+        Arc::new(ModelAnalyzeRule::new_with_access_control(
             Arc::clone(&analyzed_mdl),
             Arc::clone(&session_state_ref),
             Arc::clone(&properties),
+            Arc::clone(&access_control),
         )),
     ]
 }
@@ -355,6 +442,30 @@ pub async fn register_table_with_mdl(
     properties: SessionPropertiesRef,
     mode: Mode,
 ) -> Result<()> {
+    register_table_with_mdl_with_access_control(
+        ctx,
+        analyzed_mdl,
+        properties,
+        mode,
+        &WrenAccessControlProvider,
+    )
+    .await
+}
+
+/// Register model and view schemas using the same provider as the analyzer rules.
+///
+/// Denied columns are omitted except in [`Mode::PermissionAnalyze`], where the
+/// full schema lets the analyzer report explicit permission errors. This function
+/// does not install analyzer rules or apply row filters; use
+/// [`apply_wren_on_ctx_with_access_control`] for the complete setup workflow.
+/// Returns provider, schema, registration, or view-planning errors.
+pub async fn register_table_with_mdl_with_access_control(
+    ctx: &SessionContext,
+    analyzed_mdl: Arc<AnalyzedWrenMDL>,
+    properties: SessionPropertiesRef,
+    mode: Mode,
+    access_control: &dyn AccessControlProvider,
+) -> Result<()> {
     let catalog = MemoryCatalogProvider::new();
     let schema = MemorySchemaProvider::new();
     let wren_mdl = analyzed_mdl.wren_mdl();
@@ -362,11 +473,12 @@ pub async fn register_table_with_mdl(
     ctx.register_catalog(&wren_mdl.manifest.catalog, Arc::new(catalog));
 
     for model in wren_mdl.manifest.models.iter() {
-        let table = WrenDataSource::new(
+        let table = WrenDataSource::new_with_access_control(
             Arc::clone(model),
             &properties,
             Arc::clone(&analyzed_mdl),
             &mode,
+            access_control,
         )?;
         ctx.register_table(
             TableReference::full(wren_mdl.catalog(), wren_mdl.schema(), model.name()),
@@ -396,18 +508,44 @@ impl WrenDataSource {
         analyzed_mdl: Arc<AnalyzedWrenMDL>,
         mode: &Mode,
     ) -> Result<Self> {
+        Self::new_with_access_control(
+            model,
+            properties,
+            analyzed_mdl,
+            mode,
+            &WrenAccessControlProvider,
+        )
+    }
+
+    /// Create a model schema, omitting columns denied by the supplied provider.
+    ///
+    /// [`Mode::PermissionAnalyze`] retains all columns without calling the provider
+    /// so subsequent analysis can diagnose permission errors. Otherwise, provider
+    /// errors propagate; schema conversion errors are returned in every mode.
+    /// The provider is borrowed only to build the schema. Reuse it in analyzer
+    /// rules to enforce row and column access during planning, normally through
+    /// [`apply_wren_on_ctx_with_access_control`].
+    pub fn new_with_access_control(
+        model: Arc<Model>,
+        properties: &SessionPropertiesRef,
+        analyzed_mdl: Arc<AnalyzedWrenMDL>,
+        mode: &Mode,
+        access_control: &dyn AccessControlProvider,
+    ) -> Result<Self> {
         let available_columns = model
             .get_physical_columns(true)
             .iter()
             .map(|column| {
                 if mode.is_permission_analyze()
-                    || validate_clac_rule(
-                        model.name(),
-                        column,
-                        properties,
-                        Some(Arc::clone(&analyzed_mdl)),
-                    )?
-                    .0
+                    || matches!(
+                        access_control.column_access(
+                            model.name(),
+                            column,
+                            properties,
+                            Some(Arc::clone(&analyzed_mdl)),
+                        )?,
+                        ColumnAccessDecision::Allow
+                    )
                 {
                     Ok(Some(Arc::clone(column)))
                 } else {
