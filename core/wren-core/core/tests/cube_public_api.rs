@@ -27,14 +27,11 @@ fn cube_query_public_order_by_types_generate_sql_without_a_limit() {
         cube: "OrdersCube".to_string(),
         measures: vec!["revenue".to_string()],
         dimensions: vec!["status".to_string()],
-        time_dimensions: vec![],
-        filters: vec![],
         order_by: vec![CubeOrderBy {
             member: "revenue".to_string(),
             direction: SortDirection::Desc,
         }],
-        limit: None,
-        offset: None,
+        ..Default::default()
     };
 
     assert_eq!(
