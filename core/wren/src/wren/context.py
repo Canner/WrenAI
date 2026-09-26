@@ -778,7 +778,7 @@ def _load_cubes_v2(project_path: Path) -> list[dict]:
         if not meta_file.exists():
             continue
         try:
-            data = yaml.safe_load(meta_file.read_text())
+            data = yaml.safe_load(meta_file.read_text(encoding="utf-8"))
         except yaml.YAMLError:
             continue
         if isinstance(data, dict):
