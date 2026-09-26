@@ -1194,6 +1194,33 @@ def test_load_cubes_v2_parses_metadata_yaml(tmp_path):
     assert cubes[0]["measures"][0]["name"] == "revenue"
 
 
+def test_load_cubes_v2_reads_metadata_as_utf8(tmp_path, monkeypatch):
+    """v2 cube metadata must not follow the process locale.
+
+    Sibling loaders pass encoding='utf-8'. This path used to omit it, so a
+    Windows cp936 locale could turn a UTF-8 cube name into different Unicode
+    without raising.
+    """
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "order_metrics",
+        "name: \u8ba2\u5355\U0001f4c8 caf\u00e9\nbase_object: orders\n",
+    )
+    seen: list[str | None] = []
+    real = Path.read_text
+
+    def wrapped(self, *args, **kwargs):
+        if self.name == "metadata.yml":
+            seen.append(kwargs.get("encoding", args[0] if args else None))
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", wrapped)
+    cubes = load_cubes(tmp_path)
+    assert seen == ["utf-8"]
+    assert cubes[0]["name"] == "\u8ba2\u5355\U0001f4c8 caf\u00e9"
+
+
 def test_load_cubes_v2_ignores_flat_yaml(tmp_path):
     _make_v2_cube_project(tmp_path)
     cubes_dir = tmp_path / "cubes"
