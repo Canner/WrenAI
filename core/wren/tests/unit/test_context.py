@@ -1150,7 +1150,7 @@ def _write_cube(tmp_path: Path, name: str, content: str) -> Path:
     cube_dir = tmp_path / "cubes" / name
     cube_dir.mkdir(parents=True)
     cube_file = cube_dir / "metadata.yml"
-    cube_file.write_text(content)
+    cube_file.write_text(content, encoding="utf-8")
     return cube_file
 
 
