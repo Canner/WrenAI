@@ -283,7 +283,7 @@ def init(
         "\n"
         "data_source: postgres  # change to your datasource type\n"
     )
-    project_file.write_text(project_yml)
+    project_file.write_text(project_yml, encoding="utf-8")
 
     # Empty relationships.yml (shared between empty and full scaffold)
     rels = (
@@ -297,7 +297,7 @@ def init(
         "#     join_type: MANY_TO_ONE\n"
         "#     condition: orders.customer_id = customers.customer_id\n"
     )
-    (project_path / "relationships.yml").write_text(rels)
+    (project_path / "relationships.yml").write_text(rels, encoding="utf-8")
 
     # `wren context build` writes target/mdl.json — compiled output, derived
     # from the YAML beside it. Without this, a project pushed to a git remote
@@ -308,7 +308,8 @@ def init(
     gitignore = project_path / ".gitignore"
     if not gitignore.exists():
         gitignore.write_text(
-            "# Compiled MDL — rebuild with `wren context build`\ntarget/\n"
+            "# Compiled MDL — rebuild with `wren context build`\ntarget/\n",
+            encoding="utf-8",
         )
 
     if not empty:
@@ -337,7 +338,8 @@ def init(
             "    properties: {}\n"
             "primary_key: id\n"
             "cached: false\n"
-            "properties: {}\n"
+            "properties: {}\n",
+            encoding="utf-8",
         )
 
         # Scaffold example view
@@ -347,10 +349,11 @@ def init(
             "# Example view — replace with your actual view\n"
             "name: example_view\n"
             "properties:\n"
-            '  description: "An example view"\n'
+            '  description: "An example view"\n',
+            encoding="utf-8",
         )
         (example_view_dir / "sql.yml").write_text(
-            "statement: >\n  SELECT * FROM example LIMIT 100\n"
+            "statement: >\n  SELECT * FROM example LIMIT 100\n", encoding="utf-8"
         )
 
     # ── knowledge/ skeleton (first-class business context) ──
@@ -364,11 +367,12 @@ def init(
     if force or not general_rules.exists():
         general_rules.write_text(
             "# Business rules\n\n"
-            "Add custom rules or guidelines for LLM-based query generation here.\n"
+            "Add custom rules or guidelines for LLM-based query generation here.\n",
+            encoding="utf-8",
         )
 
     # ── AGENTS.md ──
-    (project_path / "AGENTS.md").write_text(_AGENTS_MD_TEMPLATE)
+    (project_path / "AGENTS.md").write_text(_AGENTS_MD_TEMPLATE, encoding="utf-8")
 
     # NL→SQL pairs live in knowledge/sql/ (written by `wren memory store`),
     # so no queries.yml is scaffolded.
@@ -667,7 +671,9 @@ def build(
     if output:
         out_path = Path(output).expanduser()
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(manifest_json, indent=2, ensure_ascii=False))
+        out_path.write_text(
+            json.dumps(manifest_json, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
     else:
         out_path = save_target(manifest_json, project_path)
 
@@ -1115,7 +1121,9 @@ def _build_from_osi(
     else:
         out_path = Path.cwd() / "target" / "mdl.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(manifest_json, indent=2, ensure_ascii=False))
+    out_path.write_text(
+        json.dumps(manifest_json, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
     n_models = len(manifest_json.get("models", []))
     n_rels = len(manifest_json.get("relationships", []))

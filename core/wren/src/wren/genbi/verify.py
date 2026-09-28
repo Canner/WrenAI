@@ -136,7 +136,7 @@ def verify_app(app_dir: Path, *, data_mode: str) -> VerifyResult:
         failures.append("missing mdl.json (copy the compiled MDL into the app)")
     else:
         try:
-            parsed = json.loads(mdl.read_text())
+            parsed = json.loads(mdl.read_text(encoding="utf-8"))
             if not parsed:
                 failures.append("mdl.json is empty")
         except json.JSONDecodeError as e:
