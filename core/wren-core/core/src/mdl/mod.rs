@@ -21,7 +21,7 @@ use datafusion::execution::{SessionStateBuilder, SessionStateDefaults};
 use datafusion::logical_expr::{AggregateUDF, ScalarUDF, WindowUDF};
 use datafusion::prelude::{SessionConfig, SessionContext};
 use datafusion::sql::parser::DFParser;
-use datafusion::sql::sqlparser::ast::{Expr, ExprWithAlias, Ident};
+use datafusion::sql::sqlparser::ast::{visit_relations_mut, Expr, ExprWithAlias, Ident};
 use datafusion::sql::sqlparser::dialect::dialect_from_str;
 use datafusion::sql::unparser::Unparser;
 use datafusion::sql::TableReference;
@@ -533,13 +533,24 @@ pub async fn transform_sql_with_ctx(
         )]);
     // show the planned sql
     match unparser.plan_to_sql(&analyzed) {
-        Ok(sql) => {
-            // TODO: workaround to remove unnecessary catalog and schema of mdl
-            let replaced = sql
-                .to_string()
-                .replace(analyzed_mdl.wren_mdl().catalog_schema_prefix(), "");
-            info!("wren-core planned SQL: {replaced}");
-            Ok(replaced)
+        Ok(mut sql) => {
+            let wren_mdl = analyzed_mdl.wren_mdl();
+            let _ = visit_relations_mut(&mut sql, |relation| {
+                if relation.0.len() >= 3
+                    && relation.0[0]
+                        .as_ident()
+                        .is_some_and(|ident| ident.value == wren_mdl.catalog())
+                    && relation.0[1]
+                        .as_ident()
+                        .is_some_and(|ident| ident.value == wren_mdl.schema())
+                {
+                    relation.0.drain(..2);
+                }
+                std::ops::ControlFlow::<()>::Continue(())
+            });
+            let sql = sql.to_string();
+            info!("wren-core planned SQL: {sql}");
+            Ok(sql)
         }
         Err(e) => Err(e),
     }
@@ -832,6 +843,46 @@ mod test {
             println!("After transform: {actual}");
             assert_sql_valid_executable(&actual).await?;
         }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_transform_sql_preserves_catalog_schema_prefix_in_string_literals(
+    ) -> Result<()> {
+        let test_data: PathBuf =
+            [env!("CARGO_MANIFEST_DIR"), "tests", "data", "mdl.json"]
+                .iter()
+                .collect();
+        let mdl_json = fs::read_to_string(test_data.as_path())?;
+        let mdl = serde_json::from_str::<Manifest>(&mdl_json).unwrap();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            mdl,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let ctx = create_wren_ctx(None, analyzed_mdl.wren_mdl().data_source().as_ref());
+
+        let actual = transform_sql_with_ctx(
+            &ctx,
+            analyzed_mdl,
+            &[],
+            Arc::new(HashMap::new()),
+            "SELECT 'test.test.keep' AS marker, \
+             CASE WHEN c_name LIKE 'test.test.%' \
+             THEN 'test.test.match' ELSE 'test.test.miss' END AS category, \
+             c_custkey FROM test.test.customer",
+        )
+        .await?;
+
+        assert!(actual.contains("'test.test.keep'"), "actual SQL: {actual}");
+        assert!(
+            actual.contains("LIKE 'test.test.%'"),
+            "actual SQL: {actual}"
+        );
+        assert!(actual.contains("'test.test.match'"), "actual SQL: {actual}");
+        assert!(actual.contains("'test.test.miss'"), "actual SQL: {actual}");
+        assert!(!actual.contains("FROM test.test."), "actual SQL: {actual}");
 
         Ok(())
     }
