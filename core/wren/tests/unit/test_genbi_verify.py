@@ -228,3 +228,19 @@ def test_verify_does_not_scan_binary_data_assets(tmp_path: Path) -> None:
     result = verify_app(app, data_mode="snapshot")
 
     assert result.passed, result.failures
+
+
+def test_verify_scans_utf8_files_for_secrets_with_non_utf8_default_encoding(
+    tmp_path: Path, cp1252_default_encoding
+) -> None:
+    # "à" is C3 A0 in UTF-8; read as cp1252 the A0 becomes a no-break space,
+    # which splits the password so the connection-string pattern misses it.
+    app = _otherwise_valid_snapshot_app(tmp_path)
+    (app / "config.js").write_bytes(
+        'const DB = "postgres://admin:pàssw0rd@db.internal/prod";\n'.encode("utf-8")
+    )
+
+    result = verify_app(app, data_mode="snapshot")
+
+    assert not result.passed
+    assert any("config.js" in f for f in result.failures), result.failures

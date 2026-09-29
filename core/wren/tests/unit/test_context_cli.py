@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 import yaml
 from typer.testing import CliRunner
 
@@ -240,25 +239,6 @@ def test_init_creates_scaffold(tmp_path):
     model_meta = (tmp_path / "models" / "example" / "metadata.yml").read_text()
     assert "table_reference" in model_meta
     assert "ACTUAL database" in model_meta
-
-
-@pytest.fixture()
-def cp1252_default_encoding(monkeypatch):
-    """Make Path.read_text/write_text default to cp1252, like Windows does.
-
-    Without an explicit ``encoding=``, pathlib uses the locale encoding, which is
-    a legacy code page on most Windows installs rather than UTF-8.
-    """
-    real_read, real_write = Path.read_text, Path.write_text
-
-    def read_text(self, encoding=None, errors=None, newline=None):
-        return real_read(self, encoding or "cp1252", errors, newline)
-
-    def write_text(self, data, encoding=None, errors=None, newline=None):
-        return real_write(self, data, encoding or "cp1252", errors, newline)
-
-    monkeypatch.setattr(Path, "read_text", read_text)
-    monkeypatch.setattr(Path, "write_text", write_text)
 
 
 def test_init_then_build_with_non_utf8_default_encoding(

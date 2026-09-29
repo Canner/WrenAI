@@ -89,7 +89,7 @@ def _scan_for_secrets(app_dir: Path) -> list[str]:
         if path.suffix.lower() in _UNSCANNABLE_SUFFIXES:
             continue
         try:
-            text = path.read_text(errors="ignore")
+            text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
         for label, pattern in _SECRET_PATTERNS:
