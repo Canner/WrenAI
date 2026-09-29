@@ -2,9 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::sync::Arc;
 
+use datafusion::common::TableReference;
 use datafusion::common::{internal_err, plan_err, Column};
 use datafusion::error::Result;
-use datafusion::sql::TableReference;
 use petgraph::Graph;
 
 use crate::logical_plan::utils::from_qualified_name;
@@ -388,9 +388,9 @@ fn get_dataset_link_revers_if_need(
 
 #[cfg(test)]
 mod test {
+    use datafusion::common::TableReference;
     use datafusion::common::{Column, Spans};
     use datafusion::error::Result;
-    use datafusion::sql::TableReference;
     use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
 

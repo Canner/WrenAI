@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Wren is an open-source semantic engine for MCP clients and AI agents. It translates SQL queries through a semantic layer (MDL — Modeling Definition Language) and executes them against 22+ data sources (PostgreSQL, BigQuery, Snowflake, Spark, etc.). The Rust engine is powered by Apache DataFusion (upstream, crates.io v53).
+Wren is an open-source semantic engine for MCP clients and AI agents. It translates SQL queries through a semantic layer (MDL — Modeling Definition Language) and executes them against 22+ data sources (PostgreSQL, BigQuery, Snowflake, Spark, etc.). The Rust engine is powered by Apache DataFusion (upstream, crates.io v55).
 
 The previous WrenAI services (`wren-ui/`, `wren-ai-service/`, `wren-launcher/`, `docker/`, `deployment/`) were moved to the `legacy/v1` branch (tag `v1-final`) as of the wren-engine import. Active development is focused on the Open Context Engine.
 
@@ -83,7 +83,7 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend. Opti
 SQL query
   → wren CLI / wren-core-py
   → wren-core (Rust): MDL analysis → logical plan → optimization
-  → DataFusion (query planning, upstream crates.io v53)
+  → DataFusion (query planning, upstream crates.io v55)
   → connector-specific SQL (Ibis / sqlglot)
   → native execution on the target data source
 ```
@@ -110,7 +110,7 @@ SQL query
 - **Commits**: Conventional commits (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`, `perf:`, `deps:`). Releases are automated via release-please with independent release lines per module.
 - **Rust**: format with `cargo fmt`, lint with `clippy -D warnings`, TOML with `taplo`.
 - **Python**: format and lint with `ruff` (line-length 88, target Python 3.11). Both `core/wren-core-py` and `core/wren` use uv.
-- **DataFusion**: upstream `datafusion` v53 from crates.io (no longer the Canner fork).
+- **DataFusion**: upstream `datafusion` v55 from crates.io (no longer the Canner fork).
 - **Snapshot testing**: wren-core uses `insta` for Rust snapshot tests.
 - **CI**: Per-module path-filtered workflows trigger only on changes inside that module.
 

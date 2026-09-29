@@ -1,8 +1,8 @@
 use crate::mdl::Dataset;
 use datafusion::common::internal_err;
+use datafusion::common::TableReference;
 use datafusion::error::Result;
 use datafusion::prelude::Expr;
-use datafusion::sql::TableReference;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Display};
 

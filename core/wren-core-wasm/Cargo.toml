@@ -19,7 +19,7 @@ path = "src/lib.rs"
 # DataFusion WITHOUT parquet feature — parquet's default-features=true in
 # DataFusion enables zstd (C library) which cannot compile to WASM.
 # We read Parquet bytes → Arrow RecordBatch → MemTable ourselves.
-datafusion = { version = "53", default-features = false, features = [
+datafusion = { version = "55.1", default-features = false, features = [
   "nested_expressions",
   "crypto_expressions",
   "datetime_expressions",
@@ -30,16 +30,16 @@ datafusion = { version = "53", default-features = false, features = [
   "sql",
 ] }
 
-object_store = { version = "0.13.1", features = ["aws", "http"] }
+object_store = { version = "0.13.2", features = ["aws", "http"] }
 
 # --- Arrow / Parquet ---
-arrow = { version = "58.1", default-features = false, features = [
+arrow = { version = "59.2", default-features = false, features = [
   "json",
   "csv",
 ] }
 # No zstd: requires C library (zstd-sys) which cannot compile to WASM.
 # Snappy and LZ4 are pure Rust and WASM-compatible.
-parquet = { version = "58.1", default-features = false, features = [
+parquet = { version = "59.2", default-features = false, features = [
   "arrow",
   "snap",
   "lz4",
@@ -89,3 +89,9 @@ getrandom_04 = { package = "getrandom", version = "0.4", features = [
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
+
+# Fat LTO with a single codegen unit keeps the binary under the 15 MB gzip
+# budget checked in CI (~14 MB vs ~16 MB without it on DataFusion 55).
+[profile.release]
+lto = true
+codegen-units = 1

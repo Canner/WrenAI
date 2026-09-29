@@ -17,12 +17,12 @@ use crate::DataFusionError;
 use datafusion::common::alias::AliasGenerator;
 use datafusion::common::config::ConfigOptions;
 use datafusion::common::tree_node::{Transformed, TransformedResult};
+use datafusion::common::TableReference;
 use datafusion::common::{plan_err, Result};
 use datafusion::logical_expr::{col, ident, Extension, UserDefinedLogicalNodeCore};
 use datafusion::logical_expr::{Expr, LogicalPlan, LogicalPlanBuilder};
 use datafusion::optimizer::analyzer::AnalyzerRule;
 use datafusion::physical_plan::internal_err;
-use datafusion::sql::TableReference;
 
 pub const SOURCE_ALIAS: &str = "__source";
 

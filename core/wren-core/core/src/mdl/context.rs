@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -19,6 +18,7 @@ use datafusion::catalog::memory::{MemoryCatalogProvider, MemoryCatalogProviderLi
 use datafusion::catalog::CatalogProvider;
 use datafusion::catalog::CatalogProviderList;
 use datafusion::catalog::{MemorySchemaProvider, Session};
+use datafusion::common::TableReference;
 use datafusion::common::{internal_err, Result};
 use datafusion::datasource::{TableProvider, TableType, ViewTable};
 use datafusion::execution::session_state::SessionStateBuilder;
@@ -36,7 +36,6 @@ use datafusion::optimizer::{AnalyzerRule, OptimizerRule};
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion::prelude::SessionContext;
 use datafusion::scalar::ScalarValue;
-use datafusion::sql::TableReference;
 use parking_lot::RwLock;
 
 pub type SessionPropertiesRef = Arc<HashMap<String, Option<String>>>;
@@ -429,10 +428,6 @@ impl WrenDataSource {
 
 #[async_trait]
 impl TableProvider for WrenDataSource {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn schema(&self) -> SchemaRef {
         self.schema.clone()
     }

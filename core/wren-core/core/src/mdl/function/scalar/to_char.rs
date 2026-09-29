@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use datafusion::arrow::datatypes::DataType;
 use datafusion::common::not_impl_err;
 use datafusion::common::types::{
@@ -53,10 +51,6 @@ impl ToCharFunc {
 }
 
 impl ScalarUDFImpl for ToCharFunc {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn name(&self) -> &str {
         "to_char"
     }
