@@ -1011,11 +1011,10 @@ impl ModelAnalyzeRule {
             {
                 Transformed::yes(col(format!("{}.{}", alias_model, quoted(&name))))
             } else {
-                // handle Wren View
-                let name = name.replace(
-                    self.analyzed_wren_mdl.wren_mdl().catalog_schema_prefix(),
-                    "",
-                );
+                // handle Wren View. Keep the column name intact: a derived
+                // name (for example a string literal) can embed the MDL
+                // catalog/schema prefix, and a substring replace would make
+                // the outer reference miss the input schema.
                 Transformed::yes(Expr::Column(Column::new(
                     Some(TableReference::bare(relation.table())),
                     &name,
