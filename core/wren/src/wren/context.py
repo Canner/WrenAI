@@ -353,6 +353,7 @@ def write_project_files(
         managed_paths = {
             "models",
             "views",
+            "cubes",
             "relationships.yml",
             "instructions.md",
             "wren_project.yml",
