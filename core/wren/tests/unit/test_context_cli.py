@@ -506,6 +506,19 @@ def test_validate_strict_warns(tmp_path):
     assert result.exit_code == 1
 
 
+def test_validate_summary_counts_errors(tmp_path):
+    _make_valid_project(tmp_path)
+    project_file = tmp_path / "wren_project.yml"
+    project_file.write_text(project_file.read_text().replace("name: test_proj\n", ""))
+    model_meta = tmp_path / "models" / "orders" / "metadata.yml"
+    model_meta.write_text(model_meta.read_text() + "dialect: postgres\n")
+
+    result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "missing required field 'name'" in result.output
+    assert "1 warning(s), 1 error(s)." in result.output
+
+
 def _write_null_models_relationship(tmp_path: Path) -> None:
     # A relationship whose `models:` is an explicit YAML null. `.get("models", [])`
     # returns None (not the default) for a present-but-null key, so iterating /
