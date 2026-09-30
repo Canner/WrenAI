@@ -40,7 +40,7 @@ def load_index(project_path: Path) -> dict:
     if not path.exists():
         return {"schema_version": INDEX_SCHEMA_VERSION, "apps": {}}
     try:
-        data = yaml.safe_load(path.read_text())
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as e:
         raise MalformedIndexError(f"{path} is not valid YAML: {e}") from e
     if data is None:
@@ -74,7 +74,10 @@ def load_index(project_path: Path) -> dict:
 def save_index(project_path: Path, index: dict) -> None:
     path = index_path(project_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(index, default_flow_style=False, sort_keys=False))
+    path.write_text(
+        yaml.safe_dump(index, default_flow_style=False, sort_keys=False),
+        encoding="utf-8",
+    )
 
 
 def register_app(project_path: Path, name: str, *, data_mode: str) -> dict:

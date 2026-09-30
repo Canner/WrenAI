@@ -363,7 +363,7 @@ def write_project_files(
 
     for file, target in resolved_files:
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(file.content)
+        target.write_text(file.content, encoding="utf-8")
 
 
 # ── Project discovery ─────────────────────────────────────────────────────
@@ -456,7 +456,8 @@ def save_project_config(project_path: Path, config: dict) -> None:
     (project_path / PROJECT_FILE).write_text(
         yaml.safe_dump(
             ordered, default_flow_style=False, sort_keys=False, allow_unicode=True
-        )
+        ),
+        encoding="utf-8",
     )
 
 
@@ -939,7 +940,9 @@ def save_target(manifest_json: dict, project_path: Path) -> Path:
     target_dir = project_path / _TARGET_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
     out = target_dir / _TARGET_FILE
-    out.write_text(json.dumps(manifest_json, indent=2, ensure_ascii=False))
+    out.write_text(
+        json.dumps(manifest_json, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     return out
 
 
@@ -1746,9 +1749,11 @@ def create_knowledge_skeleton(project_path: Path) -> list[str]:
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
         if rel == _KNOWLEDGE_CONFIG_FILE:
-            dest.write_text(f"schema_version: {_KNOWLEDGE_SCHEMA_VERSION}\n")
+            dest.write_text(
+                f"schema_version: {_KNOWLEDGE_SCHEMA_VERSION}\n", encoding="utf-8"
+            )
         else:
-            dest.write_text("")  # .gitkeep
+            dest.write_text("", encoding="utf-8")  # .gitkeep
         created.append(rel)
     return created
 
@@ -1961,7 +1966,10 @@ def apply_upgrade(project_path: Path, result: UpgradeResult) -> None:
     config["schema_version"] = result.to_version
     config_file = project_path / PROJECT_FILE
     config_file.write_text(
-        yaml.dump(config, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        yaml.dump(
+            config, default_flow_style=False, sort_keys=False, allow_unicode=True
+        ),
+        encoding="utf-8",
     )
 
 
@@ -1981,13 +1989,14 @@ def _apply_v1_to_v2(project_path: Path) -> None:
         ref_sql = model.pop("ref_sql", None)
         if ref_sql:
             _resolve_upgrade_file(model_dir, "ref_sql.sql").write_text(
-                ref_sql.strip() + "\n"
+                ref_sql.strip() + "\n", encoding="utf-8"
             )
 
         _resolve_upgrade_file(model_dir, "metadata.yml").write_text(
             yaml.dump(
                 model, default_flow_style=False, sort_keys=False, allow_unicode=True
-            )
+            ),
+            encoding="utf-8",
         )
 
         # Delete old flat file
@@ -2013,7 +2022,8 @@ def _apply_v1_to_v2(project_path: Path) -> None:
                     default_flow_style=False,
                     sort_keys=False,
                     allow_unicode=True,
-                )
+                ),
+                encoding="utf-8",
             )
         elif statement:
             view["statement"] = statement
@@ -2021,7 +2031,8 @@ def _apply_v1_to_v2(project_path: Path) -> None:
         _resolve_upgrade_file(view_dir, "metadata.yml").write_text(
             yaml.dump(
                 view, default_flow_style=False, sort_keys=False, allow_unicode=True
-            )
+            ),
+            encoding="utf-8",
         )
 
     # Delete old views.yml
@@ -2045,7 +2056,7 @@ def _apply_v1_to_v2(project_path: Path) -> None:
         cube_dir.mkdir(parents=True, exist_ok=True)
 
         _resolve_upgrade_file(cube_dir, "metadata.yml").write_text(
-            yaml.dump(cube, default_flow_style=False, sort_keys=False)
+            yaml.dump(cube, default_flow_style=False, sort_keys=False), encoding="utf-8"
         )
 
         if source_file:

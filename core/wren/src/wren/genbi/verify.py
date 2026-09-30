@@ -89,7 +89,7 @@ def _scan_for_secrets(app_dir: Path) -> list[str]:
         if path.suffix.lower() in _UNSCANNABLE_SUFFIXES:
             continue
         try:
-            text = path.read_text(errors="ignore")
+            text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
         for label, pattern in _SECRET_PATTERNS:
@@ -136,7 +136,7 @@ def verify_app(app_dir: Path, *, data_mode: str) -> VerifyResult:
         failures.append("missing mdl.json (copy the compiled MDL into the app)")
     else:
         try:
-            parsed = json.loads(mdl.read_text())
+            parsed = json.loads(mdl.read_text(encoding="utf-8"))
             if not parsed:
                 failures.append("mdl.json is empty")
         except json.JSONDecodeError as e:

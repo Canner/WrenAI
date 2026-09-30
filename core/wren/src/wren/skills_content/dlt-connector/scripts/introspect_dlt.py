@@ -374,7 +374,7 @@ def write_project(files: dict[str, str], output_dir: Path, *, force: bool = Fals
     for rel_path, content in files.items():
         path = output_dir / rel_path
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
+        path.write_text(content, encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------

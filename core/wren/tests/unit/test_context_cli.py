@@ -241,6 +241,52 @@ def test_init_creates_scaffold(tmp_path):
     assert "ACTUAL database" in model_meta
 
 
+def test_init_then_build_with_non_utf8_default_encoding(
+    tmp_path, cp1252_default_encoding
+):
+    result = runner.invoke(app, ["context", "init", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.exception
+
+    result = runner.invoke(app, ["context", "build", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.exception
+    agents_md = (tmp_path / "AGENTS.md").read_bytes().decode("utf-8")
+    assert "→" in agents_md
+
+
+def test_init_from_mdl_then_build_keeps_non_ascii_with_non_utf8_default_encoding(
+    tmp_path, cp1252_default_encoding
+):
+    mdl = {
+        "name": "shop",
+        "catalog": "wren",
+        "schema": "public",
+        "dataSource": "postgres",
+        "models": [
+            {
+                "name": "orders",
+                "tableReference": {"schema": "public", "table": "orders"},
+                "columns": [{"name": "id", "type": "INTEGER"}],
+                "primaryKey": "id",
+                "properties": {"description": "訂單 — café"},
+            }
+        ],
+    }
+    mdl_file = tmp_path / "mdl.json"
+    mdl_file.write_bytes(json.dumps(mdl, ensure_ascii=False).encode("utf-8"))
+    project = tmp_path / "project"
+
+    result = runner.invoke(
+        app,
+        ["context", "init", "--path", str(project), "--from-mdl", str(mdl_file)],
+    )
+    assert result.exit_code == 0, result.exception
+    result = runner.invoke(app, ["context", "build", "--path", str(project)])
+    assert result.exit_code == 0, result.exception
+
+    built = json.loads((project / "target" / "mdl.json").read_bytes().decode("utf-8"))
+    assert built["models"][0]["properties"]["description"] == "訂單 — café"
+
+
 def test_init_refuses_existing(tmp_path):
     (tmp_path / "wren_project.yml").write_text("name: existing\n")
     result = runner.invoke(app, ["context", "init", "--path", str(tmp_path)])

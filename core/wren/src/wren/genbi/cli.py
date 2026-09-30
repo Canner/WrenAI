@@ -44,7 +44,7 @@ def _resolve_prompt(prompt: str | None, prompt_file: str | None) -> str | None:
         if not p.exists():
             typer.echo(f"Error: prompt file not found: {p}", err=True)
             raise typer.Exit(1)
-        return p.read_text().strip() or None
+        return p.read_text(encoding="utf-8").strip() or None
     if prompt == "-":
         return sys.stdin.read().strip() or None
     return prompt
