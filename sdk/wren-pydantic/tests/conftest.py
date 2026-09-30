@@ -1,5 +1,6 @@
 """Shared pytest fixtures for wren-pydantic tests."""
 
+import io
 import json
 
 import pytest
@@ -32,3 +33,15 @@ def fake_active_profile(monkeypatch):
         "wren_pydantic._providers.connection.get_active_profile",
         lambda: ("test", {"datasource": "duckdb", "path": ":memory:"}),
     )
+
+
+@pytest.fixture
+def simulate_cp936_default_encoding(monkeypatch):
+    """Make text reads without an encoding behave like a Windows CP936 locale."""
+
+    def apply():
+        monkeypatch.setattr(
+            io, "text_encoding", lambda encoding, stacklevel=2: encoding or "cp936"
+        )
+
+    return apply

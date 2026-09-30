@@ -27,13 +27,17 @@ class ProjectMDLSource:
                 "Run `wren context build` first."
             )
         try:
-            return json.loads(self._mdl_path.read_text())
-        except json.JSONDecodeError as exc:
-            # Normalize malformed manifest into the common init-error contract
-            # so callers don't need to special-case JSON errors.
+            return json.loads(self._mdl_path.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            if isinstance(exc, json.JSONDecodeError):
+                detail = (
+                    f"is not valid JSON: {exc.msg} (line {exc.lineno}, col {exc.colno})"
+                )
+            else:
+                detail = "is not encoded as UTF-8"
             raise WrenToolkitInitError(
-                f"target/mdl.json at {self._mdl_path} is not valid JSON: {exc.msg} "
-                f"(line {exc.lineno}, col {exc.colno}). "
+                f"target/mdl.json at {self._mdl_path} {detail}. "
+                "The manifest must be UTF-8 encoded. "
                 "Re-run `wren context build` to regenerate it."
             ) from exc
 
