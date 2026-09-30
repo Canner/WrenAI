@@ -71,3 +71,20 @@ def test_project_mdl_source_normalizes_malformed_json_to_init_error(tmp_path):
 
     with pytest.raises(WrenToolkitInitError, match="not valid JSON"):
         source.load_manifest()
+
+
+def test_project_mdl_source_explains_legacy_cp936_manifest(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "mdl.json").write_bytes(
+        json.dumps({"models": [{"name": "订单"}]}, ensure_ascii=False).encode("cp936")
+    )
+
+    source = ProjectMDLSource(project_path=tmp_path)
+
+    with pytest.raises(WrenToolkitInitError) as exc_info:
+        source.load_manifest()
+
+    message = str(exc_info.value)
+    assert "UTF-8" in message
+    assert "wren context build" in message

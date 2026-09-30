@@ -1,7 +1,7 @@
 """Shared pytest fixtures for wren-pydantic tests."""
 
+import io
 import json
-from pathlib import Path
 
 import pytest
 
@@ -38,23 +38,10 @@ def fake_active_profile(monkeypatch):
 @pytest.fixture
 def simulate_cp936_default_encoding(monkeypatch):
     """Make text reads without an encoding behave like a Windows CP936 locale."""
-    original_open = Path.open
 
     def apply():
-        def open_with_cp936_default(
-            path, mode="r", buffering=-1, encoding=None, errors=None, newline=None
-        ):
-            if "b" not in mode and encoding is None:
-                encoding = "cp936"
-            return original_open(
-                path,
-                mode=mode,
-                buffering=buffering,
-                encoding=encoding,
-                errors=errors,
-                newline=newline,
-            )
-
-        monkeypatch.setattr(Path, "open", open_with_cp936_default)
+        monkeypatch.setattr(
+            io, "text_encoding", lambda encoding, stacklevel=2: encoding or "cp936"
+        )
 
     return apply
