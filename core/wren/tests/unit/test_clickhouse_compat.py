@@ -98,6 +98,45 @@ class TestWindowFunctions:
             " / COUNT(*) OVER (PARTITION BY o_custkey)) AS cd"
         ) in out
 
+    def test_cume_dist_over_a_named_window_keeps_its_clauses(self):
+        out = _rewrite(
+            "SELECT CUME_DIST() OVER w AS cd FROM orders"
+            " WINDOW w AS (PARTITION BY o_custkey ORDER BY o_totalprice)"
+        )
+        assert (
+            "(COUNT(*) OVER (PARTITION BY o_custkey ORDER BY o_totalprice)"
+            " / COUNT(*) OVER (PARTITION BY o_custkey)) AS cd"
+        ) in out
+
+    def test_cume_dist_follows_a_chain_of_named_windows(self):
+        out = _clickhouse(
+            "SELECT CUME_DIST() OVER (w2 ORDER BY b) FROM t"
+            " WINDOW w1 AS (PARTITION BY a), w2 AS (w1)"
+        )
+        assert (
+            "(COUNT(*) OVER (PARTITION BY a ORDER BY b)"
+            " / COUNT(*) OVER (PARTITION BY a))"
+        ) in out
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT CUME_DIST() OVER missing FROM t",
+            "SELECT CUME_DIST() OVER w FROM t WINDOW w AS (v), v AS (w)",
+        ],
+    )
+    def test_cume_dist_over_an_unresolved_window_is_left_alone(self, sql):
+        assert "CUME_DIST" in _clickhouse(sql)
+
+    def test_lag_over_a_named_window_is_inlined(self):
+        out = _clickhouse(
+            "SELECT LAG(x) OVER w FROM t WINDOW w AS (PARTITION BY a ORDER BY b)"
+        )
+        assert (
+            f"lagInFrame(toNullable(x)) OVER (PARTITION BY a ORDER BY b {_WHOLE})"
+            in out
+        )
+
     def test_percent_rank_is_left_alone(self):
         sql = "SELECT PERCENT_RANK() OVER (ORDER BY o_totalprice) AS pr FROM t"
         native = sqlglot.parse_one(sql, dialect="clickhouse").sql("clickhouse")
@@ -169,6 +208,32 @@ class TestCorrelatedExists:
     )
     def test_shapes_it_does_not_understand_are_left_alone(self, sql):
         assert "EXISTS" in _clickhouse(sql)
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            # One row whatever WHERE keeps: EXISTS is always true.
+            "SELECT 1 FROM c WHERE EXISTS (SELECT COUNT(*) FROM o WHERE o.k = c.k)",
+            "SELECT 1 FROM c WHERE EXISTS (SELECT 1 FROM o WHERE o.k = c.k"
+            " HAVING COUNT(*) > 5)",
+            "SELECT 1 FROM c WHERE EXISTS (SELECT 1 FROM o WHERE o.k = c.k"
+            " QUALIFY ROW_NUMBER() OVER (ORDER BY o.x) > 1)",
+            "SELECT 1 FROM c WHERE EXISTS (SELECT 1 FROM o WHERE o.k = c.k"
+            " LIMIT 1 OFFSET 2)",
+            "SELECT 1 FROM c WHERE EXISTS (WITH w AS (SELECT 1) SELECT 1 FROM o"
+            " WHERE o.k = c.k)",
+            "SELECT 1 FROM c WHERE EXISTS (SELECT 1 FROM o PREWHERE o.x = 1"
+            " WHERE o.k = c.k)",
+        ],
+    )
+    def test_clauses_the_rewrite_would_drop_leave_it_alone(self, sql):
+        assert "EXISTS" in _clickhouse(sql)
+
+    def test_distinct_does_not_change_existence(self):
+        out = _clickhouse(
+            "SELECT 1 FROM c WHERE EXISTS (SELECT DISTINCT 1 FROM o WHERE o.k = c.k)"
+        )
+        assert "EXISTS" not in out
 
 
 class TestAggregateAliasShadowing:

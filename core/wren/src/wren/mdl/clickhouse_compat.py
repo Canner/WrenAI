@@ -34,6 +34,11 @@ from sqlglot import exp
 
 _DOW_UNITS = frozenset({"DOW", "DAYOFWEEK", "ISODOW"})
 
+# The only parts of an EXISTS subquery the IN rewrite carries over. Anything else
+# (aggregates aside) changes which rows exist: HAVING, QUALIFY, OFFSET, WITH,
+# ClickHouse's PREWHERE, ... A subquery using one is left as written.
+_EXISTS_KEEPS = frozenset({"expressions", "from_", "where", "distinct"})
+
 
 def translate(ast: exp.Expression) -> exp.Expression:
     """Rewrite *ast* in place for ClickHouse and return it."""
@@ -47,6 +52,7 @@ def translate(ast: exp.Expression) -> exp.Expression:
 
 
 def _whole_partition() -> exp.WindowSpec:
+    """``ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING``."""
     return exp.WindowSpec(
         kind="ROWS",
         start="UNBOUNDED",
@@ -57,10 +63,15 @@ def _whole_partition() -> exp.WindowSpec:
 
 
 def _lag_lead(ast: exp.Expression) -> None:
+    """``LAG`` / ``LEAD`` -> ``lagInFrame`` / ``leadInFrame`` over the partition."""
     for window in list(ast.find_all(exp.Window)):
         fn = window.this
         if not isinstance(fn, exp.Lag | exp.Lead):
             continue
+        resolved = _named_window(window)
+        if resolved is None:
+            continue
+        partition, order = resolved
         name = "lagInFrame" if isinstance(fn, exp.Lag) else "leadInFrame"
         args: list[exp.Expression] = [
             exp.Anonymous(this="toNullable", expressions=[fn.this.copy()])
@@ -71,15 +82,55 @@ def _lag_lead(ast: exp.Expression) -> None:
         if default is not None:
             args.append(default.copy())
         window.set("this", exp.Anonymous(this=name, expressions=args))
+        # Inline a named window: the frame is replaced, so ``OVER w`` cannot stay.
+        window.set("alias", None)
+        window.set("partition_by", [p.copy() for p in partition])
+        window.set("order", order.copy() if order is not None else None)
         window.set("spec", _whole_partition())
 
 
+def _named_window(
+    window: exp.Window,
+) -> tuple[list[exp.Expression], exp.Order | None] | None:
+    """Effective ``PARTITION BY`` and ``ORDER BY`` of *window*, or None.
+
+    ``OVER w`` and ``OVER (w ORDER BY ...)`` keep the clauses in the owning SELECT's
+    ``WINDOW w AS (...)``, which may itself extend another named window. A window
+    names its base in ``alias``. None when a name does not resolve, so the caller
+    leaves the query as written.
+    """
+    partition = list(window.args.get("partition_by") or [])
+    order = window.args.get("order")
+    base = window.args.get("alias")
+    if base is None:
+        return partition, order
+    select = window.find_ancestor(exp.Select)
+    definitions = {
+        w.this.name: w
+        for w in (select.args.get("windows") or [] if select else [])
+        if isinstance(w.this, exp.Identifier)
+    }
+    seen: set[str] = set()
+    while base is not None:
+        definition = definitions.get(base.name)
+        if definition is None or base.name in seen:
+            return None
+        seen.add(base.name)
+        partition = partition or list(definition.args.get("partition_by") or [])
+        order = order if order is not None else definition.args.get("order")
+        base = definition.args.get("alias")
+    return partition, order
+
+
 def _cume_dist(ast: exp.Expression) -> None:
+    """``CUME_DIST()`` -> rows up to and including peers / rows in the partition."""
     for window in list(ast.find_all(exp.Window)):
         if not isinstance(window.this, exp.CumeDist):
             continue
-        partition = window.args.get("partition_by") or []
-        order = window.args.get("order")
+        resolved = _named_window(window)
+        if resolved is None:
+            continue
+        partition, order = resolved
         upto = exp.Window(
             this=exp.Count(this=exp.Star()),
             partition_by=[p.copy() for p in partition],
@@ -93,6 +144,7 @@ def _cume_dist(ast: exp.Expression) -> None:
 
 
 def _extract_dow(ast: exp.Expression) -> None:
+    """``EXTRACT(DOW | DAYOFWEEK | ISODOW FROM d)`` -> ``toDayOfWeek``."""
     for node in list(ast.find_all(exp.Extract)):
         unit = node.this.name.upper() if isinstance(node.this, exp.Var) else ""
         if unit not in _DOW_UNITS:
@@ -106,6 +158,7 @@ def _extract_dow(ast: exp.Expression) -> None:
 
 
 def _null_cast(ast: exp.Expression) -> None:
+    """``CAST(NULL AS T)`` -> ``CAST(NULL AS Nullable(T))``."""
     for cast in list(ast.find_all(exp.Cast)):
         to = cast.args.get("to")
         if not isinstance(cast.this, exp.Null) or not isinstance(to, exp.DataType):
@@ -119,6 +172,7 @@ def _null_cast(ast: exp.Expression) -> None:
 
 
 def _single_table(select: exp.Select) -> exp.Table | None:
+    """The only table *select* reads, or None for a join or a derived table."""
     from_ = select.args.get("from_")
     if from_ is None or select.args.get("joins"):
         return None
@@ -142,17 +196,31 @@ def _correlation(
 
 
 def _not_null(column: exp.Column) -> exp.Expression:
+    """``NOT column IS NULL``."""
     return exp.Not(this=exp.Is(this=column.copy(), expression=exp.Null()))
 
 
+def _row_preserving(sub: exp.Select) -> bool:
+    """Whether *sub* has a row for exactly the rows its WHERE keeps.
+
+    An aggregate without GROUP BY always yields one row, so ``EXISTS (SELECT
+    COUNT(*) ...)`` is always true; any clause outside ``_EXISTS_KEEPS`` would be
+    dropped by the rewrite.
+    """
+    if any(value for key, value in sub.args.items() if key not in _EXISTS_KEEPS):
+        return False
+    return not any(e.find(exp.AggFunc) for e in sub.expressions)
+
+
 def _correlated_exists(ast: exp.Expression) -> None:
+    """A correlated ``EXISTS`` -> a NULL-safe ``IN``, for the shapes it can prove."""
     for node in list(ast.find_all(exp.Exists)):
         sub = node.this
-        if not isinstance(sub, exp.Select) or sub.args.get("group"):
+        if not isinstance(sub, exp.Select) or not _row_preserving(sub):
             continue
         table = _single_table(sub)
         where = sub.args.get("where")
-        if table is None or where is None or sub.args.get("limit"):
+        if table is None or where is None:
             continue
         inner = table.alias_or_name
         conds = (
@@ -193,6 +261,7 @@ def _correlated_exists(ast: exp.Expression) -> None:
 
 
 def _aggregate_alias_shadowing(ast: exp.Expression) -> None:
+    """Qualify a column inside an aggregate that an aggregate output alias shadows."""
     for select in list(ast.find_all(exp.Select)):
         table = _single_table(select)
         if table is None:
