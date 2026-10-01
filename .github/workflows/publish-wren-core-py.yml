@@ -31,6 +31,8 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
           - os: macos-15-intel
             target: x86_64-apple-darwin
           - os: macos-15
@@ -147,9 +149,44 @@ jobs:
           name: sdist
           path: core/wren-core-py/dist/*.tar.gz
 
+  smoke-test:
+    name: Smoke test wheel — ${{ matrix.os }}
+    needs: build-wheels
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-15-intel
+          - macos-15
+          - windows-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          path: dist
+          merge-multiple: true
+      # --no-index means pip can only resolve from the wheels this run built, so
+      # a platform with no matching wheel fails here instead of silently falling
+      # back to the sdist (and a source build) for users.
+      - name: Install wheel
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: pip install --no-index --find-links dist "wren-core-py==$VERSION"
+      - name: Import wren_core
+        shell: bash
+        run: python -c "import wren_core; print(wren_core.__file__)"
+
   publish:
     name: Publish to ${{ inputs.pypi_target }}
-    needs: [build-wheels, build-sdist]
+    needs: [build-wheels, build-sdist, smoke-test]
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.pypi_target }}

@@ -13,11 +13,11 @@ pip install wren-core-py
 Requires Python >= 3.11.
 
 Pre-built wheels are available for:
-- Linux x86_64
+- Linux x86_64 / ARM64 (manylinux)
 - macOS x86_64 / ARM64 (Apple Silicon)
 - Windows x86_64
 
-Linux ARM64 wheels are not yet available. To use on that platform, build from source (requires Rust toolchain).
+On any other platform pip falls back to the sdist and builds from source, which requires a Rust toolchain.
 
 ## Quick Start
 
