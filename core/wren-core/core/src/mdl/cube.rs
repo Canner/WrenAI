@@ -13,7 +13,11 @@ use serde::{Deserialize, Serialize};
 use crate::mdl::manifest::{Cube, CubeDimension, Manifest, Measure, TimeDimension};
 
 /// A structured cube query — the input to [`cube_query_to_sql`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// Every field satisfies [`Default`], so callers should use struct-update
+/// syntax (`..Default::default()`) and only name the fields they care about.
+/// New optional fields can then be added without breaking downstream code.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CubeQuery {
     pub cube: String,
@@ -647,13 +651,7 @@ mod tests {
     fn query(cube: &str) -> CubeQuery {
         CubeQuery {
             cube: cube.to_string(),
-            measures: vec![],
-            dimensions: vec![],
-            time_dimensions: vec![],
-            filters: vec![],
-            order_by: vec![],
-            limit: None,
-            offset: None,
+            ..Default::default()
         }
     }
 
