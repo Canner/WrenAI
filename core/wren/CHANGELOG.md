@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.15.1](https://github.com/Canner/WrenAI/compare/wren-v0.15.0...wren-v0.15.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **context:** read v2 cube metadata as UTF-8 ([#2769](https://github.com/Canner/WrenAI/issues/2769)) ([2cc843f](https://github.com/Canner/WrenAI/commit/2cc843fd87d6cfe9831554721559018dda2938a0))
+* **wren:** make test-unit run the whole unit tree like CI does ([#2768](https://github.com/Canner/WrenAI/issues/2768)) ([702e17d](https://github.com/Canner/WrenAI/commit/702e17d62da4fde12056728801a0bce491052c36))
+* **wren:** strip semicolon before trailing comment in strip_trailing_semicolon ([#2752](https://github.com/Canner/WrenAI/issues/2752)) ([4d55c52](https://github.com/Canner/WrenAI/commit/4d55c52a223c641dacb2fbd3c6a6cfcdb37d9a85))
+* **wren:** write project files as UTF-8 so init/build work on Windows ([#2770](https://github.com/Canner/WrenAI/issues/2770)) ([8d254db](https://github.com/Canner/WrenAI/commit/8d254db2aa8a26178d4afa8d1e65f913a8619a2a))
+
 ## [0.15.0](https://github.com/Canner/WrenAI/compare/wren-v0.14.0...wren-v0.15.0) (2026-09-16)
 
 
