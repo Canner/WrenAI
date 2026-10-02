@@ -104,6 +104,7 @@ def poll_once(
     reindex: Callable[[], object],
     *,
     on_event: Callable[[str], None] | None = None,
+    on_error: Callable[[str, BaseException], None] | None = None,
 ) -> bool:
     """Run a single poll cycle. Returns True iff a reindex was triggered.
 
@@ -113,6 +114,12 @@ def poll_once(
     pending and is retried on the next poll — a transient reindex failure can
     never silently drop an update. ``on_event`` receives short status strings
     for logging.
+
+    ``on_error`` receives the status string and the exception itself for the
+    reindex failure. ``on_event`` alone cannot tell a user *why* the index
+    stopped updating — the failure message is the actionable part, and it is
+    what every other ``wren memory`` command prints. The exception is still
+    re-raised, so a caller that owns the loop keeps its retry behaviour.
     """
     state.polls += 1
     current = compute_fingerprint(project_path)
@@ -123,10 +130,12 @@ def poll_once(
         on_event("change-detected")
     try:
         reindex()
-    except Exception:  # noqa: BLE001 — surface count, keep change pending for retry
+    except Exception as exc:  # noqa: BLE001 — surface count, keep change pending for retry
         state.errors += 1
         if on_event is not None:
             on_event("reindex-error")
+        if on_error is not None:
+            on_error("reindex-error", exc)
         raise
     # Only advance the baseline after a clean reindex.
     state.fingerprint = current
@@ -146,6 +155,7 @@ def watch_loop(
     max_polls: int | None = None,
     reindex_on_start: bool = False,
     on_event: Callable[[str], None] | None = None,
+    on_error: Callable[[str, BaseException], None] | None = None,
     sleep: Callable[[float], None] = time.sleep,
 ) -> WatchState:
     """Poll ``project_path`` and reindex on change until interrupted.
@@ -160,6 +170,11 @@ def watch_loop(
     reindex_on_start:
         Reindex immediately on startup regardless of change, so the index is
         known-fresh before the first poll interval elapses.
+    on_error:
+        Forwarded to :func:`poll_once`, which reports the reindex exception
+        there. The loop deliberately does not report it a second time when the
+        exception reaches it as a re-raise, so a failing reindex produces one
+        message per attempt rather than two.
     sleep:
         Injectable sleep, so tests can drive the loop without real delays.
     """
@@ -170,7 +185,13 @@ def watch_loop(
     try:
         while max_polls is None or state.polls < max_polls:
             try:
-                poll_once(project_path, state, reindex, on_event=on_event)
+                poll_once(
+                    project_path,
+                    state,
+                    reindex,
+                    on_event=on_event,
+                    on_error=on_error,
+                )
             except Exception:
                 # A transient reindex/poll failure must not kill the watcher.
                 # poll_once keeps the old fingerprint on reindex failure, so
