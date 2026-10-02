@@ -11,6 +11,7 @@ import contextlib
 import datetime as dtlib
 import json
 from decimal import Decimal as PyDecimal
+from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlparse
 
 import pyarrow as pa
@@ -321,6 +322,26 @@ def _apply_trino_ssl_overrides(connect_kwargs: dict) -> dict:
             connect_kwargs["verify"] = True
     elif "insecure" in connect_kwargs:
         connect_kwargs.pop("insecure", None)
+    verify = connect_kwargs.get("verify")
+    if isinstance(verify, str):
+        verify = str(Path(verify).expanduser())
+        if not Path(verify).is_absolute():
+            # A relative path has no defined base yet: it's read from
+            # profiles.yml, which has no fixed relationship to the
+            # process's cwd. Resolve against cwd (matching what requests
+            # would already do) and fail fast below rather than let a bare
+            # certificate error hide where it looked; use an absolute or
+            # ~/ path instead.
+            verify = str(Path(verify).resolve())
+        if not Path(verify).exists():
+            raise WrenError(
+                ErrorCode.INVALID_CONNECTION_INFO,
+                f"Trino SSL verify path not found: {verify}. A relative "
+                "path is resolved against the current working directory, "
+                "not the profile file; use an absolute path or one "
+                "starting with ~/.",
+            )
+        connect_kwargs["verify"] = verify
     if connect_kwargs.get("verify") is False:
         logger.warning(
             "Trino SSL certificate verification is disabled (verify=false); "
