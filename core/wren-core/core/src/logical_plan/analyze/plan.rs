@@ -16,13 +16,12 @@ use datafusion::logical_expr::utils::find_aggregate_exprs;
 use datafusion::logical_expr::{
     col, Expr, Extension, LogicalPlan, UserDefinedLogicalNode, UserDefinedLogicalNodeCore,
 };
-use log::{debug, warn};
+use log::debug;
 use petgraph::Graph;
 
-use crate::logical_plan::analyze::access_control::validate_clac_rule;
+use crate::logical_plan::analyze::access_control::provider::check_column_access;
 use crate::logical_plan::analyze::RelationChain;
 use crate::logical_plan::analyze::RelationChain::Start;
-use crate::logical_plan::error::WrenError;
 use crate::logical_plan::utils::{from_qualified_name, try_map_data_type};
 use crate::mdl;
 use crate::mdl::context::SessionPropertiesRef;
@@ -34,8 +33,7 @@ use crate::mdl::utils::{
 };
 use crate::mdl::Dataset;
 use crate::mdl::{AnalyzedWrenMDL, ColumnReference, SessionStateRef};
-
-use super::access_control::{build_filter_expression, collect_condition, validate_rule};
+use crate::{AccessControlProvider, AccessScope, ColumnAccessDecision};
 
 #[derive(Debug)]
 pub(crate) enum WrenPlan {
@@ -77,6 +75,7 @@ pub(crate) struct ModelPlanNode {
 }
 
 impl ModelPlanNode {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         model: Arc<Model>,
         required_fields: Vec<Expr>,
@@ -84,12 +83,17 @@ impl ModelPlanNode {
         analyzed_wren_mdl: Arc<AnalyzedWrenMDL>,
         session_state: SessionStateRef,
         properties: SessionPropertiesRef,
+        access_control: Arc<dyn AccessControlProvider>,
+        access_scope: AccessScope,
     ) -> Result<Self> {
-        ModelPlanNodeBuilder::new(analyzed_wren_mdl, session_state, properties).build(
-            model,
-            required_fields,
-            original_table_scan,
+        ModelPlanNodeBuilder::new(
+            analyzed_wren_mdl,
+            session_state,
+            properties,
+            access_control,
+            access_scope,
         )
+        .build(model, required_fields, original_table_scan)
     }
 
     pub fn plan_name(&self) -> &str {
@@ -114,6 +118,8 @@ struct ModelPlanNodeBuilder {
     analyzed_wren_mdl: Arc<AnalyzedWrenMDL>,
     session_state: SessionStateRef,
     properties: SessionPropertiesRef,
+    access_control: Arc<dyn AccessControlProvider>,
+    access_scope: AccessScope,
 }
 
 impl ModelPlanNodeBuilder {
@@ -121,6 +127,8 @@ impl ModelPlanNodeBuilder {
         analyzed_wren_mdl: Arc<AnalyzedWrenMDL>,
         session_state: SessionStateRef,
         properties: SessionPropertiesRef,
+        access_control: Arc<dyn AccessControlProvider>,
+        access_scope: AccessScope,
     ) -> Self {
         Self {
             required_exprs_buffer: BTreeSet::new(),
@@ -131,6 +139,8 @@ impl ModelPlanNodeBuilder {
             analyzed_wren_mdl,
             session_state,
             properties,
+            access_control,
+            access_scope,
         }
     }
 
@@ -147,7 +157,7 @@ impl ModelPlanNodeBuilder {
         );
 
         let required_fields =
-            self.add_required_columns_from_session_properties(&model, required_fields)?;
+            self.add_required_access_control_columns(&model, required_fields)?;
 
         // `required_fields` could contain the hidden columns, so we need to get from all physical columns.
         let required_columns =
@@ -163,36 +173,13 @@ impl ModelPlanNodeBuilder {
             // Actually, it's only be checked in PermissionAnalyze mode.
             // In Unparse or LocalRuntime mode, an invalid column won't be registered in the table provider.
             // A column accessing will be failed by the column not found error.
-            let (is_valid, rule_name) = validate_clac_rule(
+            check_column_access(
+                self.access_control.as_ref(),
                 model.name(),
                 &column,
                 &self.properties,
                 Some(Arc::clone(&self.analyzed_wren_mdl)),
             )?;
-            if !is_valid {
-                let message = if let Some(rule_name) = rule_name {
-                    format!(
-                        r#"Access denied to column "{}"."{}": violates access control rule "{}""#,
-                        model.name(),
-                        column.name(),
-                        rule_name
-                    )
-                } else {
-                    warn!(
-                        "No rule name found for column access, {}.{}",
-                        model.name(),
-                        column.name()
-                    );
-                    format!(
-                        r#"Access denied to column "{}"."{}"#,
-                        model.name(),
-                        column.name(),
-                    )
-                };
-                return Err(DataFusionError::External(Box::new(
-                    WrenError::PermissionDenied(message),
-                )));
-            }
 
             if column.is_calculated {
                 let expr = if column.expression.is_some() {
@@ -302,6 +289,7 @@ impl ModelPlanNodeBuilder {
                         Arc::clone(&self.properties),
                         &qualified_column,
                         &mut self.model_required_fields,
+                        self.access_control.as_ref(),
                     )?;
                 }
             } else {
@@ -311,6 +299,7 @@ impl ModelPlanNodeBuilder {
                     Arc::clone(&self.analyzed_wren_mdl),
                     Arc::clone(&self.session_state),
                     Arc::clone(&self.properties),
+                    self.access_control.as_ref(),
                 )?;
                 self.model_required_fields
                     .entry(model_ref.clone())
@@ -392,6 +381,7 @@ impl ModelPlanNodeBuilder {
                     Arc::clone(&self.analyzed_wren_mdl),
                     Arc::clone(&self.session_state),
                     Arc::clone(&self.properties),
+                    Arc::clone(&self.access_control),
                 )?
             } else {
                 let Some(first_calculation) = calculate_iter.next() else {
@@ -402,7 +392,7 @@ impl ModelPlanNodeBuilder {
                 }))
             };
 
-        let mut relation_chain = RelationChain::with_chain(
+        let mut relation_chain = RelationChain::with_chain_with_access_control(
             source_chain,
             start,
             iter,
@@ -411,6 +401,8 @@ impl ModelPlanNodeBuilder {
             Arc::clone(&self.analyzed_wren_mdl),
             Arc::clone(&self.session_state),
             Arc::clone(&self.properties),
+            Arc::clone(&self.access_control),
+            self.access_scope,
         )?;
 
         for calculation_plan in calculate_iter {
@@ -465,53 +457,34 @@ impl ModelPlanNodeBuilder {
         })
     }
 
-    /// Build the combined RLAC filter expression for this model.
-    ///
-    /// Each rule whose required session properties are present contributes one `Expr`; all
-    /// matching rules are AND-combined. Returns `None` when no rule matches (e.g. all rules
-    /// are optional and the corresponding session properties are unset).
+    /// Ask the provider for this model's row filter. `None` means no restriction;
+    /// an error rejects the model access.
     ///
     /// Note: subqueries inside the parsed expression may contain `TableScan`s that point at
     /// other Wren models — they remain unanalyzed here. [`ModelAnalyzeRule`] is responsible
     /// for recursively analyzing those subqueries (and for detecting cycles between RLAC
     /// rules that reference each other).
     fn build_rlac_filter(&self, model: &Arc<Model>) -> Result<Option<Expr>> {
-        let mut combined: Option<Expr> = None;
-        for rule in model.row_level_access_controls().iter() {
-            if !validate_rule(&rule.name, &rule.required_properties, &self.properties)? {
-                continue;
-            }
-            let expr = build_filter_expression(
-                &self.session_state,
-                Some(Arc::clone(&self.analyzed_wren_mdl)),
-                Arc::clone(model),
-                &self.properties,
-                rule,
-            )?;
-            combined = Some(match combined {
-                Some(acc) => acc.and(expr),
-                None => expr,
-            });
-        }
-        Ok(combined)
+        self.access_control.row_filter(
+            model,
+            &self.session_state,
+            &self.properties,
+            Some(Arc::clone(&self.analyzed_wren_mdl)),
+            self.access_scope,
+        )
     }
 
-    fn add_required_columns_from_session_properties(
+    fn add_required_access_control_columns(
         &self,
         model: &Model,
-        required_fields: Vec<Expr>,
+        mut required_fields: Vec<Expr>,
     ) -> Result<Vec<Expr>> {
-        let mut required_fields = required_fields;
-        model
-            .row_level_access_controls()
-            .iter()
-            .try_for_each(|rule| {
-                if validate_rule(&rule.name, &rule.required_properties, &self.properties)?
-                {
-                    required_fields.extend(collect_condition(model, &rule.condition)?.0);
-                }
-                Ok::<_, DataFusionError>(())
-            })?;
+        required_fields.extend(self.access_control.collect_required_fields(
+            model,
+            &self.session_state,
+            &self.properties,
+            Some(Arc::clone(&self.analyzed_wren_mdl)),
+        )?);
         Ok(required_fields)
     }
 
@@ -617,9 +590,10 @@ impl ModelPlanNodeBuilder {
             Arc::clone(&self.analyzed_wren_mdl),
             Arc::clone(&self.session_state),
             Arc::clone(&self.properties),
+            Arc::clone(&self.access_control),
         )?;
 
-        let partial_chain = RelationChain::with_chain(
+        let partial_chain = RelationChain::with_chain_with_access_control(
             source_chain,
             start,
             iter,
@@ -628,6 +602,8 @@ impl ModelPlanNodeBuilder {
             Arc::clone(&self.analyzed_wren_mdl),
             Arc::clone(&self.session_state),
             Arc::clone(&self.properties),
+            Arc::clone(&self.access_control),
+            self.access_scope,
         )?;
         let Some(column_rf) = self
             .analyzed_wren_mdl
@@ -750,6 +726,7 @@ fn collect_model_required_fields(
     session_properties: SessionPropertiesRef,
     qualified_column: &DFColumn,
     required_fields: &mut HashMap<TableReference, BTreeSet<OrdExpr>>,
+    access_control: &dyn AccessControlProvider,
 ) -> Result<()> {
     let Some(set) = analyzed_wren_mdl
         .lineage()
@@ -799,6 +776,7 @@ fn collect_model_required_fields(
                 Arc::clone(&analyzed_wren_mdl),
                 Arc::clone(&session_state_ref),
                 Arc::clone(&session_properties),
+                access_control,
             )?;
             debug!("Required field: {}", expr_plan);
             required_fields
@@ -816,40 +794,18 @@ fn get_remote_column_exp(
     analyzed_wren_mdl: Arc<AnalyzedWrenMDL>,
     session_state_ref: SessionStateRef,
     session_properties: SessionPropertiesRef,
+    access_control: &dyn AccessControlProvider,
 ) -> Result<Expr> {
     // Actually, it's only be checked in PermissionAnalyze mode.
     // In Unparse or LocalRuntime mode, an invalid column won't be registered in the table provider.
     // A column accessing will be failed by the column not found error.
-    let (is_valid, rule_name) = validate_clac_rule(
+    check_column_access(
+        access_control,
         model.name(),
         column,
         &session_properties,
         Some(Arc::clone(&analyzed_wren_mdl)),
     )?;
-    if !is_valid {
-        let message = if let Some(rule_name) = rule_name {
-            format!(
-                r#"Access denied to column "{}"."{}": violates access control rule "{}""#,
-                model.name(),
-                column.name(),
-                rule_name
-            )
-        } else {
-            warn!(
-                "No rule name found for column access, {}.{}",
-                model.name(),
-                column.name()
-            );
-            format!(
-                r#"Access denied to column "{}"."{}"#,
-                model.name(),
-                column.name(),
-            )
-        };
-        return Err(DataFusionError::External(Box::new(
-            WrenError::PermissionDenied(message),
-        )));
-    }
     let expr = if let Some(expression) = &column.expression {
         create_remote_expr_for_model(
             expression,
@@ -1116,6 +1072,7 @@ impl ModelSourceNode {
         session_state_ref: SessionStateRef,
         session_properties: SessionPropertiesRef,
         original_table_scan: Option<LogicalPlan>,
+        access_control: Arc<dyn AccessControlProvider>,
     ) -> Result<Self> {
         let mut required_exprs_buffer = BTreeSet::new();
         let mut fields_buffer = BTreeSet::new();
@@ -1148,13 +1105,15 @@ impl ModelSourceNode {
                     // references still deny, because they arrive as named required
                     // fields (the non-wildcard branch / ModelPlanNodeBuilder::build),
                     // not here.
-                    let (is_valid, _) = validate_clac_rule(
-                        model.name(),
-                        &column,
-                        &session_properties,
-                        Some(Arc::clone(&analyzed_wren_mdl)),
-                    )?;
-                    if !is_valid {
+                    if matches!(
+                        access_control.column_access(
+                            model.name(),
+                            &column,
+                            &session_properties,
+                            Some(Arc::clone(&analyzed_wren_mdl)),
+                        )?,
+                        ColumnAccessDecision::Deny { .. }
+                    ) {
                         continue;
                     }
                     fields_buffer.insert((
@@ -1171,6 +1130,7 @@ impl ModelSourceNode {
                         Arc::clone(&analyzed_wren_mdl),
                         Arc::clone(&session_state_ref),
                         Arc::clone(&session_properties),
+                        access_control.as_ref(),
                     )?));
                 }
             } else {
@@ -1192,6 +1152,7 @@ impl ModelSourceNode {
                         Arc::clone(&analyzed_wren_mdl),
                         Arc::clone(&session_state_ref),
                         Arc::clone(&session_properties),
+                        access_control.as_ref(),
                     )?;
                     required_exprs_buffer.insert(OrdExpr::new(expr_plan.clone()));
                 }
