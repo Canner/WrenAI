@@ -670,16 +670,15 @@ async fn permission_analyze(
         Ok(_) => {
             info!("SQL is allowed to be planned");
         }
-        // If the error is a permission denied error, we throw it instead. Otherwise, we throw the original error.
-        Err(e) => {
-            if let DataFusionError::Context(_, ee) = &e {
-                if let DataFusionError::External(we) = ee.as_ref() {
-                    if we.downcast_ref::<WrenError>().is_some() {
-                        return Err(e);
-                    }
-                }
+        // A permission denied error, or a plan error such as a provider rejecting
+        // a whole model, explains the failure better than the original error.
+        Err(e) => match e.find_root() {
+            DataFusionError::Plan(_) => return Err(e),
+            DataFusionError::External(we) if we.downcast_ref::<WrenError>().is_some() => {
+                return Err(e)
             }
-        }
+            _ => {}
+        },
     }
     Ok(())
 }

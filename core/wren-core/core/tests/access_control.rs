@@ -668,3 +668,98 @@ async fn relationship_filter_cycles_use_the_enclosing_query_stack() {
         "{error}"
     );
 }
+
+#[tokio::test]
+async fn views_over_denied_columns_do_not_abort_context_setup() -> Result<()> {
+    let mut manifest = manifest();
+    for (name, statement) in [
+        ("secret_view", "SELECT secret FROM items"),
+        ("nested_view", "SELECT * FROM secret_view"),
+        ("id_view", "SELECT id FROM items"),
+    ] {
+        manifest.views.push(
+            wren_core::mdl::builder::ViewBuilder::new(name)
+                .statement(statement)
+                .build(),
+        );
+    }
+    let provider = Arc::new(RecordingProvider {
+        denied_columns: HashSet::from(["items.secret".into()]),
+        ..Default::default()
+    });
+    for sql in ["SELECT id FROM items", "SELECT id FROM id_view"] {
+        transform(manifest.clone(), sql, provider.clone()).await?;
+    }
+    for sql in ["SELECT * FROM secret_view", "SELECT * FROM nested_view"] {
+        let error = transform(manifest.clone(), sql, provider.clone())
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("Permission Denied") && error.contains("test restriction"),
+            "{sql}: {error}"
+        );
+    }
+
+    let base = SessionContext::new();
+    let table = base
+        .sql("SELECT 1 AS id, 7 AS tenant_id, 'a' AS secret")
+        .await?
+        .into_view();
+    let mdl = Arc::new(AnalyzedWrenMDL::analyze_with_tables(
+        manifest,
+        HashMap::from([("items_remote".into(), table)]),
+    )?);
+    let ctx = apply_wren_on_ctx_with_access_control(
+        &base,
+        mdl,
+        properties(),
+        Mode::LocalRuntime,
+        provider,
+    )
+    .await?;
+    let result = ctx.sql("SELECT id FROM id_view").await?.collect().await?;
+    assert_eq!(
+        result.iter().map(|batch| batch.num_rows()).sum::<usize>(),
+        1
+    );
+    assert!(ctx.sql("SELECT * FROM secret_view").await.is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn view_errors_unrelated_to_denied_columns_still_abort_setup() {
+    let mut manifest = manifest();
+    manifest.views.push(
+        wren_core::mdl::builder::ViewBuilder::new("broken_view")
+            .statement("SELECT missing FROM items")
+            .build(),
+    );
+    let provider = Arc::new(RecordingProvider {
+        denied_columns: HashSet::from(["items.secret".into()]),
+        ..Default::default()
+    });
+    let error = transform(manifest, "SELECT id FROM items", provider)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("missing"), "{error}");
+}
+
+#[tokio::test]
+async fn provider_plan_errors_surface_through_permission_diagnostics() {
+    let provider = Arc::new(RecordingProvider {
+        denied_columns: HashSet::from(["items.secret".into()]),
+        internal_only: HashSet::from(["allowed".into()]),
+        ..Default::default()
+    });
+    let error = transform(
+        manifest(),
+        "SELECT a.id FROM allowed a JOIN items i ON a.id = i.id WHERE i.secret = 'x'",
+        provider,
+    )
+    .await
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("direct access denied to allowed"), "{error}");
+}

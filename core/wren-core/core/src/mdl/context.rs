@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -19,7 +19,7 @@ use datafusion::catalog::CatalogProvider;
 use datafusion::catalog::CatalogProviderList;
 use datafusion::catalog::{MemorySchemaProvider, Session};
 use datafusion::common::TableReference;
-use datafusion::common::{internal_err, Result};
+use datafusion::common::{internal_err, DataFusionError, Result, SchemaError};
 use datafusion::datasource::{TableProvider, TableType, ViewTable};
 use datafusion::execution::session_state::SessionStateBuilder;
 use datafusion::logical_expr::Expr;
@@ -471,6 +471,7 @@ pub async fn register_table_with_mdl_with_access_control(
     catalog.register_schema(&wren_mdl.manifest.schema, Arc::new(schema))?;
     ctx.register_catalog(&wren_mdl.manifest.catalog, Arc::new(catalog));
 
+    let mut denied_columns = HashSet::new();
     for model in wren_mdl.manifest.models.iter() {
         let table = WrenDataSource::new_with_access_control(
             Arc::clone(model),
@@ -479,20 +480,69 @@ pub async fn register_table_with_mdl_with_access_control(
             &mode,
             access_control,
         )?;
+        denied_columns.extend(
+            model
+                .get_physical_columns(true)
+                .iter()
+                .filter(|column| table.schema.field_with_name(column.name()).is_err())
+                .map(|column| column.name().to_string()),
+        );
         ctx.register_table(
             TableReference::full(wren_mdl.catalog(), wren_mdl.schema(), model.name()),
             Arc::new(table),
         )?;
     }
+    // A view that reads a denied column, directly or through another such view,
+    // stays unregistered: it is unavailable without failing the whole setup, and
+    // querying it falls back to permission analysis, which reports the denial.
+    let mut denied_views = HashSet::new();
     for view in wren_mdl.manifest.views.iter() {
-        let plan = ctx.state().create_logical_plan(&view.statement).await?;
+        let state = ctx.state();
+        let options = state.config().options();
+        let resolve = |table: TableReference| {
+            table.resolve(
+                &options.catalog.default_catalog,
+                &options.catalog.default_schema,
+            )
+        };
+        let view_ref =
+            TableReference::full(wren_mdl.catalog(), wren_mdl.schema(), view.name());
+        let statement =
+            state.sql_to_statement(&view.statement, &options.sql_parser.dialect)?;
+        if !denied_views.is_empty()
+            && state
+                .resolve_table_references(&statement)?
+                .into_iter()
+                .any(|table| denied_views.contains(&resolve(table)))
+        {
+            denied_views.insert(resolve(view_ref));
+            continue;
+        }
+        let plan = match state.statement_to_plan(statement).await {
+            Ok(plan) => plan,
+            Err(e) if is_denied_column_error(&e, &denied_columns) => {
+                denied_views.insert(resolve(view_ref));
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
         let view_table = ViewTable::new(plan, Some(view.statement.clone()));
-        ctx.register_table(
-            TableReference::full(wren_mdl.catalog(), wren_mdl.schema(), view.name()),
-            Arc::new(view_table),
-        )?;
+        ctx.register_table(view_ref, Arc::new(view_table))?;
     }
     Ok(())
+}
+
+fn is_denied_column_error(
+    error: &DataFusionError,
+    denied_columns: &HashSet<String>,
+) -> bool {
+    match error.find_root() {
+        DataFusionError::SchemaError(schema_error, _) => matches!(
+            schema_error.as_ref(),
+            SchemaError::FieldNotFound { field, .. } if denied_columns.contains(&field.name)
+        ),
+        _ => false,
+    }
 }
 
 #[derive(Debug)]
