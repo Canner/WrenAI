@@ -1,0 +1,21 @@
+relationships:
+  - name: orders_customers
+    models:
+      - orders
+      - customers
+    join_type: many_to_one
+    condition: "orders.customer_id = customers.customer_id"
+
+  - name: raw_orders_raw_customers
+    models:
+      - raw_orders
+      - raw_customers
+    join_type: many_to_one
+    condition: "raw_orders.user_id = raw_customers.id"
+
+  - name: raw_payments_raw_orders
+    models:
+      - raw_payments
+      - raw_orders
+    join_type: many_to_one
+    condition: "raw_payments.order_id = raw_orders.id"

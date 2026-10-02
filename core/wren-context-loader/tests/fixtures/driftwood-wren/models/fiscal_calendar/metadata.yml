@@ -1,0 +1,21 @@
+name: fiscal_calendar
+properties:
+  description: "Company fiscal calendar. The fiscal year starts Feb 1 and is labeled by its starting year (FY2024 = 2024-02-01 through 2025-01-31)."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: fiscal_calendar
+primary_key: date
+columns:
+  - name: date
+    type: DATE
+    properties:
+      description: "Calendar date."
+  - name: fiscal_year
+    type: INTEGER
+    properties:
+      description: "Fiscal year label (year in which the FY starts)."
+  - name: fiscal_quarter
+    type: VARCHAR
+    properties:
+      description: "Fiscal quarter label, e.g. 'FY2024-Q3' (Q1 = Feb-Apr)."
