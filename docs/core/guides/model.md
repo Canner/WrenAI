@@ -57,7 +57,7 @@ Once you have a baseline, add depth incrementally:
 
 - **Descriptions and business names** on models and columns, which memory uses for retrieval
 - **Calculated fields** for metrics the team agrees on (`revenue = net_total - refunds`)
-- **Relationship columns** so agents can write `orders.customer.first_name` without manual joins
+- **Relationship columns** so calculated fields can pull values from related models without manual joins (see [Relationship columns](/oss/reference/mdl#relationship-columns))
 - **Views** for stable, pre-built query shapes (`completed_orders`, `monthly_revenue`)
 - **Cubes** for governed aggregations (see [Pre-aggregate with cubes](./cubes.md))
 - **Selective column exposure** to keep PII columns invisible to agents. Omit them from the model and they cannot be queried
