@@ -1,6 +1,6 @@
 # CLAUDE.md — wren package
 
-Python SDK and CLI for Wren Engine. Wraps `wren-core-py` (PyO3 bindings) + Ibis connectors into a single installable package with YAML-based MDL project management, named connection profiles, and optional semantic memory.
+Python SDK and CLI for Wren Engine. Wraps `wren-core-py` (PyO3 bindings) + native-driver connectors into a single installable package with YAML-based MDL project management, named connection profiles, and optional semantic memory.
 
 ## Build & Development
 
