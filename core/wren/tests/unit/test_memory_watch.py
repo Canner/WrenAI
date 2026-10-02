@@ -316,3 +316,26 @@ def test_cli_watch_grep_backend_exits(tmp_path, monkeypatch):
     result = runner.invoke(app, ["memory", "watch", "--max-polls", "1"])
     assert result.exit_code == 1
     assert "grep backend" in result.output
+
+
+def test_cli_watch_truncated_mdl_reports_reason_without_exit_code(
+    tmp_path, monkeypatch
+):
+    """A truncated ``target/mdl.json`` surfaces the parse error, not "1".
+
+    ``_load_manifest`` already echoes the real error and raises ``typer.Exit``;
+    the watcher must not append a redundant exit-code reason ("Reindex failed:
+    1") on top of it.
+    """
+    monkeypatch.setattr(
+        "wren.memory.index_backend.resolve_backend", lambda *_a, **_k: "lancedb"
+    )
+    monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+    _touch_mdl(tmp_path, '{"models": [{"name": "or')  # truncated JSON
+    result = runner.invoke(
+        app, ["memory", "watch", "--reindex-on-start", "--max-polls", "1"]
+    )
+    assert result.exit_code == 0
+    assert "invalid JSON" in result.output
+    assert "Reindex failed; change kept pending" in result.output
+    assert "Reindex failed: 1" not in result.output

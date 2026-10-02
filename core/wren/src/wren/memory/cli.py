@@ -729,10 +729,16 @@ def watch(
     def _on_error(event: str, exc: BaseException) -> None:
         if event == "reindex-error":
             # The reason is the actionable half of this message, and the only
-            # half the event name cannot carry.
+            # half the event name cannot carry — except for typer.Exit, where
+            # _reindex has already echoed the real error and str(exc) would
+            # only repeat the exit code ("Reindex failed: 1").
+            reason = (
+                ""
+                if isinstance(exc, typer.Exit)
+                else f": {str(exc) or type(exc).__name__}"
+            )
             typer.echo(
-                f"Reindex failed: {str(exc) or type(exc).__name__}; "
-                "change kept pending, will retry next poll.",
+                f"Reindex failed{reason}; change kept pending, will retry next poll.",
                 err=True,
             )
 
