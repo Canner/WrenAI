@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.8.0...wren-core-py-v0.8.1) (2026-10-02)
+
+
+### Dependencies
+
+* **core:** upgrade DataFusion to 55.1 ([#2766](https://github.com/Canner/WrenAI/issues/2766)) ([563058a](https://github.com/Canner/WrenAI/commit/563058a9b7da5b2a97fbdc70f6d3774d74b16350))
+
 ## [0.8.0](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.6...wren-core-py-v0.8.0) (2026-09-10)
 
 
