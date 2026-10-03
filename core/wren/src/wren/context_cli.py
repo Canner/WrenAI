@@ -240,10 +240,12 @@ def init(
         model_count = len(mdl_json.get("models", []))
         view_count = len(mdl_json.get("views", []))
         rel_count = len(mdl_json.get("relationships", []))
+        cube_count = len(mdl_json.get("cubes", []))
 
         typer.echo(f"Imported MDL to YAML project at {project_path}/")
         typer.echo(
-            f"  {model_count} models, {view_count} views, {rel_count} relationships"
+            f"  {model_count} models, {view_count} views, {rel_count} relationships, "
+            f"{cube_count} cubes"
         )
         typer.echo("\nNext steps:")
         typer.echo(f"  wren context validate --path {project_path}")

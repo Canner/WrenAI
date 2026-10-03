@@ -261,6 +261,23 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
             )
         )
 
+    # ── Cubes ─────────────────────────────────────────────────
+    for i, cube in enumerate(mdl_json.get("cubes", [])):
+        cube_snake = _convert_keys_to_snake(cube)
+        if "name" not in cube_snake:
+            raise ValueError(f"Cube at index {i} is missing required 'name' field")
+        files.append(
+            ProjectFile(
+                relative_path=f"cubes/{cube_snake['name']}/metadata.yml",
+                content=yaml.dump(
+                    cube_snake,
+                    default_flow_style=False,
+                    sort_keys=False,
+                    allow_unicode=True,
+                ),
+            )
+        )
+
     # ── Relationships ─────────────────────────────────────────
     relationships = mdl_json.get("relationships", [])
     if relationships:
@@ -336,6 +353,7 @@ def write_project_files(
         managed_paths = {
             "models",
             "views",
+            "cubes",
             "relationships.yml",
             "instructions.md",
             "wren_project.yml",

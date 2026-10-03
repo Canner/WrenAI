@@ -310,6 +310,53 @@ def test_convert_then_build_roundtrip(tmp_path: Path):
     assert rel["joinType"] == "MANY_TO_ONE"
 
 
+def test_convert_then_build_roundtrip_keeps_cubes(tmp_path: Path):
+    """Cubes in the imported MDL are written to cubes/ and survive a rebuild."""
+    cube = {
+        "name": "order_metrics",
+        "baseObject": "orders",
+        "measures": [
+            {"name": "revenue", "expression": "SUM(total)", "type": "DECIMAL"}
+        ],
+        "dimensions": [
+            {"name": "customer_id", "expression": "customer_id", "type": "INTEGER"}
+        ],
+        "timeDimensions": [
+            {"name": "ordered_at", "expression": "order_date", "type": "DATE"}
+        ],
+    }
+    files = convert_mdl_to_project({**SAMPLE_MDL, "layoutVersion": 3, "cubes": [cube]})
+    assert "cubes/order_metrics/metadata.yml" in {f.relative_path for f in files}
+    write_project_files(files, tmp_path)
+
+    assert build_json(tmp_path)["cubes"] == [cube]
+
+
+def test_write_project_files_force_removes_stale_cubes(tmp_path: Path):
+    """A forced re-import drops cubes that are not in the new MDL."""
+    cube = {"name": "order_metrics", "baseObject": "orders"}
+    write_project_files(
+        convert_mdl_to_project({**SAMPLE_MDL, "layoutVersion": 3, "cubes": [cube]}),
+        tmp_path,
+    )
+    assert (tmp_path / "cubes" / "order_metrics" / "metadata.yml").exists()
+
+    write_project_files(
+        convert_mdl_to_project({**SAMPLE_MDL, "layoutVersion": 3}),
+        tmp_path,
+        force=True,
+    )
+
+    assert not (tmp_path / "cubes").exists()
+    assert not build_json(tmp_path).get("cubes")
+
+
+def test_convert_cube_missing_name_raises():
+    mdl = {"catalog": "wren", "schema": "public", "cubes": [{"baseObject": "orders"}]}
+    with pytest.raises(ValueError, match="Cube at index 0"):
+        convert_mdl_to_project(mdl)
+
+
 # ── Edge cases ─────────────────────────────────────────────────────────────
 
 
