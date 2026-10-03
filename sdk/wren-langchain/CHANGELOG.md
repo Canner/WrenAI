@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/Canner/WrenAI/compare/wren-langchain-v0.2.2...wren-langchain-v0.2.3) (2026-10-02)
+
+
+### Bug Fixes
+
+* **sdk:** read project artifacts as UTF-8 ([#2764](https://github.com/Canner/WrenAI/issues/2764)) ([87b438a](https://github.com/Canner/WrenAI/commit/87b438a00af25a84e2c229538cae6cd0e58d5295))
+
 ## [0.2.2](https://github.com/Canner/WrenAI/compare/wren-langchain-v0.2.1...wren-langchain-v0.2.2) (2026-09-02)
 
 
