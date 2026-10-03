@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.4.0...wren-semantic-core-v0.4.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **core:** preserve string literals when removing MDL qualifiers ([#2762](https://github.com/Canner/WrenAI/issues/2762)) ([7b74af1](https://github.com/Canner/WrenAI/commit/7b74af177ea9a0ad387175dd7849ea7ad30c73da))
+
 ## [0.4.0](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.3.2...wren-semantic-core-v0.4.0) (2026-09-09)
 
 
