@@ -287,6 +287,29 @@ def test_init_from_mdl_then_build_keeps_non_ascii_with_non_utf8_default_encoding
     assert built["models"][0]["properties"]["description"] == "訂單 — café"
 
 
+def test_init_from_built_mdl_then_build(tmp_path):
+    """A target/mdl.json has no project name; the import names it after its dir."""
+    source = tmp_path / "source"
+    result = runner.invoke(app, ["context", "init", "--path", str(source)])
+    assert result.exit_code == 0, result.exception
+    result = runner.invoke(app, ["context", "build", "--path", str(source)])
+    assert result.exit_code == 0, result.exception
+    mdl_file = source / "target" / "mdl.json"
+    assert "name" not in json.loads(mdl_file.read_text(encoding="utf-8"))
+
+    project = tmp_path / "shop"
+    result = runner.invoke(
+        app,
+        ["context", "init", "--path", str(project), "--from-mdl", str(mdl_file)],
+    )
+    assert result.exit_code == 0, result.exception
+
+    result = runner.invoke(app, ["context", "build", "--path", str(project)])
+    assert result.exit_code == 0, result.output
+    config = yaml.safe_load((project / "wren_project.yml").read_text(encoding="utf-8"))
+    assert config["name"] == "shop"
+
+
 def test_init_refuses_existing(tmp_path):
     (tmp_path / "wren_project.yml").write_text("name: existing\n")
     result = runner.invoke(app, ["context", "init", "--path", str(tmp_path)])
