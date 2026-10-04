@@ -18,7 +18,6 @@ from decimal import Decimal as PyDecimal
 
 import psycopg
 import pyarrow as pa
-from loguru import logger
 
 from wren.connector.base import ConnectorABC, coerce_limit
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
@@ -287,17 +286,10 @@ class PostgresConnector(ConnectorABC):
                 "use PostgresConnectionInfo instead",
             )
         kwargs = dict(connection_info.kwargs) if connection_info.kwargs else {}
-        # psycopg opens an implicit transaction per statement, so without this a
-        # failed statement leaves the session ``idle in transaction (aborted)``
-        # and every later statement fails with "current transaction is aborted".
-        # A successful statement is no better: the session stays ``idle in
-        # transaction`` for the connector's whole life, holding a snapshot open.
-        # This connector is long-lived and process-shared (``WrenEngine`` caches
-        # it; the MCP server hands one engine to every tool handler), and it only
-        # ever reads, so there is no multi-statement transaction to preserve.
-        # ``setdefault`` keeps an explicit caller-supplied value winning.
+        # Each operation owns its connection; the cached connector holds no
+        # session between requests. Preserve explicit caller-supplied options.
         kwargs.setdefault("autocommit", True)
-        self.connection = psycopg.connect(
+        self._connection_kwargs = dict(
             host=connection_info.host,
             port=int(connection_info.port),
             dbname=connection_info.database,
@@ -309,7 +301,6 @@ class PostgresConnector(ConnectorABC):
             ),
             **kwargs,
         )
-        self._closed = False
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         limit = coerce_limit(limit)
@@ -323,9 +314,10 @@ class PostgresConnector(ConnectorABC):
             sql = f"SELECT * FROM (\n{sql}\n) AS _sub LIMIT {limit}"
 
         try:
-            with self.connection.cursor() as cursor:
-                cursor.execute(sql)
-                return _build_pg_arrow_table(cursor)
+            with psycopg.connect(**self._connection_kwargs) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(sql)
+                    return _build_pg_arrow_table(cursor)
         except psycopg.errors.QueryCanceled:
             raise
         except (WrenError, TimeoutError):
@@ -341,8 +333,9 @@ class PostgresConnector(ConnectorABC):
     def dry_run(self, sql: str) -> None:
         wrapped = f"SELECT * FROM (\n{self._strip(sql)}\n) AS _sub LIMIT 0"
         try:
-            with self.connection.cursor() as cursor:
-                cursor.execute(wrapped)
+            with psycopg.connect(**self._connection_kwargs) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(wrapped)
         except psycopg.errors.QueryCanceled:
             raise
         except (WrenError, TimeoutError):
@@ -356,20 +349,7 @@ class PostgresConnector(ConnectorABC):
             ) from e
 
     def close(self) -> None:
-        if self._closed or self.connection is None:
-            return
-        try:
-            if not self.connection.closed:
-                try:
-                    self.connection.cancel()
-                except Exception:
-                    pass
-                self.connection.close()
-        except Exception as e:
-            logger.warning(f"Error closing postgres connection: {e}")
-        finally:
-            self._closed = True
-            self.connection = None
+        """No persistent connection to close; each operation closes its own."""
 
 
 def create_connector(connection_info) -> PostgresConnector:

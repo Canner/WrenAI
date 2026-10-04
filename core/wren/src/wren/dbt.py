@@ -1198,7 +1198,10 @@ def _build_verified_constraint_lines(test_events: list[dict[str, Any]]) -> list[
             entry["values"] = event.get("values") or []
 
     lines: list[str] = []
-    for (model_name, column_name), entry in sorted(grouped.items()):
+    sorted_constraints = sorted(
+        grouped.items(), key=lambda item: (item[0][0], item[0][1] or "")
+    )
+    for (model_name, column_name), entry in sorted_constraints:
         tests = entry["tests"]
         if not column_name:
             continue

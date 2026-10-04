@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 from urllib.parse import urlparse
 
 import duckdb
@@ -21,12 +22,14 @@ from testcontainers.postgres import PostgresContainer
 from tests.suite.manifests import make_tpch_manifest
 from tests.suite.query import WrenQueryTestSuite
 from wren import WrenEngine
+from wren.connector.base import strip_trailing_semicolon as _strip_trailing_semicolon
 from wren.connector.postgres import (
     PostgresConnector,
     _build_pg_arrow_table,
     _build_pg_column,
 )
 from wren.model.data_source import DataSource
+from wren.model.error import WrenError
 
 pytestmark = pytest.mark.postgres
 
@@ -399,8 +402,6 @@ class TestPostgresConnectorTypes:
         connector.dry_run("SELECT c_int4 FROM type_zoo")
 
     def test_dry_run_invalid_sql_raises(self, connector: PostgresConnector) -> None:
-        from wren.model.error import WrenError
-
         with pytest.raises(WrenError):
             connector.dry_run("SELECT * FROM nope_does_not_exist")
 
@@ -410,9 +411,6 @@ class TestPostgresConnectorTypes:
         # ``pa.table({...})`` silently drops duplicate keys, which trashes
         # join results like ``SELECT a.id, b.id FROM t a, t b``. The
         # connector must preserve both fields positionally.
-        # The previous ``test_dry_run_invalid_sql_raises`` aborts the shared
-        # class-scoped connection's transaction; reset it before running.
-        connector.connection.rollback()
         result = connector.query(
             "SELECT a.c_int4 AS id, b.c_int4 AS id "
             "FROM type_zoo a, type_zoo b "
@@ -434,39 +432,31 @@ class TestPostgresConnectorTypes:
 # is required.
 # ---------------------------------------------------------------------------
 
-from contextlib import contextmanager
-from unittest.mock import MagicMock
 
-from wren.connector.base import strip_trailing_semicolon as _strip_trailing_semicolon
-
-
-def _make_mock_connector() -> tuple[PostgresConnector, MagicMock]:
+def _make_mock_connector(monkeypatch) -> tuple[PostgresConnector, MagicMock]:
     """Build a PostgresConnector bypassing __init__ (no real connection)."""
     connector = PostgresConnector.__new__(PostgresConnector)
-    connector._closed = False
+    connector._connection_kwargs = {}
     cursor = MagicMock()
     cursor.description = None  # _build_pg_arrow_table returns an empty table
 
-    @contextmanager
-    def _cursor_cm():
-        yield cursor
-
     conn = MagicMock()
-    conn.cursor.side_effect = _cursor_cm
-    connector.connection = conn
+    conn.__enter__.return_value = conn
+    conn.cursor.return_value.__enter__.return_value = cursor
+    monkeypatch.setattr(psycopg, "connect", lambda **kwargs: conn)
     return connector, cursor
 
 
-def test_query_strips_trailing_semicolon_before_subquery_wrap() -> None:
-    connector, cursor = _make_mock_connector()
+def test_query_strips_trailing_semicolon_before_subquery_wrap(monkeypatch) -> None:
+    connector, cursor = _make_mock_connector(monkeypatch)
     connector.query("SELECT 1;", limit=5)
     (sent,), _ = cursor.execute.call_args
     assert sent == "SELECT * FROM (\nSELECT 1\n) AS _sub LIMIT 5"
     assert ";\n)" not in sent
 
 
-def test_dry_run_strips_trailing_semicolon() -> None:
-    connector, cursor = _make_mock_connector()
+def test_dry_run_strips_trailing_semicolon(monkeypatch) -> None:
+    connector, cursor = _make_mock_connector(monkeypatch)
     connector.dry_run("SELECT 1;  ")
     (sent,), _ = cursor.execute.call_args
     assert sent == "SELECT * FROM (\nSELECT 1\n) AS _sub LIMIT 0"
@@ -482,12 +472,10 @@ def test_helper_no_trailing_semicolon_unchanged() -> None:
 
 
 class TestPostgresConnectorTransactionRecovery:
-    """A failed statement must not poison the connector's long-lived connection.
+    """A failed statement must not poison the cached connector.
 
-    ``WrenEngine._get_connector`` caches one connector per engine and the MCP
-    server shares one engine per process, so a connection left ``idle in
-    transaction (aborted)`` fails every later query until the process restarts.
-    The fixture is class-scoped on purpose: both tests reuse the same connection.
+    The class-scoped fixture reuses one connector, as the MCP server does.
+    Each operation must open its own connection and close it on success or error.
     """
 
     @pytest.fixture(scope="class")
@@ -518,8 +506,6 @@ class TestPostgresConnectorTransactionRecovery:
     def test_query_succeeds_after_failed_query(
         self, connector: PostgresConnector
     ) -> None:
-        from wren.model.error import WrenError
-
         with pytest.raises(WrenError):
             connector.query("SELECT no_such_column FROM recovery")
 
@@ -529,8 +515,6 @@ class TestPostgresConnectorTransactionRecovery:
     def test_query_succeeds_after_failed_dry_run(
         self, connector: PostgresConnector
     ) -> None:
-        from wren.model.error import WrenError
-
         with pytest.raises(WrenError):
             connector.dry_run("SELECT no_such_column FROM recovery")
 

@@ -9,6 +9,7 @@ import yaml
 
 from wren.dbt import (
     DbtLoadError,
+    _build_verified_constraint_lines,
     convert_dbt_project_to_wren_project,
     convert_dbt_target_to_wren_profile,
     default_wren_profile_name,
@@ -331,9 +332,9 @@ class TestLoadDbtArtifacts:
         monkeypatch.setenv("JAFFLE_DUCKDB_PATH", "warehouse/jaffle.duckdb")
         catalog_path = project_dir / "build" / "catalog.json"
         catalog = json.loads(catalog_path.read_text())
-        catalog["nodes"]["model.jaffle_shop.orders"]["columns"]["id"][
-            "type"
-        ] = "character varying(255)"
+        catalog["nodes"]["model.jaffle_shop.orders"]["columns"]["id"]["type"] = (
+            "character varying(255)"
+        )
         catalog_path.write_text(json.dumps(catalog))
 
         imported = convert_dbt_project_to_wren_project(
@@ -394,3 +395,33 @@ class TestLoadDbtArtifacts:
 
         with pytest.raises(DbtLoadError, match="dbt docs generate"):
             load_dbt_artifacts(project_dir)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("reverse", [False, True])
+def test_verified_constraints_mix_model_and_column_tests(reverse):
+    events = [
+        {
+            "model_name": "orders",
+            "column_name": column_name,
+            "test_name": test_name,
+            "status": "verified",
+        }
+        for column_name, test_name in [
+            (None, "unique_combination_of_columns"),
+            ("order_id", "unique"),
+            ("order_id", "not_null"),
+        ]
+    ]
+    if reverse:
+        events.reverse()
+
+    assert _build_verified_constraint_lines(events) == [
+        "orders.order_id: NOT NULL, UNIQUE (primary key)"
+    ]
+    assert (
+        _build_verified_constraint_lines(
+            [event for event in events if event["column_name"] is None]
+        )
+        == []
+    )

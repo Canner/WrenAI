@@ -25,6 +25,7 @@ def _ensure_psycopg_stub() -> None:
     sys.modules["psycopg"] = mod
     sys.modules["psycopg.errors"] = errors
     mod.errors = errors
+    mod.connect = MagicMock()
 
 
 _ensure_psycopg_stub()
@@ -35,9 +36,11 @@ from wren.connector.postgres import PostgresConnector  # noqa: E402
 
 def test_unlimited_query_strips_trailing_semicolon(monkeypatch):
     connector = PostgresConnector.__new__(PostgresConnector)
-    connector.connection = MagicMock()
-    cursor = MagicMock()
-    connector.connection.cursor.return_value.__enter__.return_value = cursor
+    connector._connection_kwargs = {}
+    connection = MagicMock()
+    connection.__enter__.return_value = connection
+    monkeypatch.setattr(postgres_mod.psycopg, "connect", lambda **kwargs: connection)
+    cursor = connection.cursor.return_value.__enter__.return_value
     monkeypatch.setattr(
         postgres_mod, "_build_pg_arrow_table", lambda cur: pa.table({"x": [1]})
     )
@@ -49,9 +52,11 @@ def test_unlimited_query_strips_trailing_semicolon(monkeypatch):
 
 def test_limited_query_wraps_after_strip(monkeypatch):
     connector = PostgresConnector.__new__(PostgresConnector)
-    connector.connection = MagicMock()
-    cursor = MagicMock()
-    connector.connection.cursor.return_value.__enter__.return_value = cursor
+    connector._connection_kwargs = {}
+    connection = MagicMock()
+    connection.__enter__.return_value = connection
+    monkeypatch.setattr(postgres_mod.psycopg, "connect", lambda **kwargs: connection)
+    cursor = connection.cursor.return_value.__enter__.return_value
     monkeypatch.setattr(
         postgres_mod, "_build_pg_arrow_table", lambda cur: pa.table({"x": [1]})
     )
@@ -66,9 +71,11 @@ def test_limited_query_wraps_after_strip(monkeypatch):
 def test_query_limit_survives_trailing_line_comment(monkeypatch):
     """Trailing `--` must not eat the wrap (same shape as athena.py #2457)."""
     connector = PostgresConnector.__new__(PostgresConnector)
-    connector.connection = MagicMock()
-    cursor = MagicMock()
-    connector.connection.cursor.return_value.__enter__.return_value = cursor
+    connector._connection_kwargs = {}
+    connection = MagicMock()
+    connection.__enter__.return_value = connection
+    monkeypatch.setattr(postgres_mod.psycopg, "connect", lambda **kwargs: connection)
+    cursor = connection.cursor.return_value.__enter__.return_value
     monkeypatch.setattr(
         postgres_mod, "_build_pg_arrow_table", lambda cur: pa.table({"x": [1]})
     )
@@ -80,11 +87,13 @@ def test_query_limit_survives_trailing_line_comment(monkeypatch):
     )
 
 
-def test_dry_run_limit_survives_trailing_line_comment():
+def test_dry_run_limit_survives_trailing_line_comment(monkeypatch):
     connector = PostgresConnector.__new__(PostgresConnector)
-    connector.connection = MagicMock()
-    cursor = MagicMock()
-    connector.connection.cursor.return_value.__enter__.return_value = cursor
+    connector._connection_kwargs = {}
+    connection = MagicMock()
+    connection.__enter__.return_value = connection
+    monkeypatch.setattr(postgres_mod.psycopg, "connect", lambda **kwargs: connection)
+    cursor = connection.cursor.return_value.__enter__.return_value
 
     connector.dry_run("SELECT 1 AS x -- pick")
 
