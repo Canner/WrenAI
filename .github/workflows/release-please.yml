@@ -41,6 +41,32 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      # The linked-versions plugin hard-codes the group PR title as
+      # "release wren-rust-core libraries" and ignores
+      # group-pull-request-title-pattern, so add the shared version here to
+      # match the other release PRs. The title still parses under
+      # release-please's default pattern when the PR is merged. A failure here
+      # must not skip the publish jobs that need this one.
+      - name: Add version to wren-rust-core release PR title
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_BRANCH: release-please--branches--main--groups--wren-rust-core
+        run: |
+          pr=$(gh pr list --repo "$REPO" --head "$HEAD_BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$pr" ]; then
+            exit 0
+          fi
+          version=$(gh api -H 'Accept: application/vnd.github.raw+json' \
+            "repos/$REPO/contents/.release-please-manifest.json?ref=$HEAD_BRANCH" \
+            --jq '."core/wren-core" // empty')
+          if [ -z "$version" ]; then
+            echo "::error::core/wren-core missing from the manifest on $HEAD_BRANCH"
+            exit 1
+          fi
+          gh api -X PATCH "repos/$REPO/pulls/$pr" -f title="chore(main): release wren-rust-core $version" --silent
+
   publish-wren-core-py:
     needs: release-please
     if: needs.release-please.outputs['wren-core-py--release_created'] == 'true'
