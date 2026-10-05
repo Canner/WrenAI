@@ -345,10 +345,42 @@ def test_write_project_files_force_removes_stale_cubes(tmp_path: Path):
         convert_mdl_to_project({**SAMPLE_MDL, "layoutVersion": 3}),
         tmp_path,
         force=True,
+        extra_managed_paths=("cubes",),
     )
 
     assert not (tmp_path / "cubes").exists()
     assert not build_json(tmp_path).get("cubes")
+
+
+def test_write_project_files_force_keeps_unmanaged_cubes(tmp_path: Path):
+    """A forced write that does not claim cubes/ (e.g. dbt import) keeps it."""
+    cube_file = tmp_path / "cubes" / "order_metrics" / "metadata.yml"
+    cube_file.parent.mkdir(parents=True)
+    cube_file.write_text("name: order_metrics")
+
+    write_project_files(
+        [ProjectFile(relative_path="models/orders/metadata.yml", content="new")],
+        tmp_path,
+        force=True,
+    )
+
+    assert cube_file.read_text() == "name: order_metrics"
+    assert (tmp_path / "models" / "orders" / "metadata.yml").read_text() == "new"
+
+
+def test_write_project_files_rejects_duplicate_paths(tmp_path: Path):
+    cube = {"name": "order_metrics", "baseObject": "orders"}
+    files = convert_mdl_to_project(
+        {**SAMPLE_MDL, "layoutVersion": 3, "cubes": [cube, cube]}
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        write_project_files(files, tmp_path)
+
+    assert str(exc_info.value) == (
+        "Error: duplicate output path: 'cubes/order_metrics/metadata.yml'"
+    )
+    assert not any(tmp_path.iterdir())
 
 
 def test_convert_cube_missing_name_raises():

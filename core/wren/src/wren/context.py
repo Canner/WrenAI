@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
@@ -325,6 +326,7 @@ def write_project_files(
     output_dir: Path,
     *,
     force: bool = False,
+    extra_managed_paths: Iterable[str] = (),
 ) -> None:
     """Write project files to disk.
 
@@ -332,10 +334,13 @@ def write_project_files(
         files: List of ProjectFile from convert_mdl_to_project().
         output_dir: Target directory.
         force: If False, raise SystemExit if any target file already exists.
+        extra_managed_paths: Additional top-level paths the caller owns; with
+            ``force`` they are removed before writing (e.g. ``"cubes"``).
     """
     output_dir = Path(output_dir)
     root = output_dir.resolve()
     resolved_files: list[tuple[ProjectFile, Path]] = []
+    seen_targets: set[Path] = set()
 
     for file in files:
         target = (output_dir / file.relative_path).resolve()
@@ -345,6 +350,9 @@ def write_project_files(
             raise SystemExit(f"Error: invalid output path: {file.relative_path!r}")
         if target == root:
             raise SystemExit(f"Error: invalid output path: {file.relative_path!r}")
+        if target in seen_targets:
+            raise SystemExit(f"Error: duplicate output path: {file.relative_path!r}")
+        seen_targets.add(target)
         resolved_files.append((file, target))
 
     if force and output_dir.exists():
@@ -353,11 +361,11 @@ def write_project_files(
         managed_paths = {
             "models",
             "views",
-            "cubes",
             "relationships.yml",
             "instructions.md",
             "wren_project.yml",
             "AGENTS.md",
+            *extra_managed_paths,
         }
         if any(f.relative_path == "queries.yml" for f in files):
             managed_paths.add("queries.yml")

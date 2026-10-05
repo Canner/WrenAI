@@ -232,7 +232,9 @@ def init(
         mdl_json = json.loads(mdl_path.read_text(encoding="utf-8"))
         files = convert_mdl_to_project(mdl_json)
         try:
-            write_project_files(files, project_path, force=force)
+            write_project_files(
+                files, project_path, force=force, extra_managed_paths=("cubes",)
+            )
         except SystemExit as e:
             typer.echo(str(e), err=True)
             raise typer.Exit(1)
@@ -1056,7 +1058,9 @@ def _init_from_osi(
 
     files = convert_mdl_to_project(mdl_json)
     try:
-        write_project_files(files, project_path, force=force)
+        write_project_files(
+            files, project_path, force=force, extra_managed_paths=("cubes",)
+        )
     except SystemExit as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
