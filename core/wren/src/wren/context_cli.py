@@ -232,7 +232,9 @@ def init(
         mdl_json = json.loads(mdl_path.read_text(encoding="utf-8"))
         files = convert_mdl_to_project(mdl_json)
         try:
-            write_project_files(files, project_path, force=force)
+            write_project_files(
+                files, project_path, force=force, extra_managed_paths=("cubes",)
+            )
         except SystemExit as e:
             typer.echo(str(e), err=True)
             raise typer.Exit(1)
@@ -240,10 +242,12 @@ def init(
         model_count = len(mdl_json.get("models", []))
         view_count = len(mdl_json.get("views", []))
         rel_count = len(mdl_json.get("relationships", []))
+        cube_count = len(mdl_json.get("cubes", []))
 
         typer.echo(f"Imported MDL to YAML project at {project_path}/")
         typer.echo(
-            f"  {model_count} models, {view_count} views, {rel_count} relationships"
+            f"  {model_count} models, {view_count} views, {rel_count} relationships, "
+            f"{cube_count} cubes"
         )
         typer.echo("\nNext steps:")
         typer.echo(f"  wren context validate --path {project_path}")
@@ -1060,7 +1064,9 @@ def _init_from_osi(
 
     files = convert_mdl_to_project(mdl_json)
     try:
-        write_project_files(files, project_path, force=force)
+        write_project_files(
+            files, project_path, force=force, extra_managed_paths=("cubes",)
+        )
     except SystemExit as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
