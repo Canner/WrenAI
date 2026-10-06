@@ -1,3 +1,4 @@
+use crate::{AccessControlProvider, WrenAccessControlProvider};
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -31,6 +32,7 @@ pub struct ModelGenerationRule {
     analyzed_wren_mdl: Arc<AnalyzedWrenMDL>,
     session_state: SessionStateRef,
     properties: SessionPropertiesRef,
+    access_control: Arc<dyn AccessControlProvider>,
 }
 
 impl ModelGenerationRule {
@@ -39,10 +41,25 @@ impl ModelGenerationRule {
         session_state: SessionStateRef,
         properties: SessionPropertiesRef,
     ) -> Self {
+        Self::new_with_access_control(
+            mdl,
+            session_state,
+            properties,
+            Arc::new(WrenAccessControlProvider),
+        )
+    }
+
+    pub fn new_with_access_control(
+        mdl: Arc<AnalyzedWrenMDL>,
+        session_state: SessionStateRef,
+        properties: SessionPropertiesRef,
+        access_control: Arc<dyn AccessControlProvider>,
+    ) -> Self {
         Self {
             analyzed_wren_mdl: mdl,
             session_state,
             properties,
+            access_control,
         }
     }
 
@@ -57,10 +74,11 @@ impl ModelGenerationRule {
                     extension.node.as_any().downcast_ref::<ModelPlanNode>()
                 {
                     let (source_plan, alias) = model_plan.relation_chain.clone().plan(
-                        ModelGenerationRule::new(
+                        ModelGenerationRule::new_with_access_control(
                             Arc::clone(&self.analyzed_wren_mdl),
                             Arc::clone(&self.session_state),
                             Arc::clone(&self.properties),
+                            Arc::clone(&self.access_control),
                         ),
                         &alias_generator,
                     )?;
@@ -192,10 +210,11 @@ impl ModelGenerationRule {
                 ) {
                     let (source_plan, plan_alias) =
                         calculation_plan.relation_chain.clone().plan(
-                            ModelGenerationRule::new(
+                            ModelGenerationRule::new_with_access_control(
                                 Arc::clone(&self.analyzed_wren_mdl),
                                 Arc::clone(&self.session_state),
                                 Arc::clone(&self.properties),
+                                Arc::clone(&self.access_control),
                             ),
                             &alias_generator,
                         )?;
