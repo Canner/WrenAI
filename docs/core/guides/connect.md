@@ -23,6 +23,8 @@ If you have an AI coding agent installed, the `/wren` skill drives the whole thi
 | DuckDB | _(included)_ |
 | PostgreSQL | `postgres` |
 | MySQL | `mysql` |
+| Doris | `mysql` |
+| StarRocks | `mysql` |
 | BigQuery | `bigquery` |
 | Snowflake | `snowflake` |
 | ClickHouse | `clickhouse` |

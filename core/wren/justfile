@@ -77,6 +77,9 @@ test-postgres:
 test-mysql:
     uv run --no-sync pytest tests/connectors/test_mysql.py tests/connectors/test_mysql_connector.py -v -m mysql
 
+test-starrocks:
+    uv run --no-sync pytest tests/connectors/test_starrocks.py -v -m starrocks
+
 test-snowflake:
     uv run --no-sync pytest tests/connectors/test_snowflake.py -v -m snowflake
 

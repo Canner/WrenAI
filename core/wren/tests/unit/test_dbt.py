@@ -279,6 +279,33 @@ class TestConvertDbtTargetToWrenProfile:
         assert profile["dataset_id"] == "analytics"
         assert profile["credentials"]
 
+    def test_map_starrocks_adapter(self):
+        assert map_dbt_adapter_to_wren("starrocks") == "starrocks"
+
+    def test_convert_starrocks_profile(self, tmp_path):
+        project_dir, profiles_path = _write_basic_dbt_project(tmp_path)
+        profiles_path.write_text(
+            "jaffle_shop:\n"
+            "  target: dev\n"
+            "  outputs:\n"
+            "    dev:\n"
+            "      type: starrocks\n"
+            "      host: sr.example.com\n"
+            "      port: 9030\n"
+            "      schema: analytics\n"
+            "      username: etl\n"
+            "      password: secret\n"
+        )
+        target = resolve_dbt_target(project_dir, profiles_path=profiles_path)
+
+        profile = convert_dbt_target_to_wren_profile(target)
+
+        assert profile["datasource"] == "starrocks"
+        assert profile["host"] == "sr.example.com"
+        assert profile["port"] == "9030"
+        assert profile["database"] == "analytics"
+        assert profile["user"] == "etl"
+
     def test_convert_databricks_profile_preserves_catalog(self, tmp_path):
         project_dir, profiles_path = _write_basic_dbt_project(tmp_path)
         profiles_path.write_text(

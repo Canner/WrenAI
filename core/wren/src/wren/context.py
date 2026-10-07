@@ -523,6 +523,7 @@ _VALID_DIALECTS = {
     "s3_file",
     "snowflake",
     "spark",
+    "starrocks",
     "trino",
 }
 

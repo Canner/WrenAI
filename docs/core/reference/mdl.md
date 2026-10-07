@@ -382,7 +382,7 @@ Models and views support an optional `dialect` field declaring which SQL dialect
 | `dialect` omitted | Falls back to project-level `data_source`. Default. |
 | `dialect` set | Engine uses the named dialect parser for this object's SQL. |
 
-Valid dialect values: `athena`, `bigquery`, `canner`, `clickhouse`, `databricks`, `datafusion`, `doris`, `duckdb`, `gcs_file`, `local_file`, `minio_file`, `mssql`, `mysql`, `oracle`, `postgres`, `redshift`, `s3_file`, `snowflake`, `spark`, `trino`.
+Valid dialect values: `athena`, `bigquery`, `canner`, `clickhouse`, `databricks`, `datafusion`, `doris`, `duckdb`, `gcs_file`, `local_file`, `minio_file`, `mssql`, `mysql`, `oracle`, `postgres`, `redshift`, `s3_file`, `snowflake`, `spark`, `starrocks`, `trino`.
 
 ### Schema version vs layout version
 

@@ -9,6 +9,12 @@ from wren.model.error import ErrorCode, WrenError
 pytestmark = pytest.mark.unit
 
 
+def test_starrocks_uses_mysql_connector_module_and_extra() -> None:
+    assert factory._REGISTRY[DataSource.starrocks] == "wren.connector.mysql"
+    assert factory._INSTALL_EXTRA[DataSource.starrocks] == "mysql"
+    assert DataSource.starrocks in factory._NEEDS_DATA_SOURCE
+
+
 def test_connector_import_error_has_quoted_wrenai_extra_hint(monkeypatch) -> None:
     def _fake_import_module(name: str):
         if name == "wren.connector.mysql":

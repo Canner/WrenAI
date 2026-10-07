@@ -520,6 +520,17 @@ class TestDialectMapping:
     def test_mssql_maps_to_tsql(self):
         assert get_sqlglot_dialect(DataSource.mssql) == "tsql"
 
+    def test_starrocks_uses_its_own_sqlglot_dialect(self):
+        # Doris and StarRocks differ in DATE_TRUNC argument order and in
+        # ARRAY_AGG / GROUP_CONCAT spelling, so StarRocks must not reuse "doris".
+        assert get_sqlglot_dialect(DataSource.starrocks) == "starrocks"
+        assert get_sqlglot_dialect(DataSource.doris) == "doris"
+
+    def test_starrocks_date_trunc_argument_order(self):
+        sql = "SELECT date_trunc('month', d) FROM t"
+        out = sqlglot.transpile(sql, read="starrocks", write="starrocks")[0]
+        assert out == "SELECT DATE_TRUNC('MONTH', d) FROM t"
+
     def test_canner_maps_to_trino(self):
         assert get_sqlglot_dialect(DataSource.canner) == "trino"
 

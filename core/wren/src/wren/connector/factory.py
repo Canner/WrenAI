@@ -8,6 +8,7 @@ _REGISTRY: dict[DataSource, str] = {
     DataSource.postgres: "wren.connector.postgres",
     DataSource.mysql: "wren.connector.mysql",
     DataSource.doris: "wren.connector.mysql",
+    DataSource.starrocks: "wren.connector.mysql",
     DataSource.mssql: "wren.connector.mssql",
     DataSource.canner: "wren.connector.canner",
     DataSource.bigquery: "wren.connector.bigquery",
@@ -30,6 +31,7 @@ _REGISTRY: dict[DataSource, str] = {
 # Map data sources to the correct pip extra when they share a connector module
 _INSTALL_EXTRA: dict[DataSource, str] = {
     DataSource.doris: "mysql",
+    DataSource.starrocks: "mysql",
     DataSource.canner: "postgres",
     DataSource.local_file: "duckdb",
     DataSource.s3_file: "duckdb",
@@ -40,6 +42,7 @@ _INSTALL_EXTRA: dict[DataSource, str] = {
 _NEEDS_DATA_SOURCE = {
     DataSource.mysql,
     DataSource.doris,
+    DataSource.starrocks,
     DataSource.trino,
 }
 

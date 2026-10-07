@@ -554,3 +554,16 @@ def test_lazy_init_thread_safe() -> None:
             # Sanity: the field-type map is non-empty (MySQLdb constants exist).
             if fn is _mysql_field_type_map:
                 assert len(got) > 0
+
+
+def test_starrocks_connection_info_shares_doris_fields() -> None:
+    from wren.model.data_source import DataSource  # noqa: PLC0415
+
+    info = DataSource.starrocks.get_connection_info(
+        {"host": "sr", "port": "9030", "database": "olymp", "user": "u"}
+    )
+    kwargs = mysql_connector._build_doris_connect_kwargs(info)
+    assert kwargs["host"] == "sr"
+    assert kwargs["port"] == 9030
+    assert kwargs["db"] == "olymp"
+    assert kwargs["autocommit"] is True

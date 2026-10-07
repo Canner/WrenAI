@@ -37,6 +37,7 @@ from wren.model import (
     S3FileConnectionInfo,
     SnowflakeConnectionInfo,
     SparkConnectionInfo,
+    StarRocksConnectionInfo,
     TrinoConnectionInfo,
 )
 
@@ -65,6 +66,7 @@ DATASOURCE_MODELS: dict[str, list[type[BaseConnectionInfo]]] = {
     "s3_file": [S3FileConnectionInfo],
     "snowflake": [SnowflakeConnectionInfo],
     "spark": [SparkConnectionInfo],
+    "starrocks": [StarRocksConnectionInfo],
     "trino": [TrinoConnectionInfo],
     "connection_url": [ConnectionUrl],
 }

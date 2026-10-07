@@ -98,6 +98,7 @@ pub fn get_inner_dialect(data_source: &DataSource) -> Box<dyn InnerDialect> {
     match data_source {
         DataSource::MySQL => Box::new(MySQLDialect {}),
         DataSource::Doris => Box::new(MySQLDialect {}),
+        DataSource::StarRocks => Box::new(MySQLDialect {}),
         DataSource::BigQuery => Box::new(BigQueryDialect {}),
         DataSource::Oracle => Box::new(OracleDialect {}),
         DataSource::MSSQL => Box::new(MsSqlDialect {}),
