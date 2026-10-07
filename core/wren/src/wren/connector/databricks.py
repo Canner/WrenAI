@@ -60,7 +60,7 @@ class DatabricksConnector(ConnectorABC):
 
     def dry_run(self, sql: str) -> None:
         with closing(self.connection.cursor()) as cursor:
-            cursor.execute(f"SELECT * FROM ({self._strip(sql)}) AS sub LIMIT 0")
+            cursor.execute(f"SELECT * FROM (\n{self._strip(sql)}\n) AS sub LIMIT 0")
 
     def close(self) -> None:
         try:
