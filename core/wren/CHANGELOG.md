@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.15.1](https://github.com/Canner/WrenAI/compare/wren-v0.15.0...wren-v0.15.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **context:** count errors in the validate warning summary ([#2781](https://github.com/Canner/WrenAI/issues/2781)) ([fedf182](https://github.com/Canner/WrenAI/commit/fedf182b4bb8294623d9cc0a9db4fbae1edf63fb))
+* **context:** keep cubes when importing an MDL with init --from-mdl ([#2771](https://github.com/Canner/WrenAI/issues/2771)) ([e65351e](https://github.com/Canner/WrenAI/commit/e65351eb0e06ee534297beccc83f3ca22b5dd8b8))
+* **context:** read v2 cube metadata as UTF-8 ([#2769](https://github.com/Canner/WrenAI/issues/2769)) ([2cc843f](https://github.com/Canner/WrenAI/commit/2cc843fd87d6cfe9831554721559018dda2938a0))
+* **core/wren:** bump urllib3, pyjwt and sentence-transformers for security advisories ([#2787](https://github.com/Canner/WrenAI/issues/2787)) ([e467c8d](https://github.com/Canner/WrenAI/commit/e467c8db2cdf259f65d4587390bd48836d8b2d99))
+* **memory:** carry the reindex failure reason out of the watch loop ([#2767](https://github.com/Canner/WrenAI/issues/2767)) ([a834e21](https://github.com/Canner/WrenAI/commit/a834e21ee9bee9ad190805e90022665d01d46ab1))
+* **wren:** make test-unit run the whole unit tree like CI does ([#2768](https://github.com/Canner/WrenAI/issues/2768)) ([702e17d](https://github.com/Canner/WrenAI/commit/702e17d62da4fde12056728801a0bce491052c36))
+* **wren:** multiline subquery wrap to prevent trailing comment swallowing ([#2733](https://github.com/Canner/WrenAI/issues/2733)) ([#2754](https://github.com/Canner/WrenAI/issues/2754)) ([eab640c](https://github.com/Canner/WrenAI/commit/eab640c67c91ab6fd237dc19629c22f77497d89b))
+* **wren:** strip semicolon before trailing comment in strip_trailing_semicolon ([#2752](https://github.com/Canner/WrenAI/issues/2752)) ([4d55c52](https://github.com/Canner/WrenAI/commit/4d55c52a223c641dacb2fbd3c6a6cfcdb37d9a85))
+* **wren:** write project files as UTF-8 so init/build work on Windows ([#2770](https://github.com/Canner/WrenAI/issues/2770)) ([8d254db](https://github.com/Canner/WrenAI/commit/8d254db2aa8a26178d4afa8d1e65f913a8619a2a))
+
+
+### Documentation
+
+* **wren:** correct CLI commands and connector modules in CLAUDE.md ([#2759](https://github.com/Canner/WrenAI/issues/2759)) ([369eee1](https://github.com/Canner/WrenAI/commit/369eee1579c2c442d4810a1ca3e93908ff16d85c))
+
 ## [0.15.0](https://github.com/Canner/WrenAI/compare/wren-v0.14.0...wren-v0.15.0) (2026-09-16)
 
 
