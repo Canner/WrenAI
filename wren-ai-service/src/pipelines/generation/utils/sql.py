@@ -364,11 +364,11 @@ WHERE
 _DEFAULT_JSON_FIELD_INSTRUCTIONS = """
 #### Instructions for JSON related functions ####
 - ONLY USE JSON_QUERY for querying fields if "json_type":"JSON" is identified in the columns comment, NOT the deprecated JSON_EXTRACT_SCALAR function.
-    - DON'T USE CAST for JSON fields, ONLY USE the following funtions:
-      - LAX_BOOL for boolean fields
-      - LAX_FLOAT64 for double and float fields
-      - LAX_INT64 for bigint fields
-      - LAX_STRING for varchar fields
+    - USE CAST to convert JSON_QUERY results to the appropriate type:
+      - CAST(... AS BOOLEAN) for boolean fields
+      - CAST(... AS DOUBLE) for double and float fields
+      - CAST(... AS BIGINT) for bigint fields
+      - CAST(... AS VARCHAR) for varchar fields
     - For Example:
       DATA SCHEMA:
         `/* {"alias":"users","description":"A model representing the users data."} */
@@ -377,7 +377,7 @@ _DEFAULT_JSON_FIELD_INSTRUCTIONS = """
             address JSON
         )`
       To get the city of address in user table use SQL:
-      `SELECT LAX_STRING(JSON_QUERY(u.address, '$.city')) FROM user as u`
+      `SELECT CAST(JSON_QUERY(u.address, '$.city') AS VARCHAR) FROM user as u`
 - ONLY USE JSON_QUERY_ARRAY for querying "json_type":"JSON_ARRAY" is identified in the comment of the column, NOT the deprecated JSON_EXTRACT_ARRAY.
     - USE UNNEST to analysis each item individually in the ARRAY. YOU MUST SELECT FROM the parent table ahead of the UNNEST ARRAY.
     - The alias of the UNNEST(ARRAY) should be in the format `unnest_table_alias(individual_item_alias)`
@@ -391,11 +391,11 @@ _DEFAULT_JSON_FIELD_INSTRUCTIONS = """
             elements JSON
         )`
         To get the number of elements in my_table table use SQL:
-        `SELECT LAX_INT64(JSON_QUERY(element, '$.number')) FROM my_table as t, UNNEST(JSON_QUERY_ARRAY(elements)) AS my_unnested_table(element) WHERE LAX_FLOAT64(JSON_QUERY(element, '$.value')) > 3.5`
+        `SELECT CAST(JSON_QUERY(element, '$.number') AS BIGINT) FROM my_table as t, UNNEST(JSON_QUERY_ARRAY(elements)) AS my_unnested_table(element) WHERE CAST(JSON_QUERY(element, '$.value') AS DOUBLE) > 3.5`
     - To JOIN ON the fields inside UNNEST(ARRAY), YOU MUST SELECT FROM the parent table ahead of the UNNEST syntax, and the alias of the UNNEST(ARRAY) SHOULD BE IN THE FORMAT unnest_table_alias(individual_item_alias)
       - For Example: `SELECT p.column_1, j.column_2 FROM parent_table AS p, join_table AS j JOIN UNNEST(p.array_column) AS unnested(array_item) ON j.id = array_item.id`
 - DON'T USE JSON_QUERY and JSON_QUERY_ARRAY when "json_type":"".
-- DON'T USE LAX_BOOL, LAX_FLOAT64, LAX_INT64, LAX_STRING when "json_type":"".
+- DON'T USE LAX_BOOL, LAX_FLOAT64, LAX_INT64, LAX_STRING. Use CAST instead.
 """
 
 sql_samples_instructions = """

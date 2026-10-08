@@ -2,6 +2,7 @@ type: llm
 provider: litellm_llm
 timeout: 120
 models:
+  # --- OpenAI models ---
   - alias: default
     model: gpt-4.1-nano-2025-04-14
     context_window_size: 1000000
@@ -45,6 +46,18 @@ models:
       n: 1
       seed: 0
       reasoning_effort: minimal
+  # --- Ollama hosted models (uncomment to use) ---
+  # Requires: OLLAMA_API_KEY in .env
+  # Note: Ollama does not support /v1/embeddings, use a separate embedder (e.g. Gemini)
+  # - alias: default
+  #   model: openai/gpt-oss:120b-cloud
+  #   api_base: https://ollama.com/v1
+  #   api_key_name: OLLAMA_API_KEY
+  #   context_window_size: 131072
+  #   kwargs:
+  #     max_completion_tokens: 32768
+  #     n: 1
+  #     temperature: 0.0
 ---
 type: embedder
 provider: litellm_embedder
@@ -52,6 +65,12 @@ models:
   - model: text-embedding-3-large
     alias: default
     timeout: 120
+  # --- Gemini embedder (for use with Ollama LLM) ---
+  # Requires: GEMINI_API_KEY in .env
+  # Note: set embedding_model_dim below to 3072 to match
+  # - model: gemini/gemini-embedding-001
+  #   alias: default
+  #   timeout: 120
 
 ---
 type: engine
