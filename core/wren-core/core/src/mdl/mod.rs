@@ -1037,6 +1037,40 @@ mod test {
         Ok(())
     }
 
+    /// A derived column whose auto-generated name embeds the MDL catalog/schema
+    /// prefix (a string literal) must still resolve. The analyzer used to strip
+    /// that prefix with a substring replace on the column *name*, so the outer
+    /// reference no longer matched the input schema.
+    #[tokio::test]
+    async fn test_derived_literal_column_keeps_catalog_prefix_in_name() -> Result<()> {
+        let test_data: PathBuf =
+            [env!("CARGO_MANIFEST_DIR"), "tests", "data", "mdl.json"]
+                .iter()
+                .collect();
+        let mdl_json = fs::read_to_string(test_data.as_path())?;
+        let mdl = match serde_json::from_str::<Manifest>(&mdl_json) {
+            Ok(mdl) => mdl,
+            Err(e) => return not_impl_err!("Failed to parse mdl json: {}", e),
+        };
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            mdl,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let ctx = create_wren_ctx(None, analyzed_mdl.wren_mdl().data_source().as_ref());
+        let actual = mdl::transform_sql_with_ctx(
+            &ctx,
+            Arc::clone(&analyzed_mdl),
+            &[],
+            Arc::new(HashMap::new()),
+            "SELECT * FROM (SELECT 'test.test.x' FROM test.test.customer) t",
+        )
+        .await?;
+        assert_sql_valid_executable(&actual).await?;
+        assert_snapshot!(actual, @r#"SELECT t."Utf8(""test.test.x"")" FROM (SELECT 'test.test.x' FROM (SELECT __source.c_custkey AS c_custkey, __source.c_name AS c_name FROM customer AS __source) AS customer) AS t"#);
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_uppercase_catalog_schema() -> Result<()> {
         let manifest = ManifestBuilder::new()

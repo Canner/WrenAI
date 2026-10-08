@@ -1036,9 +1036,9 @@ impl ModelAnalyzeRule {
                 if let Some(relation) = relation {
                     Ok(self.rewrite_column_qualifier(relation, name, alias_model))
                 } else {
-                    let name = name.replace(
+                    let name = Self::strip_catalog_prefix_outside_quotes(
+                        &name,
                         self.analyzed_wren_mdl.wren_mdl().catalog_schema_prefix(),
-                        "",
                     );
                     let ident = ident(&name);
                     Ok(Transformed::yes(ident))
@@ -1065,6 +1065,37 @@ impl ModelAnalyzeRule {
         }
     }
 
+
+/// Drop `prefix` from `name` only outside double quotes.
+/// View column names embed the MDL prefix as a qualifier (`sum(wrenai.public.X)`),
+/// while a derived literal's display name can contain the same text inside quotes
+/// (`Utf8("test.test.x")`). Stripping inside quotes makes the outer reference miss
+/// the input schema.
+fn strip_catalog_prefix_outside_quotes(name: &str, prefix: &str) -> String {
+    if prefix.is_empty() || !name.contains(prefix) {
+        return name.to_string();
+    }
+    let mut out = String::with_capacity(name.len());
+    let mut in_quotes = false;
+    let mut rest = name;
+    while !rest.is_empty() {
+        if rest.starts_with('"') {
+            in_quotes = !in_quotes;
+            out.push('"');
+            rest = &rest[1..];
+            continue;
+        }
+        if !in_quotes && rest.starts_with(prefix) {
+            rest = &rest[prefix.len()..];
+            continue;
+        }
+        let ch = rest.chars().next().unwrap();
+        out.push(ch);
+        rest = &rest[ch.len_utf8()..];
+    }
+    out
+}
+
     fn rewrite_column_qualifier(
         &self,
         relation: TableReference,
@@ -1084,10 +1115,14 @@ impl ModelAnalyzeRule {
             {
                 Transformed::yes(col(format!("{}.{}", alias_model, quoted(&name))))
             } else {
-                // handle Wren View
-                let name = name.replace(
+                // Wren View output columns drop the MDL catalog/schema prefix
+                // from qualifiers inside the name (`sum(wrenai.public.X)` ->
+                // `sum(X)`). A blind substring replace also hits that prefix
+                // inside a quoted literal (`Utf8("test.test.x")`), so only
+                // strip occurrences outside quotes.
+                let name = Self::strip_catalog_prefix_outside_quotes(
+                    &name,
                     self.analyzed_wren_mdl.wren_mdl().catalog_schema_prefix(),
-                    "",
                 );
                 Transformed::yes(Expr::Column(Column::new(
                     Some(TableReference::bare(relation.table())),
