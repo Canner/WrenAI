@@ -153,11 +153,17 @@ class ProjectFile:
     content: str  # file content (YAML or SQL or Markdown)
 
 
-def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
+def convert_mdl_to_project(
+    mdl_json: dict, *, default_name: str | None = None
+) -> list[ProjectFile]:
     """Convert an MDL JSON manifest to a list of project files.
 
     Args:
         mdl_json: Parsed MDL JSON (camelCase keys).
+        default_name: Project name to write when the MDL carries neither
+            ``name`` nor ``projectName``. The MDL schema has no project name
+            (``wren context build`` does not emit one), but ``wren_project.yml``
+            requires it.
 
     Returns:
         List of ProjectFile objects, each representing a file to write.
@@ -178,6 +184,8 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
         project_config["name"] = mdl_json["name"]
     elif "projectName" in mdl_json:
         project_config["name"] = mdl_json["projectName"]
+    elif default_name:
+        project_config["name"] = default_name
     if "catalog" in mdl_json:
         project_config["catalog"] = mdl_json["catalog"]
     if "schema" in mdl_json:
