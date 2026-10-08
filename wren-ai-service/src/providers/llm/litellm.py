@@ -104,53 +104,90 @@ class LitellmLLMProvider(LLMProvider):
                 **(generation_kwargs or {}),
             }
 
+            import json as _json
+
+            _expected_keys = set()
+            _rf = generation_kwargs.get("response_format")
+            if isinstance(_rf, dict) and _rf.get("type") == "json_schema":
+                _schema = _rf.get("json_schema", {}).get("schema", {})
+                _expected_keys = set(_schema.get("required", []))
+
+            if self._api_base and "ollama" in self._api_base:
+                generation_kwargs.pop("response_format", None)
+
             allowed_openai_params = generation_kwargs.get(
                 "allowed_openai_params", []
             ) + (["reasoning_effort"] if self._model.startswith("gpt-5") else [])
 
-            if self._has_fallbacks:
-                completion = await self._router.acompletion(
-                    model=self._model,
-                    messages=openai_formatted_messages,
-                    stream=streaming_callback is not None,
-                    allowed_openai_params=allowed_openai_params,
-                    mock_testing_fallbacks=self._enable_fallback_testing,
-                    **generation_kwargs,
-                )
-            else:
-                completion = await acompletion(
-                    model=self._model,
-                    api_key=self._api_key,
-                    api_base=self._api_base,
-                    api_version=self._api_version,
-                    timeout=self._timeout,
-                    messages=openai_formatted_messages,
-                    stream=streaming_callback is not None,
-                    allowed_openai_params=allowed_openai_params,
-                    **generation_kwargs,
-                )
-
+            _max_content_retries = 3
             completions: List[ChatMessage] = []
-            if streaming_callback is not None:
-                num_responses = generation_kwargs.pop("n", 1)
-                if num_responses > 1:
-                    raise ValueError(
-                        "Cannot stream multiple responses, please set n=1."
+            for _content_attempt in range(_max_content_retries):
+                if self._has_fallbacks:
+                    completion = await self._router.acompletion(
+                        model=self._model,
+                        messages=openai_formatted_messages,
+                        stream=streaming_callback is not None,
+                        allowed_openai_params=allowed_openai_params,
+                        mock_testing_fallbacks=self._enable_fallback_testing,
+                        **generation_kwargs,
                     )
-                chunks: List[StreamingChunk] = []
+                else:
+                    completion = await acompletion(
+                        model=self._model,
+                        api_key=self._api_key,
+                        api_base=self._api_base,
+                        api_version=self._api_version,
+                        timeout=self._timeout,
+                        messages=openai_formatted_messages,
+                        stream=streaming_callback is not None,
+                        allowed_openai_params=allowed_openai_params,
+                        **generation_kwargs,
+                    )
 
-                async for chunk in completion:
-                    if chunk.choices and streaming_callback:
-                        chunk_delta: StreamingChunk = build_chunk(chunk)
-                        chunks.append(chunk_delta)
-                        streaming_callback(
-                            chunk_delta, query_id
-                        )  # invoke callback with the chunk_delta
-                completions = [connect_chunks(chunk, chunks)]
-            else:
-                completions = [
-                    build_message(completion, choice) for choice in completion.choices
-                ]
+                if streaming_callback is not None:
+                    num_responses = generation_kwargs.pop("n", 1)
+                    if num_responses > 1:
+                        raise ValueError(
+                            "Cannot stream multiple responses, please set n=1."
+                        )
+                    chunks: List[StreamingChunk] = []
+
+                    async for chunk in completion:
+                        if chunk.choices and streaming_callback:
+                            chunk_delta: StreamingChunk = build_chunk(chunk)
+                            chunks.append(chunk_delta)
+                            streaming_callback(
+                                chunk_delta, query_id
+                            )
+                    completions = [connect_chunks(chunk, chunks)]
+                else:
+                    completions = [
+                        build_message(completion, choice) for choice in completion.choices
+                    ]
+
+                _all_valid = True
+                for _msg in completions:
+                    if _msg.meta:
+                        try:
+                            _msg.meta = _json.loads(_json.dumps(_msg.meta, default=str))
+                        except (TypeError, ValueError):
+                            _msg.meta = _json.loads(_json.dumps(_msg.meta, default=str, ignore_nan=True))
+                    _extracted = extract_braces_content(_msg.content or "")
+                    if not _extracted.strip():
+                        _all_valid = False
+                        break
+                    try:
+                        _parsed = _json.loads(_extracted)
+                    except (ValueError, TypeError):
+                        _all_valid = False
+                        break
+                    if _expected_keys and isinstance(_parsed, dict):
+                        if not _expected_keys.issubset(_parsed.keys()):
+                            _all_valid = False
+                            break
+
+                if _all_valid or _content_attempt == _max_content_retries - 1:
+                    break
 
             # before returning, do post-processing of the completions
             for response in completions:

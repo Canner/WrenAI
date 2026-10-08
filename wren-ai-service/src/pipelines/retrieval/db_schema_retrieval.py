@@ -346,9 +346,20 @@ def construct_retrieval_results(
     dbschema_retrieval: list[Document],
 ) -> dict[str, Any]:
     if filter_columns_in_tables:
-        columns_and_tables_needed = orjson.loads(
-            filter_columns_in_tables["replies"][0]
-        )["results"]
+        try:
+            columns_and_tables_needed = orjson.loads(
+                filter_columns_in_tables["replies"][0]
+            )["results"]
+        except (KeyError, orjson.JSONDecodeError, TypeError):
+            retrieval_results = check_using_db_schemas_without_pruning["db_schemas"]
+            return {
+                "retrieval_results": retrieval_results,
+                "has_calculated_field": check_using_db_schemas_without_pruning[
+                    "has_calculated_field"
+                ],
+                "has_metric": check_using_db_schemas_without_pruning["has_metric"],
+                "has_json_field": check_using_db_schemas_without_pruning["has_json_field"],
+            }
 
         # we need to change the below code to match the new schema of structured output
         # the objective of this loop is to change the structure of JSON to match the needed format
