@@ -713,6 +713,36 @@ def test_cli_validate_from_osi_surfaces_warnings():
     assert "column_types" in result.output  # snippet emitted
 
 
+def test_cli_validate_from_osi_summary_counts_errors(tmp_path: Path):
+    osi_file = tmp_path / "osi.yaml"
+    osi_file.write_text(
+        'version: "0.2.0"\n'
+        "semantic_model:\n"
+        "  - name: shop\n"
+        "    datasets:\n"
+        "      - name: orders\n"
+        "        source: shop.public.orders\n"
+        "        fields:\n"
+        "          - name: order_id\n"
+        "            expression: order_id\n"
+        "      - source: shop.public.customers\n"
+    )
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "validate",
+            "--from-osi",
+            str(osi_file),
+            "--data-source",
+            "postgres",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "dataset missing 'name'" in result.output
+    assert "1 warning(s), 1 error(s)." in result.output
+
+
 def test_cli_validate_from_osi_strict_fails_on_warning():
     result = runner.invoke(
         app,

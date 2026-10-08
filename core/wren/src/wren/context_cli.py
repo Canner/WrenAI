@@ -543,7 +543,9 @@ def validate(
             typer.echo(f"  \u2717 {msg}", err=True)
 
     all_warnings: list[str] = [str(w) for w in struct_warnings] + list(sem_warnings)
-    _print_warnings(all_warnings, verbose=verbose)
+    _print_warnings(
+        all_warnings, verbose=verbose, errors=len(struct_hard) + len(sem_errors)
+    )
 
     # ── Exit logic ──────────────────────────────────────────────────────────────────
     has_hard_error = bool(struct_hard or sem_errors)
@@ -576,7 +578,7 @@ def validate(
         )
 
 
-def _print_warnings(warnings: list[str], *, verbose: bool) -> None:
+def _print_warnings(warnings: list[str], *, verbose: bool, errors: int = 0) -> None:
     """Render warnings: every line below the threshold, grouped summary above.
 
     Agents and humans both read the first "Warnings:" line as a signal
@@ -593,7 +595,7 @@ def _print_warnings(warnings: list[str], *, verbose: bool) -> None:
         typer.echo("\nWarnings:")
         for msg in warnings:
             typer.echo(f"  \u26a0 {msg}")
-        typer.echo(f"\n{total} warning(s), 0 errors.")
+        typer.echo(f"\n{total} warning(s), {errors} error(s).")
         return
 
     # Bucket by warning *category* — the text after the last colon
@@ -1165,7 +1167,7 @@ def _validate_from_osi(
         for e in hard:
             typer.echo(f"  ✗ {e}", err=True)
 
-    _print_warnings(warns, verbose=verbose)
+    _print_warnings(warns, verbose=verbose, errors=len(hard))
 
     if hard or (strict and warns):
         raise typer.Exit(1)
