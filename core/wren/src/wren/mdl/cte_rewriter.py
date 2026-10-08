@@ -26,6 +26,7 @@ from sqlglot.schema import MappingSchema
 
 # Ensure the Wren dialect is registered with sqlglot on import.
 import wren.mdl.wren_dialect as _wren_dialect  # noqa: F401
+from wren.mdl import clickhouse_compat
 from wren.model.data_source import DataSource
 from wren.model.error import ErrorCode, ErrorPhase, WrenError
 from wren.policy import resolve_model_name
@@ -304,19 +305,37 @@ class CTERewriter:
                 if (t.name or "").lower() not in user_cte_names
             ]
             if not base_tables:
-                return ast.sql(dialect=self.dialect, identify=identify)
+                return self._render(ast, identify)
             # Otherwise the query references a table that is not an MDL model
             # or view. Fall back to the legacy whole-query transform (so a
             # broken/stale reference still surfaces an error), or raise when
             # ``fallback=False`` so tests catch a rewriter miss.
             if self.fallback:
                 wren_sql = self.session_context.transform_sql(sql)
-                return sqlglot.transpile(wren_sql, read="wren", write=self.dialect)[0]
+                if self.dialect != "clickhouse":
+                    return sqlglot.transpile(wren_sql, read="wren", write=self.dialect)[
+                        0
+                    ]
+                return self._render(parse_one(wren_sql, dialect="wren"), identify)
             raise ValueError(f"No model or view references found in SQL: {sql}")
 
         model_ctes = self._build_model_ctes(used_columns, user_table_refs, col_quoting)
         view_ctes = self._build_view_ctes(view_refs)
         self._inject_ctes(ast, model_ctes + view_ctes)
+        return self._render(ast, identify)
+
+    def _render(self, ast: exp.Expression, identify: bool) -> str:
+        """Generate the target-dialect SQL for *ast*.
+
+        Queries are dialect-neutral SQL (``usage/references/wren-sql.md``), and a
+        few neutral constructs are emitted verbatim by sqlglot's ClickHouse
+        generator although ClickHouse rejects them or answers them differently
+        from the SQL meaning; ``clickhouse_compat`` translates those. This is the
+        one exception to "the user's SQL is never rewritten" above: it touches
+        only those constructs, never a query's structure or its column binding.
+        """
+        if self.dialect == "clickhouse":
+            clickhouse_compat.translate(ast)
         return ast.sql(dialect=self.dialect, identify=identify)
 
     # ------------------------------------------------------------------
