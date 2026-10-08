@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.4.0...wren-semantic-core-v0.5.0) (2026-10-08)
+
+
+### Features
+
+* **core:** support pluggable access control providers ([#2749](https://github.com/Canner/WrenAI/issues/2749)) ([f4bfb20](https://github.com/Canner/WrenAI/commit/f4bfb208f9bbd965967278647c4b987b94aded9f))
+
+
+### Bug Fixes
+
+* **core:** preserve string literals when removing MDL qualifiers ([#2762](https://github.com/Canner/WrenAI/issues/2762)) ([7b74af1](https://github.com/Canner/WrenAI/commit/7b74af177ea9a0ad387175dd7849ea7ad30c73da))
+
 ## [0.4.0](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.3.2...wren-semantic-core-v0.4.0) (2026-09-09)
 
 
