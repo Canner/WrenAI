@@ -71,7 +71,7 @@ Useful options:
 | `--name` | Destination Wren profile name |
 | `--no-activate` | Save the profile without making it active |
 
-Supported adapters include `postgres`, `bigquery`, `snowflake`, `databricks`, `trino`, `clickhouse`, `duckdb`, `mysql`, `redshift`, `spark`, `athena`, `mssql`, and `doris`.
+Supported adapters include `postgres`, `bigquery`, `snowflake`, `databricks`, `trino`, `clickhouse`, `duckdb`, `mysql`, `redshift`, `spark`, `athena`, `mssql`, `doris`, and `starrocks`.
 
 ## Import the dbt Project
 

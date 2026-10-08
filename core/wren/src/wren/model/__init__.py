@@ -152,6 +152,10 @@ class DorisConnectionInfo(BaseConnectionInfo):
     kwargs: dict[str, str] | None = Field(default=None)
 
 
+class StarRocksConnectionInfo(DorisConnectionInfo):
+    """StarRocks speaks the MySQL wire protocol (FE query port, 9030 by default)."""
+
+
 class PostgresConnectionInfo(BaseConnectionInfo):
     host: str = Field(examples=["localhost"])
     port: StrPort = Field(examples=["5432"])
@@ -307,6 +311,7 @@ ConnectionInfo = (
     | MSSqlConnectionInfo
     | MySqlConnectionInfo
     | DorisConnectionInfo
+    | StarRocksConnectionInfo
     | OracleConnectionInfo
     | PostgresConnectionInfo
     | RedshiftConnectionInfo

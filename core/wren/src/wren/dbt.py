@@ -54,6 +54,7 @@ DBT_ADAPTER_TO_WREN_DATASOURCE = {
     "snowflake": "snowflake",
     "spark": "spark",
     "sqlserver": "mssql",
+    "starrocks": "starrocks",
     "trino": "trino",
 }
 
@@ -471,6 +472,21 @@ def convert_dbt_target_to_wren_profile(target: DbtTarget) -> dict[str, Any]:
                 "port": str(output.get("port", "5432")),
                 "database": str(_require_output_field(output, "dbname", "database")),
                 "user": str(_require_output_field(output, "user")),
+                "password": str(output["password"]) if output.get("password") else None,
+            },
+        )
+
+    if datasource == "starrocks":
+        # dbt-starrocks names the login ``username`` and the database ``schema``.
+        return _build_wren_profile(
+            "starrocks",
+            {
+                "host": str(_require_output_field(output, "host")),
+                "port": str(output.get("port", "9030")),
+                "database": str(
+                    _require_output_field(output, "schema", "database", "dbname")
+                ),
+                "user": str(_require_output_field(output, "username", "user")),
                 "password": str(output["password"]) if output.get("password") else None,
             },
         )

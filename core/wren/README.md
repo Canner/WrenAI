@@ -270,6 +270,7 @@ dependencies change, re-run an install recipe first.
 | `just test-duckdb` | DuckDB connector tests | No |
 | `just test-postgres` | PostgreSQL connector tests | Yes |
 | `just test-mysql` | MySQL connector tests | Yes |
+| `just test-starrocks` | StarRocks connector tests | Yes |
 | `just test` | All tests | Yes |
 
 Profile web tests (`test_profile_web.py`) require `wrenai[ui]`:
