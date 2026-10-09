@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import base64
 import json
+from collections.abc import Iterator
 
 import sqlglot
 from sqlglot import exp, parse_one
@@ -22,6 +23,7 @@ from sqlglot.dialects.dialect import Dialect, NormalizationStrategy
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import qualify_columns
 from sqlglot.optimizer.qualify_tables import qualify_tables
+from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.schema import MappingSchema
 
 # Ensure the Wren dialect is registered with sqlglot on import.
@@ -369,18 +371,19 @@ class CTERewriter:
         # identifiers are case-sensitive at the storage layer — capturing the
         # alias-to-model map pre-normalize keeps the right model bound.
         alias_to_model, user_table_refs = self._build_alias_map(copy, user_cte_names)
+        scope_aliases = self._build_scope_alias_maps(copy, user_cte_names)
 
         # Detect models referenced via SELECT * BEFORE qualify_columns
         # expands the star.  These will use SELECT * in transform_sql so
         # that wren-core controls column visibility (CLAC).
-        star_models = self._detect_star_models(copy, alias_to_model)
+        star_models = self._detect_star_models(copy, scope_aliases)
 
         if self._case_sensitive_columns:
             # Columns were already canonicalized + force-quoted to manifest case
             # by ``_normalize_model_column_case``; resolve them case-sensitively
             # against the ``normalize=False`` schema with no folding.
             return self._collect_columns_case_sensitive(
-                copy, alias_to_model, user_table_refs, star_models
+                copy, scope_aliases, user_table_refs, star_models
             )
 
         # Unquote model table refs on the collection-only copy so a quoted
@@ -445,23 +448,15 @@ class CTERewriter:
         # Ensure every referenced model appears in the result, even if no
         # specific columns are referenced (e.g. SELECT COUNT(*) FROM model).
         # Use dict as ordered set to preserve insertion order and deduplicate.
-        used: dict[str, dict[str, None]] = {m: {} for m in alias_to_model.values()}
-        # Lowercase index for column.table lookups — column qualifier may have
-        # been normalized (lowercased) by qualify_columns even though we built
-        # the alias map from the pre-normalize AST.
-        alias_lookup = {k.lower(): v for k, v in alias_to_model.items()}
+        used: dict[str, dict[str, None]] = {
+            m: {} for aliases in scope_aliases.values() for m in aliases.values()
+        }
         # Quoting recorded *per resolved model* (``{model: {col_lower: quoted}}``)
         # so a quoted reference to one source can't flip another model's CTE
         # alias. Quoted-wins within a model. A column referenced only via a
         # non-model source (user CTE, external table) is never attributed here.
         col_quoting: dict[str, dict[str, bool]] = {}
-        for col in qualified.find_all(exp.Column):
-            table_ref = col.table
-            if not table_ref:
-                continue
-            model_name = alias_lookup.get(table_ref.lower())
-            if not model_name:
-                continue
+        for col, model_name in self._scoped_model_columns(qualified, scope_aliases):
             used[model_name][col.name] = None
             quoted = quoting_by_id.get(id(col))
             if quoted is None:
@@ -482,7 +477,7 @@ class CTERewriter:
     def _collect_columns_case_sensitive(
         self,
         copy: exp.Expression,
-        alias_to_model: dict[str, str],
+        scope_aliases: dict[int, dict[str, str]],
         user_table_refs: dict[str, tuple[str, bool]],
         star_models: set[str],
     ) -> tuple[
@@ -499,17 +494,15 @@ class CTERewriter:
         model CTE exposes *every* column quoted in manifest case (the default in
         ``_alias_projection_to_user_quoting``), matching the force-quoted refs.
         """
-        alias_lower = {k.lower(): v for k, v in alias_to_model.items()}
-
         # Rewrite each model table ref to its manifest-case name (quoted) so it
         # matches the manifest-case schema key without folding. Only the table
         # *name* is touched; SQL aliases are left intact.
-        for tbl in copy.find_all(exp.Table):
-            ident = tbl.this
-            if isinstance(ident, exp.Identifier):
-                model_name = alias_lower.get(ident.name.lower())
-                if model_name:
-                    tbl.set("this", exp.to_identifier(model_name, quoted=True))
+        for scope in traverse_scope(copy):
+            aliases = scope_aliases[id(scope.expression)]
+            for alias, source in scope.sources.items():
+                model_name = aliases.get(alias.lower())
+                if model_name is not None and isinstance(source, exp.Table):
+                    source.set("this", exp.to_identifier(model_name, quoted=True))
 
         qualified = qualify_columns(
             copy,
@@ -518,20 +511,58 @@ class CTERewriter:
             allow_partial_qualification=True,
         )
 
-        used: dict[str, dict[str, None]] = {m: {} for m in alias_to_model.values()}
-        for col in qualified.find_all(exp.Column):
-            table_ref = col.table
-            if not table_ref:
-                continue
-            model_name = alias_lower.get(table_ref.lower())
-            if model_name:
-                used[model_name][col.name] = None
+        used: dict[str, dict[str, None]] = {
+            m: {} for aliases in scope_aliases.values() for m in aliases.values()
+        }
+        for col, model_name in self._scoped_model_columns(qualified, scope_aliases):
+            used[model_name][col.name] = None
 
         return (
             {m: None if m in star_models else list(cols) for m, cols in used.items()},
             user_table_refs,
             {},
         )
+
+    def _build_scope_alias_maps(
+        self, ast: exp.Expression, user_cte_names: set[str]
+    ) -> dict[int, dict[str, str]]:
+        """Keep aliases local to each SELECT, including set-operation branches.
+
+        Capture canonical model names before identifier normalization. Derived
+        tables and CTE references resolve to Scope objects rather than Tables,
+        so their exposed columns must not be attributed to an unrelated model.
+        """
+        maps: dict[int, dict[str, str]] = {}
+        for scope in traverse_scope(ast):
+            aliases: dict[str, str] = {}
+            for alias, source in scope.sources.items():
+                if not isinstance(source, exp.Table):
+                    continue
+                if source.name.lower() in user_cte_names:
+                    continue
+                quoted = (
+                    bool(source.this.quoted)
+                    if isinstance(source.this, exp.Identifier)
+                    else False
+                )
+                model = resolve_model_name(source.name, quoted, self.model_dict)
+                if model is not None:
+                    aliases[alias.lower()] = model
+            maps[id(scope.expression)] = aliases
+        return maps
+
+    @staticmethod
+    def _scoped_model_columns(
+        ast: exp.Expression, scope_aliases: dict[int, dict[str, str]]
+    ) -> Iterator[tuple[exp.Column, str]]:
+        for scope in traverse_scope(ast):
+            aliases = scope_aliases[id(scope.expression)]
+            # scope.columns also includes references from correlated subqueries
+            # to this scope; local aliases in those subqueries take precedence.
+            for column in scope.columns:
+                model = aliases.get(column.table.lower())
+                if model is not None:
+                    yield column, model
 
     def _build_alias_map(
         self, ast: exp.Expression, user_cte_names: set[str]
@@ -682,10 +713,11 @@ class CTERewriter:
         if not self._model_cols:
             return
 
-        alias_to_model, _ = self._build_alias_map(
-            qualify_tables(ast.copy(), dialect=self.dialect), user_cte_names
-        )
-        alias_to_model_lower = {a.lower(): m for a, m in alias_to_model.items()}
+        scope_aliases = self._build_scope_alias_maps(ast, user_cte_names)
+        column_models = {
+            id(col): model
+            for col, model in self._scoped_model_columns(ast, scope_aliases)
+        }
         has_user_ctes = bool(user_cte_names)
         cs = self._case_sensitive_columns
         # A SELECT-list output alias (``SELECT x AS yr ... ORDER BY yr``) parses
@@ -705,13 +737,13 @@ class CTERewriter:
                 continue
             table = col.table
             if table:
-                model_name = alias_to_model_lower.get(table.lower())
+                model_name = column_models.get(id(col))
                 if model_name is None:
                     # qualified by something that isn't a model (e.g. a user CTE)
                     continue
                 candidates = self._model_cols.get(model_name, [])
                 where = f"{table}"
-            elif has_user_ctes or not alias_to_model:
+            elif has_user_ctes or not any(scope_aliases.values()):
                 # Skip canonicalization (and the case-sensitive existence check)
                 # when the column can't be attributed to a model:
                 #   * user CTEs present → it could be a CTE column, and we can't
@@ -1079,54 +1111,34 @@ class CTERewriter:
     # ------------------------------------------------------------------
 
     def _detect_star_models(
-        self, ast: exp.Expression, alias_to_model: dict[str, str]
+        self, ast: exp.Expression, scope_aliases: dict[int, dict[str, str]]
     ) -> set[str]:
         """Detect models selected via ``*`` before column qualification.
 
-        A bare ``SELECT *`` marks all models; ``SELECT t.*`` marks only
-        the referenced model. Checks every top-level branch of a
-        UNION/INTERSECT/EXCEPT, not just the first, so a star anywhere in
-        the set operation still routes that model through wren-core's own
-        ``SELECT *`` (letting CLAC control column visibility) instead of an
-        explicit column list. *alias_to_model* is the case-aware mapping
-        produced by ``_build_alias_map``.
+        A bare ``SELECT *`` marks the models in its own scope;
+        ``SELECT t.*`` marks only the model bound to that scope's alias.
+        Inspect every SELECT, including nested queries and set-operation
+        branches, before qualification expands their stars.
         """
         star_models: set[str] = set()
 
-        for select in self._iter_top_level_selects(ast):
+        for scope in traverse_scope(ast):
+            select = scope.expression
+            if not isinstance(select, exp.Select):
+                continue
+            aliases = scope_aliases[id(select)]
             for sel_expr in select.expressions:
                 if isinstance(sel_expr, exp.Star):
-                    # Bare * marks all models
-                    star_models.update(alias_to_model.values())
+                    star_models.update(aliases.values())
                 elif isinstance(sel_expr, exp.Column) and isinstance(
                     sel_expr.this, exp.Star
                 ):
                     # table.* marks the specific model
                     table_ref = sel_expr.table
-                    if table_ref and table_ref in alias_to_model:
-                        star_models.add(alias_to_model[table_ref])
+                    if table_ref and table_ref.lower() in aliases:
+                        star_models.add(aliases[table_ref.lower()])
 
         return star_models
-
-    @classmethod
-    def _iter_top_level_selects(cls, node: exp.Expression) -> list[exp.Select]:
-        """Yield every top-level SELECT branch of a set-operation chain.
-
-        A plain query is one branch. Recurses through ``UNION``/``INTERSECT``/
-        ``EXCEPT`` (``exp.SetOperation.this``/``.expression``) and through a
-        parenthesized branch (``exp.Subquery``), but does not descend into a
-        branch's own nested subqueries: those are a separate alias_to_model
-        scope, resolved on their own recursive call in ``_collect_model_columns``.
-        """
-        if isinstance(node, exp.Select):
-            return [node]
-        if isinstance(node, exp.SetOperation):
-            return cls._iter_top_level_selects(node.this) + cls._iter_top_level_selects(
-                node.expression
-            )
-        if isinstance(node, exp.Subquery):
-            return cls._iter_top_level_selects(node.this)
-        return []
 
     @staticmethod
     def _collect_user_cte_names(ast: exp.Expression) -> set[str]:
