@@ -96,17 +96,13 @@ impl Dialect for WrenDialect {
         start_bound: &WindowFrameBound,
         end_bound: &WindowFrameBound,
     ) -> bool {
-        if matches!(start_bound, WindowFrameBound::Preceding(None))
-            && matches!(end_bound, WindowFrameBound::CurrentRow)
-        {
-            false
-        } else {
-            self.inner_dialect.window_func_support_window_frame(
-                func_name,
-                start_bound,
-                end_bound,
-            )
-        }
+        // Do not drop UNBOUNDED PRECEDING .. CURRENT ROW here. That bound pair
+        // is the default RANGE frame, but it is also a legal explicit ROWS or
+        // GROUPS frame. The unparser only passes bounds, so omitting the frame
+        // here silently changes ROWS into the engine's RANGE default (issue 2745).
+        // Default RANGE frames are stripped after unparse instead.
+        self.inner_dialect
+            .window_func_support_window_frame(func_name, start_bound, end_bound)
     }
 
     fn date_field_extract_style(&self) -> DateFieldExtractStyle {

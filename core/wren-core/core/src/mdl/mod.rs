@@ -618,12 +618,60 @@ pub async fn transform_sql_with_ctx_with_access_control(
                 }
                 std::ops::ControlFlow::<()>::Continue(())
             });
-            let sql = sql.to_string();
+            let sql = preserve_explicit_rows_frame(sql.to_string());
             info!("wren-core planned SQL: {sql}");
             Ok(sql)
         }
         Err(e) => Err(e),
     }
+}
+
+
+/// Drop the implicit RANGE frame the unparser now emits, but keep an explicit
+/// ROWS or GROUPS frame with the same bounds.
+///
+/// `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` is not the SQL default.
+/// Engines that omit the frame use RANGE, which includes peer rows and changes
+/// the result. See https://github.com/Canner/WrenAI/issues/2745.
+fn preserve_explicit_rows_frame(sql: String) -> String {
+    const NEEDLE: &str = "RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW";
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        // Never strip the frame text from a string literal or quoted identifier.
+        if matches!(bytes[i], b'\'' | b'"') {
+            let quote = bytes[i];
+            let start = i;
+            i += 1;
+            while i < bytes.len() {
+                if bytes[i] == quote {
+                    let doubled = i + 1 < bytes.len() && bytes[i + 1] == quote;
+                    i += if doubled { 2 } else { 1 };
+                    if !doubled {
+                        break;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            out.push_str(&sql[start..i]);
+            continue;
+        }
+        if sql[i..].starts_with(NEEDLE) {
+            let mut start = out.len();
+            while start > 0 && out.as_bytes()[start - 1].is_ascii_whitespace() {
+                start -= 1;
+            }
+            out.truncate(start);
+            i += NEEDLE.len();
+            continue;
+        }
+        let ch = sql[i..].chars().next().unwrap();
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
 }
 
 /// Try to check if the fail reason is a permission denied error.
@@ -4417,6 +4465,15 @@ mod test {
         assert_snapshot!(
             transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], Arc::clone(&headers), sql).await?,
             @"SELECT rank() OVER (PARTITION BY orders.o_custkey ORDER BY orders.o_orderdate ASC NULLS LAST) FROM (SELECT orders.o_custkey, orders.o_orderdate FROM (SELECT __source.o_custkey AS o_custkey, __source.o_orderdate AS o_orderdate FROM orders AS __source) AS orders) AS orders"
+        );
+
+        // Explicit ROWS UNBOUNDED PRECEDING .. CURRENT ROW must survive planning.
+        // Dropping it lets engines default to RANGE, which includes peer rows.
+        let sql = "SELECT sum(o_orderkey) OVER (ORDER BY o_custkey ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_sum FROM orders";
+        let planned = transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], Arc::clone(&headers), sql).await?;
+        assert!(
+            planned.contains("ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW"),
+            "explicit ROWS frame was dropped: {planned}"
         );
 
         // assert generate window frame if given
