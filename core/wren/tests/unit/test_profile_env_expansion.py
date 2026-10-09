@@ -48,6 +48,7 @@ def test_expands_simple_var(monkeypatch):
 
 
 def test_expands_inside_larger_string(monkeypatch):
+    """Expand each reference while preserving the surrounding connection URL."""
     monkeypatch.setenv("USER_NAME", "paul")
     monkeypatch.setenv("HOST_NAME", "db.local")
     assert expand_profile_secrets(
@@ -81,6 +82,7 @@ def test_double_dollar_escapes_to_literal():
 
 
 def test_mixed_escape_and_var(monkeypatch):
+    """Keep an escaped dollar literal while expanding the adjacent variable."""
     monkeypatch.setenv("X", "v")
     assert expand_profile_secrets({"k": "$${literal}-${X}"}) == {"k": "${literal}-v"}
 
@@ -107,6 +109,7 @@ def test_non_string_values_preserved(monkeypatch):
 
 
 def test_list_of_strings_expanded(monkeypatch):
+    """Resolve references in list values without changing their positions."""
     monkeypatch.setenv("A", "x")
     monkeypatch.setenv("B", "y")
     assert expand_profile_secrets({"names": ["${A}", "${B}"]}) == {"names": ["x", "y"]}
@@ -186,6 +189,7 @@ def test_explicit_projects_do_not_share_dotenv_values(tmp_path, monkeypatch):
 def test_selected_project_preserves_its_subdirectory_dotenv(
     tmp_path, monkeypatch, nested_project
 ):
+    """Honor a child .env only when its nearest project marker is the selected root."""
     monkeypatch.delenv("PROJECT_VAR", raising=False)
     monkeypatch.setattr(profile_mod, "_WREN_HOME", tmp_path / "home")
     (tmp_path / "wren_project.yml").write_text("name: selected\n", encoding="utf-8")

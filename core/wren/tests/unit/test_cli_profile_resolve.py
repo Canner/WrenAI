@@ -71,7 +71,7 @@ def test_query_uses_selected_projects_dotenv(
         args = [
             "query",
             "--sql",
-            "SELECT SUM(amount) AS total FROM orders",
+            "SELECT CAST(SUM(amount) AS BIGINT) AS total FROM orders",
             "--mdl",
             str(tmp_path / "selected" / "target" / "mdl.json"),
             "--output",
@@ -85,9 +85,12 @@ def test_query_uses_selected_projects_dotenv(
         totals = []
 
         def run_server(ctx, **kwargs):
+            """Check the selected DB through the real engine without MCP transport."""
             try:
-                rows = ctx.engine.query("SELECT SUM(amount) AS total FROM orders")
-                totals.append(str(rows.to_pylist()[0]["total"]))
+                rows = ctx.engine.query(
+                    "SELECT CAST(SUM(amount) AS BIGINT) AS total FROM orders"
+                )
+                totals.append(rows.to_pylist()[0]["total"])
             finally:
                 ctx.engine.close()
 
@@ -108,9 +111,9 @@ def test_query_uses_selected_projects_dotenv(
 
     assert result.exit_code == 0, result.output
     if command == "query":
-        assert json.loads(result.output) == {"total": "999"}
+        assert json.loads(result.output) == {"total": 999}
     else:
-        assert totals == ["999"]
+        assert totals == [999]
 
 
 @pytest.fixture(autouse=True)
@@ -123,6 +126,7 @@ def isolated_profiles(tmp_path, monkeypatch):
 
 
 def _write_project(project_dir: Path, **fields) -> Path:
+    """Write the project marker and a placeholder MDL for profile discovery."""
     project_dir.mkdir(parents=True, exist_ok=True)
     config = {
         "schema_version": 3,
