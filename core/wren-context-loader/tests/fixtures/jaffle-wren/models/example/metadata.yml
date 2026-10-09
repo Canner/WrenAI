@@ -1,0 +1,22 @@
+# Example model — replace with your actual table
+name: example
+# table_reference points to the ACTUAL database table location
+table_reference:
+  catalog: ""        # your database catalog (empty if N/A)
+  schema: public      # your database schema
+  table: example      # your database table name
+columns:
+  - name: id
+    type: INTEGER
+    is_calculated: false
+    not_null: true
+    is_primary_key: true
+    properties: {}
+  - name: name
+    type: VARCHAR
+    is_calculated: false
+    not_null: false
+    properties: {}
+primary_key: id
+cached: false
+properties: {}
