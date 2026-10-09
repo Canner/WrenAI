@@ -233,7 +233,9 @@ def _build_engine(
             # info to the engine.  Keep the stored profile untouched so
             # debug output never leaks real secrets.
             try:
-                prof_dict = expand_profile_secrets(prof_dict)
+                prof_dict = expand_profile_secrets(
+                    prof_dict, project_path=_discover_project_for_engine(mdl)
+                )
             except MissingSecretError as e:
                 typer.echo(f"Error: {e}", err=True)
                 raise typer.Exit(1)

@@ -119,14 +119,40 @@ def _expand_string(value: str, env: dict[str, str]) -> str:
         ) from exc
 
 
-def expand_profile_secrets(profile: Any) -> Any:
+def expand_profile_secrets(profile: Any, *, project_path: Path | None = None) -> Any:
     """Recursively resolve ``${VAR}`` references in a profile dict.
 
     Only string values are substituted; integers, booleans, lists, and
     nested dicts are preserved (lists and dicts are walked recursively so
     ``kwargs: {password: ${PG_PW}}`` works).  Use at connection time;
     never when writing profiles back to disk or printing debug output.
+
+    With ``project_path``, resolve that project's .env and the user-global
+    fallback, also honoring cwd's .env when cwd belongs to that project.
+    Shell variables take precedence. Keep those values local so resolving
+    another project in the same process cannot reuse its secrets.
     """
+    if project_path is not None:
+        from dotenv import dotenv_values  # noqa: PLC0415
+
+        project_root = project_path.resolve()
+        env_paths = [_WREN_HOME / ".env", project_root / ".env"]
+        cwd = Path.cwd().resolve()
+        for parent in [cwd, *cwd.parents]:
+            if (parent / "wren_project.yml").exists():
+                if parent == project_root and cwd != project_root:
+                    env_paths.append(cwd / ".env")
+                break
+        env = {}
+        for env_path in env_paths:
+            if env_path.is_file():
+                env.update(
+                    (key, value)
+                    for key, value in dotenv_values(env_path).items()
+                    if value is not None
+                )
+        env.update(os.environ)
+        return _expand_obj(profile, env)
     _ensure_env_loaded()
     return _expand_obj(profile, os.environ)
 
