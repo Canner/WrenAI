@@ -57,7 +57,7 @@ class DuckDBConnector(ConnectorABC):
 
         self._HTTPException = HTTPException
         self._IOException = IOException
-        # ponytail: one in-flight call per connector; use pooled connections
+        # One in-flight call per connector; use pooled connections
         # if parallel query throughput becomes necessary.
         self._connection_lock = Lock()
         self.connection = duckdb.connect()
