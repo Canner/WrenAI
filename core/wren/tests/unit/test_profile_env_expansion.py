@@ -8,6 +8,8 @@ the same on Windows, macOS, and Linux.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from wren import profile as profile_mod
@@ -46,11 +48,12 @@ def test_expands_simple_var(monkeypatch):
 
 
 def test_expands_inside_larger_string(monkeypatch):
+    """Expand each reference while preserving the surrounding connection URL."""
     monkeypatch.setenv("USER_NAME", "paul")
     monkeypatch.setenv("HOST_NAME", "db.local")
-    assert expand_profile_secrets({"url": "postgres://${USER_NAME}@${HOST_NAME}/x"}) == {
-        "url": "postgres://paul@db.local/x"
-    }
+    assert expand_profile_secrets(
+        {"url": "postgres://${USER_NAME}@${HOST_NAME}/x"}
+    ) == {"url": "postgres://paul@db.local/x"}
 
 
 def test_undefined_var_raises(monkeypatch):
@@ -79,10 +82,9 @@ def test_double_dollar_escapes_to_literal():
 
 
 def test_mixed_escape_and_var(monkeypatch):
+    """Keep an escaped dollar literal while expanding the adjacent variable."""
     monkeypatch.setenv("X", "v")
-    assert expand_profile_secrets({"k": "$${literal}-${X}"}) == {
-        "k": "${literal}-v"
-    }
+    assert expand_profile_secrets({"k": "$${literal}-${X}"}) == {"k": "${literal}-v"}
 
 
 # ── Nested structures ──────────────────────────────────────────────────────
@@ -107,11 +109,10 @@ def test_non_string_values_preserved(monkeypatch):
 
 
 def test_list_of_strings_expanded(monkeypatch):
+    """Resolve references in list values without changing their positions."""
     monkeypatch.setenv("A", "x")
     monkeypatch.setenv("B", "y")
-    assert expand_profile_secrets({"names": ["${A}", "${B}"]}) == {
-        "names": ["x", "y"]
-    }
+    assert expand_profile_secrets({"names": ["${A}", "${B}"]}) == {"names": ["x", "y"]}
 
 
 # ── .env file loading ──────────────────────────────────────────────────────
@@ -154,6 +155,55 @@ def test_project_root_env_loaded_when_cwd_is_subdir(tmp_path, monkeypatch):
     subdir.mkdir()
     monkeypatch.chdir(subdir)
     assert expand_profile_secrets({"k": "${PROJECT_VAR}"}) == {"k": "from_root"}
+
+
+def test_explicit_projects_do_not_share_dotenv_values(tmp_path, monkeypatch):
+    """Project selection bypasses cwd discovery and leaves the shell untouched."""
+    monkeypatch.delenv("PROJECT_VAR", raising=False)
+    monkeypatch.delenv("GLOBAL_ONLY", raising=False)
+    wren_home = tmp_path / "home"
+    wren_home.mkdir()
+    monkeypatch.setattr(profile_mod, "_WREN_HOME", wren_home)
+    (wren_home / ".env").write_text(
+        "PROJECT_VAR=global\nGLOBAL_ONLY=fallback\n", encoding="utf-8"
+    )
+    first, second = tmp_path / "first", tmp_path / "second"
+    for project, value in ((first, "first"), (second, "second")):
+        project.mkdir()
+        (project / ".env").write_text(f"PROJECT_VAR={value}\n", encoding="utf-8")
+    monkeypatch.chdir(first)
+    profile = {"password": "${PROJECT_VAR}", "host": "${GLOBAL_ONLY}"}
+
+    assert expand_profile_secrets(profile, project_path=second) == {
+        "password": "second",
+        "host": "fallback",
+    }
+    assert expand_profile_secrets(profile, project_path=first)["password"] == "first"
+    assert "PROJECT_VAR" not in os.environ
+    assert "GLOBAL_ONLY" not in os.environ
+    monkeypatch.setenv("PROJECT_VAR", "shell")
+    assert expand_profile_secrets(profile, project_path=second)["password"] == "shell"
+
+
+@pytest.mark.parametrize("nested_project", [False, True])
+def test_selected_project_preserves_its_subdirectory_dotenv(
+    tmp_path, monkeypatch, nested_project
+):
+    """Honor a child .env only when its nearest project marker is the selected root."""
+    monkeypatch.delenv("PROJECT_VAR", raising=False)
+    monkeypatch.setattr(profile_mod, "_WREN_HOME", tmp_path / "home")
+    (tmp_path / "wren_project.yml").write_text("name: selected\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("PROJECT_VAR=root\n", encoding="utf-8")
+    child = tmp_path / "child"
+    child.mkdir()
+    (child / ".env").write_text("PROJECT_VAR=child\n", encoding="utf-8")
+    if nested_project:
+        (child / "wren_project.yml").write_text("name: other\n", encoding="utf-8")
+    monkeypatch.chdir(child)
+
+    result = expand_profile_secrets({"k": "${PROJECT_VAR}"}, project_path=tmp_path)
+
+    assert result["k"] == ("root" if nested_project else "child")
 
 
 # ── Debug must not expand ──────────────────────────────────────────────────

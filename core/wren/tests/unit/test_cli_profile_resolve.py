@@ -4,13 +4,116 @@ has no `profile:` field (falls back to global active)."""
 
 from __future__ import annotations
 
+import json
+import sys
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 
+import duckdb
 import pytest
 import yaml
+from typer.testing import CliRunner
 
+import wren.cli as cli_mod
 import wren.profile as profile_mod
 from wren.cli import _resolve_engine_profile
+
+
+@pytest.mark.parametrize("working_directory", ["other_project", "selected", "outside"])
+@pytest.mark.parametrize("command", ["query", "serve"])
+def test_query_uses_selected_projects_dotenv(
+    tmp_path, monkeypatch, working_directory, command
+):
+    """An external --mdl must not combine its profile with another project's DB."""
+    monkeypatch.setattr(cli_mod, "_WREN_HOME", tmp_path)
+    monkeypatch.delenv("AUDIT_DB_ROOT", raising=False)
+    profile_mod._reset_env_loaded_for_tests()
+    profile_mod.add_profile(
+        "selected_profile",
+        {"datasource": "duckdb", "url": "${AUDIT_DB_ROOT}", "format": "duckdb"},
+    )
+    for name, amount in (("other_project", 111), ("selected", 999)):
+        project = tmp_path / name
+        mdl = _write_project(project, profile="selected_profile")
+        data_dir = project / "data"
+        data_dir.mkdir()
+        with duckdb.connect(str(data_dir / "warehouse.duckdb")) as connection:
+            connection.execute("CREATE TABLE orders(amount BIGINT)")
+            connection.execute("INSERT INTO orders VALUES (?)", [amount])
+        (project / ".env").write_text(
+            f"AUDIT_DB_ROOT={data_dir.as_posix()}\n", encoding="utf-8"
+        )
+        mdl.write_text(
+            json.dumps(
+                {
+                    "catalog": "wren",
+                    "schema": "public",
+                    "dataSource": "duckdb",
+                    "models": [
+                        {
+                            "name": "orders",
+                            "tableReference": {
+                                "catalog": "warehouse",
+                                "schema": "main",
+                                "table": "orders",
+                            },
+                            "columns": [{"name": "amount", "type": "BIGINT"}],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+    (tmp_path / "outside").mkdir()
+    monkeypatch.chdir(tmp_path / working_directory)
+
+    if command == "query":
+        args = [
+            "query",
+            "--sql",
+            "SELECT CAST(SUM(amount) AS BIGINT) AS total FROM orders",
+            "--mdl",
+            str(tmp_path / "selected" / "target" / "mdl.json"),
+            "--output",
+            "json",
+            "--quiet",
+        ]
+    else:
+        # Replace only the optional transport. Startup and DB execution are real.
+        server = ModuleType("wren.mcp_server")
+        server.ServeContext = SimpleNamespace
+        totals = []
+
+        def run_server(ctx, **kwargs):
+            """Check the selected DB through the real engine without MCP transport."""
+            try:
+                rows = ctx.engine.query(
+                    "SELECT CAST(SUM(amount) AS BIGINT) AS total FROM orders"
+                )
+                totals.append(rows.to_pylist()[0]["total"])
+            finally:
+                ctx.engine.close()
+
+        server.run_server = run_server
+        monkeypatch.setitem(sys.modules, "mcp", ModuleType("mcp"))
+        monkeypatch.setitem(sys.modules, "wren.mcp_server", server)
+        args = [
+            "serve",
+            "mcp",
+            "--project",
+            str(tmp_path / "selected"),
+            "--profile",
+            "selected_profile",
+            "--quiet",
+        ]
+
+    result = CliRunner().invoke(cli_mod.app, args)
+
+    assert result.exit_code == 0, result.output
+    if command == "query":
+        assert json.loads(result.output) == {"total": 999}
+    else:
+        assert totals == [999]
 
 
 @pytest.fixture(autouse=True)
@@ -23,6 +126,7 @@ def isolated_profiles(tmp_path, monkeypatch):
 
 
 def _write_project(project_dir: Path, **fields) -> Path:
+    """Write the project marker and a placeholder MDL for profile discovery."""
     project_dir.mkdir(parents=True, exist_ok=True)
     config = {
         "schema_version": 3,
@@ -57,9 +161,7 @@ def test_resolve_engine_profile_prefers_project_pin_when_mdl_given(
     assert prof["datasource"] == "postgres"
 
 
-def test_resolve_engine_profile_falls_back_to_active_when_no_pin(
-    tmp_path, monkeypatch
-):
+def test_resolve_engine_profile_falls_back_to_active_when_no_pin(tmp_path, monkeypatch):
     """No `profile:` field → falls back to global active."""
     profile_mod.add_profile("active_only", {"datasource": "duckdb"})
     mdl = _write_project(tmp_path / "myproj")  # no profile field
@@ -115,9 +217,7 @@ def test_resolve_engine_profile_raises_when_pinned_profile_missing(
         _resolve_engine_profile(str(mdl))
 
 
-def test_resolve_engine_profile_uses_cwd_pin_when_mdl_is_base64(
-    tmp_path, monkeypatch
-):
+def test_resolve_engine_profile_uses_cwd_pin_when_mdl_is_base64(tmp_path, monkeypatch):
     """--mdl as a base64 string must NOT silently bypass cwd's project pin —
     that would re-introduce the silent-mismatch problem this PR is closing."""
     profile_mod.add_profile("active_one", {"datasource": "postgres"})
