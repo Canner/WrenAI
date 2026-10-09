@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 
+import duckdb
 import orjson
 import pytest
 import sqlglot
@@ -254,6 +255,99 @@ class TestMultiModel:
         customer_body = _cte_body_sql(result, "customer")
         assert customer_body is not None
         assert "c_name" in customer_body.lower()
+
+
+class TestScopedAliases:
+    """Verify alias reuse preserves model columns across SQL scopes."""
+
+    @pytest.fixture
+    def database(self):
+        """Provide local tables for executing rewritten regression queries."""
+        with duckdb.connect() as connection:
+            connection.execute(
+                "CREATE TABLE orders (o_orderkey INTEGER, o_custkey INTEGER, "
+                "o_orderstatus VARCHAR); "
+                "INSERT INTO orders VALUES (1, 10, 'O'), (2, 20, 'F'); "
+                "CREATE TABLE customer (c_custkey INTEGER, c_name VARCHAR); "
+                "INSERT INTO customer VALUES (10, 'Alice'), (20, 'Bob')"
+            )
+            yield connection
+
+    @pytest.mark.parametrize("operator", ["UNION ALL", "INTERSECT", "EXCEPT"])
+    @pytest.mark.parametrize(
+        "data_source",
+        [
+            DataSource.duckdb,
+            DataSource.postgres,
+            DataSource.oracle,
+            DataSource.snowflake,
+        ],
+    )
+    def test_alias_reused_in_set_operation(self, database, operator, data_source):
+        """Each set-operation branch binds its own alias in every dialect."""
+        sql = (
+            f"SELECT t.o_custkey FROM orders t {operator} "
+            "SELECT t.c_custkey FROM customer t"
+        )
+        rewritten = _make_rewriter(_MULTI_MODEL_MANIFEST, data_source).rewrite(sql)
+        duckdb_sql = sqlglot.transpile(
+            rewritten, read=get_sqlglot_dialect(data_source), write="duckdb"
+        )[0]
+        assert sorted(database.execute(duckdb_sql).fetchall()) == sorted(
+            database.execute(sql).fetchall()
+        )
+
+    def test_alias_reused_in_independent_subquery(self, database):
+        """An inner alias must not replace the outer query's model binding."""
+        sql = (
+            "SELECT t.o_orderkey FROM orders t WHERE EXISTS "
+            "(SELECT 1 FROM customer t WHERE t.c_name = 'Alice')"
+        )
+        rewritten = _make_rewriter(_MULTI_MODEL_MANIFEST).rewrite(sql)
+        assert database.execute(rewritten).fetchall() == [(1,), (2,)]
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT t.order_id FROM (SELECT t.o_orderkey AS order_id FROM orders t) t",
+            "WITH summary AS (SELECT t.o_orderkey AS order_id FROM orders t) "
+            "SELECT t.order_id FROM summary t",
+        ],
+    )
+    def test_alias_reused_for_derived_source(self, database, sql):
+        """A derived table or CTE exposes its output columns under its alias."""
+        rewritten = _make_rewriter(_MULTI_MODEL_MANIFEST).rewrite(sql)
+        assert database.execute(rewritten).fetchall() == [(1,), (2,)]
+
+    def test_correlated_reference_keeps_outer_scope(self, database):
+        """A correlated column still belongs to the outer model's scope."""
+        sql = (
+            "SELECT t.o_orderkey FROM orders t WHERE EXISTS "
+            "(SELECT 1 FROM customer c WHERE c.c_custkey = t.o_custkey)"
+        )
+        rewritten = _make_rewriter(_MULTI_MODEL_MANIFEST).rewrite(sql)
+        assert database.execute(rewritten).fetchall() == [(1,), (2,)]
+
+    def test_qualified_star_uses_its_own_scope(self, database):
+        """A qualified star expands the outer model despite an inner alias."""
+        rw = _make_rewriter(_MULTI_MODEL_MANIFEST)
+        rw.session_context = _RecordingSessionContext(rw.session_context)
+        sql = "SELECT t.* FROM orders t WHERE EXISTS (SELECT t.c_name FROM customer t)"
+        rewritten = rw.rewrite(sql)
+        assert 'SELECT * FROM "orders"' in rw.session_context.calls
+        assert 'SELECT * FROM "customer"' not in rw.session_context.calls
+        assert database.execute(rewritten).fetchall() == [
+            (1, 10, "O", "1_10"),
+            (2, 20, "F", "2_20"),
+        ]
+
+    def test_nested_star_routes_model_through_star_expansion(self, database):
+        """A star inside a derived table reaches wren-core as SELECT *."""
+        rw = _make_rewriter(_MULTI_MODEL_MANIFEST)
+        rw.session_context = _RecordingSessionContext(rw.session_context)
+        rewritten = rw.rewrite("SELECT x.o_orderkey FROM (SELECT t.* FROM orders t) x")
+        assert 'SELECT * FROM "orders"' in rw.session_context.calls
+        assert database.execute(rewritten).fetchall() == [(1,), (2,)]
 
 
 class TestUnionStarDetection:
@@ -577,6 +671,25 @@ _CASE_COLLISION_MANIFEST = {
 
 
 class TestCaseSensitiveBinding:
+    def test_scoped_aliases_with_case_distinct_columns(self):
+        """Case-sensitive column collection keeps branch aliases separate."""
+        manifest = dict(
+            _CASE_COLLISION_MANIFEST,
+            models=_CASE_COLLISION_MANIFEST["models"]
+            + [_MULTI_MODEL_MANIFEST["models"][1]],
+        )
+        rw = _make_rewriter(manifest, DataSource.postgres)
+        rw.session_context = _RecordingSessionContext(rw.session_context)
+        rewritten = rw.rewrite(
+            'SELECT t."Year" FROM clash t UNION ALL SELECT t.c_custkey FROM customer t'
+        )
+        assert 'SELECT "clash"."Year" FROM "clash"' in rw.session_context.calls
+        assert (
+            'SELECT "customer"."c_custkey" FROM "customer"' in rw.session_context.calls
+        )
+        assert _has_cte(rewritten, "clash", dialect="postgres")
+        assert _has_cte(rewritten, "customer", dialect="postgres")
+
     def test_force_identify_detected_from_dialect(self):
         """Upper-folding dialects force-quote output; others do not."""
         assert _make_rewriter(_SINGLE_MODEL_MANIFEST, DataSource.oracle)._force_identify
