@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from threading import Lock
 from unittest.mock import MagicMock
 
 import pyarrow as pa
@@ -15,8 +16,9 @@ pytestmark = pytest.mark.unit
 def test_unlimited_query_strips_trailing_semicolon():
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
-    connector.connection.execute.return_value.fetch_arrow_table.return_value = (
-        pa.table({"x": [1]})
+    connector._connection_lock = Lock()
+    connector.connection.execute.return_value.fetch_arrow_table.return_value = pa.table(
+        {"x": [1]}
     )
 
     connector.query("SELECT 1 AS x;  ")
@@ -27,8 +29,9 @@ def test_unlimited_query_strips_trailing_semicolon():
 def test_limited_query_still_wraps_after_strip():
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
-    connector.connection.execute.return_value.fetch_arrow_table.return_value = (
-        pa.table({"x": [1]})
+    connector._connection_lock = Lock()
+    connector.connection.execute.return_value.fetch_arrow_table.return_value = pa.table(
+        {"x": [1]}
     )
 
     connector.query("SELECT 1 AS x;", limit=2)
@@ -42,8 +45,9 @@ def test_query_limit_survives_trailing_line_comment():
     """Trailing `--` must not eat the wrap (same shape as postgres.py #2728)."""
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
-    connector.connection.execute.return_value.fetch_arrow_table.return_value = (
-        pa.table({"x": [1]})
+    connector._connection_lock = Lock()
+    connector.connection.execute.return_value.fetch_arrow_table.return_value = pa.table(
+        {"x": [1]}
     )
 
     connector.query("SELECT 1 AS x -- pick", limit=2)
@@ -56,6 +60,7 @@ def test_query_limit_survives_trailing_line_comment():
 def test_dry_run_survives_trailing_line_comment():
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
+    connector._connection_lock = Lock()
 
     connector.dry_run("SELECT 1 AS x -- pick")
 

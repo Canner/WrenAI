@@ -1,5 +1,6 @@
 """Regression test: DuckDB file discovery is case-insensitive on extension."""
 
+from threading import Lock
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -90,6 +91,7 @@ def test_query_strips_trailing_semicolon_before_limit_wrap():
     # ``SELECT * FROM (SELECT 1;) AS _q LIMIT 5`` when a limit is applied.
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
+    connector._connection_lock = Lock()
     connector.connection.execute.return_value.fetch_arrow_table.return_value = "tbl"
 
     result = connector.query("SELECT 1;", limit=5)
@@ -106,6 +108,7 @@ def test_dry_run_wraps_in_limit_zero_subquery():
     # syntax error inside the subquery.
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
+    connector._connection_lock = Lock()
 
     connector.dry_run("SELECT 1; DROP TABLE t;")
 
@@ -118,6 +121,7 @@ def test_dry_run_wraps_in_limit_zero_subquery():
 def test_dry_run_strips_trailing_semicolon():
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
+    connector._connection_lock = Lock()
 
     connector.dry_run("SELECT 1;")
 
@@ -130,6 +134,7 @@ def test_dry_run_preserves_semicolon_in_string_literal():
     # not be mangled or falsely rejected.
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
+    connector._connection_lock = Lock()
 
     connector.dry_run("SELECT ';' AS x")
 

@@ -1,4 +1,5 @@
 import os
+from threading import Lock
 
 import opendal
 import pyarrow as pa
@@ -56,6 +57,9 @@ class DuckDBConnector(ConnectorABC):
 
         self._HTTPException = HTTPException
         self._IOException = IOException
+        # ponytail: one in-flight call per connector; use pooled connections
+        # if parallel query throughput becomes necessary.
+        self._connection_lock = Lock()
         self.connection = duckdb.connect()
 
         try:
@@ -91,7 +95,10 @@ class DuckDBConnector(ConnectorABC):
             sql = f"SELECT * FROM (\n{stripped}\n) AS _q LIMIT {limit}"
         else:
             sql = stripped
-        return self.connection.execute(sql).fetch_arrow_table()
+        # Pending results belong to the connection. Keep execute and fetch
+        # together so another call cannot overwrite or consume this result.
+        with self._connection_lock:
+            return self.connection.execute(sql).fetch_arrow_table()
 
     def dry_run(self, sql: str) -> None:
         """Validate ``sql`` without returning rows or side effects.
@@ -105,7 +112,8 @@ class DuckDBConnector(ConnectorABC):
         no rows are materialized.
         """
         stripped = self._strip(sql)
-        self.connection.execute(f"SELECT * FROM (\n{stripped}\n) AS _q LIMIT 0")
+        with self._connection_lock:
+            self.connection.execute(f"SELECT * FROM (\n{stripped}\n) AS _q LIMIT 0")
 
     def _attach_database(self, connection_info) -> None:
         """Attach every discovered DuckDB file as a read-only database.
@@ -170,7 +178,8 @@ class DuckDBConnector(ConnectorABC):
     def close(self) -> None:
         """Close the underlying DuckDB connection, logging any error."""
         try:
-            self.connection.close()
+            with self._connection_lock:
+                self.connection.close()
         except Exception as e:
             logger.warning(f"Error closing DuckDB connection: {e}")
 
