@@ -22,6 +22,10 @@ _MANIFEST_FILE = "manifest.json"
 _CATALOG_FILE = "catalog.json"
 _RUN_RESULTS_FILE = "run_results.json"
 
+# dbt env vars are always strings, so dbt's docs cast numeric and boolean
+# settings with a filter, e.g. ``port: "{{ env_var('DB_PORT') | as_number }}"``.
+# The profile is rendered to YAML scalars here and typed by the connection-info
+# model downstream, so these cast filters are accepted and dropped.
 _ENV_VAR_PATTERN = re.compile(
     r"""
     \{\{\s*
@@ -31,11 +35,16 @@ _ENV_VAR_PATTERN = re.compile(
     (?P<name>[^'"]+)
     (?P=quote1)
     (?:\s*,\s*
-        (?P<quote2>['"])
-        (?P<default>[^'"]*)
-        (?P=quote2)
+        (?:
+            (?P<quote2>['"])
+            (?P<default>[^'"]*)
+            (?P=quote2)
+        |
+            (?P<bare_default>[\w.+-]+)
+        )
     )?
     \s*\)
+    (?:\s*\|\s*(?:as_number|as_bool|as_text|int|float|string))*
     \s*\}\}
     """,
     re.VERBOSE,
@@ -132,6 +141,8 @@ def resolve_env_vars(value: Any, env: dict[str, str] | None = None) -> Any:
     def _replace(match: re.Match[str]) -> str:
         name = match.group("name")
         default = match.group("default")
+        if default is None:
+            default = match.group("bare_default")
         if name in env_map:
             return env_map[name]
         if default is not None:
