@@ -52,6 +52,7 @@ def _init_duckdb_gcs(connection, info: GcsFileConnectionInfo):
 
 class DuckDBConnector(ConnectorABC):
     def __init__(self, connection_info):
+        """Open a DuckDB session and serialize operations sharing its results."""
         import duckdb  # noqa: PLC0415
         from duckdb import HTTPException, IOException  # noqa: PLC0415
 

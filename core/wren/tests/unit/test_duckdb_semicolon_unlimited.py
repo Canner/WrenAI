@@ -14,6 +14,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_unlimited_query_strips_trailing_semicolon():
+    """Strip final statement terminators even when no row limit is requested."""
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
     connector._connection_lock = Lock()
@@ -27,6 +28,7 @@ def test_unlimited_query_strips_trailing_semicolon():
 
 
 def test_limited_query_still_wraps_after_strip():
+    """Apply the row limit after removing the trailing terminator."""
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
     connector._connection_lock = Lock()
@@ -58,6 +60,7 @@ def test_query_limit_survives_trailing_line_comment():
 
 
 def test_dry_run_survives_trailing_line_comment():
+    """Keep the validation wrapper outside a trailing SQL line comment."""
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
     connector._connection_lock = Lock()

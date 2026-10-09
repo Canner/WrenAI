@@ -14,6 +14,7 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture
 def connector(tmp_path):
+    """Yield a real in-memory connector and close it after each test."""
     instance = DuckDBConnector(
         LocalFileConnectionInfo(url=str(tmp_path), format="parquet")
     )
@@ -25,12 +26,14 @@ class _InterleavedConnection:
     """Pause after real execution so the second call runs before the fetch."""
 
     def __init__(self, connection, executed, resume, second_executed):
+        """Record events controlling execution before the first result fetch."""
         self.connection = connection
         self.executed = executed
         self.resume = resume
         self.second_executed = second_executed
 
     def execute(self, sql):
+        """Execute real SQL and pause the first query before returning its result."""
         result = self.connection.execute(sql)
         if "AS first_result" in sql:
             self.executed.set()
@@ -40,11 +43,13 @@ class _InterleavedConnection:
         return result
 
     def close(self):
+        """Forward closing to the real DuckDB connection."""
         self.connection.close()
 
 
 @pytest.mark.parametrize("second_operation", ["query", "dry_run"])
 def test_execute_and_fetch_are_isolated(connector, second_operation):
+    """Keep a competing query or dry run blocked until the first result is fetched."""
     executed, resume, second_executed = Event(), Event(), Event()
     connector.connection = _InterleavedConnection(
         connector.connection, executed, resume, second_executed
@@ -58,7 +63,7 @@ def test_execute_and_fetch_are_isolated(connector, second_operation):
             )
             # On the broken shared connection this lets the second operation
             # replace the first result. With serialization it waits for resume.
-            second_executed.wait(1)
+            assert not second_executed.wait(1), "second operation executed before fetch"
         finally:
             resume.set()
         assert first.result().to_pylist() == [{"first_result": 11}]
@@ -69,6 +74,7 @@ def test_execute_and_fetch_are_isolated(connector, second_operation):
 
 
 def test_parallel_queries_share_memory_tables_and_views(connector):
+    """Preserve each query's ID while sharing in-memory and temporary objects."""
     connector.connection.execute("CREATE TABLE numbers AS SELECT 7 AS value")
     connector.connection.execute(
         "CREATE TEMP TABLE temp_numbers AS SELECT * FROM numbers"
@@ -89,6 +95,7 @@ def test_parallel_queries_share_memory_tables_and_views(connector):
 
 
 def test_queries_preserve_attached_tables_and_settings(connector, tmp_path):
+    """Keep session state and release the lock after execution or validation errors."""
     db_path = tmp_path / "sample.duckdb"
     with duckdb.connect(str(db_path)) as source:
         source.execute("CREATE TABLE numbers AS SELECT 42 AS value")
@@ -111,12 +118,14 @@ def test_queries_preserve_attached_tables_and_settings(connector, tmp_path):
 
 
 def test_close_waits_for_query_to_fetch(connector):
+    """Block closing until a paused query has fetched its result."""
     executed, resume, close_started, close_finished = Event(), Event(), Event(), Event()
     connector.connection = _InterleavedConnection(
         connector.connection, executed, resume, Event()
     )
 
     def close():
+        """Signal the start and completion of a competing close operation."""
         close_started.set()
         connector.close()
         close_finished.set()
@@ -127,7 +136,7 @@ def test_close_waits_for_query_to_fetch(connector):
             assert executed.wait(10), "first query did not execute"
             closing = pool.submit(close)
             assert close_started.wait(10), "close did not start"
-            close_finished.wait(1)
+            assert not close_finished.wait(1), "connection closed before fetch"
         finally:
             resume.set()
         assert first.result().to_pylist() == [{"first_result": 11}]
