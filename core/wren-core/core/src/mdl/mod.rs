@@ -635,17 +635,42 @@ pub async fn transform_sql_with_ctx_with_access_control(
 /// the result. See https://github.com/Canner/WrenAI/issues/2745.
 fn preserve_explicit_rows_frame(sql: String) -> String {
     const NEEDLE: &str = "RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW";
+    let bytes = sql.as_bytes();
     let mut out = String::with_capacity(sql.len());
-    let mut rest = sql.as_str();
-    while let Some(idx) = rest.find(NEEDLE) {
-        let mut start = idx;
-        while start > 0 && rest.as_bytes()[start - 1].is_ascii_whitespace() {
-            start -= 1;
+    let mut i = 0;
+    while i < bytes.len() {
+        // Never strip the frame text from a string literal or quoted identifier.
+        if matches!(bytes[i], b'\'' | b'"') {
+            let quote = bytes[i];
+            let start = i;
+            i += 1;
+            while i < bytes.len() {
+                if bytes[i] == quote {
+                    let doubled = i + 1 < bytes.len() && bytes[i + 1] == quote;
+                    i += if doubled { 2 } else { 1 };
+                    if !doubled {
+                        break;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            out.push_str(&sql[start..i]);
+            continue;
         }
-        out.push_str(&rest[..start]);
-        rest = &rest[idx + NEEDLE.len()..];
+        if sql[i..].starts_with(NEEDLE) {
+            let mut start = out.len();
+            while start > 0 && out.as_bytes()[start - 1].is_ascii_whitespace() {
+                start -= 1;
+            }
+            out.truncate(start);
+            i += NEEDLE.len();
+            continue;
+        }
+        let ch = sql[i..].chars().next().unwrap();
+        out.push(ch);
+        i += ch.len_utf8();
     }
-    out.push_str(rest);
     out
 }
 
