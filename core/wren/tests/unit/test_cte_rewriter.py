@@ -258,8 +258,11 @@ class TestMultiModel:
 
 
 class TestScopedAliases:
+    """Verify alias reuse preserves model columns across SQL scopes."""
+
     @pytest.fixture
     def database(self):
+        """Provide local tables for executing rewritten regression queries."""
         with duckdb.connect() as connection:
             connection.execute(
                 "CREATE TABLE orders (o_orderkey INTEGER, o_custkey INTEGER, "
@@ -281,6 +284,7 @@ class TestScopedAliases:
         ],
     )
     def test_alias_reused_in_set_operation(self, database, operator, data_source):
+        """Each set-operation branch binds its own alias in every dialect."""
         sql = (
             f"SELECT t.o_custkey FROM orders t {operator} "
             "SELECT t.c_custkey FROM customer t"
@@ -294,6 +298,7 @@ class TestScopedAliases:
         )
 
     def test_alias_reused_in_independent_subquery(self, database):
+        """An inner alias must not replace the outer query's model binding."""
         sql = (
             "SELECT t.o_orderkey FROM orders t WHERE EXISTS "
             "(SELECT 1 FROM customer t WHERE t.c_name = 'Alice')"
@@ -310,10 +315,12 @@ class TestScopedAliases:
         ],
     )
     def test_alias_reused_for_derived_source(self, database, sql):
+        """A derived table or CTE exposes its output columns under its alias."""
         rewritten = _make_rewriter(_MULTI_MODEL_MANIFEST).rewrite(sql)
         assert database.execute(rewritten).fetchall() == [(1,), (2,)]
 
     def test_correlated_reference_keeps_outer_scope(self, database):
+        """A correlated column still belongs to the outer model's scope."""
         sql = (
             "SELECT t.o_orderkey FROM orders t WHERE EXISTS "
             "(SELECT 1 FROM customer c WHERE c.c_custkey = t.o_custkey)"
@@ -322,6 +329,7 @@ class TestScopedAliases:
         assert database.execute(rewritten).fetchall() == [(1,), (2,)]
 
     def test_qualified_star_uses_its_own_scope(self, database):
+        """A qualified star expands the outer model despite an inner alias."""
         rw = _make_rewriter(_MULTI_MODEL_MANIFEST)
         rw.session_context = _RecordingSessionContext(rw.session_context)
         sql = "SELECT t.* FROM orders t WHERE EXISTS (SELECT t.c_name FROM customer t)"
@@ -334,6 +342,7 @@ class TestScopedAliases:
         ]
 
     def test_nested_star_routes_model_through_star_expansion(self, database):
+        """A star inside a derived table reaches wren-core as SELECT *."""
         rw = _make_rewriter(_MULTI_MODEL_MANIFEST)
         rw.session_context = _RecordingSessionContext(rw.session_context)
         rewritten = rw.rewrite("SELECT x.o_orderkey FROM (SELECT t.* FROM orders t) x")
@@ -663,6 +672,7 @@ _CASE_COLLISION_MANIFEST = {
 
 class TestCaseSensitiveBinding:
     def test_scoped_aliases_with_case_distinct_columns(self):
+        """Case-sensitive column collection keeps branch aliases separate."""
         manifest = dict(
             _CASE_COLLISION_MANIFEST,
             models=_CASE_COLLISION_MANIFEST["models"]

@@ -555,6 +555,11 @@ class CTERewriter:
     def _scoped_model_columns(
         ast: exp.Expression, scope_aliases: dict[int, dict[str, str]]
     ) -> Iterator[tuple[exp.Column, str]]:
+        """Yield column/model pairs using each SELECT's alias bindings.
+
+        Include correlated references reported by sqlglot in their outer
+        scope, and leave columns from derived tables or CTE outputs alone.
+        """
         for scope in traverse_scope(ast):
             aliases = scope_aliases[id(scope.expression)]
             # scope.columns also includes references from correlated subqueries
