@@ -310,6 +310,60 @@ def test_init_from_built_mdl_then_build(tmp_path):
     assert config["name"] == "shop"
 
 
+def test_init_from_mdl_with_blank_name_uses_directory_name(tmp_path):
+    """``"name": null`` or ``""`` in the MDL falls back like a missing name."""
+    for blank in (None, ""):
+        mdl_file = tmp_path / "mdl.json"
+        mdl_file.write_text(
+            json.dumps(
+                {
+                    "name": blank,
+                    "catalog": "wren",
+                    "schema": "public",
+                    "dataSource": "postgres",
+                }
+            ),
+            encoding="utf-8",
+        )
+        project = tmp_path / "shop"
+        result = runner.invoke(
+            app,
+            [
+                "context",
+                "init",
+                "--path",
+                str(project),
+                "--from-mdl",
+                str(mdl_file),
+                "--force",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        config = yaml.safe_load(
+            (project / "wren_project.yml").read_text(encoding="utf-8")
+        )
+        assert config["name"] == "shop"
+        result = runner.invoke(app, ["context", "validate", "--path", str(project)])
+        assert result.exit_code == 0, result.output
+
+
+def test_init_from_mdl_with_dot_path_uses_directory_name(tmp_path, monkeypatch):
+    """``--path .`` names the project after the resolved current directory."""
+    mdl_file = tmp_path / "mdl.json"
+    mdl_file.write_text(
+        json.dumps({"catalog": "wren", "schema": "public"}), encoding="utf-8"
+    )
+    project = tmp_path / "shop"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    result = runner.invoke(
+        app, ["context", "init", "--path", ".", "--from-mdl", str(mdl_file)]
+    )
+    assert result.exit_code == 0, result.output
+    config = yaml.safe_load((project / "wren_project.yml").read_text(encoding="utf-8"))
+    assert config["name"] == "shop"
+
+
 def test_init_refuses_existing(tmp_path):
     (tmp_path / "wren_project.yml").write_text("name: existing\n")
     result = runner.invoke(app, ["context", "init", "--path", str(tmp_path)])
