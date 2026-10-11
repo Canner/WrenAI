@@ -13,20 +13,24 @@ from urllib.parse import urlparse
 
 import duckdb
 import orjson
-import psycopg
 import pyarrow as pa
 import pytest
-from testcontainers.postgres import PostgresContainer
 
-from tests.suite.manifests import make_tpch_manifest
-from tests.suite.query import WrenQueryTestSuite
-from wren import WrenEngine
-from wren.connector.postgres import (
+psycopg = pytest.importorskip(
+    "psycopg", reason="psycopg not installed (postgres extra)"
+)
+
+from testcontainers.postgres import PostgresContainer  # noqa: E402
+
+from tests.suite.manifests import make_tpch_manifest  # noqa: E402
+from tests.suite.query import WrenQueryTestSuite  # noqa: E402
+from wren import WrenEngine  # noqa: E402
+from wren.connector.postgres import (  # noqa: E402
     PostgresConnector,
     _build_pg_arrow_table,
     _build_pg_column,
 )
-from wren.model.data_source import DataSource
+from wren.model.data_source import DataSource  # noqa: E402
 
 pytestmark = pytest.mark.postgres
 
