@@ -401,6 +401,25 @@ def test_empty_mdl():
     assert "instructions.md" not in paths
 
 
+def test_default_name_fills_a_missing_or_blank_project_name():
+    def project_name(mdl: dict) -> str | None:
+        files = convert_mdl_to_project(mdl, default_name="fallback")
+        project_file = next(f for f in files if f.relative_path == "wren_project.yml")
+        return yaml.safe_load(project_file.content).get("name")
+
+    base = {"catalog": "wren", "schema": "public"}
+    assert project_name(base) == "fallback"
+    assert project_name({**base, "name": "shop"}) == "shop"
+    assert project_name({**base, "projectName": "legacy"}) == "legacy"
+    # A key that is present but null or empty is not a usable name.
+    for blank in (None, ""):
+        assert project_name({**base, "name": blank}) == "fallback"
+        assert project_name({**base, "projectName": blank}) == "fallback"
+        assert project_name({**base, "name": blank, "projectName": "legacy"}) == (
+            "legacy"
+        )
+
+
 def test_no_data_source():
     """Missing dataSource — wren_project.yml omits data_source field."""
     mdl = {"catalog": "wren", "schema": "public", "models": [], "views": []}

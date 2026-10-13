@@ -230,7 +230,9 @@ def init(
             raise typer.Exit(1)
 
         mdl_json = json.loads(mdl_path.read_text(encoding="utf-8"))
-        files = convert_mdl_to_project(mdl_json)
+        files = convert_mdl_to_project(
+            mdl_json, default_name=project_path.resolve().name
+        )
         try:
             write_project_files(
                 files, project_path, force=force, extra_managed_paths=("cubes",)
