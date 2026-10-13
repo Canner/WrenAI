@@ -75,7 +75,15 @@ class _StarRocksContainer(DockerContainer):
 def _connect(host: str, port: int, database: str | None = None):
     import MySQLdb  # noqa: PLC0415
 
-    kwargs = {"host": host, "port": port, "user": "root", "passwd": ""}
+    # MySQLdb treats ``host="localhost"`` as the unix socket /tmp/mysql.sock;
+    # testcontainers returns "localhost" when Docker is reached over a socket.
+    # The connector itself rewrites it the same way (_build_mysql_connect_kwargs).
+    kwargs = {
+        "host": "127.0.0.1" if host == "localhost" else host,
+        "port": port,
+        "user": "root",
+        "passwd": "",
+    }
     if database:
         kwargs["db"] = database
     conn = MySQLdb.connect(**kwargs)
@@ -84,10 +92,13 @@ def _connect(host: str, port: int, database: str | None = None):
 
 
 def _wait_until_ready(host: str, port: int, timeout: float = 300.0) -> None:
-    """Wait for the FE to accept connections and for the BE to register alive.
+    """Wait for the FE to accept connections and for the BE to be usable.
 
     The FE answers on 9030 well before a backend is available; creating a table
-    before then fails with "no alive backend", so poll ``SHOW BACKENDS``.
+    before then fails with "no alive backend". ``Alive=true`` is also reported
+    about two seconds before the BE has reported its disk capacity, and a
+    ``CREATE TABLE`` inside that window fails with "backends without enough
+    disk space", so also wait until ``TotalCapacity`` is non-zero.
     """
     deadline = time.time() + timeout
     last_err: Exception | None = None
@@ -99,10 +110,15 @@ def _wait_until_ready(host: str, port: int, timeout: float = 300.0) -> None:
             cur.execute("SHOW BACKENDS")
             columns = [d[0] for d in cur.description]
             alive = columns.index("Alive")
+            capacity = columns.index("TotalCapacity")
             rows = cur.fetchall()
-            if rows and all(str(r[alive]).lower() == "true" for r in rows):
+            if rows and all(
+                str(r[alive]).lower() == "true"
+                and not str(r[capacity]).startswith("0.000")
+                for r in rows
+            ):
                 return
-            last_err = RuntimeError(f"backends not alive yet: {rows!r}")
+            last_err = RuntimeError(f"backends not ready yet: {rows!r}")
         except Exception as e:  # noqa: BLE001
             last_err = e
         finally:

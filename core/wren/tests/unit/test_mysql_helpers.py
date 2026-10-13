@@ -556,6 +556,27 @@ def test_lazy_init_thread_safe() -> None:
                 assert len(got) > 0
 
 
+def test_create_connector_routes_starrocks_to_doris_connector(monkeypatch) -> None:
+    pytest.importorskip("MySQLdb")
+    from unittest.mock import MagicMock  # noqa: PLC0415
+
+    import MySQLdb  # noqa: PLC0415
+
+    from wren.model.data_source import DataSource  # noqa: PLC0415
+
+    connection = MagicMock()
+    monkeypatch.setattr(MySQLdb, "connect", lambda **kwargs: connection)
+    info = DataSource.starrocks.get_connection_info(
+        {"host": "sr", "port": "9030", "database": "olymp", "user": "u"}
+    )
+
+    connector = mysql_connector.create_connector(DataSource.starrocks, info)
+
+    assert isinstance(connector, mysql_connector.DorisConnector)
+    # MySqlConnector would run ``SET sql_mode=...ANSI_QUOTES`` on connect.
+    connection.cursor.assert_not_called()
+
+
 def test_starrocks_connection_info_shares_doris_fields() -> None:
     from wren.model.data_source import DataSource  # noqa: PLC0415
 

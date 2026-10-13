@@ -528,8 +528,13 @@ class TestDialectMapping:
 
     def test_starrocks_date_trunc_argument_order(self):
         sql = "SELECT date_trunc('month', d) FROM t"
-        out = sqlglot.transpile(sql, read="starrocks", write="starrocks")[0]
+        starrocks = get_sqlglot_dialect(DataSource.starrocks)
+        doris = get_sqlglot_dialect(DataSource.doris)
+        out = sqlglot.transpile(sql, read=starrocks, write=starrocks)[0]
         assert out == "SELECT DATE_TRUNC('MONTH', d) FROM t"
+        # The doris dialect swaps the arguments, which StarRocks rejects.
+        out_doris = sqlglot.transpile(sql, read=doris, write=doris)[0]
+        assert out_doris == "SELECT DATE_TRUNC(d, 'MONTH') FROM t"
 
     def test_canner_maps_to_trino(self):
         assert get_sqlglot_dialect(DataSource.canner) == "trino"

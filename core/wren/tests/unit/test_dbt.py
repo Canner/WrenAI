@@ -305,6 +305,25 @@ class TestConvertDbtTargetToWrenProfile:
         assert profile["port"] == "9030"
         assert profile["database"] == "analytics"
         assert profile["user"] == "etl"
+        assert profile["password"] == "secret"
+
+    def test_convert_starrocks_profile_rejects_custom_catalog(self, tmp_path):
+        project_dir, profiles_path = _write_basic_dbt_project(tmp_path)
+        profiles_path.write_text(
+            "jaffle_shop:\n"
+            "  target: dev\n"
+            "  outputs:\n"
+            "    dev:\n"
+            "      type: starrocks\n"
+            "      host: sr.example.com\n"
+            "      schema: analytics\n"
+            "      username: etl\n"
+            "      catalog: hive_catalog\n"
+        )
+        target = resolve_dbt_target(project_dir, profiles_path=profiles_path)
+
+        with pytest.raises(DbtLoadError, match="catalog"):
+            convert_dbt_target_to_wren_profile(target)
 
     def test_convert_databricks_profile_preserves_catalog(self, tmp_path):
         project_dir, profiles_path = _write_basic_dbt_project(tmp_path)

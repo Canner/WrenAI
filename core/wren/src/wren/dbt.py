@@ -477,6 +477,15 @@ def convert_dbt_target_to_wren_profile(target: DbtTarget) -> dict[str, Any]:
         )
 
     if datasource == "starrocks":
+        # Wren's StarRocks connection has no catalog field, so a profile that
+        # targets a catalog other than the default would silently connect to
+        # ``default_catalog``. Refuse it instead of querying the wrong place.
+        catalog = output.get("catalog")
+        if catalog not in (None, "", "default_catalog"):
+            raise DbtLoadError(
+                f"dbt target uses StarRocks catalog {catalog!r}, which Wren does "
+                "not support yet; only 'default_catalog' can be imported."
+            )
         # dbt-starrocks names the login ``username`` and the database ``schema``.
         return _build_wren_profile(
             "starrocks",

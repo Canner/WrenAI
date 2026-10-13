@@ -15,6 +15,23 @@ def test_starrocks_uses_mysql_connector_module_and_extra() -> None:
     assert DataSource.starrocks in factory._NEEDS_DATA_SOURCE
 
 
+def test_get_connector_passes_starrocks_to_create_connector(monkeypatch) -> None:
+    calls: list[tuple] = []
+
+    class _FakeModule:
+        @staticmethod
+        def create_connector(data_source, connection_info):
+            calls.append((data_source, connection_info))
+            return type("_Connector", (), {})()
+
+    monkeypatch.setattr(factory.importlib, "import_module", lambda name: _FakeModule)
+
+    connector = factory.get_connector(DataSource.starrocks, {"host": "sr"})
+
+    assert calls == [(DataSource.starrocks, {"host": "sr"})]
+    assert connector.dialect == "starrocks"
+
+
 def test_connector_import_error_has_quoted_wrenai_extra_hint(monkeypatch) -> None:
     def _fake_import_module(name: str):
         if name == "wren.connector.mysql":
