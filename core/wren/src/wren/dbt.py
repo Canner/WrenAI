@@ -54,6 +54,7 @@ DBT_ADAPTER_TO_WREN_DATASOURCE = {
     "snowflake": "snowflake",
     "spark": "spark",
     "sqlserver": "mssql",
+    "starrocks": "starrocks",
     "trino": "trino",
 }
 
@@ -471,6 +472,30 @@ def convert_dbt_target_to_wren_profile(target: DbtTarget) -> dict[str, Any]:
                 "port": str(output.get("port", "5432")),
                 "database": str(_require_output_field(output, "dbname", "database")),
                 "user": str(_require_output_field(output, "user")),
+                "password": str(output["password"]) if output.get("password") else None,
+            },
+        )
+
+    if datasource == "starrocks":
+        # Wren's StarRocks connection has no catalog field, so a profile that
+        # targets a catalog other than the default would silently connect to
+        # ``default_catalog``. Refuse it instead of querying the wrong place.
+        catalog = output.get("catalog")
+        if catalog not in (None, "", "default_catalog"):
+            raise DbtLoadError(
+                f"dbt target uses StarRocks catalog {catalog!r}, which Wren does "
+                "not support yet; only 'default_catalog' can be imported."
+            )
+        # dbt-starrocks names the login ``username`` and the database ``schema``.
+        return _build_wren_profile(
+            "starrocks",
+            {
+                "host": str(_require_output_field(output, "host")),
+                "port": str(output.get("port", "9030")),
+                "database": str(
+                    _require_output_field(output, "schema", "database", "dbname")
+                ),
+                "user": str(_require_output_field(output, "username", "user")),
                 "password": str(output["password"]) if output.get("password") else None,
             },
         )

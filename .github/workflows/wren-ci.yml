@@ -93,6 +93,10 @@ jobs:
               tests/connectors/test_mysql.py
               tests/connectors/test_mysql_connector.py
             marker: mysql
+          - datasource: starrocks
+            extra: mysql
+            test_file: tests/connectors/test_starrocks.py
+            marker: starrocks
     defaults:
       run:
         working-directory: core/wren
@@ -104,7 +108,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
       - name: Install system dependencies for mysqlclient
-        if: matrix.datasource == 'mysql'
+        if: matrix.extra == 'mysql'
         run: |
           sudo apt-get update
           sudo apt-get install -y default-libmysqlclient-dev pkg-config

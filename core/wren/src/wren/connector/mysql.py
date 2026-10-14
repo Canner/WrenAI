@@ -1,11 +1,11 @@
-"""Native MySQLdb connector for MySQL and Doris.
+"""Native MySQLdb connector for MySQL, Doris and StarRocks.
 
 Replaces the previous ibis-based implementation. Uses the ``mysqlclient``
 (``MySQLdb``) driver directly and builds PyArrow tables from cursor
 descriptions so no ibis backend is required.
 
-Doris speaks the MySQL wire protocol and reuses the same query path; it
-only differs in how the connection is opened.
+Doris and StarRocks speak the MySQL wire protocol and reuse the same query
+path; they only differ in how the connection is opened.
 """
 
 from __future__ import annotations
@@ -111,7 +111,9 @@ class MySqlConnector(ConnectorABC):
 
 
 class DorisConnector(MySqlConnector):
-    """Doris connector. Speaks MySQL protocol; routes through Doris connection."""
+    """Doris / StarRocks connector. Speaks MySQL protocol; routes through the
+    Doris connection (also used for StarRocks, which shares the same wire
+    protocol and ``ANSI_QUOTES`` limitation)."""
 
     def __init__(self, connection_info):
         import MySQLdb  # noqa: PLC0415
@@ -125,7 +127,7 @@ class DorisConnector(MySqlConnector):
 
 
 def create_connector(data_source: DataSource, connection_info) -> MySqlConnector:
-    if data_source == DataSource.doris:
+    if data_source in (DataSource.doris, DataSource.starrocks):
         return DorisConnector(connection_info)
     return MySqlConnector(connection_info)
 
@@ -687,7 +689,8 @@ def _build_mysql_connect_kwargs(connection_info) -> dict:
 
 
 def _build_doris_connect_kwargs(connection_info) -> dict:
-    """Translate ``DorisConnectionInfo`` / ``ConnectionUrl`` into MySQLdb kwargs."""
+    """Translate ``DorisConnectionInfo`` / ``StarRocksConnectionInfo`` /
+    ``ConnectionUrl`` into MySQLdb kwargs."""
     if hasattr(connection_info, "connection_url"):
         return _build_mysql_connect_kwargs(connection_info)
 

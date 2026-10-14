@@ -19,6 +19,9 @@ def pytest_configure(config: pytest.Config) -> None:
     )
     config.addinivalue_line("markers", "mysql: MySQL connector tests — requires Docker")
     config.addinivalue_line(
+        "markers", "starrocks: StarRocks connector tests — requires Docker"
+    )
+    config.addinivalue_line(
         "markers", "snowflake: Snowflake connector tests — mocked, no Docker required"
     )
     config.addinivalue_line(

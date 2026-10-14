@@ -93,6 +93,8 @@ pub fn data_source(python_binding: proc_macro::TokenStream) -> proc_macro::Token
             MySQL,
             #[serde(alias = "doris")]
             Doris,
+            #[serde(alias = "starrocks")]
+            StarRocks,
             #[serde(alias = "postgres")]
             Postgres,
             #[serde(alias = "snowflake")]

@@ -30,6 +30,7 @@ from wren.model import (
     S3FileConnectionInfo,
     SnowflakeConnectionInfo,
     SparkConnectionInfo,
+    StarRocksConnectionInfo,
     TrinoConnectionInfo,
 )
 from wren.model.error import ErrorCode, WrenError
@@ -46,6 +47,7 @@ class DataSource(StrEnum):
     mssql = auto()
     mysql = auto()
     doris = auto()
+    starrocks = auto()
     oracle = auto()
     postgres = auto()
     redshift = auto()
@@ -130,6 +132,8 @@ class DataSource(StrEnum):
                 return MySqlConnectionInfo.model_validate(data)
             case DataSource.doris:
                 return DorisConnectionInfo.model_validate(data)
+            case DataSource.starrocks:
+                return StarRocksConnectionInfo.model_validate(data)
             case DataSource.oracle:
                 return OracleConnectionInfo.model_validate(data)
             case DataSource.postgres:
