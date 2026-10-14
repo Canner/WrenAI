@@ -23,7 +23,10 @@ use datafusion::execution::{SessionStateBuilder, SessionStateDefaults};
 use datafusion::logical_expr::{AggregateUDF, ScalarUDF, WindowUDF};
 use datafusion::prelude::{SessionConfig, SessionContext};
 use datafusion::sql::parser::DFParser;
-use datafusion::sql::sqlparser::ast::{visit_relations_mut, Expr, ExprWithAlias, Ident};
+use datafusion::sql::sqlparser::ast::{
+    visit_expressions_mut, visit_relations_mut, Expr, ExprWithAlias, Function, Ident,
+    Statement, WindowFrame, WindowFrameBound, WindowFrameUnits, WindowType,
+};
 use datafusion::sql::sqlparser::dialect::dialect_from_str;
 use datafusion::sql::unparser::Unparser;
 pub use dataset::Dataset;
@@ -618,12 +621,40 @@ pub async fn transform_sql_with_ctx_with_access_control(
                 }
                 std::ops::ControlFlow::<()>::Continue(())
             });
+            // Drop the implicit RANGE frame on the AST. An explicit ROWS or
+            // GROUPS frame with the same bounds must stay: engines that omit
+            // the frame default to RANGE and include peer rows (issue 2745).
+            strip_default_range_frame(&mut sql);
             let sql = sql.to_string();
             info!("wren-core planned SQL: {sql}");
             Ok(sql)
         }
         Err(e) => Err(e),
     }
+}
+
+/// Remove the default `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`
+/// frame from window functions, leaving explicit ROWS/GROUPS frames intact.
+fn strip_default_range_frame(statement: &mut Statement) {
+    let _ = visit_expressions_mut(statement, |expr| {
+        if let Expr::Function(Function {
+            over: Some(WindowType::WindowSpec(spec)),
+            ..
+        }) = expr
+        {
+            if matches!(
+                &spec.window_frame,
+                Some(WindowFrame {
+                    units: WindowFrameUnits::Range,
+                    start_bound: WindowFrameBound::Preceding(None),
+                    end_bound: Some(WindowFrameBound::CurrentRow),
+                })
+            ) {
+                spec.window_frame = None;
+            }
+        }
+        std::ops::ControlFlow::<()>::Continue(())
+    });
 }
 
 /// Try to check if the fail reason is a permission denied error.
@@ -4417,6 +4448,21 @@ mod test {
         assert_snapshot!(
             transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], Arc::clone(&headers), sql).await?,
             @"SELECT rank() OVER (PARTITION BY orders.o_custkey ORDER BY orders.o_orderdate ASC NULLS LAST) FROM (SELECT orders.o_custkey, orders.o_orderdate FROM (SELECT __source.o_custkey AS o_custkey, __source.o_orderdate AS o_orderdate FROM orders AS __source) AS orders) AS orders"
+        );
+
+        // Explicit ROWS UNBOUNDED PRECEDING .. CURRENT ROW must survive planning.
+        // Dropping it lets engines default to RANGE, which includes peer rows.
+        let sql = "SELECT sum(o_orderkey) OVER (ORDER BY o_custkey ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_sum FROM orders";
+        assert_snapshot!(
+            transform_sql_with_ctx(
+                &ctx,
+                Arc::clone(&analyzed_mdl),
+                &[],
+                Arc::clone(&headers),
+                sql,
+            )
+            .await?,
+            @"SELECT sum(CAST(orders.o_orderkey AS BIGINT)) OVER (ORDER BY orders.o_custkey ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_sum FROM (SELECT orders.o_custkey, orders.o_orderkey FROM (SELECT __source.o_custkey AS o_custkey, __source.o_orderkey AS o_orderkey FROM orders AS __source) AS orders) AS orders"
         );
 
         // assert generate window frame if given
