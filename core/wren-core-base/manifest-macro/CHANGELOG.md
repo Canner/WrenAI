@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Canner/WrenAI/compare/wren-manifest-macro-v0.4.0...wren-manifest-macro-v0.5.0) (2026-10-14)
+
+
+### Features
+
+* **wren:** add StarRocks as a first-class data source ([#2790](https://github.com/Canner/WrenAI/issues/2790)) ([4e1c25e](https://github.com/Canner/WrenAI/commit/4e1c25ecfbe7dfc6fabfb668a704203fe46018a2))
+
 ## [0.4.0](https://github.com/Canner/WrenAI/compare/wren-manifest-macro-v0.3.2...wren-manifest-macro-v0.4.0) (2026-09-09)
 
 

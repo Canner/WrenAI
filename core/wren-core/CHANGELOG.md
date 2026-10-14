@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.4.0...wren-semantic-core-v0.5.0) (2026-10-14)
+
+
+### Features
+
+* **core:** support pluggable access control providers ([#2749](https://github.com/Canner/WrenAI/issues/2749)) ([f4bfb20](https://github.com/Canner/WrenAI/commit/f4bfb208f9bbd965967278647c4b987b94aded9f))
+* **wren:** add StarRocks as a first-class data source ([#2790](https://github.com/Canner/WrenAI/issues/2790)) ([4e1c25e](https://github.com/Canner/WrenAI/commit/4e1c25ecfbe7dfc6fabfb668a704203fe46018a2))
+
+
+### Bug Fixes
+
+* **core:** keep explicit ROWS window frames in planned SQL ([#2792](https://github.com/Canner/WrenAI/issues/2792)) ([13e8bd3](https://github.com/Canner/WrenAI/commit/13e8bd3654534c528715e0bb6fa687caca25ebd4))
+* **core:** preserve string literals when removing MDL qualifiers ([#2762](https://github.com/Canner/WrenAI/issues/2762)) ([7b74af1](https://github.com/Canner/WrenAI/commit/7b74af177ea9a0ad387175dd7849ea7ad30c73da))
+
 ## [0.4.0](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.3.2...wren-semantic-core-v0.4.0) (2026-09-09)
 
 
