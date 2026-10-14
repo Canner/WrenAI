@@ -106,7 +106,7 @@ jobs:
       url: ${{ inputs.pypi_target == 'pypi' && 'https://pypi.org/project/wren-langchain/' || 'https://test.pypi.org/project/wren-langchain/' }}
     steps:
       - name: Download distributions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
