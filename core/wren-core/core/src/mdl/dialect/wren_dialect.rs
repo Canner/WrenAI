@@ -100,9 +100,12 @@ impl Dialect for WrenDialect {
         // is the default RANGE frame, but it is also a legal explicit ROWS or
         // GROUPS frame. The unparser only passes bounds, so omitting the frame
         // here silently changes ROWS into the engine's RANGE default (issue 2745).
-        // Default RANGE frames are stripped after unparse instead.
-        self.inner_dialect
-            .window_func_support_window_frame(func_name, start_bound, end_bound)
+        // Default RANGE frames are stripped on the planned AST instead.
+        self.inner_dialect.window_func_support_window_frame(
+            func_name,
+            start_bound,
+            end_bound,
+        )
     }
 
     fn date_field_extract_style(&self) -> DateFieldExtractStyle {

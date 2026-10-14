@@ -23,7 +23,10 @@ use datafusion::execution::{SessionStateBuilder, SessionStateDefaults};
 use datafusion::logical_expr::{AggregateUDF, ScalarUDF, WindowUDF};
 use datafusion::prelude::{SessionConfig, SessionContext};
 use datafusion::sql::parser::DFParser;
-use datafusion::sql::sqlparser::ast::{visit_relations_mut, Expr, ExprWithAlias, Ident};
+use datafusion::sql::sqlparser::ast::{
+    visit_expressions_mut, visit_relations_mut, Expr, ExprWithAlias, Function, Ident,
+    Statement, WindowFrame, WindowFrameBound, WindowFrameUnits, WindowType,
+};
 use datafusion::sql::sqlparser::dialect::dialect_from_str;
 use datafusion::sql::unparser::Unparser;
 pub use dataset::Dataset;
@@ -618,7 +621,11 @@ pub async fn transform_sql_with_ctx_with_access_control(
                 }
                 std::ops::ControlFlow::<()>::Continue(())
             });
-            let sql = preserve_explicit_rows_frame(sql.to_string());
+            // Drop the implicit RANGE frame on the AST. An explicit ROWS or
+            // GROUPS frame with the same bounds must stay: engines that omit
+            // the frame default to RANGE and include peer rows (issue 2745).
+            strip_default_range_frame(&mut sql);
+            let sql = sql.to_string();
             info!("wren-core planned SQL: {sql}");
             Ok(sql)
         }
@@ -626,52 +633,28 @@ pub async fn transform_sql_with_ctx_with_access_control(
     }
 }
 
-
-/// Drop the implicit RANGE frame the unparser now emits, but keep an explicit
-/// ROWS or GROUPS frame with the same bounds.
-///
-/// `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` is not the SQL default.
-/// Engines that omit the frame use RANGE, which includes peer rows and changes
-/// the result. See https://github.com/Canner/WrenAI/issues/2745.
-fn preserve_explicit_rows_frame(sql: String) -> String {
-    const NEEDLE: &str = "RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW";
-    let bytes = sql.as_bytes();
-    let mut out = String::with_capacity(sql.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        // Never strip the frame text from a string literal or quoted identifier.
-        if matches!(bytes[i], b'\'' | b'"') {
-            let quote = bytes[i];
-            let start = i;
-            i += 1;
-            while i < bytes.len() {
-                if bytes[i] == quote {
-                    let doubled = i + 1 < bytes.len() && bytes[i + 1] == quote;
-                    i += if doubled { 2 } else { 1 };
-                    if !doubled {
-                        break;
-                    }
-                } else {
-                    i += 1;
-                }
+/// Remove the default `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`
+/// frame from window functions, leaving explicit ROWS/GROUPS frames intact.
+fn strip_default_range_frame(statement: &mut Statement) {
+    let _ = visit_expressions_mut(statement, |expr| {
+        if let Expr::Function(Function {
+            over: Some(WindowType::WindowSpec(spec)),
+            ..
+        }) = expr
+        {
+            if matches!(
+                &spec.window_frame,
+                Some(WindowFrame {
+                    units: WindowFrameUnits::Range,
+                    start_bound: WindowFrameBound::Preceding(None),
+                    end_bound: Some(WindowFrameBound::CurrentRow),
+                })
+            ) {
+                spec.window_frame = None;
             }
-            out.push_str(&sql[start..i]);
-            continue;
         }
-        if sql[i..].starts_with(NEEDLE) {
-            let mut start = out.len();
-            while start > 0 && out.as_bytes()[start - 1].is_ascii_whitespace() {
-                start -= 1;
-            }
-            out.truncate(start);
-            i += NEEDLE.len();
-            continue;
-        }
-        let ch = sql[i..].chars().next().unwrap();
-        out.push(ch);
-        i += ch.len_utf8();
-    }
-    out
+        std::ops::ControlFlow::<()>::Continue(())
+    });
 }
 
 /// Try to check if the fail reason is a permission denied error.
@@ -4470,10 +4453,16 @@ mod test {
         // Explicit ROWS UNBOUNDED PRECEDING .. CURRENT ROW must survive planning.
         // Dropping it lets engines default to RANGE, which includes peer rows.
         let sql = "SELECT sum(o_orderkey) OVER (ORDER BY o_custkey ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_sum FROM orders";
-        let planned = transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], Arc::clone(&headers), sql).await?;
-        assert!(
-            planned.contains("ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW"),
-            "explicit ROWS frame was dropped: {planned}"
+        assert_snapshot!(
+            transform_sql_with_ctx(
+                &ctx,
+                Arc::clone(&analyzed_mdl),
+                &[],
+                Arc::clone(&headers),
+                sql,
+            )
+            .await?,
+            @"SELECT sum(CAST(orders.o_orderkey AS BIGINT)) OVER (ORDER BY orders.o_custkey ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_sum FROM (SELECT orders.o_custkey, orders.o_orderkey FROM (SELECT __source.o_custkey AS o_custkey, __source.o_orderkey AS o_orderkey FROM orders AS __source) AS orders) AS orders"
         );
 
         // assert generate window frame if given
