@@ -119,6 +119,21 @@ class TestEnvResolution:
         with pytest.raises(DbtLoadError, match="DBT_PASSWORD"):
             resolve_env_vars("{{ env_var('DBT_PASSWORD') }}", env={})
 
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("{{ env_var('DB_PORT') | as_number }}", "5433"),
+            ("{{ env_var('DB_PORT') | int }}", "5433"),
+            ("{{env_var('DB_PORT')|int}}", "5433"),
+            ("{{ env_var('DBT_THREADS', 4) | int }}", "4"),
+            ("{{ env_var('DBT_SSL', False) | as_bool }}", "False"),
+            ("{{ env_var('DBT_SCHEMA', 'public') | as_text }}", "public"),
+        ],
+    )
+    def test_resolve_env_var_with_cast_filter(self, value, expected):
+        resolved = resolve_env_vars(value, env={"DB_PORT": "5433"})
+        assert resolved == expected
+
 
 @pytest.mark.unit
 class TestResolveDbtTarget:
@@ -230,6 +245,27 @@ class TestConvertDbtTargetToWrenProfile:
             "user": "postgres",
             "password": "secret",
         }
+
+    def test_convert_postgres_profile_with_cast_env_var_port(self, tmp_path):
+        project_dir, profiles_path = _write_basic_dbt_project(tmp_path)
+        profiles_path.write_text(
+            "jaffle_shop:\n"
+            "  target: dev\n"
+            "  outputs:\n"
+            "    dev:\n"
+            "      type: postgres\n"
+            "      host: localhost\n"
+            "      port: \"{{ env_var('DB_PORT') | as_number }}\"\n"
+            "      dbname: analytics\n"
+            "      user: postgres\n"
+        )
+        target = resolve_dbt_target(
+            project_dir, profiles_path=profiles_path, env={"DB_PORT": "5433"}
+        )
+
+        profile = convert_dbt_target_to_wren_profile(target)
+
+        assert profile["port"] == "5433"
 
     def test_convert_postgres_profile_omits_missing_password(self, tmp_path):
         project_dir, profiles_path = _write_basic_dbt_project(tmp_path)
