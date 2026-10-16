@@ -1207,7 +1207,14 @@ def _qualify_measure_expression(expression: str, base_object: str) -> str | None
         return None
 
     def _qualify(node: exp.Expression) -> exp.Expression:
-        if isinstance(node, exp.Column) and not node.table:
+        # Only columns in the outer expression scope belong to the base
+        # object; a column inside a nested query (or subquery) resolves
+        # against that query's own FROM clause and must be left alone.
+        if (
+            isinstance(node, exp.Column)
+            and not node.table
+            and node.find_ancestor(exp.Query, exp.Subquery) is None
+        ):
             return exp.Column(this=node.this, table=exp.to_identifier(base_object))
         return node
 

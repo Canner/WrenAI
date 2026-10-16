@@ -1226,6 +1226,15 @@ def test_qualify_measure_expression_prefixes_bare_columns():
     )
 
 
+def test_qualify_measure_expression_leaves_nested_query_scope_alone():
+    assert (
+        _qualify_measure_expression(
+            "SUM(amount) + (SELECT MAX(amount) FROM refunds)", "orders"
+        )
+        == "SUM(orders.amount) + (SELECT MAX(amount) FROM refunds)"
+    )
+
+
 def test_qualify_measure_expression_keeps_qualified_columns():
     assert _qualify_measure_expression("SUM(o.amount)", "orders") == "SUM(o.amount)"
 
