@@ -386,6 +386,28 @@ impl ModelAnalyzeRule {
                     })?;
                 Ok(Transformed::no(plan))
             }
+            // `SELECT DISTINCT ON (...)` is planned without a Projection: the
+            // DistinctOn node carries the select list, the ON keys and the
+            // ORDER BY keys itself, so their columns must be collected here.
+            LogicalPlan::Distinct(Distinct::On(distinct_on)) => {
+                let mut accum = HashSet::new();
+                distinct_on
+                    .on_expr
+                    .iter()
+                    .chain(distinct_on.select_expr.iter())
+                    .for_each(|expr| Expr::add_column_refs(expr, &mut accum));
+                distinct_on.sort_expr.iter().flatten().for_each(|sort| {
+                    Expr::add_column_refs(&sort.expr, &mut accum);
+                });
+                accum.into_iter().try_for_each(|col| {
+                    self.collect_required_column(
+                        Expr::Column(col.to_owned()),
+                        scope_manager,
+                        current_scope_id,
+                    )
+                })?;
+                Ok(Transformed::no(plan))
+            }
             _ => Ok(Transformed::no(plan)),
         }
     }
