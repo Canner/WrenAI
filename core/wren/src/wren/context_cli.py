@@ -337,7 +337,7 @@ def _import_openmetadata(
     typer.echo("\nNext steps:")
     typer.echo(
         f"  wren profile add <name> --datasource {imported.datasource} "
-        "--interactive   # OpenMetadata does not export connection credentials"
+        "--interactive   # connection settings are not imported from OpenMetadata"
     )
     typer.echo(f"  wren context validate --path {output_path}")
     typer.echo(f"  wren context build --path {output_path}")

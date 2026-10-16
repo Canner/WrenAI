@@ -48,7 +48,9 @@ openmetadata:
 - **Lineage is not turned into relationships.** OpenMetadata lineage records how data is derived
   (table B is computed from table A), not how tables join. Only foreign-key constraints produce
   relationships, so tables with no foreign keys get no relationships.
-- **Connection credentials.** OpenMetadata does not export them; bind a Wren profile separately.
+- **Connection settings.** Only the datasource type comes from OpenMetadata. Host, port, user and
+  database are not imported (the address OpenMetadata ingests through is often not reachable from
+  where Wren runs) and OpenMetadata masks passwords, so bind a Wren profile separately.
 - Glossary terms, metrics and other knowledge assets, and incremental re-sync, are not covered by
   this command.
 
