@@ -217,7 +217,7 @@ AI coding agents should **never** ask for credentials in chat. The agent writes 
 | Source | Command | When to use |
 |---|---|---|
 | Wren `mdl.json` (camelCase) | `wren context init --from-mdl /path/to/mdl.json --path my_project` | You have an older `mdl.json` from a previous Wren setup. |
-| OSI `semantic_model.yaml` | `wren context init --from-osi /path/to/semantic_model.yaml --data-source postgres --path my_project` | You have an [Open Semantic Interchange](./osi.md) file and want to leave the OSI flow to use Wren-only features (cubes, views, RLAC). |
+| Apache Ossie `semantic_model.yaml` | `wren context init --from-ossie /path/to/semantic_model.yaml --data-source postgres --path my_project` | You have an [Apache Ossie (formerly OSI)](./ossie.md) file and want to leave the Ossie flow to use Wren-only features (cubes, views, RLAC). |
 
 After either import:
 
@@ -228,7 +228,7 @@ wren context build --path my_project
 
 If the target directory already has project files, use `--force` to overwrite.
 
-For `--from-osi`, see the dedicated [OSI guide](./osi.md) — it covers the alternative of keeping OSI as the source of truth (`wren context build --from-osi`) instead of migrating once.
+For `--from-ossie` (`--from-osi` is a deprecated alias), see the dedicated [Ossie guide](./ossie.md) — it covers the alternative of keeping Ossie as the source of truth (`wren context build --from-ossie`) instead of migrating once, and the reverse direction (`wren context export-ossie`) for publishing a wren project to other Ossie consumers.
 
 ## Upgrade an existing project
 
