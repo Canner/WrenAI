@@ -137,12 +137,18 @@ def _resolve_engine_profile(mdl: str | None) -> tuple[str | None, dict]:
     discovery finds a project — preventing ``--mdl <base64>`` or
     ``--mdl /external.json`` from silently bypassing cwd's pin.
     """
+    return _resolve_profile_for_engine_project(_discover_project_for_engine(mdl))
+
+
+def _resolve_profile_for_engine_project(
+    project_path: Path | None,
+) -> tuple[str | None, dict]:
+    """Use the project's pinned profile, or the active profile without a project."""
     from wren.profile import (  # noqa: PLC0415
         get_active_profile,
         resolve_profile_for_project,
     )
 
-    project_path = _discover_project_for_engine(mdl)
     if project_path is None:
         return get_active_profile()
     return resolve_profile_for_project(project_path)
@@ -202,6 +208,11 @@ def _build_engine(
     conn_required: bool = True,
     datasource: str | None = None,
 ):
+    """Build an engine using explicit connections or the selected project's profile.
+
+    Reuse the discovered project for profile selection and secret expansion so
+    an external MDL cannot inherit another project's connection environment.
+    """
     from wren.config import load_config  # noqa: PLC0415
     from wren.engine import WrenEngine  # noqa: PLC0415
     from wren.model.data_source import DataSource  # noqa: PLC0415
@@ -217,7 +228,8 @@ def _build_engine(
             expand_profile_secrets,
         )
 
-        prof_name, prof_dict = _resolve_engine_profile(mdl)
+        project_path = _discover_project_for_engine(mdl)
+        prof_name, prof_dict = _resolve_profile_for_engine_project(project_path)
         if prof_dict:
             prof_ds = prof_dict.pop("datasource", None)
             ds_str = datasource or prof_ds
@@ -233,7 +245,7 @@ def _build_engine(
             # info to the engine.  Keep the stored profile untouched so
             # debug output never leaks real secrets.
             try:
-                prof_dict = expand_profile_secrets(prof_dict)
+                prof_dict = expand_profile_secrets(prof_dict, project_path=project_path)
             except MissingSecretError as e:
                 typer.echo(f"Error: {e}", err=True)
                 raise typer.Exit(1)
