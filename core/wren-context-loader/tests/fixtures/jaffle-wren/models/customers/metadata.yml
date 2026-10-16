@@ -1,0 +1,38 @@
+name: customers
+properties:
+  description: "Final customers mart. One row per customer, enriched with order history aggregates (first order date, most recent order date, total order count, lifetime value)."
+table_reference:
+  catalog: jaffle_shop
+  schema: main
+  table: customers
+primary_key: customer_id
+columns:
+  - name: customer_id
+    type: INT
+    not_null: true
+    properties:
+      description: "Unique customer identifier."
+  - name: first_name
+    type: TEXT
+    properties:
+      description: "Customer's first name."
+  - name: last_name
+    type: TEXT
+    properties:
+      description: "Customer's last name."
+  - name: first_order
+    type: DATE
+    properties:
+      description: "Date of the customer's first order."
+  - name: most_recent_order
+    type: DATE
+    properties:
+      description: "Date of the customer's most recent order."
+  - name: number_of_orders
+    type: BIGINT
+    properties:
+      description: "Total number of orders placed by this customer."
+  - name: customer_lifetime_value
+    type: DOUBLE
+    properties:
+      description: "Sum of all completed order amounts for this customer."

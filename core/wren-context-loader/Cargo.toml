@@ -1,0 +1,27 @@
+[package]
+name = "wren-context-loader"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Reads a Wren MDL project into Warble's ContextLoader projection, so a Warble profile can bind a wren project without Warble depending on Wren."
+homepage = "https://getwren.ai"
+repository = "https://github.com/Canner/WrenAI"
+keywords = ["mdl", "semantic-layer", "lineage", "wren"]
+categories = ["database"]
+
+[dependencies]
+# `PreparedContext` and `prepared_document_from` — the wire contract this crate produces documents
+# for — plus the host-analysis shapes (`HostAnalysis`, `RankedSeverity`) this crate fills, ship in
+# warble 0.12.0. A published version, not a git ref: a branch dep here died when the source branch
+# was deleted on merge, and a deleted ref fails only on a cold cache, so the break surfaces on
+# someone else's machine rather than the author's.
+warble = "0.12"
+wren-core-base = { path = "../wren-core-base", version = "0.3" }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1"
+sqlparser = { version = "0.58", features = ["visitor"] }
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"
