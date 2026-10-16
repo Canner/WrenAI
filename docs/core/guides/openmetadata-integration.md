@@ -55,7 +55,8 @@ openmetadata:
   this command.
 
 Foreign keys that point at a table outside the selection are skipped and listed in the command
-output. Widen the selection (for example drop `--schema`) to include the referenced table.
+output. Tables with no columns in OpenMetadata, or whose name cannot be used as a model directory
+(for example one containing `/`), are skipped and listed too. Widen the selection (for example drop `--schema`) to include the referenced table.
 
 ## Prerequisites
 
@@ -117,5 +118,5 @@ OpenMetadata is the source of truth for the import, in the same way dbt is for
   definition differs from OpenMetadata. Use this to pull newly cataloged tables into an existing
   project. If there is nothing new to write, the command exits with status 1.
 - **With `--force`** the generated files (`models/`, `views/`, `relationships.yml`,
-  `wren_project.yml`, `AGENTS.md`) are deleted and regenerated from OpenMetadata. **Local edits to
+  `instructions.md`, `wren_project.yml`, `AGENTS.md`) are deleted and regenerated from OpenMetadata. **Local edits to
   those files are discarded.** Make durable description changes in OpenMetadata itself.

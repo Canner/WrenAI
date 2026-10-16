@@ -312,6 +312,8 @@ def _import_openmetadata(
         f"  {imported.model_count} models, {imported.relationship_count} "
         f"relationships (from foreign keys), datasource {imported.datasource}"
     )
+    for skipped_table in imported.skipped_tables:
+        typer.echo(f"  skipped table {skipped_table.table}: {skipped_table.reason}")
     for skipped in imported.skipped_relationships:
         typer.echo(
             f"  skipped foreign key {skipped.table}({', '.join(skipped.columns)}): "

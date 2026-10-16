@@ -189,6 +189,15 @@ class TestClient:
         assert table_calls[1]["after"]
         assert len(tables) == len(_all_tables())
 
+    def test_repeated_paging_cursor_stops(self):
+        class LoopingSession(RecordedSession):
+            def get(self, url, *, headers=None, params=None, timeout=None):
+                return _Response({"data": [], "paging": {"after": "same"}})
+
+        client = OpenMetadataClient("om.test", "test-token", session=LoopingSession())
+        with pytest.raises(OpenMetadataError, match="same paging cursor"):
+            client.list_tables(OpenMetadataSelection(service=SERVICE))
+
     def test_host_normalisation(self):
         session = RecordedSession()
         OpenMetadataClient(
@@ -356,6 +365,83 @@ class TestConversion:
             service_type="Postgres",
         )
         assert imported.relationships == []
+
+    def test_unusable_tables_are_skipped_and_reported(self):
+        tables = _all_tables()
+        orders = next(t for t in tables if t["name"] == "orders")
+        tables.append(
+            {**orders, "name": "a/b", "fullyQualifiedName": "shop_pg.shop.shop.a/b"}
+        )
+        tables.append(
+            {
+                **orders,
+                "name": "empty",
+                "fullyQualifiedName": "shop_pg.shop.shop.empty",
+                "columns": [],
+            }
+        )
+        tables.append({**orders, "fullyQualifiedName": "shop_pg.shop.orders"})
+        imported = convert_openmetadata_tables(
+            tables,
+            selection=OpenMetadataSelection(service=SERVICE, database=DATABASE),
+            service_type="Postgres",
+        )
+        names = {model["name"] for model in imported.models}
+        assert "a/b" not in names and "empty" not in names
+        model_paths = [
+            f.relative_path
+            for f in imported.files
+            if f.relative_path.startswith("models/")
+        ]
+        assert all(len(Path(path).parts) == 3 for path in model_paths)
+        assert {(s.table, s.reason.split(" ")[0]) for s in imported.skipped_tables} == {
+            ("shop_pg.shop.shop.a/b", "table"),
+            ("shop_pg.shop.shop.empty", "no"),
+            ("shop_pg.shop.orders", "not"),
+        }
+
+    def test_foreign_key_into_quoted_schema(self):
+        customers = {
+            "name": "customers",
+            "fullyQualifiedName": 'svc.db."sales.v2".customers',
+            "columns": [
+                {
+                    "name": "id",
+                    "dataTypeDisplay": "integer",
+                    "constraint": "PRIMARY_KEY",
+                }
+            ],
+        }
+        orders = {
+            "name": "orders",
+            "fullyQualifiedName": 'svc.db."sales.v2".orders',
+            "columns": [
+                {
+                    "name": "id",
+                    "dataTypeDisplay": "integer",
+                    "constraint": "PRIMARY_KEY",
+                },
+                {"name": "customer_id", "dataTypeDisplay": "integer"},
+            ],
+            "tableConstraints": [
+                {
+                    "constraintType": "FOREIGN_KEY",
+                    "columns": ["customer_id"],
+                    "referredColumns": ['svc.db."sales.v2".customers.id'],
+                }
+            ],
+        }
+        imported = convert_openmetadata_tables(
+            [customers, orders],
+            selection=OpenMetadataSelection(
+                service="svc", database="db", schema="sales.v2"
+            ),
+            service_type="Postgres",
+        )
+        assert _model(imported, "orders")["table_reference"]["schema"] == "sales.v2"
+        assert [rel["condition"] for rel in imported.relationships] == [
+            "orders.customer_id = customers.id"
+        ]
 
     def test_empty_selection_fails(self):
         with pytest.raises(OpenMetadataError, match="No tables matched"):

@@ -74,6 +74,12 @@ class SkippedRelationship:
     reason: str
 
 
+@dataclass(frozen=True)
+class SkippedTable:
+    table: str
+    reason: str
+
+
 @dataclass
 class OpenMetadataProjectImport:
     """Project files and summary generated from an OpenMetadata catalog."""
@@ -86,6 +92,7 @@ class OpenMetadataProjectImport:
     models: list[dict[str, Any]] = field(default_factory=list)
     relationships: list[dict[str, Any]] = field(default_factory=list)
     skipped_relationships: list[SkippedRelationship] = field(default_factory=list)
+    skipped_tables: list[SkippedTable] = field(default_factory=list)
 
 
 class OpenMetadataClient:
@@ -132,12 +139,19 @@ class OpenMetadataClient:
             params["service"] = selection.service
 
         tables: list[dict[str, Any]] = []
+        seen_cursors: set[str] = set()
         while True:
             payload = self._get("/tables", params=params)
             tables.extend(payload.get("data") or [])
             after = (payload.get("paging") or {}).get("after")
             if not after:
                 break
+            if after in seen_cursors:
+                raise OpenMetadataError(
+                    "OpenMetadata returned the same paging cursor twice while "
+                    "listing tables; stopping to avoid an endless loop."
+                )
+            seen_cursors.add(after)
             params = {**params, "after": after}
         return tables
 
@@ -205,7 +219,7 @@ def convert_openmetadata_tables(
     wren_datasource = datasource or map_service_type_to_wren(service_type)
     dialect = _SQLGLOT_DIALECT.get(wren_datasource, wren_datasource)
 
-    selected = _filter_tables(tables, selection)
+    selected, skipped_tables = _filter_tables(tables, selection)
     if not selected:
         raise OpenMetadataError(
             "No tables matched the selection "
@@ -213,7 +227,7 @@ def convert_openmetadata_tables(
             f"schema={selection.schema!r}, tables={list(selection.tables) or 'all'})."
         )
 
-    models, model_by_table_fqn = _build_models(selected, dialect)
+    models, model_by_table_fqn = _build_models(selected, dialect, skipped_tables)
     relationships, skipped = _build_relationships(selected, model_by_table_fqn)
 
     project_config: dict[str, Any] = {
@@ -265,6 +279,7 @@ def convert_openmetadata_tables(
         models=models,
         relationships=relationships,
         skipped_relationships=skipped,
+        skipped_tables=skipped_tables,
     )
 
 
@@ -378,14 +393,19 @@ def build_fqn(*parts: str) -> str:
 
 def _filter_tables(
     tables: list[dict[str, Any]], selection: OpenMetadataSelection
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[SkippedTable]]:
     wanted = {name.lower() for name in selection.tables}
     selected = []
+    skipped: list[SkippedTable] = []
     for table in tables:
         if table.get("deleted"):
             continue
-        parts = split_fqn(str(table.get("fullyQualifiedName") or ""))
+        fqn = str(table.get("fullyQualifiedName") or "")
+        parts = split_fqn(fqn)
         if len(parts) != 4:
+            skipped.append(
+                SkippedTable(fqn, "not a service.database.schema.table name")
+            )
             continue
         service, database, schema, name = parts
         if service != selection.service:
@@ -397,11 +417,12 @@ def _filter_tables(
         if wanted and name.lower() not in wanted:
             continue
         selected.append(table)
-    return sorted(selected, key=lambda t: str(t.get("fullyQualifiedName")))
+    selected.sort(key=lambda t: str(t.get("fullyQualifiedName")))
+    return selected, skipped
 
 
 def _build_models(
-    tables: list[dict[str, Any]], dialect: str
+    tables: list[dict[str, Any]], dialect: str, skipped: list[SkippedTable]
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
     name_counts: dict[str, int] = {}
     for table in tables:
@@ -415,6 +436,11 @@ def _build_models(
         fqn = str(table["fullyQualifiedName"])
         _, database, schema, table_name = split_fqn(fqn)
         name = table_name if name_counts[table_name] == 1 else f"{schema}_{table_name}"
+        if not _is_safe_model_name(name):
+            skipped.append(
+                SkippedTable(fqn, f"table name {name!r} cannot be a model directory")
+            )
+            continue
         if name in used_names:
             raise OpenMetadataError(
                 f"Duplicate Wren model name '{name}' for OpenMetadata table '{fqn}'. "
@@ -426,6 +452,7 @@ def _build_models(
             _build_column(column, dialect) for column in table.get("columns") or []
         ]
         if not columns:
+            skipped.append(SkippedTable(fqn, "no columns in OpenMetadata"))
             continue
         model: dict[str, Any] = {
             "name": name,
@@ -472,6 +499,14 @@ def _build_column(column: dict[str, Any], dialect: str) -> dict[str, Any]:
             }
         ),
     }
+
+
+def _is_safe_model_name(name: str) -> bool:
+    return bool(name.strip()) and not (
+        name.startswith(".")
+        or any(sep in name for sep in ("/", "\\"))
+        or any(ord(char) < 32 for char in name)
+    )
 
 
 def _primary_key(table: dict[str, Any]) -> list[str]:
