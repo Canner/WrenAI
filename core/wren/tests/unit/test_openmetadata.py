@@ -205,6 +205,20 @@ class TestClient:
         ).server_version()
         assert session.calls[0][0] == "http://om.test:8585/api/v1/system/version"
 
+    def test_host_without_scheme_defaults_to_https(self):
+        session = RecordedSession()
+        OpenMetadataClient(
+            "om.test:8585", "test-token", session=session
+        ).server_version()
+        assert session.calls[0][0] == "https://om.test:8585/api/v1/system/version"
+
+    def test_explicit_http_host_is_kept(self):
+        session = RecordedSession()
+        OpenMetadataClient(
+            "http://localhost:8585", "test-token", session=session
+        ).server_version()
+        assert session.calls[0][0] == "http://localhost:8585/api/v1/system/version"
+
     def test_database_only_selection_filters_by_database(self):
         session = RecordedSession()
         client = OpenMetadataClient("om.test", "test-token", session=session)

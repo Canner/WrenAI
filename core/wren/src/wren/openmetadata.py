@@ -679,7 +679,8 @@ def _api_base(host: str) -> str:
     if not base:
         raise OpenMetadataError("OpenMetadata host is empty.")
     if not base.startswith(("http://", "https://")):
-        base = f"http://{base}"
+        # The token travels in a header; never fall back to cleartext silently.
+        base = f"https://{base}"
     if base.endswith("/api/v1"):
         return base
     if base.endswith("/api"):

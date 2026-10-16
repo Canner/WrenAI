@@ -86,7 +86,7 @@ wren context import openmetadata \
 
 | Flag | Meaning |
 |------|---------|
-| `--host` / `OPENMETADATA_HOST` | OpenMetadata server URL (`/api/v1` is appended if missing) |
+| `--host` / `OPENMETADATA_HOST` | OpenMetadata server URL. `https://` is assumed when no scheme is given; write `http://` explicitly for a local quickstart. `/api/v1` is appended if missing |
 | `--token` / `OPENMETADATA_TOKEN` | Bot or personal access token |
 | `--service` | Database service name as shown in OpenMetadata (required) |
 | `--database` | Only import tables from this database |
