@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import json
+import shutil
+from pathlib import Path
 
+import duckdb
 import pytest
+import sqlglot
 import yaml
 
 from wren.dbt import (
     DbtLoadError,
+    _ensure_relationship,
+    _find_column,
     convert_dbt_project_to_wren_project,
     convert_dbt_target_to_wren_profile,
     default_wren_profile_name,
@@ -370,6 +376,86 @@ class TestConvertDbtTargetToWrenProfile:
 
 @pytest.mark.unit
 class TestLoadDbtArtifacts:
+    def test_import_preserves_quoted_column_tests(self, tmp_path):
+        project_dir = tmp_path / "dbt"
+        fixture_dir = Path(__file__).parents[1] / "fixtures" / "dbt" / "quoted_columns"
+        shutil.copytree(fixture_dir, project_dir / "target")
+        (project_dir / "dbt_project.yml").write_text(
+            "name: review_dbt\nprofile: review_dbt\n", encoding="utf-8"
+        )
+        profiles_path = project_dir / "profiles.yml"
+        profiles_path.write_text(
+            "review_dbt:\n  target: dev\n  outputs:\n"
+            "    dev:\n      type: duckdb\n      path: warehouse.duckdb\n",
+            encoding="utf-8",
+        )
+
+        imported = convert_dbt_project_to_wren_project(
+            project_dir, output_dir=project_dir / "wren", profiles_path=profiles_path
+        )
+        files = {file.relative_path: file.content for file in imported.files}
+        customers = yaml.safe_load(files["models/dim_customers/metadata.yml"])
+        column = customers["columns"][0]
+        assert customers["primary_key"] == "customer-id"
+        assert column["not_null"] is True
+        assert column["properties"]["dbt_tests"] == "not_null,unique"
+        assert column["properties"]["dbt_test_status"] == "verified"
+        assert imported.relationship_count == 1
+        relationship = yaml.safe_load(files["relationships.yml"])["relationships"][0]
+        condition = relationship["condition"]
+        assert {
+            (col.table, col.name)
+            for col in sqlglot.parse_one(condition).find_all(sqlglot.exp.Column)
+        } == {("fct_orders", "customer-id"), ("dim_customers", "customer-id")}
+        # The restored join must refer to the actual columns, not subtraction.
+        with duckdb.connect() as conn:
+            conn.execute('CREATE TABLE dim_customers ("customer-id" INTEGER)')
+            conn.execute('CREATE TABLE fct_orders ("customer-id" INTEGER)')
+            conn.execute("INSERT INTO dim_customers VALUES (1), (2)")
+            conn.execute("INSERT INTO fct_orders VALUES (1), (1), (2)")
+            assert conn.execute(
+                f"SELECT count(*) FROM fct_orders JOIN dim_customers ON {condition}"
+            ).fetchone() == (3,)
+
+    @pytest.mark.parametrize(
+        "dialect, quoted_name, name",
+        [
+            ("duckdb", '"Customer-ID"', "Customer-ID"),
+            ("duckdb", '"customer""id"', 'customer"id'),
+            ("mysql", "`customer``id`", "customer`id"),
+            ("tsql", "[customer]]id]", "customer]id"),
+        ],
+    )
+    def test_find_quoted_column(self, dialect, quoted_name, name):
+        column = {"name": name}
+        assert (
+            _find_column({"columns": [column]}, quoted_name, dialect=dialect) is column
+        )
+
+    def test_find_column_prefers_exact_catalog_name(self):
+        raw_column = {"name": '"id"'}
+        assert (
+            _find_column({"columns": [{"name": "id"}, raw_column]}, '"id"')
+            is raw_column
+        )
+
+    def test_unquoted_columns_keep_existing_relationship_condition(self):
+        column = {"name": "customer_id"}
+        orders = {"name": "orders", "columns": [column]}
+        assert _find_column(orders, "customer_id", dialect="duckdb") is column
+        relationships = []
+        _ensure_relationship(
+            relationships, {}, orders, "customer_id", {"name": "customers"}, "id"
+        )
+        assert relationships[0]["condition"] == "orders.customer_id = customers.id"
+
+    @pytest.mark.parametrize("name", ["id", "'id'", "t.id", '"ID"', '"id'])
+    def test_find_column_does_not_reinterpret_other_sql(self, name):
+        assert (
+            _find_column({"columns": [{"name": "ID" if name == "id" else "id"}]}, name)
+            is None
+        )
+
     def test_import_normalizes_column_types_with_dbt_adapter(
         self, tmp_path, monkeypatch
     ):
@@ -377,9 +463,9 @@ class TestLoadDbtArtifacts:
         monkeypatch.setenv("JAFFLE_DUCKDB_PATH", "warehouse/jaffle.duckdb")
         catalog_path = project_dir / "build" / "catalog.json"
         catalog = json.loads(catalog_path.read_text())
-        catalog["nodes"]["model.jaffle_shop.orders"]["columns"]["id"][
-            "type"
-        ] = "character varying(255)"
+        catalog["nodes"]["model.jaffle_shop.orders"]["columns"]["id"]["type"] = (
+            "character varying(255)"
+        )
         catalog_path.write_text(json.dumps(catalog))
 
         imported = convert_dbt_project_to_wren_project(

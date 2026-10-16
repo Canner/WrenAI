@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from sqlglot import Dialect, exp
+from sqlglot.errors import TokenError
+from sqlglot.tokens import TokenType
 
 from wren.type_mapping import parse_type
 
@@ -783,6 +786,7 @@ def _apply_dbt_test_enrichment(
         for model in imported_models
     }
     status_by_unique_id = _build_run_results_index(artifacts.run_results)
+    dialect = _dbt_type_dialect(artifacts.manifest)
     relationships: list[dict[str, Any]] = []
     relationship_keys: dict[tuple[str, str, str, str], str] = {}
     test_events: list[dict[str, Any]] = []
@@ -802,7 +806,11 @@ def _apply_dbt_test_enrichment(
             continue
         kwargs = test_meta.get("kwargs") or {}
         column_name = node.get("column_name") or kwargs.get("column_name")
-        column = _find_column(model, str(column_name)) if column_name else None
+        column = (
+            _find_column(model, str(column_name), dialect=dialect)
+            if column_name
+            else None
+        )
         status_info = status_by_unique_id.get(unique_id, {})
         status = _normalize_test_status(status_info.get("status"))
         failures = status_info.get("failures")
@@ -831,6 +839,11 @@ def _apply_dbt_test_enrichment(
                 target_model = model_by_unique_id.get(target_uid)
                 target_field = str(kwargs.get("field") or "id")
                 if target_model is not None:
+                    target_column = _find_column(
+                        target_model, target_field, dialect=dialect
+                    )
+                    if target_column is not None:
+                        target_field = target_column["name"]
                     rel_name = _ensure_relationship(
                         relationships,
                         relationship_keys,
@@ -1083,10 +1096,24 @@ def _infer_attached_node(node: dict[str, Any]) -> str | None:
     return None
 
 
-def _find_column(model: dict[str, Any], column_name: str) -> dict[str, Any] | None:
+def _find_column(
+    model: dict[str, Any], column_name: str, *, dialect: str = ""
+) -> dict[str, Any] | None:
     for column in model.get("columns", []):
         if column.get("name") == column_name:
             return column
+
+    # dbt test artifacts quote identifiers; catalog names are physical names.
+    # Tokenize only after the raw lookup so literal quote characters in a
+    # physical column name keep their existing exact-match behavior.
+    try:
+        tokens = Dialect.get_or_raise(dialect).tokenize(column_name)
+    except TokenError:
+        return None
+    if len(tokens) == 1 and tokens[0].token_type == TokenType.IDENTIFIER:
+        for column in model.get("columns", []):
+            if column.get("name") == tokens[0].text:
+                return column
     return None
 
 
@@ -1137,7 +1164,9 @@ def _ensure_relationship(
             "models": [model["name"], target_model["name"]],
             "join_type": _infer_join_type(model, target_model),
             "condition": (
-                f"{model['name']}.{column_name} = {target_model['name']}.{target_field}"
+                exp.column(column_name, table=model["name"])
+                .eq(exp.column(target_field, table=target_model["name"]))
+                .sql()
             ),
             "properties": {"source": "dbt_test"},
         }

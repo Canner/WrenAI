@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "status": "success",
+      "failures": null,
+      "unique_id": "model.review_dbt.dim_customers"
+    },
+    {
+      "status": "success",
+      "failures": null,
+      "unique_id": "model.review_dbt.fct_orders"
+    },
+    {
+      "status": "success",
+      "failures": null,
+      "unique_id": "test.review_dbt.not_null_dim_customers__customer_id_.46e5ec03aa"
+    },
+    {
+      "status": "success",
+      "failures": null,
+      "unique_id": "test.review_dbt.unique_dim_customers__customer_id_.591896cf0f"
+    },
+    {
+      "status": "success",
+      "failures": null,
+      "unique_id": "test.review_dbt.relationships_fct_orders__customer_id____customer_id___ref_dim_customers_.48ccecd76d"
+    }
+  ]
+}
