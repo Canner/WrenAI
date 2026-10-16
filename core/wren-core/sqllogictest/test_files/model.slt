@@ -52,6 +52,22 @@ select * from w1;
 56
 9
 
+# DISTINCT ON over a model keeps one row per key
+query B
+select cnt1 = cnt2 from (select count(*) as cnt1 from (select distinct on ("Order_id") "Order_id", "Id" from wrenai.public."Order_items" order by "Order_id", "Price" desc, "Id")), (select count(distinct order_id) as cnt2 from datafusion.public.order_items) limit 1;
+----
+true
+
+# DISTINCT ON over a model picks the same rows as over the source table
+query I
+select count(*) from (
+    (select distinct on ("Order_id") "Order_id", "Id" from wrenai.public."Order_items" order by "Order_id", "Price" desc, "Id")
+    except
+    (select distinct on (order_id) order_id, id from datafusion.public.order_items order by order_id, price desc, id)
+);
+----
+0
+
 # TODO: occurred fatal runtime error: stack overflow
 #query B
 #select actual = expected from (select "Totalprice" as actual from wrenai.public."Orders" where "Order_id" = '76754c0e642c8f99a8c3fcb8a14ac700'), (select sum(price) as expected from datafusion.public.order_items where order_id = '76754c0e642c8f99a8c3fcb8a14ac700') limit 1;
