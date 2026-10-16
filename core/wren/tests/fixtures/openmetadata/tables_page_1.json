@@ -1,0 +1,660 @@
+{
+  "data": [
+    {
+      "columns": [
+        {
+          "children": [],
+          "constraint": "PRIMARY_KEY",
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.customer_profiles.customer_id",
+          "name": "customer_id",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NULL",
+          "dataLength": 1,
+          "dataType": "TEXT",
+          "dataTypeDisplay": "text",
+          "fullyQualifiedName": "shop_pg.shop.shop.customer_profiles.bio",
+          "name": "bio",
+          "tags": []
+        }
+      ],
+      "database": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop",
+        "href": "http://localhost:8585/api/v1/databases/3b803793-8798-46ed-821a-04f4aecbcae1",
+        "id": "3b803793-8798-46ed-821a-04f4aecbcae1",
+        "name": "shop",
+        "type": "database"
+      },
+      "databaseSchema": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop.shop",
+        "href": "http://localhost:8585/api/v1/databaseSchemas/a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "id": "a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "name": "shop",
+        "type": "databaseSchema"
+      },
+      "deleted": false,
+      "entityStatus": "Unprocessed",
+      "fullyQualifiedName": "shop_pg.shop.shop.customer_profiles",
+      "href": "http://localhost:8585/api/v1/tables/64a44d81-19e8-40f6-a953-bc81d71d29c7",
+      "id": "64a44d81-19e8-40f6-a953-bc81d71d29c7",
+      "name": "customer_profiles",
+      "owners": [],
+      "processedLineage": false,
+      "service": {
+        "deleted": false,
+        "displayName": "shop_pg",
+        "fullyQualifiedName": "shop_pg",
+        "href": "http://localhost:8585/api/v1/services/databaseServices/18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "id": "18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "name": "shop_pg",
+        "type": "databaseService"
+      },
+      "serviceType": "Postgres",
+      "sourceHash": "e391a3c28927366447291753a9177d69",
+      "tableConstraints": [
+        {
+          "columns": [
+            "customer_id"
+          ],
+          "constraintType": "FOREIGN_KEY",
+          "referredColumns": [
+            "shop_pg.shop.shop.customers.customer_id"
+          ],
+          "relationshipType": "ONE_TO_ONE"
+        }
+      ],
+      "tableType": "Regular",
+      "tags": [],
+      "updatedAt": 1792120206690,
+      "updatedBy": "admin",
+      "version": 0.1
+    },
+    {
+      "changeDescription": {
+        "changeSummary": {
+          "columns.email.description": {
+            "changeSource": "Manual",
+            "changedAt": 1792120231841,
+            "changedBy": "admin"
+          },
+          "description": {
+            "changeSource": "Manual",
+            "changedAt": 1792120231841,
+            "changedBy": "admin"
+          },
+          "owners": {
+            "changeSource": "Manual",
+            "changedAt": 1792120231841,
+            "changedBy": "admin"
+          }
+        },
+        "fieldsAdded": [
+          {
+            "name": "owners",
+            "newValue": "[{\"id\":\"a7a0b943-4b5c-413c-a2ce-a10ed32a6165\",\"type\":\"user\",\"name\":\"admin\",\"fullyQualifiedName\":\"admin\",\"displayName\":\"admin\",\"deleted\":false}]"
+          },
+          {
+            "name": "tags",
+            "newValue": "[{\"tagFQN\":\"Tier.Tier1\",\"name\":\"Tier1\",\"description\":\"**Critical Source of Truth business data assets of an organization**\\n\\n- Used in critical metrics and dashboards to drive business and product decisions\\n\\n- Used in critical compliance reporting to regulators, govt entities, and third party\\n\\n- Used in brand or revenue impacting online user-facing experiences (search results, advertisement, promotions, and experimentation)\\n\\n- Other high impact use, such as ML models and fraud detection\\n\\n- Source used to derive other critical Tier-1 datasets\",\"source\":\"Classification\",\"labelType\":\"Manual\",\"state\":\"Confirmed\",\"appliedBy\":\"admin\"}]"
+          },
+          {
+            "name": "columns.email.description",
+            "newValue": "Primary contact email."
+          },
+          {
+            "name": "columns.email.tags",
+            "newValue": "[{\"tagFQN\":\"PII.Sensitive\",\"name\":\"Sensitive\",\"description\":\"PII which if lost, compromised, or disclosed without authorization, could result in substantial harm, embarrassment, inconvenience, or unfairness to an individual.\",\"source\":\"Classification\",\"labelType\":\"Manual\",\"state\":\"Confirmed\",\"appliedBy\":\"admin\"}]"
+          },
+          {
+            "name": "tableConstraints",
+            "newValue": "[{\"constraintType\":\"FOREIGN_KEY\",\"columns\":[\"region_code\"],\"referredColumns\":[\"shop_pg.shop.ref.regions.region_code\"],\"relationshipType\":\"MANY_TO_ONE\"}]"
+          }
+        ],
+        "fieldsDeleted": [],
+        "fieldsUpdated": [
+          {
+            "name": "description",
+            "newValue": "Customers who have placed at least one order.",
+            "oldValue": "Registered customers (DB comment)"
+          }
+        ],
+        "previousVersion": 0.1
+      },
+      "columns": [
+        {
+          "children": [],
+          "constraint": "PRIMARY_KEY",
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.customers.customer_id",
+          "name": "customer_id",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 200,
+          "dataType": "VARCHAR",
+          "dataTypeDisplay": "character varying(200)",
+          "fullyQualifiedName": "shop_pg.shop.shop.customers.name",
+          "name": "name",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NULL",
+          "dataLength": 320,
+          "dataType": "VARCHAR",
+          "dataTypeDisplay": "character varying(320)",
+          "description": "Primary contact email.",
+          "fullyQualifiedName": "shop_pg.shop.shop.customers.email",
+          "name": "email",
+          "tags": [
+            {
+              "appliedAt": "2026-10-16T03:10:31.000853Z",
+              "appliedBy": "admin",
+              "description": "PII which if lost, compromised, or disclosed without authorization, could result in substantial harm, embarrassment, inconvenience, or unfairness to an individual.",
+              "labelType": "Manual",
+              "name": "Sensitive",
+              "source": "Classification",
+              "state": "Confirmed",
+              "tagFQN": "PII.Sensitive"
+            }
+          ]
+        },
+        {
+          "children": [],
+          "constraint": "NULL",
+          "dataLength": 1,
+          "dataType": "TEXT",
+          "dataTypeDisplay": "text",
+          "fullyQualifiedName": "shop_pg.shop.shop.customers.region_code",
+          "name": "region_code",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 1,
+          "dataType": "TIMESTAMP",
+          "dataTypeDisplay": "timestamp without time zone",
+          "fullyQualifiedName": "shop_pg.shop.shop.customers.created_at",
+          "name": "created_at",
+          "tags": []
+        }
+      ],
+      "database": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop",
+        "href": "http://localhost:8585/api/v1/databases/3b803793-8798-46ed-821a-04f4aecbcae1",
+        "id": "3b803793-8798-46ed-821a-04f4aecbcae1",
+        "name": "shop",
+        "type": "database"
+      },
+      "databaseSchema": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop.shop",
+        "href": "http://localhost:8585/api/v1/databaseSchemas/a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "id": "a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "name": "shop",
+        "type": "databaseSchema"
+      },
+      "deleted": false,
+      "description": "Customers who have placed at least one order.",
+      "entityStatus": "Unprocessed",
+      "fullyQualifiedName": "shop_pg.shop.shop.customers",
+      "href": "http://localhost:8585/api/v1/tables/03fb8439-c255-427d-82b7-4ff434f588d4",
+      "id": "03fb8439-c255-427d-82b7-4ff434f588d4",
+      "incrementalChangeDescription": {
+        "changeSummary": {
+          "columns.email.description": {
+            "changeSource": "Manual",
+            "changedAt": 1792120231841,
+            "changedBy": "admin"
+          },
+          "description": {
+            "changeSource": "Manual",
+            "changedAt": 1792120231841,
+            "changedBy": "admin"
+          },
+          "owners": {
+            "changeSource": "Manual",
+            "changedAt": 1792120231841,
+            "changedBy": "admin"
+          }
+        },
+        "fieldsAdded": [
+          {
+            "name": "owners",
+            "newValue": "[{\"id\":\"a7a0b943-4b5c-413c-a2ce-a10ed32a6165\",\"type\":\"user\",\"name\":\"admin\",\"fullyQualifiedName\":\"admin\",\"displayName\":\"admin\",\"deleted\":false}]"
+          },
+          {
+            "name": "tags",
+            "newValue": "[{\"tagFQN\":\"Tier.Tier1\",\"name\":\"Tier1\",\"description\":\"**Critical Source of Truth business data assets of an organization**\\n\\n- Used in critical metrics and dashboards to drive business and product decisions\\n\\n- Used in critical compliance reporting to regulators, govt entities, and third party\\n\\n- Used in brand or revenue impacting online user-facing experiences (search results, advertisement, promotions, and experimentation)\\n\\n- Other high impact use, such as ML models and fraud detection\\n\\n- Source used to derive other critical Tier-1 datasets\",\"source\":\"Classification\",\"labelType\":\"Manual\",\"state\":\"Confirmed\",\"appliedBy\":\"admin\"}]"
+          },
+          {
+            "name": "columns.email.description",
+            "newValue": "Primary contact email."
+          },
+          {
+            "name": "columns.email.tags",
+            "newValue": "[{\"tagFQN\":\"PII.Sensitive\",\"name\":\"Sensitive\",\"description\":\"PII which if lost, compromised, or disclosed without authorization, could result in substantial harm, embarrassment, inconvenience, or unfairness to an individual.\",\"source\":\"Classification\",\"labelType\":\"Manual\",\"state\":\"Confirmed\",\"appliedBy\":\"admin\"}]"
+          }
+        ],
+        "fieldsDeleted": [],
+        "fieldsUpdated": [
+          {
+            "name": "description",
+            "newValue": "Customers who have placed at least one order.",
+            "oldValue": "Registered customers (DB comment)"
+          }
+        ],
+        "previousVersion": 0.2
+      },
+      "name": "customers",
+      "owners": [
+        {
+          "deleted": false,
+          "displayName": "admin",
+          "fullyQualifiedName": "admin",
+          "href": "http://localhost:8585/api/v1/users/a7a0b943-4b5c-413c-a2ce-a10ed32a6165",
+          "id": "a7a0b943-4b5c-413c-a2ce-a10ed32a6165",
+          "name": "admin",
+          "type": "user"
+        }
+      ],
+      "processedLineage": false,
+      "service": {
+        "deleted": false,
+        "displayName": "shop_pg",
+        "fullyQualifiedName": "shop_pg",
+        "href": "http://localhost:8585/api/v1/services/databaseServices/18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "id": "18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "name": "shop_pg",
+        "type": "databaseService"
+      },
+      "serviceType": "Postgres",
+      "sourceHash": "2b47e23e5c923d4cb7ebd193fc0bdcbb",
+      "tableConstraints": [
+        {
+          "columns": [
+            "region_code"
+          ],
+          "constraintType": "FOREIGN_KEY",
+          "referredColumns": [
+            "shop_pg.shop.ref.regions.region_code"
+          ],
+          "relationshipType": "MANY_TO_ONE"
+        }
+      ],
+      "tableType": "Regular",
+      "tags": [
+        {
+          "appliedAt": "2026-10-16T03:10:31.000852Z",
+          "appliedBy": "admin",
+          "description": "**Critical Source of Truth business data assets of an organization**\n\n- Used in critical metrics and dashboards to drive business and product decisions\n\n- Used in critical compliance reporting to regulators, govt entities, and third party\n\n- Used in brand or revenue impacting online user-facing experiences (search results, advertisement, promotions, and experimentation)\n\n- Other high impact use, such as ML models and fraud detection\n\n- Source used to derive other critical Tier-1 datasets",
+          "labelType": "Manual",
+          "name": "Tier1",
+          "source": "Classification",
+          "state": "Confirmed",
+          "tagFQN": "Tier.Tier1"
+        }
+      ],
+      "updatedAt": 1792120231841,
+      "updatedBy": "admin",
+      "version": 0.2
+    },
+    {
+      "changeDescription": {
+        "changeSummary": {},
+        "fieldsAdded": [
+          {
+            "name": "tableConstraints",
+            "newValue": "[{\"constraintType\":\"FOREIGN_KEY\",\"columns\":[\"order_id\"],\"referredColumns\":[\"shop_pg.shop.shop.orders.order_id\"],\"relationshipType\":\"MANY_TO_ONE\"},{\"constraintType\":\"FOREIGN_KEY\",\"columns\":[\"product_id\"],\"referredColumns\":[\"shop_pg.shop.shop.products.product_id\"],\"relationshipType\":\"MANY_TO_ONE\"}]"
+          }
+        ],
+        "fieldsDeleted": [],
+        "fieldsUpdated": [],
+        "previousVersion": 0.1
+      },
+      "columns": [
+        {
+          "children": [],
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.order_lines.order_id",
+          "name": "order_id",
+          "tags": []
+        },
+        {
+          "children": [],
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.order_lines.line_no",
+          "name": "line_no",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.order_lines.product_id",
+          "name": "product_id",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.order_lines.quantity",
+          "name": "quantity",
+          "tags": []
+        }
+      ],
+      "database": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop",
+        "href": "http://localhost:8585/api/v1/databases/3b803793-8798-46ed-821a-04f4aecbcae1",
+        "id": "3b803793-8798-46ed-821a-04f4aecbcae1",
+        "name": "shop",
+        "type": "database"
+      },
+      "databaseSchema": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop.shop",
+        "href": "http://localhost:8585/api/v1/databaseSchemas/a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "id": "a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "name": "shop",
+        "type": "databaseSchema"
+      },
+      "deleted": false,
+      "entityStatus": "Unprocessed",
+      "fullyQualifiedName": "shop_pg.shop.shop.order_lines",
+      "href": "http://localhost:8585/api/v1/tables/b733afbc-58f6-4af0-ab83-f07a798afd05",
+      "id": "b733afbc-58f6-4af0-ab83-f07a798afd05",
+      "incrementalChangeDescription": {
+        "fieldsAdded": [],
+        "fieldsDeleted": [],
+        "fieldsUpdated": [],
+        "previousVersion": 0.2
+      },
+      "name": "order_lines",
+      "owners": [],
+      "processedLineage": false,
+      "service": {
+        "deleted": false,
+        "displayName": "shop_pg",
+        "fullyQualifiedName": "shop_pg",
+        "href": "http://localhost:8585/api/v1/services/databaseServices/18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "id": "18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "name": "shop_pg",
+        "type": "databaseService"
+      },
+      "serviceType": "Postgres",
+      "sourceHash": "539cb1c8334d7f66012e90536864bf8a",
+      "tableConstraints": [
+        {
+          "columns": [
+            "line_no",
+            "order_id"
+          ],
+          "constraintType": "PRIMARY_KEY"
+        },
+        {
+          "columns": [
+            "order_id"
+          ],
+          "constraintType": "FOREIGN_KEY",
+          "referredColumns": [
+            "shop_pg.shop.shop.orders.order_id"
+          ],
+          "relationshipType": "MANY_TO_ONE"
+        },
+        {
+          "columns": [
+            "product_id"
+          ],
+          "constraintType": "FOREIGN_KEY",
+          "referredColumns": [
+            "shop_pg.shop.shop.products.product_id"
+          ],
+          "relationshipType": "MANY_TO_ONE"
+        }
+      ],
+      "tableType": "Regular",
+      "tags": [],
+      "updatedAt": 1792120206771,
+      "updatedBy": "admin",
+      "version": 0.2
+    },
+    {
+      "changeDescription": {
+        "changeSummary": {},
+        "fieldsAdded": [
+          {
+            "name": "tableConstraints",
+            "newValue": "[{\"constraintType\":\"FOREIGN_KEY\",\"columns\":[\"customer_id\"],\"referredColumns\":[\"shop_pg.shop.shop.customers.customer_id\"],\"relationshipType\":\"MANY_TO_ONE\"}]"
+          }
+        ],
+        "fieldsDeleted": [],
+        "fieldsUpdated": [],
+        "previousVersion": 0.1
+      },
+      "columns": [
+        {
+          "children": [],
+          "constraint": "PRIMARY_KEY",
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.orders.order_id",
+          "name": "order_id",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.orders.customer_id",
+          "name": "customer_id",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 20,
+          "dataType": "VARCHAR",
+          "dataTypeDisplay": "character varying(20)",
+          "fullyQualifiedName": "shop_pg.shop.shop.orders.status",
+          "name": "status",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 1,
+          "dataType": "TIMESTAMP",
+          "dataTypeDisplay": "timestamp with time zone",
+          "fullyQualifiedName": "shop_pg.shop.shop.orders.ordered_at",
+          "name": "ordered_at",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NULL",
+          "dataLength": 1,
+          "dataType": "NUMERIC",
+          "dataTypeDisplay": "numeric(12,2)",
+          "fullyQualifiedName": "shop_pg.shop.shop.orders.total_amount",
+          "name": "total_amount",
+          "precision": 12,
+          "scale": 2,
+          "tags": []
+        }
+      ],
+      "database": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop",
+        "href": "http://localhost:8585/api/v1/databases/3b803793-8798-46ed-821a-04f4aecbcae1",
+        "id": "3b803793-8798-46ed-821a-04f4aecbcae1",
+        "name": "shop",
+        "type": "database"
+      },
+      "databaseSchema": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop.shop",
+        "href": "http://localhost:8585/api/v1/databaseSchemas/a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "id": "a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "name": "shop",
+        "type": "databaseSchema"
+      },
+      "deleted": false,
+      "entityStatus": "Unprocessed",
+      "fullyQualifiedName": "shop_pg.shop.shop.orders",
+      "href": "http://localhost:8585/api/v1/tables/b56de9b6-b09d-484b-acf8-c0e5d32f2a37",
+      "id": "b56de9b6-b09d-484b-acf8-c0e5d32f2a37",
+      "incrementalChangeDescription": {
+        "fieldsAdded": [],
+        "fieldsDeleted": [],
+        "fieldsUpdated": [],
+        "previousVersion": 0.2
+      },
+      "name": "orders",
+      "owners": [],
+      "processedLineage": false,
+      "service": {
+        "deleted": false,
+        "displayName": "shop_pg",
+        "fullyQualifiedName": "shop_pg",
+        "href": "http://localhost:8585/api/v1/services/databaseServices/18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "id": "18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "name": "shop_pg",
+        "type": "databaseService"
+      },
+      "serviceType": "Postgres",
+      "sourceHash": "b2f7426d5cfe43954525c06d6071d715",
+      "tableConstraints": [
+        {
+          "columns": [
+            "customer_id"
+          ],
+          "constraintType": "FOREIGN_KEY",
+          "referredColumns": [
+            "shop_pg.shop.shop.customers.customer_id"
+          ],
+          "relationshipType": "MANY_TO_ONE"
+        }
+      ],
+      "tableType": "Regular",
+      "tags": [],
+      "updatedAt": 1792120206770,
+      "updatedBy": "admin",
+      "version": 0.2
+    },
+    {
+      "columns": [
+        {
+          "children": [],
+          "constraint": "PRIMARY_KEY",
+          "dataLength": 1,
+          "dataType": "BIGINT",
+          "dataTypeDisplay": "bigint",
+          "fullyQualifiedName": "shop_pg.shop.shop.page_views.view_id",
+          "name": "view_id",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NULL",
+          "dataLength": 1,
+          "dataType": "TEXT",
+          "dataTypeDisplay": "text",
+          "fullyQualifiedName": "shop_pg.shop.shop.page_views.url",
+          "name": "url",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NULL",
+          "dataLength": 1,
+          "dataType": "TIMESTAMP",
+          "dataTypeDisplay": "timestamp without time zone",
+          "fullyQualifiedName": "shop_pg.shop.shop.page_views.viewed_at",
+          "name": "viewed_at",
+          "tags": []
+        }
+      ],
+      "database": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop",
+        "href": "http://localhost:8585/api/v1/databases/3b803793-8798-46ed-821a-04f4aecbcae1",
+        "id": "3b803793-8798-46ed-821a-04f4aecbcae1",
+        "name": "shop",
+        "type": "database"
+      },
+      "databaseSchema": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop.shop",
+        "href": "http://localhost:8585/api/v1/databaseSchemas/a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "id": "a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "name": "shop",
+        "type": "databaseSchema"
+      },
+      "deleted": false,
+      "entityStatus": "Unprocessed",
+      "fullyQualifiedName": "shop_pg.shop.shop.page_views",
+      "href": "http://localhost:8585/api/v1/tables/071fd352-f962-4501-a4ea-24137554a42b",
+      "id": "071fd352-f962-4501-a4ea-24137554a42b",
+      "name": "page_views",
+      "owners": [],
+      "processedLineage": false,
+      "service": {
+        "deleted": false,
+        "displayName": "shop_pg",
+        "fullyQualifiedName": "shop_pg",
+        "href": "http://localhost:8585/api/v1/services/databaseServices/18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "id": "18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "name": "shop_pg",
+        "type": "databaseService"
+      },
+      "serviceType": "Postgres",
+      "sourceHash": "e86ccc6f1eec9f3014ba27d701b54767",
+      "tableConstraints": [],
+      "tableType": "Regular",
+      "tags": [],
+      "updatedAt": 1792120160334,
+      "updatedBy": "admin",
+      "version": 0.1
+    }
+  ],
+  "paging": {
+    "after": "eyJuYW1lIjoicGFnZV92aWV3cyIsImlkIjoiMDcxZmQzNTItZjk2Mi00NTAxLWE0ZWEtMjQxMzc1NTRhNDJiIn0=",
+    "total": 9
+  }
+}
