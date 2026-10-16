@@ -410,6 +410,7 @@ def _convert_field(
     dialect: str,
     type_override: str | None,
     primary_key_names: set[str],
+    not_null: bool = False,
 ) -> dict:
     name = field_obj["name"]
     expr = _pick_expression(field_obj.get("expression"), dialect)
@@ -420,7 +421,7 @@ def _convert_field(
         "name": name,
         "type": col_type,
         "is_calculated": is_calc,
-        "not_null": False,
+        "not_null": not_null,
         "properties": {},
     }
     if is_calc:
@@ -523,6 +524,7 @@ def _convert_dataset(
             dialect=wren_cfg.dialect,
             type_override=type_override,
             primary_key_names=set(pk_names),
+            not_null=field_wren.get("not_null") is True,
         )
         columns.append(col)
         if type_override is None and f.get("datatype") not in (
@@ -1199,7 +1201,9 @@ def _qualify_measure_expression(expression: str, base_object: str) -> str | None
 
     try:
         tree = sqlglot.parse_one(expression)
-    except sqlglot.errors.ParseError:
+    except sqlglot.errors.SqlglotError:
+        # ParseError for bad grammar, TokenError for e.g. an unterminated
+        # string literal — both mean "cannot qualify", not "crash".
         return None
 
     def _qualify(node: exp.Expression) -> exp.Expression:

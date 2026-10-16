@@ -1232,6 +1232,8 @@ def test_qualify_measure_expression_keeps_qualified_columns():
 
 def test_qualify_measure_expression_unparseable():
     assert _qualify_measure_expression("SUM(", "orders") is None
+    # Tokenizer failures (TokenError, not ParseError) take the same path.
+    assert _qualify_measure_expression("SUM('abc)", "orders") is None
 
 
 # ── Unit: export_ossie_from_manifest ───────────────────────────────────────
@@ -1556,6 +1558,10 @@ def test_export_then_import_preserves_models_and_relationships(tmp_path: Path):
     assert orders["properties"]["description"] == "Order fact"
     cols = {c["name"]: c for c in orders["columns"]}
     assert cols["order_id"]["is_primary_key"] is True
+    assert cols["order_id"]["not_null"] is True
+    # Non-PK not_null travels through the field-level WREN block.
+    assert cols["customer_id"]["not_null"] is True
+    assert cols["amount"]["not_null"] is False
     assert cols["amount"]["type"] == "DECIMAL(18,2)"
     assert cols["amount"]["is_calculated"] is False
     assert cols["amount_eur"]["is_calculated"] is True

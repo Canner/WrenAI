@@ -171,7 +171,7 @@ Two-level support (root + semantic_model) means you can write a global default o
 | `dataset.source` containing `SELECT`/`FROM`/newlines | `model.ref_sql` |
 | `dataset.fields[*].name` + `expression` | `model.columns[]` — dialect-picked expression; type from the WREN block, else `datatype` (0.2.0.dev0), else the `is_time` hint |
 | `field.datatype` (0.2.0.dev0) | `column.type` via `String→VARCHAR`, `Integer→BIGINT`, `Decimal→DECIMAL`, `Float→DOUBLE`, `Boolean→BOOLEAN`, `Date→DATE`, `Time→TIME`, `DateTime→TIMESTAMP`, `DateTimeTz→TIMESTAMP WITH TIME ZONE`; `Opaque` counts as untyped. A WREN `type` / `column_types` entry always wins, so precision (`DECIMAL(18,2)`) still comes from the WREN block |
-| `dataset.primary_key: [x]` | `model.primary_key: x` (composite arrays warn + take the first column unless overridden) |
+| `dataset.primary_key: [x]` | `model.primary_key: x`; a composite `[x, y]` becomes `model.primary_key: [x, y]` unless a `WREN.primary_key` override narrows it to one column |
 | `relationships[]` (always many-to-one in Ossie) | wren `relationships` with synthesized `condition` and `MANY_TO_ONE` |
 | `field.dimension.is_time: true` | `column.type: TIMESTAMP` (when no explicit type override) |
 | `semantic_model.ai_context.instructions` | MDL `_instructions` |
@@ -205,17 +205,18 @@ Ossie 0.1.1 doesn't carry column types, and 0.2.0.dev0's `datatype` is a coarse 
 
 ### Composite primary keys
 
-Ossie allows `primary_key: [col_a, col_b]`; Wren MDL takes one column. Wren picks the first column and emits a snippet so you can override:
+Ossie allows `primary_key: [col_a, col_b]`, and Wren keeps the whole list as a composite `model.primary_key` — no warning is emitted. If you want Wren to treat a single column as the key instead (for example because only one of them is unique on its own), narrow it with a `WREN.primary_key` override on the dataset:
 
-```text
-[WARNING] dataset 'store_sales': composite primary_key
-  ['ss_item_sk', 'ss_ticket_number'] — Wren MDL takes one column.
-  Wren picked 'ss_item_sk'. To override, add to dataset 'store_sales':
-
+```yaml
+datasets:
+  - name: store_sales
+    primary_key: [ss_item_sk, ss_ticket_number]
     custom_extensions:
       - vendor_name: WREN
-        data: '{"primary_key": "<one of: ss_item_sk, ss_ticket_number>"}'
+        data: '{"primary_key": "ss_ticket_number"}'
 ```
+
+The override must name one of the columns in the composite list; anything else is ignored and the full list is kept.
 
 ### Cross-dataset metrics
 
@@ -290,7 +291,9 @@ my_project/
 │   ├── customers/metadata.yml
 │   └── orders/metadata.yml
 ├── relationships.yml
-├── instructions.md           # Ossie ai_context.instructions + metrics notes
+├── knowledge/
+│   ├── knowledge.yml
+│   └── rules/general.md      # Ossie ai_context.instructions + metrics notes
 └── AGENTS.md
 ```
 
@@ -300,7 +303,7 @@ After migration:
 - Edit the generated YAML directly. Add cubes under `cubes/`, views under `views/`, RLAC under each model's `properties`, etc.
 - Use the standard flow: `wren context validate` → `wren context build`.
 
-Any warnings the Ossie conversion would normally emit (untyped fields, composite primary keys, cross-dataset metrics) are printed once during init so you know which spots in the generated YAML need a human review.
+Any warnings the Ossie conversion would normally emit (untyped fields, cross-dataset metrics) are printed once during init so you know which spots in the generated YAML need a human review.
 
 ### When *not* to migrate
 
