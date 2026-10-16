@@ -1,0 +1,373 @@
+{
+  "data": [
+    {
+      "columns": [
+        {
+          "children": [],
+          "constraint": "PRIMARY_KEY",
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.products.product_id",
+          "name": "product_id",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "UNIQUE",
+          "dataLength": 64,
+          "dataType": "VARCHAR",
+          "dataTypeDisplay": "character varying(64)",
+          "fullyQualifiedName": "shop_pg.shop.shop.products.sku",
+          "name": "sku",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 1,
+          "dataType": "TEXT",
+          "dataTypeDisplay": "text",
+          "fullyQualifiedName": "shop_pg.shop.shop.products.title",
+          "name": "title",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 1,
+          "dataType": "NUMERIC",
+          "dataTypeDisplay": "numeric(10,2)",
+          "fullyQualifiedName": "shop_pg.shop.shop.products.unit_price",
+          "name": "unit_price",
+          "precision": 10,
+          "scale": 2,
+          "tags": []
+        }
+      ],
+      "database": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop",
+        "href": "http://localhost:8585/api/v1/databases/3b803793-8798-46ed-821a-04f4aecbcae1",
+        "id": "3b803793-8798-46ed-821a-04f4aecbcae1",
+        "name": "shop",
+        "type": "database"
+      },
+      "databaseSchema": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop.shop",
+        "href": "http://localhost:8585/api/v1/databaseSchemas/a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "id": "a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "name": "shop",
+        "type": "databaseSchema"
+      },
+      "deleted": false,
+      "entityStatus": "Unprocessed",
+      "fullyQualifiedName": "shop_pg.shop.shop.products",
+      "href": "http://localhost:8585/api/v1/tables/f9b426ea-6185-48c3-82ce-990cc35f7764",
+      "id": "f9b426ea-6185-48c3-82ce-990cc35f7764",
+      "name": "products",
+      "owners": [],
+      "processedLineage": false,
+      "service": {
+        "deleted": false,
+        "displayName": "shop_pg",
+        "fullyQualifiedName": "shop_pg",
+        "href": "http://localhost:8585/api/v1/services/databaseServices/18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "id": "18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "name": "shop_pg",
+        "type": "databaseService"
+      },
+      "serviceType": "Postgres",
+      "sourceHash": "bdf0654e2e7ab477dec29b175b997ef5",
+      "tableConstraints": [],
+      "tableType": "Regular",
+      "tags": [],
+      "updatedAt": 1792120160334,
+      "updatedBy": "admin",
+      "version": 0.1
+    },
+    {
+      "columns": [
+        {
+          "children": [],
+          "constraint": "PRIMARY_KEY",
+          "dataLength": 1,
+          "dataType": "TEXT",
+          "dataTypeDisplay": "text",
+          "fullyQualifiedName": "shop_pg.shop.ref.regions.region_code",
+          "name": "region_code",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 1,
+          "dataType": "TEXT",
+          "dataTypeDisplay": "text",
+          "fullyQualifiedName": "shop_pg.shop.ref.regions.region_name",
+          "name": "region_name",
+          "tags": []
+        }
+      ],
+      "database": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop",
+        "href": "http://localhost:8585/api/v1/databases/3b803793-8798-46ed-821a-04f4aecbcae1",
+        "id": "3b803793-8798-46ed-821a-04f4aecbcae1",
+        "name": "shop",
+        "type": "database"
+      },
+      "databaseSchema": {
+        "deleted": false,
+        "displayName": "ref",
+        "fullyQualifiedName": "shop_pg.shop.ref",
+        "href": "http://localhost:8585/api/v1/databaseSchemas/002908d7-79b6-4f07-84cd-72d43a898d99",
+        "id": "002908d7-79b6-4f07-84cd-72d43a898d99",
+        "name": "ref",
+        "type": "databaseSchema"
+      },
+      "deleted": false,
+      "description": "Sales regions",
+      "entityStatus": "Unprocessed",
+      "fullyQualifiedName": "shop_pg.shop.ref.regions",
+      "href": "http://localhost:8585/api/v1/tables/a7c21ca3-1d4d-460c-9250-612c60f99ede",
+      "id": "a7c21ca3-1d4d-460c-9250-612c60f99ede",
+      "name": "regions",
+      "owners": [],
+      "processedLineage": false,
+      "service": {
+        "deleted": false,
+        "displayName": "shop_pg",
+        "fullyQualifiedName": "shop_pg",
+        "href": "http://localhost:8585/api/v1/services/databaseServices/18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "id": "18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "name": "shop_pg",
+        "type": "databaseService"
+      },
+      "serviceType": "Postgres",
+      "sourceHash": "1b9035e561585622512c29ce76a80c84",
+      "tableConstraints": [],
+      "tableType": "Regular",
+      "tags": [],
+      "updatedAt": 1792120160333,
+      "updatedBy": "admin",
+      "version": 0.1
+    },
+    {
+      "columns": [
+        {
+          "children": [],
+          "constraint": "PRIMARY_KEY",
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.returns.return_id",
+          "name": "return_id",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.returns.a_ord",
+          "name": "a_ord",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.returns.b_line",
+          "name": "b_line",
+          "tags": []
+        }
+      ],
+      "database": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop",
+        "href": "http://localhost:8585/api/v1/databases/3b803793-8798-46ed-821a-04f4aecbcae1",
+        "id": "3b803793-8798-46ed-821a-04f4aecbcae1",
+        "name": "shop",
+        "type": "database"
+      },
+      "databaseSchema": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop.shop",
+        "href": "http://localhost:8585/api/v1/databaseSchemas/a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "id": "a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "name": "shop",
+        "type": "databaseSchema"
+      },
+      "deleted": false,
+      "entityStatus": "Unprocessed",
+      "fullyQualifiedName": "shop_pg.shop.shop.returns",
+      "href": "http://localhost:8585/api/v1/tables/f25b73f1-e519-46b2-93ee-b610a681db3d",
+      "id": "f25b73f1-e519-46b2-93ee-b610a681db3d",
+      "name": "returns",
+      "owners": [],
+      "processedLineage": false,
+      "service": {
+        "deleted": false,
+        "displayName": "shop_pg",
+        "fullyQualifiedName": "shop_pg",
+        "href": "http://localhost:8585/api/v1/services/databaseServices/18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "id": "18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "name": "shop_pg",
+        "type": "databaseService"
+      },
+      "serviceType": "Postgres",
+      "sourceHash": "622ac6dce61ab7ea7fe32108f4da349b",
+      "tableConstraints": [
+        {
+          "columns": [
+            "a_ord",
+            "b_line"
+          ],
+          "constraintType": "FOREIGN_KEY",
+          "referredColumns": [
+            "shop_pg.shop.shop.order_lines.order_id",
+            "shop_pg.shop.shop.order_lines.line_no"
+          ],
+          "relationshipType": "MANY_TO_MANY"
+        }
+      ],
+      "tableType": "Regular",
+      "tags": [],
+      "updatedAt": 1792120206690,
+      "updatedBy": "admin",
+      "version": 0.1
+    },
+    {
+      "changeDescription": {
+        "changeSummary": {},
+        "fieldsAdded": [
+          {
+            "name": "tableConstraints",
+            "newValue": "[{\"constraintType\":\"FOREIGN_KEY\",\"columns\":[\"line_no\",\"order_id\"],\"referredColumns\":[\"shop_pg.shop.shop.order_lines.line_no\",\"shop_pg.shop.shop.order_lines.order_id\"],\"relationshipType\":\"MANY_TO_MANY\"}]"
+          }
+        ],
+        "fieldsDeleted": [],
+        "fieldsUpdated": [],
+        "previousVersion": 0.1
+      },
+      "columns": [
+        {
+          "children": [],
+          "constraint": "PRIMARY_KEY",
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.shipments.shipment_id",
+          "name": "shipment_id",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.shipments.order_id",
+          "name": "order_id",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NOT_NULL",
+          "dataLength": 1,
+          "dataType": "INT",
+          "dataTypeDisplay": "integer",
+          "fullyQualifiedName": "shop_pg.shop.shop.shipments.line_no",
+          "name": "line_no",
+          "tags": []
+        },
+        {
+          "children": [],
+          "constraint": "NULL",
+          "dataLength": 1,
+          "dataType": "DATE",
+          "dataTypeDisplay": "date",
+          "fullyQualifiedName": "shop_pg.shop.shop.shipments.shipped_at",
+          "name": "shipped_at",
+          "tags": []
+        }
+      ],
+      "database": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop",
+        "href": "http://localhost:8585/api/v1/databases/3b803793-8798-46ed-821a-04f4aecbcae1",
+        "id": "3b803793-8798-46ed-821a-04f4aecbcae1",
+        "name": "shop",
+        "type": "database"
+      },
+      "databaseSchema": {
+        "deleted": false,
+        "displayName": "shop",
+        "fullyQualifiedName": "shop_pg.shop.shop",
+        "href": "http://localhost:8585/api/v1/databaseSchemas/a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "id": "a998638f-ecfa-4e65-a15f-eb9be94d86e6",
+        "name": "shop",
+        "type": "databaseSchema"
+      },
+      "deleted": false,
+      "entityStatus": "Unprocessed",
+      "fullyQualifiedName": "shop_pg.shop.shop.shipments",
+      "href": "http://localhost:8585/api/v1/tables/fd667e7f-e106-4481-8e37-24d876b54162",
+      "id": "fd667e7f-e106-4481-8e37-24d876b54162",
+      "incrementalChangeDescription": {
+        "fieldsAdded": [],
+        "fieldsDeleted": [],
+        "fieldsUpdated": [],
+        "previousVersion": 0.2
+      },
+      "name": "shipments",
+      "owners": [],
+      "processedLineage": false,
+      "service": {
+        "deleted": false,
+        "displayName": "shop_pg",
+        "fullyQualifiedName": "shop_pg",
+        "href": "http://localhost:8585/api/v1/services/databaseServices/18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "id": "18275b24-7fbd-4b4b-98bc-809bb7223f38",
+        "name": "shop_pg",
+        "type": "databaseService"
+      },
+      "serviceType": "Postgres",
+      "sourceHash": "270a451bb24fef6f6fd13d8775a7a5bb",
+      "tableConstraints": [
+        {
+          "columns": [
+            "line_no",
+            "order_id"
+          ],
+          "constraintType": "FOREIGN_KEY",
+          "referredColumns": [
+            "shop_pg.shop.shop.order_lines.line_no",
+            "shop_pg.shop.shop.order_lines.order_id"
+          ],
+          "relationshipType": "MANY_TO_MANY"
+        }
+      ],
+      "tableType": "Regular",
+      "tags": [],
+      "updatedAt": 1792120206771,
+      "updatedBy": "admin",
+      "version": 0.2
+    }
+  ],
+  "paging": {
+    "before": "eyJuYW1lIjoicHJvZHVjdHMiLCJpZCI6ImY5YjQyNmVhLTYxODUtNDhjMy04MmNlLTk5MGNjMzVmNzc2NCJ9",
+    "total": 9
+  }
+}

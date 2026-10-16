@@ -94,6 +94,19 @@ wren context import dbt --project-dir ./jaffle_shop --path ./wren-jaffle --dry-r
 
 Requires `target/manifest.json` and `target/catalog.json`; run `dbt build` and `dbt docs generate` first. See [dbt Integration](../guides/dbt-integration.md).
 
+## `wren context import openmetadata`
+
+Generate a Wren project from an OpenMetadata catalog instead of introspecting the live database.
+
+```bash
+export OPENMETADATA_HOST=http://localhost:8585
+export OPENMETADATA_TOKEN=<bot-or-personal-access-token>
+wren context import openmetadata --service shop_pg --database shop --schema shop --path ./wren-shop --dry-run
+wren context import openmetadata --service shop_pg --database shop --schema shop --path ./wren-shop
+```
+
+Flags: `--host`, `--token`, `--service` (required), `--database`, `--schema`, `--table` (repeatable), `--data-source`, `--dry-run`, `--force`. Without `--force` only missing files are written and collisions are listed; `--force` regenerates from OpenMetadata and discards local edits to generated files. See [OpenMetadata Integration](../guides/openmetadata-integration.md).
+
 ---
 
 ## `wren context upgrade`
