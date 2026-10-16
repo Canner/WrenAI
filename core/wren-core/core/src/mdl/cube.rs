@@ -337,6 +337,10 @@ fn resolve_measures(
     Ok(resolved)
 }
 
+/// Find references to other measures as source-ordered, half-open UTF-8 ranges.
+/// Quoted identifiers use their parsed names; literals, comments, qualified
+/// columns, function names, and `self_name` are excluded.
+/// Returns a planning error if the SQL expression cannot be parsed.
 fn find_measure_refs<'a>(
     expr: &str,
     measure_map: &HashMap<&'a str, &Measure>,
@@ -368,7 +372,9 @@ fn find_measure_refs<'a>(
     Ok(refs)
 }
 
-// sqlparser locations count characters, whereas Rust string slices use UTF-8 bytes.
+/// Convert a sqlparser location from `sql` to its UTF-8 byte offset.
+/// Locations are one-based line/character positions, including the end of input.
+/// Only `\n` advances the line number; a preceding `\r` counts as a character.
 fn sql_offset(sql: &str, location: Location) -> usize {
     let line_start: usize = sql
         .split_inclusive('\n')
