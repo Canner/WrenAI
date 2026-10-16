@@ -3774,7 +3774,7 @@ requires-dist = [
     { name = "lancedb", marker = "extra == 'memory-onnx'", specifier = ">=0.6" },
     { name = "loguru", specifier = ">=0.7" },
     { name = "lxml", specifier = ">=6.1.0" },
-    { name = "mcp", extras = ["cli"], marker = "extra == 'mcp'", specifier = ">=1.19" },
+    { name = "mcp", extras = ["cli"], marker = "extra == 'mcp'", specifier = ">=1.19,<2" },
     { name = "mysqlclient", marker = "extra == 'mysql'", specifier = ">=2.2" },
     { name = "numpy", marker = "extra == 'memory-onnx'", specifier = ">=1.24" },
     { name = "onnxruntime", marker = "extra == 'memory-onnx'", specifier = ">=1.17" },
