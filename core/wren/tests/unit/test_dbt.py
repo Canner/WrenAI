@@ -13,6 +13,8 @@ import yaml
 
 from wren.dbt import (
     DbtLoadError,
+    _apply_dbt_test_enrichment,
+    _build_imported_models,
     _ensure_relationship,
     _find_column,
     convert_dbt_project_to_wren_project,
@@ -377,6 +379,7 @@ class TestConvertDbtTargetToWrenProfile:
 @pytest.mark.unit
 class TestLoadDbtArtifacts:
     def test_import_preserves_quoted_column_tests(self, tmp_path):
+        """Import verified quoted-column metadata and execute its recovered join."""
         project_dir = tmp_path / "dbt"
         fixture_dir = Path(__file__).parents[1] / "fixtures" / "dbt" / "quoted_columns"
         shutil.copytree(fixture_dir, project_dir / "target")
@@ -417,6 +420,41 @@ class TestLoadDbtArtifacts:
                 f"SELECT count(*) FROM fct_orders JOIN dim_customers ON {condition}"
             ).fetchone() == (3,)
 
+    def test_import_skips_relationship_with_missing_target_column(
+        self, tmp_path, monkeypatch
+    ):
+        """Keep test evidence without inventing a join to a missing catalog column."""
+        project_dir, profiles_path = _write_basic_dbt_project(tmp_path)
+        monkeypatch.setenv("JAFFLE_DUCKDB_PATH", "warehouse.duckdb")
+        fixture_dir = Path(__file__).parents[1] / "fixtures" / "dbt" / "quoted_columns"
+        for filename in ("manifest.json", "catalog.json", "run_results.json"):
+            shutil.copyfile(fixture_dir / filename, project_dir / "build" / filename)
+        catalog_path = project_dir / "build" / "catalog.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        del catalog["nodes"]["model.review_dbt.dim_customers"]["columns"]["customer-id"]
+        catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+
+        imported = convert_dbt_project_to_wren_project(
+            project_dir, output_dir=project_dir / "wren", profiles_path=profiles_path
+        )
+        files = {file.relative_path: file.content for file in imported.files}
+        assert imported.relationship_count == 0
+        assert yaml.safe_load(files["relationships.yml"])["relationships"] == []
+        assert "join verified" not in files["knowledge/rules/general.md"]
+
+        artifacts = load_dbt_artifacts(project_dir)
+        models, *_ = _build_imported_models(artifacts)
+        relationships, events = _apply_dbt_test_enrichment(artifacts, models)
+        assert relationships == []
+        assert len(events) == 3
+        event = next(event for event in events if event["test_name"] == "relationships")
+        assert event["status"] == "verified"
+        assert event["column_name"] == '"customer-id"'
+        assert (
+            not {"relationship_name", "target_model_name", "target_field"}
+            & event.keys()
+        )
+
     @pytest.mark.parametrize(
         "dialect, quoted_name, name",
         [
@@ -427,12 +465,14 @@ class TestLoadDbtArtifacts:
         ],
     )
     def test_find_quoted_column(self, dialect, quoted_name, name):
+        """Decode identifier delimiters and escapes with the source adapter dialect."""
         column = {"name": name}
         assert (
             _find_column({"columns": [column]}, quoted_name, dialect=dialect) is column
         )
 
     def test_find_column_prefers_exact_catalog_name(self):
+        """Keep literal quote characters when they are part of a physical name."""
         raw_column = {"name": '"id"'}
         assert (
             _find_column({"columns": [{"name": "id"}, raw_column]}, '"id"')
@@ -440,6 +480,7 @@ class TestLoadDbtArtifacts:
         )
 
     def test_unquoted_columns_keep_existing_relationship_condition(self):
+        """Preserve the existing lookup and join SQL for ordinary identifiers."""
         column = {"name": "customer_id"}
         orders = {"name": "orders", "columns": [column]}
         assert _find_column(orders, "customer_id", dialect="duckdb") is column
@@ -451,6 +492,7 @@ class TestLoadDbtArtifacts:
 
     @pytest.mark.parametrize("name", ["id", "'id'", "t.id", '"ID"', '"id'])
     def test_find_column_does_not_reinterpret_other_sql(self, name):
+        """Reject SQL values, expressions, malformed quotes, and mismatched case."""
         assert (
             _find_column({"columns": [{"name": "ID" if name == "id" else "id"}]}, name)
             is None

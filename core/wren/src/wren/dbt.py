@@ -781,6 +781,7 @@ def _build_imported_models(
 def _apply_dbt_test_enrichment(
     artifacts: DbtArtifacts, imported_models: list[dict[str, Any]]
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Apply dbt tests to imported columns and retain their result events."""
     model_by_unique_id = {
         model.get("properties", {}).get("dbt_unique_id"): model
         for model in imported_models
@@ -844,21 +845,21 @@ def _apply_dbt_test_enrichment(
                     )
                     if target_column is not None:
                         target_field = target_column["name"]
-                    rel_name = _ensure_relationship(
-                        relationships,
-                        relationship_keys,
-                        model,
-                        column["name"],
-                        target_model,
-                        target_field,
-                    )
-                    # Do NOT stamp column["relationship"] — the relationship is
-                    # already recorded in relationships.yml. Putting it on the
-                    # column causes the Wren engine to treat the FK as a join
-                    # dereference, hiding it from direct SELECT.
-                    event["relationship_name"] = rel_name
-                    event["target_model_name"] = target_model["name"]
-                    event["target_field"] = target_field
+                        rel_name = _ensure_relationship(
+                            relationships,
+                            relationship_keys,
+                            model,
+                            column["name"],
+                            target_model,
+                            target_field,
+                        )
+                        # Do NOT stamp column["relationship"] — the relationship is
+                        # already recorded in relationships.yml. Putting it on the
+                        # column causes the Wren engine to treat the FK as a join
+                        # dereference, hiding it from direct SELECT.
+                        event["relationship_name"] = rel_name
+                        event["target_model_name"] = target_model["name"]
+                        event["target_field"] = target_field
 
         test_events.append(event)
 
@@ -1099,6 +1100,7 @@ def _infer_attached_node(node: dict[str, Any]) -> str | None:
 def _find_column(
     model: dict[str, Any], column_name: str, *, dialect: str = ""
 ) -> dict[str, Any] | None:
+    """Match a physical column name before decoding a quoted dbt identifier."""
     for column in model.get("columns", []):
         if column.get("name") == column_name:
             return column
@@ -1144,6 +1146,7 @@ def _ensure_relationship(
     target_model: dict[str, Any],
     target_field: str,
 ) -> str:
+    """Reuse or create a relationship with its physical column names quoted as needed."""
     key = (model["name"], column_name, target_model["name"], target_field)
     existing = relationship_keys.get(key)
     if existing:
