@@ -1,5 +1,6 @@
 """Regression test: DuckDB file discovery is case-insensitive on extension."""
 
+from threading import Lock
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -86,10 +87,12 @@ def test_attach_database_uniquifies_case_colliding_aliases():
 
 
 def test_query_strips_trailing_semicolon_before_limit_wrap():
+    """Remove statement terminators before wrapping a limited query."""
     # A semicolon-terminated statement must not produce invalid SQL such as
     # ``SELECT * FROM (SELECT 1;) AS _q LIMIT 5`` when a limit is applied.
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
+    connector._connection_lock = Lock()
     connector.connection.execute.return_value.fetch_arrow_table.return_value = "tbl"
 
     result = connector.query("SELECT 1;", limit=5)
@@ -100,12 +103,14 @@ def test_query_strips_trailing_semicolon_before_limit_wrap():
 
 
 def test_dry_run_wraps_in_limit_zero_subquery():
+    """Keep every statement inside the validation subquery."""
     # dry_run neutralizes multi-statement input by wrapping in a LIMIT 0
     # subquery (matching the other connectors) rather than pre-rejecting it,
     # so no rows materialize and any trailing statement becomes a natural
     # syntax error inside the subquery.
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
+    connector._connection_lock = Lock()
 
     connector.dry_run("SELECT 1; DROP TABLE t;")
 
@@ -116,8 +121,10 @@ def test_dry_run_wraps_in_limit_zero_subquery():
 
 
 def test_dry_run_strips_trailing_semicolon():
+    """Remove the final terminator before wrapping SQL for validation."""
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
+    connector._connection_lock = Lock()
 
     connector.dry_run("SELECT 1;")
 
@@ -126,10 +133,12 @@ def test_dry_run_strips_trailing_semicolon():
 
 
 def test_dry_run_preserves_semicolon_in_string_literal():
+    """Preserve literal semicolons when building the validation subquery."""
     # A single valid statement with a semicolon inside a string literal must
     # not be mangled or falsely rejected.
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
+    connector._connection_lock = Lock()
 
     connector.dry_run("SELECT ';' AS x")
 
