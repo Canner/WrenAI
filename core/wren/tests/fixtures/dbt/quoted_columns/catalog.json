@@ -1,0 +1,58 @@
+{
+  "nodes": {
+    "model.review_dbt.dim_customers": {
+      "metadata": {
+        "type": "BASE TABLE",
+        "schema": "main",
+        "name": "dim_customers",
+        "database": "warehouse",
+        "comment": null,
+        "owner": null
+      },
+      "columns": {
+        "customer-id": {
+          "type": "INTEGER",
+          "index": 1,
+          "name": "customer-id",
+          "comment": null
+        },
+        "name": {
+          "type": "VARCHAR",
+          "index": 2,
+          "name": "name",
+          "comment": null
+        }
+      }
+    },
+    "model.review_dbt.fct_orders": {
+      "metadata": {
+        "type": "BASE TABLE",
+        "schema": "main",
+        "name": "fct_orders",
+        "database": "warehouse",
+        "comment": null,
+        "owner": null
+      },
+      "columns": {
+        "id": {
+          "type": "INTEGER",
+          "index": 1,
+          "name": "id",
+          "comment": null
+        },
+        "customer-id": {
+          "type": "INTEGER",
+          "index": 2,
+          "name": "customer-id",
+          "comment": null
+        },
+        "amount": {
+          "type": "INTEGER",
+          "index": 3,
+          "name": "amount",
+          "comment": null
+        }
+      }
+    }
+  }
+}
