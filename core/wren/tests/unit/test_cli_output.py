@@ -86,3 +86,23 @@ def test_json_output_writes_one_object_per_row():
     table = pa.table({"id": [1, 2, 3]})
 
     assert _query_json(table) == [{"id": 1}, {"id": 2}, {"id": 3}]
+
+
+def test_json_output_keeps_scale_zero_decimals_as_integers():
+    # SUM(<integer column>) is decimal128(38, 0) on DuckDB and MySQL; only the
+    # scale decides, so SUM(<NUMERIC(10,2) column>) = 15.00 stays a float.
+    table = pa.table(
+        {
+            "sum_qty": pa.array([decimal.Decimal("15")], pa.decimal128(38, 0)),
+            "big": pa.array(
+                [decimal.Decimal("9007199254740993")], pa.decimal128(20, 0)
+            ),
+            "sum_price": pa.array([decimal.Decimal("15.00")], pa.decimal128(10, 2)),
+        }
+    )
+
+    rows = _query_json(table)
+
+    assert rows == [{"sum_qty": 15, "big": 9007199254740993, "sum_price": 15.0}]
+    assert isinstance(rows[0]["sum_qty"], int)
+    assert isinstance(rows[0]["sum_price"], float)

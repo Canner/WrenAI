@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -249,6 +250,22 @@ def test_run_sql_negative_limit_rejected(tmp_path):
         run_sql(sql="SELECT 1", limit=-1)
 
     engine.query.assert_not_called()
+
+
+def test_run_sql_keeps_scale_zero_decimals_as_integers(tmp_path):
+    engine = Mock()
+    engine.query.return_value = pa.table(
+        {
+            "sum_qty": pa.array([Decimal("15")], pa.decimal128(38, 0)),
+            "sum_price": pa.array([Decimal("15.00")], pa.decimal128(10, 2)),
+        }
+    )
+    run_sql = _get_tool(build_server(_make_ctx(tmp_path, engine=engine)), "run_sql")
+
+    rows = run_sql(sql="SELECT 1")["rows"]
+
+    assert rows == [{"sum_qty": 15, "sum_price": 15.0}]
+    assert isinstance(rows[0]["sum_qty"], int)
 
 
 # ── Cube queries embed truncation probes in generated SQL ──────────────────

@@ -12,6 +12,8 @@ wren --sql 'SELECT * FROM "orders"' --limit 100 --output json
 
 Output formats: `table` (default), `csv`, `json`.
 
+`json` prints one object per row (JSON Lines). Dates, times and timestamps are ISO 8601 strings, NULL, NaN and infinity are `null`, and a decimal with scale 0 (for example `SUM` of an integer column) is an integer. Any other decimal is written as a JSON float, so values beyond float precision are rounded.
+
 ## `wren query`
 
 Execute SQL and return results.

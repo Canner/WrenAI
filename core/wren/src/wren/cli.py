@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import datetime
-import decimal
 import json
-import math
 import os
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
+from wren._json_values import normalize_value
 from wren.context_cli import context_app
 
 app = typer.Typer(name="wren", help="Wren Engine CLI", no_args_is_help=False)
@@ -568,23 +566,6 @@ def dry_run(
 # ── Output formatting ──────────────────────────────────────────────────────
 
 
-def _json_value(value):
-    """Coerce a ``to_pylist()`` value into a JSON-native one for ``--output json``."""
-    if isinstance(value, (datetime.date, datetime.time)):  # datetime is a date
-        return value.isoformat()
-    if isinstance(value, decimal.Decimal):
-        value = float(value)
-    if isinstance(value, float) and not math.isfinite(value):
-        return None
-    if isinstance(value, (bytes, bytearray)):
-        return value.decode(errors="replace")
-    if isinstance(value, dict):
-        return {k: _json_value(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_value(v) for v in value]
-    return value
-
-
 def _print_result(table, output: str) -> None:
     output = output.lower()
     if output not in {"json", "csv", "table"}:
@@ -598,7 +579,8 @@ def _print_result(table, output: str) -> None:
         # timestamps into epoch numbers and nullable integers into floats.
         typer.echo(
             "\n".join(
-                json.dumps(_json_value(row), default=str) for row in table.to_pylist()
+                json.dumps(normalize_value(row), default=str)
+                for row in table.to_pylist()
             )
         )
     elif output == "csv":
