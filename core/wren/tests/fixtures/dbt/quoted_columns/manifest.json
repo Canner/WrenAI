@@ -1,0 +1,142 @@
+{
+  "metadata": {
+    "adapter_type": "duckdb"
+  },
+  "nodes": {
+    "model.review_dbt.dim_customers": {
+      "database": "warehouse",
+      "schema": "main",
+      "name": "dim_customers",
+      "resource_type": "model",
+      "alias": "dim_customers",
+      "config": {
+        "materialized": "table"
+      },
+      "columns": {
+        "customer-id": {
+          "name": "customer-id",
+          "data_type": null,
+          "quote": true
+        }
+      },
+      "depends_on": {
+        "macros": [],
+        "nodes": []
+      }
+    },
+    "model.review_dbt.fct_orders": {
+      "database": "warehouse",
+      "schema": "main",
+      "name": "fct_orders",
+      "resource_type": "model",
+      "alias": "fct_orders",
+      "config": {
+        "materialized": "table"
+      },
+      "columns": {
+        "customer-id": {
+          "name": "customer-id",
+          "data_type": null,
+          "quote": true
+        }
+      },
+      "depends_on": {
+        "macros": [],
+        "nodes": []
+      }
+    },
+    "test.review_dbt.unique_dim_customers__customer_id_.591896cf0f": {
+      "database": "warehouse",
+      "schema": "main_dbt_test__audit",
+      "name": "unique_dim_customers__customer_id_",
+      "resource_type": "test",
+      "alias": "unique_dim_customers__customer_id_",
+      "config": {
+        "materialized": "test"
+      },
+      "columns": {},
+      "depends_on": {
+        "macros": [
+          "macro.dbt.test_unique",
+          "macro.dbt.get_where_subquery"
+        ],
+        "nodes": [
+          "model.review_dbt.dim_customers"
+        ]
+      },
+      "column_name": "\"customer-id\"",
+      "attached_node": "model.review_dbt.dim_customers",
+      "test_metadata": {
+        "name": "unique",
+        "kwargs": {
+          "column_name": "\"customer-id\"",
+          "model": "{{ get_where_subquery(ref('dim_customers')) }}"
+        },
+        "namespace": null
+      }
+    },
+    "test.review_dbt.not_null_dim_customers__customer_id_.46e5ec03aa": {
+      "database": "warehouse",
+      "schema": "main_dbt_test__audit",
+      "name": "not_null_dim_customers__customer_id_",
+      "resource_type": "test",
+      "alias": "not_null_dim_customers__customer_id_",
+      "config": {
+        "materialized": "test"
+      },
+      "columns": {},
+      "depends_on": {
+        "macros": [
+          "macro.dbt.test_not_null",
+          "macro.dbt.get_where_subquery"
+        ],
+        "nodes": [
+          "model.review_dbt.dim_customers"
+        ]
+      },
+      "column_name": "\"customer-id\"",
+      "attached_node": "model.review_dbt.dim_customers",
+      "test_metadata": {
+        "name": "not_null",
+        "kwargs": {
+          "column_name": "\"customer-id\"",
+          "model": "{{ get_where_subquery(ref('dim_customers')) }}"
+        },
+        "namespace": null
+      }
+    },
+    "test.review_dbt.relationships_fct_orders__customer_id____customer_id___ref_dim_customers_.48ccecd76d": {
+      "database": "warehouse",
+      "schema": "main_dbt_test__audit",
+      "name": "relationships_fct_orders__customer_id____customer_id___ref_dim_customers_",
+      "resource_type": "test",
+      "alias": "relationships_fct_orders_6b0b90c0596c34909c61cf51d780e97f",
+      "config": {
+        "materialized": "test"
+      },
+      "columns": {},
+      "depends_on": {
+        "macros": [
+          "macro.dbt.test_relationships",
+          "macro.dbt.get_where_subquery"
+        ],
+        "nodes": [
+          "model.review_dbt.dim_customers",
+          "model.review_dbt.fct_orders"
+        ]
+      },
+      "column_name": "\"customer-id\"",
+      "attached_node": "model.review_dbt.fct_orders",
+      "test_metadata": {
+        "name": "relationships",
+        "kwargs": {
+          "column_name": "\"customer-id\"",
+          "to": "ref('dim_customers')",
+          "field": "\"customer-id\"",
+          "model": "{{ get_where_subquery(ref('fct_orders')) }}"
+        },
+        "namespace": null
+      }
+    }
+  }
+}

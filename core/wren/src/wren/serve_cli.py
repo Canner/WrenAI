@@ -226,7 +226,7 @@ def serve_mcp(
             typer.echo(f"Error: profile '{profile}' has no datasource.", err=True)
             raise typer.Exit(1)
         try:
-            prof_dict = expand_profile_secrets(prof_dict)
+            prof_dict = expand_profile_secrets(prof_dict, project_path=project_path)
         except MissingSecretError as e:
             typer.echo(f"Error: {e}", err=True)
             raise typer.Exit(1)
