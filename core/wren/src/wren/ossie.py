@@ -450,6 +450,48 @@ def _format_column_types_snippet(dataset_name: str, field_names: list[str]) -> s
     )
 
 
+def _format_fields_snippet(
+    dataset_name: str, field_names: list[str], dialect: str
+) -> str:
+    """Produce a copy-pasteable ``fields`` snippet declaring the named columns."""
+    entries = "\n".join(
+        f"      - name: {fn}\n"
+        "        expression:\n"
+        "          dialects:\n"
+        f"            - dialect: {dialect}\n"
+        f"              expression: {fn}"
+        for fn in field_names
+    )
+    return (
+        f"  Add to dataset '{dataset_name}' in the Ossie file:\n\n"
+        "    fields:\n"
+        f"{entries}"
+    )
+
+
+def _expression_column_refs(expression: str, dialect: str) -> set[str] | None:
+    """Bare column names a field expression reads, or None when unparseable.
+
+    Qualified references (``orders.amount``) and columns inside a nested query
+    are skipped: they resolve through a relationship or the subquery's own FROM
+    clause, not through the dataset's declared fields.
+    """
+    import sqlglot  # noqa: PLC0415
+    from sqlglot import exp  # noqa: PLC0415
+    from sqlglot.dialects.dialect import Dialect  # noqa: PLC0415
+
+    read = dialect.lower() if Dialect.get(dialect.lower()) else None
+    try:
+        tree = sqlglot.parse_one(expression, read=read)
+    except sqlglot.errors.SqlglotError:
+        return None
+    return {
+        node.name
+        for node in tree.find_all(exp.Column)
+        if not node.table and node.find_ancestor(exp.Query, exp.Subquery) is None
+    }
+
+
 def _convert_dataset(
     ds: dict, *, wren_cfg: WrenConfig
 ) -> tuple[dict, list[ValidationError]]:
@@ -541,6 +583,50 @@ def _convert_dataset(
                 f"dataset '{name}'",
                 f"{len(untyped)} field(s) have no type — defaulted to VARCHAR.\n"
                 + _format_column_types_snippet(name, untyped),
+            )
+        )
+
+    declared = {c["name"] for c in columns}
+
+    # `wren context validate` rejects a primary_key that names a column the
+    # model doesn't have, so report it here rather than after the migration.
+    missing_pk = [pk for pk in pk_names if pk not in declared]
+    if missing_pk:
+        errors.append(
+            ValidationError(
+                "error",
+                f"dataset '{name}'",
+                "primary_key references undeclared field(s): "
+                f"{', '.join(missing_pk)} — every primary key column must also "
+                "be declared as a field.\n"
+                + _format_fields_snippet(name, missing_pk, wren_cfg.dialect),
+            )
+        )
+
+    # The engine resolves a calculated column's expression against the model's
+    # own columns, not the source table, so a bare reference to a column that
+    # is not a declared field fails every query on the model.
+    undeclared_refs: dict[str, list[str]] = {}
+    for col in columns:
+        if not col["is_calculated"]:
+            continue
+        refs = _expression_column_refs(col["expression"], wren_cfg.dialect)
+        for ref in sorted((refs or set()) - declared):
+            undeclared_refs.setdefault(ref, []).append(col["name"])
+    if undeclared_refs:
+        detail = "; ".join(
+            f"'{ref}' (used by {', '.join(fields)})"
+            for ref, fields in undeclared_refs.items()
+        )
+        errors.append(
+            ValidationError(
+                "warning",
+                f"dataset '{name}'",
+                "calculated field(s) reference undeclared field(s): "
+                f"{detail} — the engine resolves calculated expressions against "
+                "the dataset's declared fields, so queries on this model will "
+                "fail until they are declared.\n"
+                + _format_fields_snippet(name, list(undeclared_refs), wren_cfg.dialect),
             )
         )
 
@@ -810,6 +896,14 @@ def build_manifest_from_ossie(
     return (manifest, errors)
 
 
+def _layout_version_for(models: list[dict]) -> int:
+    """Engine layoutVersion a manifest needs: 3 with a composite primary_key
+    (schema_version >= 4 on the project side), else 2."""
+    if any(isinstance(m.get("primary_key"), list) for m in models):
+        return 3
+    return 2
+
+
 def build_json_from_ossie(
     ossie_path: Path,
     *,
@@ -821,8 +915,9 @@ def build_json_from_ossie(
     metrics_override: str | None = None,
 ) -> tuple[dict, list[ValidationError]]:
     """Like :func:`build_manifest_from_ossie` but returns the camelCase JSON
-    dict the engine consumes. Stamps layoutVersion=2 (table_reference as
-    struct, which is what we emit)."""
+    dict the engine consumes. Stamps the layoutVersion the manifest needs:
+    2 (table_reference as struct, which is what we emit), or 3 once any model
+    carries a composite primary_key list, which older layouts cannot encode."""
     manifest, errors = build_manifest_from_ossie(
         ossie_path,
         data_source=data_source,
@@ -838,8 +933,9 @@ def build_json_from_ossie(
     # (see context.convert_mdl_to_project, memory.schema_indexer); pull it out
     # so the snake→camel pass doesn't mangle it into `Instructions`.
     instructions = manifest.pop("_instructions", None)
+    layout_version = _layout_version_for(manifest["models"])
     manifest_json = _convert_keys(manifest)
-    manifest_json["layoutVersion"] = 2
+    manifest_json["layoutVersion"] = layout_version
     if instructions:
         manifest_json["_instructions"] = instructions
     return (manifest_json, errors)
