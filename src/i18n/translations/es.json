@@ -1,0 +1,68 @@
+{
+  "common": {
+    "welcome": "Bienvenido",
+    "login": "Iniciar Sesión",
+    "signup": "Registrarse",
+    "logout": "Cerrar Sesión",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "next": "Siguiente",
+    "finish": "Finalizar",
+    "close": "Cerrar",
+    "submit": "Enviar",
+    "deploy": "Desplegar",
+    "synced": "Sincronizado",
+    "home": "Inicio",
+    "modeling": "Modelado"
+  },
+  "setup": {
+    "connection": {
+      "displayName": "Nombre para mostrar",
+      "host": "Host",
+      "port": "Puerto",
+      "username": "Usuario",
+      "password": "Contraseña",
+      "database": "Nombre de base de datos",
+      "useSSL": "Usar SSL",
+      "schema": "Esquema",
+      "catalog": "Catálogo"
+    }
+  },
+  "modeling": {
+    "metadata": {
+      "title": "Editar metadatos",
+      "name": "Nombre",
+      "description": "Descripción",
+      "updateSuccess": "Metadatos del modelo actualizados exitosamente."
+    },
+    "relationships": {
+      "add": "Agregar relación",
+      "edit": "Actualizar relación",
+      "delete": "Eliminar relación",
+      "deleteConfirm": "¿Estás seguro de que deseas eliminar esta relación?",
+      "createSuccess": "Relación creada exitosamente.",
+      "updateSuccess": "Relación actualizada exitosamente.",
+      "deleteSuccess": "Relación eliminada exitosamente."
+    },
+    "deploy": {
+      "undeployedChanges": "Cambios sin desplegar",
+      "deploying": "Desplegando..."
+    }
+  },
+  "views": {
+    "saveAs": "Guardar como Vista",
+    "saveSuccess": "Vista creada exitosamente.",
+    "updateSuccess": "Metadatos de la vista actualizados exitosamente.",
+    "deployNotice": "Después de guardar, asegúrate de ir a la \"Página de Modelado\" para desplegar todas las vistas guardadas."
+  },
+  "calculatedFields": {
+    "add": "Agregar campo calculado",
+    "edit": "Editar campo calculado", 
+    "delete": "Eliminar campo calculado",
+    "createSuccess": "Campo calculado creado exitosamente.",
+    "updateSuccess": "Campo calculado actualizado exitosamente.",
+    "deleteSuccess": "Campo calculado eliminado exitosamente."
+  }
+} 
