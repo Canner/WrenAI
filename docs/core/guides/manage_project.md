@@ -228,7 +228,7 @@ wren context build --path my_project
 
 If the target directory already has project files, use `--force` to overwrite.
 
-For `--from-ossie` (`--from-osi` is a deprecated alias), see the dedicated [Ossie guide](./ossie.md) — it covers the alternative of keeping Ossie as the source of truth (`wren context build --from-ossie`) instead of migrating once, and the reverse direction (`wren context export-ossie`) for publishing a wren project to other Ossie consumers.
+For `--from-ossie` (`--from-osi` is a deprecated alias), see the dedicated [Ossie guide](./ossie.md) — it covers `wren context import ossie` (the same one-way import as `init --from-ossie`), the alternative of keeping Ossie as the source of truth (`wren context build --from-ossie`), and the reverse direction (`wren context export ossie`) for publishing a wren project to other Ossie consumers.
 
 ## Upgrade an existing project
 

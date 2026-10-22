@@ -978,7 +978,7 @@ def lint_ossie_file(
 #
 # The inverse of the importer above. Emits either supported document layout
 # (``0.1.1`` wrapper by default, ``0.2.0.dev0`` root-level on request); both
-# are what ``build_manifest_from_ossie`` reads back, so ``export-ossie`` →
+# are what ``build_manifest_from_ossie`` reads back, so ``export ossie`` →
 # ``build --from-ossie`` reproduces the same models, columns, types and
 # relationships.
 #

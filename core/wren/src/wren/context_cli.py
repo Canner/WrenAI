@@ -52,7 +52,7 @@ DataSourceOpt = Annotated[
         "--data-source",
         help=(
             "Target data source (postgres, snowflake, bigquery, ...). "
-            "Required when --from-ossie is used."
+            "Required by `import ossie` and whenever --from-ossie is used."
         ),
     ),
 ]
@@ -62,8 +62,8 @@ SemanticModelOpt = Annotated[
     typer.Option(
         "--semantic-model",
         help=(
-            "Name of the semantic_model to convert when --from-ossie is used "
-            "and the Ossie file contains more than one."
+            "Name of the semantic_model to convert when the Ossie file "
+            "(`import ossie` or --from-ossie) contains more than one."
         ),
     ),
 ]
@@ -71,8 +71,19 @@ SemanticModelOpt = Annotated[
 
 @context_app.command("import")
 def import_cmd(
-    source: Annotated[str, typer.Argument(help="Import source: dbt or openmetadata.")],
+    source: Annotated[
+        str, typer.Argument(help="Import source: dbt, openmetadata or ossie.")
+    ],
     path: ProjectPathOpt = None,
+    file: Annotated[
+        Optional[str],
+        typer.Option(
+            "--file",
+            "-f",
+            help="ossie: Apache Ossie YAML file to import.",
+        ),
+    ] = None,
+    semantic_model: SemanticModelOpt = None,
     project_dir: Annotated[
         Optional[str],
         typer.Option(
@@ -134,8 +145,9 @@ def import_cmd(
         typer.Option(
             "--data-source",
             help=(
-                "openmetadata: Wren datasource override when the OpenMetadata "
-                "service type has no automatic mapping."
+                "ossie: target data source (required). openmetadata: Wren "
+                "datasource override when the OpenMetadata service type has "
+                "no automatic mapping."
             ),
         ),
     ] = None,
@@ -155,13 +167,34 @@ def import_cmd(
         ),
     ] = False,
 ) -> None:
-    """Import a Wren project from an external source (dbt or OpenMetadata).
+    """Import a Wren project from an external source.
 
-    openmetadata reads tables, columns, descriptions, tags, owners and
+    ``dbt`` reads the manifest and catalog of a dbt project.
+
+    ``openmetadata`` reads tables, columns, descriptions, tags, owners and
     foreign-key constraints from an OpenMetadata catalog — an alternative to
     introspecting the live database. Without --force it only adds files that
     do not exist yet and lists the collisions it left untouched.
+
+    ``ossie`` reads an Apache Ossie semantic-model file; the result is the same
+    native wren project ``wren context init --from-ossie`` produces, so this is
+    the path to take when you want to own the YAML afterwards. To keep the
+    Ossie file as the source of truth instead, use
+    ``wren context build --from-ossie``.
     """
+    output_path = Path(path).expanduser() if path else Path.cwd()
+
+    if source == "ossie":
+        _import_ossie(
+            file=file,
+            data_source=data_source,
+            semantic_model=semantic_model,
+            output_path=output_path,
+            dry_run=dry_run,
+            force=force,
+        )
+        return
+
     if source == "openmetadata":
         _import_openmetadata(
             path=path,
@@ -176,10 +209,11 @@ def import_cmd(
             force=force,
         )
         return
+
     if source != "dbt":
         typer.echo(
             f"Error: unsupported import source '{source}'. "
-            "Supported sources: dbt, openmetadata.",
+            "Supported sources: dbt, openmetadata, ossie.",
             err=True,
         )
         raise typer.Exit(1)
@@ -191,7 +225,6 @@ def import_cmd(
     )
 
     dbt_project_dir = project_dir or "."
-    output_path = Path(path).expanduser() if path else Path.cwd()
 
     try:
         imported = convert_dbt_project_to_wren_project(
@@ -1220,70 +1253,142 @@ def upgrade(
     typer.echo("\nUpgrade complete. Run `wren context validate` to check the result.")
 
 
-@context_app.command("export-ossie")
+ExportFromMdlOpt = Annotated[
+    Optional[str],
+    typer.Option(
+        "--from-mdl",
+        help=(
+            "Export from a built mdl.json instead of a wren YAML project. "
+            "Mutually exclusive with --path."
+        ),
+    ),
+]
+
+ExportOutputOpt = Annotated[
+    Optional[str],
+    typer.Option(
+        "--output",
+        "-o",
+        help="Write the exported file here. Defaults to stdout.",
+    ),
+]
+
+ExportNameOpt = Annotated[
+    Optional[str],
+    typer.Option(
+        "--name",
+        help="ossie: semantic_model name. Defaults to the project / manifest name.",
+    ),
+]
+
+ExportDialectOpt = Annotated[
+    Optional[str],
+    typer.Option(
+        "--dialect",
+        help=(
+            "ossie: dialect label for exported expressions (ANSI_SQL, "
+            "SNOWFLAKE, ...). Inferred from data_source when omitted."
+        ),
+    ),
+]
+
+ExportSpecVersionOpt = Annotated[
+    str,
+    typer.Option(
+        "--spec-version",
+        help=(
+            "ossie: document layout to write: 0.1.1 (released spec, "
+            "semantic_model[] wrapper) or 0.2.0.dev0 (current draft, "
+            "root-level model with datatype)."
+        ),
+    ),
+]
+
+ExportStrictOpt = Annotated[
+    bool,
+    typer.Option("--strict", help="Treat warnings as errors."),
+]
+
+
+@context_app.command("export")
+def export_cmd(
+    target: Annotated[str, typer.Argument(help="Export target: ossie.")],
+    path: ProjectPathOpt = None,
+    from_mdl: ExportFromMdlOpt = None,
+    output: ExportOutputOpt = None,
+    name: ExportNameOpt = None,
+    dialect: ExportDialectOpt = None,
+    spec_version: ExportSpecVersionOpt = "0.1.1",
+    strict: ExportStrictOpt = False,
+) -> None:
+    """Export the project to an external format (currently: Ossie).
+
+    ``ossie`` is the inverse of ``wren context import ossie``: models become
+    datasets, columns become fields (types kept in a WREN custom_extensions
+    block), relationships keep their join columns, cube measures become
+    metrics, and knowledge rules become ai_context.instructions. Views, cube
+    dimensions and access controls have no Ossie equivalent and are reported
+    as warnings.
+
+    The output is readable by ``wren context import ossie`` and
+    ``wren context build --from-ossie``.
+    """
+    if target != "ossie":
+        typer.echo(
+            f"Error: unsupported export target '{target}'. Supported targets: ossie.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    _export_ossie(
+        path=path,
+        from_mdl=from_mdl,
+        output=output,
+        name=name,
+        dialect=dialect,
+        spec_version=spec_version,
+        strict=strict,
+    )
+
+
+@context_app.command("export-ossie", hidden=True)
 def export_ossie(
     path: ProjectPathOpt = None,
-    from_mdl: Annotated[
-        Optional[str],
-        typer.Option(
-            "--from-mdl",
-            help=(
-                "Export from a built mdl.json instead of a wren YAML project. "
-                "Mutually exclusive with --path."
-            ),
-        ),
-    ] = None,
-    output: Annotated[
-        Optional[str],
-        typer.Option(
-            "--output",
-            "-o",
-            help="Write the Ossie YAML here. Defaults to stdout.",
-        ),
-    ] = None,
-    name: Annotated[
-        Optional[str],
-        typer.Option(
-            "--name",
-            help="semantic_model name. Defaults to the project / manifest name.",
-        ),
-    ] = None,
-    dialect: Annotated[
-        Optional[str],
-        typer.Option(
-            "--dialect",
-            help=(
-                "Ossie dialect label for exported expressions (ANSI_SQL, "
-                "SNOWFLAKE, ...). Inferred from data_source when omitted."
-            ),
-        ),
-    ] = None,
-    spec_version: Annotated[
-        str,
-        typer.Option(
-            "--spec-version",
-            help=(
-                "Ossie document layout to write: 0.1.1 (released spec, "
-                "semantic_model[] wrapper) or 0.2.0.dev0 (current draft, "
-                "root-level model with datatype)."
-            ),
-        ),
-    ] = "0.1.1",
-    strict: Annotated[
-        bool,
-        typer.Option("--strict", help="Treat warnings as errors."),
-    ] = False,
+    from_mdl: ExportFromMdlOpt = None,
+    output: ExportOutputOpt = None,
+    name: ExportNameOpt = None,
+    dialect: ExportDialectOpt = None,
+    spec_version: ExportSpecVersionOpt = "0.1.1",
+    strict: ExportStrictOpt = False,
 ) -> None:
-    """Export the project as an Apache Ossie (formerly OSI) YAML file.
+    """[deprecated] Alias of ``wren context export ossie``."""
+    typer.echo(
+        "Warning: `wren context export-ossie` is deprecated; "
+        "use `wren context export ossie`. The old spelling will be removed "
+        "in a future release.",
+        err=True,
+    )
+    _export_ossie(
+        path=path,
+        from_mdl=from_mdl,
+        output=output,
+        name=name,
+        dialect=dialect,
+        spec_version=spec_version,
+        strict=strict,
+    )
 
-    The inverse of --from-ossie: models become datasets, columns become fields
-    (types kept in a WREN custom_extensions block), relationships keep their
-    join columns, cube measures become metrics, and knowledge rules become
-    ai_context.instructions. Views, cube dimensions and access controls have
-    no Ossie equivalent and are reported as warnings.
 
-    The output is readable by `wren context build --from-ossie`.
-    """
+def _export_ossie(
+    *,
+    path: Optional[str],
+    from_mdl: Optional[str],
+    output: Optional[str],
+    name: Optional[str],
+    dialect: Optional[str],
+    spec_version: str,
+    strict: bool,
+) -> None:
+    """Write the project (or an mdl.json) as one Ossie YAML document."""
     from wren.ossie import (  # noqa: PLC0415
         SUPPORTED_SPEC_VERSIONS,
         dump_ossie,
@@ -1414,7 +1519,8 @@ def _resolve_ossie_path(from_ossie: str) -> Path:
 def _require_data_source(data_source: Optional[str]) -> str:
     if not data_source:
         typer.echo(
-            "Error: --data-source is required when using --from-ossie.\n"
+            "Error: --data-source is required: an Ossie file carries no "
+            "connection information.\n"
             "  Pass one of: postgres, snowflake, bigquery, mysql, duckdb, ...",
             err=True,
         )
@@ -1422,25 +1528,20 @@ def _require_data_source(data_source: Optional[str]) -> str:
     return data_source
 
 
-def _init_from_ossie(
+def _ossie_project_files(
     *,
     from_ossie: str,
     data_source: Optional[str],
     semantic_model: Optional[str],
-    project_path: Path,
-    force: bool,
-) -> None:
-    """Migrate an Ossie file to a native wren project (one-way).
+    abort_message: str,
+) -> tuple[list, dict, list[str]]:
+    """Convert an Ossie file into wren project files.
 
-    Reuses ``build_json_from_ossie`` to produce the MDL, then
-    ``convert_mdl_to_project`` + ``write_project_files`` to scaffold the
-    full wren YAML layout. The Ossie file is read once and never referenced
-    again after this command — the wren project becomes the source of truth.
+    Shared by ``init --from-ossie`` and ``import ossie`` so both produce the
+    same layout. Returns ``(files, mdl_json, warnings)``; hard Ossie errors
+    are printed and abort with ``abort_message``.
     """
-    from wren.context import (  # noqa: PLC0415
-        convert_mdl_to_project,
-        write_project_files,
-    )
+    from wren.context import convert_mdl_to_project  # noqa: PLC0415
     from wren.ossie import build_json_from_ossie  # noqa: PLC0415
 
     ossie_path = _resolve_ossie_path(from_ossie)
@@ -1456,12 +1557,104 @@ def _init_from_ossie(
     if hard_errors:
         for e in hard_errors:
             typer.echo(str(e), err=True)
-        typer.echo("\nMigration aborted due to Ossie errors.", err=True)
+        typer.echo(f"\n{abort_message}", err=True)
         raise typer.Exit(1)
 
     warnings = [str(e) for e in errors if e.level == "warning"]
+    return convert_mdl_to_project(mdl_json), mdl_json, warnings
 
-    files = convert_mdl_to_project(mdl_json)
+
+def _print_ossie_conversion_warnings(warnings: list[str]) -> None:
+    if not warnings:
+        return
+    typer.echo("")
+    _print_warnings(warnings, verbose=False)
+    typer.echo(
+        "  Review the generated YAML — items above were defaulted "
+        "or omitted and may need manual fixes."
+    )
+
+
+def _import_ossie(
+    *,
+    file: Optional[str],
+    data_source: Optional[str],
+    semantic_model: Optional[str],
+    output_path: Path,
+    dry_run: bool,
+    force: bool,
+) -> None:
+    """``wren context import ossie``: Ossie file → native wren project."""
+    from wren.context import write_project_files  # noqa: PLC0415
+
+    if not file:
+        typer.echo(
+            "Error: --file is required for `wren context import ossie`.\n"
+            "  wren context import ossie --file semantic_model.yaml "
+            "--data-source postgres",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    files, mdl_json, warnings = _ossie_project_files(
+        from_ossie=file,
+        data_source=data_source,
+        semantic_model=semantic_model,
+        abort_message="Import aborted due to Ossie errors.",
+    )
+
+    model_count = len(mdl_json.get("models", []))
+    rel_count = len(mdl_json.get("relationships", []))
+
+    if dry_run:
+        typer.echo("Dry run — files that would be written:")
+        for project_file in files:
+            typer.echo(f"  {project_file.relative_path}")
+        typer.echo(f"  {model_count} models, {rel_count} relationships")
+        _print_ossie_conversion_warnings(warnings)
+        return
+
+    try:
+        write_project_files(
+            files, output_path, force=force, extra_managed_paths=("cubes",)
+        )
+    except SystemExit as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Imported Ossie semantic model to Wren project at {output_path}/")
+    typer.echo(f"  {model_count} models, {rel_count} relationships")
+    _print_ossie_conversion_warnings(warnings)
+
+    typer.echo("\nNext steps:")
+    typer.echo(f"  wren context validate --path {output_path}")
+    typer.echo(f"  wren context build --path {output_path}")
+
+
+def _init_from_ossie(
+    *,
+    from_ossie: str,
+    data_source: Optional[str],
+    semantic_model: Optional[str],
+    project_path: Path,
+    force: bool,
+) -> None:
+    """Migrate an Ossie file to a native wren project (one-way).
+
+    Same conversion as ``wren context import ossie``: ``build_json_from_ossie``
+    produces the MDL, then ``convert_mdl_to_project`` + ``write_project_files``
+    scaffold the full wren YAML layout. The Ossie file is read once and never
+    referenced again after this command — the wren project becomes the source
+    of truth.
+    """
+    from wren.context import write_project_files  # noqa: PLC0415
+
+    files, mdl_json, warnings = _ossie_project_files(
+        from_ossie=from_ossie,
+        data_source=data_source,
+        semantic_model=semantic_model,
+        abort_message="Migration aborted due to Ossie errors.",
+    )
     try:
         write_project_files(
             files, project_path, force=force, extra_managed_paths=("cubes",)
@@ -1475,14 +1668,7 @@ def _init_from_ossie(
 
     typer.echo(f"Migrated Ossie → wren project at {project_path}/")
     typer.echo(f"  {model_count} models, {rel_count} relationships")
-
-    if warnings:
-        typer.echo("")
-        _print_warnings(warnings, verbose=False)
-        typer.echo(
-            "  Review the generated YAML — items above were defaulted "
-            "or omitted and may need manual fixes."
-        )
+    _print_ossie_conversion_warnings(warnings)
 
     typer.echo("\nNext steps:")
     typer.echo(f"  wren context validate --path {project_path}")
