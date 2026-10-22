@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import pytest
@@ -2222,10 +2221,15 @@ def test_cli_export_ossie_deprecated_alias_warns_and_matches(tmp_path: Path):
 
 
 def test_cli_export_ossie_alias_is_hidden_from_help():
+    from typer.main import get_command  # noqa: PLC0415
+
+    context_group = get_command(app).commands["context"]
+    assert not context_group.commands["export"].hidden
+    assert context_group.commands["export-ossie"].hidden
+
     result = runner.invoke(app, ["context", "--help"])
     assert result.exit_code == 0, result.output
     assert "export-ossie" not in result.output
-    assert re.search(r"\bexport\s+Export the project", result.output)
 
 
 # ── CLI: import ossie ──────────────────────────────────────────────────────
