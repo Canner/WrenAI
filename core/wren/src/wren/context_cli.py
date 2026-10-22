@@ -71,7 +71,7 @@ SemanticModelOpt = Annotated[
 
 @context_app.command("import")
 def import_cmd(
-    source: Annotated[str, typer.Argument(help="Import source (currently: dbt)")],
+    source: Annotated[str, typer.Argument(help="Import source: dbt or openmetadata.")],
     path: ProjectPathOpt = None,
     project_dir: Annotated[
         Optional[str],
@@ -92,19 +92,94 @@ def import_cmd(
         Optional[str],
         typer.Option("--target", help="dbt target name override."),
     ] = None,
+    om_host: Annotated[
+        Optional[str],
+        typer.Option(
+            "--host",
+            envvar="OPENMETADATA_HOST",
+            help="openmetadata: server URL, e.g. http://localhost:8585.",
+        ),
+    ] = None,
+    om_token: Annotated[
+        Optional[str],
+        typer.Option(
+            "--token",
+            envvar="OPENMETADATA_TOKEN",
+            help="openmetadata: bot or personal access token (JWT).",
+            show_default=False,
+        ),
+    ] = None,
+    om_service: Annotated[
+        Optional[str],
+        typer.Option("--service", help="openmetadata: database service name."),
+    ] = None,
+    om_database: Annotated[
+        Optional[str],
+        typer.Option("--database", help="openmetadata: database name filter."),
+    ] = None,
+    om_schema: Annotated[
+        Optional[str],
+        typer.Option(
+            "--schema", help="openmetadata: schema name filter (needs --database)."
+        ),
+    ] = None,
+    om_tables: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            "--table", help="openmetadata: only import this table (repeatable)."
+        ),
+    ] = None,
+    data_source: Annotated[
+        Optional[str],
+        typer.Option(
+            "--data-source",
+            help=(
+                "openmetadata: Wren datasource override when the OpenMetadata "
+                "service type has no automatic mapping."
+            ),
+        ),
+    ] = None,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", help="Preview generated files without writing."),
     ] = False,
     force: Annotated[
         bool,
-        typer.Option("--force", help="Overwrite generated Wren project files."),
+        typer.Option(
+            "--force",
+            help=(
+                "Overwrite generated Wren project files. The import source wins: "
+                "local edits to models/, relationships.yml and wren_project.yml "
+                "are discarded."
+            ),
+        ),
     ] = False,
 ) -> None:
-    """Import a Wren project from an external source."""
+    """Import a Wren project from an external source (dbt or OpenMetadata).
+
+    openmetadata reads tables, columns, descriptions, tags, owners and
+    foreign-key constraints from an OpenMetadata catalog — an alternative to
+    introspecting the live database. Without --force it only adds files that
+    do not exist yet and lists the collisions it left untouched.
+    """
+    if source == "openmetadata":
+        _import_openmetadata(
+            path=path,
+            host=om_host,
+            token=om_token,
+            service=om_service,
+            database=om_database,
+            schema=om_schema,
+            tables=om_tables or [],
+            data_source=data_source,
+            dry_run=dry_run,
+            force=force,
+        )
+        return
     if source != "dbt":
         typer.echo(
-            f"Error: unsupported import source '{source}'. Only 'dbt' is supported.",
+            f"Error: unsupported import source '{source}'. "
+            "Supported sources: dbt, openmetadata.",
             err=True,
         )
         raise typer.Exit(1)
@@ -156,6 +231,127 @@ def import_cmd(
         return
 
     typer.echo("\nNext steps:")
+    typer.echo(f"  wren context validate --path {output_path}")
+    typer.echo(f"  wren context build --path {output_path}")
+
+
+def _import_openmetadata(
+    *,
+    path: str | None,
+    host: str | None,
+    token: str | None,
+    service: str | None,
+    database: str | None,
+    schema: str | None,
+    tables: list[str],
+    data_source: str | None,
+    dry_run: bool,
+    force: bool,
+) -> None:
+    missing = [
+        flag
+        for flag, value in (
+            ("--host", host),
+            ("--token", token),
+            ("--service", service),
+        )
+        if not value
+    ]
+    if missing:
+        typer.echo(
+            f"Error: OpenMetadata is not configured — missing {', '.join(missing)}. "
+            "Pass --host and --token (or set OPENMETADATA_HOST and "
+            "OPENMETADATA_TOKEN) and choose a database service with --service.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    if schema and not database:
+        typer.echo("Error: --schema requires --database.", err=True)
+        raise typer.Exit(1)
+
+    from wren.context import write_project_files  # noqa: PLC0415
+    from wren.openmetadata import (  # noqa: PLC0415
+        TESTED_SERVER_VERSIONS,
+        OpenMetadataClient,
+        OpenMetadataError,
+        OpenMetadataSelection,
+        import_openmetadata_project,
+        is_tested_server_version,
+        plan_additive_write,
+    )
+
+    output_path = Path(path).expanduser() if path else Path.cwd()
+    selection = OpenMetadataSelection(
+        service=service,
+        database=database,
+        schema=schema,
+        tables=tuple(tables),
+    )
+    try:
+        imported = import_openmetadata_project(
+            OpenMetadataClient(host, token), selection, datasource=data_source
+        )
+    except OpenMetadataError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1)
+
+    if not is_tested_server_version(imported.server_version):
+        typer.echo(
+            f"Warning: OpenMetadata server {imported.server_version or 'unknown'} "
+            f"is outside the tested versions ({', '.join(TESTED_SERVER_VERSIONS)}.x).",
+            err=True,
+        )
+
+    if force:
+        files_to_write, collisions = imported.files, []
+    else:
+        files_to_write, collisions = plan_additive_write(imported, output_path)
+
+    if dry_run:
+        typer.echo("Dry run — files that would be written:")
+        for project_file in files_to_write:
+            typer.echo(f"  {project_file.relative_path}")
+    elif files_to_write:
+        try:
+            write_project_files(files_to_write, output_path, force=force)
+        except SystemExit as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(1)
+        typer.echo(f"Imported OpenMetadata catalog to Wren project at {output_path}/")
+
+    typer.echo(
+        f"  {imported.model_count} models, {imported.relationship_count} "
+        f"relationships (from foreign keys), datasource {imported.datasource}"
+    )
+    for skipped_table in imported.skipped_tables:
+        typer.echo(f"  skipped table {skipped_table.table}: {skipped_table.reason}")
+    for skipped in imported.skipped_relationships:
+        typer.echo(
+            f"  skipped foreign key {skipped.table}({', '.join(skipped.columns)}): "
+            f"{skipped.reason}"
+        )
+    if collisions:
+        typer.echo(
+            "\nCollisions — left untouched (existing project content wins "
+            "without --force):"
+        )
+        for collision in collisions:
+            typer.echo(f"  {collision}")
+        typer.echo(
+            "Re-run with --force to regenerate from OpenMetadata; this discards "
+            "local edits to the generated files."
+        )
+    if dry_run:
+        return
+    if not files_to_write:
+        typer.echo("Nothing new to write.", err=True)
+        raise typer.Exit(1)
+
+    typer.echo("\nNext steps:")
+    typer.echo(
+        f"  wren profile add <name> --datasource {imported.datasource} "
+        "--interactive   # connection settings are not imported from OpenMetadata"
+    )
     typer.echo(f"  wren context validate --path {output_path}")
     typer.echo(f"  wren context build --path {output_path}")
 
