@@ -357,7 +357,7 @@ If your Ossie file is updated by an upstream team and you want Wren to stay in s
 
 ## Export a wren project as Ossie
 
-`wren context export ossie` is the inverse of `import ossie` and `--from-ossie`: it turns a native wren project (or an already-built `mdl.json`) into one Ossie YAML document that Snowflake Cortex, Cube, dbt, or any other Ossie consumer can read — and that `wren context import ossie` or `wren context build --from-ossie` reads back.
+`wren context export ossie` is the inverse of `import ossie` and `--from-ossie`: it turns a native wren project (or an already-built `mdl.json`) into one Ossie YAML document for other Ossie consumers — and one that `wren context import ossie` or `wren context build --from-ossie` reads back. Which spec version and file format a given consumer accepts is up to that consumer (some take JSON rather than YAML); check its own documentation before handing it the file.
 
 ```bash
 # From the current project (auto-discovered like every other context command)
@@ -376,7 +376,7 @@ wren context export ossie --spec-version 0.2.0.dev0   # draft layout (root-level
 wren context export ossie --strict                # treat warnings as errors
 ```
 
-By default the exporter writes the released `0.1.1` layout (`version: "0.1.1"`, one `semantic_model[]` entry) — the one every shipping Ossie consumer reads. `--spec-version 0.2.0.dev0` writes the draft layout instead: the model's keys at the document root and an OSI-portable `datatype` on every field and metric whose Wren type maps to the enum. In both cases everything Ossie cannot express goes into the same `WREN` extension blocks the importer looks for, so `export ossie` → `import ossie` (or `build --from-ossie`) reproduces the same models, column types, expressions and relationships whichever layout you pick. Without `--dialect`, expressions are labelled `ANSI_SQL` (or `SNOWFLAKE` / `DATABRICKS` when the project's `data_source` is one of those, matching the importer's inference).
+By default the exporter writes the released `0.1.1` layout (`version: "0.1.1"`, one `semantic_model[]` entry). `--spec-version 0.2.0.dev0` writes the draft layout instead: the model's keys at the document root and an OSI-portable `datatype` on every field and metric whose Wren type maps to the enum. In both cases, what the export carries but Ossie cannot express (column types, calculated-column expressions, composite keys) goes into the same `WREN` extension blocks the importer looks for, so `export ossie` → `import ossie` (or `build --from-ossie`) reproduces the models, column types, expressions and relationships the export carried, whichever layout you pick. The round trip covers only what is exported: views, cube dimensions, access controls, navigation columns and relationships with unsupported conditions are left out, each with a warning (see [Export mapping](#export-mapping)), so keep the wren project if you depend on them. Without `--dialect`, expressions are labelled `ANSI_SQL` (or `SNOWFLAKE` / `DATABRICKS` when the project's `data_source` is one of those, matching the importer's inference).
 
 ### Export mapping
 
