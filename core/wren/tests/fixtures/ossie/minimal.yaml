@@ -38,7 +38,9 @@ semantic_model:
               {
                 "column_types": {
                   "customer_id": "BIGINT",
-                  "email": "VARCHAR"
+                  "email": "VARCHAR",
+                  "first_name": "VARCHAR",
+                  "last_name": "VARCHAR"
                 }
               }
         fields:
@@ -46,6 +48,10 @@ semantic_model:
             expression: customer_id
           - name: email
             expression: email
+          - name: first_name
+            expression: first_name
+          - name: last_name
+            expression: last_name
           - name: full_name
             expression:
               dialects:

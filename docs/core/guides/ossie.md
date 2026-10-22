@@ -218,6 +218,42 @@ datasets:
 
 The override must name one of the columns in the composite list; anything else is ignored and the full list is kept.
 
+Every primary key column must also be declared as a field. A key that names an undeclared column is an **error** (the generated model would fail `wren context validate`), with a snippet for the missing field:
+
+```text
+[ERROR] dataset 'store_sales': primary_key references undeclared field(s): ss_ticket_number
+  — every primary key column must also be declared as a field.
+  Add to dataset 'store_sales' in the Ossie file:
+
+    fields:
+      - name: ss_ticket_number
+        expression:
+          dialects:
+            - dialect: ANSI_SQL
+              expression: ss_ticket_number
+```
+
+### Calculated fields over undeclared columns
+
+A field whose expression is more than its own column name becomes a calculated column, and the engine resolves a calculated expression against the model's **declared** columns, not the source table. `full_name: first_name || ' ' || last_name` therefore fails every query on the model unless `first_name` and `last_name` are fields too. Validate warns and prints the fields to add:
+
+```text
+[WARNING] dataset 'customers': calculated field(s) reference undeclared field(s):
+  'first_name' (used by full_name); 'last_name' (used by full_name) — ...
+  Add to dataset 'customers' in the Ossie file:
+
+    fields:
+      - name: first_name
+        expression:
+          dialects:
+            - dialect: ANSI_SQL
+              expression: first_name
+      - name: last_name
+        ...
+```
+
+Qualified references (`orders.amount`) and columns inside a subquery are left alone — they resolve through a relationship or the subquery's own `FROM`.
+
 ### Cross-dataset metrics
 
 Wren cubes are bound to a single base object, so Ossie top-level metrics that aggregate across multiple datasets cannot become first-class cubes. They are rendered as markdown notes appended to `instructions`, available to the LLM but not as queryable measures:
@@ -303,7 +339,9 @@ After migration:
 - Edit the generated YAML directly. Add cubes under `cubes/`, views under `views/`, RLAC under each model's `properties`, etc.
 - Use the standard flow: `wren context validate` → `wren context build`.
 
-Any warnings the Ossie conversion would normally emit (untyped fields, cross-dataset metrics) are printed once during init so you know which spots in the generated YAML need a human review.
+Any warnings the Ossie conversion would normally emit (untyped fields, undeclared columns behind calculated fields, cross-dataset metrics) are printed once during init so you know which spots in the generated YAML need a human review.
+
+The generated `wren_project.yml` carries the `schema_version` the content needs: a file with a composite `primary_key` lands on the current layout (`schema_version: 5`), everything else on `3`.
 
 ### When *not* to migrate
 

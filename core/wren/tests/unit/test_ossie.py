@@ -424,12 +424,10 @@ def test_build_tpcds_composite_pk_preserved():
 
     store_sales = next(m for m in manifest["models"] if m["name"] == "store_sales")
     assert store_sales["primary_key"] == ["ss_item_sk", "ss_ticket_number"]
-    # Every composite member that is a declared field is flagged on its column.
-    # (ss_ticket_number is referenced by the PK but not declared as a field in
-    # this fixture, so it has no column to flag.)
+    # Every composite member is a declared field and is flagged on its column.
     pk_cols = {c["name"] for c in store_sales["columns"] if c.get("is_primary_key")}
-    assert "ss_item_sk" in pk_cols
-    assert pk_cols <= {"ss_item_sk", "ss_ticket_number"}
+    assert pk_cols == {"ss_item_sk", "ss_ticket_number"}
+    assert not any("primary_key references undeclared" in e.message for e in errors)
 
 
 def test_build_tpcds_untyped_field_warnings_include_snippets():
@@ -466,6 +464,135 @@ def test_build_tpcds_time_dimension_inferred_as_timestamp():
     date_dim = next(m for m in manifest["models"] if m["name"] == "date_dim")
     d_year = next(c for c in date_dim["columns"] if c["name"] == "d_year")
     assert d_year["type"] == "TIMESTAMP"
+
+
+def test_build_json_layout_version_3_for_composite_primary_key():
+    """A composite primary_key is a layoutVersion 3 wire format; stamping 2
+    makes `init --from-ossie` land on schema_version 3, which validate then
+    flags. (Single-column keys keep layoutVersion 2 — see the minimal test.)"""
+    json_manifest, _ = build_json_from_ossie(
+        _fixture("tpcds_full.yaml"), data_source="postgres"
+    )
+    assert json_manifest["layoutVersion"] == 3
+
+
+# ── Integration: undeclared fields behind calculated columns / primary keys ──
+
+
+def _write_ossie(tmp_path: Path, body: str) -> Path:
+    p = tmp_path / "ossie.yaml"
+    p.write_text(body)
+    return p
+
+
+def _customers_with(fields_yaml: str, *, primary_key: str = "[customer_id]") -> str:
+    return (
+        'version: "0.1.1"\n'
+        "semantic_model:\n"
+        "  - name: shop\n"
+        "    datasets:\n"
+        "      - name: customers\n"
+        "        source: shop.public.customers\n"
+        f"        primary_key: {primary_key}\n"
+        "        custom_extensions:\n"
+        "          - vendor_name: WREN\n"
+        '            data: \'{"column_types": {"customer_id": "BIGINT", '
+        '"full_name": "VARCHAR"}}\'\n'
+        "        fields:\n"
+        "          - name: customer_id\n"
+        "            expression: customer_id\n"
+        f"{fields_yaml}"
+    )
+
+
+_UNDECLARED_CALC = _customers_with(
+    "          - name: full_name\n"
+    "            expression: first_name || ' ' || last_name\n"
+)
+
+
+def test_build_calculated_field_over_undeclared_columns_warns(tmp_path: Path):
+    """full_name reads first_name / last_name, which are not fields. The engine
+    resolves calculated expressions against the model's columns, so every query
+    on the model would fail — the converter must say so, with a fix snippet."""
+    manifest, errors = build_manifest_from_ossie(
+        _write_ossie(tmp_path, _UNDECLARED_CALC), data_source="postgres"
+    )
+    assert [e for e in errors if e.level == "error"] == []
+    warns = [e for e in errors if "undeclared field" in e.message]
+    assert len(warns) == 1
+    w = warns[0]
+    assert w.level == "warning"
+    assert w.path == "dataset 'customers'"
+    assert "'first_name' (used by full_name)" in w.message
+    assert "'last_name' (used by full_name)" in w.message
+    # Copy-pasteable snippet declaring the missing fields.
+    assert "fields:" in w.message
+    assert "- name: first_name" in w.message
+    assert "expression: last_name" in w.message
+    # The column itself is still emitted as calculated.
+    full_name = next(
+        c for c in manifest["models"][0]["columns"] if c["name"] == "full_name"
+    )
+    assert full_name["is_calculated"] is True
+
+
+def test_build_calculated_field_over_declared_columns_is_clean():
+    """minimal.yaml declares first_name / last_name — no warning."""
+    _, errors = build_manifest_from_ossie(
+        _fixture("minimal.yaml"), data_source="postgres"
+    )
+    assert not any("undeclared field" in e.message for e in errors)
+
+
+def test_build_calculated_field_ignores_qualified_nested_and_unparseable(
+    tmp_path: Path,
+):
+    """Qualified refs resolve through relationships, subquery columns through
+    their own FROM, and an unparseable expression is left to the engine —
+    none of them is an undeclared *field* of this dataset."""
+    body = _customers_with(
+        "          - name: order_total\n"
+        "            expression: orders.amount * 2\n"
+        "          - name: max_order\n"
+        "            expression: (SELECT MAX(amount) FROM orders)\n"
+        "          - name: broken\n"
+        "            expression: CASE WHEN first_name\n"
+    )
+    _, errors = build_manifest_from_ossie(
+        _write_ossie(tmp_path, body), data_source="postgres"
+    )
+    assert [e for e in errors if e.level == "error"] == []
+    assert not any("undeclared field" in e.message for e in errors)
+
+
+def test_build_primary_key_over_undeclared_field_errors(tmp_path: Path):
+    """primary_key names a column that is not a field. `wren context validate`
+    rejects the generated model, so the conversion must report it up front."""
+    body = _customers_with("", primary_key="[customer_id, tenant_id]")
+    _, errors = build_manifest_from_ossie(
+        _write_ossie(tmp_path, body), data_source="postgres"
+    )
+    hard = [e for e in errors if e.level == "error"]
+    assert len(hard) == 1
+    assert hard[0].path == "dataset 'customers'"
+    assert "primary_key references undeclared field(s): tenant_id" in hard[0].message
+    assert "- name: tenant_id" in hard[0].message
+    assert "expression: tenant_id" in hard[0].message
+
+
+def test_build_primary_key_pick_only_checks_the_picked_column(tmp_path: Path):
+    """A WREN.primary_key override narrows the key to one column; only that
+    column has to be declared."""
+    body = _customers_with("", primary_key="[customer_id, tenant_id]").replace(
+        '"full_name": "VARCHAR"}}',
+        '"full_name": "VARCHAR"}, "primary_key": "customer_id"}',
+    )
+    manifest, errors = build_manifest_from_ossie(
+        _write_ossie(tmp_path, body), data_source="postgres"
+    )
+    assert [e for e in errors if e.level == "error"] == []
+    assert manifest["models"][0]["primary_key"] == "customer_id"
 
 
 # ── Integration: ref_sql source detection ────────────────────────────────
@@ -894,6 +1021,89 @@ def test_cli_init_from_ossie_roundtrip_matches_direct_build(tmp_path: Path):
     mig_cols = {c["name"]: c.get("type") for c in mig_orders["columns"]}
     direct_cols = {c["name"]: c.get("type") for c in direct_orders["columns"]}
     assert mig_cols == direct_cols
+
+
+def test_cli_validate_from_ossie_reports_undeclared_calculated_columns(
+    tmp_path: Path,
+):
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "validate",
+            "--from-ossie",
+            str(_write_ossie(tmp_path, _UNDECLARED_CALC)),
+            "--data-source",
+            "postgres",
+            "--verbose",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "undeclared field" in result.output
+    assert "- name: first_name" in result.output
+
+
+def test_cli_init_from_ossie_project_validates_and_builds(tmp_path: Path):
+    """What converts cleanly must also validate and build as a wren project."""
+    proj = tmp_path / "migrated"
+    init = runner.invoke(
+        app,
+        [
+            "context",
+            "init",
+            "--from-ossie",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "duckdb",
+            "--path",
+            str(proj),
+        ],
+    )
+    assert init.exit_code == 0, init.output
+    validate = runner.invoke(app, ["context", "validate", "--path", str(proj)])
+    assert validate.exit_code == 0, validate.output
+    assert "0 error(s)" in validate.output or "Valid" in validate.output
+    build = runner.invoke(app, ["context", "build", "--path", str(proj)])
+    assert build.exit_code == 0, build.output
+
+
+def test_cli_init_from_ossie_composite_pk_lands_on_schema_version_4_plus(
+    tmp_path: Path,
+):
+    """tpcds_full.yaml has a composite primary key. The migrated project must
+    carry a schema_version that accepts it, and validate / build cleanly."""
+    import yaml as _yaml  # noqa: PLC0415
+
+    proj = tmp_path / "tpcds"
+    init = runner.invoke(
+        app,
+        [
+            "context",
+            "init",
+            "--from-ossie",
+            str(_fixture("tpcds_full.yaml")),
+            "--data-source",
+            "duckdb",
+            "--path",
+            str(proj),
+        ],
+    )
+    assert init.exit_code == 0, init.output
+    cfg = _yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert cfg["schema_version"] >= 4
+
+    validate = runner.invoke(
+        app, ["context", "validate", "--path", str(proj), "--verbose"]
+    )
+    assert validate.exit_code == 0, validate.output
+    assert "composite primary_key requires" not in validate.output
+    assert "not found in columns" not in validate.output
+
+    build = runner.invoke(app, ["context", "build", "--path", str(proj)])
+    assert build.exit_code == 0, build.output
+    mdl = json.loads((proj / "target" / "mdl.json").read_text())
+    store_sales = next(m for m in mdl["models"] if m["name"] == "store_sales")
+    assert store_sales["primaryKey"] == ["ss_item_sk", "ss_ticket_number"]
 
 
 def test_cli_init_from_ossie_requires_data_source(tmp_path: Path):
