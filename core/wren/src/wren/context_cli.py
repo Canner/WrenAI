@@ -1519,7 +1519,8 @@ def _resolve_ossie_path(from_ossie: str) -> Path:
 def _require_data_source(data_source: Optional[str]) -> str:
     if not data_source:
         typer.echo(
-            "Error: --data-source is required when using --from-ossie.\n"
+            "Error: --data-source is required: an Ossie file carries no "
+            "connection information.\n"
             "  Pass one of: postgres, snowflake, bigquery, mysql, duckdb, ...",
             err=True,
         )

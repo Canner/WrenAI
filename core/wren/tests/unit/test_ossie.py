@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -2224,7 +2225,7 @@ def test_cli_export_ossie_alias_is_hidden_from_help():
     result = runner.invoke(app, ["context", "--help"])
     assert result.exit_code == 0, result.output
     assert "export-ossie" not in result.output
-    assert "export" in result.output
+    assert re.search(r"\bexport\s+Export the project", result.output)
 
 
 # ── CLI: import ossie ──────────────────────────────────────────────────────
@@ -2360,6 +2361,7 @@ def test_cli_import_ossie_requires_data_source(tmp_path: Path):
     )
     assert result.exit_code == 1
     assert "--data-source is required" in result.output
+    assert "--from-ossie" not in result.output
     assert not (tmp_path / "p").exists()
 
 
@@ -2418,9 +2420,12 @@ def test_cli_import_ossie_refuses_overwrite_without_force(tmp_path: Path):
 
 
 def test_cli_import_ossie_force_overwrites(tmp_path: Path):
+    """--force regenerates the managed layout, including a stale cubes/ dir."""
     proj = tmp_path / "existing"
     proj.mkdir()
     (proj / "wren_project.yml").write_text("name: prior\n")
+    (proj / "cubes").mkdir()
+    (proj / "cubes" / "stale.yml").write_text("name: stale\n")
     result = _import_ossie(
         [
             "--file",
@@ -2437,6 +2442,7 @@ def test_cli_import_ossie_force_overwrites(tmp_path: Path):
 
     cfg = _yaml.safe_load((proj / "wren_project.yml").read_text())
     assert cfg["name"] == "shop"
+    assert not (proj / "cubes" / "stale.yml").exists()
 
 
 def test_cli_import_ossie_with_semantic_model_picks_one(tmp_path: Path):
