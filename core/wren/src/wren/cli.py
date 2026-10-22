@@ -9,7 +9,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from wren._json_values import normalize_value
+from wren._json_values import normalize_value, unique_column_names
 from wren.context_cli import context_app
 
 app = typer.Typer(name="wren", help="Wren Engine CLI", no_args_is_help=False)
@@ -575,6 +575,7 @@ def _print_result(table, output: str) -> None:
         )
         raise typer.Exit(1)
     if output == "json":
+        table = table.rename_columns(unique_column_names(table.column_names))
         # Serialize from Arrow, not pandas: DataFrame.to_json turns dates and
         # timestamps into epoch numbers and nullable integers into floats.
         typer.echo(
