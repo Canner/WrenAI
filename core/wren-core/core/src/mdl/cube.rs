@@ -12,6 +12,7 @@ use datafusion::sql::sqlparser::ast::{visit_expressions, Expr};
 use datafusion::sql::sqlparser::dialect::GenericDialect;
 use datafusion::sql::sqlparser::parser::Parser;
 use datafusion::sql::sqlparser::tokenizer::Location;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::mdl::manifest::{Cube, CubeDimension, Manifest, Measure, TimeDimension};
@@ -340,20 +341,33 @@ fn resolve_measures(
 /// Find references to other measures as source-ordered, half-open UTF-8 ranges.
 /// Quoted identifiers use their parsed names; literals, comments, qualified
 /// columns, function names, and `self_name` are excluded.
-/// Returns a planning error if the SQL expression cannot be parsed.
+/// Unparsed dialect-specific SQL is preserved if no other measure name occurs
+/// as a whole word; otherwise returns a planning error for ambiguous references.
 fn find_measure_refs<'a>(
     expr: &str,
     measure_map: &HashMap<&'a str, &Measure>,
     self_name: &str,
 ) -> Result<Vec<(&'a str, Range<usize>)>> {
-    let parsed = Parser::new(&GenericDialect {})
+    let parsed = match Parser::new(&GenericDialect {})
         .try_with_sql(expr)
         .and_then(|mut parser| parser.parse_expr())
-        .map_err(|e| {
-            datafusion::common::DataFusionError::Plan(format!(
-                "Error parsing measure '{self_name}': {e}"
-            ))
-        })?;
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            // Preserve dialect syntax that needs no substitution. If another
+            // name occurs anywhere, even in a literal or comment, we cannot
+            // safely decide whether it is a reference without parsing.
+            let possible_reference = measure_map.keys().any(|&name| {
+                name != self_name
+                    && Regex::new(&format!(r"\b{}\b", regex::escape(name)))
+                        .map_or(true, |pattern| pattern.is_match(expr))
+            });
+            if !possible_reference {
+                return Ok(Vec::new());
+            }
+            return plan_err!("Error parsing measure '{self_name}': {e}");
+        }
+    };
     let mut refs = Vec::new();
     let _ = visit_expressions(&parsed, |node| {
         if let Expr::Identifier(id) = node {
@@ -1048,6 +1062,53 @@ mod tests {
         let err =
             derived_measure_sql(&[("a", "b + 1"), ("b", "a + 1")], "a").unwrap_err();
         assert!(err.to_string().contains("possible cycle"), "err={err}");
+    }
+
+    #[test]
+    fn test_derived_measure_preserves_unparsed_dialect_expression() {
+        for (expression, other_name) in [
+            ("SUM(amount) # mysql comment\n", "order_count"),
+            ("SUM(amount DIV 2)", "order_count"),
+            // The self name is not a dependency, and other names must match
+            // whole words: `amount` must not match `amount_total`.
+            ("SUM(amount_total DIV 2) # revenue\n", "amount"),
+            // A measure name is literal text, not regex syntax.
+            ("SUM(aaab DIV 2)", "a+b"),
+        ] {
+            let sql = derived_measure_sql(
+                &[(other_name, "COUNT(*)"), ("revenue", expression)],
+                "revenue",
+            )
+            .unwrap();
+            assert_eq!(sql, format!("SELECT {expression} AS revenue FROM orders"));
+        }
+
+        // An opaque base expression can still be inlined into a parsed one.
+        let sql = derived_measure_sql(
+            &[("base", "SUM(amount DIV 2)"), ("derived", "base + 1")],
+            "derived",
+        )
+        .unwrap();
+        assert_eq!(sql, "SELECT (SUM(amount DIV 2)) + 1 AS derived FROM orders");
+    }
+
+    #[test]
+    fn test_derived_measure_rejects_ambiguous_unparsed_expression() {
+        for expression in [
+            "revenue DIV 2",
+            "SUM(amount DIV 2) + 'revenue'",
+            "SUM(amount) # revenue\n",
+        ] {
+            let err = derived_measure_sql(
+                &[("revenue", "SUM(amount)"), ("derived", expression)],
+                "derived",
+            )
+            .unwrap_err();
+            assert!(
+                err.to_string().contains("Error parsing measure 'derived'"),
+                "expression={expression:?}, err={err}"
+            );
+        }
     }
 
     #[test]
