@@ -9,16 +9,15 @@ has already verified the ``mcp`` extra is installed (see ``serve_cli.py``).
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass
-from datetime import date, datetime, time
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable
 
 from loguru import logger
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
+
+from wren._json_values import normalize_value
 
 DEFAULT_ROW_LIMIT = 1000
 MAX_ROW_LIMIT = 10000
@@ -39,32 +38,11 @@ def _memory_path(ctx: ServeContext) -> str:
     return str(ctx.project / ".wren" / "memory")
 
 
-def _normalize_value(value: Any) -> Any:
-    """Recursively coerce a value into a JSON-native type."""
-    if isinstance(value, (datetime, date, time)):
-        return value.isoformat()
-    if isinstance(value, Decimal):
-        return float(value)
-    if isinstance(value, (bytes, bytearray)):
-        return value.decode(errors="replace")
-    if isinstance(value, float):
-        if math.isnan(value) or math.isinf(value):
-            return None
-        return value
-    if hasattr(value, "item"):
-        return _normalize_value(value.item())
-    if isinstance(value, dict):
-        return {k: _normalize_value(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_normalize_value(v) for v in value]
-    return value
-
-
 def _table_to_result(table, *, truncated: bool) -> dict:
     """Serialize a pyarrow.Table into the MCP result shape."""
     columns = [f.name for f in table.schema]
     rows = [
-        {col: _normalize_value(val) for col, val in row.items()}
+        {col: normalize_value(val) for col, val in row.items()}
         for row in table.to_pylist()
     ]
     return {
@@ -468,7 +446,7 @@ def _register_knowledge_tools(mcp: FastMCP, ctx: ServeContext) -> None:
                 source=source,
                 limit=limit if limit is not None else MAX_ROW_LIMIT,
             )
-            return {"queries": [_normalize_value(row) for row in rows]}
+            return {"queries": [normalize_value(row) for row in rows]}
         except Exception:
             from wren.memory.markdown import load_query_pairs  # noqa: PLC0415
 
