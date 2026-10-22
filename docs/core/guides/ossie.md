@@ -2,7 +2,7 @@
 sidebar_label: Apache Ossie (formerly OSI)
 ---
 
-# Apache Ossie semantic models: build from, or export to
+# Apache Ossie semantic models: import, build from, or export to
 
 [Apache Ossie](https://github.com/apache/ossie) (incubating) — formerly **Open Semantic Interchange (OSI)** — is a vendor-neutral specification for semantic models, backed by Snowflake, Salesforce, dbt Labs, Databricks, Cube, AtScale, and others. Wren reads and writes it, so an Ossie file can be the source of truth for Wren, or Wren can be the source of truth for every other Ossie consumer:
 
@@ -10,41 +10,44 @@ sidebar_label: Apache Ossie (formerly OSI)
 # Ossie → Wren: build target/mdl.json straight from an Ossie file
 wren context build --from-ossie semantic_model.yaml --data-source postgres
 
+# Ossie → Wren: import the file as a native wren project you then own
+wren context import ossie --file semantic_model.yaml --data-source postgres --path my_project
+
 # Wren → Ossie: publish the project as an Ossie file
-wren context export-ossie --output semantic_model.yaml
+wren context export ossie --output semantic_model.yaml
 ```
 
-The export is readable by `--from-ossie`, so the two directions round-trip — see [Export a wren project as Ossie](#export-a-wren-project-as-ossie).
+The export is readable by both `import ossie` and `--from-ossie`, so the two directions round-trip — see [Export a wren project as Ossie](#export-a-wren-project-as-ossie).
 
 :::note Renamed from OSI
-The project was renamed from OSI to Apache Ossie when it entered the Apache Incubator. Wren's flags followed: `--from-ossie` and `export-ossie` are the current names. `--from-osi` still works as a deprecated alias of `--from-ossie` and prints a warning each time it is used; it will be removed in a future release.
+The project was renamed from OSI to Apache Ossie when it entered the Apache Incubator. Wren's flags followed: `--from-ossie`, `import ossie` and `export ossie` are the current names. `--from-osi` still works as a deprecated alias of `--from-ossie`, and `export-ossie` as a deprecated alias of `export ossie`; both print a warning each time they are used and will be removed in a future release.
 :::
 
 ## Supported spec versions
 
 | Version | Status | Document layout | Wren |
 |---|---|---|---|
-| `0.1.1` | Released (2025-12) | `semantic_model: [...]` wrapper, one or more models per file; no `datatype` on fields | Read **and** written (default for `export-ossie`) |
-| `0.2.0.dev0` | Draft on `main` | One model per file: `name` / `datasets` / `relationships` / `metrics` at the document root; `datatype` enum on fields and metrics | Read **and** written (`export-ossie --spec-version 0.2.0.dev0`) |
+| `0.1.1` | Released (2025-12) | `semantic_model: [...]` wrapper, one or more models per file; no `datatype` on fields | Read **and** written (default for `export ossie`) |
+| `0.2.0.dev0` | Draft on `main` | One model per file: `name` / `datasets` / `relationships` / `metrics` at the document root; `datatype` enum on fields and metrics | Read **and** written (`export ossie --spec-version 0.2.0.dev0`) |
 
-Wren detects the layout from the document itself (`semantic_model:` present → wrapper; root-level `datasets:` → draft), so `--from-ossie` takes either without a flag. Everything below is written against the wrapper layout; with the draft layout, read "`semantic_model[i].…`" as "the document root".
+Wren detects the layout from the document itself (`semantic_model:` present → wrapper; root-level `datasets:` → draft), so `--from-ossie` and `import ossie` take either without a flag. Everything below is written against the wrapper layout; with the draft layout, read "`semantic_model[i].…`" as "the document root".
 
 ## Ossie project vs. wren project
 
 |  | Wren project (native) | Ossie project, kept as source | Ossie project, migrated once |
 |---|---|---|---|
 | **Source files** | `wren_project.yml` + `models/<name>/metadata.yml` + `views/` + `relationships.yml` | A single `*.yaml` Ossie file | After migration: wren project layout |
-| **Author** | You (or the `generate-mdl` agent guide) | Ossie tooling / vendor / external team | You take ownership after `init` |
-| **Wren commands** | `wren context init` → edit → `build` | `wren context build --from-ossie <file>` | `wren context init --from-ossie <file>` → edit → `build` |
+| **Author** | You (or the `generate-mdl` agent guide) | Ossie tooling / vendor / external team | You take ownership after the import |
+| **Wren commands** | `wren context init` → edit → `build` | `wren context build --from-ossie <file>` | `wren context import ossie --file <file>` → edit → `build` |
 | **Editable inside Wren?** | Yes — that's the point | No — Wren reads the file as-is | Yes after migration |
 | **Where wren-specific hints live** | Each model's YAML | Ossie's `custom_extensions[vendor_name=WREN]` block | Each model's YAML (lifted from Ossie at migration time) |
-| **Stays in sync with Ossie?** | Publish with `wren context export-ossie` | Yes — every build re-reads Ossie | No — one-way snapshot (re-export with `export-ossie` if other tools need it) |
+| **Stays in sync with Ossie?** | Publish with `wren context export ossie` | Yes — every build re-reads Ossie | No — one-way snapshot (re-export with `export ossie` if other tools need it) |
 
 Three places you might land:
 
 - **You own the semantic model from day one** → use the native wren project flow.
 - **The Ossie file is shared with other tools (Snowflake Cortex, Salesforce, Cube, …) and you want Wren to be one of many consumers without forking** → use `wren context build --from-ossie`. Every build re-reads the Ossie file.
-- **You started with an Ossie file but now want full control inside Wren (cubes, views, RLAC, custom calculations Ossie doesn't model)** → use `wren context init --from-ossie` to migrate once, then edit the generated YAML directly. See [Migrate to a native wren project](#migrate-to-a-native-wren-project).
+- **You started with an Ossie file but now want full control inside Wren (cubes, views, RLAC, custom calculations Ossie doesn't model)** → use `wren context import ossie` to import once, then edit the generated YAML directly. See [Import as a native wren project](#import-as-a-native-wren-project).
 
 All three paths produce the same `target/mdl.json` shape — Wren doesn't care how you got there.
 
@@ -286,9 +289,11 @@ wren context build --from-ossie semantic_model.yaml --data-source postgres
 wren context build --from-ossie semantic_model.yaml --data-source snowflake \
   --output build/mdl.json
 
-# Migrate to a native wren project (one-way)
-wren context init --from-ossie semantic_model.yaml --data-source postgres \
+# Import as a native wren project (one-way; `init --from-ossie` is the same conversion)
+wren context import ossie --file semantic_model.yaml --data-source postgres \
   --path my_project
+wren context import ossie --file semantic_model.yaml --data-source postgres \
+  --path my_project --dry-run
 
 # Validate — lints the conversion and prints actionable snippets
 wren context validate --from-ossie semantic_model.yaml --data-source postgres
@@ -301,24 +306,27 @@ wren context show --from-ossie semantic_model.yaml --data-source postgres --outp
 wren context show --from-ossie semantic_model.yaml --data-source postgres --output yaml
 
 # Export — the other direction: wren project (or mdl.json) → Ossie YAML
-wren context export-ossie --output semantic_model.yaml
-wren context export-ossie --from-mdl target/mdl.json --output semantic_model.yaml
+wren context export ossie --output semantic_model.yaml
+wren context export ossie --from-mdl target/mdl.json --output semantic_model.yaml
 
-# Deprecated spelling — same behaviour as --from-ossie plus a warning on stderr
+# Deprecated spellings — same behaviour plus a warning on stderr
 wren context build --from-osi semantic_model.yaml --data-source postgres
+wren context export-ossie --output semantic_model.yaml
 ```
 
-`--data-source` is required because Ossie deliberately does not carry connection or dialect environment information. Pair `--from-ossie` with `--semantic-model` if the file contains more than one model.
+`--data-source` is required because Ossie deliberately does not carry connection or dialect environment information. Pair `--from-ossie` or `import ossie` with `--semantic-model` if the file contains more than one model.
 
-## Migrate to a native wren project
+## Import as a native wren project
 
-When Ossie's surface area isn't enough — you need cubes, views, RLAC/CLAC, or calculated columns Ossie doesn't model — convert the Ossie file into a native wren project once and edit the YAML from there:
+When Ossie's surface area isn't enough — you need cubes, views, RLAC/CLAC, or calculated columns Ossie doesn't model — import the Ossie file as a native wren project once and edit the YAML from there:
 
 ```bash
-wren context init --from-ossie semantic_model.yaml --data-source postgres --path my_project
+wren context import ossie --file semantic_model.yaml --data-source postgres --path my_project
 ```
 
-This reuses the same converter as `build --from-ossie`, then scaffolds the standard wren layout:
+`import ossie` sits next to `import dbt`: it writes the project files and refuses to touch an existing project unless you pass `--force`, and `--dry-run` lists the files it would write without creating any. `wren context init --from-ossie` runs the same conversion and produces the same files; it predates `import ossie` and stays available.
+
+The import reuses the same converter as `build --from-ossie`, then scaffolds the standard wren layout:
 
 ```text
 my_project/
@@ -333,42 +341,42 @@ my_project/
 └── AGENTS.md
 ```
 
-After migration:
+After the import:
 
 - The Ossie file is **no longer referenced**. You can delete it, archive it, or keep it for diffing — Wren never reads it again.
 - Edit the generated YAML directly. Add cubes under `cubes/`, views under `views/`, RLAC under each model's `properties`, etc.
 - Use the standard flow: `wren context validate` → `wren context build`.
 
-Any warnings the Ossie conversion would normally emit (untyped fields, undeclared columns behind calculated fields, cross-dataset metrics) are printed once during init so you know which spots in the generated YAML need a human review.
+Any warnings the Ossie conversion would normally emit (untyped fields, undeclared columns behind calculated fields, cross-dataset metrics) are printed once during the import so you know which spots in the generated YAML need a human review.
 
 The generated `wren_project.yml` carries the `schema_version` the content needs: a file with a composite `primary_key` lands on the current layout (`schema_version: 5`), everything else on `3`.
 
-### When *not* to migrate
+### When *not* to import
 
-If your Ossie file is updated by an upstream team and you want Wren to stay in sync, **do not** migrate — use `build --from-ossie` instead. A migrated project is a snapshot; later Ossie edits won't reach Wren without manually merging or re-running `init --from-ossie --force` (which loses your post-migration edits).
+If your Ossie file is updated by an upstream team and you want Wren to stay in sync, **do not** import — use `build --from-ossie` instead. An imported project is a snapshot; later Ossie edits won't reach Wren without manually merging or re-running `import ossie --force` (which loses your post-import edits).
 
 ## Export a wren project as Ossie
 
-`wren context export-ossie` is the inverse of `--from-ossie`: it turns a native wren project (or an already-built `mdl.json`) into one Ossie YAML document that Snowflake Cortex, Cube, dbt, or any other Ossie consumer can read — and that `wren context build --from-ossie` reads back.
+`wren context export ossie` is the inverse of `import ossie` and `--from-ossie`: it turns a native wren project (or an already-built `mdl.json`) into one Ossie YAML document that Snowflake Cortex, Cube, dbt, or any other Ossie consumer can read — and that `wren context import ossie` or `wren context build --from-ossie` reads back.
 
 ```bash
 # From the current project (auto-discovered like every other context command)
-wren context export-ossie --output semantic_model.yaml
+wren context export ossie --output semantic_model.yaml
 
 # Print to stdout instead
-wren context export-ossie --path my_project
+wren context export ossie --path my_project
 
 # From a built manifest instead of a project
-wren context export-ossie --from-mdl target/mdl.json --output semantic_model.yaml
+wren context export ossie --from-mdl target/mdl.json --output semantic_model.yaml
 
 # Options
-wren context export-ossie --name sales_model      # semantic_model name (default: project name)
-wren context export-ossie --dialect SNOWFLAKE     # dialect label on every expression
-wren context export-ossie --spec-version 0.2.0.dev0   # draft layout (root-level model + datatype)
-wren context export-ossie --strict                # treat warnings as errors
+wren context export ossie --name sales_model      # semantic_model name (default: project name)
+wren context export ossie --dialect SNOWFLAKE     # dialect label on every expression
+wren context export ossie --spec-version 0.2.0.dev0   # draft layout (root-level model + datatype)
+wren context export ossie --strict                # treat warnings as errors
 ```
 
-By default the exporter writes the released `0.1.1` layout (`version: "0.1.1"`, one `semantic_model[]` entry) — the one every shipping Ossie consumer reads. `--spec-version 0.2.0.dev0` writes the draft layout instead: the model's keys at the document root and an OSI-portable `datatype` on every field and metric whose Wren type maps to the enum. In both cases everything Ossie cannot express goes into the same `WREN` extension blocks the importer looks for, so `export-ossie` → `build --from-ossie` reproduces the same models, column types, expressions and relationships whichever layout you pick. Without `--dialect`, expressions are labelled `ANSI_SQL` (or `SNOWFLAKE` / `DATABRICKS` when the project's `data_source` is one of those, matching the importer's inference).
+By default the exporter writes the released `0.1.1` layout (`version: "0.1.1"`, one `semantic_model[]` entry) — the one every shipping Ossie consumer reads. `--spec-version 0.2.0.dev0` writes the draft layout instead: the model's keys at the document root and an OSI-portable `datatype` on every field and metric whose Wren type maps to the enum. In both cases everything Ossie cannot express goes into the same `WREN` extension blocks the importer looks for, so `export ossie` → `import ossie` (or `build --from-ossie`) reproduces the same models, column types, expressions and relationships whichever layout you pick. Without `--dialect`, expressions are labelled `ANSI_SQL` (or `SNOWFLAKE` / `DATABRICKS` when the project's `data_source` is one of those, matching the importer's inference).
 
 ### Export mapping
 

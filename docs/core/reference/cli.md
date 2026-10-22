@@ -109,6 +109,30 @@ wren context import openmetadata --service shop_pg --database shop --schema shop
 
 Flags: `--host`, `--token`, `--service` (required), `--database`, `--schema`, `--table` (repeatable), `--data-source`, `--dry-run`, `--force`. Without `--force` only missing files are written and collisions are listed; `--force` regenerates from OpenMetadata and discards local edits to generated files. See [OpenMetadata Integration](../guides/openmetadata-integration.md).
 
+## `wren context import ossie`
+
+Generate a Wren project from an [Apache Ossie](../guides/ossie.md) semantic-model file.
+
+```bash
+wren context import ossie --file semantic_model.yaml --data-source postgres --path ./wren-shop
+wren context import ossie --file semantic_model.yaml --data-source postgres --path ./wren-shop --dry-run
+wren context import ossie --file semantic_model.yaml --data-source postgres --semantic-model sales
+```
+
+`--data-source` is required (Ossie carries no connection information). Pass `--semantic-model` when the file holds more than one model. Existing project files block the import unless `--force` is given. This is the same conversion as `wren context init --from-ossie`; to keep the Ossie file as the source of truth instead, use `wren context build --from-ossie`.
+
+## `wren context export ossie`
+
+Write the project (or a built `mdl.json`) as one Ossie YAML document, readable by `wren context import ossie` and `--from-ossie`.
+
+```bash
+wren context export ossie --output semantic_model.yaml
+wren context export ossie --from-mdl target/mdl.json --output semantic_model.yaml
+wren context export ossie --spec-version 0.2.0.dev0 --dialect SNOWFLAKE --strict
+```
+
+Common flags: `--output`, `--from-mdl`, `--name`, `--dialect`, `--spec-version`, `--strict`. `wren context export-ossie` is a deprecated alias that prints a warning. See [Apache Ossie](../guides/ossie.md).
+
 ---
 
 ## `wren context upgrade`

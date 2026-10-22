@@ -1814,7 +1814,7 @@ def test_dump_ossie_is_yaml_in_authoring_order():
     assert parse_ossie(text) == doc
 
 
-# ── CLI: export-ossie ──────────────────────────────────────────────────────
+# ── CLI: export ossie ──────────────────────────────────────────────────────
 
 
 def _make_export_project(tmp_path: Path) -> Path:
@@ -1844,7 +1844,7 @@ def _make_export_project(tmp_path: Path) -> Path:
 
 def test_cli_export_ossie_to_stdout(tmp_path: Path):
     proj = _make_export_project(tmp_path)
-    result = runner.invoke(app, ["context", "export-ossie", "--path", str(proj)])
+    result = runner.invoke(app, ["context", "export", "ossie", "--path", str(proj)])
     assert result.exit_code == 0, result.output
     doc = parse_ossie(result.output)
     sm = doc["semantic_model"][0]
@@ -1861,7 +1861,7 @@ def test_cli_export_ossie_to_file_then_build_from_ossie(tmp_path: Path):
     proj = _make_export_project(tmp_path)
     out = tmp_path / "semantic_model.yaml"
     result = runner.invoke(
-        app, ["context", "export-ossie", "--path", str(proj), "--output", str(out)]
+        app, ["context", "export", "ossie", "--path", str(proj), "--output", str(out)]
     )
     assert result.exit_code == 0, result.output
     assert "1 datasets" in result.output
@@ -1917,7 +1917,7 @@ def test_cli_export_ossie_from_mdl(tmp_path: Path):
             }
         )
     )
-    result = runner.invoke(app, ["context", "export-ossie", "--from-mdl", str(mdl)])
+    result = runner.invoke(app, ["context", "export", "ossie", "--from-mdl", str(mdl)])
     assert result.exit_code == 0, result.output
     doc = parse_ossie(result.output)
     assert _wren_data(doc) == {"dialect": "SNOWFLAKE"}
@@ -1931,7 +1931,7 @@ def test_cli_export_ossie_from_mdl(tmp_path: Path):
 def test_cli_export_ossie_name_override(tmp_path: Path):
     proj = _make_export_project(tmp_path)
     result = runner.invoke(
-        app, ["context", "export-ossie", "--path", str(proj), "--name", "renamed"]
+        app, ["context", "export", "ossie", "--path", str(proj), "--name", "renamed"]
     )
     assert result.exit_code == 0, result.output
     assert parse_ossie(result.output)["semantic_model"][0]["name"] == "renamed"
@@ -1942,11 +1942,11 @@ def test_cli_export_ossie_strict_fails_on_warning(tmp_path: Path):
     view = proj / "views" / "v"
     view.mkdir(parents=True)
     (view / "metadata.yml").write_text("name: v\nstatement: SELECT 1\n")
-    ok = runner.invoke(app, ["context", "export-ossie", "--path", str(proj)])
+    ok = runner.invoke(app, ["context", "export", "ossie", "--path", str(proj)])
     assert ok.exit_code == 0, ok.output
     assert "view(s) not exported" in ok.output
     strict = runner.invoke(
-        app, ["context", "export-ossie", "--path", str(proj), "--strict"]
+        app, ["context", "export", "ossie", "--path", str(proj), "--strict"]
     )
     assert strict.exit_code == 1
     assert "Export aborted" in strict.output
@@ -1954,7 +1954,7 @@ def test_cli_export_ossie_strict_fails_on_warning(tmp_path: Path):
 
 def test_cli_export_ossie_from_mdl_missing_file(tmp_path: Path):
     result = runner.invoke(
-        app, ["context", "export-ossie", "--from-mdl", str(tmp_path / "nope.json")]
+        app, ["context", "export", "ossie", "--from-mdl", str(tmp_path / "nope.json")]
     )
     assert result.exit_code == 1
     assert "not found" in result.output
@@ -1965,7 +1965,8 @@ def test_cli_export_ossie_from_mdl_and_path_exclusive(tmp_path: Path):
         app,
         [
             "context",
-            "export-ossie",
+            "export",
+            "ossie",
             "--from-mdl",
             str(tmp_path / "x.json"),
             "--path",
@@ -2109,7 +2110,8 @@ def test_cli_export_ossie_spec_version(tmp_path: Path):
         app,
         [
             "context",
-            "export-ossie",
+            "export",
+            "ossie",
             "--path",
             str(proj),
             "--spec-version",
@@ -2124,7 +2126,7 @@ def test_cli_export_ossie_spec_version(tmp_path: Path):
 
     bad = runner.invoke(
         app,
-        ["context", "export-ossie", "--path", str(proj), "--spec-version", "1.0"],
+        ["context", "export", "ossie", "--path", str(proj), "--spec-version", "1.0"],
     )
     assert bad.exit_code == 1
     assert "--spec-version must be one of" in bad.output
@@ -2187,3 +2189,312 @@ def test_cli_from_osi_and_from_ossie_together_is_an_error(command: str, tmp_path
     result = runner.invoke(app, args)
     assert result.exit_code == 1
     assert "pass only one of them" in result.output
+
+
+def test_cli_export_unknown_target_fails(tmp_path: Path):
+    proj = _make_export_project(tmp_path)
+    result = runner.invoke(app, ["context", "export", "pdf", "--path", str(proj)])
+    assert result.exit_code == 1
+    assert "unsupported export target 'pdf'" in result.output
+    assert "ossie" in result.output
+
+
+def test_cli_export_ossie_deprecated_alias_warns_and_matches(tmp_path: Path):
+    """`export-ossie` still works, prints a deprecation, and writes the same file."""
+    proj = _make_export_project(tmp_path)
+    new_out = tmp_path / "new.yaml"
+    old_out = tmp_path / "old.yaml"
+    new = runner.invoke(
+        app,
+        ["context", "export", "ossie", "--path", str(proj), "--output", str(new_out)],
+    )
+    assert new.exit_code == 0, new.output
+    assert "deprecated" not in new.output
+    old = runner.invoke(
+        app,
+        ["context", "export-ossie", "--path", str(proj), "--output", str(old_out)],
+    )
+    assert old.exit_code == 0, old.output
+    assert "export-ossie` is deprecated" in old.output
+    assert "wren context export ossie" in old.output
+    assert old_out.read_text() == new_out.read_text()
+
+
+def test_cli_export_ossie_alias_is_hidden_from_help():
+    result = runner.invoke(app, ["context", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "export-ossie" not in result.output
+    assert "export" in result.output
+
+
+# ── CLI: import ossie ──────────────────────────────────────────────────────
+
+
+def _import_ossie(args: list[str]):
+    return runner.invoke(app, ["context", "import", "ossie", *args])
+
+
+def test_cli_import_ossie_scaffolds_project(tmp_path: Path):
+    proj = tmp_path / "imported"
+    result = _import_ossie(
+        [
+            "--file",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(proj),
+        ]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Imported Ossie semantic model" in result.output
+    assert "2 models, 1 relationships" in result.output
+    assert "wren context build --path" in result.output
+    assert (proj / "wren_project.yml").exists()
+    assert (proj / "models" / "orders" / "metadata.yml").exists()
+    assert (proj / "models" / "customers" / "metadata.yml").exists()
+    assert (proj / "relationships.yml").exists()
+    assert (proj / "knowledge" / "rules" / "general.md").exists()
+    assert (proj / "AGENTS.md").exists()
+    import yaml as _yaml  # noqa: PLC0415
+
+    cfg = _yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert cfg["name"] == "shop"
+    assert cfg["data_source"] == "postgres"
+
+
+def test_cli_import_ossie_matches_init_from_ossie(tmp_path: Path):
+    """`import ossie` and `init --from-ossie` are the same conversion."""
+    imported = tmp_path / "imported"
+    migrated = tmp_path / "migrated"
+    res = _import_ossie(
+        [
+            "--file",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(imported),
+        ]
+    )
+    assert res.exit_code == 0, res.output
+    init = runner.invoke(
+        app,
+        [
+            "context",
+            "init",
+            "--from-ossie",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(migrated),
+        ],
+    )
+    assert init.exit_code == 0, init.output
+
+    imported_files = {
+        f.relative_to(imported): f.read_text()
+        for f in imported.rglob("*")
+        if f.is_file()
+    }
+    migrated_files = {
+        f.relative_to(migrated): f.read_text()
+        for f in migrated.rglob("*")
+        if f.is_file()
+    }
+    assert imported_files == migrated_files
+
+
+def test_cli_import_ossie_then_build(tmp_path: Path):
+    proj = tmp_path / "imported"
+    res = _import_ossie(
+        [
+            "--file",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(proj),
+        ]
+    )
+    assert res.exit_code == 0, res.output
+    build = runner.invoke(app, ["context", "build", "--path", str(proj)])
+    assert build.exit_code == 0, build.output
+    mdl = json.loads((proj / "target" / "mdl.json").read_text())
+    assert {m["name"] for m in mdl["models"]} == {"orders", "customers"}
+    assert len(mdl["relationships"]) == 1
+
+
+def test_cli_import_ossie_dry_run_writes_nothing(tmp_path: Path):
+    proj = tmp_path / "imported"
+    result = _import_ossie(
+        [
+            "--file",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(proj),
+            "--dry-run",
+        ]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Dry run" in result.output
+    assert "wren_project.yml" in result.output
+    assert "models/orders/metadata.yml" in result.output
+    assert "relationships.yml" in result.output
+    assert "2 models, 1 relationships" in result.output
+    assert not proj.exists()
+
+
+def test_cli_import_ossie_requires_file(tmp_path: Path):
+    result = _import_ossie(["--data-source", "postgres", "--path", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "--file is required" in result.output
+
+
+def test_cli_import_ossie_requires_data_source(tmp_path: Path):
+    result = _import_ossie(
+        ["--file", str(_fixture("minimal.yaml")), "--path", str(tmp_path / "p")]
+    )
+    assert result.exit_code == 1
+    assert "--data-source is required" in result.output
+    assert not (tmp_path / "p").exists()
+
+
+def test_cli_import_ossie_missing_file(tmp_path: Path):
+    result = _import_ossie(
+        [
+            "--file",
+            str(tmp_path / "nope.yaml"),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(tmp_path / "p"),
+        ]
+    )
+    assert result.exit_code == 1
+    assert "Ossie file not found" in result.output
+
+
+def test_cli_import_ossie_aborts_on_hard_error(tmp_path: Path):
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(
+        "version: '0.1.1'\n"
+        "semantic_model:\n"
+        "  - name: broken\n"
+        "    datasets:\n"
+        "      - name: orders\n"
+        "        fields:\n"
+        "          - name: id\n"
+    )
+    proj = tmp_path / "p"
+    result = _import_ossie(
+        ["--file", str(bad), "--data-source", "postgres", "--path", str(proj)]
+    )
+    assert result.exit_code == 1
+    assert "Import aborted due to Ossie errors." in result.output
+    assert not proj.exists()
+
+
+def test_cli_import_ossie_refuses_overwrite_without_force(tmp_path: Path):
+    proj = tmp_path / "existing"
+    proj.mkdir()
+    (proj / "wren_project.yml").write_text("name: prior\n")
+    result = _import_ossie(
+        [
+            "--file",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(proj),
+        ]
+    )
+    assert result.exit_code == 1
+    assert "already exists" in result.output
+    assert (proj / "wren_project.yml").read_text() == "name: prior\n"
+
+
+def test_cli_import_ossie_force_overwrites(tmp_path: Path):
+    proj = tmp_path / "existing"
+    proj.mkdir()
+    (proj / "wren_project.yml").write_text("name: prior\n")
+    result = _import_ossie(
+        [
+            "--file",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(proj),
+            "--force",
+        ]
+    )
+    assert result.exit_code == 0, result.output
+    import yaml as _yaml  # noqa: PLC0415
+
+    cfg = _yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert cfg["name"] == "shop"
+
+
+def test_cli_import_ossie_with_semantic_model_picks_one(tmp_path: Path):
+    proj = tmp_path / "p"
+    result = _import_ossie(
+        [
+            "--file",
+            str(_fixture("multi_semantic_model.yaml")),
+            "--data-source",
+            "postgres",
+            "--semantic-model",
+            "model_a",
+            "--path",
+            str(proj),
+        ]
+    )
+    assert result.exit_code == 0, result.output
+    import yaml as _yaml  # noqa: PLC0415
+
+    cfg = _yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert cfg["name"] == "model_a"
+
+
+def test_cli_export_ossie_then_import_ossie_round_trips(tmp_path: Path):
+    """export ossie → import ossie reproduces the models and relationships."""
+    src = tmp_path / "src"
+    first = _import_ossie(
+        [
+            "--file",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(src),
+        ]
+    )
+    assert first.exit_code == 0, first.output
+
+    exported = tmp_path / "exported.yaml"
+    export = runner.invoke(
+        app,
+        ["context", "export", "ossie", "--path", str(src), "--output", str(exported)],
+    )
+    assert export.exit_code == 0, export.output
+
+    back = tmp_path / "back"
+    second = _import_ossie(
+        ["--file", str(exported), "--data-source", "postgres", "--path", str(back)]
+    )
+    assert second.exit_code == 0, second.output
+
+    def _models(root: Path) -> dict[str, str]:
+        return {
+            f.parent.name: f.read_text()
+            for f in (root / "models").rglob("metadata.yml")
+        }
+
+    assert _models(back) == _models(src)
+    assert (back / "relationships.yml").read_text() == (
+        src / "relationships.yml"
+    ).read_text()
