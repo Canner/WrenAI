@@ -13,6 +13,27 @@ from decimal import Decimal
 from typing import Any
 
 
+def unique_column_names(names: list[str]) -> list[str]:
+    """Rename repeated column names so each one can be a JSON object key.
+
+    The first occurrence keeps its name. Later ones get ``_1``, ``_2``, ...,
+    skipping any name the result already uses.
+    """
+    taken = set(names)
+    used: set[str] = set()
+    unique: list[str] = []
+    for name in names:
+        if name in used:
+            suffix = 1
+            while f"{name}_{suffix}" in taken:
+                suffix += 1
+            name = f"{name}_{suffix}"
+            taken.add(name)
+        used.add(name)
+        unique.append(name)
+    return unique
+
+
 def normalize_value(value: Any) -> Any:
     """Recursively coerce a ``to_pylist()`` value into a JSON-native type.
 
