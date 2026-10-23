@@ -11,7 +11,7 @@ use datafusion::common::{plan_err, Result};
 use datafusion::sql::sqlparser::ast::{visit_expressions, Expr};
 use datafusion::sql::sqlparser::dialect::GenericDialect;
 use datafusion::sql::sqlparser::parser::Parser;
-use datafusion::sql::sqlparser::tokenizer::Location;
+use datafusion::sql::sqlparser::tokenizer::{Location, Token};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -341,6 +341,7 @@ fn resolve_measures(
 /// Find references to other measures as source-ordered, half-open UTF-8 ranges.
 /// Quoted identifiers use their parsed names; literals, comments, qualified
 /// columns, function names, and `self_name` are excluded.
+/// Reference discovery requires a complete parse, including end of input.
 /// Unparsed dialect-specific SQL is preserved if no other measure name occurs
 /// as a whole word; otherwise returns a planning error for ambiguous references.
 fn find_measure_refs<'a>(
@@ -348,10 +349,15 @@ fn find_measure_refs<'a>(
     measure_map: &HashMap<&'a str, &Measure>,
     self_name: &str,
 ) -> Result<Vec<(&'a str, Range<usize>)>> {
-    let parsed = match Parser::new(&GenericDialect {})
-        .try_with_sql(expr)
-        .and_then(|mut parser| parser.parse_expr())
-    {
+    let parse_result =
+        Parser::new(&GenericDialect {})
+            .try_with_sql(expr)
+            .and_then(|mut parser| {
+                let parsed = parser.parse_expr()?;
+                parser.expect_token(&Token::EOF)?;
+                Ok(parsed)
+            });
+    let parsed = match parse_result {
         Ok(parsed) => parsed,
         Err(e) => {
             // Preserve dialect syntax that needs no substitution. If another
@@ -1109,6 +1115,54 @@ mod tests {
                 "expression={expression:?}, err={err}"
             );
         }
+    }
+
+    #[test]
+    fn test_derived_measure_rejects_references_in_trailing_dialect_clause() {
+        for expression in [
+            "MAX(amount) KEEP (DENSE_RANK LAST ORDER BY revenue)",
+            "order_count STRAIGHT_JOIN revenue",
+        ] {
+            let err = derived_measure_sql(
+                &[
+                    ("revenue", "SUM(amount)"),
+                    ("order_count", "COUNT(*)"),
+                    ("derived", expression),
+                ],
+                "derived",
+            )
+            .unwrap_err();
+            assert!(
+                err.to_string().contains("Error parsing measure 'derived'"),
+                "expression={expression:?}, err={err}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_derived_measure_preserves_trailing_dialect_clause_without_references() {
+        let expression = "MAX(amount) KEEP (DENSE_RANK LAST ORDER BY created_at)";
+        let sql = derived_measure_sql(
+            &[("revenue", "SUM(amount)"), ("latest_amount", expression)],
+            "latest_amount",
+        )
+        .unwrap();
+        assert_eq!(
+            sql,
+            format!("SELECT {expression} AS latest_amount FROM orders")
+        );
+
+        // Whitespace and ordinary SQL comments do not leave unparsed tokens.
+        let expression = "revenue /* trailing comment */ -- revenue\r\n ";
+        let sql = derived_measure_sql(
+            &[("revenue", "SUM(amount)"), ("derived", expression)],
+            "derived",
+        )
+        .unwrap();
+        assert_eq!(
+            sql,
+            "SELECT (SUM(amount)) /* trailing comment */ -- revenue\r\n  AS derived FROM orders"
+        );
     }
 
     #[test]
