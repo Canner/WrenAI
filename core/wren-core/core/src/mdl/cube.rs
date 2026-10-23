@@ -5,9 +5,14 @@
 //! integration tests can be re-used.
 
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::ops::{ControlFlow, Range};
 
 use datafusion::common::{plan_err, Result};
-use regex::{NoExpand, Regex};
+use datafusion::sql::sqlparser::ast::{visit_expressions, Expr};
+use datafusion::sql::sqlparser::dialect::GenericDialect;
+use datafusion::sql::sqlparser::parser::Parser;
+use datafusion::sql::sqlparser::tokenizer::{Location, Token};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::mdl::manifest::{Cube, CubeDimension, Manifest, Measure, TimeDimension};
@@ -261,32 +266,17 @@ fn validate_query(
 ///
 /// Only the transitive closure of `requested` is resolved, so a cycle among
 /// measures that the current query never references will not fail the query.
-/// Longer dependency names are substituted first to avoid partial-token
-/// replacement (e.g. `revenue_2` before `revenue`).
+/// Only identifier expressions are references: literals, comments, function names,
+/// and qualified physical columns must retain their original SQL.
 fn resolve_measures(
     requested: &[String],
     measure_map: &HashMap<&str, &Measure>,
 ) -> Result<HashMap<String, String>> {
-    // Pre-compile a word-boundary regex per measure name. Reused below for
-    // both dependency discovery and the substitution loop, so each name is
-    // compiled exactly once instead of once per fixpoint iteration.
-    let patterns: HashMap<&str, Regex> = measure_map
-        .keys()
-        .map(|&name| {
-            let pattern = format!(r"\b{}\b", regex::escape(name));
-            Regex::new(&pattern).map(|re| (name, re))
-        })
-        .collect::<std::result::Result<_, _>>()
-        .map_err(|e| {
-            datafusion::common::DataFusionError::Plan(format!(
-                "invalid measure-name regex: {e}"
-            ))
-        })?;
-
     // Transitive closure of requested measures. Unknown names in `requested`
     // are skipped here (validate_query has already rejected them upstream).
     let mut needed: HashSet<&str> = HashSet::new();
     let mut queue: VecDeque<&str> = VecDeque::new();
+    let mut references = HashMap::new();
     for name in requested {
         if let Some((&key, _)) = measure_map.get_key_value(name.as_str()) {
             if needed.insert(key) {
@@ -296,11 +286,13 @@ fn resolve_measures(
     }
     while let Some(name) = queue.pop_front() {
         let expr = &measure_map[name].expression;
-        for dep in find_measure_refs(expr, &patterns, name) {
-            if needed.insert(dep) {
-                queue.push_back(dep);
+        let refs = find_measure_refs(expr, measure_map, name)?;
+        for (dep, _) in &refs {
+            if needed.insert(*dep) {
+                queue.push_back(*dep);
             }
         }
+        references.insert(name, refs);
     }
 
     let mut resolved: HashMap<String, String> = HashMap::new();
@@ -312,21 +304,21 @@ fn resolve_measures(
 
         for &name in &remaining {
             let expr = &measure_map[name].expression;
-            let deps = find_measure_refs(expr, &patterns, name);
+            let refs = &references[name];
 
-            if deps.iter().all(|dep| resolved.contains_key(*dep)) {
-                let mut resolved_expr = expr.clone();
-                let mut sorted_deps = deps.clone();
-                sorted_deps.sort_by_key(|d| std::cmp::Reverse(d.len()));
-                for dep in sorted_deps {
-                    let replacement = format!("({})", resolved[dep]);
-                    // NoExpand keeps `$1`, `$$tag$$` etc. literal — without it
-                    // Regex::replace_all would treat them as capture-group templates
-                    // and corrupt SQL expressions that contain `$`.
-                    resolved_expr = patterns[dep]
-                        .replace_all(&resolved_expr, NoExpand(replacement.as_str()))
-                        .into_owned();
+            if refs.iter().all(|(dep, _)| resolved.contains_key(*dep)) {
+                // Substitute original source ranges once. This preserves formatting
+                // and never reinterprets literals or identifiers in inserted SQL.
+                let mut resolved_expr = String::new();
+                let mut offset = 0;
+                for (dep, range) in refs {
+                    resolved_expr.push_str(&expr[offset..range.start]);
+                    resolved_expr.push('(');
+                    resolved_expr.push_str(&resolved[*dep]);
+                    resolved_expr.push(')');
+                    offset = range.end;
                 }
+                resolved_expr.push_str(&expr[offset..]);
                 resolved.insert(name.to_string(), resolved_expr);
                 progressed = true;
             } else {
@@ -346,17 +338,73 @@ fn resolve_measures(
     Ok(resolved)
 }
 
+/// Find references to other measures as source-ordered, half-open UTF-8 ranges.
+/// Quoted identifiers use their parsed names; literals, comments, qualified
+/// columns, function names, and `self_name` are excluded.
+/// Reference discovery requires a complete parse, including end of input.
+/// Unparsed dialect-specific SQL is preserved if no other measure name occurs
+/// as a whole word; otherwise returns a planning error for ambiguous references.
 fn find_measure_refs<'a>(
     expr: &str,
-    patterns: &HashMap<&'a str, Regex>,
+    measure_map: &HashMap<&'a str, &Measure>,
     self_name: &str,
-) -> Vec<&'a str> {
-    patterns
-        .iter()
-        .filter(|(&name, _)| name != self_name)
-        .filter(|(_, re)| re.is_match(expr))
-        .map(|(&name, _)| name)
-        .collect()
+) -> Result<Vec<(&'a str, Range<usize>)>> {
+    let parse_result =
+        Parser::new(&GenericDialect {})
+            .try_with_sql(expr)
+            .and_then(|mut parser| {
+                let parsed = parser.parse_expr()?;
+                parser.expect_token(&Token::EOF)?;
+                Ok(parsed)
+            });
+    let parsed = match parse_result {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            // Preserve dialect syntax that needs no substitution. If another
+            // name occurs anywhere, even in a literal or comment, we cannot
+            // safely decide whether it is a reference without parsing.
+            let possible_reference = measure_map.keys().any(|&name| {
+                name != self_name
+                    && Regex::new(&format!(r"\b{}\b", regex::escape(name)))
+                        .map_or(true, |pattern| pattern.is_match(expr))
+            });
+            if !possible_reference {
+                return Ok(Vec::new());
+            }
+            return plan_err!("Error parsing measure '{self_name}': {e}");
+        }
+    };
+    let mut refs = Vec::new();
+    let _ = visit_expressions(&parsed, |node| {
+        if let Expr::Identifier(id) = node {
+            if let Some((&name, _)) = measure_map.get_key_value(id.value.as_str()) {
+                if name != self_name {
+                    refs.push((
+                        name,
+                        sql_offset(expr, id.span.start)..sql_offset(expr, id.span.end),
+                    ));
+                }
+            }
+        }
+        ControlFlow::<()>::Continue(())
+    });
+    refs.sort_by_key(|(_, range)| range.start);
+    Ok(refs)
+}
+
+/// Convert a sqlparser location from `sql` to its UTF-8 byte offset.
+/// Locations are one-based line/character positions, including the end of input.
+/// Only `\n` advances the line number; a preceding `\r` counts as a character.
+fn sql_offset(sql: &str, location: Location) -> usize {
+    let line_start: usize = sql
+        .split_inclusive('\n')
+        .take(location.line as usize - 1)
+        .map(str::len)
+        .sum();
+    sql[line_start..]
+        .char_indices()
+        .nth(location.column as usize - 1)
+        .map_or(sql.len(), |(offset, _)| line_start + offset)
 }
 
 fn build_sql(
@@ -917,6 +965,205 @@ mod tests {
     }
 
     // ── DERIVED MEASURES ─────────────────────────────────────────────────────
+
+    fn derived_measure_sql(measures: &[(&str, &str)], requested: &str) -> Result<String> {
+        let mut cube = CubeBuilder::new("TestCube", "orders");
+        for (name, expression) in measures {
+            cube = cube.measure(MeasureBuilder::new(name, expression, "number").build());
+        }
+        let manifest = ManifestBuilder::new().cube(cube.build()).build();
+        let mut q = query("TestCube");
+        q.measures = vec![requested.to_string()];
+        cube_query_to_sql(&q, &manifest)
+    }
+
+    #[tokio::test]
+    async fn test_derived_measure_preserves_string_literal_results() {
+        let sql = derived_measure_sql(
+            &[
+                ("revenue", "SUM(amount)"),
+                (
+                    "revenue_rows",
+                    "SUM(CASE WHEN status = 'revenue' THEN 1 ELSE 0 END)",
+                ),
+            ],
+            "revenue_rows",
+        )
+        .unwrap();
+        let ctx = datafusion::prelude::SessionContext::new();
+        ctx.sql(
+            "CREATE TABLE orders AS SELECT 10 AS amount, 'revenue' AS status \
+             UNION ALL SELECT 20, 'revenue' UNION ALL SELECT 30, 'other'",
+        )
+        .await
+        .unwrap()
+        .collect()
+        .await
+        .unwrap();
+        let batches = ctx.sql(&sql).await.unwrap().collect().await.unwrap();
+        let result = batches[0]
+            .column(0)
+            .as_any()
+            .downcast_ref::<datafusion::arrow::array::Int64Array>()
+            .unwrap();
+        assert_eq!(result.value(0), 2, "sql={sql}");
+    }
+
+    #[test]
+    fn test_derived_measure_preserves_literal_and_comment_source() {
+        let expression = concat!(
+            "CASE WHEN status IN ('revenue', 'revenue''s', $$revenue$$, '收益\r\nrevenue') ",
+            "THEN revenue /* 收益:\r\norder_count */\r\n",
+            "ELSE order_count -- revenue\r\nEND"
+        );
+        let sql = derived_measure_sql(
+            &[
+                ("revenue", "SUM(amount)"),
+                ("order_count", "COUNT(*)"),
+                ("derived", expression),
+            ],
+            "derived",
+        )
+        .unwrap();
+        let expected = concat!(
+            "CASE WHEN status IN ('revenue', 'revenue''s', $$revenue$$, '收益\r\nrevenue') ",
+            "THEN (SUM(amount)) /* 收益:\r\norder_count */\r\n",
+            "ELSE (COUNT(*)) -- revenue\r\nEND"
+        );
+        assert_eq!(sql, format!("SELECT {expected} AS derived FROM orders"));
+    }
+
+    #[test]
+    fn test_derived_measure_resolves_quoted_identifiers() {
+        let sql = derived_measure_sql(
+            &[
+                ("revenue", "SUM(amount)"),
+                ("rev\"enue", "COUNT(*)"),
+                ("derived", "\"revenue\" + \"rev\"\"enue\" + `revenue`"),
+            ],
+            "derived",
+        )
+        .unwrap();
+        assert_eq!(
+            sql,
+            "SELECT (SUM(amount)) + (COUNT(*)) + (SUM(amount)) AS derived FROM orders"
+        );
+    }
+
+    #[test]
+    fn test_derived_measure_does_not_replace_qualified_columns_or_function_names() {
+        let expression = "SUM(orders.revenue) + revenue(amount)";
+        let sql = derived_measure_sql(
+            &[("revenue", "SUM(amount)"), ("derived", expression)],
+            "derived",
+        )
+        .unwrap();
+        assert_eq!(sql, format!("SELECT {expression} AS derived FROM orders"));
+    }
+
+    #[test]
+    fn test_derived_measure_literal_does_not_create_dependency_cycle() {
+        let sql = derived_measure_sql(&[("a", "'b'"), ("b", "a + 1")], "b").unwrap();
+        assert_eq!(sql, "SELECT ('b') + 1 AS b FROM orders");
+        let err =
+            derived_measure_sql(&[("a", "b + 1"), ("b", "a + 1")], "a").unwrap_err();
+        assert!(err.to_string().contains("possible cycle"), "err={err}");
+    }
+
+    #[test]
+    fn test_derived_measure_preserves_unparsed_dialect_expression() {
+        for (expression, other_name) in [
+            ("SUM(amount) # mysql comment\n", "order_count"),
+            ("SUM(amount DIV 2)", "order_count"),
+            // The self name is not a dependency, and other names must match
+            // whole words: `amount` must not match `amount_total`.
+            ("SUM(amount_total DIV 2) # revenue\n", "amount"),
+            // A measure name is literal text, not regex syntax.
+            ("SUM(aaab DIV 2)", "a+b"),
+        ] {
+            let sql = derived_measure_sql(
+                &[(other_name, "COUNT(*)"), ("revenue", expression)],
+                "revenue",
+            )
+            .unwrap();
+            assert_eq!(sql, format!("SELECT {expression} AS revenue FROM orders"));
+        }
+
+        // An opaque base expression can still be inlined into a parsed one.
+        let sql = derived_measure_sql(
+            &[("base", "SUM(amount DIV 2)"), ("derived", "base + 1")],
+            "derived",
+        )
+        .unwrap();
+        assert_eq!(sql, "SELECT (SUM(amount DIV 2)) + 1 AS derived FROM orders");
+    }
+
+    #[test]
+    fn test_derived_measure_rejects_ambiguous_unparsed_expression() {
+        for expression in [
+            "revenue DIV 2",
+            "SUM(amount DIV 2) + 'revenue'",
+            "SUM(amount) # revenue\n",
+        ] {
+            let err = derived_measure_sql(
+                &[("revenue", "SUM(amount)"), ("derived", expression)],
+                "derived",
+            )
+            .unwrap_err();
+            assert!(
+                err.to_string().contains("Error parsing measure 'derived'"),
+                "expression={expression:?}, err={err}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_derived_measure_rejects_references_in_trailing_dialect_clause() {
+        for expression in [
+            "MAX(amount) KEEP (DENSE_RANK LAST ORDER BY revenue)",
+            "order_count STRAIGHT_JOIN revenue",
+        ] {
+            let err = derived_measure_sql(
+                &[
+                    ("revenue", "SUM(amount)"),
+                    ("order_count", "COUNT(*)"),
+                    ("derived", expression),
+                ],
+                "derived",
+            )
+            .unwrap_err();
+            assert!(
+                err.to_string().contains("Error parsing measure 'derived'"),
+                "expression={expression:?}, err={err}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_derived_measure_preserves_trailing_dialect_clause_without_references() {
+        let expression = "MAX(amount) KEEP (DENSE_RANK LAST ORDER BY created_at)";
+        let sql = derived_measure_sql(
+            &[("revenue", "SUM(amount)"), ("latest_amount", expression)],
+            "latest_amount",
+        )
+        .unwrap();
+        assert_eq!(
+            sql,
+            format!("SELECT {expression} AS latest_amount FROM orders")
+        );
+
+        // Whitespace and ordinary SQL comments do not leave unparsed tokens.
+        let expression = "revenue /* trailing comment */ -- revenue\r\n ";
+        let sql = derived_measure_sql(
+            &[("revenue", "SUM(amount)"), ("derived", expression)],
+            "derived",
+        )
+        .unwrap();
+        assert_eq!(
+            sql,
+            "SELECT (SUM(amount)) /* trailing comment */ -- revenue\r\n  AS derived FROM orders"
+        );
+    }
 
     #[test]
     fn test_derived_measure_inlined() {
