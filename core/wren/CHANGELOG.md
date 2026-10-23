@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.17.0](https://github.com/Canner/WrenAI/compare/wren-v0.16.0...wren-v0.17.0) (2026-10-23)
+
+
+### Features
+
+* **wren:** add `wren context export-ossie` and follow the OSI → Apache Ossie rename ([#2806](https://github.com/Canner/WrenAI/issues/2806)) ([3a5cac4](https://github.com/Canner/WrenAI/commit/3a5cac4ddcf2104c15a7cdcbf425dea21c80da7a))
+* **wren:** add `wren context import ossie` and `wren context export ossie` ([#2821](https://github.com/Canner/WrenAI/issues/2821)) ([190ed1e](https://github.com/Canner/WrenAI/commit/190ed1ee09c6f07d906e81274ad6d5733e13b93c))
+* **wren:** import a Wren project from an OpenMetadata catalog ([#2807](https://github.com/Canner/WrenAI/issues/2807)) ([3eecec4](https://github.com/Canner/WrenAI/commit/3eecec4a7a14caa598ea9f7876a3533256f86225))
+
+
+### Bug Fixes
+
+* constrain MCP SDK to the supported major version ([#2810](https://github.com/Canner/WrenAI/issues/2810)) ([0ff9382](https://github.com/Canner/WrenAI/commit/0ff9382a82dcd1ff16776e485e40456e339e3ebe))
+* preserve dbt tests and relationships for quoted columns ([#2811](https://github.com/Canner/WrenAI/issues/2811)) ([aa9432e](https://github.com/Canner/WrenAI/commit/aa9432ec42e93519b23b86bb47e48d6e360d3a30))
+* **wren:** bump certifi to 2026.10.19 (GHSA-6q48-6c7w-9gw2) ([#2824](https://github.com/Canner/WrenAI/issues/2824)) ([9868d0c](https://github.com/Canner/WrenAI/commit/9868d0c8b3f0ef81d7dfa173768d6e65491411b3))
+* **wren:** keep `just test` collecting without the postgres extra ([#2801](https://github.com/Canner/WrenAI/issues/2801)) ([5a287c5](https://github.com/Canner/WrenAI/commit/5a287c5befd6f52db71d12593d0848f2dd0c0299))
+* **wren:** keep dates and integers intact in --output json ([#2805](https://github.com/Canner/WrenAI/issues/2805)) ([54941db](https://github.com/Canner/WrenAI/commit/54941dbdcb036b6b6e5dc528bb4b0bab5be2d8c2))
+* **wren:** make an Ossie file that converts cleanly also validate, build and query ([#2823](https://github.com/Canner/WrenAI/issues/2823)) ([8400453](https://github.com/Canner/WrenAI/commit/8400453d915590c1a7e4193c9f243ed5fa0520bd))
+* **wren:** resolve model aliases within SQL query scopes ([#2798](https://github.com/Canner/WrenAI/issues/2798)) ([b04ac03](https://github.com/Canner/WrenAI/commit/b04ac034e2f76db189c26e0b574015d39a5fd4d5))
+* **wren:** serialize shared DuckDB connection access ([#2797](https://github.com/Canner/WrenAI/issues/2797)) ([3e82da3](https://github.com/Canner/WrenAI/commit/3e82da311f3e79501d54b57531de3bbc84e5da9b))
+* **wren:** translate dialect-neutral SQL that ClickHouse rejects or misreads ([#2783](https://github.com/Canner/WrenAI/issues/2783)) ([6975f82](https://github.com/Canner/WrenAI/commit/6975f829de046d446ab16801cbec9a4d81dae88c))
+
 ## [0.16.0](https://github.com/Canner/WrenAI/compare/wren-v0.15.0...wren-v0.16.0) (2026-10-16)
 
 
