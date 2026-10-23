@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 from pathlib import Path
+from threading import Lock
 from typing import TYPE_CHECKING, Any
 
 from wren.engine import WrenEngine
@@ -44,6 +45,7 @@ class WrenToolkit:
         # every query. The engine itself is rebuilt per call so manifest
         # changes are picked up read-through.
         self._connector_cache: Any = None
+        self._connector_lock = Lock()
         # MemoryStore is heavy (loads sentence-transformer model) — cache
         # the instance and let LanceDB handle data versioning internally.
         self._memory_store_cache: Any = None
@@ -72,11 +74,15 @@ class WrenToolkit:
         fails and the model cannot be read through this method at all.
         """
         engine = self._build_engine()
-        try:
-            result = engine.query(sql, limit=limit, properties=properties)
-        finally:
-            self._connector_cache = engine._connector
-        return result
+        if self._connector_cache is None:
+            with self._connector_lock:
+                if self._connector_cache is None:
+                    try:
+                        return engine.query(sql, limit=limit, properties=properties)
+                    finally:
+                        self._connector_cache = engine._connector
+                engine._connector = self._connector_cache
+        return engine.query(sql, limit=limit, properties=properties)
 
     def dry_plan(self, sql: str, properties: dict[str, Any] | None = None) -> str:
         """Plan SQL through MDL and return the expanded SQL in target dialect.
@@ -92,10 +98,16 @@ class WrenToolkit:
         ``properties`` carries MDL session properties (see :meth:`query`).
         """
         engine = self._build_engine()
-        try:
-            engine.dry_run(sql, properties=properties)
-        finally:
-            self._connector_cache = engine._connector
+        if self._connector_cache is None:
+            with self._connector_lock:
+                if self._connector_cache is None:
+                    try:
+                        engine.dry_run(sql, properties=properties)
+                    finally:
+                        self._connector_cache = engine._connector
+                    return
+                engine._connector = self._connector_cache
+        engine.dry_run(sql, properties=properties)
 
     # ── LangChain adapter ──────────────────────────────────────────────────
 
