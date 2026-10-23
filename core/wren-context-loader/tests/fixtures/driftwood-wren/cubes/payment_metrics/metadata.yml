@@ -1,0 +1,26 @@
+name: payment_metrics
+base_object: payments
+measures:
+  # Additive: gross captured money movement (excl. refund reversals — filter in queries).
+  - name: gross_captured
+    expression: SUM(amount + fee_amount)
+    type: DOUBLE
+  - name: net_captured
+    expression: SUM(amount)
+    type: DOUBLE
+  - name: payment_count
+    expression: COUNT(*)
+    type: BIGINT
+dimensions:
+  - name: method
+    expression: method
+    type: VARCHAR
+  - name: currency
+    expression: currency
+    type: VARCHAR
+time_dimensions:
+  - name: captured_at
+    expression: captured_at
+    type: TIMESTAMP
+properties:
+  description: "Captured payment volume in transaction currency. gross = amount + fee_amount; excludes nothing by itself — refund reversals (method='refund_reversal') must be filtered out for revenue, and non-USD amounts converted via fx_rates."
