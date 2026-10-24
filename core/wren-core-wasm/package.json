@@ -21,7 +21,8 @@
     "build:dist": "node scripts/build.mjs",
     "build": "npm run build:wasm && npm run build:dist",
     "typecheck": "tsc -p sdk/tsconfig.json --noEmit",
-    "test": "node --test sdk/tests/index.test.mjs"
+    "test": "node --test sdk/tests/index.test.mjs sdk/tests/check-size.test.mjs",
+    "check:size": "node scripts/check-size.mjs"
   },
   "keywords": [
     "wasm",
