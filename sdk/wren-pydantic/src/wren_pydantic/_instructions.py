@@ -17,14 +17,17 @@ instructing the agent to call a tool that no longer exists.
 Three markdown sections (any may be empty):
   1. Workflow rules — auto-adapted to the supplied tool list.
   2. Available tools — bullet list rendered from the same list.
-  3. Project-specific instructions — content of ``<project>/instructions.md``
-     when present; silently omitted when absent.
+  3. Project-specific instructions — business rules from
+     ``<project>/knowledge/rules/*.md`` and legacy ``instructions.md``;
+     silently omitted when empty or absent.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from wren.context import load_rules
 
 if TYPE_CHECKING:
     from wren_pydantic._toolkit import WrenToolkit
@@ -234,10 +237,7 @@ def _build_tools_section(tool_list: list) -> str:
 
 
 def _build_instructions_section(project_path: Path) -> str:
-    instructions_file = project_path / "instructions.md"
-    if not instructions_file.exists():
-        return ""
-    body = instructions_file.read_text(encoding="utf-8").strip()
+    body, _ = load_rules(project_path)
     if not body:
         return ""
     return f"## Project-specific instructions\n\n{body}"
