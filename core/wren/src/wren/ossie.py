@@ -351,18 +351,33 @@ def _pick_expression(expr_field: Any, dialect_preference: str) -> str:
     return ""
 
 
-def _is_calculated_expression(expr: str, field_name: str) -> bool:
-    """True when the expression is anything other than the column's own name.
+def _is_calculated_expression(
+    expr: str, field_name: str, dialect: str = DEFAULT_DIALECT
+) -> bool:
+    """Distinguish a physical-column rename from a calculated expression.
 
-    Bare aliases (``Amount`` for field ``amount``, or ``src_col`` for field
-    ``renamed``) are 'calculated' from wren's perspective — the source column
-    name differs from the field name, so the engine must carry an expression
-    instead of resolving by identity. Only an exact-match identity is treated
-    as non-calculated.
+    A single unqualified column (including a quoted identifier) uses MDL's
+    non-calculated ``expression`` form. Qualified references still resolve
+    through the semantic model, as do arithmetic, functions and subqueries.
+    Leave expressions we cannot parse calculated, for the engine to diagnose.
     """
-    if not expr:
+    if not expr or expr.strip() == field_name:
         return False
-    return expr.strip() != field_name
+    import sqlglot  # noqa: PLC0415
+    from sqlglot import exp  # noqa: PLC0415
+    from sqlglot.dialects.dialect import Dialect  # noqa: PLC0415
+
+    read = dialect.lower() if Dialect.get(dialect.lower()) else None
+    try:
+        expressions = sqlglot.parse(expr, read=read)
+    except sqlglot.errors.SqlglotError:
+        return True
+    return not (
+        len(expressions) == 1
+        and isinstance(expressions[0], exp.Column)
+        and isinstance(expressions[0].this, exp.Identifier)
+        and len(expressions[0].parts) == 1
+    )
 
 
 def _infer_type(field_obj: dict, override: str | None) -> str:
@@ -411,10 +426,11 @@ def _convert_field(
     type_override: str | None,
     primary_key_names: set[str],
     not_null: bool = False,
+    is_calculated: bool = False,
 ) -> dict:
     name = field_obj["name"]
     expr = _pick_expression(field_obj.get("expression"), dialect)
-    is_calc = _is_calculated_expression(expr, name)
+    is_calc = is_calculated or _is_calculated_expression(expr, name, dialect)
     col_type = _infer_type(field_obj, type_override)
 
     column: dict = {
@@ -424,7 +440,7 @@ def _convert_field(
         "not_null": not_null,
         "properties": {},
     }
-    if is_calc:
+    if is_calc or (expr and expr.strip() != name):
         column["expression"] = expr
     if name in primary_key_names:
         column["is_primary_key"] = True
@@ -567,6 +583,7 @@ def _convert_dataset(
             type_override=type_override,
             primary_key_names=set(pk_names),
             not_null=field_wren.get("not_null") is True,
+            is_calculated=field_wren.get("is_calculated") is True,
         )
         columns.append(col)
         if type_override is None and f.get("datatype") not in (
@@ -1077,7 +1094,7 @@ def _export_field(
 ) -> dict:
     name = column["name"]
     expression = column.get("expression")
-    if column.get("is_calculated") and isinstance(expression, str) and expression:
+    if isinstance(expression, str) and expression:
         expr = expression
     else:
         expr = name
@@ -1094,8 +1111,17 @@ def _export_field(
     if isinstance(props, dict) and isinstance(props.get("description"), str):
         if props["description"]:
             field_obj["description"] = props["description"]
+    wren_data: dict = {}
     if column.get("not_null") and name not in pk_names:
-        field_obj["custom_extensions"] = [_wren_extension({"not_null": True})]
+        wren_data["not_null"] = True
+    # A calculated alias reads another semantic field, whereas the same bare
+    # expression without this marker reads the physical source column.
+    if column.get("is_calculated") and not _is_calculated_expression(
+        expr, name, dialect
+    ):
+        wren_data["is_calculated"] = True
+    if wren_data:
+        field_obj["custom_extensions"] = [_wren_extension(wren_data)]
     return field_obj
 
 
