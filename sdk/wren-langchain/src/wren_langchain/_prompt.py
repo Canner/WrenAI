@@ -218,6 +218,10 @@ def _build_tools_section(tool_list: list) -> str:
 
 
 def _build_instructions_section(project_path: Path) -> str:
+    """Format v5 rules and legacy instructions with the shared context loader.
+
+    Omit the section when the loader finds no non-empty rule content.
+    """
     body, _ = load_rules(project_path)
     if not body:
         return ""

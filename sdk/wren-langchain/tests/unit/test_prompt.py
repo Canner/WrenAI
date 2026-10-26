@@ -70,6 +70,7 @@ def test_system_prompt_includes_memory_tools_when_enabled(
 def test_system_prompt_appends_project_instructions_when_present(
     tmp_project, fake_active_profile
 ):
+    """Legacy instructions retain their Markdown and existing section heading."""
     (tmp_project / "instructions.md").write_text(
         "# Domain\n\nThis project tracks B2B SaaS revenue.\n"
     )
@@ -88,6 +89,7 @@ def test_system_prompt_appends_project_instructions_when_present(
 def test_system_prompt_reads_utf8_instructions_with_non_utf8_locale(
     tmp_project, fake_active_profile, simulate_cp936_default_encoding, relative_path
 ):
+    """Both rule layouts load UTF-8 content even when the default codec is CP936."""
     project_instructions = "Use the 订单📈 café model for revenue questions."
     instructions_file = tmp_project / relative_path
     instructions_file.parent.mkdir(parents=True, exist_ok=True)
@@ -101,6 +103,7 @@ def test_system_prompt_reads_utf8_instructions_with_non_utf8_locale(
 def test_system_prompt_includes_rules_from_initialized_v5_project(
     tmp_path, fake_active_profile
 ):
+    """Rules written by the v5 project converter reach the toolkit's prompt."""
     rule = "Revenue excludes cancelled orders; amounts are in cents."
     files = convert_mdl_to_project(
         {
@@ -128,6 +131,7 @@ def test_system_prompt_includes_rules_from_initialized_v5_project(
 def test_system_prompt_combines_sorted_rules_before_legacy_instructions(
     tmp_project, fake_active_profile
 ):
+    """Sorted, trimmed rules precede legacy content; blank files add no spacing."""
     rules_dir = tmp_project / "knowledge/rules"
     rules_dir.mkdir(parents=True)
     (rules_dir / "b.md").write_text("  Report amounts in cents.\n", encoding="utf-8")
@@ -145,6 +149,7 @@ def test_system_prompt_combines_sorted_rules_before_legacy_instructions(
 def test_system_prompt_omits_empty_rules_and_instructions(
     tmp_project, fake_active_profile
 ):
+    """Whitespace-only files do not produce an empty instructions section."""
     rules_dir = tmp_project / "knowledge/rules"
     rules_dir.mkdir(parents=True)
     (rules_dir / "empty.md").write_text(" \n\t", encoding="utf-8")
@@ -157,6 +162,7 @@ def test_system_prompt_omits_empty_rules_and_instructions(
 def test_system_prompt_silently_skips_instructions_when_absent(
     tmp_project, fake_active_profile
 ):
+    """Projects without either rule layout need no instructions section."""
     toolkit = WrenToolkit.from_project(tmp_project)
     prompt = toolkit.system_prompt()
     # No "Project-specific instructions" section header should appear.
