@@ -309,6 +309,7 @@ def test_pick_expression_empty():
     ],
 )
 def test_is_calculated_expression(expr, fname, expected):
+    """Only bare column references and empty expressions avoid calculation."""
     assert _is_calculated_expression(expr, fname) is expected
 
 
@@ -2009,6 +2010,7 @@ def test_physical_rename_roundtrip_preserves_query_results_and_calculated_alias(
 
 
 def test_dump_ossie_is_yaml_in_authoring_order():
+    """Exported YAML starts with the version and parses back to the same document."""
     doc, _ = export_ossie_from_manifest(_export_manifest(), name="shop")
     text = dump_ossie(doc)
     assert text.startswith("version: 0.1.1\nsemantic_model:\n")

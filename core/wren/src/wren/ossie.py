@@ -428,6 +428,11 @@ def _convert_field(
     not_null: bool = False,
     is_calculated: bool = False,
 ) -> dict:
+    """Convert a field while retaining physical renames and WREN column flags.
+
+    An explicit calculated flag takes precedence over expression inference,
+    allowing a bare column reference to represent a semantic calculated alias.
+    """
     name = field_obj["name"]
     expr = _pick_expression(field_obj.get("expression"), dialect)
     is_calc = is_calculated or _is_calculated_expression(expr, name, dialect)
@@ -511,6 +516,11 @@ def _expression_column_refs(expression: str, dialect: str) -> set[str] | None:
 def _convert_dataset(
     ds: dict, *, wren_cfg: WrenConfig
 ) -> tuple[dict, list[ValidationError]]:
+    """Build a Wren model from dataset metadata, fields and WREN overrides.
+
+    Return validation errors alongside the model, including source, type and
+    field-reference diagnostics found during conversion.
+    """
     errors: list[ValidationError] = []
     name = ds.get("name")
     if not isinstance(name, str) or not name:
@@ -1092,6 +1102,11 @@ def _source_from_model(model: dict) -> str | None:
 def _export_field(
     column: dict, *, dialect: str, pk_names: set[str], with_datatype: bool
 ) -> dict:
+    """Export a column's expression and metadata without losing rename semantics.
+
+    Merge non-primary-key nullability and otherwise ambiguous calculated aliases
+    into one WREN extension so both flags survive reimport.
+    """
     name = column["name"]
     expression = column.get("expression")
     if isinstance(expression, str) and expression:
