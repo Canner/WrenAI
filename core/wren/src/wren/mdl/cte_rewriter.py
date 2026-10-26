@@ -276,8 +276,8 @@ class CTERewriter:
             view_refs, used_columns, user_table_refs, col_quoting
         )
 
-        # The user's SQL is never rewritten — we only append CTEs. To bind the
-        # user's column references to the injected CTE on dialects that
+        # Preserve the user's column expressions when appending CTEs. To bind
+        # those column references to the injected CTE on dialects that
         # case-fold unquoted identifiers, each model CTE *exposes* its columns
         # with the same quoting the user wrote (see ``_collect_model_columns`` /
         # ``_alias_projection_to_user_quoting``): both the user's reference and
@@ -302,9 +302,9 @@ class CTERewriter:
             # with nothing to expand — pass it through transpiled to the
             # target dialect rather than rejecting it.
             base_tables = [
-                t
-                for t in ast.find_all(exp.Table)
-                if (t.name or "").lower() not in user_cte_names
+                table
+                for _, tables in self._scoped_table_sources(ast, user_cte_names)
+                for table in tables
             ]
             if not base_tables:
                 return self._render(ast, identify)
@@ -323,6 +323,7 @@ class CTERewriter:
 
         model_ctes = self._build_model_ctes(used_columns, user_table_refs, col_quoting)
         view_ctes = self._build_view_ctes(view_refs)
+        self._avoid_cte_collisions(ast, model_ctes, view_ctes, user_cte_names)
         self._inject_ctes(ast, model_ctes + view_ctes)
         return self._render(ast, identify)
 
@@ -389,7 +390,7 @@ class CTERewriter:
         # DuckDB) lowercase even backtick-quoted names, but BigQuery table
         # identifiers are case-sensitive at the storage layer — capturing the
         # alias-to-model map pre-normalize keeps the right model bound.
-        alias_to_model, user_table_refs = self._build_alias_map(copy, user_cte_names)
+        model_refs, user_table_refs = self._collect_model_refs(copy, user_cte_names)
         scope_aliases = self._build_scope_alias_maps(copy, user_cte_names)
 
         # Detect models referenced via SELECT * BEFORE qualify_columns
@@ -414,17 +415,16 @@ class CTERewriter:
         # unqualified, and the model CTE collapses to ``SELECT 1``.
         #
         # Only table refs that resolved to a model are unquoted (user CTEs are
-        # excluded by ``_build_alias_map``), so a user CTE's case matching
+        # excluded by ``_collect_model_refs``), so a user CTE's case matching
         # between its definition and reference is untouched. ``user_table_refs``
         # has already captured the original quoting for CTE-alias mirroring, and
         # this copy is never emitted — the user's SQL is not mutated.
-        model_refs = set(alias_to_model)
         for tbl in copy.find_all(exp.Table):
             ident = tbl.this
             if (
                 isinstance(ident, exp.Identifier)
                 and ident.quoted
-                and ident.name in model_refs
+                and id(tbl) in model_refs
             ):
                 ident.set("quoted", False)
 
@@ -552,13 +552,9 @@ class CTERewriter:
         so their exposed columns must not be attributed to an unrelated model.
         """
         maps: dict[int, dict[str, str]] = {}
-        for scope in traverse_scope(ast):
+        for expression, sources in self._scoped_table_sources(ast, user_cte_names):
             aliases: dict[str, str] = {}
-            for alias, source in scope.sources.items():
-                if not isinstance(source, exp.Table):
-                    continue
-                if source.name.lower() in user_cte_names:
-                    continue
+            for source in sources:
                 quoted = (
                     bool(source.this.quoted)
                     if isinstance(source.this, exp.Identifier)
@@ -566,9 +562,46 @@ class CTERewriter:
                 )
                 model = resolve_model_name(source.name, quoted, self.model_dict)
                 if model is not None:
-                    aliases[alias.lower()] = model
-            maps[id(scope.expression)] = aliases
+                    aliases[source.alias_or_name.lower()] = model
+            maps[id(expression)] = aliases
         return maps
+
+    def _scoped_table_sources(
+        self, ast: exp.Expression, user_cte_names: set[str]
+    ) -> Iterator[tuple[exp.Expression, list[exp.Table]]]:
+        """Yield model-eligible table sources, excluding visible CTEs.
+
+        Normalize an analysis-only copy when CTEs exist so dialect folding also
+        resolves ``WITH Orders AS (...) SELECT ... FROM orders``. Return the
+        original nodes: callers record their spelling or mutate their identifiers.
+        """
+        scoped = ast
+        originals = None
+        if user_cte_names:
+            scoped = ast.copy()
+            originals = {
+                id(copy): original
+                for original, copy in zip(ast.walk(), scoped.walk(), strict=True)
+            }
+            normalize_identifiers(scoped, dialect=self.dialect)
+        for scope in traverse_scope(scoped):
+            expression = scope.expression
+            sources = [
+                source
+                for source in scope.sources.values()
+                if isinstance(source, exp.Table)
+                # Qualified sources cannot bind a local CTE. Preserve the
+                # existing physical-table handling for these names instead of
+                # reinterpreting them as newly visible semantic model refs.
+                and not (
+                    (source.db or source.catalog)
+                    and source.name.lower() in user_cte_names
+                )
+            ]
+            if originals is not None:
+                expression = originals[id(expression)]
+                sources = [originals[id(source)] for source in sources]
+            yield expression, sources
 
     @staticmethod
     def _scoped_model_columns(
@@ -588,12 +621,12 @@ class CTERewriter:
                 if model is not None:
                     yield column, model
 
-    def _build_alias_map(
+    def _collect_model_refs(
         self, ast: exp.Expression, user_cte_names: set[str]
-    ) -> tuple[dict[str, str], dict[str, tuple[str, bool]]]:
-        """Map each table reference in *ast* to its canonical model name.
+    ) -> tuple[dict[int, str], dict[str, tuple[str, bool]]]:
+        """Map each base-table node in *ast* to its canonical model name.
 
-        Returns ``(alias_to_model, user_table_refs)`` — the second dict
+        Returns ``(model_refs, user_table_refs)`` — the second dict
         records the first user-written ``(name, quoted)`` per model so the
         CTE alias can be emitted with the same quoting style the user
         wrote, which is required for dialects with case-folding.
@@ -602,11 +635,16 @@ class CTERewriter:
         exact match preferred, then case-insensitive fallback. Skips tables
         that resolve to a user-defined CTE rather than an MDL model.
         """
-        alias_to_model: dict[str, str] = {}
+        base_tables = {
+            id(table)
+            for _, tables in self._scoped_table_sources(ast, user_cte_names)
+            for table in tables
+        }
+        model_refs: dict[int, str] = {}
         user_table_refs: dict[str, tuple[str, bool]] = {}
         for table in ast.find_all(exp.Table):
             name = table.name
-            if not name or name.lower() in user_cte_names:
+            if not name or id(table) not in base_tables:
                 continue
             quoted = (
                 bool(table.this.quoted)
@@ -616,12 +654,9 @@ class CTERewriter:
             model_name = resolve_model_name(name, quoted, self.model_dict)
             if model_name is None:
                 continue
-            alias = table.alias
-            if alias:
-                alias_to_model[alias] = model_name
-            alias_to_model[name] = model_name
+            model_refs[id(table)] = model_name
             user_table_refs.setdefault(model_name, (name, quoted))
-        return alias_to_model, user_table_refs
+        return model_refs, user_table_refs
 
     def _resolve_column(
         self, candidates: list[str], name: str, quoted: bool, where: str
@@ -868,14 +903,19 @@ class CTERewriter:
         Resolves table references against view names with the same
         quoted/unquoted rules as models. The recorded identifier is used as
         the injected CTE alias so dialects with case-folding bind the user's
-        ``FROM <view>`` to the CTE. Unlike ``_build_alias_map`` it does not
+        ``FROM <view>`` to the CTE. Unlike ``_collect_model_refs`` it does not
         track SQL aliases, since a view is always expanded whole.
         """
         view_refs: dict[str, tuple[str, bool]] = {}
         qualified = qualify_tables(ast.copy(), dialect=self.dialect)
+        base_tables = {
+            id(table)
+            for _, tables in self._scoped_table_sources(qualified, user_cte_names)
+            for table in tables
+        }
         for table in qualified.find_all(exp.Table):
             name = table.name
-            if not name or name.lower() in user_cte_names:
+            if not name or id(table) not in base_tables:
                 continue
             quoted = (
                 bool(table.this.quoted)
@@ -1108,6 +1148,76 @@ class CTERewriter:
     # ------------------------------------------------------------------
     # CTE injection
     # ------------------------------------------------------------------
+
+    def _avoid_cte_collisions(
+        self,
+        ast: exp.Expression,
+        model_ctes: list[exp.CTE],
+        view_ctes: list[exp.CTE],
+        user_cte_names: set[str],
+    ) -> None:
+        """Keep generated CTEs distinct from user CTEs at the injection scope.
+
+        A nonrecursive CTE can read its same-named model in its definition.
+        A view can also require a model whose name the user gave a CTE. Rename
+        only the generated CTE and its base-table references in those cases;
+        existing table aliases and actual user-CTE references stay untouched.
+        """
+        existing_with = ast.args.get("with_")
+        if existing_with is None:
+            return
+        existing = {cte.alias.lower() for cte in existing_with.expressions}
+        generated = model_ctes + view_ctes
+        reserved = (
+            user_cte_names
+            | {cte.alias.lower() for cte in generated}
+            | {
+                table.name.lower()
+                for body in [ast, *generated]
+                for table in body.find_all(exp.Table)
+            }
+        )
+        queryable_names = self.model_dict.keys() | self.view_names
+        renamed: dict[str, exp.Identifier] = {}
+        for cte in generated:
+            if cte.alias.lower() not in existing:
+                continue
+            identifier = cte.args["alias"].this
+            canonical = resolve_model_name(
+                identifier.name, identifier.quoted, queryable_names
+            )
+            name = f"wren_model_{identifier.name}"
+            suffix = 1
+            while name.lower() in reserved:
+                name = f"wren_model_{identifier.name}_{suffix}"
+                suffix += 1
+            reserved.add(name.lower())
+            replacement = exp.to_identifier(name, quoted=True)
+            renamed[canonical] = replacement
+            cte.args["alias"].set("this", replacement.copy())
+
+        if not renamed:
+            return
+        # View bodies reference the generated model CTEs, whereas model bodies
+        # contain physical tables and must never be rebound to semantic CTEs.
+        for body in [ast, *(cte.this for cte in view_ctes)]:
+            names = self._collect_user_cte_names(body)
+            for _, tables in self._scoped_table_sources(body, names):
+                for table in tables:
+                    if table.db or table.catalog:
+                        continue
+                    identifier = table.this
+                    if not isinstance(identifier, exp.Identifier):
+                        continue
+                    canonical = resolve_model_name(
+                        identifier.name, identifier.quoted, queryable_names
+                    )
+                    replacement = renamed.get(canonical)
+                    if replacement is None:
+                        continue
+                    if not table.alias:
+                        table.set("alias", exp.TableAlias(this=identifier.copy()))
+                    table.set("this", replacement.copy())
 
     def _inject_ctes(self, ast: exp.Expression, model_ctes: list[exp.CTE]) -> None:
         """Prepend *model_ctes* before any existing user CTEs in *ast*."""
