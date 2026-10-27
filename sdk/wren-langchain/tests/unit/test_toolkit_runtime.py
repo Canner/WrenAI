@@ -4,7 +4,6 @@ import base64
 import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Lock
-from time import sleep
 from unittest.mock import MagicMock, patch
 
 import pyarrow as pa
@@ -72,6 +71,7 @@ def test_concurrent_cold_queries_share_one_connector(tmp_project, fake_active_pr
     """Concurrent first calls must not create and orphan extra connectors."""
     callers = 5
     engines_ready = Barrier(callers)
+    queries_ready = Barrier(2)
     created_connectors = []
     connector_lock = Lock()
     engines = []
@@ -84,12 +84,10 @@ def test_concurrent_cold_queries_share_one_connector(tmp_project, fake_active_pr
                 self._connector = object()
                 with connector_lock:
                     created_connectors.append(self._connector)
-                # Keep the first connector unpublished long enough for cold
-                # callers to overlap if the toolkit does not guard creation.
-                sleep(0.02)
             return self._connector
 
         def query(self, sql, limit=None, properties=None):
+            queries_ready.wait(timeout=5)
             return self._get_connector()
 
         def dry_run(self, sql, properties=None):

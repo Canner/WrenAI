@@ -73,16 +73,9 @@ class WrenToolkit:
         needs the value its rule declares required, so without it planning
         fails and the model cannot be read through this method at all.
         """
-        engine = self._build_engine()
-        if self._connector_cache is None:
-            with self._connector_lock:
-                if self._connector_cache is None:
-                    try:
-                        return engine.query(sql, limit=limit, properties=properties)
-                    finally:
-                        self._connector_cache = engine._connector
-                engine._connector = self._connector_cache
-        return engine.query(sql, limit=limit, properties=properties)
+        return self._engine_with_connector().query(
+            sql, limit=limit, properties=properties
+        )
 
     def dry_plan(self, sql: str, properties: dict[str, Any] | None = None) -> str:
         """Plan SQL through MDL and return the expanded SQL in target dialect.
@@ -97,17 +90,7 @@ class WrenToolkit:
 
         ``properties`` carries MDL session properties (see :meth:`query`).
         """
-        engine = self._build_engine()
-        if self._connector_cache is None:
-            with self._connector_lock:
-                if self._connector_cache is None:
-                    try:
-                        engine.dry_run(sql, properties=properties)
-                    finally:
-                        self._connector_cache = engine._connector
-                    return
-                engine._connector = self._connector_cache
-        engine.dry_run(sql, properties=properties)
+        self._engine_with_connector().dry_run(sql, properties=properties)
 
     # ── LangChain adapter ──────────────────────────────────────────────────
 
@@ -180,6 +163,16 @@ class WrenToolkit:
         )
         if self._connector_cache is not None:
             engine._connector = self._connector_cache
+        return engine
+
+    def _engine_with_connector(self) -> WrenEngine:
+        """Build an engine with the toolkit's shared connector initialized."""
+        engine = self._build_engine()
+        if self._connector_cache is None:
+            with self._connector_lock:
+                if self._connector_cache is None:
+                    self._connector_cache = engine._get_connector()
+        engine._connector = self._connector_cache
         return engine
 
     @classmethod
