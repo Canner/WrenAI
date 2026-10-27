@@ -204,8 +204,6 @@ class WrenToolkit:
                 "Run `wren context build` first."
             )
 
-        cls._load_project_dotenv(project_path)
-
         mdl_source = ProjectMDLSource(project_path=project_path)
         connection = ProfileConnectionProvider(
             project_path=project_path,
@@ -219,27 +217,6 @@ class WrenToolkit:
             connection_provider=connection,
             memory_provider=memory_provider,
         )
-
-    @staticmethod
-    def _load_project_dotenv(project_path: Path) -> None:
-        """Load ``<project>/.env`` into ``os.environ`` if present.
-
-        Required for SDK ergonomics: when a caller passes
-        ``from_project("/some/path")`` from anywhere on the filesystem, they
-        expect that project's secrets to resolve. Core's ``expand_profile_secrets``
-        discovers ``.env`` relative to CWD, which doesn't help here.
-
-        Uses ``override=False`` so values the user already exported in their
-        shell still win, matching Core's policy.
-        """
-        env_path = project_path / ".env"
-        if not env_path.exists():
-            return
-        try:
-            from dotenv import load_dotenv  # noqa: PLC0415
-        except ImportError:
-            return
-        load_dotenv(env_path, override=False)
 
     @staticmethod
     def _resolve_memory_provider(

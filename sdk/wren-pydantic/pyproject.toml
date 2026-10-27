@@ -29,7 +29,8 @@ classifiers = [
 ]
 dependencies = [
   # Core: provides WrenEngine, MemoryStore, profile resolution, MDL handling.
-  "wrenai>=0.13.1",
+  # 0.17.0 adds per-project .env resolution in expand_profile_secrets.
+  "wrenai>=0.17.0",
   # Pydantic AI v1 is GA. Pin major so breaking changes are an explicit
   # opt-in via CHANGELOG.
   "pydantic-ai>=1.0,<2.0",
