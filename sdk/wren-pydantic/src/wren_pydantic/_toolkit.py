@@ -172,13 +172,27 @@ class WrenToolkit:
         return engine
 
     def _engine_with_connector(self) -> WrenEngine:
-        """Build an engine with the toolkit's shared connector initialized."""
+        """Build an engine that initializes the shared connector on demand.
+
+        WrenEngine plans a query before calling ``_get_connector``. Wrapping
+        that method keeps planning outside the lock while serializing only the
+        first connector creation across engines built by this toolkit.
+        """
         engine = self._build_engine()
-        if self._connector_cache is None:
+
+        if self._connector_cache is not None:
+            engine._connector = self._connector_cache
+
+        get_connector = engine._get_connector
+
+        def get_shared_connector():
             with self._connector_lock:
                 if self._connector_cache is None:
-                    self._connector_cache = engine._get_connector()
-        engine._connector = self._connector_cache
+                    self._connector_cache = get_connector()
+                engine._connector = self._connector_cache
+                return self._connector_cache
+
+        engine._get_connector = get_shared_connector
         return engine
 
     @classmethod
