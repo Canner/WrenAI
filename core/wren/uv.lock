@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -411,7 +411,7 @@ name = "cuda-bindings"
 version = "13.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cuda-pathfinder", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "cuda-pathfinder" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e0/a9/3a8241c6e19483ac1f1dcf5c10238205dcb8a6e9d0d4d4709240dff28ff4/cuda_bindings-13.2.0-cp311-cp311-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:721104c603f059780d287969be3d194a18d0cc3b713ed9049065a1107706759d", size = 5730273, upload-time = "2026-03-11T00:12:37.18Z" },
@@ -444,43 +444,43 @@ wheels = [
 
 [package.optional-dependencies]
 cublas = [
-    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cublas", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
+    { name = "nvidia-cuda-nvrtc", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 cudart = [
-    { name = "nvidia-cuda-runtime", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cuda-runtime", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 cufft = [
-    { name = "nvidia-cufft", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cufft", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
+    { name = "nvidia-nvjitlink", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 cufile = [
-    { name = "nvidia-cufile", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cufile", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 cupti = [
-    { name = "nvidia-cuda-cupti", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cuda-cupti", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 curand = [
-    { name = "nvidia-curand", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-curand", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 cusolver = [
-    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "nvidia-cusolver", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cublas", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
+    { name = "nvidia-cusolver", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
+    { name = "nvidia-cusparse", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
+    { name = "nvidia-nvjitlink", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 cusparse = [
-    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cusparse", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
+    { name = "nvidia-nvjitlink", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 nvjitlink = [
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-nvjitlink", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 nvrtc = [
-    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cuda-nvrtc", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 nvtx = [
-    { name = "nvidia-nvtx", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-nvtx", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 
 [[package]]
@@ -1485,7 +1485,7 @@ name = "nvidia-cublas"
 version = "13.1.1.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cuda-nvrtc", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "nvidia-cuda-nvrtc" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a7/a1/0bd24ee8c8d03adac032fd2909426a00c88f8c57961b1277ded97f91119f/nvidia_cublas-13.1.1.3-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:b7a210458267ac818974c53038fbec2e969d5c99f305ab15c72522fa9f001dd5", size = 542848918, upload-time = "2026-04-08T18:46:22.985Z" },
@@ -1524,7 +1524,7 @@ name = "nvidia-cudnn-cu13"
 version = "9.20.0.48"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "nvidia-cublas" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/56/c5/83384d846b2fd17c44bd499b36c75a45ed4f095fbbb2252294e89cea5c5c/nvidia_cudnn_cu13-9.20.0.48-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:e31454ae00094b0c55319d9d15b6fa2fc50a9e1c0f5c8c80fb75258234e731e1", size = 444574296, upload-time = "2026-03-09T19:28:27.751Z" },
@@ -1536,7 +1536,7 @@ name = "nvidia-cufft"
 version = "12.0.0.61"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "nvidia-nvjitlink" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/ae/f417a75c0259e85c1d2f83ca4e960289a5f814ed0cea74d18c353d3e989d/nvidia_cufft-12.0.0.61-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:2708c852ef8cd89d1d2068bdbece0aa188813a0c934db3779b9b1faa8442e5f5", size = 214053554, upload-time = "2025-09-04T08:31:38.196Z" },
@@ -1566,9 +1566,9 @@ name = "nvidia-cusolver"
 version = "12.0.4.66"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
-    { name = "nvidia-cusparse", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
-    { name = "nvidia-nvjitlink", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "nvidia-cublas" },
+    { name = "nvidia-cusparse" },
+    { name = "nvidia-nvjitlink" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/c3/b30c9e935fc01e3da443ec0116ed1b2a009bb867f5324d3f2d7e533e776b/nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:02c2457eaa9e39de20f880f4bd8820e6a1cfb9f9a34f820eb12a155aa5bc92d2", size = 223467760, upload-time = "2025-09-04T08:33:04.222Z" },
@@ -1580,7 +1580,7 @@ name = "nvidia-cusparse"
 version = "12.6.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "nvidia-nvjitlink" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f8/94/5c26f33738ae35276672f12615a64bd008ed5be6d1ebcb23579285d960a9/nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:80bcc4662f23f1054ee334a15c72b8940402975e0eab63178fc7e670aa59472c", size = 162155568, upload-time = "2025-09-04T08:33:42.864Z" },
@@ -3616,15 +3616,15 @@ wheels = [
 
 [[package]]
 name = "wren-core-py"
-version = "0.8.1"
+version = "0.8.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/54/c1/76cc0126ee2eea93d3b7921e91055e0a5b3b15cc29b7e398d6de0772d85a/wren_core_py-0.8.1.tar.gz", hash = "sha256:5cf2f6c299fe68f718e833b0f5ab26c20d36257f0601842be50966b3dcf44108", size = 233465, upload-time = "2026-10-14T10:38:28.845Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/57/3abf7dfc2104871c7a31dba14cbc355ab96cc63e36dbc7eadd2ecc267c12/wren_core_py-0.8.2.tar.gz", hash = "sha256:c2711dc74c0de37ffd7777735830e737102e7e99bebb13aebc5d3f05a575c52b", size = 236274, upload-time = "2026-10-23T09:55:57.153Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d0/b0/1dbfdccfb27a7cfa3f2d2ec26ba5d4fd90af00487a0b1151eff6a4f5d79b/wren_core_py-0.8.1-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:eed71160e6f2aa0323071fa773e354fa6dfd6711d9731b6c0bf17d48b0003bff", size = 48423777, upload-time = "2026-10-14T10:38:09.737Z" },
-    { url = "https://files.pythonhosted.org/packages/98/ea/fab456a1e86eba8704eeb60717b2590b414a47206edb048041f97e23e474/wren_core_py-0.8.1-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:264331c7359c05744da661dc0402a3b96c60c3a5747b306398c8193653fc2263", size = 46492607, upload-time = "2026-10-14T10:38:13.688Z" },
-    { url = "https://files.pythonhosted.org/packages/6f/55/6d41c0fc14f9b7e2bd809461ee10c1c52b93979240db2c06f8f2c4dc1b65/wren_core_py-0.8.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:afa541e5c095d4b144db0b7fea9d63fe268c59cbb0a459c1326a624c7687419e", size = 53629869, upload-time = "2026-10-14T10:38:17.942Z" },
-    { url = "https://files.pythonhosted.org/packages/6b/59/fb4cb1e4ceb45733c2b040b4e3a2a66139ac631b043369f5e03cc27a5b16/wren_core_py-0.8.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:781baa9188845451d39f295083e5e07172ec2a186b9fa71d7df861c1982b2f6b", size = 51828419, upload-time = "2026-10-14T10:38:22.355Z" },
-    { url = "https://files.pythonhosted.org/packages/a1/db/60eba335820e848339eb3e1ee8b5485446ec8a50798683f8984ff614ab75/wren_core_py-0.8.1-cp311-abi3-win_amd64.whl", hash = "sha256:13505326d61528eaf3bcc1280e3205d36efe38b101ff87ddeab57c035e3c4309", size = 46022507, upload-time = "2026-10-14T10:38:26.585Z" },
+    { url = "https://files.pythonhosted.org/packages/ca/5e/8081f4eb3893f5474f2f3fd081b4822926392991b0013b3eade0e5ac18bb/wren_core_py-0.8.2-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:9af21b41fa54b6f787b5a3ca772a6e124cefd2b9028712512a12bdae8c5991ef", size = 48423560, upload-time = "2026-10-23T09:55:40.085Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/5e/1687da51d5adbb70ce169d83b31038b10c659b1806f4e0097d51124d3c27/wren_core_py-0.8.2-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:809a1eca6e10fe748a4bb24f81f9f8e11099c2e96344587fdea44455bc616a1a", size = 46505086, upload-time = "2026-10-23T09:55:44.079Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/f0/72fffbf69a4c7d966d7ff82ca7875b8787112a4f46b6c9a132171b44386b/wren_core_py-0.8.2-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c8bd81272198a574e7127eb062d7097ab42286e97ae166d749524714dbc630a9", size = 53615955, upload-time = "2026-10-23T09:55:47.585Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/2b/7e9d7c67877bc26ebc73512ab915f449da08d6f2f6c00bcbaf548d42ced5/wren_core_py-0.8.2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:54cf19fb9a646e4ef3700781a2177a9d09284684202a8dca2aea0e0fcc3cf553", size = 51815579, upload-time = "2026-10-23T09:55:51.615Z" },
+    { url = "https://files.pythonhosted.org/packages/55/bd/e33fc2551ce10eeeff76392126e181c7ca89542a459eba9ee0be38c2a3a5/wren_core_py-0.8.2-cp311-abi3-win_amd64.whl", hash = "sha256:38e015e9ea33b1daaeb32838edab10f6cf31cc83b1fd9b4833ff87f41f731549", size = 46119127, upload-time = "2026-10-23T09:55:55.066Z" },
 ]
 
 [[package]]
@@ -3808,7 +3808,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12" },
     { name = "urllib3", specifier = ">=2.8.0" },
     { name = "uvicorn", marker = "extra == 'ui'", specifier = ">=0.29" },
-    { name = "wren-core-py", specifier = ">=0.8.1" },
+    { name = "wren-core-py", specifier = ">=0.8.2" },
     { name = "wrenai", extras = ["interactive", "ui"], marker = "extra == 'main'" },
     { name = "wrenai", extras = ["postgres", "mysql", "bigquery", "snowflake", "clickhouse", "trino", "mssql", "databricks", "redshift", "athena", "oracle", "spark", "main", "memory", "mcp"], marker = "extra == 'all'" },
 ]
