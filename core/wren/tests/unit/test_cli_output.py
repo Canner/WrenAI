@@ -106,3 +106,15 @@ def test_json_output_keeps_scale_zero_decimals_as_integers():
     assert rows == [{"sum_qty": 15, "big": 9007199254740993, "sum_price": 15.0}]
     assert isinstance(rows[0]["sum_qty"], int)
     assert isinstance(rows[0]["sum_price"], float)
+
+
+def test_json_output_keeps_columns_that_share_a_name():
+    table = pa.Table.from_arrays(
+        [pa.array([1, 2]), pa.array([10, 20]), pa.array(["ann", "bob"])],
+        names=["id", "id", "name"],
+    )
+
+    assert _query_json(table) == [
+        {"id": 1, "id_1": 10, "name": "ann"},
+        {"id": 2, "id_1": 20, "name": "bob"},
+    ]
