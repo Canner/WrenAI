@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import codecs
+import io
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
+from typer.core import TyperGroup
 
 from wren._json_values import normalize_value
 from wren.context_cli import context_app
@@ -365,7 +369,43 @@ def _version_callback(value: bool) -> None:
     raise typer.Exit()
 
 
-@app.callback(invoke_without_command=True)
+def _use_utf8_stdio() -> None:
+    """Switch stdin, stdout and stderr to UTF-8 when they use another encoding.
+
+    On Windows, a piped or redirected stream gets the ANSI code page (e.g.
+    cp1252). It can't encode the ``→`` and ``⚠`` in our messages, or CJK text
+    from a project or a query result, so writing them to stdout raises
+    UnicodeEncodeError partway through a command. stdin is switched too, so
+    text piped in (``genbi build --prompt -``) isn't garbled on its way back
+    out. Each stream keeps its error handler, which ``reconfigure()`` would
+    otherwise reset to ``strict``, and an encoding named in PYTHONIOENCODING
+    is left alone, as in Python's UTF-8 mode.
+    """
+    if os.environ.get("PYTHONIOENCODING", "").partition(":")[0]:
+        return
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        encoding = getattr(stream, "encoding", None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if encoding and reconfigure and codecs.lookup(encoding).name != "utf-8":
+            try:
+                reconfigure(encoding="utf-8", errors=stream.errors)
+            except io.UnsupportedOperation:
+                pass  # already read from by a program embedding the CLI; leave it
+
+
+class _Utf8StdioGroup(TyperGroup):
+    """Switch the console streams before Click parses the root options.
+
+    ``wren --help`` and ``wren --version`` are printed during that parse,
+    before the root callback runs.
+    """
+
+    def main(self, *args, **kwargs):
+        _use_utf8_stdio()
+        return super().main(*args, **kwargs)
+
+
+@app.callback(cls=_Utf8StdioGroup, invoke_without_command=True)
 def main(
     ctx: typer.Context,
     sql: Annotated[

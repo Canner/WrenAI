@@ -427,10 +427,12 @@ def check_helper_command_serviceable() -> None:
 
     probe = [resolved, *HELPER_SUBCOMMAND, "--help"]
     try:
+        # Only the exit code is read. The child writes UTF-8, which decoding
+        # its output as text with the locale code page would choke on.
         completed = subprocess.run(  # noqa: S603
             probe,
-            capture_output=True,
-            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             timeout=_HELPER_PROBE_TIMEOUT_S,
         )
     except subprocess.TimeoutExpired as exc:
