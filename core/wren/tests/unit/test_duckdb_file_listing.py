@@ -93,7 +93,7 @@ def test_query_strips_trailing_semicolon_before_limit_wrap():
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
     connector._connection_lock = Lock()
-    connector.connection.execute.return_value.fetch_arrow_table.return_value = "tbl"
+    connector.connection.execute.return_value.to_arrow_table.return_value = "tbl"
 
     result = connector.query("SELECT 1;", limit=5)
 

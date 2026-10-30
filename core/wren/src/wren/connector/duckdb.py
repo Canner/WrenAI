@@ -99,7 +99,7 @@ class DuckDBConnector(ConnectorABC):
         # Pending results belong to the connection. Keep execute and fetch
         # together so another call cannot overwrite or consume this result.
         with self._connection_lock:
-            return self.connection.execute(sql).fetch_arrow_table()
+            return self.connection.execute(sql).to_arrow_table()
 
     def dry_run(self, sql: str) -> None:
         """Validate ``sql`` without returning rows or side effects.
