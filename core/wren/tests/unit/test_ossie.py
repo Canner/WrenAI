@@ -2009,8 +2009,90 @@ def test_physical_rename_roundtrip_preserves_query_results_and_calculated_alias(
     assert "custom_extensions" not in fields["customer_id"]
 
 
+@pytest.mark.parametrize("spec_version", ["0.1.1", "0.2.0.dev0"])
+@pytest.mark.parametrize(
+    "data_source, dialect, expected_dialect",
+    [
+        ("databricks", None, "DATABRICKS"),
+        ("databricks", "SPARK", "SPARK"),
+        ("snowflake", None, "SNOWFLAKE"),
+    ],
+)
+@pytest.mark.parametrize("expression", ["usr_id", '"user id"', '"usr.id"'])
+def test_roundtrip_preserves_field_classification_across_dialects(
+    tmp_path: Path, spec_version, data_source, dialect, expected_dialect, expression
+):
+    """Keep MDL physical renames when the export dialect reads quotes as strings.
+
+    Databricks/Spark label the original Wren SQL without transpiling it, so a
+    double-quoted physical identifier needs an explicit false WREN marker.
+    Calculated bare aliases need the opposite marker in every dialect.
+    """
+    manifest = {
+        "data_source": data_source,
+        "models": [
+            {
+                "name": "orders",
+                "table_reference": {"schema": "main", "table": "raw_orders"},
+                "columns": [
+                    {
+                        "name": "customer_id",
+                        "type": "INTEGER",
+                        "is_calculated": False,
+                        "expression": expression,
+                        "not_null": True,
+                    },
+                    {
+                        "name": "copied_id",
+                        "type": "INTEGER",
+                        "is_calculated": True,
+                        "expression": "customer_id",
+                        "not_null": True,
+                    },
+                    {
+                        "name": "next_id",
+                        "type": "INTEGER",
+                        "is_calculated": True,
+                        "expression": "customer_id + 1",
+                    },
+                ],
+            }
+        ],
+    }
+    doc, errors = export_ossie_from_manifest(
+        manifest, dialect=dialect, spec_version=spec_version
+    )
+    assert errors == []
+    sm = doc["semantic_model"][0] if spec_version == "0.1.1" else doc
+    fields = {field["name"]: field for field in sm["datasets"][0]["fields"]}
+    assert fields["customer_id"]["expression"] == {
+        "dialects": [{"dialect": expected_dialect, "expression": expression}]
+    }
+    expected_flags = {"not_null": True}
+    if expected_dialect in {"DATABRICKS", "SPARK"} and expression.startswith('"'):
+        expected_flags["is_calculated"] = False
+    assert _wren_data(fields["customer_id"]) == expected_flags
+    assert _wren_data(fields["copied_id"]) == {
+        "not_null": True,
+        "is_calculated": True,
+    }
+    assert "custom_extensions" not in fields["next_id"]
+
+    ossie_path = _write_ossie(tmp_path, dump_ossie(doc))
+    rebuilt, errors = build_json_from_ossie(ossie_path, data_source=data_source)
+    assert errors == []
+    columns = {column["name"]: column for column in rebuilt["models"][0]["columns"]}
+    assert columns["customer_id"]["isCalculated"] is False
+    assert columns["customer_id"]["expression"] == expression
+    assert columns["customer_id"]["notNull"] is True
+    assert columns["copied_id"]["isCalculated"] is True
+    assert columns["copied_id"]["expression"] == "customer_id"
+    assert columns["copied_id"]["notNull"] is True
+    assert columns["next_id"]["isCalculated"] is True
+    assert columns["next_id"]["expression"] == "customer_id + 1"
+
+
 def test_dump_ossie_is_yaml_in_authoring_order():
-    """Exported YAML starts with the version and parses back to the same document."""
     doc, _ = export_ossie_from_manifest(_export_manifest(), name="shop")
     text = dump_ossie(doc)
     assert text.startswith("version: 0.1.1\nsemantic_model:\n")

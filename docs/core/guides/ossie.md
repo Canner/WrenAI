@@ -243,6 +243,8 @@ A single unqualified column expression is a [physical-column rename](/oss/refere
 
 Earlier exports did not carry this flag. Add it to existing bare aliases that intentionally read another semantic field, or export them again from the original Wren project.
 
+Export keeps the original Wren SQL expression and labels it with the selected dialect; it does not transpile the expression. Where the dialect would infer the wrong kind of column, the exporter writes an explicit `is_calculated` boolean, and import respects either `true` or `false`. For example, Databricks/Spark read `"user id"` as a string, while Wren uses double quotes for identifiers. A physical rename with that expression therefore carries `{"is_calculated": false}` so it remains physical on reimport. The flag shares the existing field-level `WREN` block with metadata such as `not_null`.
+
 Other expressions become calculated columns, and the engine resolves a calculated expression against the model's **declared** columns, not the source table. `full_name: first_name || ' ' || last_name` therefore fails every query on the model unless `first_name` and `last_name` are fields too. Validate warns and prints the fields to add:
 
 ```text
@@ -393,7 +395,7 @@ By default the exporter writes the released `0.1.1` layout (`version: "0.1.1"`, 
 | `model.ref_sql` | `dataset.source` as the inline SQL |
 | `model.primary_key` (string or list) | `dataset.primary_key: [..]` |
 | `model.properties.description` | `dataset.description` |
-| `column.name` + `column.expression` (physical rename or calculated) | `dataset.fields[]` with `expression.dialects[{dialect, expression}]`; calculated bare aliases also carry field-level `WREN: {"is_calculated": true}` |
+| `column.name` + `column.expression` (physical rename or calculated) | `dataset.fields[]` with `expression.dialects[{dialect, expression}]`; a field-level `WREN.is_calculated` boolean preserves the original classification when the selected dialect would infer it differently |
 | `column.type` | The exact type in the dataset's `WREN.column_types` block; with `--spec-version 0.2.0.dev0` also `field.datatype` (Ossie's portable enum: `String`, `Integer`, `Decimal`, `Float`, `Boolean`, `Date`, `Time`, `DateTime`, `DateTimeTz`) |
 | `column.type` date/time | `field.dimension.is_time: true` |
 | `column.not_null` (non-PK) | field-level `WREN: {"not_null": true}` |

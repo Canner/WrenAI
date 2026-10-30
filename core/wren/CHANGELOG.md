@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+* **ossie:** Preserve physical-column renames and calculated aliases across export/import, including double-quoted physical identifiers in Databricks projects. Existing Ossie documents whose bare aliases intentionally read semantic fields need field-level `WREN: {"is_calculated": true}`, or must be exported again from the original Wren project; unmarked bare aliases now read physical source columns.
+
 ## [0.17.1](https://github.com/Canner/WrenAI/compare/wren-v0.17.0...wren-v0.17.1) (2026-10-30)
 
 
