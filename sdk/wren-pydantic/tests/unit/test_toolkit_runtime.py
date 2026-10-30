@@ -2,9 +2,12 @@
 
 import base64
 import json
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Lock
 from unittest.mock import MagicMock, patch
 
 import pyarrow as pa
+import pytest
 
 from wren_pydantic import WrenToolkit
 
@@ -47,8 +50,17 @@ def test_connector_is_reused_across_query_calls(tmp_project, fake_active_profile
     engines = []
 
     def make_engine(*args, **kwargs):
-        engine = MagicMock(name=f"engine{len(engines)}")
-        engine._connector = first_connector if not engines else second_initial_connector
+        class FakeEngine:
+            def __init__(self, connector):
+                self._connector = connector
+
+            def query(self, sql, limit=None, properties=None):
+                return self._get_connector()
+
+            def _get_connector(self):
+                return self._connector
+
+        engine = FakeEngine(first_connector if not engines else second_initial_connector)
         engines.append(engine)
         return engine
 
@@ -63,6 +75,92 @@ def test_connector_is_reused_across_query_calls(tmp_project, fake_active_profile
     assert engines[0]._connector is first_connector
     assert engines[1]._connector is first_connector
     assert engines[1]._connector is not second_initial_connector
+
+
+def test_concurrent_cold_queries_share_one_connector(tmp_project, fake_active_profile):
+    """Concurrent first calls must not create and orphan extra connectors."""
+    callers = 5
+    engines_ready = Barrier(callers)
+    queries_ready = Barrier(2)
+    created_connectors = []
+    connector_lock = Lock()
+    engines = []
+
+    class FakeEngine:
+        _connector = None
+
+        def _get_connector(self):
+            if self._connector is None:
+                self._connector = object()
+                with connector_lock:
+                    created_connectors.append(self._connector)
+            return self._connector
+
+        def query(self, sql, limit=None, properties=None):
+            self.dry_plan(sql, properties)
+            queries_ready.wait(timeout=5)
+            return self._get_connector()
+
+        def dry_run(self, sql, properties=None):
+            self.dry_plan(sql, properties)
+            self._get_connector()
+
+        def dry_plan(self, sql, properties=None):
+            return sql
+
+    def make_engine(*args, **kwargs):
+        engine = FakeEngine()
+        engines.append(engine)
+        engines_ready.wait(timeout=5)
+        return engine
+
+    toolkit = WrenToolkit.from_project(tmp_project)
+    with patch("wren_pydantic._toolkit.WrenEngine", side_effect=make_engine):
+        with ThreadPoolExecutor(max_workers=callers) as executor:
+            results = list(
+                executor.map(
+                    lambda i: (
+                        toolkit.query("SELECT 1")
+                        if i % 2
+                        else toolkit.dry_run("SELECT 1")
+                    ),
+                    range(callers),
+                )
+            )
+
+    assert len(created_connectors) == 1
+    query_results = [result for result in results if result is not None]
+    assert len(query_results) == 2
+    assert all(result is created_connectors[0] for result in query_results)
+    assert all(engine._connector is created_connectors[0] for engine in engines)
+
+
+def test_planning_error_does_not_initialize_connector(
+    tmp_project, fake_active_profile
+):
+    """A planning failure must surface before connector creation is attempted."""
+    created_connectors = []
+
+    class FakeEngine:
+        _connector = None
+
+        def dry_plan(self, sql, properties=None):
+            raise ValueError("invalid SQL")
+
+        def _get_connector(self):
+            created_connectors.append(object())
+            return created_connectors[-1]
+
+        def query(self, sql, limit=None, properties=None):
+            self.dry_plan(sql, properties)
+            return self._get_connector()
+
+    toolkit = WrenToolkit.from_project(tmp_project)
+    with patch("wren_pydantic._toolkit.WrenEngine", return_value=FakeEngine()):
+        with pytest.raises(ValueError, match="invalid SQL"):
+            toolkit.query("not valid SQL")
+
+    assert created_connectors == []
 
 
 def test_manifest_is_read_through_on_every_call(
