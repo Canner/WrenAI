@@ -93,7 +93,9 @@ pip install wren-langchain
   toolkit.memory.recall("top customers")
   toolkit.memory.store(nl="...", sql="...", tags=["..."])
   ```
-- **`toolkit.system_prompt()`** — Wren-aware system prompt that adapts to enabled tools and includes your project's `instructions.md` when present.
+- **`toolkit.system_prompt()`** — Wren-aware system prompt that adapts to enabled
+  tools and includes your project's `knowledge/rules/*.md` business rules and
+  legacy `instructions.md` when present.
 
 ## Configuration
 
