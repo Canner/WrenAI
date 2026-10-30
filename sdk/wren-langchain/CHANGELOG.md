@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/Canner/WrenAI/compare/wren-langchain-v0.2.3...wren-langchain-v0.2.4) (2026-10-30)
+
+
+### Bug Fixes
+
+* **langchain:** keep tool envelopes JSON-serializable for date and decimal rows ([#2816](https://github.com/Canner/WrenAI/issues/2816)) ([0612c3e](https://github.com/Canner/WrenAI/commit/0612c3e737f738458acf2a90bad4b3a8ceb3879f))
+
 ## [0.2.3](https://github.com/Canner/WrenAI/compare/wren-langchain-v0.2.2...wren-langchain-v0.2.3) (2026-10-19)
 
 
