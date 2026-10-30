@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import base64
+from copy import deepcopy
 
 import duckdb
 import orjson
 import pytest
 import sqlglot
 
+from wren.config import WrenConfig
+from wren.engine import WrenEngine
 from wren.mdl import get_session_context
 from wren.mdl.cte_rewriter import CTERewriter, get_sqlglot_dialect
 from wren.model.data_source import DataSource
@@ -389,6 +392,197 @@ class TestUnionStarDetection:
 # ---------------------------------------------------------------------------
 # Tests: CTE edge cases
 # ---------------------------------------------------------------------------
+
+
+class TestCTEVisibility:
+    """CTE declarations shadow models and views only where they are visible."""
+
+    @pytest.fixture
+    def manifest(self):
+        """Use distinct physical names so a missed model expansion cannot pass."""
+        manifest = deepcopy(_VIEW_MANIFEST)
+        for model in manifest["models"]:
+            model["tableReference"]["table"] = f"raw_{model['name']}"
+        return manifest
+
+    @pytest.fixture
+    def database(self):
+        """Provide only physical tables, never the semantic model names."""
+        with duckdb.connect() as connection:
+            connection.execute(
+                "CREATE TABLE raw_orders (o_orderkey INTEGER, o_custkey INTEGER, "
+                "o_orderstatus VARCHAR); "
+                "INSERT INTO raw_orders VALUES (1, 10, 'O'), (2, 20, 'F'); "
+                "CREATE TABLE raw_customer (c_custkey INTEGER, c_name VARCHAR); "
+                "INSERT INTO raw_customer VALUES (10, 'Alice'), (20, 'Bob')"
+            )
+            yield connection
+
+    @pytest.mark.parametrize("strict", [False, True])
+    def test_nested_cte_does_not_shadow_outer_model(self, manifest, database, strict):
+        """Default engine planning still expands the independently bound model."""
+        engine = WrenEngine(
+            _b64(manifest), DataSource.duckdb, {}, config=WrenConfig(strict_mode=strict)
+        )
+        sql = (
+            "SELECT o.o_orderkey, c.c_name FROM orders o "
+            "JOIN customer c ON o.o_custkey = c.c_custkey "
+            "WHERE EXISTS (WITH orders AS (SELECT 99 AS id) SELECT 1 FROM orders) "
+            "ORDER BY o.o_orderkey"
+        )
+        assert database.execute(engine.dry_plan(sql)).fetchall() == [
+            (1, "Alice"),
+            (2, "Bob"),
+        ]
+
+    def test_cte_in_sibling_union_branch_does_not_shadow_model(
+        self, manifest, database
+    ):
+        """A branch-local CTE must not hide a model used by another branch."""
+        sql = (
+            "(WITH orders AS (SELECT 99 AS o_orderkey) SELECT o_orderkey FROM orders) "
+            "UNION ALL SELECT o_orderkey FROM orders"
+        )
+        planned = _make_rewriter(manifest).rewrite(sql)
+        assert sorted(database.execute(planned).fetchall()) == [(1,), (2,), (99,)]
+
+    @pytest.mark.parametrize(
+        "sql, expected",
+        [
+            ("WITH orders AS (SELECT 99 AS id) SELECT id FROM orders", [(99,)]),
+            (
+                "WITH Orders AS (SELECT 99 AS id) SELECT id FROM orders",
+                [(99,)],
+            ),
+            (
+                "SELECT c_name FROM customer WHERE EXISTS "
+                "(WITH orders AS (SELECT 99 AS id) SELECT 1 FROM orders) ORDER BY c_name",
+                [("Alice",), ("Bob",)],
+            ),
+            (
+                "WITH RECURSIVE orders(id) AS (SELECT 1 UNION ALL "
+                "SELECT id + 1 FROM orders WHERE id < 3) SELECT id FROM orders",
+                [(1,), (2,), (3,)],
+            ),
+        ],
+    )
+    def test_visible_cte_still_shadows_model(self, manifest, database, sql, expected):
+        """Ordinary, mixed-case, nested and recursive CTE bindings remain intact."""
+        planned = _make_rewriter(manifest).rewrite(sql)
+        assert database.execute(planned).fetchall() == expected
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "WITH orders AS (SELECT o_orderkey FROM orders) SELECT * FROM orders",
+            "WITH orders AS (SELECT orders.o_orderkey FROM orders) "
+            "SELECT orders.o_orderkey FROM orders",
+        ],
+    )
+    def test_nonrecursive_cte_can_read_same_named_model(self, manifest, database, sql):
+        """A nonrecursive CTE is not visible within its own definition."""
+        planned = _make_rewriter(manifest).rewrite(sql)
+        assert database.execute(planned).fetchall() == [(1,), (2,)]
+
+    def test_generated_cte_does_not_capture_an_existing_source(
+        self, manifest, database
+    ):
+        """The replacement name must not shadow an unrelated physical table."""
+        database.execute(
+            "CREATE TABLE wren_model_orders (id INTEGER); "
+            "INSERT INTO wren_model_orders VALUES (100)"
+        )
+        sql = (
+            "WITH orders AS (SELECT o_orderkey FROM orders) "
+            "SELECT o.o_orderkey, t.id FROM orders o "
+            "CROSS JOIN wren_model_orders t ORDER BY o.o_orderkey"
+        )
+        planned = _make_rewriter(manifest).rewrite(sql)
+        assert database.execute(planned).fetchall() == [(1, 100), (2, 100)]
+
+    def test_later_cte_does_not_shadow_an_earlier_definition(self, manifest, database):
+        """A later CTE name cannot hide the model referenced by an earlier CTE."""
+        sql = (
+            "WITH summary AS (SELECT o_orderkey FROM orders), "
+            "orders AS (SELECT 99 AS o_orderkey) SELECT * FROM summary"
+        )
+        planned = _make_rewriter(manifest).rewrite(sql)
+        assert database.execute(planned).fetchall() == [(1,), (2,)]
+
+    def test_nested_cte_does_not_shadow_outer_view(self, manifest, database):
+        """View references follow the same visibility rules as model references."""
+        sql = (
+            "SELECT o_orderkey FROM orders_with_customer WHERE EXISTS "
+            "(WITH orders_with_customer AS (SELECT 99 AS id) "
+            "SELECT 1 FROM orders_with_customer) ORDER BY o_orderkey"
+        )
+        planned = _make_rewriter(manifest).rewrite(sql)
+        assert database.execute(planned).fetchall() == [(1,), (2,)]
+
+    def test_nested_cte_inside_view_does_not_hide_its_model(self, manifest, database):
+        """Model usage collection for a view also respects nested CTE scopes."""
+        manifest["views"][0]["statement"] = (
+            "SELECT o_orderkey FROM orders WHERE EXISTS "
+            "(WITH orders AS (SELECT 99 AS id) SELECT 1 FROM orders)"
+        )
+        planned = _make_rewriter(manifest).rewrite(
+            "SELECT o_orderkey FROM orders_with_customer ORDER BY o_orderkey"
+        )
+        assert database.execute(planned).fetchall() == [(1,), (2,)]
+
+    def test_user_cte_does_not_replace_a_views_model(self, manifest, database):
+        """A model CTE needed by a view must not collide with a user CTE."""
+        sql = (
+            "WITH orders AS (SELECT 99 AS o_orderkey) "
+            "SELECT o_orderkey FROM orders_with_customer ORDER BY o_orderkey"
+        )
+        planned = _make_rewriter(manifest).rewrite(sql)
+        assert database.execute(planned).fetchall() == [(1,), (2,)]
+
+    def test_nested_cte_does_not_turn_external_table_into_passthrough(self, manifest):
+        """An unresolved outer table still follows the configured fallback path."""
+        sql = (
+            "SELECT * FROM external WHERE EXISTS "
+            "(WITH external AS (SELECT 1 AS id) SELECT 1 FROM external)"
+        )
+        with pytest.raises(ValueError, match="No model or view references found"):
+            _make_rewriter(manifest, fallback=False).rewrite(sql)
+
+    @pytest.mark.parametrize("table", ["main.orders", "memory.main.orders"])
+    @pytest.mark.parametrize(
+        "sql, expected",
+        [
+            (
+                "WITH orders AS (SELECT 99 AS o_orderkey) "
+                "SELECT o_orderkey FROM {table}",
+                [(80,)],
+            ),
+            (
+                "WITH orders AS (SELECT 99 AS o_orderkey) SELECT extra FROM {table}",
+                [(800,)],
+            ),
+            (
+                "WITH orders AS (SELECT extra FROM {table}) SELECT extra FROM orders",
+                [(800,)],
+            ),
+            (
+                "WITH orders AS (SELECT 99 AS o_orderkey) "
+                "SELECT p.extra, c.c_name FROM {table} p CROSS JOIN customer c "
+                "WHERE c.c_custkey = 10",
+                [(800, "Alice")],
+            ),
+        ],
+    )
+    def test_qualified_physical_table_keeps_its_binding(
+        self, manifest, database, table, sql, expected
+    ):
+        """A qualified physical source cannot bind to a same-named model CTE."""
+        database.execute(
+            "CREATE TABLE orders (o_orderkey INTEGER, extra INTEGER); "
+            "INSERT INTO orders VALUES (80, 800)"
+        )
+        planned = _make_rewriter(manifest).rewrite(sql.format(table=table))
+        assert database.execute(planned).fetchall() == expected
 
 
 class TestCTEEdgeCases:
