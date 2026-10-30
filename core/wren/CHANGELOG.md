@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.2](https://github.com/Canner/WrenAI/compare/wren-v0.17.1...wren-v0.17.2) (2026-10-30)
+
+
+### Bug Fixes
+
+* **wren:** respect CTE visibility when expanding semantic models ([#2833](https://github.com/Canner/WrenAI/issues/2833)) ([8edc086](https://github.com/Canner/WrenAI/commit/8edc086b1f8f9f2974b9faf8ab7c639c85851b46))
+
 ## [0.17.1](https://github.com/Canner/WrenAI/compare/wren-v0.17.0...wren-v0.17.1) (2026-10-30)
 
 
