@@ -6,7 +6,9 @@ Layer order (highest priority first):
   3. The user's globally active profile (``wren profile switch ...``)
 
 Secrets in profile values (``${ENV_VAR}``) are expanded via Core's
-``expand_profile_secrets`` before the connection is exposed.
+``expand_profile_secrets`` before the connection is exposed, using the
+project's ``.env`` (and ``~/.wren/.env``) without exporting them into
+``os.environ``, so each toolkit resolves its own project's secrets.
 """
 
 from pathlib import Path
@@ -33,7 +35,7 @@ class ProfileConnectionProvider:
     ):
         self._project_path = project_path
         profile_dict = self._resolve_profile(explicit_profile)
-        profile_dict = expand_profile_secrets(profile_dict)
+        profile_dict = expand_profile_secrets(profile_dict, project_path=project_path)
         # ``datasource`` is part of the profile dict but logically separate.
         self._datasource = profile_dict.pop("datasource", None)
         self._connection_info = profile_dict
