@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 from pathlib import Path
+from threading import Lock
 from typing import TYPE_CHECKING, Any
 
 from wren.engine import WrenEngine
@@ -44,6 +45,7 @@ class WrenToolkit:
         # every query. The engine itself is rebuilt per call so manifest
         # changes are picked up read-through.
         self._connector_cache: Any = None
+        self._connector_lock = Lock()
         # MemoryStore is heavy (loads sentence-transformer model) — cache
         # the instance and let LanceDB handle data versioning internally.
         self._memory_store_cache: Any = None
@@ -71,12 +73,9 @@ class WrenToolkit:
         needs the value its rule declares required, so without it planning
         fails and the model cannot be read through this method at all.
         """
-        engine = self._build_engine()
-        try:
-            result = engine.query(sql, limit=limit, properties=properties)
-        finally:
-            self._connector_cache = engine._connector
-        return result
+        return self._engine_with_connector().query(
+            sql, limit=limit, properties=properties
+        )
 
     def dry_plan(self, sql: str, properties: dict[str, Any] | None = None) -> str:
         """Plan SQL through MDL and return the expanded SQL in target dialect.
@@ -91,11 +90,7 @@ class WrenToolkit:
 
         ``properties`` carries MDL session properties (see :meth:`query`).
         """
-        engine = self._build_engine()
-        try:
-            engine.dry_run(sql, properties=properties)
-        finally:
-            self._connector_cache = engine._connector
+        self._engine_with_connector().dry_run(sql, properties=properties)
 
     # ── LangChain adapter ──────────────────────────────────────────────────
 
@@ -168,6 +163,30 @@ class WrenToolkit:
         )
         if self._connector_cache is not None:
             engine._connector = self._connector_cache
+        return engine
+
+    def _engine_with_connector(self) -> WrenEngine:
+        """Build an engine that initializes the shared connector on demand.
+
+        WrenEngine plans a query before calling ``_get_connector``. Wrapping
+        that method keeps planning outside the lock while serializing only the
+        first connector creation across engines built by this toolkit.
+        """
+        engine = self._build_engine()
+
+        if self._connector_cache is not None:
+            engine._connector = self._connector_cache
+
+        get_connector = engine._get_connector
+
+        def get_shared_connector():
+            with self._connector_lock:
+                if self._connector_cache is None:
+                    self._connector_cache = get_connector()
+                engine._connector = self._connector_cache
+                return self._connector_cache
+
+        engine._get_connector = get_shared_connector
         return engine
 
     @classmethod
