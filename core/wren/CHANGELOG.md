@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.1](https://github.com/Canner/WrenAI/compare/wren-v0.17.0...wren-v0.17.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* **core:** use to_arrow_table for DuckDB 2.0 compatibility ([#2842](https://github.com/Canner/WrenAI/issues/2842)) ([6c48e83](https://github.com/Canner/WrenAI/commit/6c48e83a5eb0ab81dc91f5652063b634969eff2a))
+
 ## [0.17.0](https://github.com/Canner/WrenAI/compare/wren-v0.16.0...wren-v0.17.0) (2026-10-23)
 
 
