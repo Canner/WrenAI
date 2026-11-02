@@ -1011,6 +1011,18 @@ def _fake_probe(monkeypatch, *, which="/usr/local/bin/wren", returncode=0):
     return seen
 
 
+def test_check_discards_the_probe_output(monkeypatch):
+    # Only the exit code is read; capturing the child's UTF-8 help as text
+    # would decode it with the locale code page.
+    seen = _fake_probe(monkeypatch, returncode=0)
+
+    cloud.check_helper_command_serviceable()
+
+    assert seen["kwargs"]["stdout"] is subprocess.DEVNULL
+    assert seen["kwargs"]["stderr"] is subprocess.DEVNULL
+    assert "text" not in seen["kwargs"]
+
+
 def test_check_passes_when_the_path_wren_can_serve_the_helper(monkeypatch):
     seen = _fake_probe(monkeypatch, returncode=0)
 
