@@ -37,6 +37,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Optional HTTP MCP research demo; leaves the base SDK installation unchanged.
+research = ["pydantic-ai-slim[mcp]>=1.107.7,<2.0"]
+
 # ── Datasource pass-through extras ────────────────────────────────────────
 # Pick the one matching your project's `data_source` (in wren_project.yml).
 # These chain through to the matching `wrenai[<datasource>]` extra so
@@ -75,6 +78,7 @@ all = ["wrenai[all]>=0.13.1"]
 
 # ── Dev / test deps ───────────────────────────────────────────────────────
 dev = [
+  "pydantic-ai-slim[mcp]>=1.107.7,<2.0",
   "pytest>=8",
   "pytest-mock>=3",
   "ruff>=0.4",
