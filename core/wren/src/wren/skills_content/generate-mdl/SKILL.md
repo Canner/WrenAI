@@ -21,6 +21,30 @@ For memory and query workflows after setup, run `wren skills get usage`.
 - A working database connection (credentials available to the agent)
 - A connection profile (set up via `wren profile add`) or connection info ready
 
+## Alternative — import from an OpenMetadata catalog
+
+If the user's team already catalogs this database in OpenMetadata, import
+from the catalog instead of introspecting the live database. The import
+carries curated table/column descriptions, tags, owners, and foreign-key
+constraints (as `relationships.yml`), so the join-inference work in Phase 4
+is mostly done:
+
+```bash
+wren context import openmetadata --host <om_url> --token <om_token> \
+  --service <om_service> --database <db> --schema <schema> --dry-run
+wren context import openmetadata --host <om_url> --token <om_token> \
+  --service <om_service> --database <db> --schema <schema>
+```
+
+Ask the user for the OpenMetadata URL, a read-only bot or personal access
+token, and the service name as it appears in OpenMetadata. `--table`
+(repeatable) narrows the import. Without `--force` the command only adds
+files that do not exist and lists the collisions it left untouched; `--force`
+regenerates from OpenMetadata and discards local edits to generated files —
+confirm with the user before using it. Relationships come from foreign keys
+only; review whether additional joins are needed (Phase 4), then bind a
+profile and finish with Phase 5 (`wren context validate` → `wren context build`).
+
 ## Phase 0 — Detect existing project
 
 **Goal:** If the current directory is already inside a wren project, let the user decide how to proceed.

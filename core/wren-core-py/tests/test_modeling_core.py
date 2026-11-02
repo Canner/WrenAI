@@ -280,6 +280,16 @@ def test_to_json_base64():
         assert len(decoded_manifest["models"]) == 3
 
 
+def test_distinct_on():
+    session_context = SessionContext(manifest_str, None)
+    sql = "SELECT DISTINCT ON (o_custkey) o_custkey FROM my_catalog.my_schema.orders ORDER BY o_custkey, o_orderdate DESC"
+    rewritten_sql = session_context.transform_sql(sql)
+    assert (
+        rewritten_sql
+        == 'SELECT DISTINCT ON (orders.o_custkey) orders.o_custkey FROM (SELECT orders.o_custkey, orders.o_orderdate FROM (SELECT __source.o_custkey AS o_custkey, __source.o_orderdate AS o_orderdate FROM "main".orders AS __source) AS orders) AS orders ORDER BY orders.o_custkey ASC NULLS LAST, orders.o_orderdate DESC NULLS LAST'
+    )
+
+
 def test_limit_pushdown():
     session_context = SessionContext()
     sql = "SELECT * FROM my_catalog.my_schema.customer"

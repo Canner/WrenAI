@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wrenai"
-version = "0.16.0"
+version = "0.17.1"
 description = "Wren AI CLI and Python SDK — semantic SQL layer for 20+ data sources"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,7 +20,7 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-  "wren-core-py>=0.8.1",
+  "wren-core-py>=0.8.2",
   "duckdb>=1.5.0",
   # >=29 required: the CTE rewriter and policy read the ``with_`` / ``from_``
   # Expression arg keys, which sqlglot renamed from ``with`` / ``from`` in 28.
@@ -77,7 +77,8 @@ memory-onnx = [
 ]
 interactive = ["InquirerPy>=0.3.4"]
 ui = ["starlette>=1.3.1", "uvicorn>=0.29", "jinja2>=3.1", "python-multipart>=0.0.31"]
-mcp = ["mcp[cli]>=1.19"]
+# FastMCP is a v1 API; MCP v2 removes mcp.server.fastmcp.
+mcp = ["mcp[cli]>=1.19,<2"]
 main = ["wrenai[interactive,ui]"]
 all = [
   "wrenai[postgres,mysql,bigquery,snowflake,clickhouse,trino,mssql,databricks,redshift,athena,oracle,spark,main,memory,mcp]",

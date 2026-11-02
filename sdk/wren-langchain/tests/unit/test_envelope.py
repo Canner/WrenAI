@@ -1,6 +1,7 @@
 """Tests for envelope construction and error formatting."""
 
 import datetime as dt
+import json
 from decimal import Decimal
 
 from wren.model.error import ErrorCode, ErrorPhase, WrenError
@@ -35,6 +36,30 @@ def test_make_success_includes_warnings_when_provided():
     )
 
     assert result["warnings"] == ["content truncated: showed 32 of 100 rows"]
+
+
+def test_make_success_makes_query_rows_json_serializable():
+    """Dates, timestamps and decimals in data rows must not break json.dumps."""
+    result = make_success(
+        content="[...]",
+        data={
+            "rows": [
+                {
+                    "order_date": dt.date(2026, 5, 6),
+                    "shipped_at": dt.datetime(2026, 5, 7, 9, 30),
+                    "amount": Decimal("19.99"),
+                }
+            ]
+        },
+    )
+
+    assert json.loads(json.dumps(result))["data"]["rows"] == [
+        {
+            "order_date": "2026-05-06",
+            "shipped_at": "2026-05-07T09:30:00",
+            "amount": "19.99",
+        }
+    ]
 
 
 def test_format_error_extracts_wren_error_fields():

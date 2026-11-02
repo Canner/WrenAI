@@ -9,6 +9,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from wren._json_values import normalize_value
 from wren.context_cli import context_app
 
 app = typer.Typer(name="wren", help="Wren Engine CLI", no_args_is_help=False)
@@ -574,11 +575,14 @@ def _print_result(table, output: str) -> None:
         )
         raise typer.Exit(1)
     if output == "json":
-        try:
-            df = table.to_pandas()
-            typer.echo(df.to_json(orient="records", lines=True))
-        except Exception:
-            typer.echo(json.dumps(table.to_pydict()))
+        # Serialize from Arrow, not pandas: DataFrame.to_json turns dates and
+        # timestamps into epoch numbers and nullable integers into floats.
+        typer.echo(
+            "\n".join(
+                json.dumps(normalize_value(row), default=str)
+                for row in table.to_pylist()
+            )
+        )
     elif output == "csv":
         try:
             df = table.to_pandas()

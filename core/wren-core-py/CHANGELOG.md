@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.8.1...wren-core-py-v0.8.2) (2026-10-23)
+
+
+### Bug Fixes
+
+* **core-py:** ship the wren-core 0.5.1 DISTINCT ON fix in the bindings ([#2828](https://github.com/Canner/WrenAI/issues/2828)) ([17f7ed9](https://github.com/Canner/WrenAI/commit/17f7ed9f61a0199d68ffabf6a3003e1f8ef19aa0))
+
 ## [0.8.1](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.8.0...wren-core-py-v0.8.1) (2026-10-14)
 
 

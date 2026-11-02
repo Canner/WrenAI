@@ -4475,6 +4475,51 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_distinct_on() -> Result<()> {
+        let ctx = create_wren_ctx(None, None);
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("orders")
+                    .table_reference("orders")
+                    .column(ColumnBuilder::new("o_orderkey", "int").build())
+                    .column(ColumnBuilder::new("o_custkey", "int").build())
+                    .column(ColumnBuilder::new("o_orderdate", "date").build())
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let headers = Arc::new(HashMap::default());
+        // DISTINCT ON is planned without a Projection, so the model must still
+        // expose the columns of the select list, the ON keys and the ORDER BY.
+        let sql = "SELECT DISTINCT ON (o_custkey) o_custkey, o_orderkey FROM orders ORDER BY o_custkey, o_orderdate DESC";
+        assert_snapshot!(
+            transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], Arc::clone(&headers), sql).await?,
+            @"SELECT DISTINCT ON (orders.o_custkey) orders.o_custkey, orders.o_orderkey FROM (SELECT orders.o_custkey, orders.o_orderdate, orders.o_orderkey FROM (SELECT __source.o_custkey AS o_custkey, __source.o_orderdate AS o_orderdate, __source.o_orderkey AS o_orderkey FROM orders AS __source) AS orders) AS orders ORDER BY orders.o_custkey ASC NULLS LAST, orders.o_orderdate DESC NULLS LAST"
+        );
+
+        // A column used only in ORDER BY must be exposed as well.
+        let sql = "SELECT DISTINCT ON (o_custkey) o_custkey FROM orders ORDER BY o_custkey, o_orderdate DESC";
+        assert_snapshot!(
+            transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], Arc::clone(&headers), sql).await?,
+            @"SELECT DISTINCT ON (orders.o_custkey) orders.o_custkey FROM (SELECT orders.o_custkey, orders.o_orderdate FROM (SELECT __source.o_custkey AS o_custkey, __source.o_orderdate AS o_orderdate FROM orders AS __source) AS orders) AS orders ORDER BY orders.o_custkey ASC NULLS LAST, orders.o_orderdate DESC NULLS LAST"
+        );
+
+        // Latest row per key under an aggregate.
+        let sql = "SELECT count(*) FROM (SELECT DISTINCT ON (o_custkey) o_custkey, o_orderkey FROM orders ORDER BY o_custkey, o_orderdate DESC) AS latest";
+        assert_snapshot!(
+            transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], Arc::clone(&headers), sql).await?,
+            @r#"SELECT count(1) AS "count(*)" FROM (SELECT DISTINCT ON (orders.o_custkey) orders.o_custkey, orders.o_orderkey FROM (SELECT orders.o_custkey, orders.o_orderdate, orders.o_orderkey FROM (SELECT __source.o_custkey AS o_custkey, __source.o_orderdate AS o_orderdate, __source.o_orderkey AS o_orderkey FROM orders AS __source) AS orders) AS orders ORDER BY orders.o_custkey ASC NULLS LAST, orders.o_orderdate DESC NULLS LAST) AS latest"#
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_window_functions_without_frame_bigquery() -> Result<()> {
         let ctx = create_wren_ctx(None, None);
         let manifest = ManifestBuilder::new()

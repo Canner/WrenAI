@@ -1,0 +1,52 @@
+{
+  "connection": {
+    "config": {
+      "authType": {
+        "password": "*********"
+      },
+      "classificationName": "PostgresPolicyTags",
+      "connectionArguments": {
+        "sslmode": "disable"
+      },
+      "database": "shop",
+      "databaseFilterPattern": {
+        "excludes": [
+          "^template1$",
+          "^template0$"
+        ],
+        "includes": []
+      },
+      "hostPort": "shop-pg:5432",
+      "ingestAllDatabases": false,
+      "queryStatementSource": "pg_stat_statements",
+      "schemaFilterPattern": {
+        "excludes": [
+          "^information_schema$"
+        ],
+        "includes": []
+      },
+      "scheme": "postgresql+psycopg2",
+      "sslMode": "disable",
+      "supportsDBTExtraction": true,
+      "supportsDataDiff": true,
+      "supportsDatabase": true,
+      "supportsLineageExtraction": true,
+      "supportsMetadataExtraction": true,
+      "supportsProfiler": true,
+      "supportsQueryComment": true,
+      "supportsUsageExtraction": true,
+      "type": "Postgres",
+      "username": "shop"
+    }
+  },
+  "deleted": false,
+  "entityStatus": "Unprocessed",
+  "fullyQualifiedName": "shop_pg",
+  "href": "http://localhost:8585/api/v1/services/databaseServices/18275b24-7fbd-4b4b-98bc-809bb7223f38",
+  "id": "18275b24-7fbd-4b4b-98bc-809bb7223f38",
+  "name": "shop_pg",
+  "serviceType": "Postgres",
+  "updatedAt": 1792120159555,
+  "updatedBy": "admin",
+  "version": 0.1
+}

@@ -101,7 +101,7 @@ If `wrenai` is already installed (e.g. you use the CLI), the bare
   ```
 - **`toolkit.instructions()`** — Pydantic-AI-aware instructions string
   that adapts to enabled tools and includes your project's
-  `instructions.md` when present.
+  `knowledge/rules/*.md` business rules and legacy `instructions.md` when present.
 
 Errors from the engine are converted into Pydantic AI's `ModelRetry`
 with phase-aware framing — the agent can self-correct on SQL or

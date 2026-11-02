@@ -18,7 +18,7 @@ def test_unlimited_query_strips_trailing_semicolon():
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
     connector._connection_lock = Lock()
-    connector.connection.execute.return_value.fetch_arrow_table.return_value = pa.table(
+    connector.connection.execute.return_value.to_arrow_table.return_value = pa.table(
         {"x": [1]}
     )
 
@@ -32,7 +32,7 @@ def test_limited_query_still_wraps_after_strip():
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
     connector._connection_lock = Lock()
-    connector.connection.execute.return_value.fetch_arrow_table.return_value = pa.table(
+    connector.connection.execute.return_value.to_arrow_table.return_value = pa.table(
         {"x": [1]}
     )
 
@@ -48,7 +48,7 @@ def test_query_limit_survives_trailing_line_comment():
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
     connector._connection_lock = Lock()
-    connector.connection.execute.return_value.fetch_arrow_table.return_value = pa.table(
+    connector.connection.execute.return_value.to_arrow_table.return_value = pa.table(
         {"x": [1]}
     )
 

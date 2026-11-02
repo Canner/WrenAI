@@ -108,11 +108,11 @@ wheels = [
 
 [[package]]
 name = "certifi"
-version = "2026.2.25"
+version = "2026.10.19"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/af/2d/7bf41579a8986e348fa033a31cdd0e4121114f6bce2457e8876010b092dd/certifi-2026.2.25.tar.gz", hash = "sha256:e887ab5cee78ea814d3472169153c2d12cd43b14bd03329a39a9c6e2e80bfba7", size = 155029, upload-time = "2026-02-25T02:54:17.342Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/bd/1436c50cc46699de0230fbaacc1d1de7bfec413176099949e9d5112e88f2/certifi-2026.10.19.tar.gz", hash = "sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae", size = 137598, upload-time = "2026-10-20T02:24:16.604Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9a/3c/c17fb3ca2d9c3acff52e30b309f538586f9f5b9c9cf454f3845fc9af4881/certifi-2026.2.25-py3-none-any.whl", hash = "sha256:027692e4402ad994f1c42e52a4997a9763c646b73e4096e4d5d6db8af1d6f0fa", size = 153684, upload-time = "2026-02-25T02:54:15.766Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/51/29046e48f693c54e5b7412216d447a1d8362c9653148d98c02cdf65fa733/certifi-2026.10.19-py3-none-any.whl", hash = "sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b", size = 136464, upload-time = "2026-10-20T02:24:15.072Z" },
 ]
 
 [[package]]
@@ -3616,18 +3616,20 @@ wheels = [
 
 [[package]]
 name = "wren-core-py"
-version = "0.8.1"
+version = "0.8.2"
 source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/57/3abf7dfc2104871c7a31dba14cbc355ab96cc63e36dbc7eadd2ecc267c12/wren_core_py-0.8.2.tar.gz", hash = "sha256:c2711dc74c0de37ffd7777735830e737102e7e99bebb13aebc5d3f05a575c52b", size = 236274, upload-time = "2026-10-23T09:55:57.153Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d0/b0/1dbfdccfb27a7cfa3f2d2ec26ba5d4fd90af00487a0b1151eff6a4f5d79b/wren_core_py-0.8.1-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:eed71160e6f2aa0323071fa773e354fa6dfd6711d9731b6c0bf17d48b0003bff", size = 48423777, upload-time = "2026-10-14T10:38:09.737Z" },
-    { url = "https://files.pythonhosted.org/packages/98/ea/fab456a1e86eba8704eeb60717b2590b414a47206edb048041f97e23e474/wren_core_py-0.8.1-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:264331c7359c05744da661dc0402a3b96c60c3a5747b306398c8193653fc2263", size = 46492607, upload-time = "2026-10-14T10:38:13.688Z" },
-    { url = "https://files.pythonhosted.org/packages/6f/55/6d41c0fc14f9b7e2bd809461ee10c1c52b93979240db2c06f8f2c4dc1b65/wren_core_py-0.8.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:afa541e5c095d4b144db0b7fea9d63fe268c59cbb0a459c1326a624c7687419e", size = 53629869, upload-time = "2026-10-14T10:38:17.942Z" },
-    { url = "https://files.pythonhosted.org/packages/6b/59/fb4cb1e4ceb45733c2b040b4e3a2a66139ac631b043369f5e03cc27a5b16/wren_core_py-0.8.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:781baa9188845451d39f295083e5e07172ec2a186b9fa71d7df861c1982b2f6b", size = 51828419, upload-time = "2026-10-14T10:38:22.355Z" },
+    { url = "https://files.pythonhosted.org/packages/ca/5e/8081f4eb3893f5474f2f3fd081b4822926392991b0013b3eade0e5ac18bb/wren_core_py-0.8.2-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:9af21b41fa54b6f787b5a3ca772a6e124cefd2b9028712512a12bdae8c5991ef", size = 48423560, upload-time = "2026-10-23T09:55:40.085Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/5e/1687da51d5adbb70ce169d83b31038b10c659b1806f4e0097d51124d3c27/wren_core_py-0.8.2-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:809a1eca6e10fe748a4bb24f81f9f8e11099c2e96344587fdea44455bc616a1a", size = 46505086, upload-time = "2026-10-23T09:55:44.079Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/f0/72fffbf69a4c7d966d7ff82ca7875b8787112a4f46b6c9a132171b44386b/wren_core_py-0.8.2-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c8bd81272198a574e7127eb062d7097ab42286e97ae166d749524714dbc630a9", size = 53615955, upload-time = "2026-10-23T09:55:47.585Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/2b/7e9d7c67877bc26ebc73512ab915f449da08d6f2f6c00bcbaf548d42ced5/wren_core_py-0.8.2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:54cf19fb9a646e4ef3700781a2177a9d09284684202a8dca2aea0e0fcc3cf553", size = 51815579, upload-time = "2026-10-23T09:55:51.615Z" },
+    { url = "https://files.pythonhosted.org/packages/55/bd/e33fc2551ce10eeeff76392126e181c7ca89542a459eba9ee0be38c2a3a5/wren_core_py-0.8.2-cp311-abi3-win_amd64.whl", hash = "sha256:38e015e9ea33b1daaeb32838edab10f6cf31cc83b1fd9b4833ff87f41f731549", size = 46119127, upload-time = "2026-10-23T09:55:55.066Z" },
 ]
 
 [[package]]
 name = "wrenai"
-version = "0.16.0"
+version = "0.17.1"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
@@ -3774,7 +3776,7 @@ requires-dist = [
     { name = "lancedb", marker = "extra == 'memory-onnx'", specifier = ">=0.6" },
     { name = "loguru", specifier = ">=0.7" },
     { name = "lxml", specifier = ">=6.1.0" },
-    { name = "mcp", extras = ["cli"], marker = "extra == 'mcp'", specifier = ">=1.19" },
+    { name = "mcp", extras = ["cli"], marker = "extra == 'mcp'", specifier = ">=1.19,<2" },
     { name = "mysqlclient", marker = "extra == 'mysql'", specifier = ">=2.2" },
     { name = "numpy", marker = "extra == 'memory-onnx'", specifier = ">=1.24" },
     { name = "onnxruntime", marker = "extra == 'memory-onnx'", specifier = ">=1.17" },
@@ -3806,7 +3808,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12" },
     { name = "urllib3", specifier = ">=2.8.0" },
     { name = "uvicorn", marker = "extra == 'ui'", specifier = ">=0.29" },
-    { name = "wren-core-py", specifier = ">=0.8.1" },
+    { name = "wren-core-py", specifier = ">=0.8.2" },
     { name = "wrenai", extras = ["interactive", "ui"], marker = "extra == 'main'" },
     { name = "wrenai", extras = ["postgres", "mysql", "bigquery", "snowflake", "clickhouse", "trino", "mssql", "databricks", "redshift", "athena", "oracle", "spark", "main", "memory", "mcp"], marker = "extra == 'all'" },
 ]

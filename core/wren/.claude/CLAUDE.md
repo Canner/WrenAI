@@ -27,7 +27,7 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 ## CLI Command Groups
 
 - `wren query` / `wren dry-plan` / `wren dry-run` — Core query operations. `dry-plan` expands SQL through the MDL with no DB; `dry-run` parses and validates against the data source. MDL validation is `wren context validate` — there is no top-level `wren validate`
-- `wren context init|import|validate|build|show|instructions|set-profile|upgrade` — YAML MDL project management
+- `wren context init|import|validate|build|show|export|instructions|set-profile|upgrade` — YAML MDL project management. `import dbt|ossie` and `export ossie` move a project in and out of external formats; `--from-ossie` on init/validate/build/show reads an Apache Ossie (formerly OSI) file — `--from-osi` is a deprecated, warning alias, and `export-ossie` is a hidden deprecated alias of `export ossie`
 - `wren profile add|list|import|rm|switch|debug` — Named connection profiles. `rm` removes a profile, `switch` activates one; there is no `show`, `remove`, or `activate`
 - `wren docs connection-info` — Generate connection field docs
 - `wren utils parse-type|parse-types|translate-type|translate-types` — SQL type normalization and dialect translation

@@ -79,11 +79,18 @@ def make_success(
     data: dict[str, Any],
     warnings: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Construct a success envelope."""
+    """Construct a success envelope.
+
+    ``data`` goes through :func:`json_safe` so query rows holding dates,
+    timestamps or decimals keep the envelope JSON-serializable. LangChain
+    turns a dict tool result into the ``ToolMessage`` content with
+    ``json.dumps`` and falls back to ``str()`` when that fails, which would
+    hand the model a Python repr instead of JSON.
+    """
     return {
         "ok": True,
         "content": content,
-        "data": data,
+        "data": json_safe(data),
         "warnings": warnings or [],
     }
 

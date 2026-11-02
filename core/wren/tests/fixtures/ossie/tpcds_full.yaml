@@ -54,6 +54,19 @@ semantic_model:
                 - "product"
                 - "item"
 
+          - name: ss_ticket_number
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: ss_ticket_number
+            description: Ticket number; together with ss_item_sk it identifies a line item
+            dimension:
+              is_time: false
+            ai_context:
+              synonyms:
+                - "ticket"
+                - "receipt number"
+
           - name: ss_customer_sk
             expression:
               dialects:

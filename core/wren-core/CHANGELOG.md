@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.5.0...wren-semantic-core-v0.5.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **core:** collect DISTINCT ON columns when building model plans ([#2815](https://github.com/Canner/WrenAI/issues/2815)) ([f618d8d](https://github.com/Canner/WrenAI/commit/f618d8d9848c3d6b617859e575bd560d50bcc04e))
+* **wren-core:** preserve SQL literals when resolving derived cube measures ([#2813](https://github.com/Canner/WrenAI/issues/2813)) ([a53c3cb](https://github.com/Canner/WrenAI/commit/a53c3cb31348b8eb41e3af7b26df9f940c28c85e))
+
 ## [0.5.0](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.4.0...wren-semantic-core-v0.5.0) (2026-10-14)
 
 
