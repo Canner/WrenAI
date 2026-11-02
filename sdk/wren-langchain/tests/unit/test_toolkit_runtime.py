@@ -60,7 +60,9 @@ def test_connector_is_reused_across_query_calls(tmp_project, fake_active_profile
             def _get_connector(self):
                 return self._connector
 
-        engine = FakeEngine(first_connector if not engines else second_initial_connector)
+        engine = FakeEngine(
+            first_connector if not engines else second_initial_connector
+        )
         engines.append(engine)
         return engine
 
@@ -135,9 +137,7 @@ def test_concurrent_cold_queries_share_one_connector(tmp_project, fake_active_pr
     assert all(engine._connector is created_connectors[0] for engine in engines)
 
 
-def test_planning_error_does_not_initialize_connector(
-    tmp_project, fake_active_profile
-):
+def test_planning_error_does_not_initialize_connector(tmp_project, fake_active_profile):
     """A planning failure must surface before connector creation is attempted."""
     created_connectors = []
 
