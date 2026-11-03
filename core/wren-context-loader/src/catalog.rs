@@ -16,7 +16,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::project::{
-    parse_doc_or_default, parse_mapping_doc, parse_relationships, sql_yml_statement, ProjectSources,
+    authored_cubes, parse_doc_or_default, parse_relationships, sql_yml_statement, ProjectSources,
 };
 
 /// Bumped when the shape below changes incompatibly; the host checks it before reading.
@@ -640,24 +640,13 @@ pub fn capability_catalog(sources: &ProjectSources) -> CapabilityCatalog {
         }
     }
 
-    let mut cubes = Vec::new();
-    match &sources.cubes_yml {
-        Some(yml) => match parse_doc_or_default::<Vec<CubeFile>>(yml) {
-            Ok(list) => cubes.extend(list.into_iter().map(cube)),
-            Err(e) => diagnostics.push(CatalogDiagnostic::Message(format!("cubes.yml: {e}"))),
-        },
-        None => {
-            for (index, yml) in sources.cube_ymls.iter().enumerate() {
-                match parse_mapping_doc::<CubeFile>(yml) {
-                    Ok(Some(c)) => cubes.push(cube(c)),
-                    Ok(None) => {}
-                    Err(e) => {
-                        diagnostics.push(CatalogDiagnostic::Message(format!("cube[{index}]: {e}")))
-                    }
-                }
-            }
-        }
-    }
+    let (declared, cube_errors) = authored_cubes::<CubeFile>(sources);
+    let cubes: Vec<CatalogCube> = declared.into_iter().map(cube).collect();
+    diagnostics.extend(
+        cube_errors
+            .into_iter()
+            .map(|(label, e)| CatalogDiagnostic::Message(format!("{label}: {e}"))),
+    );
 
     let mut views = Vec::new();
     let mut view_columns_invalid = false;

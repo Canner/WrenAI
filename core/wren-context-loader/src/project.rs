@@ -771,8 +771,8 @@ pub struct ProjectSources {
     pub model_ymls: Vec<String>,
     pub relationships_yml: Option<String>,
     pub cubes_yml: Option<String>,
-    /// Per-cube `cubes/<name>/metadata.yml` contents (wren CLI layout). Used only when
-    /// `cubes_yml` is `None` — a root `cubes.yml` takes precedence.
+    /// Per-cube `cubes/<name>/metadata.yml` contents (wren CLI layout). Used unless the root
+    /// `cubes.yml` yields at least one cube, which then takes precedence (see `authored_cubes`).
     pub cube_ymls: Vec<String>,
     /// Each view as `(metadata.yml, sql.yml)` contents; `sql.yml` is empty when the view directory
     /// has none, because the statement may be written inline in `metadata.yml` (a non-empty
@@ -786,6 +786,43 @@ pub struct ProjectSources {
     /// `dashboards[].name` + `panels[].sql` or `panels[].cube`+`measures`). Consumer source, like
     /// `knowledge_sql_mds`.
     pub dashboards_yml: Option<String>,
+}
+
+/// The cubes a project declares, parsed as `T`, and the errors (`(label, error)`, label
+/// `cubes.yml` or `cube[<index>]`) for the files that did not parse.
+///
+/// Precedence: a root `cubes.yml` that yields at least one cube wins and the per-cube files
+/// (`cubes/<name>/metadata.yml`, the layout the wren CLI reads) are ignored, never merged, so a
+/// project that keeps a root mirror beside the directory does not get every cube twice. A root
+/// file that is absent, empty, comment-only or `[]` declares nothing, so the per-cube files are
+/// used. A root file that does not parse is an error and yields no cubes. A per-cube file that is
+/// empty or not a mapping is skipped, as wren skips it.
+///
+/// `assemble` and the catalog both read cubes through this one function, so they cannot disagree
+/// about which cubes exist.
+pub(crate) fn authored_cubes<T>(
+    sources: &ProjectSources,
+) -> (Vec<T>, Vec<(String, serde_yaml::Error)>)
+where
+    T: serde::de::DeserializeOwned,
+{
+    if let Some(yml) = &sources.cubes_yml {
+        match parse_doc_or_default::<Vec<T>>(yml) {
+            Ok(root) if !root.is_empty() => return (root, Vec::new()),
+            Ok(_) => {}
+            Err(e) => return (Vec::new(), vec![("cubes.yml".to_string(), e)]),
+        }
+    }
+    let mut cubes = Vec::new();
+    let mut errors = Vec::new();
+    for (index, yml) in sources.cube_ymls.iter().enumerate() {
+        match parse_mapping_doc::<T>(yml) {
+            Ok(Some(cube)) => cubes.push(cube),
+            Ok(None) => {}
+            Err(e) => errors.push((format!("cube[{index}]"), e)),
+        }
+    }
+    (cubes, errors)
 }
 
 /// Assemble read project sources into a canonical [`Manifest`]. Returns a [`LoadError`] if any file
@@ -809,28 +846,11 @@ pub fn assemble(sources: &ProjectSources) -> Result<LoadedProject, LoadError> {
         None => Vec::new(),
     };
 
-    // A root `cubes.yml` (bare list) wins when present; otherwise fall back to the wren CLI's
-    // per-cube layout (`cubes/<name>/metadata.yml`, one cube per file). Never both, so a project
-    // that keeps a root mirror alongside the directory doesn't get every cube twice.
-    let cubes = match &sources.cubes_yml {
-        Some(yml) => {
-            let cubes: Vec<CubeFile> =
-                parse_doc_or_default(yml).map_err(|e| msg(format!("cubes.yml: {e}")))?;
-            cubes.into_iter().map(cube_to_json).collect()
-        }
-        None => sources
-            .cube_ymls
-            .iter()
-            .map(|yml| {
-                let cube: Option<CubeFile> =
-                    parse_mapping_doc(yml).map_err(|e| msg(format!("cube metadata: {e}")))?;
-                Ok(cube.map(cube_to_json))
-            })
-            .collect::<Result<Vec<_>, LoadError>>()?
-            .into_iter()
-            .flatten()
-            .collect(),
-    };
+    let (declared, cube_errors) = authored_cubes::<CubeFile>(sources);
+    if let Some((label, error)) = cube_errors.into_iter().next() {
+        return Err(msg(format!("{label}: {error}")));
+    }
+    let cubes: Vec<serde_json::Value> = declared.into_iter().map(cube_to_json).collect();
 
     let mut views = Vec::with_capacity(sources.views.len());
     for (meta_yml, sql_yml) in &sources.views {

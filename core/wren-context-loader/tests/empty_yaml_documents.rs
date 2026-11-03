@@ -136,3 +136,54 @@ fn empty_wren_project_yml_is_parseable() {
     assert!(assemble(&sources).is_ok());
     assert!(capability_catalog(&sources).diagnostics.is_empty());
 }
+
+const DIRECTORY_CUBE: &str = "name: dir_cube\nbase_object: orders\nmeasures:\n  - { name: n, expression: \"COUNT(*)\", type: BIGINT }\ndimensions: []\ntime_dimensions: []\n";
+const ROOT_CUBE: &str = "- name: root_cube\n  base_object: orders\n  measures: []\n  dimensions: []\n  time_dimensions: []\n";
+
+fn cube_names(sources: &ProjectSources) -> (Vec<String>, Vec<String>) {
+    let loaded = assemble(sources).expect("assemble");
+    let manifest: Vec<String> = loaded
+        .manifest
+        .cubes
+        .iter()
+        .map(|c| c.name.clone())
+        .collect();
+    let catalog = capability_catalog(sources);
+    assert!(catalog.diagnostics.is_empty(), "{:?}", catalog.diagnostics);
+    (
+        manifest,
+        catalog.cubes.iter().map(|c| c.name.clone()).collect(),
+    )
+}
+
+#[test]
+fn cr18_per_cube_metadata_is_read_when_the_root_cubes_yml_has_no_entries() {
+    for root in ["", "# none\n", "[]\n"] {
+        let sources = sources_with(
+            None,
+            &[
+                ("cubes.yml", root),
+                ("cubes/dir_cube/metadata.yml", DIRECTORY_CUBE),
+            ],
+        );
+        let expected = vec!["dir_cube".to_string()];
+        assert_eq!(
+            cube_names(&sources),
+            (expected.clone(), expected),
+            "root cubes.yml {root:?}"
+        );
+    }
+}
+
+#[test]
+fn cr18_root_entries_win_over_per_cube_metadata_and_the_two_are_never_merged() {
+    let sources = sources_with(
+        None,
+        &[
+            ("cubes.yml", ROOT_CUBE),
+            ("cubes/dir_cube/metadata.yml", DIRECTORY_CUBE),
+        ],
+    );
+    let expected = vec!["root_cube".to_string()];
+    assert_eq!(cube_names(&sources), (expected.clone(), expected));
+}
