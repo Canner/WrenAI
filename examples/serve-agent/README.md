@@ -53,6 +53,8 @@ For direct tools with the same boundary, replace `serve agent` with `serve mcp`,
 
 The context loader refuses symlinks for source-directory roots (`models`, `cubes`, `views`, `knowledge`) and nested directory or unresolved symlinks. This prevents cycles and keeps its readers and the host's change digest consistent. Valid file symlinks remain supported: their relative path and target bytes contribute to the digest, and edits to the target invalidate context.
 
+Saved-query consumer lineage is a structural extraction using sqlparser's `GenericDialect`. CTE shadowing currently uses case folding; it does not guarantee execution-equivalent provenance for every data source. Runtime SQL authorization and execution continue through the query gate and engine independently of this consumer-lineage extraction.
+
 ## Deliver the planner skill
 
 Retrieve the bundled guide with `wren skills get wren-planner`. Put that output in a `wren-planner/SKILL.md` directory using the external agent's supported skill installation mechanism. Do not install it into a global agent directory without the user's instruction.
