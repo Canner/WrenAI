@@ -157,7 +157,7 @@ fn cube_names(sources: &ProjectSources) -> (Vec<String>, Vec<String>) {
 }
 
 #[test]
-fn cr18_per_cube_metadata_is_read_when_the_root_cubes_yml_has_no_entries() {
+fn per_cube_metadata_is_read_when_the_root_cubes_yml_has_no_entries() {
     for root in ["", "# none\n", "[]\n"] {
         let sources = sources_with(
             None,
@@ -176,7 +176,7 @@ fn cr18_per_cube_metadata_is_read_when_the_root_cubes_yml_has_no_entries() {
 }
 
 #[test]
-fn cr18_root_entries_win_over_per_cube_metadata_and_the_two_are_never_merged() {
+fn root_entries_win_over_per_cube_metadata_and_the_two_are_never_merged() {
     let sources = sources_with(
         None,
         &[

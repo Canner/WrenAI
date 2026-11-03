@@ -113,11 +113,11 @@ NOT_IN_MISSES = {
 
 
 @pytest.mark.parametrize("sql", NOT_IN_MISSES.values(), ids=NOT_IN_MISSES.keys())
-def test_cr5_not_in_counts_only_when_the_outer_column_is_the_flagged_key(checker, sql):
+def test_not_in_counts_only_when_the_outer_column_is_the_flagged_key(checker, sql):
     assert check(checker, sql) == [EXCLUDE]
 
 
-def test_cr5_not_in_over_the_flagged_model_itself_still_satisfies_the_rule(checker):
+def test_not_in_over_the_flagged_model_itself_still_satisfies_the_rule(checker):
     assert (
         check(
             checker,
@@ -144,7 +144,7 @@ CR6_MISSES = {
 
 
 @pytest.mark.parametrize("sql", CR6_MISSES.values(), ids=CR6_MISSES.keys())
-def test_cr6_a_filter_off_the_outer_read_does_not_satisfy_the_rule(checker, sql):
+def test_a_filter_off_the_outer_read_does_not_satisfy_the_rule(checker, sql):
     assert check(checker, sql) == [EXCLUDE]
 
 
@@ -160,7 +160,7 @@ CR6_HITS = {
 
 
 @pytest.mark.parametrize("sql", CR6_HITS.values(), ids=CR6_HITS.keys())
-def test_cr6_a_filter_on_a_row_source_of_the_outer_read_still_counts(checker, sql):
+def test_a_filter_on_a_row_source_of_the_outer_read_still_counts(checker, sql):
     assert check(checker, sql) == []
 
 

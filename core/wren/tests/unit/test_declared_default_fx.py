@@ -203,7 +203,7 @@ def test_row_number_that_does_not_keep_the_newest_row_is_not_single(strict):
     assert violations(strict, RANKED.format(limit=2)) == [f"{RATE}:rate_multi_match"]
 
 
-def test_cr7_a_row_number_limit_under_or_is_not_single(strict):
+def test_a_row_number_limit_under_or_is_not_single(strict):
     ranked = RANKED.replace("r.rn = {limit}", "{limit}")
     either = "(r.rn = 1 OR p.amount > 100)"
     assert violations(strict, ranked.format(limit=either)) == [

@@ -955,7 +955,7 @@ def test_a_function_miss_does_not_hide_a_denial(adhoc, sql):
         adhoc().sql.prepare(sql)
 
 
-def test_cr19_an_unknown_model_is_terminal_even_beside_a_function_miss(adhoc):
+def test_an_unknown_model_is_terminal_even_beside_a_function_miss(adhoc):
     s = adhoc()
     for sql in (
         "SELECT now() FROM ghosts",
@@ -1252,7 +1252,7 @@ def test_a_cte_named_like_a_view_shadows_it(adhoc):
     assert prepared.unverified == []
 
 
-def test_cr1_cte_reference_in_view_body_is_not_external(adhoc):
+def test_cte_reference_in_view_body_is_not_external(adhoc):
     cte_view = {
         "views/paid_ids/metadata.yml": "name: paid_ids\n",
         "views/paid_ids/sql.yml": yaml.safe_dump(
@@ -1268,7 +1268,7 @@ def test_cr1_cte_reference_in_view_body_is_not_external(adhoc):
     assert prepared.observed["models"] == ["orders"]
 
 
-def test_cr1_a_cte_defined_later_or_elsewhere_is_still_external(adhoc):
+def test_a_cte_defined_later_or_elsewhere_is_still_external(adhoc):
     unresolved = {
         "views/ghost_cte/metadata.yml": "name: ghost_cte\n",
         "views/ghost_cte/sql.yml": yaml.safe_dump(
@@ -1285,7 +1285,7 @@ def test_cr1_a_cte_defined_later_or_elsewhere_is_still_external(adhoc):
     assert s.sql.broken_views == {"ghost_cte", "bare_ghost"}
 
 
-def test_cr2_a_cte_shadows_a_view_only_where_it_is_visible(adhoc):
+def test_a_cte_shadows_a_view_only_where_it_is_visible(adhoc):
     s = adhoc()
     tree, read = s.sql._expand_views(
         sqlglot.parse_one(
@@ -2411,7 +2411,7 @@ def test_the_case_of_a_model_name_does_not_change_the_verdict():
     )
 
 
-def test_cr3_a_self_join_is_judged_per_alias(adhoc):
+def test_a_self_join_is_judged_per_alias(adhoc):
     found, unverified = windows_of(
         adhoc(),
         "SELECT COUNT(*) AS n FROM orders o JOIN orders p ON p.customer_id = o.customer_id "
@@ -2423,7 +2423,7 @@ def test_cr3_a_self_join_is_judged_per_alias(adhoc):
     assert DATE_WINDOW_UNVERIFIED in unverified
 
 
-def test_cr3_a_self_join_with_a_window_on_each_alias_is_pinned(adhoc):
+def test_a_self_join_with_a_window_on_each_alias_is_pinned(adhoc):
     found, unverified = windows_of(
         adhoc(),
         "SELECT COUNT(*) AS n FROM orders o JOIN orders p ON p.customer_id = o.customer_id "
@@ -2448,9 +2448,7 @@ OWN_ROWS = "WHERE NOT o.is_test AND o.status IN ('paid', 'shipped')"
         f"orders o FULL JOIN invoices i ON o.customer_id = i.customer_id {JOIN_ON_JUNE_ORDERS}",
     ],
 )
-def test_cr20_an_on_literal_on_the_preserved_side_of_an_outer_join_is_no_window(
-    adhoc, join
-):
+def test_an_on_literal_on_the_preserved_side_of_an_outer_join_is_no_window(adhoc, join):
     found, unverified = windows_of(adhoc(), f"SELECT COUNT(*) FROM {join} {OWN_ROWS}")
     assert found == []
     assert DATE_WINDOW_UNVERIFIED not in unverified
@@ -2466,6 +2464,6 @@ def test_cr20_an_on_literal_on_the_preserved_side_of_an_outer_join_is_no_window(
         "AND i.invoice_date >= DATE '2026-06-01'",
     ],
 )
-def test_cr20_an_on_literal_that_filters_a_kept_side_stays_a_window(adhoc, join):
+def test_an_on_literal_that_filters_a_kept_side_stays_a_window(adhoc, join):
     found, _ = windows_of(adhoc(), f"SELECT COUNT(*) FROM {join} {OWN_ROWS}")
     assert len(found) == 1

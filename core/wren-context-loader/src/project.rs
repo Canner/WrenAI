@@ -1009,7 +1009,7 @@ mod tests {
     use super::sorted_paths;
 
     #[test]
-    fn cr16_an_unreadable_directory_entry_is_an_error_naming_the_directory() {
+    fn an_unreadable_directory_entry_is_an_error_naming_the_directory() {
         let entries: Vec<io::Result<PathBuf>> = vec![
             Ok(PathBuf::from("models/orders")),
             Err(io::Error::new(io::ErrorKind::PermissionDenied, "denied")),

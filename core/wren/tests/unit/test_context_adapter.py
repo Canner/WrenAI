@@ -1340,7 +1340,7 @@ def test_an_aliased_cast_inside_a_derived_table_is_a_stable_name(real_project):
     assert load_snapshot(real_project).unverified_views == ()
 
 
-def test_cr4_rule_body_never_names_a_denied_column():
+def test_rule_body_never_names_a_denied_column():
     mixed = "knowledge/rules/mixed.md"
     only = "knowledge/rules/only.md"
     r = reader(

@@ -3472,7 +3472,7 @@ def test_the_readme_table_matches_the_code_to_reason_mapping():
     assert {**RUNTIME_CODES, **HOST_CODES} == rows
 
 
-def test_cr9_plain_serve_mcp_refuses_a_warble_path_it_would_ignore(tmp_path):
+def test_plain_serve_mcp_refuses_a_warble_path_it_would_ignore(tmp_path):
     from typer.testing import CliRunner  # noqa: PLC0415
 
     from wren.serve_cli import serve_app  # noqa: PLC0415
@@ -3482,7 +3482,7 @@ def test_cr9_plain_serve_mcp_refuses_a_warble_path_it_would_ignore(tmp_path):
     assert "--warble" in out.output and "--service-config" in out.output
 
 
-def test_cr10_a_missing_service_config_is_a_controlled_error(tmp_path):
+def test_a_missing_service_config_is_a_controlled_error(tmp_path):
     from typer.testing import CliRunner  # noqa: PLC0415
 
     from wren.serve_cli import serve_app  # noqa: PLC0415

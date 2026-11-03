@@ -37,7 +37,7 @@ fn statements(dir: &Path) -> Vec<(String, String)> {
 }
 
 #[test]
-fn cr17_a_view_whose_statement_lives_in_its_metadata_is_read() {
+fn a_view_whose_statement_lives_in_its_metadata_is_read() {
     let tmp = tempfile::tempdir().unwrap();
     project(tmp.path());
     write(
@@ -57,7 +57,7 @@ fn cr17_a_view_whose_statement_lives_in_its_metadata_is_read() {
 }
 
 #[test]
-fn cr17_sql_yml_wins_over_an_inline_statement() {
+fn sql_yml_wins_over_an_inline_statement() {
     let tmp = tempfile::tempdir().unwrap();
     project(tmp.path());
     write(
@@ -78,7 +78,7 @@ fn cr17_sql_yml_wins_over_an_inline_statement() {
 }
 
 #[test]
-fn cr17_a_view_with_no_statement_anywhere_is_an_error_and_a_diagnostic() {
+fn a_view_with_no_statement_anywhere_is_an_error_and_a_diagnostic() {
     let tmp = tempfile::tempdir().unwrap();
     project(tmp.path());
     write(tmp.path(), "views/half/metadata.yml", "name: half\n");

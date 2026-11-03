@@ -314,7 +314,7 @@ fn reaches(ctx: &MdlContext, seed: &str, consumer: &str) -> bool {
 }
 
 #[test]
-fn cr12_a_cte_named_like_a_model_is_not_a_read_of_that_model() {
+fn a_cte_named_like_a_model_is_not_a_read_of_that_model() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());
     write(
@@ -335,7 +335,7 @@ fn cr12_a_cte_named_like_a_model_is_not_a_read_of_that_model() {
 }
 
 #[test]
-fn cr12_a_cte_body_that_reads_the_same_named_model_still_links_it() {
+fn a_cte_body_that_reads_the_same_named_model_still_links_it() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());
     write(
@@ -368,7 +368,7 @@ fn cr12_a_cte_body_that_reads_the_same_named_model_still_links_it() {
 }
 
 #[test]
-fn cr12_a_view_over_a_cte_named_like_a_model_does_not_depend_on_the_model() {
+fn a_view_over_a_cte_named_like_a_model_does_not_depend_on_the_model() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());
     write(
@@ -396,7 +396,7 @@ fn cr12_a_view_over_a_cte_named_like_a_model_does_not_depend_on_the_model() {
 }
 
 #[test]
-fn cr14_view_backed_cube_resolves_to_view_node() {
+fn view_backed_cube_resolves_to_view_node() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());
     write(
@@ -443,7 +443,7 @@ time_dimensions: []
 }
 
 #[test]
-fn cr14_a_model_wins_when_a_model_and_a_view_share_the_cube_base_name() {
+fn a_model_wins_when_a_model_and_a_view_share_the_cube_base_name() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());
     write(tmp.path(), "views/orders/metadata.yml", "name: orders\n");
@@ -464,7 +464,7 @@ fn cr14_a_model_wins_when_a_model_and_a_view_share_the_cube_base_name() {
 }
 
 #[test]
-fn cr15_a_measure_named_only_in_a_comment_or_a_string_does_not_link_the_consumer() {
+fn a_measure_named_only_in_a_comment_or_a_string_does_not_link_the_consumer() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());
     write(
@@ -494,7 +494,7 @@ fn cr15_a_measure_named_only_in_a_comment_or_a_string_does_not_link_the_consumer
 }
 
 #[test]
-fn cr12_under_recursive_a_cte_sees_its_later_siblings() {
+fn under_recursive_a_cte_sees_its_later_siblings() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());
     write(
@@ -511,7 +511,7 @@ fn cr12_under_recursive_a_cte_sees_its_later_siblings() {
 }
 
 #[test]
-fn cr12_cte_names_match_case_insensitively() {
+fn cte_names_match_case_insensitively() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());
     write(

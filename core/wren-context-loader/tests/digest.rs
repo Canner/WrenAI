@@ -170,7 +170,7 @@ fn listed_inputs(dir: &Path) -> (Vec<String>, Vec<String>, usize, usize, usize) 
 }
 
 #[test]
-fn cr13_the_digest_and_the_readers_agree_that_dot_named_entries_are_not_inputs() {
+fn the_digest_and_the_readers_agree_that_dot_named_entries_are_not_inputs() {
     let project = copy_of("rules-wren");
     let dir = project.path();
     let digest_before = digest(dir);
