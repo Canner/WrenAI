@@ -703,14 +703,22 @@ pub struct KnowledgeRuleFile {
     pub content: String,
 }
 
-/// The entries of `dir`, sorted by path. An entry that cannot be read is an error naming the
-/// directory: a project the loader could not read completely must not load as a smaller one.
+/// The entries of `dir` that are project inputs, sorted by path: dot-named entries are skipped by
+/// the same rule the digest applies ([`crate::digest::is_hidden`]), so the catalog, the prepared
+/// document and the digest agree on what the project is. An entry that cannot be read is an error
+/// naming the directory: a project the loader could not read completely must not load as a
+/// smaller one.
 #[cfg(not(target_arch = "wasm32"))]
 fn list_dir(dir: &std::path::Path) -> std::io::Result<Vec<std::path::PathBuf>> {
-    sorted_paths(
+    let mut paths = sorted_paths(
         std::fs::read_dir(dir)?.map(|entry| entry.map(|entry| entry.path())),
         dir,
-    )
+    )?;
+    paths.retain(|path| {
+        path.file_name()
+            .is_none_or(|name| !crate::digest::is_hidden(name))
+    });
+    Ok(paths)
 }
 
 #[cfg(not(target_arch = "wasm32"))]

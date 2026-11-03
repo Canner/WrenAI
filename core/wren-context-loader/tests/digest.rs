@@ -150,3 +150,58 @@ fn the_pure_builder_leaves_the_digest_out() {
         serde_json::from_str(&catalog_document(&capability_catalog(&sources)).unwrap()).unwrap();
     assert!(doc.get("digest").is_none());
 }
+
+/// What the catalog and the prepared document are built from, listed through the readers the
+/// loader uses: rule files, saved queries, and the model, cube and view sources.
+fn listed_inputs(dir: &Path) -> (Vec<String>, Vec<String>, usize, usize, usize) {
+    let rules = read_knowledge_rules(dir).unwrap();
+    let sources = read_project_dir(dir).unwrap().unwrap();
+    (
+        rules.files.iter().map(|f| f.path.clone()).collect(),
+        sources
+            .knowledge_sql_mds
+            .iter()
+            .map(|(slug, _)| slug.clone())
+            .collect(),
+        sources.model_ymls.len(),
+        sources.cube_ymls.len(),
+        sources.views.len(),
+    )
+}
+
+#[test]
+fn cr13_the_digest_and_the_readers_agree_that_dot_named_entries_are_not_inputs() {
+    let project = copy_of("rules-wren");
+    let dir = project.path();
+    let digest_before = digest(dir);
+    let listed_before = listed_inputs(dir);
+
+    let write = |relative: &str, contents: &str| {
+        let path = dir.join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, contents).unwrap();
+    };
+    write("knowledge/rules/.private.md", "Never show salaries.\n");
+    write("knowledge/sql/.draft.md", "---\nsql: SELECT 1\n---\n");
+    write(
+        "models/.scratch/metadata.yml",
+        "name: scratch\ncolumns:\n  - { name: id, type: INTEGER }\n",
+    );
+    write(
+        "cubes/.scratch/metadata.yml",
+        "name: scratch\nbase_object: orders\n",
+    );
+    write("views/.scratch/metadata.yml", "name: scratch\n");
+    write("views/.scratch/sql.yml", "statement: SELECT 1\n");
+
+    assert_eq!(
+        digest_before,
+        digest(dir),
+        "the digest ignores dot-named entries"
+    );
+    assert_eq!(
+        listed_before,
+        listed_inputs(dir),
+        "so must every reader the catalog and the prepared document are built from"
+    );
+}

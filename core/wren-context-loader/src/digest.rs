@@ -4,7 +4,9 @@
 //! `relationships.yml`, `cubes.yml`, `dashboards.yml`, the legacy root `instructions.md`, and every
 //! file under `models/`, `cubes/`, `views/` and `knowledge/`. It does not cover `target/` (a build
 //! product) or data files, and it skips dotfiles (editor and OS droppings never change what the
-//! project says).
+//! project says). Every reader that lists a source directory applies the same rule through
+//! [`is_hidden`], so the digest, the catalog and the prepared document agree on which files are
+//! inputs.
 //!
 //! Framing: files are visited in path order (byte-wise order of the `/`-joined relative path), and
 //! each contributes `<path> NUL <decimal byte length> NUL <bytes>`, so no two different projects
@@ -25,6 +27,13 @@ const ROOT_FILES: [&str; 5] = [
     "instructions.md",
 ];
 const SOURCE_DIRS: [&str; 4] = ["models", "cubes", "views", "knowledge"];
+
+/// Whether a directory entry is ignored as a project input: a name that starts with `.`, such as
+/// an editor swap file, `.DS_Store` or `.gitkeep`. The one definition of the rule, shared by the
+/// digest and by the readers in `project.rs`.
+pub(crate) fn is_hidden(name: &std::ffi::OsStr) -> bool {
+    name.to_string_lossy().starts_with('.')
+}
 
 /// The digest of the project in `dir`, as lowercase hex.
 pub fn project_digest(dir: &Path) -> io::Result<String> {
@@ -66,10 +75,10 @@ fn collect(
 ) -> io::Result<()> {
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if name.starts_with('.') {
+        if is_hidden(&entry.file_name()) {
             continue;
         }
+        let name = entry.file_name().to_string_lossy().into_owned();
         let path = entry.path();
         let child = format!("{relative}/{name}");
         if path.is_dir() {
