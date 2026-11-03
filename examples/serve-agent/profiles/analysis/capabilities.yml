@@ -14,5 +14,5 @@ capabilities:
   - row count
   - session result and evidence references
   limits:
-  - read-only count of one model
-  - no raw rows or SQL disclosure
+  - the worker is briefed to count the rows of one model; the host does not enforce this scope
+  - the worker is briefed not to return raw rows or SQL; the host does not check either
