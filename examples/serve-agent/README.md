@@ -51,6 +51,8 @@ Omitting `--project` searches upward from the launch directory for `wren_project
 
 For direct tools with the same boundary, replace `serve agent` with `serve mcp`, retaining `--service-config`, `--agent-profile`, `--runtime`, `--warble` and the project. Controlled mode supports stdio only and refuses writes and `--no-connect`. Legacy `serve mcp` without `--service-config` remains a separate, ungoverned mode.
 
+The context loader refuses symlinks for source-directory roots (`models`, `cubes`, `views`, `knowledge`) and nested directory or unresolved symlinks. This prevents cycles and keeps its readers and the host's change digest consistent. Valid file symlinks remain supported: their relative path and target bytes contribute to the digest, and edits to the target invalidate context.
+
 ## Deliver the planner skill
 
 Retrieve the bundled guide with `wren skills get wren-planner`. Put that output in a `wren-planner/SKILL.md` directory using the external agent's supported skill installation mechanism. Do not install it into a global agent directory without the user's instruction.
@@ -332,6 +334,13 @@ uv run --extra mcp pytest tests/unit/test_agent_service.py tests/unit/test_agent
   tests/unit/test_context_adapter.py tests/unit/test_agent_query_lifetime.py \
   tests/unit/test_declared_default_fx.py \
   tests/unit/test_declared_default_status.py tests/unit/test_query_gate_termination.py
+```
+
+CI also installs the pinned public `@cedar-policy/cedar-wasm` dependency under `core/wren/tests/policy-runtime` and runs `test_policy_denial.py` without optional skips. A separately authored test-only IPC peer evaluates the host's policies with real Cedar: an allowed query produces a result/evidence, an explicit forbid stops the host before SQL execution, and parse/evaluation errors fail closed. This checks the host authorization boundary; it does not certify the production runtime's admission, model loop, or entire policy adapter. To run that gate locally after building the loader and setting `WARBLE_BIN`:
+
+```sh
+npm ci --ignore-scripts --no-audit --no-fund --prefix tests/policy-runtime
+uv run --extra mcp pytest tests/policy-runtime/test_policy_denial.py -v
 ```
 
 **Local gate** (not in CI: the private runtime is not published) runs the same

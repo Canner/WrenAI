@@ -40,6 +40,7 @@ jobs:
             tests/unit/test_governed_stdio.py
             tests/unit/test_query_gate_termination.py
             tests/unit/test_query_semantics.py
+            tests/policy-runtime/test_policy_denial.py
             tests/unit/test_read_only.py
             ../../examples/serve-agent
           )
@@ -419,6 +420,12 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/warble-cli" --no-audit --no-fund @warble/cli@0.19.0
           echo "WARBLE_BIN=$RUNNER_TEMP/warble-cli/node_modules/.bin/warble" >> "$GITHUB_ENV"
           echo "WARBLE_SERVICE=$GITHUB_WORKSPACE/core/wren/tests/unit/fixtures/fake_runtime.js" >> "$GITHUB_ENV"
+      # A separately authored test peer uses only the published Cedar evaluator.
+      # It proves host denial before execution without distributing a model runtime.
+      - name: Install real Cedar test evaluator
+        run: npm ci --ignore-scripts --no-audit --no-fund --prefix tests/policy-runtime
+      - name: Run host policy boundary tests
+        run: uv run --no-sync pytest tests/policy-runtime/test_policy_denial.py -v
       - name: Run agent service tests
         run: |
           uv run --no-sync pytest \
