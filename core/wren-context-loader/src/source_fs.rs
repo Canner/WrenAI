@@ -150,7 +150,22 @@ impl SourceDir {
         Ok(Some(bytes))
     }
 
-    fn final_is_regular_file(&self, name: &OsStr) -> io::Result<bool> {
+    pub(crate) fn open_regular_file(&self, name: &OsStr) -> io::Result<Option<File>> {
+        let fd = match openat(
+            &self.fd,
+            name,
+            OFlags::RDONLY | OFlags::NONBLOCK | OFlags::CLOEXEC,
+            Mode::empty(),
+        ) {
+            Ok(fd) => fd,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        let file = File::from(fd);
+        Ok(file.metadata()?.is_file().then_some(file))
+    }
+
+    pub(crate) fn final_is_regular_file(&self, name: &OsStr) -> io::Result<bool> {
         let fd = match openat(
             &self.fd,
             name,

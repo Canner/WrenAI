@@ -44,7 +44,7 @@ pub(crate) fn is_hidden(name: &std::ffi::OsStr) -> bool {
 /// The digest of the project in `dir`, as lowercase hex.
 pub fn project_digest(dir: &Path) -> io::Result<String> {
     #[cfg(unix)]
-    let mut files = source_files(&crate::source_fs::SourceDir::open_root(dir)?)?;
+    return project_digest_unix(&crate::source_fs::SourceDir::open_root(dir)?);
     #[cfg(not(unix))]
     let mut files: Vec<(String, std::path::PathBuf)> = Vec::new();
     #[cfg(not(unix))]
@@ -57,9 +57,12 @@ pub fn project_digest(dir: &Path) -> io::Result<String> {
         }
         files.extend(source_files(dir)?);
     }
+    #[cfg(not(unix))]
     files.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
 
+    #[cfg(not(unix))]
     let mut hasher = Sha256::new();
+    #[cfg(not(unix))]
     for (relative, bytes) in files {
         #[cfg(not(unix))]
         let bytes = fs::read(&bytes)?;
@@ -69,6 +72,7 @@ pub fn project_digest(dir: &Path) -> io::Result<String> {
         hasher.update([0]);
         hasher.update(&bytes);
     }
+    #[cfg(not(unix))]
     Ok(hasher
         .finalize()
         .iter()
@@ -76,29 +80,142 @@ pub fn project_digest(dir: &Path) -> io::Result<String> {
         .collect())
 }
 
+#[cfg(unix)]
+fn project_digest_unix(root: &crate::source_fs::SourceDir) -> io::Result<String> {
+    let mut hasher = Sha256::new();
+    let mut entries: Vec<(String, bool)> = ROOT_FILES
+        .iter()
+        .map(|name| (name.to_string(), false))
+        .chain(SOURCE_DIRS.iter().map(|name| (format!("{name}/"), true)))
+        .collect();
+    entries.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+    for (key, is_dir) in entries {
+        let name = key.trim_end_matches('/');
+        if is_dir {
+            if let Some(child) = root.open_dir_if_exists(name.as_ref())? {
+                hash_directory(&child, name, &mut hasher)?;
+            }
+        } else if let Some(file) = root.open_regular_file(name.as_ref())? {
+            hash_file(&mut hasher, name, file)?;
+        }
+    }
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
+}
+
+#[cfg(unix)]
+fn hash_directory(
+    dir: &crate::source_fs::SourceDir,
+    prefix: &str,
+    hasher: &mut Sha256,
+) -> io::Result<()> {
+    let mut entries = Vec::new();
+    for name in dir.names()? {
+        if is_hidden(&name) {
+            continue;
+        }
+        let kind = dir.entry_kind(&name)?;
+        let label = format!(
+            "{}/{}{}",
+            prefix,
+            name.to_string_lossy(),
+            if kind == crate::source_fs::EntryKind::Directory {
+                "/"
+            } else {
+                ""
+            }
+        );
+        entries.push((label, name, kind));
+    }
+    entries.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+    for (label, name, kind) in entries {
+        match kind {
+            crate::source_fs::EntryKind::Directory => {
+                hash_directory(&dir.open_dir(&name)?, label.trim_end_matches('/'), hasher)?
+            }
+            crate::source_fs::EntryKind::Regular | crate::source_fs::EntryKind::Symlink => {
+                let Some(file) = dir.open_regular_file(&name)? else {
+                    if kind == crate::source_fs::EntryKind::Symlink {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            "directory_symlink_unsupported",
+                        ));
+                    }
+                    continue;
+                };
+                hash_file(hasher, &label, file)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn hash_file(hasher: &mut Sha256, relative: &str, mut file: std::fs::File) -> io::Result<()> {
+    use std::io::Read;
+    let expected = file.metadata()?.len();
+    hasher.update(relative.as_bytes());
+    hasher.update([0]);
+    hasher.update(expected.to_string().as_bytes());
+    hasher.update([0]);
+    let mut total = 0;
+    let mut buf = [0; 8192];
+    loop {
+        let count = file.read(&mut buf)?;
+        if count == 0 {
+            break;
+        }
+        total += count as u64;
+        hasher.update(&buf[..count]);
+    }
+    if total != expected {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("file changed while hashing: {relative}"),
+        ));
+    }
+    Ok(())
+}
+
 /// Validate exactly the same covered directory tree before either reader uses it.
 /// File symlinks stay supported; directory and unresolved symlinks fail closed.
 pub(crate) fn validate_source_directories(dir: &Path) -> io::Result<()> {
     #[cfg(unix)]
-    return source_files(&crate::source_fs::SourceDir::open_root(dir)?).map(|_| ());
+    {
+        let root = crate::source_fs::SourceDir::open_root(dir)?;
+        for name in SOURCE_DIRS {
+            if let Some(source) = root.open_dir_if_exists(name.as_ref())? {
+                validate_collect(&source)?;
+            }
+        }
+        Ok(())
+    }
     #[cfg(not(unix))]
     source_files(dir).map(|_| ())
 }
 
 #[cfg(unix)]
-fn source_files(dir: &crate::source_fs::SourceDir) -> io::Result<Vec<(String, Vec<u8>)>> {
-    let mut files = Vec::new();
-    for name in ROOT_FILES {
-        if let Some(bytes) = dir.read_bytes_if_file(name.as_ref())? {
-            files.push((name.to_string(), bytes));
+fn validate_collect(dir: &crate::source_fs::SourceDir) -> io::Result<()> {
+    for name in dir.names()? {
+        if is_hidden(&name) {
+            continue;
+        }
+        match dir.entry_kind(&name)? {
+            crate::source_fs::EntryKind::Directory => validate_collect(&dir.open_dir(&name)?)?,
+            crate::source_fs::EntryKind::Symlink if !dir.final_is_regular_file(&name)? => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "directory_symlink_unsupported",
+                ));
+            }
+            _ => {}
         }
     }
-    for name in SOURCE_DIRS {
-        if let Some(root) = dir.open_dir_if_exists(name.as_ref())? {
-            collect(&root, name, &mut files)?;
-        }
-    }
-    Ok(files)
+    Ok(())
 }
 
 #[cfg(not(unix))]
@@ -114,43 +231,6 @@ fn source_files(dir: &Path) -> io::Result<Vec<(String, std::path::PathBuf)>> {
         }
     }
     Ok(files)
-}
-
-#[cfg(unix)]
-fn collect(
-    dir: &crate::source_fs::SourceDir,
-    relative: &str,
-    out: &mut Vec<(String, Vec<u8>)>,
-) -> io::Result<()> {
-    for name in dir.names()? {
-        if is_hidden(&name) {
-            continue;
-        }
-        let child = format!("{relative}/{}", name.to_string_lossy());
-        match dir.entry_kind(&name)? {
-            crate::source_fs::EntryKind::Directory => {
-                let child_dir = dir.open_dir(&name)?;
-                collect(&child_dir, &child, out)?;
-            }
-            crate::source_fs::EntryKind::Regular => {
-                if let Some(bytes) = dir.read_bytes_if_file(&name)? {
-                    out.push((child, bytes));
-                }
-            }
-            crate::source_fs::EntryKind::Symlink => {
-                if let Some(bytes) = dir.read_bytes_if_file(&name)? {
-                    out.push((child, bytes));
-                } else {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        format!("directory_symlink_unsupported: {child}"),
-                    ));
-                }
-            }
-            crate::source_fs::EntryKind::Missing | crate::source_fs::EntryKind::Other => {}
-        }
-    }
-    Ok(())
 }
 
 #[cfg(not(unix))]
