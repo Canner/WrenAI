@@ -123,16 +123,38 @@ class _Statement:
         self.checker = checker
         scopes = traverse_scope(ast)
         self.scopes = scopes
+        self._live_scopes = set()
+
+        def visit(scope):
+            marker = id(scope.expression)
+            if marker in self._live_scopes:
+                return
+            self._live_scopes.add(marker)
+            for _alias, child in self._read_sources(scope):
+                visit(child)
+            for child in [*scope.union_scopes, *scope.subquery_scopes]:
+                visit(child)
+
+        if scopes:
+            visit(scopes[-1])
         self._scope_of = {id(scope.expression): scope for scope in scopes}
         self._origins: dict[int, _Origin] = {}
-        filters: list[exp.Expression] = [w.this for w in ast.find_all(exp.Where)]
+
+        def live(node):
+            scope = self._scope_for(node)
+            return scope is not None and id(scope.expression) in self._live_scopes
+
+        filters: list[exp.Expression] = [
+            w.this for w in ast.find_all(exp.Where) if live(w)
+        ]
         joins = [
             (join, on)
             for join in ast.find_all(exp.Join)
+            if live(join)
             if (on := join.args.get("on")) is not None
         ]
-        filters += [h.this for h in ast.find_all(exp.Having)]
-        filters += [q.this for q in ast.find_all(exp.Qualify)]
+        filters += [h.this for h in ast.find_all(exp.Having) if live(h)]
+        filters += [q.this for q in ast.find_all(exp.Qualify) if live(q)]
         self.roots = [*filters, *(on for _, on in joins)]
         self.conjuncts = [c for root in filters for c in _conjuncts(root)]
         # What reaches the fact rows: WHERE and the ON of an inner or comma join. A nullable-side
@@ -162,11 +184,14 @@ class _Statement:
         self.tables_read = {
             source.name
             for scope in scopes
+            if id(scope.expression) in self._live_scopes
             for source in scope.sources.values()
             if isinstance(source, exp.Table) and source.name
         }
-        self.aggregates = list(ast.find_all(exp.AggFunc))
-        self.aggregated = bool(self.aggregates) or ast.find(exp.Group) is not None
+        self.aggregates = [node for node in ast.find_all(exp.AggFunc) if live(node)]
+        self.aggregated = bool(self.aggregates) or any(
+            live(node) for node in ast.find_all(exp.Group)
+        )
 
     @staticmethod
     def _read_sources(scope: Scope) -> list[tuple[str, Scope]]:
@@ -485,7 +510,10 @@ class _Statement:
 
     def _read_paths(self, scope, alias, source, visiting=frozenset()):
         edge = (scope, alias, source)
-        if id(scope.expression) in visiting:
+        if (
+            id(scope.expression) in visiting
+            or id(scope.expression) not in self._live_scopes
+        ):
             return []
         parents = []
         for parent in self.scopes:

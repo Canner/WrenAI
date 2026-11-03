@@ -696,3 +696,46 @@ def test_exclusions_must_reach_each_alias_and_consuming_branch(checker, sql):
 def test_a_shared_cte_with_each_consuming_alias_filtered_is_valid(checker):
     sql = "WITH shared AS (SELECT id,is_test,country FROM customers) SELECT COUNT(*) FROM shared a JOIN shared b ON a.country=b.country WHERE NOT a.is_test AND NOT b.is_test"
     assert check(checker, sql) == []
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "WITH unused AS (SELECT * FROM customers) ",
+        "WITH unused AS (SELECT (SELECT COUNT(*) FROM customers)) ",
+        "WITH first AS (SELECT * FROM customers), unused AS (SELECT * FROM first) ",
+    ],
+)
+def test_unused_cte_reads_do_not_trigger_unrelated_exclusions(prefix):
+    manifest = {**build_json(FIXTURE), "relationships": []}
+    checker = DefaultsChecker(
+        read_declared_defaults(FIXTURE, manifest), manifest, "duckdb"
+    )
+    assert check(checker, prefix + "SELECT COUNT(*) FROM orders") == []
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT (SELECT COUNT(*) FROM customers) FROM orders",
+        "SELECT COUNT(*) FROM orders WHERE EXISTS (SELECT 1 FROM customers)",
+        "SELECT COUNT(*) FROM orders WHERE customer_id IN (SELECT id FROM customers)",
+        "WITH used AS (SELECT * FROM customers) SELECT COUNT(*) FROM used",
+    ],
+)
+def test_actual_subquery_and_cte_reads_still_require_exclusions(sql):
+    manifest = {**build_json(FIXTURE), "relationships": []}
+    checker = DefaultsChecker(
+        read_declared_defaults(FIXTURE, manifest), manifest, "duckdb"
+    )
+    assert check(checker, sql) == [EXCLUDE]
+
+
+def test_an_unused_aggregate_cannot_make_a_plain_read_aggregated(checker):
+    assert (
+        check(
+            checker,
+            "WITH unused AS (SELECT COUNT(*) FROM customers) SELECT id FROM orders",
+        )
+        == []
+    )
