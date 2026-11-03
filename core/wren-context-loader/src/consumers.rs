@@ -16,7 +16,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::ops::ControlFlow;
 
 use serde::Deserialize;
-use sqlparser::ast::{ObjectName, ObjectNamePart, Query, Visit, Visitor};
+use sqlparser::ast::{visit_expressions, Expr, ObjectName, ObjectNamePart, Query, Visit, Visitor};
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 
@@ -108,6 +108,30 @@ pub(crate) fn sql_table_names(sql: &str) -> Option<BTreeSet<String>> {
     let mut collector = RelationCollector::default();
     let _: ControlFlow<()> = statements.visit(&mut collector);
     Some(collector.names)
+}
+
+/// Every column name `sql` references in an expression (`total`, `o.total` → `total`), by parsing
+/// it. Comments, string literals, select-list aliases and table names are not column references,
+/// so they are not in the set. Returns `None` when the SQL does not parse; the caller falls back
+/// to a whole-word scan, as for [`sql_table_names`].
+pub(crate) fn sql_column_names(sql: &str) -> Option<BTreeSet<String>> {
+    let statements = Parser::parse_sql(&GenericDialect {}, sql).ok()?;
+    let mut names = BTreeSet::new();
+    let _: ControlFlow<()> = visit_expressions(&statements, |expr| {
+        match expr {
+            Expr::Identifier(ident) => {
+                names.insert(ident.value.clone());
+            }
+            Expr::CompoundIdentifier(parts) => {
+                if let Some(last) = parts.last() {
+                    names.insert(last.value.clone());
+                }
+            }
+            _ => {}
+        }
+        ControlFlow::Continue(())
+    });
+    Some(names)
 }
 
 /// Collects table-position relation names while tracking which CTE names are in scope.
@@ -238,7 +262,22 @@ mod tests {
     }
 
     #[test]
+    fn sql_column_names_skip_comments_literals_aliases_and_tables() {
+        let names = sql_column_names(
+            "SELECT o.total, SUM(amount) AS revenue /* refunds */ FROM orders o \
+             WHERE note = 'status' ORDER BY revenue -- region",
+        )
+        .unwrap();
+        let expected: BTreeSet<String> = ["total", "amount", "note", "revenue"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(names, expected);
+    }
+
+    #[test]
     fn unparseable_sql_returns_none() {
         assert!(sql_table_names("SELECT FROM WHERE ((( broken").is_none());
+        assert!(sql_column_names("SELECT FROM WHERE ((( broken").is_none());
     }
 }

@@ -462,3 +462,33 @@ fn cr14_a_model_wins_when_a_model_and_a_view_share_the_cube_base_name() {
         .iter()
         .any(|e| e.from == "view:orders" && e.to == "cube:order_metrics"));
 }
+
+#[test]
+fn cr15_a_measure_named_only_in_a_comment_or_a_string_does_not_link_the_consumer() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/mentions.md",
+        "---\nsql: \"SELECT placed_at /* total_value */ FROM order_metrics WHERE 'total_value' <> 'x' GROUP BY placed_at -- total_value\"\n---\n",
+    );
+    write(
+        tmp.path(),
+        "knowledge/sql/uses.md",
+        "---\nsql: SELECT placed_at, SUM(total_value) AS revenue FROM order_metrics GROUP BY placed_at\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(
+        !reaches(&ctx, "metric:order_metrics.total_value", "query:mentions"),
+        "a comment and a string literal are not references to the measure"
+    );
+    assert!(
+        reaches(&ctx, "dim:order_metrics.placed_at", "query:mentions"),
+        "a real column reference still links"
+    );
+    assert!(
+        reaches(&ctx, "metric:order_metrics.total_value", "query:uses"),
+        "a real column reference still links"
+    );
+}

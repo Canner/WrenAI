@@ -219,7 +219,7 @@ pub fn extend_with_consumers(
 
 /// Add edges from every semantic node a consumer's SQL references to the consumer. Relations are
 /// matched against models, views, and cubes; a referenced cube additionally links the measures and
-/// dimensions the SQL mentions (whole-word), so `metric → consumer` edges exist for cube queries.
+/// dimensions the SQL references as columns, so `metric → consumer` edges exist for cube queries.
 fn link_sql_consumer(
     graph: &mut LineageGraph,
     manifest: &Manifest,
@@ -234,6 +234,15 @@ fn link_sql_consumer(
     candidates.extend(view_names.iter().cloned());
     candidates.extend(manifest.cubes.iter().map(|c| c.name.clone()));
 
+    // Members are matched against the parsed column references, so a name that appears only in a
+    // comment or a string literal does not link the consumer. SQL that does not parse was already
+    // recorded by `referenced_names` and falls back to the whole-word scan.
+    let columns = consumers::sql_column_names(sql);
+    let mentions = |name: &str| match &columns {
+        Some(columns) => columns.contains(name),
+        None => statement_references(sql, name),
+    };
+
     for name in referenced_names(sql, &candidates, consumer, diagnostics) {
         if model_names.contains(&name) {
             push_edge(&mut graph.edges, model_id(&name), consumer.to_string());
@@ -242,7 +251,7 @@ fn link_sql_consumer(
         } else if let Some(cube) = manifest.cubes.iter().find(|c| c.name == name) {
             push_edge(&mut graph.edges, cube_id(&name), consumer.to_string());
             for measure in &cube.measures {
-                if statement_references(sql, &measure.name) {
+                if mentions(&measure.name) {
                     push_edge(
                         &mut graph.edges,
                         metric_id(&cube.name, &measure.name),
@@ -256,7 +265,7 @@ fn link_sql_consumer(
                 .map(|d| d.name.as_str())
                 .chain(cube.time_dimensions.iter().map(|d| d.name.as_str()));
             for dim_name in dim_names {
-                if statement_references(sql, dim_name) {
+                if mentions(dim_name) {
                     push_edge(
                         &mut graph.edges,
                         dim_id(&cube.name, dim_name),
