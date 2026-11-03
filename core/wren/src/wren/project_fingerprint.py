@@ -4,8 +4,11 @@ Kept independent of the Wren package/SQL imports so the worker can be started
 as this exact file. The native host alone supplies the captured root/path list.
 """
 
+import errno
 import hashlib
+import os
 import pickle
+import stat
 import sys
 from pathlib import Path
 
@@ -31,8 +34,91 @@ def project_digest(root: Path) -> str:
     ``cubes/``, ``views/`` and ``knowledge/``; ``target/``, data files and dotfiles are
     not covered. Source directories and nested directory symlinks (including
     unresolved links) are refused; file symlinks remain covered by their path and
-    target bytes. ``load_snapshot`` asserts the two implementations agree.
+    target bytes. On POSIX, captured directory descriptors and no-follow opens
+    prevent directory replacements from redirecting subsequent traversal. The
+    root is trusted, and regular-file symlink targets are intentionally followed.
+    ``load_snapshot`` asserts the two implementations agree.
     """
+    if os.name == "posix":
+        return _descriptor_digest(root)
+    return _path_digest(root)
+
+
+def _descriptor_digest(root):
+    # The root is the trusted anchor. Every directory below it is opened through
+    # its captured parent, with no symlink following at the point of use.
+    root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        entries = []
+        for name in (*_DIGEST_ROOT_FILES, *_DIGEST_DIRS):
+            try:
+                mode = os.stat(name, dir_fd=root_fd, follow_symlinks=False).st_mode
+            except FileNotFoundError:
+                continue
+            directory = name in _DIGEST_DIRS
+            if directory and stat.S_ISLNK(mode):
+                raise OSError("directory_symlink_unsupported", name)
+            if directory and not stat.S_ISDIR(mode):
+                continue
+            if not directory and not (stat.S_ISREG(mode) or stat.S_ISLNK(mode)):
+                continue
+            entries.append((name, directory, stat.S_ISLNK(mode)))
+        digest = hashlib.sha256()
+        _hash_entries(root_fd, "", entries, digest)
+        return digest.hexdigest()
+    finally:
+        os.close(root_fd)
+
+
+def _hash_entries(parent_fd, prefix, entries, digest):
+    # A file named a.yml sorts before directory a/'s children. Sort by complete
+    # path prefixes (including the directory slash), preserving the old framing.
+    for name, directory, symlink in sorted(
+        entries, key=lambda item: (item[0] + ("/" if item[1] else "")).encode()
+    ):
+        relative = prefix + name
+        if directory:
+            try:
+                child_fd = os.open(
+                    name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd
+                )
+            except OSError as error:
+                if error.errno in (errno.ELOOP, errno.ENOTDIR):
+                    raise OSError("directory_symlink_unsupported", relative) from None
+                raise
+            try:
+                children = []
+                for child in os.listdir(child_fd):
+                    if child.startswith("."):
+                        continue
+                    mode = os.stat(
+                        child, dir_fd=child_fd, follow_symlinks=False
+                    ).st_mode
+                    if stat.S_ISDIR(mode) or stat.S_ISREG(mode) or stat.S_ISLNK(mode):
+                        children.append((child, stat.S_ISDIR(mode), stat.S_ISLNK(mode)))
+                _hash_entries(child_fd, relative + "/", children, digest)
+            finally:
+                os.close(child_fd)
+        else:
+            try:
+                fd = os.open(name, os.O_RDONLY | os.O_NONBLOCK, dir_fd=parent_fd)
+            except OSError:
+                if symlink:
+                    raise OSError("directory_symlink_unsupported", relative) from None
+                raise
+            try:
+                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                    raise OSError("directory_symlink_unsupported", relative)
+                with os.fdopen(fd, "rb", closefd=False) as stream:
+                    data = stream.read()
+            finally:
+                os.close(fd)
+            digest.update(relative.encode() + b"\0" + str(len(data)).encode() + b"\0")
+            digest.update(data)
+
+
+def _path_digest(root):
+    """Compatibility path for platforms without the controlled POSIX service."""
     files: dict[str, Path] = {}
     for name in _DIGEST_ROOT_FILES:
         if (root / name).is_file():

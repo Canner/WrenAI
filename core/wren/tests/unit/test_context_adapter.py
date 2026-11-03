@@ -1491,6 +1491,109 @@ def test_file_symlink_changes_remain_visible_to_both_digests_and_reader(
     )
 
 
+@pytest.mark.parametrize("relative", ["models", "models/orders"])
+def test_digest_rejects_a_directory_swapped_after_classification(
+    tmp_path, monkeypatch, relative
+):
+    import os  # noqa: PLC0415
+
+    if os.name != "posix":
+        pytest.skip("requires POSIX descriptor-relative traversal")
+    root = tmp_path / "project"
+    directory = root / relative
+    directory.mkdir(parents=True)
+    (root / "wren_project.yml").write_text("name: test\n")
+    (directory / "source.yml").write_text("original context")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "source.yml").write_text("outside context")
+    original_stat = os.stat
+    swapped = []
+
+    def swap_after_stat(path, *args, **kwargs):
+        result = original_stat(path, *args, **kwargs)
+        targeted = (kwargs.get("dir_fd") is not None and path == directory.name) or (
+            not isinstance(path, int) and Path(path) == directory
+        )
+        if targeted and not swapped:
+            swapped.append(True)
+            directory.rename(directory.with_name(".saved"))
+            directory.symlink_to(outside, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(os, "stat", swap_after_stat)
+    with pytest.raises(OSError, match="directory_symlink_unsupported"):
+        project_digest(root)
+    assert swapped
+
+
+@pytest.mark.parametrize("relative", ["models", "models/orders"])
+def test_digest_keeps_the_open_directory_when_its_path_is_replaced(
+    tmp_path, monkeypatch, relative
+):
+    import os  # noqa: PLC0415
+
+    if os.name != "posix":
+        pytest.skip("requires POSIX descriptor-relative traversal")
+    root = tmp_path / "project"
+    directory = root / relative
+    directory.mkdir(parents=True)
+    (root / "wren_project.yml").write_text("name: test\n")
+    (directory / "source.yml").write_text("original context")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "source.yml").write_text("outside context")
+    expected = project_digest(root)
+    identity = directory.stat()
+    original_listdir = os.listdir
+    swapped = []
+
+    def swap_before_listdir(path):
+        if isinstance(path, int):
+            current = os.fstat(path)
+            targeted = (current.st_dev, current.st_ino) == (
+                identity.st_dev,
+                identity.st_ino,
+            )
+        else:
+            targeted = Path(path) == directory
+        if targeted and not swapped:
+            swapped.append(True)
+            directory.rename(directory.with_name(".saved"))
+            directory.symlink_to(outside, target_is_directory=True)
+        return original_listdir(path)
+
+    monkeypatch.setattr(os, "listdir", swap_before_listdir)
+    assert project_digest(root) == expected
+    assert swapped
+
+
+def test_descriptor_digest_keeps_byte_sorted_framing_and_regular_file_links(tmp_path):
+    root = tmp_path / "project"
+    contents = {
+        "wren_project.yml": "name: framing\n",
+        "instructions.md": "notes\n",
+        "cubes.yml": "cubes: []\n",
+        "cubes/a.yml": "cube\n",
+        "models/a.yml": "model\n",
+        "models/a/member.yml": "member\n",
+        "models/a0.yml": "suffix\n",
+        "models/é.yml": "unicode\n",
+        "models/.hidden.yml": "ignored\n",
+    }
+    for name, content in contents.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    target = tmp_path / "external.yml"
+    target.write_text("linked\n")
+    (root / "models/link.yml").symlink_to(target)
+    assert (
+        project_digest(root)
+        == "9b376e40bbd6d8f73f967ad990a22f0baab496b75f4b5ab41b936d853751871b"
+    )
+
+
 @pytest.mark.parametrize(
     "reference", ['"customers"."email"', "customers . email", "`customers`.`email`"]
 )
