@@ -18,7 +18,7 @@
 use warble::{LineageEdge, LineageGraph, LineageKind, LineageNode};
 use wren_core_base::mdl::manifest::Manifest;
 
-use crate::consumers;
+use crate::consumers::{self, RelationReference};
 use crate::project::ProjectSources;
 
 pub fn model_id(name: &str) -> String {
@@ -295,7 +295,8 @@ fn referenced_names(
         Some(references) => references
             .relations
             .iter()
-            .filter_map(|relation| resolve_relation_name(&relation.name, candidates))
+            .filter_map(RelationReference::unqualified_name)
+            .filter_map(|name| resolve_relation_name(name, candidates))
             .collect(),
         None => {
             diagnostics.push(format!(
@@ -339,7 +340,8 @@ fn source_matches_cube(source: &consumers::SelectSource, cube: &str) -> bool {
     source
         .relation
         .as_ref()
-        .is_some_and(|relation| identifier_matches_name(&relation.name, cube))
+        .and_then(RelationReference::unqualified_name)
+        .is_some_and(|name| identifier_matches_name(name, cube))
 }
 
 fn source_matches_qualifier(

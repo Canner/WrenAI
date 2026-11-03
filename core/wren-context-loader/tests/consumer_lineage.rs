@@ -588,6 +588,60 @@ fn qualified_cube_members_must_resolve_to_the_cube_source() {
 }
 
 #[test]
+fn qualified_relations_do_not_resolve_to_local_semantic_objects() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    for (slug, sql) in [
+        ("orders", "SELECT * FROM orders"),
+        ("main-orders", "SELECT * FROM main.orders"),
+        ("external-orders", "SELECT * FROM external_schema.orders"),
+        ("catalog-orders", "SELECT * FROM catalog.schema.orders"),
+        ("cube", "SELECT total_value FROM order_metrics"),
+        (
+            "qualified-cube",
+            "SELECT total_value FROM main.order_metrics",
+        ),
+        (
+            "cte",
+            "WITH orders AS (SELECT 1 AS id) SELECT * FROM orders",
+        ),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+    let ctx = load(tmp.path());
+
+    assert!(reaches(&ctx, "model:orders", "query:orders"));
+    assert!(reaches(
+        &ctx,
+        "metric:order_metrics.total_value",
+        "query:cube"
+    ));
+    for query in [
+        "query:main-orders",
+        "query:external-orders",
+        "query:catalog-orders",
+        "query:cte",
+    ] {
+        assert!(
+            !reaches(&ctx, "model:orders", query),
+            "{query} must not resolve a qualified physical relation or CTE as the local model"
+        );
+    }
+    assert!(
+        !reaches(
+            &ctx,
+            "metric:order_metrics.total_value",
+            "query:qualified-cube"
+        ),
+        "a qualified physical relation must not donate local cube member provenance"
+    );
+}
+
+#[test]
 fn quoted_ctes_and_relations_preserve_engine_case_resolution() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());
@@ -656,6 +710,60 @@ fn cte_projection_does_not_borrow_a_cube_member_from_its_body() {
         "metric:order_metrics.total_value",
         "query:cte-constant"
     ));
+}
+
+#[test]
+fn query_order_by_uses_the_select_scope_without_borrowing_output_aliases() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    for (slug, sql) in [
+        ("member", "SELECT 1 FROM order_metrics ORDER BY total_value"),
+        (
+            "constant-alias",
+            "SELECT 1 AS total_value FROM order_metrics ORDER BY total_value",
+        ),
+        (
+            "qualified",
+            "SELECT 1 FROM order_metrics om ORDER BY om.total_value",
+        ),
+        (
+            "cte",
+            "WITH c AS (SELECT 1 AS total_value) SELECT 1 FROM c ORDER BY total_value",
+        ),
+        (
+            "derived",
+            "SELECT 1 FROM (SELECT 1 AS total_value) c ORDER BY total_value",
+        ),
+        (
+            "union",
+            "SELECT 1 FROM order_metrics UNION ALL SELECT 1 FROM customers ORDER BY total_value",
+        ),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+
+    let ctx = load(tmp.path());
+    for query in ["query:member", "query:qualified"] {
+        assert!(
+            reaches(&ctx, "metric:order_metrics.total_value", query),
+            "{query} should retain its SELECT source provenance"
+        );
+    }
+    for query in [
+        "query:constant-alias",
+        "query:cte",
+        "query:derived",
+        "query:union",
+    ] {
+        assert!(
+            !reaches(&ctx, "metric:order_metrics.total_value", query),
+            "{query} must not borrow an unrelated cube member"
+        );
+    }
 }
 
 #[test]

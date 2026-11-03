@@ -38,7 +38,23 @@ const SOURCE_DIRS: [&str; 4] = ["models", "cubes", "views", "knowledge"];
 /// digest, the catalog or the prepared document. The one definition of the rule, shared by the
 /// digest and by the readers in `project.rs`.
 pub(crate) fn is_hidden(name: &std::ffi::OsStr) -> bool {
-    name.to_string_lossy().starts_with('.')
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        name.as_bytes().first() == Some(&b'.')
+    }
+    #[cfg(not(unix))]
+    {
+        name.to_str().is_some_and(|name| name.starts_with('.'))
+    }
+}
+
+/// Return a source entry name only when it is valid Unicode. Covered non-hidden source entries
+/// are names in loader output and digest framing, so rejecting them keeps every reader aligned
+/// without changing the established UTF-8 path-byte digest contract.
+pub(crate) fn source_name(name: &std::ffi::OsStr) -> io::Result<&str> {
+    name.to_str()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "non_utf8_source_name"))
 }
 
 /// The digest of the project in `dir`, as lowercase hex.
@@ -117,11 +133,12 @@ fn hash_directory(
         if is_hidden(&name) {
             continue;
         }
+        let source_name = source_name(&name)?;
         let kind = dir.entry_kind(&name)?;
         let label = format!(
             "{}/{}{}",
             prefix,
-            name.to_string_lossy(),
+            source_name,
             if kind == crate::source_fs::EntryKind::Directory {
                 "/"
             } else {
@@ -204,6 +221,7 @@ fn validate_collect(dir: &crate::source_fs::SourceDir) -> io::Result<()> {
         if is_hidden(&name) {
             continue;
         }
+        source_name(&name)?;
         match dir.entry_kind(&name)? {
             crate::source_fs::EntryKind::Directory => validate_collect(&dir.open_dir(&name)?)?,
             crate::source_fs::EntryKind::Symlink if !dir.final_is_regular_file(&name)? => {
@@ -252,7 +270,8 @@ fn collect(
         if is_hidden(&entry.file_name()) {
             continue;
         }
-        let name = entry.file_name().to_string_lossy().into_owned();
+        let entry_name = entry.file_name();
+        let name = source_name(&entry_name)?.to_string();
         let path = entry.path();
         let child = format!("{relative}/{name}");
         if path.is_symlink() && !path.is_file() {
@@ -265,4 +284,22 @@ fn collect(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn non_utf8_names_are_rejected_after_raw_dotfile_filtering() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let invalid = std::ffi::OsString::from_vec(b"\xff.md".to_vec());
+        let hidden_invalid = std::ffi::OsString::from_vec(b".\xff.md".to_vec());
+        let error = source_name(&invalid).expect_err("invalid source names must fail closed");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(error.to_string(), "non_utf8_source_name");
+        assert!(is_hidden(&hidden_invalid));
+    }
 }

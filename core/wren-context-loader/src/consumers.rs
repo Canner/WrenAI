@@ -21,7 +21,7 @@ use std::ops::ControlFlow;
 
 use serde::Deserialize;
 use sqlparser::ast::{
-    Expr, Ident, ObjectName, ObjectNamePart, Query, Select, SelectItem,
+    Expr, Ident, ObjectName, ObjectNamePart, OrderBy, Query, Select, SelectItem,
     SelectItemQualifiedWildcardKind, SetExpr, TableFactor, Visit, Visitor,
 };
 use sqlparser::dialect::GenericDialect;
@@ -99,10 +99,10 @@ pub(crate) fn parse_dashboards(yml: &str) -> Result<DashboardsFile, String> {
         .map_err(|e| format!("dashboards.yml is not valid yaml: {e}"))
 }
 
-/// Every relation (table-position) name referenced by `sql`, by parsing it with sqlparser's
-/// GenericDialect. Compound names keep only their last part (`main.orders` → `orders`), since MDL
-/// node names are unqualified. Returns `None` when the SQL does not parse — the caller decides the
-/// fallback (whole-word scan) and records the degradation.
+/// Every unqualified relation (table-position) name referenced by `sql`, by parsing it with
+/// sqlparser's GenericDialect. Qualified relations remain physical and are intentionally not
+/// matched to local semantic objects. Returns `None` when the SQL does not parse — the caller
+/// decides the fallback (whole-word scan) and records the degradation.
 ///
 /// A name bound by a `WITH` clause is not a table read, so an unqualified reference to a CTE that
 /// is in scope is left out (matched case-insensitively, as SQL does for unquoted names). Scope
@@ -116,7 +116,8 @@ pub(crate) fn sql_table_names(sql: &str) -> Option<BTreeSet<String>> {
         sql_consumer_references(sql)?
             .relations
             .iter()
-            .map(|relation| relation.name.value.clone())
+            .filter_map(RelationReference::unqualified_name)
+            .map(|name| name.value.clone())
             .collect(),
     )
 }
@@ -159,7 +160,18 @@ pub(crate) struct SqlConsumerReferences {
 
 #[derive(Debug, Clone)]
 pub(crate) struct RelationReference {
-    pub name: Ident,
+    pub name: ObjectName,
+}
+
+impl RelationReference {
+    /// Only a one-part relation can name a local semantic object. A qualified relation names a
+    /// physical object in the engine namespace and must not be reduced to its final component.
+    pub(crate) fn unqualified_name(&self) -> Option<&Ident> {
+        let [ObjectNamePart::Identifier(name)] = self.name.0.as_slice() else {
+            return None;
+        };
+        Some(name)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -282,32 +294,35 @@ impl Visitor for RelationCollector {
         let TableFactor::Table { name, .. } = factor else {
             return ControlFlow::Continue(());
         };
-        let Some(ObjectNamePart::Identifier(ident)) = name.0.last() else {
-            return ControlFlow::Continue(());
-        };
-        if name.0.len() == 1
-            && self
+        if let [ObjectNamePart::Identifier(ident)] = name.0.as_slice() {
+            let bound = self
                 .scopes
                 .last()
-                .is_some_and(|scope| scope.iter().any(|cte| cte_identifiers_match(cte, ident)))
-        {
-            return ControlFlow::Continue(());
+                .is_some_and(|scope| scope.iter().any(|cte| cte_identifiers_match(cte, ident)));
+            if bound {
+                return ControlFlow::Continue(());
+            }
         }
-        self.relations.push(RelationReference {
-            name: ident.clone(),
-        });
+        self.relations
+            .push(RelationReference { name: name.clone() });
         ControlFlow::Continue(())
     }
 }
 
 impl RelationCollector {
     fn collect_query_selects(&mut self, query: &Query) {
-        self.collect_set_expr_selects(&query.body);
+        match query.body.as_ref() {
+            // Query-level ORDER BY expressions resolve in the single SELECT's source scope. Set
+            // operations expose their output columns rather than either branch's sources, so
+            // keeping their ORDER BY out is the conservative provenance choice.
+            SetExpr::Select(select) => self.collect_select(select, query.order_by.as_ref()),
+            expression => self.collect_set_expr_selects(expression),
+        }
     }
 
     fn collect_set_expr_selects(&mut self, expression: &SetExpr) {
         match expression {
-            SetExpr::Select(select) => self.collect_select(select),
+            SetExpr::Select(select) => self.collect_select(select, None),
             SetExpr::SetOperation { left, right, .. } => {
                 self.collect_set_expr_selects(left);
                 self.collect_set_expr_selects(right);
@@ -318,12 +333,32 @@ impl RelationCollector {
         }
     }
 
-    fn collect_select(&mut self, select: &Select) {
+    fn collect_select(&mut self, select: &Select, order_by: Option<&OrderBy>) {
         let sources = self.select_sources(select);
         let mut columns = ScopedColumnCollector::default();
         // Nested queries must not contribute columns to this SELECT's scope, while expressions
         // after a nested query still belong to this SELECT and must be retained.
         let _ = select.visit(&mut columns);
+        if let Some(order_by) = order_by {
+            let mut order_columns = ScopedColumnCollector::default();
+            let _ = order_by.visit(&mut order_columns);
+            let output_aliases: Vec<&Ident> = select
+                .projection
+                .iter()
+                .filter_map(|item| match item {
+                    SelectItem::ExprWithAlias { alias, .. } => Some(alias),
+                    _ => None,
+                })
+                .collect();
+            columns
+                .columns
+                .extend(order_columns.columns.into_iter().filter(|column| {
+                    column.qualifier.is_some()
+                        || !output_aliases
+                            .iter()
+                            .any(|alias| identifiers_match(alias, &column.name))
+                }));
+        }
         let mut wildcards = Vec::new();
         for item in &select.projection {
             let qualifier = match item {
@@ -376,10 +411,8 @@ impl RelationCollector {
                         })
                 });
                 sources.push(SelectSource {
-                    relation: source_name
-                        .clone()
-                        .filter(|_| !is_cte)
-                        .map(|name| RelationReference { name }),
+                    relation: (!is_cte && name.0.len() == 1)
+                        .then(|| RelationReference { name: name.clone() }),
                     name: source_name,
                     alias: alias.as_ref().map(|alias| alias.name.clone()),
                 });
@@ -498,9 +531,9 @@ mod tests {
     }
 
     #[test]
-    fn sql_table_names_unqualifies_compound_names() {
+    fn sql_table_names_leaves_qualified_physical_relations_out() {
         let names = sql_table_names("SELECT * FROM main.orders").unwrap();
-        assert!(names.contains("orders"));
+        assert!(!names.contains("orders"));
         assert!(!names.contains("main.orders"));
     }
 

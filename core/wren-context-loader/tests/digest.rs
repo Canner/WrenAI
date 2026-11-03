@@ -206,6 +206,34 @@ fn the_digest_and_the_readers_agree_that_dot_named_entries_are_not_inputs() {
     );
 }
 
+#[test]
+#[cfg(target_os = "linux")]
+fn non_utf8_source_names_are_rejected_but_hidden_entries_are_ignored() {
+    use std::os::unix::ffi::OsStringExt;
+
+    let project = copy_of("rules-wren");
+    let invalid = std::ffi::OsString::from_vec(b"\xff.md".to_vec());
+    let hidden_invalid = std::ffi::OsString::from_vec(b".\xff.md".to_vec());
+    let rules = project.path().join("knowledge/rules");
+    fs::write(rules.join(&invalid), "not a rule").unwrap();
+
+    for result in [
+        project_digest(project.path()).map(|_| ()),
+        read_project_dir(project.path()).map(|_| ()),
+        read_knowledge_rules(project.path()).map(|_| ()),
+    ] {
+        let error = result.expect_err("non-hidden non-UTF-8 source name must be rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+        assert_eq!(error.to_string(), "non_utf8_source_name");
+    }
+
+    fs::remove_file(rules.join(invalid)).unwrap();
+    fs::write(rules.join(hidden_invalid), "ignored").unwrap();
+    assert!(project_digest(project.path()).is_ok());
+    assert!(read_project_dir(project.path()).is_ok());
+    assert!(read_knowledge_rules(project.path()).is_ok());
+}
+
 #[cfg(unix)]
 fn bounded_loader_rejection(dir: &Path, output: &Path) {
     use std::process::Stdio;
