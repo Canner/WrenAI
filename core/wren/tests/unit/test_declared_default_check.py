@@ -102,6 +102,68 @@ def test_anti_joins_on_the_flag_satisfy_the_rule(checker):
     )
 
 
+NOT_IN_MISSES = {
+    "outer column is not the flagged key": "SELECT COUNT(*) FROM orders o WHERE o.id NOT IN "
+    "(SELECT id FROM customers WHERE is_test = TRUE)",
+    "subquery selects a non-key column": "SELECT COUNT(*) FROM orders o WHERE o.customer_id NOT IN "
+    "(SELECT country FROM customers WHERE is_test = TRUE)",
+    "outer side is computed": "SELECT COUNT(*) FROM orders o WHERE o.customer_id + 0 NOT IN "
+    "(SELECT id FROM customers WHERE is_test = TRUE)",
+}
+
+
+@pytest.mark.parametrize("sql", NOT_IN_MISSES.values(), ids=NOT_IN_MISSES.keys())
+def test_cr5_not_in_counts_only_when_the_outer_column_is_the_flagged_key(checker, sql):
+    assert check(checker, sql) == [EXCLUDE]
+
+
+def test_cr5_not_in_over_the_flagged_model_itself_still_satisfies_the_rule(checker):
+    assert (
+        check(
+            checker,
+            "SELECT COUNT(*) FROM customers c WHERE c.id NOT IN "
+            "(SELECT id FROM customers WHERE is_test = TRUE)",
+        )
+        == []
+    )
+
+
+CTE_ACTIVE = "WITH active AS (SELECT id FROM customers WHERE NOT is_test) "
+CR6_MISSES = {
+    "uncorrelated exists over a filtering cte": f"{CTE_ACTIVE}"
+    "SELECT COUNT(*) FROM customers WHERE EXISTS (SELECT 1 FROM active)",
+    "uncorrelated exists with its own filter": "SELECT COUNT(*) FROM customers "
+    "WHERE EXISTS (SELECT 1 FROM customers x WHERE NOT x.is_test)",
+    "scalar subquery with its own filter": "SELECT COUNT(*) FROM customers WHERE id = "
+    "(SELECT MIN(id) FROM customers WHERE NOT is_test)",
+    "a sibling set-operation branch": "SELECT COUNT(*) FROM customers UNION ALL "
+    "SELECT COUNT(*) FROM customers WHERE NOT is_test",
+    "cte read only inside a negated predicate": f"{CTE_ACTIVE}"
+    "SELECT COUNT(*) FROM customers WHERE NOT EXISTS (SELECT 1 FROM active a WHERE a.id = 0)",
+}
+
+
+@pytest.mark.parametrize("sql", CR6_MISSES.values(), ids=CR6_MISSES.keys())
+def test_cr6_a_filter_off_the_outer_read_does_not_satisfy_the_rule(checker, sql):
+    assert check(checker, sql) == [EXCLUDE]
+
+
+CR6_HITS = {
+    "the cte is the source": f"{CTE_ACTIVE}SELECT COUNT(*) FROM active",
+    "in over a filtering cte": f"{CTE_ACTIVE}"
+    "SELECT COUNT(*) FROM orders o WHERE o.customer_id IN (SELECT id FROM active)",
+    "correlated exists over a filtering cte": f"{CTE_ACTIVE}"
+    "SELECT COUNT(*) FROM orders o WHERE EXISTS (SELECT 1 FROM active a WHERE a.id = o.customer_id)",
+    "a derived source": "SELECT COUNT(*) FROM orders o JOIN "
+    "(SELECT id FROM customers WHERE NOT is_test) d ON o.customer_id = d.id",
+}
+
+
+@pytest.mark.parametrize("sql", CR6_HITS.values(), ids=CR6_HITS.keys())
+def test_cr6_a_filter_on_a_row_source_of_the_outer_read_still_counts(checker, sql):
+    assert check(checker, sql) == []
+
+
 NEAR_MISSES = {
     "not null only": "c.is_test IS NOT NULL",
     "is not false keeps test rows": "c.is_test IS NOT FALSE",

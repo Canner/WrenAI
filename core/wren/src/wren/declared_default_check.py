@@ -137,12 +137,25 @@ class _Statement:
         self.conjuncts = [c for root in filters for c in _conjuncts(root)]
         # What reaches the fact rows: WHERE and the ON of an inner or comma join. A nullable-side
         # ON conjunct of an outer join narrows that side only, so an exclusion cannot rest on it.
-        self.reaching = list(self.conjuncts)
+        reaching = [(c, root) for root in filters for c in _conjuncts(root)]
         for join, on in joins:
             kept = [c for c in _conjuncts(on) if _restricts(join, c)]
             self.conjuncts += kept
             if not _outer(join):
-                self.reaching += kept
+                reaching += [(c, on) for c in kept]
+        # Each filter is kept with the scope it sits in: whether it restricts a given read of a
+        # covered model depends on how that read reaches the result (``_restricting``).
+        self._filters = [
+            (conjunct, id(scope.expression))
+            for conjunct, root in reaching
+            if (scope := self._scope_for(root)) is not None
+        ]
+        self._parents: dict[int, list[Scope]] = {}
+        for scope in scopes:
+            for _, source in self._read_sources(scope):
+                self._parents.setdefault(id(source.expression), []).append(scope)
+            for branch in scope.union_scopes:
+                self._parents.setdefault(id(branch.expression), []).append(scope)
         # A table is read when some scope's source is that stored table. A CTE
         # that shadows a model name is a Scope source, while the table inside the
         # CTE body is still a Table source, so shadowing cannot hide a read.
@@ -154,6 +167,71 @@ class _Statement:
         }
         self.aggregates = list(ast.find_all(exp.AggFunc))
         self.aggregated = bool(self.aggregates) or ast.find(exp.Group) is not None
+
+    @staticmethod
+    def _read_sources(scope: Scope) -> list[tuple[str, Scope]]:
+        """The CTEs and derived tables ``scope`` reads from (not the CTEs merely in scope)."""
+        read = {alias for alias, _ in scope.references}
+        return [
+            (alias, source)
+            for alias, source in scope.sources.items()
+            if isinstance(source, Scope) and alias in read
+        ]
+
+    def _restricting(self, read: Scope) -> set[int]:
+        """The scopes (by expression id) whose row filters restrict the rows ``read`` yields.
+
+        The read's own scope and every scope that consumes it (a CTE or derived table is read
+        by its consumer, a set-operation branch by the set operation), and for each of those the
+        CTEs and derived tables it reads from, and a subquery that is a top-level conjunct as a
+        positive ``IN`` or as an ``EXISTS`` correlated with the scope's rows. A scalar subquery,
+        an uncorrelated ``EXISTS``, anything under ``NOT`` or ``OR`` and a sibling set-operation
+        branch filter none of those rows.
+        """
+        consumers: dict[int, Scope] = {}
+        stack = [read]
+        while stack:
+            scope = stack.pop()
+            if id(scope.expression) not in consumers:
+                consumers[id(scope.expression)] = scope
+                stack += self._parents.get(id(scope.expression), [])
+        restricting: set[int] = set()
+
+        def visit(scope: Scope) -> None:
+            if id(scope.expression) in restricting:
+                return
+            restricting.add(id(scope.expression))
+            for _, source in self._read_sources(scope):
+                visit(source)
+            top = {id(c) for c in self._top_conjuncts(scope)}
+            for sub in scope.subquery_scopes:
+                node = sub.expression.parent
+                while isinstance(node, (exp.Subquery, exp.Paren)):
+                    node = node.parent
+                if id(node) in top and (
+                    isinstance(node, exp.In)
+                    or (isinstance(node, exp.Exists) and sub.external_columns)
+                ):
+                    visit(sub)
+
+        for scope in consumers.values():
+            visit(scope)
+        return restricting
+
+    @staticmethod
+    def _top_conjuncts(scope: Scope) -> list[exp.Expression]:
+        select = scope.expression
+        roots = [
+            clause.this
+            for key in ("where", "having", "qualify")
+            if (clause := select.args.get(key)) is not None
+        ]
+        roots += [
+            on
+            for join in select.args.get("joins") or []
+            if (on := join.args.get("on")) is not None
+        ]
+        return [c for root in roots for c in _conjuncts(root)]
 
     # -- column origins -------------------------------------------------
 
@@ -314,8 +392,11 @@ class _Statement:
         excluded = rule.exclude
         if self._is_flag(inner, flag):
             return "excl" if excluded else "incl"
-        if isinstance(inner, (exp.Exists, exp.In)):
+        if isinstance(inner, exp.Exists):
             return "excl" if self._selects_flag(inner, rule) else None
+        if isinstance(inner, exp.In):
+            keyed = self._keyed_to_flag(inner, flag)
+            return "excl" if keyed and self._selects_flag(inner, rule) else None
         if isinstance(
             inner, (exp.EQ, exp.NEQ, exp.Is, exp.NullSafeEQ, exp.NullSafeNEQ)
         ):
@@ -332,15 +413,28 @@ class _Statement:
             return "incl" if same else "excl"
         return None
 
+    def _keyed_to_flag(self, node: exp.In, flag: Pair) -> bool:
+        """Whether ``<column> IN (SELECT <key> FROM <flagged model> ...)`` compares the outer
+        column with the flagged model's own key: the same column, or the two sides of one of
+        the project's single-column relationships. Any other outer expression says nothing
+        about which flagged rows its own rows belong to."""
+        query = node.args.get("query")
+        selects = getattr(query, "selects", None) or []
+        outer = self.direct(node.this)
+        chosen = self.direct(selects[0].unalias()) if len(selects) == 1 else None
+        if outer is None or chosen is None or chosen[0] != flag[0]:
+            return False
+        return outer == chosen or frozenset((outer, chosen)) in self.checker.joins
+
     def _selects_flag(self, subquery: exp.Expression, rule: ExcludeRows) -> bool:
         for where in subquery.find_all(exp.Where):
             if any(self.polarity(c, rule) == "incl" for c in _conjuncts(where.this)):
                 return True
         return False
 
-    def _addresses(self, rule: ExcludeRows) -> bool:
+    def _addresses(self, rule: ExcludeRows, reaching: list[exp.Expression]) -> bool:
         flag = self.checker.flag_of(rule)
-        if any(self.polarity(c, rule) == "incl" for c in self.reaching):
+        if any(self.polarity(c, rule) == "incl" for c in reaching):
             return True
         grouped = [
             column
@@ -359,12 +453,24 @@ class _Statement:
             return False
         if rule.aggregated_only and not self.aggregated:
             return False
-        if rule.addresses_column and self._addresses(rule):
-            return False
+        covered = self.checker.covered_of(rule)
+        return any(
+            not self._excluded(scope, rule)
+            for scope in self.scopes
+            if covered
+            & {s.name for s in scope.sources.values() if isinstance(s, exp.Table)}
+        )
+
+    def _excluded(self, read: Scope, rule: ExcludeRows) -> bool:
+        """Whether the filters that restrict ``read``'s rows exclude the rule's flagged rows."""
+        restricting = self._restricting(read)
+        reaching = [c for c, scope_id in self._filters if scope_id in restricting]
+        if rule.addresses_column and self._addresses(rule, reaching):
+            return True
         for atom in self.checker.atoms_of(rule):
-            if any(self.canonical(c) == atom for c in self.reaching):
-                return False
-        return not any(self.polarity(c, rule) == "excl" for c in self.reaching)
+            if any(self.canonical(c) == atom for c in reaching):
+                return True
+        return any(self.polarity(c, rule) == "excl" for c in reaching)
 
     # -- require_rate_join ----------------------------------------------
 
@@ -462,6 +568,27 @@ class DefaultsChecker:
             for rule in self.rules
             if isinstance(rule, ExcludeRows)
         }
+        self.joins = self._join_pairs(manifest.get("relationships"))
+
+    def _join_pairs(self, relationships) -> frozenset[frozenset[Pair]]:
+        """The column pairs the manifest's relationships equate, one pair per relationship
+        whose condition is a single ``model.column = model.column`` equality."""
+        pairs: set[frozenset[Pair]] = set()
+        for item in relationships or []:
+            condition = item.get("condition") if isinstance(item, dict) else None
+            if not isinstance(condition, str):
+                continue
+            try:
+                node = _unparen(parse_one(condition, dialect=self.dialect))
+            except Exception:  # noqa: BLE001 - an unreadable condition links nothing
+                continue
+            sides = (node.this, node.expression) if isinstance(node, exp.EQ) else ()
+            columns = [side for side in sides if isinstance(side, exp.Column)]
+            if len(columns) == 2 and all(c.table for c in columns):
+                pairs.add(
+                    frozenset((self.norm(c.table), self.norm(c.name)) for c in columns)
+                )
+        return frozenset(pairs)
 
     @property
     def ids(self) -> list[str]:
