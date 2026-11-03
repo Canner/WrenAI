@@ -1,0 +1,16 @@
+name: payments
+table_reference:
+  schema: main
+  table: payments
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+  - name: order_id
+    type: INTEGER
+  - name: amount
+    type: DECIMAL
+  - name: currency
+    type: VARCHAR
+  - name: captured_at
+    type: TIMESTAMP

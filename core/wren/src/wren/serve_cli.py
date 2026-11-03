@@ -149,6 +149,24 @@ def serve_mcp(
             help="Transpile-only mode: disable run_sql, dry_run, and query_cube.",
         ),
     ] = False,
+    service_config: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--service-config",
+            help="Enable governed stdio mode with this trusted deployment configuration (version 2: config_version, caller, project_id, policy, private_model, optional execution and policy_presets).",
+        ),
+    ] = None,
+    agent_profile: Annotated[
+        Optional[Path],
+        typer.Option("--agent-profile", help="Capability profile for governed mode."),
+    ] = None,
+    runtime: Annotated[
+        Optional[Path],
+        typer.Option("--runtime", help="Installed Warble private service entry."),
+    ] = None,
+    warble: Annotated[
+        str, typer.Option("--warble", help="Warble compiler executable.")
+    ] = "warble",
     quiet: Annotated[
         bool,
         typer.Option(
@@ -162,6 +180,35 @@ def serve_mcp(
 
     Backed by an in-process WrenEngine — no ibis-server, no HTTP engine.
     """
+    if service_config is not None:
+        if (
+            transport != "stdio"
+            or allow_write
+            or no_connect
+            or agent_profile is None
+            or runtime is None
+        ):
+            typer.echo(
+                "Governed mode requires stdio, --agent-profile and --runtime; writes and no-connect are unsupported.",
+                err=True,
+            )
+            raise typer.Exit(1)
+        from wren.agent_service import launch  # noqa: PLC0415
+
+        try:
+            launch(
+                project, agent_profile, service_config, runtime, warble, "mcp", profile
+            )
+        except Exception:
+            typer.echo(
+                "Governed service startup failed. Check profile, project, runtime and deployment configuration.",
+                err=True,
+            )
+            raise typer.Exit(1) from None
+        return
+    if agent_profile is not None or runtime is not None:
+        typer.echo("--agent-profile and --runtime require --service-config.", err=True)
+        raise typer.Exit(1)
     if transport not in {"stdio", "http"}:
         typer.echo(
             f"Error: unsupported --transport '{transport}'. Use stdio or http.",
@@ -256,3 +303,102 @@ def serve_mcp(
             no_connect=no_connect,
         )
     run_server(ctx, transport=transport, host=host, port=port)
+
+
+@serve_app.command("agent")
+def serve_agent(
+    agent_profile: Annotated[
+        Path, typer.Option("--agent-profile", help="Warble profile directory.")
+    ],
+    service_config: Annotated[
+        Path,
+        typer.Option(
+            "--service-config",
+            help="Trusted service deployment configuration, version 2 (config_version: 2; "
+            "caller, project_id, policy, private_model, optional execution and policy_presets).",
+        ),
+    ],
+    runtime: Annotated[
+        Path, typer.Option("--runtime", help="Installed Warble private service entry.")
+    ],
+    project: Annotated[Optional[Path], typer.Option("--project")] = None,
+    profile: Annotated[
+        Optional[str], typer.Option("--profile", help="Data connection profile.")
+    ] = None,
+    warble: Annotated[str, typer.Option("--warble")] = "warble",
+    transport: Annotated[
+        str, typer.Option("--transport", help="stdio (default) or http (loopback).")
+    ] = "stdio",
+    host: Annotated[
+        str, typer.Option("--host", help="Loopback bind host for --transport http.")
+    ] = "127.0.0.1",
+    port: Annotated[
+        int, typer.Option("--port", help="Bind port for --transport http; 0 = any.")
+    ] = 0,
+    policy_preset: Annotated[
+        Optional[str],
+        typer.Option(
+            "--policy-preset",
+            help="Named preset from service.yml policy_presets (hidden, structure, rules or full in the example); default_preset when omitted.",
+        ),
+    ] = None,
+) -> None:
+    """Serve one project-bound Warble profile through a private pi runtime."""
+    if transport not in ("stdio", "http"):
+        typer.echo("Agent service supports --transport stdio or http.", err=True)
+        raise typer.Exit(1)
+    from wren.agent_service import LOCAL_TOKEN_ENV, launch  # noqa: PLC0415
+
+    if transport == "http" and not os.environ.get(LOCAL_TOKEN_ENV):
+        typer.echo(f"--transport http requires {LOCAL_TOKEN_ENV}.", err=True)
+        raise typer.Exit(1)
+    try:
+        launch(
+            project,
+            agent_profile,
+            service_config,
+            runtime,
+            warble,
+            "agent",
+            profile,
+            policy_preset,
+            transport=transport,
+            host=host,
+            port=port,
+        )
+    except (ValueError, RuntimeError) as exc:
+        typer.echo(f"Agent startup failed: {exc}.", err=True)
+        raise typer.Exit(1) from None
+    except Exception:
+        typer.echo(
+            "Agent startup failed. Check profile, project, runtime, model credentials and deployment configuration.",
+            err=True,
+        )
+        raise typer.Exit(1) from None
+
+
+@serve_app.command("agent-presets")
+def serve_agent_presets(
+    service_config: Annotated[
+        Path,
+        typer.Option(
+            "--service-config",
+            help="Trusted service deployment configuration, version 2 (config_version: 2; "
+            "caller, project_id, policy, private_model, optional execution and policy_presets).",
+        ),
+    ],
+) -> None:
+    """Print the named policy presets of a service configuration as JSON."""
+    import yaml  # noqa: PLC0415
+
+    from wren.agent_service import read_policy_presets  # noqa: PLC0415
+
+    try:
+        config = yaml.safe_load(
+            service_config.expanduser().resolve(strict=True).read_text()
+        )
+        default, presets = read_policy_presets(config)
+    except ValueError as exc:
+        typer.echo(f"Invalid presets: {exc}.", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(json.dumps({"default": default, "presets": sorted(presets)}))

@@ -286,3 +286,26 @@ def test_unknown_subcommand_is_flagged(tmp_path, monkeypatch):
     assert "unknown subcommand 'typo' for 'wren memory'" in joined, problems
     # leaf + positional should NOT appear
     assert "'usage'" not in joined, problems
+
+
+def test_the_planner_skill_states_the_evidence_and_clarification_contracts():
+    """The skill has to say what the service's disclosure modes and clarification expect, and
+    must not hand the planner a way around a service limit."""
+    text = (_SKILLS_CONTENT / "wren-planner" / "SKILL.md").read_text()
+    for needle in (
+        "comma-separated list of status values",
+        "Ask the user first",
+        "not verified human input",
+        "second unusable answer ends the task as `unavailable` with reason `worker`",
+        "`checks_summary`",
+        "`has_unverified_semantics`",
+        "`observed`",
+        "`satisfied_by_caller_scope`",
+        "never ask the service for one that is absent",
+        "is never shown",
+        "not verified",
+        "advice to the private analyst, not a control",
+    ):
+        assert needle in text, needle
+    for forbidden in ("ignore the service", "bypass the", "override the service limit"):
+        assert forbidden not in text.lower()

@@ -1,0 +1,12 @@
+name: returns
+table_reference:
+  schema: main
+  table: returns
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+  - name: order_item_id
+    type: INTEGER
+  - name: returned_at
+    type: TIMESTAMP
