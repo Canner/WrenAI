@@ -127,9 +127,16 @@ fn collect(
             continue;
         }
         let child = format!("{relative}/{}", name.to_string_lossy());
-        match dir.open_dir(&name) {
-            Ok(child_dir) => collect(&child_dir, &child, out)?,
+        match dir.open_dir_if_exists(&name) {
+            Ok(Some(child_dir)) => collect(&child_dir, &child, out)?,
+            Ok(None) => {
+                if let Some(bytes) = dir.read_bytes_if_file(&name)? {
+                    out.push((child, bytes));
+                }
+            }
             Err(directory_error) => {
+                // A final file symlink remains supported; a symlink to a directory or an
+                // unresolved link stays a rejected traversal edge.
                 if let Some(bytes) = dir.read_bytes_if_file(&name)? {
                     out.push((child, bytes));
                 } else {

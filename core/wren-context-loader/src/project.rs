@@ -221,7 +221,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
             if crate::digest::is_hidden(&name) {
                 continue;
             }
-            if let Ok(child) = parent.open_dir(&name) {
+            if let Some(child) = parent.open_dir_if_exists(&name)? {
                 if let Some(contents) = child.read_string_if_file("metadata.yml".as_ref())? {
                     values.push(contents);
                 }
@@ -246,7 +246,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
             if crate::digest::is_hidden(&name) {
                 continue;
             }
-            if let Ok(view) = view_root.open_dir(&name) {
+            if let Some(view) = view_root.open_dir_if_exists(&name)? {
                 if let Some(meta) = view.read_string_if_file("metadata.yml".as_ref())? {
                     views.push((
                         meta,

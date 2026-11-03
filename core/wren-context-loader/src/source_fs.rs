@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 #[cfg(test)]
 use std::{cell::RefCell, thread_local};
 
-use rustix::fs::{open, openat, Dir, Mode, OFlags};
+use rustix::fs::{open, openat, statat, AtFlags, Dir, FileType, Mode, OFlags};
 
 pub(crate) struct SourceDir {
     fd: OwnedFd,
@@ -53,18 +53,19 @@ impl SourceDir {
     }
 
     pub(crate) fn open_dir_if_exists(&self, name: &OsStr) -> io::Result<Option<Self>> {
-        match self.open_dir(name) {
-            Ok(dir) => Ok(Some(dir)),
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
-                ) =>
-            {
-                Ok(None)
-            }
-            Err(error) => Err(error),
+        let stat = match statat(&self.fd, name, AtFlags::SYMLINK_NOFOLLOW) {
+            Ok(stat) => stat,
+            Err(error) if error == rustix::io::Errno::NOENT => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        let file_type = FileType::from_raw_mode(stat.st_mode);
+        if file_type.is_symlink() {
+            return Err(directory_symlink_error(&self.display.join(name)));
         }
+        if !file_type.is_dir() {
+            return Ok(None);
+        }
+        self.open_dir(name).map(Some)
     }
 
     /// List entries from this already-open directory. Names are sorted byte-wise as Rust paths
@@ -156,4 +157,11 @@ fn directory_open_error(path: &Path, error: rustix::io::Errno) -> io::Error {
     } else {
         error.into()
     }
+}
+
+fn directory_symlink_error(path: &Path) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidInput,
+        format!("directory_symlink_unsupported: {}", path.display()),
+    )
 }
