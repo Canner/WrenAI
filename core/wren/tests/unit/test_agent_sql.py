@@ -2400,7 +2400,7 @@ def test_the_case_of_a_model_name_does_not_change_the_verdict():
     )
 
 
-def test_a_self_join_is_judged_per_model_not_per_alias(adhoc):
+def test_cr3_a_self_join_is_judged_per_alias(adhoc):
     found, unverified = windows_of(
         adhoc(),
         "SELECT COUNT(*) AS n FROM orders o JOIN orders p ON p.customer_id = o.customer_id "
@@ -2408,6 +2408,53 @@ def test_a_self_join_is_judged_per_model_not_per_alias(adhoc):
         "AND NOT p.is_test AND p.status IN ('paid', 'shipped') "
         "AND o.order_date >= DATE '2026-06-01'",
     )
-    # Documented limit: the window on one alias counts for the model, p is not checked apart.
+    assert found == [window("orders.order_date", "2026-06-01", None, True, False)]
+    assert DATE_WINDOW_UNVERIFIED in unverified
+
+
+def test_cr3_a_self_join_with_a_window_on_each_alias_is_pinned(adhoc):
+    found, unverified = windows_of(
+        adhoc(),
+        "SELECT COUNT(*) AS n FROM orders o JOIN orders p ON p.customer_id = o.customer_id "
+        "AND p.order_date >= DATE '2026-06-01' "
+        "WHERE NOT o.is_test AND o.status IN ('paid', 'shipped') "
+        "AND NOT p.is_test AND p.status IN ('paid', 'shipped') "
+        "AND o.order_date >= DATE '2026-06-01'",
+    )
     assert found == [window("orders.order_date", "2026-06-01", None, True, False)]
     assert DATE_WINDOW_UNVERIFIED not in unverified
+
+
+JOIN_ON_JUNE_ORDERS = "AND o.order_date >= DATE '2026-06-01'"
+OWN_ROWS = "WHERE NOT o.is_test AND o.status IN ('paid', 'shipped')"
+
+
+@pytest.mark.parametrize(
+    "join",
+    [
+        f"orders o LEFT JOIN invoices i ON o.customer_id = i.customer_id {JOIN_ON_JUNE_ORDERS}",
+        f"invoices i RIGHT JOIN orders o ON o.customer_id = i.customer_id {JOIN_ON_JUNE_ORDERS}",
+        f"orders o FULL JOIN invoices i ON o.customer_id = i.customer_id {JOIN_ON_JUNE_ORDERS}",
+    ],
+)
+def test_cr20_an_on_literal_on_the_preserved_side_of_an_outer_join_is_no_window(
+    adhoc, join
+):
+    found, unverified = windows_of(adhoc(), f"SELECT COUNT(*) FROM {join} {OWN_ROWS}")
+    assert found == []
+    assert DATE_WINDOW_UNVERIFIED not in unverified
+
+
+@pytest.mark.parametrize(
+    "join",
+    [
+        f"orders o JOIN invoices i ON o.customer_id = i.customer_id {JOIN_ON_JUNE_ORDERS}",
+        "orders o LEFT JOIN invoices i ON o.customer_id = i.customer_id "
+        "AND i.invoice_date >= DATE '2026-06-01'",
+        "invoices i RIGHT JOIN orders o ON o.customer_id = i.customer_id "
+        "AND i.invoice_date >= DATE '2026-06-01'",
+    ],
+)
+def test_cr20_an_on_literal_that_filters_a_kept_side_stays_a_window(adhoc, join):
+    found, _ = windows_of(adhoc(), f"SELECT COUNT(*) FROM {join} {OWN_ROWS}")
+    assert len(found) == 1

@@ -695,9 +695,12 @@ class AdHocSQL:
                 continue
             selects.append(scope)
             bounds = {}
-            for condition, joined in self._conditions(select):
+            for condition, join in self._conditions(select):
+                joined = join is not None
                 for term in self._conjuncts(condition):
                     taken = self._bounds_of(scope, term)
+                    if taken is not None and self._unfiltered_by(join, term):
+                        continue
                     if taken is not None:
                         for column, side, value, inclusive, edge in taken:
                             self._tighten(
@@ -737,8 +740,8 @@ class AdHocSQL:
         """Whether every select that reads a windowed model is bounded by a window for it.
 
         Coverage is per consuming edge. A filter marks only the first hop it reads through:
-        the consumer's own source, a table (judged per model, so a self-join counts as one
-        read) or a CTE, derived table or view body. A select is *bounded* for a model when each
+        the consumer's own source, a table (judged per alias, so each side of a self-join
+        needs a window of its own) or a CTE, derived table or view body. A select is *bounded* for a model when each
         source of it that leads there is marked by its own filter or is itself bounded; it is
         *fine* when it is bounded, or when it has consumers and each of them marks the edge to it
         or is fine. A CTE two selects read is therefore bounded only for the consumer that
@@ -751,11 +754,11 @@ class AdHocSQL:
             """The sources a select actually reads (FROM and JOIN), not the CTEs merely in
             scope."""
             aliases = {alias for alias, _ in scope.references}
-            return [s for alias, s in scope.sources.items() if alias in aliases]
+            return [(a, s) for a, s in scope.sources.items() if a in aliases]
 
         parents = {}
         for scope in scopes:
-            for source in used(scope):
+            for _, source in used(scope):
                 if isinstance(source, Scope):
                     parents.setdefault(id(source), {})[id(scope)] = scope
             for branch in scope.union_scopes:
@@ -765,7 +768,7 @@ class AdHocSQL:
         def reach(scope):
             if id(scope) not in reach_cache:
                 found = set()
-                for source in used(scope):
+                for _, source in used(scope):
                     if isinstance(source, Scope):
                         found |= reach(source)
                     elif isinstance(source, exp.Table):
@@ -787,13 +790,13 @@ class AdHocSQL:
                 else:
                     ok = True
                     seen = set()
-                    for source in used(scope):
+                    for alias, source in used(scope):
                         if isinstance(source, Scope):
                             edge = ("s", id(source))
                             leads = model in reach(source)
                         else:
-                            edge = ("t", source.name.lower())
-                            leads = edge[1] == model
+                            edge = ("t", alias)
+                            leads = source.name.lower() == model
                         if not leads or edge in seen:
                             continue
                         seen.add(edge)
@@ -840,14 +843,34 @@ class AdHocSQL:
 
     @staticmethod
     def _conditions(select):
-        """``(condition, is_join_condition)`` for every filter position of a select."""
+        """``(condition, join)`` for every filter position of a select: the join whose ``ON``
+        it is, or ``None`` for ``WHERE``, ``HAVING`` and ``QUALIFY``."""
         for key in ("where", "having", "qualify"):
             clause = select.args.get(key)
             if clause is not None:
-                yield clause.this, False
+                yield clause.this, None
         for join in select.args.get("joins") or []:
             if join.args.get("on") is not None:
-                yield join.args["on"], True
+                yield join.args["on"], join
+
+    @staticmethod
+    def _unfiltered_by(join, term):
+        """Whether ``term``, a condition in ``join``'s ``ON``, leaves every row of the side it
+        names in the result: a literal on the preserved side of an outer join only decides
+        which rows match, not which rows are kept, and the same holds on either side of an
+        ``ANTI`` join. It is no date filter."""
+        if join is None:
+            return False
+        if join.args.get("kind") == "ANTI":
+            return True
+        side = join.args.get("side")
+        if side not in ("LEFT", "RIGHT", "FULL"):
+            return False
+        if side == "FULL":
+            return True
+        target = join.this.alias_or_name
+        on_target = {c.table for c in term.find_all(exp.Column)} == {target}
+        return on_target if side == "RIGHT" else not on_target
 
     @staticmethod
     def _conjuncts(node):
@@ -893,7 +916,7 @@ class AdHocSQL:
                 key = (source.name.lower(), node.name.lower())
                 if key not in self.date_columns:
                     return None
-                return f"{source.name}.{node.name}", first or ("t", key[0])
+                return f"{source.name}.{node.name}", first or ("t", node.table)
             if not isinstance(source, Scope):
                 return None
             first = first or ("s", id(source))
