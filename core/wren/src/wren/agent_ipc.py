@@ -27,6 +27,13 @@ class RuntimeIPC:
         self.callbacks = {}
         self.cancel_callbacks = {}
         self.closed = False
+        # Runtime IDs are opaque host-issued sequence numbers, independent of
+        # caller task labels. A fixed prefix/range recognises every retired ID
+        # exactly without retaining an ever-growing set of tombstones.
+        self._wire_prefix = uuid.uuid4().hex
+        self._wire_sequence = 0
+        self.wire_ids = {}
+        self._wire_owners = {}
         # Ids the host gave up waiting for. A late reply or tool call for one of them is
         # answered or dropped; it is not a protocol violation and must not kill the runtime.
         self.abandoned = {}
@@ -74,9 +81,20 @@ class RuntimeIPC:
             "owner": message["owner"],
         }
         try:
-            callback = self.callbacks[message["owner"]]
+            owner = message["_owner"]
+            with self.state_lock:
+                if (
+                    self.wire_ids.get(owner) != message["owner"]
+                    or owner not in self.pending
+                ):
+                    raise PermissionError("task_ended")
+                callback = self.callbacks[owner]
             response["value"] = callback(message["name"], message["args"])
-            if message["owner"] in self.abandoned or self.closed:
+            if (
+                owner not in self.pending
+                or self.wire_ids.get(owner) != message["owner"]
+                or self.closed
+            ):
                 return
         except Exception:
             response["error"] = "tool_denied"
@@ -95,15 +113,19 @@ class RuntimeIPC:
                     raise ValueError("ipc_size")
                 m = json.loads(line)
                 if m.get("type") == "tool_call":
-                    owner = m.get("owner")
-                    if owner not in self.callbacks and owner not in self.abandoned:
-                        raise ValueError("ipc_order")
+                    with self.state_lock:
+                        wire = m.get("owner")
+                        owner = self._wire_owners.get(wire)
+                        if owner not in self.callbacks and not self._issued(wire):
+                            raise ValueError("ipc_order")
+                        m["_owner"] = owner
                     self.pool.submit(self._tool, m)
                 else:
                     with self.state_lock:
-                        future = self.pending.pop(m["id"], None)
+                        owner = self._wire_owners.pop(m["id"], None)
+                        future = self.pending.pop(owner, None)
                         if future is None:
-                            if m["id"] in self.abandoned:
+                            if self._issued(m["id"]):
                                 continue
                             raise ValueError("ipc_order")
                     if m.get("error"):
@@ -152,17 +174,27 @@ class RuntimeIPC:
         if self.closed:
             raise RuntimeError("runtime_unavailable")
         ident = invocation_id or str(uuid.uuid4())
-        if ident in self.pending or ident in self.abandoned:
-            raise ValueError("invalid_invocation_id")
         future = concurrent.futures.Future()
-        self.pending[ident] = future
-        if callback:
-            self.callbacks[ident] = callback
-        if on_cancel:
-            self.cancel_callbacks[ident] = on_cancel
+        with self.state_lock:
+            if self.closed:
+                raise RuntimeError("runtime_unavailable")
+            if (
+                ident in self.pending
+                or ident in self.abandoned
+                or ident in self.wire_ids
+            ):
+                raise ValueError("invalid_invocation_id")
+            wire = self._new_wire_id()
+            self.pending[ident] = future
+            self.wire_ids[ident] = wire
+            self._wire_owners[wire] = ident
+            if callback:
+                self.callbacks[ident] = callback
+            if on_cancel:
+                self.cancel_callbacks[ident] = on_cancel
         completed = False
         try:
-            self._send({"id": ident, "op": op, **values})
+            self._send({"id": wire, "op": op, **values})
             # The runtime's own deadlines sit below this cap. The operator can override it.
             value, calls = future.result(timeout=self._timeout())
             completed = True
@@ -175,6 +207,10 @@ class RuntimeIPC:
             failure.detail = "ipc_timeout:host"
             raise failure from None
         finally:
+            with self.state_lock:
+                self.pending.pop(ident, None)
+                self.wire_ids.pop(ident, None)
+                self._wire_owners.pop(wire, None)
             cancel = self.cancel_callbacks.pop(ident, None)
             if cancel is not None and not completed:
                 cancel()
@@ -194,12 +230,40 @@ class RuntimeIPC:
             cancel_callback()
         if not cancel:
             return
-        cancel_id = str(uuid.uuid4())
-        self._remember(cancel_id)
+        with self.state_lock:
+            wire = self.wire_ids.get(ident)
+            if wire is None:
+                return
+            cancel_id = self._new_wire_id()
         try:
-            self._send({"id": cancel_id, "op": "cancel", "owner": ident})
+            self._send({"id": cancel_id, "op": "cancel", "owner": wire})
         except Exception:
             pass
+
+    def _new_wire_id(self):
+        # Called with state_lock held. Fixed-width bounded range: exhausted
+        # transports must be restarted rather than reusing a historical ID.
+        if self._wire_sequence >= 2**64 - 1:
+            raise RuntimeError("ipc_id_exhausted")
+        self._wire_sequence += 1
+        return f"{self._wire_prefix}:{self._wire_sequence}"
+
+    def _issued(self, wire):
+        if not isinstance(wire, str):
+            return False
+        prefix, separator, sequence = wire.partition(":")
+        if (
+            prefix != self._wire_prefix
+            or separator != ":"
+            or not sequence.isascii()
+            or not sequence.isdecimal()
+        ):
+            return False
+        # Reject alternative spellings and future/unallocated IDs as protocol errors.
+        if len(sequence) > 20:
+            return False
+        number = int(sequence)
+        return str(number) == sequence and 0 < number <= self._wire_sequence
 
     def _remember(self, ident):
         self.abandoned[ident] = True
@@ -210,7 +274,9 @@ class RuntimeIPC:
         cancel = self.cancel_callbacks.get(owner)
         if cancel is not None:
             cancel()
-        return self.call("cancel", **{"owner": owner})
+        with self.state_lock:
+            wire = self.wire_ids.get(owner)
+        return self.call("cancel", **{"owner": wire or owner})
 
     def abort(self, owner):
         """End a task now: ask the runtime to cancel it and stop waiting for its answer.

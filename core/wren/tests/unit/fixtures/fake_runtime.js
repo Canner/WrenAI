@@ -130,7 +130,7 @@ lines.on("line", (line) => {
     }
     return;
   }
-  if (m.op !== "ops" && m.op !== "echo_init") seen.push({ op: m.op, owner: m.owner || null });
+  if (m.op !== "ops" && m.op !== "echo_init") seen.push({ op: m.op, id: m.id, owner: m.owner || null });
   switch (m.op) {
     case "init":
       if (init || m.protocol !== PROTOCOL) return send({ id: m.id, error: "service_unavailable" });
@@ -156,6 +156,10 @@ lines.on("line", (line) => {
       return invoke(m);
     case "hang":
       return;
+    case "late_frames":
+      if (m.reply) send({ id: m.reply, value: "late" });
+      if (m.tool_owner) send({ type: "tool_call", id: ++sequence, owner: m.tool_owner, name: "late", args: {} });
+      return send({ id: m.id, value: true });
     case "stray":
       return send({ id: "never-sent", value: 1 });
     default:

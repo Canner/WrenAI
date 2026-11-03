@@ -73,9 +73,10 @@ def test_a_host_timeout_sends_cancel_clears_pending_and_keeps_the_runtime(
     assert raised.value.detail == "ipc_timeout:host"
     assert "inv-1" not in runtime.pending
     seen = ops(runtime)
-    assert {"op": "cancel", "owner": "inv-1"} in [
-        {"op": o.get("op"), "owner": o.get("owner")} for o in seen
-    ]
+    assert {
+        "op": "cancel",
+        "owner": next(o["id"] for o in seen if o.get("op") == "invoke"),
+    } in [{"op": o.get("op"), "owner": o.get("owner")} for o in seen]
     assert runtime.process.poll() is None
     assert runtime.call("authorize", request={}) is True
 
@@ -93,7 +94,13 @@ def test_a_late_tool_call_and_reply_after_the_timeout_do_not_kill_the_runtime(
         if denied:
             break
         time.sleep(0.05)
-    assert denied == [{"type": "tool_result", "owner": "inv-2", "error": "tool_denied"}]
+    assert denied == [
+        {
+            "type": "tool_result",
+            "owner": next(o["id"] for o in ops(runtime) if o.get("op") == "invoke"),
+            "error": "tool_denied",
+        }
+    ]
     time.sleep(0.2)
     assert runtime.process.poll() is None
     assert runtime.call("authorize", request={}) is True
@@ -224,12 +231,168 @@ def test_an_abort_ends_the_wait_now_and_drops_whatever_the_runtime_sends_later(i
         if any(o.get("type") == "tool_result" for o in seen):
             break
         time.sleep(0.05)
-    assert {"op": "cancel", "owner": "inv-abort"} in [
-        {"op": o.get("op"), "owner": o.get("owner")} for o in seen
-    ]
+    assert {
+        "op": "cancel",
+        "owner": next(o["id"] for o in seen if o.get("op") == "invoke"),
+    } in [{"op": o.get("op"), "owner": o.get("owner")} for o in seen]
     assert [o["error"] for o in seen if o.get("type") == "tool_result"] == [
         "tool_denied"
     ]
     time.sleep(0.2)
     assert runtime.process.poll() is None
     assert runtime.call("authorize", request={}) is True
+
+
+@pytest.mark.parametrize("frame", ["reply", "tool_owner"])
+def test_an_evicted_abandoned_call_is_still_recognised_without_unbounded_state(
+    ipc, frame, monkeypatch
+):
+    from wren.agent_ipc import ABANDONED_LIMIT  # noqa: PLC0415
+
+    runtime = ipc(call_timeout_s=0.05)
+    sent = []
+    original = runtime._send
+
+    def capture(frame):
+        sent.append(frame)
+        return original(frame)
+
+    monkeypatch.setattr(runtime, "_send", capture)
+    with pytest.raises(RuntimeError):
+        runtime.call("hang", invocation_id="oldest")
+    old = sent[0]["id"]
+    for i in range(ABANDONED_LIMIT + 1):
+        runtime._remember(f"expired-{i}")
+    assert "oldest" not in runtime.abandoned
+    assert len(runtime.abandoned) <= ABANDONED_LIMIT
+    assert runtime.call("late_frames", **{frame: old}) is True
+    assert runtime.call("authorize", request={}) is True
+    assert (
+        not runtime.pending and not runtime.callbacks and not runtime.cancel_callbacks
+    )
+    assert len(getattr(runtime, "wire_ids", {})) == 0
+
+
+def test_a_reachable_send_size_failure_leaves_no_pending_call(ipc):
+    runtime = ipc()
+    for _ in range(3):
+        with pytest.raises(ValueError, match="ipc_size"):
+            runtime.call("authorize", invocation_id="too-large", request="x" * 1048576)
+        assert (
+            not runtime.pending
+            and not runtime.callbacks
+            and not runtime.cancel_callbacks
+        )
+    assert runtime.call("authorize", request={}) is True
+
+
+@pytest.mark.parametrize("suffix", ["0", "99999999999999999999", "01", "1:extra"])
+def test_an_unknown_wire_id_is_rejected_even_with_the_instance_prefix(ipc, suffix):
+    runtime = ipc()
+    with pytest.raises(RuntimeError):
+        runtime.call("late_frames", reply=f"{runtime._wire_prefix}:{suffix}")
+    assert runtime.process.wait(timeout=5) != 0
+
+
+def test_wire_history_survives_real_timeouts_and_caller_label_reuse(ipc, monkeypatch):
+    from wren.agent_ipc import ABANDONED_LIMIT  # noqa: PLC0415
+
+    runtime = ipc()
+    oldest = []
+    original = runtime._send
+
+    def capture(frame):
+        if frame.get("op") == "hang" and not oldest:
+            oldest.append(frame["id"])
+        return original(frame)
+
+    monkeypatch.setattr(runtime, "_send", capture)
+    runtime.call_timeout_s = 0.001
+    for index in range(ABANDONED_LIMIT + 4):
+        with pytest.raises(RuntimeError):
+            runtime.call("hang", invocation_id=f"call-{index}")
+    assert "call-0" not in runtime.abandoned
+    runtime.call_timeout_s = 5
+    called = []
+    assert (
+        runtime.call(
+            "late_frames",
+            invocation_id="call-0",
+            reply=oldest[0],
+            tool_owner=oldest[0],
+            callback=lambda *_: called.append(True),
+        )
+        is True
+    )
+    assert runtime.call("authorize", request={}) is True
+    assert not called
+    assert len(runtime.abandoned) <= ABANDONED_LIMIT
+    assert not runtime.pending and not runtime.callbacks
+    assert not runtime.wire_ids and not runtime._wire_owners
+
+
+def test_an_old_queued_tool_cannot_use_a_reused_callers_callback(ipc, monkeypatch):
+    import threading  # noqa: PLC0415
+
+    from wren.agent_ipc import ABANDONED_LIMIT  # noqa: PLC0415
+
+    runtime = ipc(call_timeout_s=0.05)
+    queued = []
+    monkeypatch.setattr(
+        runtime.pool,
+        "submit",
+        lambda function, message: queued.append((function, message)),
+    )
+    request = json.dumps({"behavior": "script", "steps": [{"tool": "run_sql"}]})
+    with pytest.raises(RuntimeError):
+        runtime.call(
+            "invoke", invocation_id="shared", request=request, callback=lambda *_: "old"
+        )
+    assert len(queued) == 1
+    for index in range(ABANDONED_LIMIT + 1):
+        runtime._remember(f"expired-{index}")
+    runtime.call_timeout_s = 5
+    called, errors = [], []
+
+    def waiting():
+        try:
+            runtime.call(
+                "invoke",
+                invocation_id="shared",
+                request=request,
+                callback=lambda *_: called.append(True),
+            )
+        except RuntimeError as error:
+            errors.append(error)
+
+    thread = threading.Thread(target=waiting)
+    thread.start()
+    try:
+        deadline = time.monotonic() + 3
+        while len(queued) < 2 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert len(queued) == 2
+        function, old_message = queued[0]
+        function(old_message)
+        assert not called
+    finally:
+        runtime.abort("shared")
+        thread.join(5)
+    assert not thread.is_alive() and len(errors) == 1
+
+
+def test_a_broken_runtime_pipe_does_not_accumulate_pending_entries(ipc):
+    runtime = ipc()
+    runtime.process.kill()
+    runtime.process.wait(timeout=5)
+    runtime.reader.join(timeout=5)
+    assert not runtime.reader.is_alive()
+    for _ in range(3):
+        with pytest.raises(OSError):
+            runtime.call("authorize", invocation_id="broken-pipe", request={})
+        assert (
+            not runtime.pending
+            and not runtime.callbacks
+            and not runtime.cancel_callbacks
+        )
+        assert not runtime.wire_ids and not runtime._wire_owners

@@ -67,6 +67,8 @@ def query_semantics(ast: exp.Expression, sql: str, manifest: dict) -> dict | Non
     if len(tables) != 1 or tables[0].db or tables[0].catalog:
         return None
     table = tables[0]
+    if not cubes_read_as_tables([table.name], manifest):
+        return None
     cubes = [
         cube for cube in manifest.get("cubes", []) if cube.get("name") == table.name
     ]
