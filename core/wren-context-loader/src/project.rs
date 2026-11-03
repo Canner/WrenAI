@@ -207,13 +207,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     let mut model_ymls = Vec::new();
     let models_dir = dir.join("models");
     if models_dir.is_dir() {
-        let mut entries: Vec<_> = fs::read_dir(&models_dir)?
-            .filter_map(Result::ok)
-            .map(|e| e.path())
-            .filter(|p| p.is_dir())
-            .collect();
-        entries.sort();
-        for model_dir in entries {
+        for model_dir in list_dir(&models_dir)?.into_iter().filter(|p| p.is_dir()) {
             let meta = model_dir.join("metadata.yml");
             if meta.is_file() {
                 model_ymls.push(fs::read_to_string(meta)?);
@@ -227,13 +221,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     let mut cube_ymls = Vec::new();
     let cubes_dir = dir.join("cubes");
     if cubes_dir.is_dir() {
-        let mut entries: Vec<_> = fs::read_dir(&cubes_dir)?
-            .filter_map(Result::ok)
-            .map(|e| e.path())
-            .filter(|p| p.is_dir())
-            .collect();
-        entries.sort();
-        for cube_dir in entries {
+        for cube_dir in list_dir(&cubes_dir)?.into_iter().filter(|p| p.is_dir()) {
             let meta = cube_dir.join("metadata.yml");
             if meta.is_file() {
                 cube_ymls.push(fs::read_to_string(meta)?);
@@ -244,13 +232,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     let mut views = Vec::new();
     let views_dir = dir.join("views");
     if views_dir.is_dir() {
-        let mut entries: Vec<_> = fs::read_dir(&views_dir)?
-            .filter_map(Result::ok)
-            .map(|e| e.path())
-            .filter(|p| p.is_dir())
-            .collect();
-        entries.sort();
-        for view_dir in entries {
+        for view_dir in list_dir(&views_dir)?.into_iter().filter(|p| p.is_dir()) {
             let meta = view_dir.join("metadata.yml");
             let sql = view_dir.join("sql.yml");
             if meta.is_file() && sql.is_file() {
@@ -262,13 +244,10 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     let mut knowledge_sql_mds = Vec::new();
     let knowledge_sql_dir = dir.join("knowledge").join("sql");
     if knowledge_sql_dir.is_dir() {
-        let mut entries: Vec<_> = fs::read_dir(&knowledge_sql_dir)?
-            .filter_map(Result::ok)
-            .map(|e| e.path())
-            .filter(|p| p.is_file() && p.extension().is_some_and(|ext| ext == "md"))
-            .collect();
-        entries.sort();
-        for md in entries {
+        let markdown = list_dir(&knowledge_sql_dir)?
+            .into_iter()
+            .filter(|p| p.is_file() && p.extension().is_some_and(|ext| ext == "md"));
+        for md in markdown {
             let slug = md
                 .file_stem()
                 .map(|s| s.to_string_lossy().into_owned())
@@ -303,16 +282,14 @@ pub fn read_knowledge_rules(dir: &std::path::Path) -> std::io::Result<KnowledgeR
     use std::fs;
 
     let rules_dir = dir.join("knowledge").join("rules");
-    let mut paths = if rules_dir.is_dir() {
-        fs::read_dir(&rules_dir)?
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
+    let paths = if rules_dir.is_dir() {
+        list_dir(&rules_dir)?
+            .into_iter()
             .filter(|path| path.is_file() && path.extension().is_some_and(|ext| ext == "md"))
             .collect::<Vec<_>>()
     } else {
         Vec::new()
     };
-    paths.sort();
 
     let mut files = Vec::new();
     for path in paths {
@@ -726,6 +703,34 @@ pub struct KnowledgeRuleFile {
     pub content: String,
 }
 
+/// The entries of `dir`, sorted by path. An entry that cannot be read is an error naming the
+/// directory: a project the loader could not read completely must not load as a smaller one.
+#[cfg(not(target_arch = "wasm32"))]
+fn list_dir(dir: &std::path::Path) -> std::io::Result<Vec<std::path::PathBuf>> {
+    sorted_paths(
+        std::fs::read_dir(dir)?.map(|entry| entry.map(|entry| entry.path())),
+        dir,
+    )
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn sorted_paths(
+    entries: impl Iterator<Item = std::io::Result<std::path::PathBuf>>,
+    dir: &std::path::Path,
+) -> std::io::Result<Vec<std::path::PathBuf>> {
+    let mut paths = Vec::new();
+    for entry in entries {
+        paths.push(entry.map_err(|e| {
+            std::io::Error::new(
+                e.kind(),
+                format!("cannot read an entry of {}: {e}", dir.display()),
+            )
+        })?);
+    }
+    paths.sort();
+    Ok(paths)
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn read_if_exists(path: &std::path::Path) -> std::io::Result<Option<String>> {
     if path.is_file() {
@@ -943,4 +948,37 @@ fn cube_to_json(c: CubeFile) -> serde_json::Value {
         "timeDimensions": c.time_dimensions.into_iter().map(cube_member_to_json).collect::<Vec<_>>(),
         "hierarchies": empty,
     })
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use std::io;
+    use std::path::{Path, PathBuf};
+
+    use super::sorted_paths;
+
+    #[test]
+    fn cr16_an_unreadable_directory_entry_is_an_error_naming_the_directory() {
+        let entries: Vec<io::Result<PathBuf>> = vec![
+            Ok(PathBuf::from("models/orders")),
+            Err(io::Error::new(io::ErrorKind::PermissionDenied, "denied")),
+        ];
+
+        let error = sorted_paths(entries.into_iter(), Path::new("models"))
+            .expect_err("a skipped entry would silently drop a model");
+
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert!(
+            error.to_string().contains("models"),
+            "the error names the directory: {error}"
+        );
+    }
+
+    #[test]
+    fn readable_entries_come_back_sorted() {
+        let entries: Vec<io::Result<PathBuf>> =
+            vec![Ok(PathBuf::from("b")), Ok(PathBuf::from("a"))];
+        let paths = sorted_paths(entries.into_iter(), Path::new(".")).unwrap();
+        assert_eq!(paths, [PathBuf::from("a"), PathBuf::from("b")]);
+    }
 }
