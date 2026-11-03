@@ -206,8 +206,11 @@ def serve_mcp(
             )
             raise typer.Exit(1) from None
         return
-    if agent_profile is not None or runtime is not None:
-        typer.echo("--agent-profile and --runtime require --service-config.", err=True)
+    if agent_profile is not None or runtime is not None or warble != "warble":
+        typer.echo(
+            "--agent-profile, --runtime and --warble require --service-config.",
+            err=True,
+        )
         raise typer.Exit(1)
     if transport not in {"stdio", "http"}:
         typer.echo(
@@ -398,6 +401,9 @@ def serve_agent_presets(
             service_config.expanduser().resolve(strict=True).read_text()
         )
         default, presets = read_policy_presets(config)
+    except OSError as exc:
+        typer.echo(f"Cannot read service config: {exc}.", err=True)
+        raise typer.Exit(1) from None
     except ValueError as exc:
         typer.echo(f"Invalid presets: {exc}.", err=True)
         raise typer.Exit(1) from None
