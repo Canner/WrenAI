@@ -230,7 +230,7 @@ def test_pick_expression_prefers_named_dialect():
             {"dialect": "SNOWFLAKE", "expression": "LOWER(x)::VARCHAR"},
         ]
     }
-    assert _pick_expression(expr, "SNOWFLAKE") == "LOWER(x)::VARCHAR"
+    assert _pick_expression(expr, "SNOWFLAKE") == ("LOWER(x)::VARCHAR", "SNOWFLAKE")
 
 
 def test_pick_expression_falls_back_to_ansi_sql():
@@ -240,12 +240,12 @@ def test_pick_expression_falls_back_to_ansi_sql():
             {"dialect": "MDX", "expression": "[x] + 1"},
         ]
     }
-    assert _pick_expression(expr, "SNOWFLAKE") == "x + 1"
+    assert _pick_expression(expr, "SNOWFLAKE") == ("x + 1", "ANSI_SQL")
 
 
 def test_pick_expression_falls_back_to_first():
     expr = {"dialects": [{"dialect": "MDX", "expression": "[x]"}]}
-    assert _pick_expression(expr, "SNOWFLAKE") == "[x]"
+    assert _pick_expression(expr, "SNOWFLAKE") == ("[x]", "MDX")
 
 
 def test_pick_expression_skips_empty_preferred_and_uses_ansi():
@@ -256,7 +256,7 @@ def test_pick_expression_skips_empty_preferred_and_uses_ansi():
             {"dialect": "ANSI_SQL", "expression": "SUM(x)"},
         ]
     }
-    assert _pick_expression(expr, "SNOWFLAKE") == "SUM(x)"
+    assert _pick_expression(expr, "SNOWFLAKE") == ("SUM(x)", "ANSI_SQL")
 
 
 def test_pick_expression_skips_empty_ansi_and_uses_first_nonempty():
@@ -269,16 +269,16 @@ def test_pick_expression_skips_empty_ansi_and_uses_first_nonempty():
             {"dialect": "MDX", "expression": "[x]"},
         ]
     }
-    assert _pick_expression(expr, "SNOWFLAKE") == "[x]"
+    assert _pick_expression(expr, "SNOWFLAKE") == ("[x]", "MDX")
 
 
 def test_pick_expression_shorthand_string():
-    assert _pick_expression("x", "ANSI_SQL") == "x"
+    assert _pick_expression("x", "ANSI_SQL") == ("x", "ANSI_SQL")
 
 
 def test_pick_expression_empty():
-    assert _pick_expression({}, "ANSI_SQL") == ""
-    assert _pick_expression(None, "ANSI_SQL") == ""
+    assert _pick_expression({}, "ANSI_SQL") == ("", "ANSI_SQL")
+    assert _pick_expression(None, "ANSI_SQL") == ("", "ANSI_SQL")
 
 
 # ── Unit: _is_calculated_expression ───────────────────────────────────────
@@ -2011,22 +2011,31 @@ def test_physical_rename_roundtrip_preserves_query_results_and_calculated_alias(
 
 @pytest.mark.parametrize("spec_version", ["0.1.1", "0.2.0.dev0"])
 @pytest.mark.parametrize(
-    "data_source, dialect, expected_dialect",
+    "data_source, import_data_source, dialect, expected_dialect",
     [
-        ("databricks", None, "DATABRICKS"),
-        ("databricks", "SPARK", "SPARK"),
-        ("snowflake", None, "SNOWFLAKE"),
+        ("databricks", "databricks", None, "DATABRICKS"),
+        ("databricks", "databricks", "SPARK", "SPARK"),
+        ("snowflake", "snowflake", None, "SNOWFLAKE"),
+        ("duckdb", "databricks", None, "ANSI_SQL"),
+        ("postgres", "databricks", None, "ANSI_SQL"),
     ],
 )
 @pytest.mark.parametrize("expression", ["usr_id", '"user id"', '"usr.id"'])
 def test_roundtrip_preserves_field_classification_across_dialects(
-    tmp_path: Path, spec_version, data_source, dialect, expected_dialect, expression
+    tmp_path: Path,
+    spec_version,
+    data_source,
+    import_data_source,
+    dialect,
+    expected_dialect,
+    expression,
 ):
     """Keep MDL physical renames when the export dialect reads quotes as strings.
 
     Databricks/Spark label the original Wren SQL without transpiling it, so a
     double-quoted physical identifier needs an explicit false WREN marker.
-    Calculated bare aliases need the opposite marker in every dialect.
+    Calculated bare aliases need the opposite marker in every dialect. ANSI
+    exports keep their identifier meaning when imported into Databricks.
     """
     manifest = {
         "data_source": data_source,
@@ -2079,7 +2088,7 @@ def test_roundtrip_preserves_field_classification_across_dialects(
     assert "custom_extensions" not in fields["next_id"]
 
     ossie_path = _write_ossie(tmp_path, dump_ossie(doc))
-    rebuilt, errors = build_json_from_ossie(ossie_path, data_source=data_source)
+    rebuilt, errors = build_json_from_ossie(ossie_path, data_source=import_data_source)
     assert errors == []
     columns = {column["name"]: column for column in rebuilt["models"][0]["columns"]}
     assert columns["customer_id"]["isCalculated"] is False
@@ -2090,6 +2099,101 @@ def test_roundtrip_preserves_field_classification_across_dialects(
     assert columns["copied_id"]["notNull"] is True
     assert columns["next_id"]["isCalculated"] is True
     assert columns["next_id"]["expression"] == "customer_id + 1"
+
+
+@pytest.mark.parametrize(
+    "data_source, entries, is_calculated, missing_ref",
+    [
+        (
+            "databricks",
+            [("DATABRICKS", ""), ("ANSI_SQL", '"missing field" + 1')],
+            None,
+            "missing field",
+        ),
+        (
+            "databricks",
+            [("SNOWFLAKE", '"missing field" + 1')],
+            None,
+            "missing field",
+        ),
+        (
+            "databricks",
+            [("ANSI_SQL", ""), ("SNOWFLAKE", '"missing field" + 1')],
+            None,
+            "missing field",
+        ),
+        (
+            "databricks",
+            [("ANSI_SQL", '"missing field"')],
+            True,
+            "missing field",
+        ),
+        (
+            "postgres",
+            [("DATABRICKS", '"missing field"')],
+            None,
+            None,
+        ),
+        (
+            "databricks",
+            [
+                ("ANSI_SQL", '"ignored field" + 1'),
+                ("DATABRICKS", '"missing field"'),
+            ],
+            None,
+            None,
+        ),
+    ],
+)
+def test_import_reference_warnings_use_selected_expression_dialect(
+    tmp_path: Path, data_source, entries, is_calculated, missing_ref
+):
+    """Analyze selected SQL, including fallback and explicit calculated aliases.
+
+    A double-quoted ANSI/Snowflake column must trigger an undeclared-field
+    warning; the same text is a string literal in Databricks and reads no field.
+    """
+    field = {
+        "name": "result",
+        "datatype": "Integer",
+        "expression": {
+            "dialects": [
+                {"dialect": dialect, "expression": expression}
+                for dialect, expression in entries
+            ]
+        },
+    }
+    if is_calculated is not None:
+        field["custom_extensions"] = [
+            {
+                "vendor_name": "WREN",
+                "data": json.dumps({"is_calculated": is_calculated}),
+            }
+        ]
+    doc = {
+        "version": "0.1.1",
+        "semantic_model": [
+            {
+                "name": "shop",
+                "datasets": [
+                    {"name": "orders", "source": "raw_orders", "fields": [field]}
+                ],
+            }
+        ],
+    }
+    rebuilt, errors = build_json_from_ossie(
+        _write_ossie(tmp_path, dump_ossie(doc)), data_source=data_source
+    )
+    column = rebuilt["models"][0]["columns"][0]
+    assert column["isCalculated"] is True
+    if missing_ref is None:
+        assert errors == []
+    else:
+        assert len(errors) == 1
+        assert errors[0].level == "warning"
+        assert "reference undeclared field(s)" in errors[0].message
+        assert f"'{missing_ref}' (used by result)" in errors[0].message
+        assert "ignored field" not in errors[0].message
 
 
 def test_dump_ossie_is_yaml_in_authoring_order():

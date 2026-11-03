@@ -243,6 +243,8 @@ A single unqualified column expression is a [physical-column rename](/oss/refere
 
 Earlier exports did not carry this flag. Add it to existing bare aliases that intentionally read another semantic field, or export them again from the original Wren project.
 
+Import selects the preferred dialect's nonempty expression, then falls back to `ANSI_SQL`, then to the first nonempty entry. Classification and undeclared-field checks use the selected entry's dialect, even when it differs from the destination warehouse. For example, an `ANSI_SQL` entry containing `"user id"` remains a physical identifier when imported into a Databricks project. A bare-string expression has no dialect label and uses the import preference.
+
 Export keeps the original Wren SQL expression and labels it with the selected dialect; it does not transpile the expression. Where the dialect would infer the wrong kind of column, the exporter writes an explicit `is_calculated` boolean, and import respects either `true` or `false`. For example, Databricks/Spark read `"user id"` as a string, while Wren uses double quotes for identifiers. A physical rename with that expression therefore carries `{"is_calculated": false}` so it remains physical on reimport. The flag shares the existing field-level `WREN` block with metadata such as `not_null`.
 
 Other expressions become calculated columns, and the engine resolves a calculated expression against the model's **declared** columns, not the source table. `full_name: first_name || ' ' || last_name` therefore fails every query on the model unless `first_name` and `last_name` are fields too. Validate warns and prints the fields to add:

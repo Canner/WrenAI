@@ -313,20 +313,20 @@ def _parse_source(source: Any) -> tuple[dict | None, str | None]:
     return (None, src)
 
 
-def _pick_expression(expr_field: Any, dialect_preference: str) -> str:
-    """Extract a SQL expression from Ossie's expression block.
+def _pick_expression(expr_field: Any, dialect_preference: str) -> tuple[str, str]:
+    """Extract SQL text and the dialect of the entry actually selected.
 
     Order: preferred dialect → ANSI_SQL fallback → first available.
     Ossie also permits a bare string for the expression (shorthand) — we honor
-    that too.
+    that too, using the preferred dialect when no entry label is available.
     """
     if isinstance(expr_field, str):
-        return expr_field
+        return expr_field, dialect_preference
     if not isinstance(expr_field, dict):
-        return ""
+        return "", dialect_preference
     dialects = expr_field.get("dialects")
     if not isinstance(dialects, list) or not dialects:
-        return ""
+        return "", dialect_preference
     by_dialect: dict[str, str] = {}
     for d in dialects:
         if isinstance(d, dict):
@@ -340,15 +340,16 @@ def _pick_expression(expr_field: Any, dialect_preference: str) -> str:
     # "found" would emit an empty/identity column for a genuinely calculated
     # field.
     if by_dialect.get(dialect_preference):
-        return by_dialect[dialect_preference]
+        return by_dialect[dialect_preference], dialect_preference
     if by_dialect.get("ANSI_SQL"):
-        return by_dialect["ANSI_SQL"]
+        return by_dialect["ANSI_SQL"], "ANSI_SQL"
     for d in dialects:
         if isinstance(d, dict):
             val = d.get("expression", "")
             if isinstance(val, str) and val:
-                return val
-    return ""
+                label = d.get("dialect")
+                return val, label if isinstance(label, str) else dialect_preference
+    return "", dialect_preference
 
 
 def _sqlglot_read_dialect(dialect: str) -> str | None:
@@ -433,18 +434,19 @@ def _convert_field(
     primary_key_names: set[str],
     not_null: bool = False,
     is_calculated: bool | None = None,
-) -> dict:
+) -> tuple[dict, str]:
     """Convert a field while retaining physical renames and WREN column flags.
 
     An explicit boolean flag takes precedence over expression inference, for
     calculated aliases and physical identifiers with dialect-dependent quoting.
+    Return the selected dialect too, so reference analysis uses the same syntax.
     """
     name = field_obj["name"]
-    expr = _pick_expression(field_obj.get("expression"), dialect)
+    expr, expression_dialect = _pick_expression(field_obj.get("expression"), dialect)
     is_calc = (
         is_calculated
         if isinstance(is_calculated, bool)
-        else _is_calculated_expression(expr, name, dialect)
+        else _is_calculated_expression(expr, name, expression_dialect)
     )
     col_type = _infer_type(field_obj, type_override)
 
@@ -462,7 +464,7 @@ def _convert_field(
         column["not_null"] = True
     if desc := _ossie_description(field_obj):
         column["properties"]["description"] = desc
-    return column
+    return column, expression_dialect
 
 
 def _format_column_types_snippet(dataset_name: str, field_names: list[str]) -> str:
@@ -574,7 +576,7 @@ def _convert_dataset(
         pk_names = [pk_raw]
 
     # Convert fields
-    columns: list[dict] = []
+    converted_fields: list[tuple[dict, str]] = []
     untyped: list[str] = []
     sm_column_types = wren_cfg.column_types.get(name) or {}
     for f in ds.get("fields") or []:
@@ -590,7 +592,7 @@ def _convert_dataset(
             or ds_column_types_local.get(fname)
             or sm_column_types.get(fname)
         )
-        col = _convert_field(
+        col, expression_dialect = _convert_field(
             f,
             dialect=wren_cfg.dialect,
             type_override=type_override,
@@ -598,7 +600,7 @@ def _convert_dataset(
             not_null=field_wren.get("not_null") is True,
             is_calculated=field_wren.get("is_calculated"),
         )
-        columns.append(col)
+        converted_fields.append((col, expression_dialect))
         if type_override is None and f.get("datatype") not in (
             _OSSIE_DATATYPE_TO_WREN_TYPE
         ):
@@ -616,6 +618,7 @@ def _convert_dataset(
             )
         )
 
+    columns = [col for col, _ in converted_fields]
     declared = {c["name"] for c in columns}
 
     # `wren context validate` rejects a primary_key that names a column the
@@ -637,10 +640,10 @@ def _convert_dataset(
     # own columns, not the source table, so a bare reference to a column that
     # is not a declared field fails every query on the model.
     undeclared_refs: dict[str, list[str]] = {}
-    for col in columns:
+    for col, expression_dialect in converted_fields:
         if not col["is_calculated"]:
             continue
-        refs = _expression_column_refs(col["expression"], wren_cfg.dialect)
+        refs = _expression_column_refs(col["expression"], expression_dialect)
         for ref in sorted((refs or set()) - declared):
             undeclared_refs.setdefault(ref, []).append(col["name"])
     if undeclared_refs:
@@ -784,7 +787,7 @@ def _process_metrics(
         mname = m.get("name") or "<unnamed>"
         if not isinstance(mname, str):
             mname = str(mname)
-        expr = _pick_expression(m.get("expression"), wren_cfg.dialect)
+        expr, _ = _pick_expression(m.get("expression"), wren_cfg.dialect)
         desc = m.get("description") if isinstance(m.get("description"), str) else ""
         refs = _metric_referenced_datasets(expr, dataset_names)
         if len(refs) >= 2:
