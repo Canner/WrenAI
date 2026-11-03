@@ -1239,4 +1239,31 @@ mod tests {
         let loaded = super::read_project_dir(project.path()).unwrap().unwrap();
         assert_eq!(loaded.model_ymls.len(), 1);
     }
+
+    #[test]
+    #[cfg(unix)]
+    fn nested_directory_swap_after_reader_parent_open_is_not_silently_skipped() {
+        use std::os::unix::fs::symlink;
+        let project = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(
+            project.path().join("wren_project.yml"),
+            "schema_version: 5\n",
+        )
+        .unwrap();
+        let orders = project.path().join("models/orders");
+        fs::create_dir_all(&orders).unwrap();
+        fs::write(
+            orders.join("metadata.yml"),
+            "name: safe\ntable_reference: safe\ncolumns: []\n",
+        )
+        .unwrap();
+        let moved = project.path().join("models/orders-original");
+        let outside_dir = outside.path().to_path_buf();
+        crate::source_fs::set_after_nth_open_directory_hook(3, move || {
+            fs::rename(&orders, &moved).unwrap();
+            symlink(&outside_dir, &orders).unwrap();
+        });
+        assert!(super::read_project_dir(project.path()).is_err());
+    }
 }

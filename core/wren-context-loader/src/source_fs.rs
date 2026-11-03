@@ -94,7 +94,7 @@ impl SourceDir {
         match self.entry_kind(name)? {
             EntryKind::Directory => self.open_dir(name).map(Some),
             EntryKind::Symlink => {
-                if self.read_bytes_if_file(name)?.is_some() {
+                if self.final_is_regular_file(name)? {
                     Ok(None)
                 } else {
                     Err(directory_symlink_error(&self.display.join(name)))
@@ -150,6 +150,20 @@ impl SourceDir {
         Ok(Some(bytes))
     }
 
+    fn final_is_regular_file(&self, name: &OsStr) -> io::Result<bool> {
+        let fd = match openat(
+            &self.fd,
+            name,
+            OFlags::RDONLY | OFlags::NONBLOCK | OFlags::CLOEXEC,
+            Mode::empty(),
+        ) {
+            Ok(fd) => fd,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error.into()),
+        };
+        Ok(File::from(fd).metadata()?.is_file())
+    }
+
     pub(crate) fn read_string_if_file(&self, name: &OsStr) -> io::Result<Option<String>> {
         self.read_bytes_if_file(name).and_then(|bytes| {
             bytes
@@ -160,20 +174,38 @@ impl SourceDir {
 }
 
 #[cfg(test)]
+type OpenDirectoryHook = (usize, Box<dyn FnOnce()>);
+
+#[cfg(test)]
 thread_local! {
-    static AFTER_OPEN_DIRECTORY: RefCell<Option<Box<dyn FnOnce()>>> = RefCell::new(None);
+    static AFTER_OPEN_DIRECTORY: RefCell<Option<OpenDirectoryHook>> = RefCell::new(None);
+    static OPEN_DIRECTORY_COUNT: RefCell<usize> = const { RefCell::new(0) };
 }
 
 #[cfg(test)]
 pub(crate) fn set_after_open_directory_hook(hook: impl FnOnce() + 'static) {
-    AFTER_OPEN_DIRECTORY.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+    set_after_nth_open_directory_hook(1, hook);
+}
+
+#[cfg(test)]
+pub(crate) fn set_after_nth_open_directory_hook(nth: usize, hook: impl FnOnce() + 'static) {
+    OPEN_DIRECTORY_COUNT.with(|count| *count.borrow_mut() = 0);
+    AFTER_OPEN_DIRECTORY.with(|slot| *slot.borrow_mut() = Some((nth, Box::new(hook))));
 }
 
 #[cfg(test)]
 fn run_after_open_directory_hook() {
+    let count = OPEN_DIRECTORY_COUNT.with(|count| {
+        let mut count = count.borrow_mut();
+        *count += 1;
+        *count
+    });
     AFTER_OPEN_DIRECTORY.with(|slot| {
-        if let Some(hook) = slot.borrow_mut().take() {
-            hook();
+        let should_run = slot.borrow().as_ref().is_some_and(|(nth, _)| *nth == count);
+        if should_run {
+            if let Some((_, hook)) = slot.borrow_mut().take() {
+                hook();
+            }
         }
     });
 }
