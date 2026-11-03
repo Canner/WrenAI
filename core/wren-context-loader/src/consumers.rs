@@ -12,11 +12,16 @@
 //! a statement that fails to parse is reported to the caller, who falls back to a whole-word text
 //! scan and records the degradation (no silent caps).
 
-use std::collections::{BTreeSet, HashMap};
+#[cfg(test)]
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::ops::ControlFlow;
 
 use serde::Deserialize;
-use sqlparser::ast::{visit_expressions, Expr, ObjectName, ObjectNamePart, Query, Visit, Visitor};
+use sqlparser::ast::{
+    visit_expressions, Expr, Ident, ObjectName, ObjectNamePart, Query, Select, SelectItem,
+    SelectItemQualifiedWildcardKind, TableFactor, Visit, Visitor,
+};
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 
@@ -103,46 +108,116 @@ pub(crate) fn parse_dashboards(yml: &str) -> Result<DashboardsFile, String> {
 /// declared after it (to every sibling under `WITH RECURSIVE`), never to its own body, so
 /// `WITH orders AS (SELECT * FROM orders) SELECT * FROM orders` still reads the `orders` table
 /// inside the CTE body, and a CTE defined in a subquery shadows nothing outside that subquery.
+#[cfg(test)]
 pub(crate) fn sql_table_names(sql: &str) -> Option<BTreeSet<String>> {
-    let statements = Parser::parse_sql(&GenericDialect {}, sql).ok()?;
-    let mut collector = RelationCollector::default();
-    let _: ControlFlow<()> = statements.visit(&mut collector);
-    Some(collector.names)
+    Some(
+        sql_consumer_references(sql)?
+            .relations
+            .iter()
+            .map(|relation| relation.name.value.clone())
+            .collect(),
+    )
 }
 
 /// Every column name `sql` references in an expression (`total`, `o.total` → `total`), by parsing
 /// it. Comments, string literals, select-list aliases and table names are not column references,
 /// so they are not in the set. Returns `None` when the SQL does not parse; the caller falls back
 /// to a whole-word scan, as for [`sql_table_names`].
+#[cfg(test)]
 pub(crate) fn sql_column_names(sql: &str) -> Option<BTreeSet<String>> {
+    Some(
+        sql_consumer_references(sql)?
+            .columns
+            .iter()
+            .map(|column| column.name.value.clone())
+            .collect(),
+    )
+}
+
+/// Parsed SQL facts that preserve enough source provenance for consumer lineage. In particular,
+/// quoted identifiers stay quoted, table aliases stay attached to their relation, and projection
+/// wildcards are distinguished from expression wildcards such as `COUNT(*)`.
+#[derive(Debug, Default)]
+pub(crate) struct SqlConsumerReferences {
+    pub relations: Vec<RelationReference>,
+    pub columns: Vec<ColumnReference>,
+    pub wildcards: Vec<WildcardReference>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct RelationReference {
+    pub name: Ident,
+    pub alias: Option<Ident>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ColumnReference {
+    pub qualifier: Option<Ident>,
+    pub name: Ident,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct WildcardReference {
+    pub qualifier: Option<Ident>,
+    /// Physical table sources in the `SELECT` that owns this projection. CTE and derived sources
+    /// deliberately do not appear: their output cannot safely be attributed to a cube here.
+    pub sources: Vec<RelationReference>,
+}
+
+/// Parse consumer SQL once and retain relation, column, and projection provenance. A malformed
+/// statement returns `None`, so callers retain the established diagnostic fallback.
+pub(crate) fn sql_consumer_references(sql: &str) -> Option<SqlConsumerReferences> {
     let statements = Parser::parse_sql(&GenericDialect {}, sql).ok()?;
-    let mut names = BTreeSet::new();
+    let mut collector = RelationCollector::default();
+    let _: ControlFlow<()> = statements.visit(&mut collector);
+    let mut columns = Vec::new();
     let _: ControlFlow<()> = visit_expressions(&statements, |expr| {
         match expr {
             Expr::Identifier(ident) => {
-                names.insert(ident.value.clone());
+                columns.push(ColumnReference {
+                    qualifier: None,
+                    name: ident.clone(),
+                });
             }
             Expr::CompoundIdentifier(parts) => {
                 if let Some(last) = parts.last() {
-                    names.insert(last.value.clone());
+                    columns.push(ColumnReference {
+                        qualifier: parts.get(parts.len().saturating_sub(2)).cloned(),
+                        name: last.clone(),
+                    });
                 }
             }
             _ => {}
         }
         ControlFlow::Continue(())
     });
-    Some(names)
+    Some(SqlConsumerReferences {
+        relations: collector.relations,
+        columns,
+        wildcards: collector.wildcards,
+    })
 }
 
 /// Collects table-position relation names while tracking which CTE names are in scope.
 #[derive(Default)]
 struct RelationCollector {
-    names: BTreeSet<String>,
-    /// The CTE names (lowercased) visible to the query being visited, innermost query last.
-    scopes: Vec<Vec<String>>,
+    relations: Vec<RelationReference>,
+    wildcards: Vec<WildcardReference>,
+    /// The CTE names visible to the query being visited, innermost query last.
+    scopes: Vec<Vec<Ident>>,
     /// The scope a CTE body sees, keyed by the body's address. It differs from the scope of the
     /// query that carries the `WITH`, because a CTE does not see itself or the CTEs after it.
-    cte_body_scopes: HashMap<*const Query, Vec<String>>,
+    cte_body_scopes: HashMap<*const Query, Vec<Ident>>,
+}
+
+/// SQL matching rules for identifiers relevant to the engine's relation resolution: an unquoted
+/// occurrence is ASCII case-insensitive, while any quoted side requires exact text.
+pub(crate) fn identifiers_match(left: &Ident, right: &Ident) -> bool {
+    if left.quote_style.is_some() || right.quote_style.is_some() {
+        left.value == right.value
+    } else {
+        left.value.eq_ignore_ascii_case(&right.value)
+    }
 }
 
 impl Visitor for RelationCollector {
@@ -156,10 +231,10 @@ impl Visitor for RelationCollector {
             .unwrap_or_default();
         let mut visible = inherited.clone();
         if let Some(with) = &query.with {
-            let declared: Vec<String> = with
+            let declared: Vec<Ident> = with
                 .cte_tables
                 .iter()
-                .map(|cte| cte.alias.name.value.to_lowercase())
+                .map(|cte| cte.alias.name.clone())
                 .collect();
             for (index, cte) in with.cte_tables.iter().enumerate() {
                 let sees = if with.recursive {
@@ -175,6 +250,7 @@ impl Visitor for RelationCollector {
             visible.extend(declared);
         }
         self.scopes.push(visible);
+        self.collect_query_wildcards(query);
         ControlFlow::Continue(())
     }
 
@@ -188,15 +264,94 @@ impl Visitor for RelationCollector {
             let bound = self
                 .scopes
                 .last()
-                .is_some_and(|scope| scope.contains(&ident.value.to_lowercase()));
+                .is_some_and(|scope| scope.iter().any(|cte| identifiers_match(cte, ident)));
             if bound {
                 return ControlFlow::Continue(());
             }
         }
-        if let Some(ObjectNamePart::Identifier(ident)) = relation.0.last() {
-            self.names.insert(ident.value.clone());
-        }
         ControlFlow::Continue(())
+    }
+
+    fn pre_visit_table_factor(&mut self, factor: &TableFactor) -> ControlFlow<()> {
+        let TableFactor::Table { name, alias, .. } = factor else {
+            return ControlFlow::Continue(());
+        };
+        let Some(ObjectNamePart::Identifier(ident)) = name.0.last() else {
+            return ControlFlow::Continue(());
+        };
+        if name.0.len() == 1
+            && self
+                .scopes
+                .last()
+                .is_some_and(|scope| scope.iter().any(|cte| identifiers_match(cte, ident)))
+        {
+            return ControlFlow::Continue(());
+        }
+        self.relations.push(RelationReference {
+            name: ident.clone(),
+            alias: alias.as_ref().map(|alias| alias.name.clone()),
+        });
+        ControlFlow::Continue(())
+    }
+}
+
+impl RelationCollector {
+    fn collect_query_wildcards(&mut self, query: &Query) {
+        let Some(select) = query.body.as_select() else {
+            return;
+        };
+        let sources = self.select_sources(select);
+        for item in &select.projection {
+            let qualifier = match item {
+                SelectItem::Wildcard(_) => None,
+                SelectItem::QualifiedWildcard(
+                    SelectItemQualifiedWildcardKind::ObjectName(name),
+                    _,
+                ) => name.0.last().and_then(|part| match part {
+                    ObjectNamePart::Identifier(ident) => Some(ident.clone()),
+                    _ => None,
+                }),
+                // `COUNT(*)` and arbitrary `expr.*` are not a projection of a relation.
+                _ => continue,
+            };
+            self.wildcards.push(WildcardReference {
+                qualifier,
+                sources: sources.clone(),
+            });
+        }
+    }
+
+    fn select_sources(&self, select: &Select) -> Vec<RelationReference> {
+        let mut sources = Vec::new();
+        for table in &select.from {
+            Self::add_source(&table.relation, self.scopes.last(), &mut sources);
+            for join in &table.joins {
+                Self::add_source(&join.relation, self.scopes.last(), &mut sources);
+            }
+        }
+        sources
+    }
+
+    fn add_source(
+        factor: &TableFactor,
+        scope: Option<&Vec<Ident>>,
+        sources: &mut Vec<RelationReference>,
+    ) {
+        let TableFactor::Table { name, alias, .. } = factor else {
+            return;
+        };
+        let Some(ObjectNamePart::Identifier(ident)) = name.0.last() else {
+            return;
+        };
+        if name.0.len() == 1
+            && scope.is_some_and(|scope| scope.iter().any(|cte| identifiers_match(cte, ident)))
+        {
+            return;
+        }
+        sources.push(RelationReference {
+            name: ident.clone(),
+            alias: alias.as_ref().map(|alias| alias.name.clone()),
+        });
     }
 }
 

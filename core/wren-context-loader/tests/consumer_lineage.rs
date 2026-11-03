@@ -527,3 +527,89 @@ fn cte_names_match_case_insensitively() {
     );
     assert!(reaches(&ctx, "model:customers", "query:mixed-case"));
 }
+
+#[test]
+fn projection_wildcards_link_only_their_cube_members() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    for (slug, sql) in [
+        ("all", "SELECT * FROM order_metrics"),
+        ("alias", "SELECT om.* FROM order_metrics om"),
+        ("count", "SELECT COUNT(*) FROM order_metrics"),
+        (
+            "customers-only",
+            "SELECT c.* FROM customers c JOIN order_metrics om ON TRUE",
+        ),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+    let ctx = load(tmp.path());
+
+    for query in ["query:all", "query:alias"] {
+        assert!(reaches(&ctx, "metric:order_metrics.total_value", query));
+        assert!(reaches(&ctx, "dim:order_metrics.placed_at", query));
+    }
+    for query in ["query:count", "query:customers-only"] {
+        assert!(!reaches(&ctx, "metric:order_metrics.total_value", query));
+        assert!(!reaches(&ctx, "dim:order_metrics.placed_at", query));
+    }
+}
+
+#[test]
+fn qualified_cube_members_must_resolve_to_the_cube_source() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/unrelated-qualified.md",
+        "---\nsql: SELECT c.total_value FROM customers c JOIN order_metrics om ON TRUE\n---\n",
+    );
+    write(
+        tmp.path(),
+        "knowledge/sql/cube-qualified.md",
+        "---\nsql: SELECT om.total_value FROM customers c JOIN order_metrics om ON TRUE\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(!reaches(
+        &ctx,
+        "metric:order_metrics.total_value",
+        "query:unrelated-qualified"
+    ));
+    assert!(reaches(
+        &ctx,
+        "metric:order_metrics.total_value",
+        "query:cube-qualified"
+    ));
+}
+
+#[test]
+fn quoted_ctes_and_relations_preserve_engine_case_resolution() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/quoted-cte.md",
+        "---\nsql: WITH \"Orders\" AS (SELECT * FROM customers) SELECT * FROM orders\n---\n",
+    );
+    write(
+        tmp.path(),
+        "knowledge/sql/unquoted-model.md",
+        "---\nsql: SELECT * FROM ORDERS\n---\n",
+    );
+    write(
+        tmp.path(),
+        "knowledge/sql/quoted-model.md",
+        "---\nsql: SELECT * FROM \"ORDERS\"\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(reaches(&ctx, "model:customers", "query:quoted-cte"));
+    assert!(reaches(&ctx, "model:orders", "query:quoted-cte"));
+    assert!(reaches(&ctx, "model:orders", "query:unquoted-model"));
+    assert!(!reaches(&ctx, "model:orders", "query:quoted-model"));
+}

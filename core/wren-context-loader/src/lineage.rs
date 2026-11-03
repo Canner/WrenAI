@@ -118,7 +118,14 @@ pub fn build(manifest: &Manifest) -> (LineageGraph, Vec<String>) {
     for view in &manifest.views {
         let vid = view_id(&view.name);
         push_node(&mut nodes, vid.clone(), LineageKind::View);
-        for model_name in referenced_names(&view.statement, &model_names, &vid, &mut diagnostics) {
+        let references = consumers::sql_consumer_references(&view.statement);
+        for model_name in referenced_names(
+            references.as_ref(),
+            &view.statement,
+            &model_names,
+            &vid,
+            &mut diagnostics,
+        ) {
             push_edge(&mut edges, model_id(&model_name), vid.clone());
         }
     }
@@ -234,16 +241,8 @@ fn link_sql_consumer(
     candidates.extend(view_names.iter().cloned());
     candidates.extend(manifest.cubes.iter().map(|c| c.name.clone()));
 
-    // Members are matched against the parsed column references, so a name that appears only in a
-    // comment or a string literal does not link the consumer. SQL that does not parse was already
-    // recorded by `referenced_names` and falls back to the whole-word scan.
-    let columns = consumers::sql_column_names(sql);
-    let mentions = |name: &str| match &columns {
-        Some(columns) => columns.contains(name),
-        None => statement_references(sql, name),
-    };
-
-    for name in referenced_names(sql, &candidates, consumer, diagnostics) {
+    let references = consumers::sql_consumer_references(sql);
+    for name in referenced_names(references.as_ref(), sql, &candidates, consumer, diagnostics) {
         if model_names.contains(&name) {
             push_edge(&mut graph.edges, model_id(&name), consumer.to_string());
         } else if view_names.contains(&name) {
@@ -251,7 +250,7 @@ fn link_sql_consumer(
         } else if let Some(cube) = manifest.cubes.iter().find(|c| c.name == name) {
             push_edge(&mut graph.edges, cube_id(&name), consumer.to_string());
             for measure in &cube.measures {
-                if mentions(&measure.name) {
+                if member_is_referenced(references.as_ref(), sql, &cube.name, &measure.name) {
                     push_edge(
                         &mut graph.edges,
                         metric_id(&cube.name, &measure.name),
@@ -265,7 +264,7 @@ fn link_sql_consumer(
                 .map(|d| d.name.as_str())
                 .chain(cube.time_dimensions.iter().map(|d| d.name.as_str()));
             for dim_name in dim_names {
-                if mentions(dim_name) {
+                if member_is_referenced(references.as_ref(), sql, &cube.name, dim_name) {
                     push_edge(
                         &mut graph.edges,
                         dim_id(&cube.name, dim_name),
@@ -281,15 +280,21 @@ fn link_sql_consumer(
 /// its relation names with `candidates`; when the SQL does not parse, degrades to the whole-word
 /// scan over every candidate and records the degradation against `node` in `diagnostics`.
 fn referenced_names(
+    references: Option<&consumers::SqlConsumerReferences>,
     sql: &str,
     candidates: &[String],
     node: &str,
     diagnostics: &mut Vec<String>,
 ) -> Vec<String> {
-    match consumers::sql_table_names(sql) {
-        Some(relations) => candidates
+    match references {
+        Some(references) => candidates
             .iter()
-            .filter(|name| relations.contains(*name))
+            .filter(|name| {
+                references
+                    .relations
+                    .iter()
+                    .any(|relation| identifier_matches_name(&relation.name, name))
+            })
             .cloned()
             .collect(),
         None => {
@@ -303,6 +308,77 @@ fn referenced_names(
                 .collect()
         }
     }
+}
+
+/// A parsed relation identifier resolves to a manifest name using the same quoted/unquoted rule
+/// as CTE scope matching. Manifest names are authored unquoted: a quoted SQL occurrence therefore
+/// needs identical text, while an unquoted occurrence is ASCII case-insensitive.
+fn identifier_matches_name(identifier: &sqlparser::ast::Ident, name: &str) -> bool {
+    if identifier.quote_style.is_some() {
+        identifier.value == name
+    } else {
+        identifier.value.eq_ignore_ascii_case(name)
+    }
+}
+
+fn source_matches_cube(source: &consumers::RelationReference, cube: &str) -> bool {
+    identifier_matches_name(&source.name, cube)
+}
+
+fn source_matches_qualifier(
+    source: &consumers::RelationReference,
+    qualifier: &sqlparser::ast::Ident,
+) -> bool {
+    source
+        .alias
+        .as_ref()
+        .is_some_and(|alias| consumers::identifiers_match(alias, qualifier))
+        || consumers::identifiers_match(&source.name, qualifier)
+}
+
+/// Whether a cube member is selected from this cube. Qualified columns first resolve their
+/// qualifier to exactly one physical relation in the whole statement; ambiguous aliases do not
+/// manufacture an edge. Bare names are only accepted when the cube is the statement's sole
+/// physical relation. Projection wildcards are kept per `SELECT`, so `COUNT(*)` and an outer
+/// wildcard over a derived/CTE source cannot expand cube members.
+fn member_is_referenced(
+    references: Option<&consumers::SqlConsumerReferences>,
+    sql: &str,
+    cube: &str,
+    member: &str,
+) -> bool {
+    let Some(references) = references else {
+        return statement_references(sql, member);
+    };
+    let column_matches = references.columns.iter().any(|column| {
+        if !identifier_matches_name(&column.name, member) {
+            return false;
+        }
+        match &column.qualifier {
+            Some(qualifier) => {
+                let mut sources = references
+                    .relations
+                    .iter()
+                    .filter(|source| source_matches_qualifier(source, qualifier));
+                matches!(sources.next(), Some(source) if source_matches_cube(source, cube))
+                    && sources.next().is_none()
+            }
+            None => {
+                references.relations.len() == 1
+                    && source_matches_cube(&references.relations[0], cube)
+            }
+        }
+    });
+    column_matches
+        || references.wildcards.iter().any(|wildcard| {
+            wildcard.sources.iter().any(|source| {
+                source_matches_cube(source, cube)
+                    && wildcard
+                        .qualifier
+                        .as_ref()
+                        .is_none_or(|qualifier| source_matches_qualifier(source, qualifier))
+            })
+        })
 }
 
 /// Naive whole-word containment check: does `statement` reference `name` as a standalone token?
