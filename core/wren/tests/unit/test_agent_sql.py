@@ -955,6 +955,17 @@ def test_a_function_miss_does_not_hide_a_denial(adhoc, sql):
         adhoc().sql.prepare(sql)
 
 
+def test_cr19_an_unknown_model_is_terminal_even_beside_a_function_miss(adhoc):
+    s = adhoc()
+    for sql in (
+        "SELECT now() FROM ghosts",
+        "SELECT now() FROM orders o JOIN ghosts g ON g.id = o.id",
+        "SELECT COUNT(*) FROM orders WHERE id IN (SELECT id FROM ghosts) AND now() > 1",
+    ):
+        with pytest.raises(PermissionError, match="query_denied:unknown_model"):
+            s.sql.prepare(sql)
+
+
 def test_an_unexpected_planner_error_is_rewritable_never_terminal(adhoc, monkeypatch):
     s = adhoc()
     for error in (RuntimeError("boom"), KeyError("x"), ValueError("anything")):

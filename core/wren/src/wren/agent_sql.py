@@ -534,6 +534,12 @@ class AdHocSQL:
                     ):
                         raise denied("denied_column")
             if pending is not None:
+                # A model the project does not have ends the task as well; only a statement
+                # whose every source is known gets the rewritable form error.
+                for scope in scopes:
+                    for src in scope.sources.values():
+                        if isinstance(src, exp.Table) and src.name not in self.schema:
+                            raise ValueError("unknown_model")
                 raise pending
             sources, physical = {}, []
             for scope in scopes:
