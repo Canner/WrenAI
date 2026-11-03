@@ -364,6 +364,9 @@ jobs:
         run: uv run --no-sync pytest tests/unit/test_mcp_server.py -v
 
   test-agent:
+    env:
+      WREN_REQUIRE_CONTEXT_LOADER: "1"
+      WREN_CONTEXT_LOADER_BIN: ${{ github.workspace }}/core/wren-context-loader/target/debug/wren-context-loader
     name: agent service tests
     runs-on: ubuntu-latest
     defaults:
