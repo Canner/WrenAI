@@ -195,6 +195,29 @@ def test_the_latest_row_per_amount_through_row_number_is_single(strict):
     assert violations(strict, QUALIFIED.format(order="DESC")) == []
 
 
+@pytest.mark.parametrize("predicate", ["1 <= r.rn", "r.rn >= 1"])
+def test_a_lower_bound_on_row_number_is_not_a_single_match(strict, predicate):
+    sql = RANKED.replace("r.rn = {limit}", predicate)
+    assert violations(strict, sql) == [f"{RATE}:rate_multi_match"]
+
+
+@pytest.mark.parametrize(
+    "predicate", ["r.rn = 1", "1 = r.rn", "r.rn <= 1", "1 >= r.rn"]
+)
+def test_single_match_limits_preserve_comparison_direction(strict, predicate):
+    assert violations(strict, RANKED.replace("r.rn = {limit}", predicate)) == []
+
+
+def test_each_partition_key_must_be_fixed_by_the_later_join(strict):
+    sql = RANKED.replace("PARTITION BY p.id", "PARTITION BY p.id, f.date")
+    assert violations(strict, sql.format(limit=1)) == [f"{RATE}:rate_multi_match"]
+
+
+def test_an_unrelated_rank_alias_does_not_limit_the_rate(strict):
+    sql = RANKED.replace("r.rn = {limit}", "p.id = 1")
+    assert violations(strict, sql) == [f"{RATE}:rate_multi_match"]
+
+
 def test_row_number_that_does_not_keep_the_newest_row_is_not_single(strict):
     # oldest first, and no filter on the row number, are not "the latest rate"
     assert violations(strict, QUALIFIED.format(order="ASC")) == [
@@ -400,3 +423,45 @@ def test_a_scope_for_one_rule_does_not_excuse_another_that_would_otherwise_pass(
     kept = evaluate(checker, ast, {"keep-paid-shipped": fold_all(["paid"])})
     assert list(kept.violations) == []
     assert kept.checks["keep-usd-eur"]["result"] == "satisfied"
+
+
+def test_a_passthrough_alias_preserves_the_rank_proof():
+    strict = make_checker(match="single")
+    sql = RANKED.replace(
+        ") SELECT SUM",
+        "), renamed AS (SELECT pid AS key, rate, rn AS rank FROM ranked) SELECT SUM",
+    )
+    sql = sql.replace(
+        "LEFT JOIN ranked r ON r.pid = p.id AND r.rn = {limit}",
+        "LEFT JOIN renamed r ON r.key = p.id AND r.rank = 1",
+    )
+    assert violations(strict, sql) == []
+
+
+def test_each_consumer_needs_its_own_rank_limit(strict):
+    sql = RANKED.format(limit=1) + " LEFT JOIN ranked s ON s.pid = p.id"
+    assert violations(strict, sql) == [f"{RATE}:rate_multi_match"]
+
+
+def test_a_same_named_rank_on_another_source_is_not_a_limit(strict):
+    sql = RANKED.replace("r.rn = {limit}", "other.rn = 1")
+    sql += " LEFT JOIN (SELECT id AS rn FROM payments) other ON other.rn=p.id"
+    assert violations(strict, sql) == [f"{RATE}:rate_multi_match"]
+
+
+def test_a_local_rank_cannot_partition_an_amount_by_an_unrelated_source(strict):
+    sql = """SELECT SUM(CASE WHEN p.currency='USD' THEN p.amount ELSE p.amount*f.rate_to_usd END)
+        FROM payments p LEFT JOIN fx_rates f
+        ON f.currency=p.currency AND f.date<=p.captured_at
+        CROSS JOIN customers c GROUP BY p.id,c.id,f.date
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY p.id,c.id ORDER BY f.date DESC)=1"""
+    assert violations(strict, sql) == [f"{RATE}:rate_multi_match"]
+
+
+def test_a_local_rank_on_the_amount_instance_is_still_single(strict):
+    sql = """SELECT SUM(CASE WHEN p.currency='USD' THEN p.amount ELSE p.amount*f.rate_to_usd END)
+        FROM payments p LEFT JOIN fx_rates f
+        ON f.currency=p.currency AND f.date<=p.captured_at
+        GROUP BY p.id,f.date
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY p.id ORDER BY f.date DESC)=1"""
+    assert violations(strict, sql) == []

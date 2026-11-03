@@ -39,6 +39,7 @@ from typing import Iterator
 
 from sqlglot import exp
 from sqlglot.optimizer.qualify import qualify
+from sqlglot.optimizer.scope import Scope
 
 from wren.declared_default_check import (
     DefaultsChecker,
@@ -313,7 +314,6 @@ class _Rate:
             if column not in keys
         }
         self.base = rule.base_currency.casefold() if rule.base_currency else None
-        self.ctes = {cte.alias: cte.this for cte in statement.ast.find_all(exp.CTE)}
 
     # -- applicability --------------------------------------------------
 
@@ -338,12 +338,16 @@ class _Rate:
 
     def _reads(self, node: exp.Expression, seen: frozenset = frozenset()) -> bool:
         for table in node.find_all(exp.Table):
-            if table.name == self.model:
-                return True
-            body = self.ctes.get(table.name)
-            if body is not None and table.name not in seen:
-                if self._reads(body, seen | {table.name}):
+            owner = self.st._scope_for(table)
+            source = (
+                owner.sources.get(table.alias_or_name) if owner is not None else table
+            )
+            if isinstance(source, Scope):
+                key = id(source.expression)
+                if key not in seen and self._reads(source.expression, seen | {key}):
                     return True
+            elif isinstance(source, exp.Table) and source.name == self.model:
+                return True
         return False
 
     def _direct(self, node: exp.Expression) -> bool:
@@ -384,80 +388,215 @@ class _Rate:
 
     # -- single match -----------------------------------------------------
 
-    def _latest_one(self, select: exp.Select) -> bool:
-        """The select keeps only the newest rate row: ``ROW_NUMBER() ... ORDER BY date DESC`` = 1."""
-        for window in select.find_all(exp.Window):
-            if not isinstance(window.this, exp.RowNumber):
-                continue
-            if window.find_ancestor(exp.Select) is not select:
-                continue
-            order = window.args.get("order")
-            newest_first = order is not None and any(
-                isinstance(item, exp.Ordered)
-                and item.args.get("desc")
-                and self.st.direct(item.this) == self.rate_date
-                for item in order.expressions
-            )
-            if newest_first and self._limited_to_one(select, window):
-                return True
-        return False
+    def _origin(self, node, visiting=frozenset()):
+        """Exact AST origin, preserving table instances and window identities."""
+        node = _unparen(node.unalias())
+        if isinstance(node, exp.Window):
+            return (id(node), "window")
+        if not isinstance(node, exp.Column):
+            return None
+        scope = self.st._scope_for(node)
+        if scope is None:
+            return None
+        source = scope.sources.get(node.table)
+        if isinstance(source, exp.Table):
+            return (id(source), node.name)
+        if isinstance(source, Scope) and isinstance(source.expression, exp.Select):
+            key = (id(source), node.name)
+            if key in visiting:
+                return None
+            matches = [
+                p for p in source.expression.selects if p.alias_or_name == node.name
+            ]
+            if len(matches) == 1:
+                return self._origin(matches[0], visiting | {key})
+        return None
 
-    def _limited_to_one(self, select: exp.Select, window: exp.Window) -> bool:
-        alias = window.parent.alias if isinstance(window.parent, exp.Alias) else None
-        clauses = [q.this for q in select.find_all(exp.Qualify)]
-        if alias:
-            clauses += self.st.roots
+    @staticmethod
+    def _one_bound(node):
+        """Return only the operand bounded above by one, never a lower bound."""
+        if isinstance(node, (exp.EQ, exp.LTE)):
+            other = _unparen(node.expression)
+            if (
+                isinstance(other, exp.Literal)
+                and not other.is_string
+                and other.this == "1"
+            ):
+                yield _unparen(node.this)
+        if isinstance(node, (exp.EQ, exp.GTE)):
+            other = _unparen(node.this)
+            if (
+                isinstance(other, exp.Literal)
+                and not other.is_string
+                and other.this == "1"
+            ):
+                yield _unparen(node.expression)
+
+    def _limited_to_one(self, select, window, clauses, alias=None):
         for clause in clauses:
             for node in _conjuncts(clause):
-                if not isinstance(node, (exp.EQ, exp.LTE)):
-                    continue
-                for side, other in (
-                    (node.this, node.expression),
-                    (node.expression, node.this),
-                ):
-                    one = (
-                        isinstance(other, exp.Literal)
-                        and not other.is_string
-                        and other.this == "1"
-                    )
-                    names_it = side == window or (
-                        alias is not None
-                        and isinstance(side, exp.Column)
-                        and side.name == alias
-                    )
-                    if one and names_it:
+                for side in self._one_bound(node):
+                    if alias is not None and (
+                        not isinstance(side, exp.Column) or side.table != alias
+                    ):
+                        continue
+                    if side is window or self._origin(side) == (id(window), "window"):
                         return True
+                    # A QUALIFY may refer to a SELECT alias without a table qualifier.
+                    if (
+                        alias is None
+                        and isinstance(side, exp.Column)
+                        and not side.table
+                    ):
+                        if (
+                            side.find_ancestor(exp.Select) is select
+                            and isinstance(window.parent, exp.Alias)
+                            and side.name == window.parent.alias
+                        ):
+                            return True
+        return False
+
+    def _latest_one(self, select, clauses, alias=None, fixed=None):
+        for window in select.find_all(exp.Window):
+            if (
+                not isinstance(window.this, exp.RowNumber)
+                or window.find_ancestor(exp.Select) is not select
+            ):
+                continue
+            order = window.args.get("order")
+            newest = (
+                order is not None
+                and bool(order.expressions)
+                and (
+                    order.expressions[0].args.get("desc")
+                    and self.st.direct(order.expressions[0].this) == self.rate_date
+                )
+            )
+            keys = [self._origin(key) for key in window.args.get("partition_by") or []]
+            if any(key is None for key in keys):
+                continue
+            if fixed is not None:
+                if not set(keys) <= fixed:
+                    continue
+            elif keys:
+                # A local QUALIFY must bound the amount instance itself. Keys
+                # from another joined source can vary many times per amount.
+                amount_sources = {
+                    origin[0]
+                    for projection in select.selects
+                    for column in projection.find_all(exp.Column)
+                    if column.find_ancestor(exp.Select) is select
+                    and self.st.direct(column) in self.amounts
+                    and (origin := self._origin(column)) is not None
+                }
+                if len(amount_sources) != 1 or any(
+                    key[0] not in amount_sources for key in keys
+                ):
+                    continue
+            local = select.args.get("qualify")
+            limited = local is not None and self._limited_to_one(
+                select, window, [local.this]
+            )
+            limited = limited or self._limited_to_one(select, window, clauses, alias)
+            if newest and limited:
+                return True
         return False
 
     def _single(self, kind: str, select: exp.Select, join: exp.Join | None) -> bool:
         if join is not None and join.args.get("method") == "ASOF":
             return True
-        if self._latest_one(select):
+        # A window in this SELECT applies after its joins. Only its own QUALIFY
+        # can limit it here; filters in another scope must prove the derived join.
+        if self._latest_one(select, []):
             return True
-        if join is not None:
-            source = join.this
-        else:
-            source = (select.args.get("from_") or select.args.get("from")).this
-        return not self._direct(source) and self._derived_single(source)
-
-    def _derived_single(
-        self, node: exp.Expression, seen: frozenset = frozenset()
-    ) -> bool:
-        for select in node.find_all(exp.Select):
-            if self._takes_rate_directly(select) and self._latest_one(select):
+        # The enclosing attachment separately proves every consumer's join keys.
+        # Here an exact reference to this window may limit the intermediate rows.
+        own_scope = self.st._scope_for(select)
+        consumers = any(
+            own_scope is src
+            for parent in self.st.scopes
+            for src in parent.sources.values()
+        )
+        if consumers:
+            if not select.args.get("joins") and all(
+                isinstance(_unparen(p.unalias()), exp.Column) for p in select.selects
+            ):
+                # This wrapper adds no rows; the consuming attachment must prove
+                # the underlying rank and its partition keys through the wrapper.
                 return True
-        for table in node.find_all(exp.Table):
-            body = self.ctes.get(table.name)
-            if body is not None and table.name not in seen:
-                if self._derived_single(body, seen | {table.name}):
-                    return True
-        return False
+            keys = {
+                self._origin(key)
+                for window in select.find_all(exp.Window)
+                for key in window.args.get("partition_by") or []
+            }
+            if self._latest_one(select, self.st.roots, fixed=keys):
+                return True
+        source = (
+            join.this
+            if join is not None
+            else (select.args.get("from_") or select.args.get("from")).this
+        )
+        if self._direct(source):
+            return False
+        scope = self.st._scope_for(select)
+        derived = scope.sources.get(source.alias_or_name) if scope is not None else None
+        if not isinstance(derived, Scope) or not isinstance(
+            derived.expression, exp.Select
+        ):
+            return False
+        clauses = []
+        if join is not None and join.args.get("on") is not None:
+            clauses.append(join.args["on"])
+        if select.args.get("where") is not None:
+            clauses.append(select.args["where"].this)
+        fixed = set()
+        for clause in clauses:
+            for atom in _conjuncts(clause):
+                if not isinstance(atom, exp.EQ):
+                    continue
+                for side, other in (
+                    (atom.this, atom.expression),
+                    (atom.expression, atom.this),
+                ):
+                    side, other = _unparen(side), _unparen(other)
+                    if (
+                        not isinstance(side, exp.Column)
+                        or side.table != source.alias_or_name
+                    ):
+                        continue
+                    # Equality must fix the partition key from outside this source.
+                    if isinstance(other, exp.Literal) or (
+                        isinstance(other, exp.Column)
+                        and other.table != side.table
+                        and self.st._scope_for(other) is scope
+                        and self.st.direct(other) is not None
+                        and self.st.direct(other)[0] in {m for m, _ in self.amounts}
+                        and not self._reads(
+                            scope.sources[other.table].expression
+                            if isinstance(scope.sources.get(other.table), Scope)
+                            else scope.sources[other.table]
+                        )
+                    ):
+                        origin = self._origin(side)
+                        if origin is not None:
+                            fixed.add(origin)
+        return self._derived_single(derived, clauses, source.alias_or_name, fixed)
 
-    def _takes_rate_directly(self, select: exp.Select) -> bool:
+    def _derived_single(self, scope, clauses, alias, fixed):
+        select = scope.expression
+        if self._latest_one(select, clauses, alias, fixed):
+            return True
+        # Pass-through wrappers may preserve a proof, but a further join or set
+        # operation can multiply it and needs its own cardinality analysis.
+        if select.args.get("joins"):
+            return False
         source = select.args.get("from_") or select.args.get("from")
-        sources = [source.this] if source is not None else []
-        sources += [join.this for join in select.args.get("joins") or []]
-        return any(self._direct(s) for s in sources)
+        inner = (
+            scope.sources.get(source.this.alias_or_name) if source is not None else None
+        )
+        if isinstance(inner, Scope) and isinstance(inner.expression, exp.Select):
+            return self._derived_single(inner, clauses, alias, fixed)
+        return False
 
     # -- base currency ------------------------------------------------------
 

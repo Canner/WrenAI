@@ -41,6 +41,7 @@ from sqlglot.optimizer.scope import Scope, ScopeType, traverse_scope
 
 from wren.declared_default_check import DefaultsChecker
 from wren.declared_default_fx import VIEW_MARK, evaluate
+from wren.governed_query import query as governed_query
 from wren.read_only import UnsupportedFunctionError, check_read_only_query
 
 
@@ -1212,7 +1213,7 @@ class AdHocSQL:
 
     def execute(self, prepared):
         sql, sources, conditions, labels, checks, observed, unverified = prepared
-        table = self.project.engine.query(sql, 101, read_only=True)
+        table = governed_query(self.project.engine, sql, 101)
         self.project.current()
         if table.num_rows > 100 or len(table.columns) != len(labels):
             raise ValueError("result_limit")

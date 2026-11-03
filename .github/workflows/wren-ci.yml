@@ -424,6 +424,7 @@ jobs:
           uv run --no-sync pytest \
             tests/unit/test_agent_service.py \
             tests/unit/test_agent_sql.py \
+            tests/unit/test_agent_query_lifetime.py \
             tests/unit/test_context_adapter.py \
             tests/unit/test_declared_default_fx.py \
             tests/unit/test_declared_default_status.py \

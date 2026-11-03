@@ -2467,3 +2467,129 @@ def test_an_on_literal_on_the_preserved_side_of_an_outer_join_is_no_window(adhoc
 def test_an_on_literal_that_filters_a_kept_side_stays_a_window(adhoc, join):
     found, _ = windows_of(adhoc(), f"SELECT COUNT(*) FROM {join} {OWN_ROWS}")
     assert len(found) == 1
+
+
+@pytest.mark.parametrize(
+    "predicate,partition",
+    [
+        ("r.rn = 1 OR i.amount > 0", "currency"),
+        ("1 <= r.rn", "currency"),
+        ("r.rn = 1", "currency, rate_date"),
+    ],
+)
+def test_ranked_fx_counterexamples_never_mint_satisfied_evidence(
+    adhoc, predicate, partition
+):
+    service = adhoc()
+    sql = f"""SELECT SUM(CASE WHEN i.currency = 'USD' THEN i.amount ELSE i.amount * r.rate_to_usd END)
+        FROM invoices i LEFT JOIN (SELECT currency, rate_date, rate_to_usd,
+        ROW_NUMBER() OVER (PARTITION BY {partition} ORDER BY rate_date DESC) AS rn FROM fx_rates) r
+        ON r.currency = i.currency AND r.rate_date <= i.invoice_date WHERE {predicate}"""
+    with pytest.raises(DeclaredDefaultMissing) as raised:
+        service.sql.prepare(sql)
+    assert "convert-invoices-to-usd:rate_multi_match" in raised.value.rules
+    assert not events(service, "private_sql")
+    result = ask(service, FX_GUARDED)
+    assert result["result"]["rows"] == [{"c1": 1550.0}]
+    assert result["evidence"]["checks_summary"] == "all_satisfied"
+    assert result["evidence"]["has_unverified_semantics"] is False
+
+
+def test_explicit_wrong_status_case_cannot_mint_zero_count_evidence(adhoc):
+    service = adhoc()
+    with pytest.raises(DeclaredDefaultMissing) as raised:
+        service.sql.prepare(
+            "SELECT COUNT(*) FROM orders WHERE NOT is_test AND UPPER(status) IN ('paid', 'shipped')"
+        )
+    assert "count-paid-and-shipped:subset" in raised.value.rules
+    result = ask(
+        service,
+        "SELECT COUNT(*) FROM orders WHERE NOT is_test AND UPPER(status) IN ('PAID', 'SHIPPED')",
+    )
+    assert result["result"]["rows"] == [{"c1": 12}]
+
+
+@pytest.mark.parametrize("action", ["deadline", "session_close", "shutdown"])
+def test_governed_direct_sql_owns_and_reaps_its_query_process(adhoc, action):
+    import threading  # noqa: PLC0415
+    import time  # noqa: PLC0415
+    from dataclasses import replace  # noqa: PLC0415
+
+    import duckdb  # noqa: PLC0415
+
+    from wren.agent_service import SQL  # noqa: PLC0415
+
+    service = adhoc(
+        policy='permit(principal, action, resource) when { principal.role == "planner" && ((action == Service::Action::"invoke_tool" && resource.name == "run_sql") || action == Service::Action::"execute_query") };'
+    )
+    service.execution = replace(
+        service.execution, deadline_ms=1500 if action == "deadline" else 30000
+    )
+    with duckdb.connect(
+        str(service.project.root.parent / "data/synthetic.duckdb")
+    ) as db:
+        db.execute("DROP TABLE raw_orders")
+        db.execute(
+            "CREATE VIEW raw_orders AS SELECT (i % 1000)::INTEGER id, 1::INTEGER customer_id, TIMESTAMP '2026-01-06' order_date, i::DOUBLE amount, FALSE is_test, 'paid' status FROM range(1000000000000) t(i)"
+        )
+    sid = service.open()["session_id"]
+    request = SQL(
+        session_id=sid,
+        request_id="slow",
+        expected_revision=0,
+        capability="analytics",
+        sql="SELECT SUM(amount) FROM orders WHERE NOT is_test AND status IN ('paid', 'shipped')",
+    )
+    outcome = []
+
+    def run_direct():
+        try:
+            outcome.append(service.execute(request, direct={"sql": request.sql}))
+        except Exception as error:
+            outcome.append(error)
+
+    thread = threading.Thread(target=run_direct)
+    thread.start()
+    try:
+        end = time.monotonic() + 5
+        lifetime = None
+        children = []
+        while time.monotonic() < end:
+            lifetime = service.sessions[sid].get("query_lifetime")
+            children = list(lifetime.children) if lifetime else []
+            if children:
+                break
+            time.sleep(0.01)
+        assert children
+        if action == "session_close":
+            service.close(sid)
+        elif action == "shutdown":
+            service.shutdown()
+        thread.join(5)
+        assert not thread.is_alive()
+        assert len(outcome) == 1 and isinstance(outcome[0], Exception)
+        assert not lifetime.children
+        assert all(child.poll() is not None for child in children)
+        assert not service.sessions[sid]["results"]
+        assert not service.sessions[sid]["evidence"]
+        assert not events(service, "task_completed")
+    finally:
+        if lifetime:
+            lifetime.cancel()
+        thread.join(5)
+
+
+def test_ranked_rate_sources_cannot_prove_each_others_partition_keys(adhoc):
+    service = adhoc()
+    sql = """WITH ranked AS (
+        SELECT currency, rate_date, rate_to_usd,
+        ROW_NUMBER() OVER (PARTITION BY currency, rate_date ORDER BY rate_date DESC) AS rn
+        FROM fx_rates)
+        SELECT SUM(CASE WHEN i.currency='USD' THEN i.amount ELSE i.amount*r.rate_to_usd END)
+        FROM invoices i
+        LEFT JOIN ranked r ON r.currency=i.currency AND r.rate_date<=i.invoice_date
+        LEFT JOIN ranked s ON s.currency=i.currency AND s.rate_date<=i.invoice_date
+        WHERE r.rn=1 AND s.rn=1 AND r.rate_date=s.rate_date"""
+    with pytest.raises(DeclaredDefaultMissing) as raised:
+        service.sql.prepare(sql)
+    assert "convert-invoices-to-usd:rate_multi_match" in raised.value.rules

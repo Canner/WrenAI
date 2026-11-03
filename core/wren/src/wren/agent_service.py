@@ -46,6 +46,8 @@ from wren.context_adapter import (
 )
 from wren.declared_default_status import display, fold_all
 from wren.declared_defaults import SaleStatuses
+from wren.governed_query import QueryCancelled, QueryLifetime
+from wren.model.error import DatabaseTimeoutError
 
 
 def uid():
@@ -856,8 +858,11 @@ class Service:
         except Exception:
             for old in self.sessions.values():
                 old["closed"] = True
+                lifetime = old.get("query_lifetime")
+                if lifetime is not None:
+                    lifetime.cancel()
                 if old["active"]:
-                    self.ipc.cancel(old["active"])
+                    self.ipc.abort(old["active"])
             raise ValueError("context_changed") from None
         s["used"] = now
         return s
@@ -867,8 +872,11 @@ class Service:
             s = self.sessions.get(ident)
             if s and s["caller"] == self.caller:
                 s["closed"] = True
+                lifetime = s.get("query_lifetime")
+                if lifetime is not None:
+                    lifetime.cancel()
                 if s["active"]:
-                    self.ipc.cancel(s["active"])
+                    self.ipc.abort(s["active"])
                 for k in ("results", "evidence", "cache", "pending"):
                     s[k].clear()
         return {"status": "closed"}
@@ -1024,6 +1032,8 @@ class Service:
         ending = threading.Lock()
         owner = uid()
         s["active"] = owner
+        lifetime = QueryLifetime(self.execution.deadline_ms / 1000)
+        s["query_lifetime"] = lifetime
 
         def callback(name, args):
             self.record(
@@ -1197,6 +1207,7 @@ class Service:
                     if over:
                         raise stop(*over) from None
                     return {"error": "query_unavailable", "hint": UNAVAILABLE_HINT}
+                lifetime.check()
                 internal["as_of"] = as_of
                 for rule_id, check in prepared.checks.items():
                     if check["result"] == "satisfied_by_caller_scope":
@@ -1276,7 +1287,8 @@ class Service:
             if ended is not None:
                 raise PermissionError("task_ended")
             try:
-                return callback(name, args)
+                with lifetime.bind():
+                    return callback(name, args)
             except PermissionError as exc:
                 # An authorization failure is final: a rewrite cannot make it allowed.
                 policy_denied = True
@@ -1315,6 +1327,7 @@ class Service:
                         "invoke",
                         callback=guarded_callback,
                         invocation_id=owner,
+                        on_cancel=lifetime.cancel,
                         usage=usage,
                         request=json.dumps(
                             {
@@ -1344,6 +1357,7 @@ class Service:
                     raise ended
             with self.lock:
                 self.session(s["id"])
+                lifetime.check()
                 if (
                     not isinstance(raw, dict)
                     or set(raw) != {"evidence"}
@@ -1478,6 +1492,8 @@ class Service:
                 raise PermissionError("denied") from None
             raise
         finally:
+            lifetime.cancel()
+            s.pop("query_lifetime", None)
             s["active"] = None
 
     def resolve_status_scope(self, pending: dict, answer: str):
@@ -1533,6 +1549,8 @@ UNAVAILABLE_REASONS = {
 def unavailable_reason(exc: BaseException) -> str:
     """Classify a failed task: provider (model platform), worker (private agent
     output or limits), timeout, or service (host/runtime, or no diagnostic)."""
+    if isinstance(exc, (QueryCancelled, DatabaseTimeoutError)):
+        return "timeout"
     if isinstance(exc, ValueError) and str(exc) == "invalid_evidence":
         return "worker"
     detail = str(getattr(exc, "detail", "") or "")

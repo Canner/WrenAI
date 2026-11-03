@@ -57,6 +57,23 @@ def count(where: str) -> str:
     return f"SELECT COUNT(*) FROM orders WHERE {where}"
 
 
+@pytest.mark.parametrize(
+    "where,expected",
+    [
+        ("UPPER(status) IN ('paid', 'shipped')", "subset"),
+        ("LOWER(status) IN ('PAID', 'SHIPPED')", "subset"),
+        ("UPPER(status) = 'paid' OR UPPER(status) = 'shipped'", "subset"),
+        ("UPPER(status) NOT IN ('cancelled', 'pending')", "superset"),
+        ("UPPER(status) IN (UPPER('paid'), UPPER('shipped'))", "satisfied"),
+        ("LOWER(UPPER(status)) IN ('paid', 'shipped')", "satisfied"),
+        ("UPPER(LOWER(status)) IN ('PAID', 'SHIPPED')", "satisfied"),
+        ("LOWER(status) IN (LOWER('PAID'), LOWER('SHIPPED'))", "satisfied"),
+    ],
+)
+def test_explicit_case_functions_are_evaluated_before_set_comparison(where, expected):
+    assert outcome(count(where)) == expected
+
+
 EQUAL = [
     "status IN ('paid', 'shipped')",
     "status = 'paid' OR status = 'shipped'",
@@ -453,3 +470,11 @@ def test_a_joined_group_has_no_name_to_tell_its_side_so_its_on_filters_nothing()
 def test_a_semi_join_condition_filters_nothing():
     sql = f"SELECT o.id FROM orders o LEFT SEMI JOIN customers c ON c.id = o.customer_id AND {PAID}"
     assert outcome(sql) == "missing"
+
+
+def test_case_mapping_checks_the_original_domain_before_casefolding():
+    from dataclasses import replace  # noqa: PLC0415
+
+    rule = replace(RULE, values=("ß",), domain=("ß", "cancelled"))
+    with pytest.raises(StatusUndetermined, match="case_mapping"):
+        outcome(count("UPPER(status) = 'SS'"), rule=rule)

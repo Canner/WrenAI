@@ -367,3 +367,20 @@ def test_an_undetermined_statement_counts_toward_the_rejection_total(
     ]
     assert exhausted(s) == [{"kind": "rejected", "attempts": 3}]
     assert not events(s, "private_sql")
+
+
+def test_real_ipc_success_commits_evidence_before_lifetime_cleanup(scripted):
+    service = scripted()
+    request = ask(service, GOOD)
+    result = service.execute(request)
+    assert result["status"] == "completed"
+    assert result["result"]["rows"] == [{"c1": 3}]
+    assert result["evidence_ref"] in service.sessions[request.session_id]["evidence"]
+    assert "query_lifetime" not in service.sessions[request.session_id]
+    assert len(events(service, "task_completed")) == 1
+    assert not events(service, "task_failed")
+    assert not any(op.get("op") == "cancel" for op in runtime_ops(service))
+    second = service.execute(
+        ask(service, GOOD, session=request.session_id, revision=1, request_id="next")
+    )
+    assert second["status"] == "completed"

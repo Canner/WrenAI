@@ -25,6 +25,8 @@ class RuntimeIPC:
     def __init__(self, runtime: Path, init: dict, call_timeout_s: float | None = None):
         self.pending = {}
         self.callbacks = {}
+        self.cancel_callbacks = {}
+        self.closed = False
         # Ids the host gave up waiting for. A late reply or tool call for one of them is
         # answered or dropped; it is not a protocol violation and must not kill the runtime.
         self.abandoned = {}
@@ -32,6 +34,7 @@ class RuntimeIPC:
             DEFAULT_CALL_TIMEOUT_S if call_timeout_s is None else call_timeout_s
         )
         self.lock = threading.Lock()
+        self.state_lock = threading.RLock()
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
         self.process = subprocess.Popen(
             ["node", str(runtime)],
@@ -73,6 +76,8 @@ class RuntimeIPC:
         try:
             callback = self.callbacks[message["owner"]]
             response["value"] = callback(message["name"], message["args"])
+            if message["owner"] in self.abandoned or self.closed:
+                return
         except Exception:
             response["error"] = "tool_denied"
         try:
@@ -95,11 +100,12 @@ class RuntimeIPC:
                         raise ValueError("ipc_order")
                     self.pool.submit(self._tool, m)
                 else:
-                    future = self.pending.pop(m["id"], None)
-                    if future is None:
-                        if m["id"] in self.abandoned:
-                            continue
-                        raise ValueError("ipc_order")
+                    with self.state_lock:
+                        future = self.pending.pop(m["id"], None)
+                        if future is None:
+                            if m["id"] in self.abandoned:
+                                continue
+                            raise ValueError("ipc_order")
                     if m.get("error"):
                         failure = RuntimeError("runtime_unavailable")
                         # Operator diagnostics only: never forwarded to a caller.
@@ -118,18 +124,33 @@ class RuntimeIPC:
         except Exception:
             self.process.kill()
         finally:
+            for cancel in list(self.cancel_callbacks.values()):
+                cancel()
             for future in list(self.pending.values()):
                 if not future.done():
                     future.set_exception(RuntimeError("runtime_unavailable"))
             self.pending.clear()
 
-    def call(self, op, *, callback=None, invocation_id=None, usage=None, **values):
+    def call(
+        self,
+        op,
+        *,
+        callback=None,
+        invocation_id=None,
+        on_cancel=None,
+        usage=None,
+        **values,
+    ):
         """Send one op and wait for its reply.
 
+        ``on_cancel`` releases host-owned work when this call fails, is abandoned,
+        or the IPC closes. A successful reply leaves the owner's lifetime intact.
         ``usage``, when given, receives the runtime's per-attempt ``calls`` of a successful
         reply (a failed one carries them on the exception). They are audit-only and never part
         of the returned value.
         """
+        if self.closed:
+            raise RuntimeError("runtime_unavailable")
         ident = invocation_id or str(uuid.uuid4())
         if ident in self.pending or ident in self.abandoned:
             raise ValueError("invalid_invocation_id")
@@ -137,10 +158,14 @@ class RuntimeIPC:
         self.pending[ident] = future
         if callback:
             self.callbacks[ident] = callback
+        if on_cancel:
+            self.cancel_callbacks[ident] = on_cancel
+        completed = False
         try:
             self._send({"id": ident, "op": op, **values})
             # The runtime's own deadlines sit below this cap. The operator can override it.
             value, calls = future.result(timeout=self._timeout())
+            completed = True
             if usage is not None and calls is not None:
                 usage["calls"] = calls
             return value
@@ -150,6 +175,9 @@ class RuntimeIPC:
             failure.detail = "ipc_timeout:host"
             raise failure from None
         finally:
+            cancel = self.cancel_callbacks.pop(ident, None)
+            if cancel is not None and not completed:
+                cancel()
             self.callbacks.pop(ident, None)
 
     def _timeout(self) -> float:
@@ -158,8 +186,12 @@ class RuntimeIPC:
 
     def _abandon(self, ident, *, cancel: bool):
         """Stop waiting for ``ident``: clear it and ask the runtime to cancel its work."""
-        self._remember(ident)
-        self.pending.pop(ident, None)
+        with self.state_lock:
+            self._remember(ident)
+            self.pending.pop(ident, None)
+        cancel_callback = self.cancel_callbacks.get(ident)
+        if cancel_callback is not None:
+            cancel_callback()
         if not cancel:
             return
         cancel_id = str(uuid.uuid4())
@@ -175,6 +207,9 @@ class RuntimeIPC:
             del self.abandoned[next(iter(self.abandoned))]
 
     def cancel(self, owner):
+        cancel = self.cancel_callbacks.get(owner)
+        if cancel is not None:
+            cancel()
         return self.call("cancel", **{"owner": owner})
 
     def abort(self, owner):
@@ -183,16 +218,24 @@ class RuntimeIPC:
         The call that waits for ``owner`` fails with ``TaskAborted``; whatever the runtime
         still sends for it (a tool call, a final value) is refused or dropped.
         """
-        future = self.pending.pop(owner, None)
+        with self.state_lock:
+            future = self.pending.pop(owner, None)
+            self._remember(owner)
         self._abandon(owner, cancel=True)
         if future is not None and not future.done():
             future.set_exception(TaskAborted())
 
     def close(self):
+        if self.closed:
+            return
+        self.closed = True
+        for owner in list(self.cancel_callbacks):
+            self.abort(owner)
         try:
             self.process.stdin.close()
             self.process.wait(timeout=5)
         except Exception:
             self.process.kill()
             self.process.wait(timeout=5)
+        self.reader.join(timeout=5)
         self.pool.shutdown(wait=True, cancel_futures=True)

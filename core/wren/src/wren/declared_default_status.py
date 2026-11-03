@@ -23,7 +23,9 @@ keeps.
 Recognised atoms are ``=``, ``<>``/``!=``, ``IN``, ``NOT IN`` and ``IS [NOT] NULL`` between the
 status column (optionally wrapped in ``LOWER``, ``UPPER`` or ``TRIM``) and string or numeric
 literals. Anything else that touches the column (another column, a function, a subquery, ``LIKE``,
-a ``CASE``) has no verdict: ``StatusUndetermined`` is raised, never a guess. Comparison folds case.
+a ``CASE``) has no verdict: ``StatusUndetermined`` is raised, never a guess. Bare-column
+comparison retains declaration case folding; explicit LOWER/UPPER operations and literals
+are evaluated before comparing, so an explicit case contradiction cannot disappear.
 """
 
 from __future__ import annotations
@@ -245,11 +247,41 @@ class _Status:
         if isinstance(node, exp.Literal):
             return str(node.this)
         if isinstance(node, (exp.Lower, exp.Upper)):
-            return self._text(node.this)
+            inner = self._text(node.this)
+            if inner is None:
+                return None
+            if not inner.isascii():
+                raise StatusUndetermined("case_mapping")
+            return inner.lower() if isinstance(node, exp.Lower) else inner.upper()
         if isinstance(node, exp.Trim) and node.args.get("expression") is None:
             inner = self._text(node.this)
             return None if inner is None else inner.strip()
         return None
+
+    def _hit(self, side, texts):
+        """Evaluate explicit ASCII case functions without guessing DB collation.
+
+        Bare comparisons keep the declaration's existing case-insensitive contract.
+        Unicode case mappings vary by database/locale and have no verdict here.
+        """
+
+        def transform(node, value):
+            node = _unparen(node)
+            if isinstance(node, exp.Lower):
+                return transform(node.this, value).lower()
+            if isinstance(node, exp.Upper):
+                return transform(node.this, value).upper()
+            if isinstance(node, exp.Trim):
+                return transform(node.this, value).strip()
+            return value
+
+        if not any(isinstance(n, (exp.Lower, exp.Upper)) for n in side.walk()):
+            return fold_all(texts) & self.domain
+        if any(not value.isascii() for value in (*self.rule.domain, *texts)):
+            raise StatusUndetermined("case_mapping")
+        return frozenset(
+            value for value in self.domain if transform(side, value) in texts
+        )
 
     def _atom(self, node: exp.Expression) -> _Verdict:
         if isinstance(node, (exp.EQ, exp.NEQ)):
@@ -261,7 +293,7 @@ class _Status:
                     text = self._text(other)
                     if text is None:
                         raise StatusUndetermined("non_literal")
-                    hit = frozenset({fold(text)}) & self.domain
+                    hit = self._hit(side, [text])
                     kept = hit if isinstance(node, exp.EQ) else self.domain - hit
                     return kept, kept, _UNKNOWN_ONLY
             raise StatusUndetermined("unsupported_predicate")
@@ -276,7 +308,7 @@ class _Status:
             texts = [self._text(item) for item in node.expressions]
             if not texts or any(text is None for text in texts):
                 raise StatusUndetermined("non_literal")
-            hit = fold_all(t for t in texts if t is not None) & self.domain
+            hit = self._hit(node.this, [t for t in texts if t is not None])
             return hit, hit, _UNKNOWN_ONLY
         if (
             isinstance(node, exp.Is)
