@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 import sqlglot
 import yaml
+from sqlglot import exp
 from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.scope import traverse_scope
 
@@ -1271,6 +1272,24 @@ def test_cr1_a_cte_defined_later_or_elsewhere_is_still_external(adhoc):
     }
     s = adhoc(files=unresolved)
     assert s.sql.broken_views == {"ghost_cte", "bare_ghost"}
+
+
+def test_cr2_a_cte_shadows_a_view_only_where_it_is_visible(adhoc):
+    s = adhoc()
+    tree, read = s.sql._expand_views(
+        sqlglot.parse_one(
+            "SELECT COUNT(*) FROM usd_line_value v JOIN "
+            "(WITH usd_line_value AS (SELECT id FROM customers) "
+            "SELECT id FROM usd_line_value) c ON c.id = v.id",
+            read="duckdb",
+        )
+    )
+    assert read == ["usd_line_value"]
+    assert len([n for n in tree.walk() if n.meta.get(VIEW_MARK)]) == 1
+    assert [t.name for t in tree.find_all(exp.Table)].count("usd_line_value") == 1
+    cte_body = tree.find(exp.CTE).this
+    assert cte_body.find(exp.Table, bfs=False) is not None
+    assert not any(n.meta.get(VIEW_MARK) for n in tree.find(exp.CTE).walk())
 
 
 def test_a_view_the_host_cannot_read_is_not_a_source(adhoc):

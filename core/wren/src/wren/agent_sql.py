@@ -348,7 +348,7 @@ class AdHocSQL:
 
     def _expand_views(self, tree):
         """Replace every reference to a view by its marked body; return the names read."""
-        shadowed = {cte.alias.lower() for cte in tree.find_all(exp.CTE)}
+        shadowed = _cte_references(tree)
         read = []
         for table in list(tree.find_all(exp.Table)):
             name = table.name.lower()
@@ -357,7 +357,7 @@ class AdHocSQL:
                 or table.catalog
                 or not isinstance(table.this, exp.Identifier)
                 or table.name in self.schema
-                or name in shadowed
+                or id(table) in shadowed
                 or (name not in self.views and name not in self.broken_views)
             ):
                 continue
