@@ -1594,6 +1594,80 @@ def test_descriptor_digest_keeps_byte_sorted_framing_and_regular_file_links(tmp_
     )
 
 
+@pytest.mark.parametrize("kind", ["file", "directory"])
+def test_non_utf8_managed_names_raise_a_controlled_filesystem_error(tmp_path, kind):
+    import errno  # noqa: PLC0415
+    import os  # noqa: PLC0415
+
+    if os.name != "posix":
+        pytest.skip("requires byte-preserving POSIX filenames")
+    root = tmp_path / "project"
+    source = root / "knowledge"
+    source.mkdir(parents=True)
+    path = os.fsencode(source) + b"/invalid-\xff"
+    try:
+        if kind == "directory":
+            os.mkdir(path)
+        else:
+            fd = os.open(path, os.O_CREAT | os.O_WRONLY, 0o600)
+            os.close(fd)
+    except OSError as error:
+        if error.errno == errno.EILSEQ:
+            pytest.skip("filesystem refuses non-UTF8 directory entries")
+        raise
+    with pytest.raises(OSError, match="non_utf8_source_name"):
+        project_digest(root)
+
+
+def test_hidden_non_utf8_names_still_do_not_contribute_to_the_digest(tmp_path):
+    import errno  # noqa: PLC0415
+    import os  # noqa: PLC0415
+
+    if os.name != "posix":
+        pytest.skip("requires byte-preserving POSIX filenames")
+    root = tmp_path / "project"
+    source = root / "knowledge"
+    source.mkdir(parents=True)
+    before = project_digest(root)
+    try:
+        fd = os.open(
+            os.fsencode(source) + b"/.hidden-\xff", os.O_CREAT | os.O_WRONLY, 0o600
+        )
+    except OSError as error:
+        if error.errno == errno.EILSEQ:
+            pytest.skip("filesystem refuses non-UTF8 directory entries")
+        raise
+    os.close(fd)
+    assert project_digest(root) == before
+
+
+@pytest.mark.parametrize("hidden", [False, True])
+def test_listed_surrogate_names_are_controlled_before_stat(
+    tmp_path, monkeypatch, hidden
+):
+    import os  # noqa: PLC0415
+
+    root = tmp_path / "project"
+    source = root / "knowledge"
+    source.mkdir(parents=True)
+    expected = project_digest(root)
+    identity = source.stat()
+    original = os.listdir
+
+    def listed(path):
+        info = os.fstat(path) if isinstance(path, int) else Path(path).stat()
+        if (info.st_dev, info.st_ino) == (identity.st_dev, identity.st_ino):
+            return [".hidden-\udcff" if hidden else "invalid-\udcff"]
+        return original(path)
+
+    monkeypatch.setattr(os, "listdir", listed)
+    if hidden:
+        assert project_digest(root) == expected
+    else:
+        with pytest.raises(OSError, match="non_utf8_source_name"):
+            project_digest(root)
+
+
 @pytest.mark.parametrize(
     "reference", ['"customers"."email"', "customers . email", "`customers`.`email`"]
 )

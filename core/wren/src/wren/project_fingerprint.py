@@ -24,6 +24,13 @@ _DIGEST_ROOT_FILES = (
 _DIGEST_DIRS = ("models", "cubes", "views", "knowledge")
 
 
+def _source_name_bytes(name):
+    try:
+        return name.encode("utf-8")
+    except UnicodeEncodeError:
+        raise OSError("non_utf8_source_name") from None
+
+
 def project_digest(root: Path) -> str:
     """The loader's ``digest``, computed in Python so a running service can detect change.
 
@@ -74,7 +81,7 @@ def _hash_entries(parent_fd, prefix, entries, digest):
     # A file named a.yml sorts before directory a/'s children. Sort by complete
     # path prefixes (including the directory slash), preserving the old framing.
     for name, directory, symlink in sorted(
-        entries, key=lambda item: (item[0] + ("/" if item[1] else "")).encode()
+        entries, key=lambda item: _source_name_bytes(item[0] + ("/" if item[1] else ""))
     ):
         relative = prefix + name
         if directory:
@@ -91,6 +98,7 @@ def _hash_entries(parent_fd, prefix, entries, digest):
                 for child in os.listdir(child_fd):
                     if child.startswith("."):
                         continue
+                    _source_name_bytes(child)
                     mode = os.stat(
                         child, dir_fd=child_fd, follow_symlinks=False
                     ).st_mode
@@ -113,7 +121,9 @@ def _hash_entries(parent_fd, prefix, entries, digest):
                     data = stream.read()
             finally:
                 os.close(fd)
-            digest.update(relative.encode() + b"\0" + str(len(data)).encode() + b"\0")
+            digest.update(
+                _source_name_bytes(relative) + b"\0" + str(len(data)).encode() + b"\0"
+            )
             digest.update(data)
 
 
@@ -130,7 +140,7 @@ def _path_digest(root):
         if base.is_dir():
             _collect(base, name, files)
     digest = hashlib.sha256()
-    for relative in sorted(files, key=lambda r: r.encode()):
+    for relative in sorted(files, key=_source_name_bytes):
         data = files[relative].read_bytes()
         digest.update(relative.encode() + b"\0" + str(len(data)).encode() + b"\0")
         digest.update(data)
@@ -141,6 +151,7 @@ def _collect(directory: Path, relative: str, files: dict[str, Path]) -> None:
     for entry in directory.iterdir():
         if entry.name.startswith("."):
             continue
+        _source_name_bytes(entry.name)
         child = f"{relative}/{entry.name}"
         if entry.is_symlink() and not entry.is_file():
             raise OSError("directory_symlink_unsupported", str(entry))
