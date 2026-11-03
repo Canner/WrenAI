@@ -321,26 +321,31 @@ fn identifier_matches_name(identifier: &sqlparser::ast::Ident, name: &str) -> bo
     }
 }
 
-fn source_matches_cube(source: &consumers::RelationReference, cube: &str) -> bool {
-    identifier_matches_name(&source.name, cube)
+fn source_matches_cube(source: &consumers::SelectSource, cube: &str) -> bool {
+    source
+        .relation
+        .as_ref()
+        .is_some_and(|relation| identifier_matches_name(&relation.name, cube))
 }
 
 fn source_matches_qualifier(
-    source: &consumers::RelationReference,
+    source: &consumers::SelectSource,
     qualifier: &sqlparser::ast::Ident,
 ) -> bool {
     source
         .alias
         .as_ref()
         .is_some_and(|alias| consumers::identifiers_match(alias, qualifier))
-        || consumers::identifiers_match(&source.name, qualifier)
+        || source
+            .name
+            .as_ref()
+            .is_some_and(|name| consumers::identifiers_match(name, qualifier))
 }
 
-/// Whether a cube member is selected from this cube. Qualified columns first resolve their
-/// qualifier to exactly one physical relation in the whole statement; ambiguous aliases do not
-/// manufacture an edge. Bare names are only accepted when the cube is the statement's sole
-/// physical relation. Projection wildcards are kept per `SELECT`, so `COUNT(*)` and an outer
-/// wildcard over a derived/CTE source cannot expand cube members.
+/// Whether a cube member is referenced from this cube. Qualified columns resolve within the
+/// owning `SELECT`; bare names require that SELECT to have exactly one source, a direct cube
+/// relation. CTE and derived sources are blockers unless their projection can be proved, which is
+/// deliberately outside this lightweight consumer lineage parser.
 fn member_is_referenced(
     references: Option<&consumers::SqlConsumerReferences>,
     sql: &str,
@@ -350,35 +355,33 @@ fn member_is_referenced(
     let Some(references) = references else {
         return statement_references(sql, member);
     };
-    let column_matches = references.columns.iter().any(|column| {
-        if !identifier_matches_name(&column.name, member) {
-            return false;
-        }
-        match &column.qualifier {
-            Some(qualifier) => {
-                let mut sources = references
-                    .relations
-                    .iter()
-                    .filter(|source| source_matches_qualifier(source, qualifier));
-                matches!(sources.next(), Some(source) if source_matches_cube(source, cube))
-                    && sources.next().is_none()
+    references.selects.iter().any(|select| {
+        let column_matches = select.columns.iter().any(|column| {
+            if !identifier_matches_name(&column.name, member) {
+                return false;
             }
-            None => {
-                references.relations.len() == 1
-                    && source_matches_cube(&references.relations[0], cube)
+            match &column.qualifier {
+                Some(qualifier) => {
+                    let mut sources = select
+                        .sources
+                        .iter()
+                        .filter(|source| source_matches_qualifier(source, qualifier));
+                    matches!(sources.next(), Some(source) if source_matches_cube(source, cube))
+                        && sources.next().is_none()
+                }
+                None => select.sources.len() == 1 && source_matches_cube(&select.sources[0], cube),
             }
-        }
-    });
-    column_matches
-        || references.wildcards.iter().any(|wildcard| {
-            wildcard.sources.iter().any(|source| {
-                source_matches_cube(source, cube)
-                    && wildcard
-                        .qualifier
-                        .as_ref()
-                        .is_none_or(|qualifier| source_matches_qualifier(source, qualifier))
+        });
+        column_matches
+            || select.wildcards.iter().any(|qualifier| {
+                select.sources.iter().any(|source| {
+                    source_matches_cube(source, cube)
+                        && qualifier
+                            .as_ref()
+                            .is_none_or(|qualifier| source_matches_qualifier(source, qualifier))
+                })
             })
-        })
+    })
 }
 
 /// Naive whole-word containment check: does `statement` reference `name` as a standalone token?

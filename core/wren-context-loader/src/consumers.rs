@@ -13,14 +13,16 @@
 //! scan and records the degradation (no silent caps).
 
 #[cfg(test)]
+use sqlparser::ast::visit_expressions;
+#[cfg(test)]
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::ops::ControlFlow;
 
 use serde::Deserialize;
 use sqlparser::ast::{
-    visit_expressions, Expr, Ident, ObjectName, ObjectNamePart, Query, Select, SelectItem,
-    SelectItemQualifiedWildcardKind, TableFactor, Visit, Visitor,
+    Expr, Ident, ObjectName, ObjectNamePart, Query, Select, SelectItem,
+    SelectItemQualifiedWildcardKind, SetExpr, TableFactor, Visit, Visitor,
 };
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
@@ -125,13 +127,23 @@ pub(crate) fn sql_table_names(sql: &str) -> Option<BTreeSet<String>> {
 /// to a whole-word scan, as for [`sql_table_names`].
 #[cfg(test)]
 pub(crate) fn sql_column_names(sql: &str) -> Option<BTreeSet<String>> {
-    Some(
-        sql_consumer_references(sql)?
-            .columns
-            .iter()
-            .map(|column| column.name.value.clone())
-            .collect(),
-    )
+    let statements = Parser::parse_sql(&GenericDialect {}, sql).ok()?;
+    let mut names = BTreeSet::new();
+    let _: ControlFlow<()> = visit_expressions(&statements, |expr| {
+        match expr {
+            Expr::Identifier(ident) => {
+                names.insert(ident.value.clone());
+            }
+            Expr::CompoundIdentifier(parts) => {
+                if let Some(last) = parts.last() {
+                    names.insert(last.value.clone());
+                }
+            }
+            _ => {}
+        }
+        ControlFlow::Continue(())
+    });
+    Some(names)
 }
 
 /// Parsed SQL facts that preserve enough source provenance for consumer lineage. In particular,
@@ -140,14 +152,14 @@ pub(crate) fn sql_column_names(sql: &str) -> Option<BTreeSet<String>> {
 #[derive(Debug, Default)]
 pub(crate) struct SqlConsumerReferences {
     pub relations: Vec<RelationReference>,
-    pub columns: Vec<ColumnReference>,
-    pub wildcards: Vec<WildcardReference>,
+    /// Facts owned by individual `SELECT` branches. A column must resolve through sources in the
+    /// same entry; physical relations elsewhere in the statement cannot donate provenance.
+    pub selects: Vec<SelectReference>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct RelationReference {
     pub name: Ident,
-    pub alias: Option<Ident>,
 }
 
 #[derive(Debug, Clone)]
@@ -157,11 +169,21 @@ pub(crate) struct ColumnReference {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct WildcardReference {
-    pub qualifier: Option<Ident>,
-    /// Physical table sources in the `SELECT` that owns this projection. CTE and derived sources
-    /// deliberately do not appear: their output cannot safely be attributed to a cube here.
-    pub sources: Vec<RelationReference>,
+pub(crate) struct SelectReference {
+    pub sources: Vec<SelectSource>,
+    pub columns: Vec<ColumnReference>,
+    /// Projection wildcards only (`SELECT *` / `SELECT alias.*`), never expression wildcards such
+    /// as `COUNT(*)`.
+    pub wildcards: Vec<Option<Ident>>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SelectSource {
+    /// A direct physical table source. `None` means a CTE, derived table, or opaque source whose
+    /// projected provenance is intentionally not guessed.
+    pub relation: Option<RelationReference>,
+    pub name: Option<Ident>,
+    pub alias: Option<Ident>,
 }
 
 /// Parse consumer SQL once and retain relation, column, and projection provenance. A malformed
@@ -170,31 +192,9 @@ pub(crate) fn sql_consumer_references(sql: &str) -> Option<SqlConsumerReferences
     let statements = Parser::parse_sql(&GenericDialect {}, sql).ok()?;
     let mut collector = RelationCollector::default();
     let _: ControlFlow<()> = statements.visit(&mut collector);
-    let mut columns = Vec::new();
-    let _: ControlFlow<()> = visit_expressions(&statements, |expr| {
-        match expr {
-            Expr::Identifier(ident) => {
-                columns.push(ColumnReference {
-                    qualifier: None,
-                    name: ident.clone(),
-                });
-            }
-            Expr::CompoundIdentifier(parts) => {
-                if let Some(last) = parts.last() {
-                    columns.push(ColumnReference {
-                        qualifier: parts.get(parts.len().saturating_sub(2)).cloned(),
-                        name: last.clone(),
-                    });
-                }
-            }
-            _ => {}
-        }
-        ControlFlow::Continue(())
-    });
     Some(SqlConsumerReferences {
         relations: collector.relations,
-        columns,
-        wildcards: collector.wildcards,
+        selects: collector.selects,
     })
 }
 
@@ -202,7 +202,7 @@ pub(crate) fn sql_consumer_references(sql: &str) -> Option<SqlConsumerReferences
 #[derive(Default)]
 struct RelationCollector {
     relations: Vec<RelationReference>,
-    wildcards: Vec<WildcardReference>,
+    selects: Vec<SelectReference>,
     /// The CTE names visible to the query being visited, innermost query last.
     scopes: Vec<Vec<Ident>>,
     /// The scope a CTE body sees, keyed by the body's address. It differs from the scope of the
@@ -250,7 +250,7 @@ impl Visitor for RelationCollector {
             visible.extend(declared);
         }
         self.scopes.push(visible);
-        self.collect_query_wildcards(query);
+        self.collect_query_selects(query);
         ControlFlow::Continue(())
     }
 
@@ -273,7 +273,7 @@ impl Visitor for RelationCollector {
     }
 
     fn pre_visit_table_factor(&mut self, factor: &TableFactor) -> ControlFlow<()> {
-        let TableFactor::Table { name, alias, .. } = factor else {
+        let TableFactor::Table { name, .. } = factor else {
             return ControlFlow::Continue(());
         };
         let Some(ObjectNamePart::Identifier(ident)) = name.0.last() else {
@@ -289,18 +289,37 @@ impl Visitor for RelationCollector {
         }
         self.relations.push(RelationReference {
             name: ident.clone(),
-            alias: alias.as_ref().map(|alias| alias.name.clone()),
         });
         ControlFlow::Continue(())
     }
 }
 
 impl RelationCollector {
-    fn collect_query_wildcards(&mut self, query: &Query) {
-        let Some(select) = query.body.as_select() else {
-            return;
-        };
+    fn collect_query_selects(&mut self, query: &Query) {
+        self.collect_set_expr_selects(&query.body);
+    }
+
+    fn collect_set_expr_selects(&mut self, expression: &SetExpr) {
+        match expression {
+            SetExpr::Select(select) => self.collect_select(select),
+            SetExpr::SetOperation { left, right, .. } => {
+                self.collect_set_expr_selects(left);
+                self.collect_set_expr_selects(right);
+            }
+            // Nested `Query` expressions receive their own visitor callback and therefore their
+            // own scope. The remaining set expressions do not expose SELECT sources.
+            _ => {}
+        }
+    }
+
+    fn collect_select(&mut self, select: &Select) {
         let sources = self.select_sources(select);
+        let mut columns = ScopedColumnCollector::default();
+        // A nested query must not contribute columns to this SELECT's scope. `Break` at the nested
+        // query is conservative for an expression that contains one: it may omit a later column,
+        // but can never fabricate provenance from the nested query.
+        let _ = select.visit(&mut columns);
+        let mut wildcards = Vec::new();
         for item in &select.projection {
             let qualifier = match item {
                 SelectItem::Wildcard(_) => None,
@@ -314,14 +333,16 @@ impl RelationCollector {
                 // `COUNT(*)` and arbitrary `expr.*` are not a projection of a relation.
                 _ => continue,
             };
-            self.wildcards.push(WildcardReference {
-                qualifier,
-                sources: sources.clone(),
-            });
+            wildcards.push(qualifier);
         }
+        self.selects.push(SelectReference {
+            sources,
+            columns: columns.columns,
+            wildcards,
+        });
     }
 
-    fn select_sources(&self, select: &Select) -> Vec<RelationReference> {
+    fn select_sources(&self, select: &Select) -> Vec<SelectSource> {
         let mut sources = Vec::new();
         for table in &select.from {
             Self::add_source(&table.relation, self.scopes.last(), &mut sources);
@@ -335,23 +356,75 @@ impl RelationCollector {
     fn add_source(
         factor: &TableFactor,
         scope: Option<&Vec<Ident>>,
-        sources: &mut Vec<RelationReference>,
+        sources: &mut Vec<SelectSource>,
     ) {
-        let TableFactor::Table { name, alias, .. } = factor else {
-            return;
-        };
-        let Some(ObjectNamePart::Identifier(ident)) = name.0.last() else {
-            return;
-        };
-        if name.0.len() == 1
-            && scope.is_some_and(|scope| scope.iter().any(|cte| identifiers_match(cte, ident)))
-        {
-            return;
+        match factor {
+            TableFactor::Table { name, alias, .. } => {
+                let source_name = name.0.last().and_then(|part| match part {
+                    ObjectNamePart::Identifier(ident) => Some(ident.clone()),
+                    _ => None,
+                });
+                let is_cte = source_name.as_ref().is_some_and(|ident| {
+                    name.0.len() == 1
+                        && scope.is_some_and(|scope| {
+                            scope.iter().any(|cte| identifiers_match(cte, ident))
+                        })
+                });
+                sources.push(SelectSource {
+                    relation: source_name
+                        .clone()
+                        .filter(|_| !is_cte)
+                        .map(|name| RelationReference { name }),
+                    name: source_name,
+                    alias: alias.as_ref().map(|alias| alias.name.clone()),
+                });
+            }
+            TableFactor::Derived { alias, .. } => sources.push(SelectSource {
+                relation: None,
+                name: None,
+                alias: alias.as_ref().map(|alias| alias.name.clone()),
+            }),
+            // Unknown table factors still block bare-column attribution. Their output may be a
+            // function, pivot, UNNEST, or another construct whose cube provenance is unproved.
+            _ => sources.push(SelectSource {
+                relation: None,
+                name: None,
+                alias: None,
+            }),
         }
-        sources.push(RelationReference {
-            name: ident.clone(),
-            alias: alias.as_ref().map(|alias| alias.name.clone()),
-        });
+    }
+}
+
+#[derive(Default)]
+struct ScopedColumnCollector {
+    columns: Vec<ColumnReference>,
+}
+
+impl Visitor for ScopedColumnCollector {
+    type Break = ();
+
+    fn pre_visit_query(&mut self, _query: &Query) -> ControlFlow<()> {
+        // This collector is driven from a SELECT, so every query it encounters is nested.
+        ControlFlow::Break(())
+    }
+
+    fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+        match expr {
+            Expr::Identifier(ident) => self.columns.push(ColumnReference {
+                qualifier: None,
+                name: ident.clone(),
+            }),
+            Expr::CompoundIdentifier(parts) => {
+                if let Some(last) = parts.last() {
+                    self.columns.push(ColumnReference {
+                        qualifier: parts.get(parts.len().saturating_sub(2)).cloned(),
+                        name: last.clone(),
+                    });
+                }
+            }
+            _ => {}
+        }
+        ControlFlow::Continue(())
     }
 }
 

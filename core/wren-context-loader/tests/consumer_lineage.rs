@@ -613,3 +613,62 @@ fn quoted_ctes_and_relations_preserve_engine_case_resolution() {
     assert!(reaches(&ctx, "model:orders", "query:unquoted-model"));
     assert!(!reaches(&ctx, "model:orders", "query:quoted-model"));
 }
+
+#[test]
+fn cte_projection_does_not_borrow_a_cube_member_from_its_body() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/cte-constant.md",
+        "---\nsql: WITH c AS (SELECT 1 AS total_value FROM order_metrics) SELECT total_value FROM c\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(!reaches(
+        &ctx,
+        "metric:order_metrics.total_value",
+        "query:cte-constant"
+    ));
+}
+
+#[test]
+fn derived_source_does_not_borrow_a_nested_cube_alias() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/derived-constant.md",
+        "---\nsql: SELECT c.total_value FROM (SELECT 1 AS total_value) c WHERE EXISTS (SELECT 1 FROM order_metrics c)\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(!reaches(
+        &ctx,
+        "metric:order_metrics.total_value",
+        "query:derived-constant"
+    ));
+}
+
+#[test]
+fn set_operation_projection_wildcards_keep_their_branch_sources() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/union-all.md",
+        "---\nsql: SELECT * FROM order_metrics UNION ALL SELECT * FROM order_metrics\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(reaches(
+        &ctx,
+        "metric:order_metrics.total_value",
+        "query:union-all"
+    ));
+    assert!(reaches(
+        &ctx,
+        "dim:order_metrics.placed_at",
+        "query:union-all"
+    ));
+}
