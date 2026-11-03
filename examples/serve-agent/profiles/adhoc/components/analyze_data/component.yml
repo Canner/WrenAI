@@ -1,0 +1,25 @@
+id: analyze_data
+verb: analyze_data
+type: analytical
+realization_kind: skill
+binding_mode: runtime_selected
+params: []
+llm_steps:
+- name: respond
+  tier: strong
+  prompt_ref: respond.md
+  component_calls:
+  - alias: ask_data
+    component: data_worker
+trigger:
+  kind: one_shot
+guardrails:
+- name: read_only_execution
+  locked: true
+required_capabilities:
+- llm:strong
+borrowed_actions: []
+effect:
+  render_blocks: []
+  outcome:
+    kind: none
