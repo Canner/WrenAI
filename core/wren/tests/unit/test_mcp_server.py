@@ -268,6 +268,23 @@ def test_run_sql_keeps_scale_zero_decimals_as_integers(tmp_path):
     assert isinstance(rows[0]["sum_qty"], int)
 
 
+def test_run_sql_keeps_columns_that_share_a_name(tmp_path):
+    engine = Mock()
+    engine.query.return_value = pa.Table.from_arrays(
+        [pa.array([1, 2]), pa.array([10, 20]), pa.array(["ann", "bob"])],
+        names=["id", "id", "name"],
+    )
+    run_sql = _get_tool(build_server(_make_ctx(tmp_path, engine=engine)), "run_sql")
+
+    result = run_sql(sql="SELECT 1")
+
+    assert result["columns"] == ["id", "id_1", "name"]
+    assert result["rows"] == [
+        {"id": 1, "id_1": 10, "name": "ann"},
+        {"id": 2, "id_1": 20, "name": "bob"},
+    ]
+
+
 # ── Cube queries embed truncation probes in generated SQL ──────────────────
 #
 # The generated SQL owns the row cap, and the connector receives `limit=None`.
