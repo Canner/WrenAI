@@ -180,11 +180,22 @@ struct CubeMemberFile {
 #[derive(Debug, Deserialize)]
 struct ViewMetaFile {
     name: String,
+    /// The statement may be written inline; a non-empty `sql.yml` statement takes precedence.
+    #[serde(default)]
+    statement: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct ViewSqlFile {
-    statement: String,
+    #[serde(default)]
+    statement: Option<String>,
+}
+
+/// The statement in a view's `sql.yml`, if it has a non-empty one. An empty or comment-only file
+/// is "no statement", as the wren CLI reads it.
+pub(crate) fn sql_yml_statement(sql_yml: &str) -> Result<Option<String>, serde_yaml::Error> {
+    let sql: ViewSqlFile = parse_doc_or_default(sql_yml)?;
+    Ok(sql.statement.filter(|statement| !statement.is_empty()))
 }
 
 // --- native host convenience ---------------------------------------------------------------------
@@ -193,7 +204,10 @@ struct ViewSqlFile {
 /// path is what a WASM host feeds directly). Returns `None` if the directory has no
 /// `wren_project.yml` — i.e. it is not a wren project — so the caller can build an unparseable
 /// context. Model, cube, and view sub-directories are read in sorted order for deterministic
-/// output.
+/// output. Entries that cannot be read are an error; dot-named entries are not inputs.
+///
+/// A view directory is a view when it has a `metadata.yml`, with or without a `sql.yml` — the
+/// same rule as `wren`, which also ignores a directory that holds only a `sql.yml`.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<ProjectSources>> {
     use std::fs;
@@ -234,9 +248,9 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     if views_dir.is_dir() {
         for view_dir in list_dir(&views_dir)?.into_iter().filter(|p| p.is_dir()) {
             let meta = view_dir.join("metadata.yml");
-            let sql = view_dir.join("sql.yml");
-            if meta.is_file() && sql.is_file() {
-                views.push((fs::read_to_string(meta)?, fs::read_to_string(sql)?));
+            if meta.is_file() {
+                let sql = read_if_exists(&view_dir.join("sql.yml"))?.unwrap_or_default();
+                views.push((fs::read_to_string(meta)?, sql));
             }
         }
     }
@@ -760,7 +774,9 @@ pub struct ProjectSources {
     /// Per-cube `cubes/<name>/metadata.yml` contents (wren CLI layout). Used only when
     /// `cubes_yml` is `None` — a root `cubes.yml` takes precedence.
     pub cube_ymls: Vec<String>,
-    /// Each view as `(metadata.yml, sql.yml)` contents.
+    /// Each view as `(metadata.yml, sql.yml)` contents; `sql.yml` is empty when the view directory
+    /// has none, because the statement may be written inline in `metadata.yml` (a non-empty
+    /// `sql.yml` statement wins, as in the wren CLI).
     pub views: Vec<(String, String)>,
     /// Confirmed saved queries from the wren CLI's `knowledge/sql/<slug>.md` store, as
     /// `(slug, file contents)`. Consumer sources: they never enter the MDL manifest — they only
@@ -820,9 +836,16 @@ pub fn assemble(sources: &ProjectSources) -> Result<LoadedProject, LoadError> {
     for (meta_yml, sql_yml) in &sources.views {
         let meta: ViewMetaFile =
             serde_yaml::from_str(meta_yml).map_err(|e| msg(format!("view metadata: {e}")))?;
-        let sql: ViewSqlFile =
-            serde_yaml::from_str(sql_yml).map_err(|e| msg(format!("view sql: {e}")))?;
-        views.push(serde_json::json!({ "name": meta.name, "statement": sql.statement }));
+        let sql = sql_yml_statement(sql_yml).map_err(|e| msg(format!("view sql: {e}")))?;
+        let statement = sql
+            .or_else(|| meta.statement.filter(|statement| !statement.is_empty()))
+            .ok_or_else(|| {
+                msg(format!(
+                    "view '{}': no statement (define it in metadata.yml or sql.yml)",
+                    meta.name
+                ))
+            })?;
+        views.push(serde_json::json!({ "name": meta.name, "statement": statement }));
     }
 
     let mut manifest_json = serde_json::Map::new();

@@ -16,7 +16,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::project::{
-    parse_doc_or_default, parse_mapping_doc, parse_relationships, ProjectSources,
+    parse_doc_or_default, parse_mapping_doc, parse_relationships, sql_yml_statement, ProjectSources,
 };
 
 /// Bumped when the shape below changes incompatibly; the host checks it before reading.
@@ -107,6 +107,8 @@ struct ViewMetaFile {
     /// is a diagnostic for the host to refuse, not a view that silently drops out of the catalog.
     #[serde(default)]
     columns: Option<serde_yaml::Value>,
+    #[serde(default)]
+    statement: Option<String>,
     #[serde(default)]
     properties: Properties,
 }
@@ -659,9 +661,16 @@ pub fn capability_catalog(sources: &ProjectSources) -> CapabilityCatalog {
 
     let mut views = Vec::new();
     let mut view_columns_invalid = false;
-    for (index, (meta_yml, _sql_yml)) in sources.views.iter().enumerate() {
+    for (index, (meta_yml, sql_yml)) in sources.views.iter().enumerate() {
         match serde_yaml::from_str::<ViewMetaFile>(meta_yml) {
             Ok(v) => {
+                let inline = v.statement.as_deref().is_some_and(|s| !s.is_empty());
+                if matches!(sql_yml_statement(sql_yml), Ok(None)) && !inline {
+                    diagnostics.push(CatalogDiagnostic::Message(format!(
+                        "views/{}: no statement (define it in metadata.yml or sql.yml)",
+                        v.name
+                    )));
+                }
                 let columns = match view_columns(v.columns.as_ref()) {
                     Ok(columns) => columns,
                     Err(reason) => {
