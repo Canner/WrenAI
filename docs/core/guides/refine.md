@@ -68,6 +68,10 @@ your agent reads, next to the prose it summarises. A host that serves the projec
 `wren governed-stdio` then refuses a query that breaks a declared rule before it runs and
 names the rule's `id`, so the agent can repair the query and try again.
 
+`wren governed-stdio` accepts unqualified model names and CTEs over them. It refuses schema-
+or catalog-qualified table sources before execution because those can resolve to physical
+data instead of a bound model.
+
 ```markdown
 ---
 defaults:

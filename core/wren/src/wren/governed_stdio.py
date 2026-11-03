@@ -195,6 +195,14 @@ def serve(project: Path) -> None:
                     ):
                         raise _RequestError("Invalid query")
                     ast = parse_one(request["sql"], dialect=dialect)
+                    if any(
+                        table.db or table.catalog for table in ast.find_all(exp.Table)
+                    ):
+                        raise WrenError(
+                            ErrorCode.MODEL_NOT_FOUND,
+                            "Query only unqualified bound models.",
+                            phase=ErrorPhase.SQL_POLICY_CHECK,
+                        )
                     source_tables = require_source_tables(ast)
                     if checker is not None and (fired := checker.check(ast)):
                         raise _DeclaredDefaultMissing(fired)

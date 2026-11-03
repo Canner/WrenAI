@@ -21,6 +21,39 @@ from wren.model.error import ErrorCode, ErrorPhase, WrenError
 pytestmark = pytest.mark.unit
 
 
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT COUNT(*) FROM main.orders",
+        "SELECT COUNT(*) FROM external.orders",
+        "SELECT COUNT(*) FROM memory.main.orders",
+        'SELECT COUNT(*) FROM "external"."orders"',
+        "WITH c AS (SELECT * FROM external.orders) SELECT COUNT(*) FROM c",
+    ],
+)
+def test_qualified_physical_sources_never_reach_the_governed_engine(
+    bound_transport, sql
+):
+    request = {"id": 1, "operation": "query", "sql": sql, "limit": 1}
+    frames = bound_transport.run((json.dumps(request) + "\n").encode())
+    assert frames[-1]["error"]["class"] == "model_not_found"
+    bound_transport.engine.query.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT COUNT(*) FROM orders",
+        'SELECT COUNT(*) FROM "orders"',
+        "WITH c AS (SELECT * FROM orders) SELECT COUNT(*) FROM c",
+    ],
+)
+def test_unqualified_models_and_ctes_keep_governed_support(bound_transport, sql):
+    request = {"id": 1, "operation": "query", "sql": sql, "limit": 1}
+    assert "result" in bound_transport.run((json.dumps(request) + "\n").encode())[-1]
+    bound_transport.engine.query.assert_called_once()
+
+
 @pytest.fixture
 def bound_transport(tmp_path, monkeypatch):
     (tmp_path / "wren_project.yml").write_text("name: synthetic\nprofile: fixture\n")
@@ -344,7 +377,6 @@ def test_a_query_over_a_model_next_to_a_literal_select_still_executes(
         "WITH x AS (SELECT * FROM orders) SELECT n FROM x",
         "SELECT n FROM (SELECT n FROM orders) t",
         'SELECT n FROM "orders"',
-        "SELECT n FROM public.orders",
         "WITH Totals AS (SELECT n FROM orders) SELECT n FROM totals",
     ],
 )
