@@ -96,6 +96,8 @@ function invoke(m) {
       return send({ id: m.id, value: request });
     case "hang":
       return;
+    case "malformed_reply":
+      return send({ id: m.id, error: request.error });
     case "with_calls":
       return send({
         id: m.id,
@@ -141,6 +143,9 @@ lines.on("line", (line) => {
     case "ops":
       return send({ id: m.id, value: seen });
     case "authorize":
+      if (m.request && m.request.__test_delay_ms) {
+        return void setTimeout(() => send({ id: m.id, value: true }), m.request.__test_delay_ms);
+      }
       return send({ id: m.id, value: true });
     case "cancel": {
       cancelled.add(m.owner);

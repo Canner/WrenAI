@@ -4,9 +4,11 @@ carries on afterwards can still do. The runtime is the scripted fake in
 a token, as a runtime that has not noticed a cancel yet would."""
 
 import asyncio
+import errno
 import importlib.util
 import json
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -384,3 +386,90 @@ def test_real_ipc_success_commits_evidence_before_lifetime_cleanup(scripted):
         ask(service, GOOD, session=request.session_id, revision=1, request_id="next")
     )
     assert second["status"] == "completed"
+
+
+@pytest.mark.parametrize("stage", ["initial", "tool"])
+def test_context_fifo_does_not_retain_a_closed_task_or_tool_pool(
+    scripted, monkeypatch, stage
+):
+    service = scripted()
+    request = ask(service, ORDERS)
+    session = service.sessions[request.session_id]
+    target = service.project.paths[0]
+    original = target.read_bytes()
+    installed = threading.Event()
+
+    def install():
+        target.unlink()
+        os.mkfifo(target)
+        installed.set()
+
+    if stage == "initial":
+        install()
+    else:
+        record = service.record
+
+        def enter_tool(event):
+            record(event)
+            if event.get("event") == "private_tool" and not installed.is_set():
+                install()
+
+        monkeypatch.setattr(service, "record", enter_tool)
+
+    outcome = []
+
+    def execute():
+        try:
+            outcome.append(service.execute(request))
+        except Exception as error:
+            outcome.append(error)
+
+    task = threading.Thread(target=execute)
+    closer = None
+    task.start()
+    try:
+        assert installed.wait(5)
+        deadline = time.monotonic() + 5
+        children = []
+        while time.monotonic() < deadline:
+            lifetime = session.get("query_lifetime")
+            children = list(lifetime.children) if lifetime else []
+            if children:
+                break
+            time.sleep(0.01)
+        assert children and task.is_alive()
+        # The child is now reading the real FIFO, not a mocked filesystem call.
+        time.sleep(0.1)
+        closer = threading.Thread(
+            target=service.shutdown
+            if stage == "tool"
+            else lambda: service.close(request.session_id)
+        )
+        closer.start()
+        closer.join(2)
+        task.join(2)
+        assert not closer.is_alive() and not task.is_alive()
+        assert all(child.poll() is not None for child in children)
+        assert not session["results"] and not session["evidence"]
+        assert not any(
+            isinstance(value, dict) and value.get("status") == "completed"
+            for value in outcome
+        )
+    finally:
+        if installed.is_set():
+            old_fifo = target.with_suffix(".blocked")
+            target.rename(old_fifo)
+            target.write_bytes(original)
+            try:
+                fd = os.open(old_fifo, os.O_WRONLY | os.O_NONBLOCK)
+            except OSError as error:
+                if error.errno != errno.ENXIO:
+                    raise
+            else:
+                with os.fdopen(fd, "wb") as stream:
+                    stream.write(original)
+            old_fifo.unlink()
+        task.join(5)
+        if closer is not None:
+            closer.join(5)
+        assert not task.is_alive()

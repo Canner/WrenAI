@@ -282,7 +282,19 @@ def test_a_semantics_flag_without_a_diagnostic_still_refuses(tmp_path):
 
 
 @pytest.fixture
-def real_project(tmp_path):
+def required_loader():
+    import os  # noqa: PLC0415
+
+    try:
+        return resolve_loader()
+    except ContextLoaderUnavailable:
+        if os.environ.get("WREN_REQUIRE_CONTEXT_LOADER") == "1":
+            raise
+        pytest.skip("build core/wren-context-loader or set WREN_CONTEXT_LOADER_BIN")
+
+
+@pytest.fixture
+def real_project(tmp_path, required_loader):
     import importlib.util  # noqa: PLC0415
 
     try:
@@ -1430,7 +1442,9 @@ def test_directory_symlink_cycles_fail_with_a_bounded_walk(tmp_path, relative):
         "knowledge/rules/loop",
     ],
 )
-def test_rust_and_python_reject_the_same_directory_symlinks(tmp_path, relative):
+def test_rust_and_python_reject_the_same_directory_symlinks(
+    tmp_path, relative, required_loader
+):
     import subprocess  # noqa: PLC0415
 
     root = tmp_path / "project"
@@ -1441,7 +1455,7 @@ def test_rust_and_python_reject_the_same_directory_symlinks(tmp_path, relative):
     link.symlink_to(root, target_is_directory=True)
     with pytest.raises(OSError, match="directory_symlink_unsupported"):
         project_digest(root)
-    loader = resolve_loader()
+    loader = required_loader
     result = subprocess.run(
         [
             str(loader),
@@ -1475,3 +1489,80 @@ def test_file_symlink_changes_remain_visible_to_both_digests_and_reader(
         "Additional authored rule."
         in ContextReader(after, after.denied, 4096).documents()["rules"]["content"]
     )
+
+
+@pytest.mark.parametrize(
+    "reference", ['"customers"."email"', "customers . email", "`customers`.`email`"]
+)
+def test_rule_redaction_handles_quoted_and_spaced_identifiers(reference):
+    assert (
+        adapter._prose(
+            f"Use {reference} to match. Keep regional rules.",
+            None,
+            frozenset({("customers", "email")}),
+        )
+        == "Keep regional rules."
+    )
+
+
+def test_qualified_denied_column_match_has_identifier_boundaries():
+    sentence = "Use customers.email_verified for matching."
+    assert (
+        adapter._prose(sentence, None, frozenset({("customers", "email")})) == sentence
+    )
+
+
+def test_cube_catalog_cannot_disagree_with_built_cube_members():
+    catalog = {
+        "cubes": [
+            {
+                "name": "sales",
+                "base_object": "orders",
+                "measures": [{"name": "gross", "type": "DOUBLE"}],
+            }
+        ]
+    }
+    manifest = {
+        "cubes": [
+            {
+                "name": "sales",
+                "baseObject": "orders",
+                "measures": [
+                    {"name": "net", "type": "DOUBLE", "expression": "SUM(amount)"}
+                ],
+            }
+        ]
+    }
+    with pytest.raises(ContextInconsistent, match="cube"):
+        adapter._check_consistent(catalog, manifest)
+
+
+@pytest.mark.parametrize(
+    "field,authored,built",
+    [
+        ("granularities", ["day"], ["month"]),
+        ("date_range", ["2026-01-01", "2026-06-30"], ["2026-02-01", "2026-06-30"]),
+    ],
+)
+def test_cube_time_settings_must_match_the_built_manifest(field, authored, built):
+    name = "dateRange" if field == "date_range" else field
+    catalog = {
+        "cubes": [
+            {
+                "name": "sales",
+                "base_object": "orders",
+                "time_dimensions": [{"name": "day", "type": "DATE", field: authored}],
+            }
+        ]
+    }
+    manifest = {
+        "cubes": [
+            {
+                "name": "sales",
+                "baseObject": "orders",
+                "timeDimensions": [{"name": "day", "type": "DATE", name: built}],
+            }
+        ]
+    }
+    with pytest.raises(ContextInconsistent, match="cube"):
+        adapter._check_consistent(catalog, manifest)

@@ -46,7 +46,12 @@ from wren.context_adapter import (
 )
 from wren.declared_default_status import display, fold_all
 from wren.declared_defaults import SaleStatuses
-from wren.governed_query import QueryCancelled, QueryLifetime
+from wren.governed_query import (
+    QueryCancelled,
+    QueryLifetime,
+    current_lifetime,
+    require_platform,
+)
 from wren.model.error import DatabaseTimeoutError
 
 
@@ -615,8 +620,11 @@ class Service:
         self.project.current()
         if session and (session["closed"] or session["caller"] != self.caller):
             return False
+        lifetime = current_lifetime()
+        timeout = {"timeout_s": lifetime.remaining()} if lifetime is not None else {}
         value = self.ipc.call(
             "authorize",
+            **timeout,
             request={
                 "caller": self.caller,
                 "project": self.pid,
@@ -855,6 +863,8 @@ class Service:
             raise ValueError("session_expired")
         try:
             self.project.current()
+        except (QueryCancelled, DatabaseTimeoutError):
+            raise
         except Exception:
             for old in self.sessions.values():
                 old["closed"] = True
@@ -930,15 +940,29 @@ class Service:
         return exc
 
     def execute(self, request: Ask | SQL, *, direct=None, continuation=None):
-        s = self.session(request.session_id)
-        if not s["lock"].acquire(blocking=False):
-            raise self.conflict(s, request, "busy")
+        # Register before the first session/current or authorization check: those
+        # operations are host work too, and close must be able to terminate them.
+        lifetime = QueryLifetime(self.execution.deadline_ms / 1000)
+        with self.lock:
+            s = self.sessions.get(request.session_id)
+            if not s or s["closed"] or s["caller"] != self.caller:
+                raise ValueError("session_expired")
+            if not s["lock"].acquire(blocking=False):
+                raise self.conflict(s, request, "busy")
+            owner = uid()
+            s["active"] = owner
+            s["query_lifetime"] = lifetime
         try:
-            return self._execute(s, request, direct, continuation)
+            with lifetime.bind():
+                self.session(request.session_id)
+                return self._execute(s, request, direct, continuation, lifetime, owner)
         finally:
+            lifetime.cancel()
+            s.pop("query_lifetime", None)
+            s["active"] = None
             s["lock"].release()
 
-    def _execute(self, s, request, direct, continuation):
+    def _execute(self, s, request, direct, continuation, lifetime, owner):
         capability = self.capabilities.get(request.capability)
         if not capability:
             raise PermissionError("denied")
@@ -1030,10 +1054,6 @@ class Service:
         policy_denied = False
         ended = None
         ending = threading.Lock()
-        owner = uid()
-        s["active"] = owner
-        lifetime = QueryLifetime(self.execution.deadline_ms / 1000)
-        s["query_lifetime"] = lifetime
 
         def callback(name, args):
             self.record(
@@ -1491,10 +1511,6 @@ class Service:
             if policy_denied:
                 raise PermissionError("denied") from None
             raise
-        finally:
-            lifetime.cancel()
-            s.pop("query_lifetime", None)
-            s["active"] = None
 
     def resolve_status_scope(self, pending: dict, answer: str):
         """What a continuation's answer makes of the status-scope question: the folded set, or
@@ -1738,6 +1754,7 @@ def create_service(
     policy_preset: str | None = None,
 ):
     """Prepare all bindings before exposing MCP. Configuration is trusted local input."""
+    require_platform()
     if mode not in {"agent", "mcp"}:
         raise ValueError("invalid_mode")
     root = discover(project_path)

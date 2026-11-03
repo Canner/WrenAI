@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 
 import yaml
 
-from wren.context_adapter import ContextReader, Snapshot, project_digest
+from wren.context_adapter import ContextReader, Snapshot
+from wren.project_fingerprint import fingerprint_sources
 
 
 def discover(explicit: Path | None) -> Path:
@@ -75,14 +75,10 @@ class Project:
         return self.reader.describe()
 
     def fingerprint(self):
-        digest = hashlib.sha256()
-        digest.update(b"project\0" + project_digest(self.root).encode() + b"\0")
-        for path in self.paths:
-            data = path.read_bytes()
-            digest.update(str(path).encode() + b"\0")
-            digest.update(str(len(data)).encode() + b"\0" + data)
-        return digest.hexdigest()
+        return fingerprint_sources(self.root, self.paths)
 
     def current(self):
-        if self.fingerprint() != self.version:
+        from wren.governed_query import fingerprint  # noqa: PLC0415
+
+        if fingerprint(self.root, self.paths) != self.version:
             raise ValueError("context_changed")

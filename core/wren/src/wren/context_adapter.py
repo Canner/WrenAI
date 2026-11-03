@@ -31,6 +31,7 @@ from wren.declared_defaults import (
     read_declared_defaults,
     split_front_matter,
 )
+from wren.project_fingerprint import project_digest
 
 LOADER_ENV = "WREN_CONTEXT_LOADER_BIN"
 LOADER_NAME = "wren-context-loader"
@@ -42,15 +43,6 @@ MAX_IDS = 16
 MIN_BUDGET_BYTES = 512
 RULE_PREFIX = "rule:"
 DENIED_KEY = "denied_columns"
-
-_DIGEST_ROOT_FILES = (
-    "wren_project.yml",
-    "relationships.yml",
-    "cubes.yml",
-    "dashboards.yml",
-    "instructions.md",
-)
-_DIGEST_DIRS = ("models", "cubes", "views", "knowledge")
 
 
 class ContextError(ValueError):
@@ -154,49 +146,6 @@ def loader_identity(path: Path) -> str:
                 digest.update(chunk)
         _identity_cache[key] = f"sha256:{digest.hexdigest()}"
     return _identity_cache[key]
-
-
-def project_digest(root: Path) -> str:
-    """The loader's ``digest``, computed in Python so a running service can detect change.
-
-    Same definition as ``wren_context_loader::project_digest``: SHA-256 over, for each
-    covered file in path order, ``<path> NUL <byte length> NUL <bytes>``. Covered files are
-    the root files ``wren_project.yml``, ``relationships.yml``, ``cubes.yml``,
-    ``dashboards.yml`` and ``instructions.md`` plus everything under ``models/``,
-    ``cubes/``, ``views/`` and ``knowledge/``; ``target/``, data files and dotfiles are
-    not covered. Source directories and nested directory symlinks (including
-    unresolved links) are refused; file symlinks remain covered by their path and
-    target bytes. ``load_snapshot`` asserts the two implementations agree.
-    """
-    files: dict[str, Path] = {}
-    for name in _DIGEST_ROOT_FILES:
-        if (root / name).is_file():
-            files[name] = root / name
-    for name in _DIGEST_DIRS:
-        base = root / name
-        if base.is_symlink():
-            raise OSError("directory_symlink_unsupported", str(base))
-        if base.is_dir():
-            _collect(base, name, files)
-    digest = hashlib.sha256()
-    for relative in sorted(files, key=lambda r: r.encode()):
-        data = files[relative].read_bytes()
-        digest.update(relative.encode() + b"\0" + str(len(data)).encode() + b"\0")
-        digest.update(data)
-    return digest.hexdigest()
-
-
-def _collect(directory: Path, relative: str, files: dict[str, Path]) -> None:
-    for entry in directory.iterdir():
-        if entry.name.startswith("."):
-            continue
-        child = f"{relative}/{entry.name}"
-        if entry.is_symlink() and not entry.is_file():
-            raise OSError("directory_symlink_unsupported", str(entry))
-        if entry.is_dir():
-            _collect(entry, child, files)
-        elif entry.is_file():
-            files[child] = entry
 
 
 def _read_json(path: Path, what: str):
@@ -465,6 +414,35 @@ def _check_consistent(catalog: dict, manifest: dict) -> None:
             f"columns differ: {changed})"
         )
 
+    def cubes(document, authored):
+        result = {}
+        for cube in document.get("cubes") or []:
+            members = {}
+            for source, target in (
+                ("measures", "measures"),
+                ("dimensions", "dimensions"),
+                ("time_dimensions" if authored else "timeDimensions", "time"),
+            ):
+                members[target] = sorted(
+                    (
+                        m["name"],
+                        m["type"],
+                        tuple(sorted(m.get("granularities") or [])),
+                        tuple(m.get("date_range" if authored else "dateRange") or []),
+                    )
+                    for m in cube.get(source) or []
+                )
+            result[cube["name"]] = (
+                cube.get("base_object" if authored else "baseObject"),
+                members,
+            )
+        return result
+
+    if cubes(catalog, True) != cubes(manifest, False):
+        raise ContextInconsistent(
+            "target/mdl.json differs from project sources in its cubes; run `wren context build`"
+        )
+
 
 def _check_denied_exist(denied: frozenset, catalog: dict) -> None:
     columns = {
@@ -506,9 +484,14 @@ def _mentions_denied(
     column of ``model`` (one model name, or a set of them); ``None`` means no owner is known.
     """
     owners = {model} if isinstance(model, str) else (model or frozenset())
-    lowered = sentence.lower()
+
+    def identifier(name):
+        plain = re.escape(name)
+        return rf'(?:{plain}|"{plain}"|`{plain}`|\[{plain}\])'
+
     for owner, column in denied:
-        if f"{owner}.{column}".lower() in lowered:
+        qualified = rf"(?<!\w){identifier(owner)}\s*\.\s*{identifier(column)}(?!\w)"
+        if re.search(qualified, sentence, re.IGNORECASE):
             return True
         if owner in owners and re.search(
             rf"\b{re.escape(column)}\b", sentence, re.IGNORECASE
@@ -521,9 +504,20 @@ def _prose(
     text: str | None, model: str | frozenset | None, denied: frozenset
 ) -> str | None:
     """A description with every sentence that names a denied column removed."""
-    kept = [
-        s for s in _sentences(_one_line(text)) if not _mentions_denied(s, model, denied)
-    ]
+    # Keep a qualified identifier together before sentence splitting: SQL permits
+    # whitespace around its dot, which is not a prose sentence boundary.
+    normalised = _one_line(text)
+
+    def identifier(name):
+        plain = re.escape(name)
+        return rf'(?:{plain}|"{plain}"|`{plain}`|\[{plain}\])'
+
+    for owner, column in denied:
+        pattern = rf"(?<!\w){identifier(owner)}\s*\.\s*{identifier(column)}(?!\w)"
+        normalised = re.sub(
+            pattern, lambda _: f"{owner}.{column}", normalised, flags=re.IGNORECASE
+        )
+    kept = [s for s in _sentences(normalised) if not _mentions_denied(s, model, denied)]
     return " ".join(kept) or None
 
 
@@ -554,8 +548,8 @@ def _redact_rule_body(text: str, denied: frozenset) -> str:
     body = []
     for line in lines[head:]:
         content = line.rstrip("\r\n")
-        if not content.strip() or not any(
-            _mentions_denied(s, None, denied) for s in _sentences(_one_line(content))
+        if not content.strip() or not _mentions_denied(
+            _one_line(content), None, denied
         ):
             body.append(line)
             continue

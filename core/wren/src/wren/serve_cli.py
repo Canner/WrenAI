@@ -401,6 +401,9 @@ def serve_agent_presets(
             service_config.expanduser().resolve(strict=True).read_text()
         )
         default, presets = read_policy_presets(config)
+    except yaml.YAMLError:
+        typer.echo("Cannot parse service config YAML.", err=True)
+        raise typer.Exit(1) from None
     except OSError as exc:
         typer.echo(f"Cannot read service config: {exc}.", err=True)
         raise typer.Exit(1) from None

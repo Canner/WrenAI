@@ -122,12 +122,18 @@ class RuntimeIPC:
                     self.pool.submit(self._tool, m)
                 else:
                     with self.state_lock:
-                        owner = self._wire_owners.pop(m["id"], None)
-                        future = self.pending.pop(owner, None)
+                        owner = self._wire_owners.get(m["id"])
+                        future = self.pending.get(owner)
                         if future is None:
                             if self._issued(m["id"]):
                                 continue
                             raise ValueError("ipc_order")
+                        # Retain the waiter until the complete reply can be read.
+                        # Protocol failure below must still fail it in finally.
+                        if not m.get("error") and "value" not in m:
+                            raise ValueError("ipc_reply")
+                        self._wire_owners.pop(m["id"])
+                        self.pending.pop(owner)
                     if m.get("error"):
                         failure = RuntimeError("runtime_unavailable")
                         # Operator diagnostics only: never forwarded to a caller.
@@ -147,7 +153,7 @@ class RuntimeIPC:
             self.process.kill()
         finally:
             for cancel in list(self.cancel_callbacks.values()):
-                cancel()
+                self._cancel_callback(cancel)
             for future in list(self.pending.values()):
                 if not future.done():
                     future.set_exception(RuntimeError("runtime_unavailable"))
@@ -161,6 +167,7 @@ class RuntimeIPC:
         invocation_id=None,
         on_cancel=None,
         usage=None,
+        timeout_s=None,
         **values,
     ):
         """Send one op and wait for its reply.
@@ -196,7 +203,10 @@ class RuntimeIPC:
         try:
             self._send({"id": wire, "op": op, **values})
             # The runtime's own deadlines sit below this cap. The operator can override it.
-            value, calls = future.result(timeout=self._timeout())
+            timeout = self._timeout()
+            if timeout_s is not None:
+                timeout = min(timeout, max(0, timeout_s))
+            value, calls = future.result(timeout=timeout)
             completed = True
             if usage is not None and calls is not None:
                 usage["calls"] = calls
@@ -213,8 +223,16 @@ class RuntimeIPC:
                 self._wire_owners.pop(wire, None)
             cancel = self.cancel_callbacks.pop(ident, None)
             if cancel is not None and not completed:
-                cancel()
+                self._cancel_callback(cancel)
             self.callbacks.pop(ident, None)
+
+    @staticmethod
+    def _cancel_callback(cancel):
+        # One failed cleanup must not strand other invocations or their waiters.
+        try:
+            cancel()
+        except Exception:
+            pass
 
     def _timeout(self) -> float:
         raw = os.environ.get("WREN_IPC_CALL_TIMEOUT_S")
@@ -227,7 +245,7 @@ class RuntimeIPC:
             self.pending.pop(ident, None)
         cancel_callback = self.cancel_callbacks.get(ident)
         if cancel_callback is not None:
-            cancel_callback()
+            self._cancel_callback(cancel_callback)
         if not cancel:
             return
         with self.state_lock:
@@ -273,7 +291,7 @@ class RuntimeIPC:
     def cancel(self, owner):
         cancel = self.cancel_callbacks.get(owner)
         if cancel is not None:
-            cancel()
+            self._cancel_callback(cancel)
         with self.state_lock:
             wire = self.wire_ids.get(owner)
         return self.call("cancel", **{"owner": wire or owner})

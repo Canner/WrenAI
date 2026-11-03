@@ -7,6 +7,7 @@ import json
 import os
 import re
 import threading
+import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -3493,3 +3494,40 @@ def test_a_missing_service_config_is_a_controlled_error(tmp_path):
     assert missing.exit_code == 1
     assert isinstance(missing.exception, SystemExit)
     assert "Cannot read service config" in missing.output
+
+
+def test_malformed_presets_yaml_is_a_controlled_cli_error(tmp_path):
+    import yaml  # noqa: PLC0415
+    from typer.testing import CliRunner  # noqa: PLC0415
+
+    from wren.cli import app  # noqa: PLC0415
+
+    path = tmp_path / "malformed.yml"
+    path.write_text("policy_presets: [not closed")
+    result = CliRunner().invoke(
+        app, ["serve", "agent-presets", "--service-config", str(path)]
+    )
+    assert result.exit_code == 1
+    assert "Cannot parse service config YAML." in result.output
+    assert not isinstance(result.exception, yaml.YAMLError)
+
+
+def test_authorization_wait_is_inside_the_task_deadline(service, monkeypatch):
+    from dataclasses import replace  # noqa: PLC0415
+
+    instance = service(runtime_path=FAKE_RUNTIME)
+    value = sql_request(instance, "SELECT COUNT(*) FROM customers")
+    instance.execution = replace(instance.execution, deadline_ms=300)
+    original = instance.ipc._send
+
+    def delayed(frame):
+        if frame.get("op") == "authorize":
+            frame["request"]["__test_delay_ms"] = 800
+        return original(frame)
+
+    monkeypatch.setattr(instance.ipc, "_send", delayed)
+    started = time.monotonic()
+    result = asyncio.run(safe(instance.execute, value, direct={"sql": value.sql}))
+    assert time.monotonic() - started < 0.7
+    assert result == {"status": "unavailable", "reason": "timeout"}
+    assert not instance.sessions[value.session_id]["results"]

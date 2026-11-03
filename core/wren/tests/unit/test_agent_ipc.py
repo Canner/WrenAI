@@ -20,9 +20,12 @@ def ipc(monkeypatch):
     made = []
 
     def make(init=None, **kwargs):
+        call_timeout_s = kwargs.pop("call_timeout_s", None)
         runtime = RuntimeIPC(
             FAKE_RUNTIME, init or {"model": {"apiKey": "secret"}}, **kwargs
         )
+        if call_timeout_s is not None:
+            runtime.call_timeout_s = call_timeout_s
         made.append(runtime)
         return runtime
 
@@ -42,6 +45,18 @@ def invoke(ipc, behavior, ident, **extra):
 
 def ops(ipc):
     return ipc.call("ops")
+
+
+@pytest.mark.parametrize("error", [None, ""])
+def test_malformed_reply_fails_the_waiting_call_without_waiting_for_timeout(ipc, error):
+    runtime = ipc(call_timeout_s=2)
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="runtime_unavailable") as raised:
+        invoke(runtime, "malformed_reply", "malformed", error=error)
+    assert time.monotonic() - started < 1
+    assert getattr(raised.value, "detail", None) != "ipc_timeout:host"
+    runtime.process.wait(timeout=2)
+    assert not runtime.pending
 
 
 def test_the_handshake_passes_the_init_payload_through_and_redacts_the_key(ipc):
@@ -396,3 +411,26 @@ def test_a_broken_runtime_pipe_does_not_accumulate_pending_entries(ipc):
             and not runtime.cancel_callbacks
         )
         assert not runtime.wire_ids and not runtime._wire_owners
+
+
+def test_reader_cleanup_isolates_a_failing_cancel_callback(ipc):
+    import threading  # noqa: PLC0415
+
+    runtime = ipc()
+    completed = threading.Event()
+
+    def fail():
+        raise RuntimeError("cancel failed")
+
+    runtime.cancel_callbacks["first"] = fail
+    runtime.cancel_callbacks["second"] = completed.set
+    future = __import__("concurrent.futures").futures.Future()
+    runtime.pending["pending"] = future
+    runtime.process.kill()
+    runtime.process.wait(timeout=5)
+    runtime.reader.join(timeout=5)
+    try:
+        assert completed.is_set()
+        assert future.done() and isinstance(future.exception(), RuntimeError)
+    finally:
+        runtime.cancel_callbacks.clear()
