@@ -232,8 +232,9 @@ pub(crate) fn identifiers_match(left: &Ident, right: &Ident) -> bool {
     }
 }
 
-/// DuckDB folds CTE names regardless of whether their spelling was quoted. This is deliberately
-/// narrower than manifest relation resolution, which retains quoted identifier strictness.
+/// DuckDB folds CTE names and query-level output aliases regardless of whether their spelling was
+/// quoted. This is deliberately narrower than manifest relation resolution, which retains quoted
+/// identifier strictness.
 fn cte_identifiers_match(left: &Ident, right: &Ident) -> bool {
     left.value.eq_ignore_ascii_case(&right.value)
 }
@@ -356,7 +357,7 @@ impl RelationCollector {
                     column.qualifier.is_some()
                         || !output_aliases
                             .iter()
-                            .any(|alias| identifiers_match(alias, &column.name))
+                            .any(|alias| cte_identifiers_match(alias, &column.name))
                 }));
         }
         let mut wildcards = Vec::new();

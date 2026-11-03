@@ -723,6 +723,14 @@ fn query_order_by_uses_the_select_scope_without_borrowing_output_aliases() {
             "SELECT 1 AS total_value FROM order_metrics ORDER BY total_value",
         ),
         (
+            "quoted-constant-alias",
+            "SELECT 1 AS \"TOTAL_VALUE\" FROM order_metrics ORDER BY total_value",
+        ),
+        (
+            "reverse-quoted-constant-alias",
+            "SELECT 1 AS total_value FROM order_metrics ORDER BY \"TOTAL_VALUE\"",
+        ),
+        (
             "qualified",
             "SELECT 1 FROM order_metrics om ORDER BY om.total_value",
         ),
@@ -755,6 +763,8 @@ fn query_order_by_uses_the_select_scope_without_borrowing_output_aliases() {
     }
     for query in [
         "query:constant-alias",
+        "query:quoted-constant-alias",
+        "query:reverse-quoted-constant-alias",
         "query:cte",
         "query:derived",
         "query:union",
