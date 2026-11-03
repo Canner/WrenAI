@@ -6,7 +6,9 @@
 //! product) or data files, and it skips dotfiles (editor and OS droppings never change what the
 //! project says). Every reader that lists a source directory applies the same rule through
 //! [`is_hidden`], so the digest, the catalog and the prepared document agree on which files are
-//! inputs.
+//! inputs. Source-directory roots and nested directory/unresolved symlinks are refused by
+//! both the digest and the project readers; file symlinks remain covered by their relative
+//! path and target bytes.
 //!
 //! Framing: files are visited in path order (byte-wise order of the `/`-joined relative path), and
 //! each contributes `<path> NUL <decimal byte length> NUL <bytes>`, so no two different projects
@@ -46,12 +48,7 @@ pub fn project_digest(dir: &Path) -> io::Result<String> {
             files.push((name.to_string(), path));
         }
     }
-    for name in SOURCE_DIRS {
-        let root = dir.join(name);
-        if root.is_dir() {
-            collect(&root, name, &mut files)?;
-        }
-    }
+    files.extend(source_files(dir)?);
     files.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
 
     let mut hasher = Sha256::new();
@@ -70,6 +67,33 @@ pub fn project_digest(dir: &Path) -> io::Result<String> {
         .collect())
 }
 
+/// Validate exactly the same covered directory tree before either reader uses it.
+/// File symlinks stay supported; directory and unresolved symlinks fail closed.
+pub(crate) fn validate_source_directories(dir: &Path) -> io::Result<()> {
+    source_files(dir).map(|_| ())
+}
+
+fn source_files(dir: &Path) -> io::Result<Vec<(String, std::path::PathBuf)>> {
+    let mut files = Vec::new();
+    for name in SOURCE_DIRS {
+        let root = dir.join(name);
+        if root.is_symlink() {
+            return Err(directory_symlink_error(&root));
+        }
+        if root.is_dir() {
+            collect(&root, name, &mut files)?;
+        }
+    }
+    Ok(files)
+}
+
+fn directory_symlink_error(path: &Path) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidInput,
+        format!("directory_symlink_unsupported: {}", path.display()),
+    )
+}
+
 fn collect(
     dir: &Path,
     relative: &str,
@@ -83,6 +107,9 @@ fn collect(
         let name = entry.file_name().to_string_lossy().into_owned();
         let path = entry.path();
         let child = format!("{relative}/{name}");
+        if path.is_symlink() && !path.is_file() {
+            return Err(directory_symlink_error(&path));
+        }
         if path.is_dir() {
             collect(&path, &child, out)?;
         } else if path.is_file() {

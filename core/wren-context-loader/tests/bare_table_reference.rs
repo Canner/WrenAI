@@ -17,7 +17,7 @@ use std::fs;
 use std::path::Path;
 
 use warble::ContextLoader;
-use wren_context_loader::{read_project_dir, MdlContext};
+use wren_context_loader::{assemble, read_project_dir, MdlContext};
 
 fn write(dir: &Path, rel: &str, contents: &str) {
     let path = dir.join(rel);
@@ -59,6 +59,14 @@ fn bare_table_key_table_reference_still_parses() {
     let ctx = MdlContext::try_from_sources(&sources)
         .expect("a table_reference with only `table` (no catalog/schema) must still assemble");
 
+    let assembled = assemble(&sources).expect("assemble the original authored sources");
+    let manifest = serde_json::to_value(&assembled.manifest).unwrap();
+    assert_eq!(
+        manifest["models"][0]["tableReference"]["table"],
+        "/abs/path/to/customers.parquet"
+    );
+    assert!(manifest["models"][0]["tableReference"]["catalog"].is_null());
+    assert!(manifest["models"][0]["tableReference"]["schema"].is_null());
     assert!(ctx.is_parseable());
     let model = ctx
         .model("customers")

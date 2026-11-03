@@ -1379,3 +1379,99 @@ def test_rule_body_never_names_a_denied_column():
     assert "# Matching" in body[mixed]
     assert body[only] == ""
     assert f"rule {only}" in r.list(1)["text"]
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "models",
+        "cubes",
+        "views",
+        "knowledge",
+        "knowledge/rules",
+        "models/linked",
+        "knowledge/rules/loop",
+    ],
+)
+def test_directory_symlink_cycles_fail_with_a_bounded_walk(tmp_path, relative):
+    import os  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "wren_project.yml").write_text("name: test\n")
+    link = root / relative
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(root, target_is_directory=True)
+    code = "from pathlib import Path; from wren.context_adapter import project_digest; project_digest(Path(__import__('sys').argv[1]))"
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", code, str(root)],
+            capture_output=True,
+            text=True,
+            env={**os.environ},
+            timeout=2,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail("source walk followed a directory-symlink cycle past the deadline")
+    assert result.returncode != 0
+    assert "directory_symlink_unsupported" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "models",
+        "cubes",
+        "views",
+        "knowledge",
+        "knowledge/rules",
+        "models/linked",
+        "knowledge/rules/loop",
+    ],
+)
+def test_rust_and_python_reject_the_same_directory_symlinks(tmp_path, relative):
+    import subprocess  # noqa: PLC0415
+
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "wren_project.yml").write_text("name: test\n")
+    link = root / relative
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(root, target_is_directory=True)
+    with pytest.raises(OSError, match="directory_symlink_unsupported"):
+        project_digest(root)
+    loader = resolve_loader()
+    result = subprocess.run(
+        [
+            str(loader),
+            str(root),
+            "-o",
+            str(tmp_path / "context.json"),
+            "--catalog-out",
+            str(tmp_path / "catalog.json"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=3,
+    )
+    assert result.returncode != 0 and "directory_symlink_unsupported" in result.stderr
+
+
+def test_file_symlink_changes_remain_visible_to_both_digests_and_reader(
+    real_project, tmp_path
+):
+    original = real_project / "knowledge/rules/conventions.md"
+    target = tmp_path / "external-rule.md"
+    original.rename(target)
+    original.symlink_to(target)
+    before = load_snapshot(real_project)
+    text = target.read_text()
+    target.write_text(text + "\nAdditional authored rule.\n")
+    after = load_snapshot(real_project)
+    assert before.digest != after.digest
+    assert after.digest == project_digest(real_project)
+    assert (
+        "Additional authored rule."
+        in ContextReader(after, after.denied, 4096).documents()["rules"]["content"]
+    )

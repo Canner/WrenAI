@@ -205,3 +205,108 @@ fn the_digest_and_the_readers_agree_that_dot_named_entries_are_not_inputs() {
         "so must every reader the catalog and the prepared document are built from"
     );
 }
+
+#[cfg(unix)]
+fn bounded_loader_rejection(dir: &Path, output: &Path) {
+    use std::process::Stdio;
+    use std::time::{Duration, Instant};
+    let mut child = Command::new(env!("CARGO_BIN_EXE_wren-context-loader"))
+        .arg(dir)
+        .arg("-o")
+        .arg(output.join("context.json"))
+        .arg("--catalog-out")
+        .arg(output.join("catalog.json"))
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        if child.try_wait().unwrap().is_some() {
+            break;
+        }
+        if Instant::now() >= deadline {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("directory-symlink traversal exceeded its bound");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let result = child.wait_with_output().unwrap();
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("directory_symlink_unsupported"));
+}
+
+#[test]
+#[cfg(unix)]
+fn directory_symlinks_are_rejected_by_digest_and_both_readers() {
+    use std::os::unix::fs::symlink;
+    for relative in [
+        "models",
+        "cubes",
+        "views",
+        "knowledge",
+        "knowledge/rules",
+        "models/linked",
+        "knowledge/rules/loop",
+    ] {
+        let project = copy_of("rules-wren");
+        let output = tempfile::tempdir().unwrap();
+        let link = project.path().join(relative);
+        if link.exists() {
+            fs::rename(&link, output.path().join("original")).unwrap();
+        }
+        fs::create_dir_all(link.parent().unwrap()).unwrap();
+        symlink(project.path(), &link).unwrap();
+        // The subprocess deadline makes a regression to recursive traversal safe.
+        bounded_loader_rejection(project.path(), output.path());
+        assert!(project_digest(project.path()).is_err(), "{relative}");
+        assert!(read_project_dir(project.path()).is_err(), "{relative}");
+        assert!(read_knowledge_rules(project.path()).is_err(), "{relative}");
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn branching_directory_cycles_are_rejected_before_expansion() {
+    use std::os::unix::fs::symlink;
+    let project = copy_of("rules-wren");
+    let cycles = project.path().join("knowledge/cycles");
+    fs::create_dir_all(&cycles).unwrap();
+    symlink(project.path().join("knowledge"), cycles.join("a")).unwrap();
+    symlink(project.path().join("knowledge"), cycles.join("b")).unwrap();
+    let output = tempfile::tempdir().unwrap();
+    bounded_loader_rejection(project.path(), output.path());
+}
+
+#[test]
+#[cfg(unix)]
+fn file_symlinks_still_contribute_target_bytes_and_are_read() {
+    use std::os::unix::fs::symlink;
+    let project = copy_of("rules-wren");
+    let outside = tempfile::tempdir().unwrap();
+    let linked = project.path().join("knowledge/rules/linked.md");
+    let target = outside.path().join("rule.md");
+    fs::write(&target, "first external rule").unwrap();
+    symlink(&target, &linked).unwrap();
+    let first = digest(project.path());
+    assert!(read_knowledge_rules(project.path())
+        .unwrap()
+        .content
+        .contains("first external rule"));
+    fs::write(&target, "updated external rule").unwrap();
+    assert_ne!(first, digest(project.path()));
+    assert!(read_knowledge_rules(project.path())
+        .unwrap()
+        .content
+        .contains("updated external rule"));
+    let model = project.path().join("models/orders/metadata.yml");
+    let expected = fs::read_to_string(&model).unwrap();
+    fs::rename(&model, outside.path().join("model.yml")).unwrap();
+    symlink(outside.path().join("model.yml"), &model).unwrap();
+    assert!(read_project_dir(project.path())
+        .unwrap()
+        .unwrap()
+        .model_ymls
+        .contains(&expected));
+}

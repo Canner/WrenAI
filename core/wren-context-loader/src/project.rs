@@ -216,6 +216,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     if !wren_project_path.is_file() {
         return Ok(None);
     }
+    crate::digest::validate_source_directories(dir)?;
     let wren_project_yml = fs::read_to_string(&wren_project_path)?;
 
     let mut model_ymls = Vec::new();
@@ -295,6 +296,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
 pub fn read_knowledge_rules(dir: &std::path::Path) -> std::io::Result<KnowledgeRules> {
     use std::fs;
 
+    crate::digest::validate_source_directories(dir)?;
     let rules_dir = dir.join("knowledge").join("rules");
     let paths = if rules_dir.is_dir() {
         list_dir(&rules_dir)?

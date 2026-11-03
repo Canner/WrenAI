@@ -164,7 +164,9 @@ def project_digest(root: Path) -> str:
     the root files ``wren_project.yml``, ``relationships.yml``, ``cubes.yml``,
     ``dashboards.yml`` and ``instructions.md`` plus everything under ``models/``,
     ``cubes/``, ``views/`` and ``knowledge/``; ``target/``, data files and dotfiles are
-    not covered. ``load_snapshot`` asserts the two implementations agree.
+    not covered. Source directories and nested directory symlinks (including
+    unresolved links) are refused; file symlinks remain covered by their path and
+    target bytes. ``load_snapshot`` asserts the two implementations agree.
     """
     files: dict[str, Path] = {}
     for name in _DIGEST_ROOT_FILES:
@@ -172,6 +174,8 @@ def project_digest(root: Path) -> str:
             files[name] = root / name
     for name in _DIGEST_DIRS:
         base = root / name
+        if base.is_symlink():
+            raise OSError("directory_symlink_unsupported", str(base))
         if base.is_dir():
             _collect(base, name, files)
     digest = hashlib.sha256()
@@ -187,6 +191,8 @@ def _collect(directory: Path, relative: str, files: dict[str, Path]) -> None:
         if entry.name.startswith("."):
             continue
         child = f"{relative}/{entry.name}"
+        if entry.is_symlink() and not entry.is_file():
+            raise OSError("directory_symlink_unsupported", str(entry))
         if entry.is_dir():
             _collect(entry, child, files)
         elif entry.is_file():
