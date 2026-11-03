@@ -1240,6 +1240,39 @@ def test_a_cte_named_like_a_view_shadows_it(adhoc):
     assert prepared.unverified == []
 
 
+def test_cr1_cte_reference_in_view_body_is_not_external(adhoc):
+    cte_view = {
+        "views/paid_ids/metadata.yml": "name: paid_ids\n",
+        "views/paid_ids/sql.yml": yaml.safe_dump(
+            {
+                "statement": "WITH x AS (SELECT id, customer_id FROM orders "
+                f"WHERE {SCOPED}) SELECT id, customer_id FROM x"
+            }
+        ),
+    }
+    s = adhoc(files=cte_view)
+    assert s.sql.broken_views == set()
+    prepared = s.sql.prepare("SELECT COUNT(*) FROM paid_ids")
+    assert prepared.observed["models"] == ["orders"]
+
+
+def test_cr1_a_cte_defined_later_or_elsewhere_is_still_external(adhoc):
+    unresolved = {
+        "views/ghost_cte/metadata.yml": "name: ghost_cte\n",
+        "views/ghost_cte/sql.yml": yaml.safe_dump(
+            {
+                "statement": "WITH x AS (SELECT id FROM ghosts) SELECT id FROM x",
+            }
+        ),
+        "views/bare_ghost/metadata.yml": "name: bare_ghost\n",
+        "views/bare_ghost/sql.yml": yaml.safe_dump(
+            {"statement": "SELECT id FROM (SELECT id FROM orders) o, missing_cte"}
+        ),
+    }
+    s = adhoc(files=unresolved)
+    assert s.sql.broken_views == {"ghost_cte", "bare_ghost"}
+
+
 def test_a_view_the_host_cannot_read_is_not_a_source(adhoc):
     broken = {
         "views/ghost_view/metadata.yml": "name: ghost_view\n",

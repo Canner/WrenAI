@@ -174,6 +174,27 @@ def model_schema(models) -> dict:
     }
 
 
+def _cte_references(tree) -> set[int]:
+    """The ids of the table nodes that name a CTE visible at their own position.
+
+    A CTE reference parses as a table node, so a name that is not a model is a physical read
+    unless the scope the node sits in resolves it to the very CTE defined for it.
+    """
+    found = set()
+    for scope in traverse_scope(tree):
+        for alias, node in scope.references:
+            visible = scope.cte_sources.get(node.name) if node.name else None
+            if (
+                isinstance(node, exp.Table)
+                and not node.db
+                and not node.catalog
+                and visible is not None
+                and scope.sources.get(alias) is visible
+            ):
+                found.add(id(node))
+    return found
+
+
 def read_view_bodies(schema: dict, catalog: dict, manifest: dict | None):
     """The views the catalog lists, as parsed bodies over models: ``(usable, broken)``.
 
@@ -196,16 +217,17 @@ def read_view_bodies(schema: dict, catalog: dict, manifest: dict | None):
             body = sqlglot.parse_one(statement, read="duckdb")
             if not isinstance(body, exp.Query):
                 raise ValueError("not a query")
-            qualify(
+            qualified = qualify(
                 body.copy(),
                 dialect="duckdb",
                 schema=schema,
                 validate_qualify_columns=True,
                 identify=False,
             )
+            from_ctes = _cte_references(qualified)
             if any(
-                t.db or t.catalog or t.name not in schema
-                for t in body.find_all(exp.Table)
+                t.db or t.catalog or (t.name not in schema and id(t) not in from_ctes)
+                for t in qualified.find_all(exp.Table)
             ):
                 raise ValueError("reads more than models")
         except Exception:  # noqa: BLE001 - any unreadable view is unusable, never trusted
