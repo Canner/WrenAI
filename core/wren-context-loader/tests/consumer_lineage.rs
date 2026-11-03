@@ -609,9 +609,35 @@ fn quoted_ctes_and_relations_preserve_engine_case_resolution() {
     let ctx = load(tmp.path());
 
     assert!(reaches(&ctx, "model:customers", "query:quoted-cte"));
-    assert!(reaches(&ctx, "model:orders", "query:quoted-cte"));
+    assert!(!reaches(&ctx, "model:orders", "query:quoted-cte"));
     assert!(reaches(&ctx, "model:orders", "query:unquoted-model"));
     assert!(!reaches(&ctx, "model:orders", "query:quoted-model"));
+}
+
+#[test]
+fn duckdb_cte_scope_folds_quotes_and_case() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    for (slug, sql) in [
+        (
+            "unquoted-to-quoted",
+            "WITH orders AS (SELECT 1) SELECT * FROM \"ORDERS\"",
+        ),
+        (
+            "quoted-variants",
+            "WITH \"Orders\" AS (SELECT 1) SELECT * FROM \"ORDERS\"",
+        ),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+    let ctx = load(tmp.path());
+    for query in ["query:unquoted-to-quoted", "query:quoted-variants"] {
+        assert!(!reaches(&ctx, "model:orders", query));
+    }
 }
 
 #[test]

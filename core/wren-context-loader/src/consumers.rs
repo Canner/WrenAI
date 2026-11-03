@@ -220,6 +220,12 @@ pub(crate) fn identifiers_match(left: &Ident, right: &Ident) -> bool {
     }
 }
 
+/// DuckDB folds CTE names regardless of whether their spelling was quoted. This is deliberately
+/// narrower than manifest relation resolution, which retains quoted identifier strictness.
+fn cte_identifiers_match(left: &Ident, right: &Ident) -> bool {
+    left.value.eq_ignore_ascii_case(&right.value)
+}
+
 impl Visitor for RelationCollector {
     type Break = ();
 
@@ -264,7 +270,7 @@ impl Visitor for RelationCollector {
             let bound = self
                 .scopes
                 .last()
-                .is_some_and(|scope| scope.iter().any(|cte| identifiers_match(cte, ident)));
+                .is_some_and(|scope| scope.iter().any(|cte| cte_identifiers_match(cte, ident)));
             if bound {
                 return ControlFlow::Continue(());
             }
@@ -283,7 +289,7 @@ impl Visitor for RelationCollector {
             && self
                 .scopes
                 .last()
-                .is_some_and(|scope| scope.iter().any(|cte| identifiers_match(cte, ident)))
+                .is_some_and(|scope| scope.iter().any(|cte| cte_identifiers_match(cte, ident)))
         {
             return ControlFlow::Continue(());
         }
@@ -366,7 +372,7 @@ impl RelationCollector {
                 let is_cte = source_name.as_ref().is_some_and(|ident| {
                     name.0.len() == 1
                         && scope.is_some_and(|scope| {
-                            scope.iter().any(|cte| identifiers_match(cte, ident))
+                            scope.iter().any(|cte| cte_identifiers_match(cte, ident))
                         })
                 });
                 sources.push(SelectSource {
