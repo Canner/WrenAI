@@ -29,7 +29,9 @@ const ROOT_FILES: [&str; 5] = [
 const SOURCE_DIRS: [&str; 4] = ["models", "cubes", "views", "knowledge"];
 
 /// Whether a directory entry is ignored as a project input: a name that starts with `.`, such as
-/// an editor swap file, `.DS_Store` or `.gitkeep`. The one definition of the rule, shared by the
+/// an editor swap file, `.DS_Store` or `.gitkeep`. Dot-named files and directories under
+/// `models/`, `cubes/`, `views/` and `knowledge/` are not loader inputs: they are not in the
+/// digest, the catalog or the prepared document. The one definition of the rule, shared by the
 /// digest and by the readers in `project.rs`.
 pub(crate) fn is_hidden(name: &std::ffi::OsStr) -> bool {
     name.to_string_lossy().starts_with('.')

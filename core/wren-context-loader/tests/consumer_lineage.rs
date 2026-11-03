@@ -492,3 +492,38 @@ fn cr15_a_measure_named_only_in_a_comment_or_a_string_does_not_link_the_consumer
         "a real column reference still links"
     );
 }
+
+#[test]
+fn cr12_under_recursive_a_cte_sees_its_later_siblings() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/recursive-siblings.md",
+        "---\nsql: WITH RECURSIVE a AS (SELECT * FROM customers), customers AS (SELECT 1 AS id) SELECT * FROM a\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(
+        !reaches(&ctx, "model:customers", "query:recursive-siblings"),
+        "under WITH RECURSIVE, `customers` inside `a` is the later sibling CTE, not the model"
+    );
+}
+
+#[test]
+fn cr12_cte_names_match_case_insensitively() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/mixed-case.md",
+        "---\nsql: WITH Orders AS (SELECT * FROM customers) SELECT * FROM orders\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(
+        !reaches(&ctx, "model:orders", "query:mixed-case"),
+        "`orders` resolves to the CTE `Orders`, as SQL names do"
+    );
+    assert!(reaches(&ctx, "model:customers", "query:mixed-case"));
+}
