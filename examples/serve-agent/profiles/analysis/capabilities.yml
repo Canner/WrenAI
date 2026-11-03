@@ -15,4 +15,4 @@ capabilities:
   - session result and evidence references
   limits:
   - the worker is briefed to count the rows of one model; the host does not enforce this scope
-  - the worker is briefed not to return raw rows or SQL; the host does not check either
+  - the worker is briefed not to return raw rows or SQL; what reaches the planner is governed by the policy's receive_answer rules, not by this profile
