@@ -1,0 +1,159 @@
+//! Native source-tree access rooted in opened directory file descriptors.
+//!
+//! On Unix, source directories are opened with `openat(..., O_DIRECTORY | O_NOFOLLOW)` from an
+//! already-open parent. This closes the validate-then-reopen race for directory traversal while
+//! retaining existing support for a final file symlink to a regular file. The project root is the
+//! caller's trusted anchor; this module is not a general filesystem sandbox.
+
+use std::ffi::{OsStr, OsString};
+use std::fs::File;
+use std::io::{self, Read};
+use std::os::fd::OwnedFd;
+use std::os::unix::ffi::OsStringExt;
+use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::{cell::RefCell, thread_local};
+
+use rustix::fs::{open, openat, Dir, Mode, OFlags};
+
+pub(crate) struct SourceDir {
+    fd: OwnedFd,
+    display: PathBuf,
+}
+
+impl SourceDir {
+    /// Open the caller-supplied project root. It is the trusted anchor for subsequent `openat`
+    /// operations and may itself be a symlink, preserving the native API's existing behavior.
+    pub(crate) fn open_root(path: &Path) -> io::Result<Self> {
+        let fd = open(
+            path,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
+            Mode::empty(),
+        )?;
+        Ok(Self {
+            fd,
+            display: path.to_path_buf(),
+        })
+    }
+
+    /// Open an immediate source child as a directory without resolving a symlink at that point.
+    pub(crate) fn open_dir(&self, name: &OsStr) -> io::Result<Self> {
+        let display = self.display.join(name);
+        let fd = openat(
+            &self.fd,
+            name,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(|error| directory_open_error(&display, error))?;
+        let directory = Self { fd, display };
+        #[cfg(test)]
+        run_after_open_directory_hook();
+        Ok(directory)
+    }
+
+    pub(crate) fn open_dir_if_exists(&self, name: &OsStr) -> io::Result<Option<Self>> {
+        match self.open_dir(name) {
+            Ok(dir) => Ok(Some(dir)),
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
+                ) =>
+            {
+                Ok(None)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// List entries from this already-open directory. Names are sorted byte-wise as Rust paths
+    /// were before; callers decide which names are project inputs.
+    pub(crate) fn names(&self) -> io::Result<Vec<OsString>> {
+        let mut directory = Dir::read_from(&self.fd)?;
+        let mut names = Vec::new();
+        while let Some(entry) = directory.read() {
+            let entry = entry?;
+            let bytes = entry.file_name().to_bytes();
+            if bytes == b"." || bytes == b".." {
+                continue;
+            }
+            names.push(OsString::from_vec(bytes.to_vec()));
+        }
+        names.sort();
+        Ok(names)
+    }
+
+    /// Read one final file from this directory. Its final component intentionally follows a
+    /// symlink, matching the established supported-file-symlink contract.
+    pub(crate) fn read_bytes_if_file(&self, name: &OsStr) -> io::Result<Option<Vec<u8>>> {
+        let fd = openat(
+            &self.fd,
+            name,
+            OFlags::RDONLY | OFlags::NONBLOCK | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .map(Some)
+        .or_else(|error| {
+            if error.kind() == io::ErrorKind::NotFound {
+                Ok(None)
+            } else {
+                Err(error)
+            }
+        })?;
+        let Some(fd) = fd else {
+            return Ok(None);
+        };
+        let mut file = File::from(fd);
+        if !file.metadata()?.is_file() {
+            return Ok(None);
+        }
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)?;
+        Ok(Some(bytes))
+    }
+
+    pub(crate) fn read_string_if_file(&self, name: &OsStr) -> io::Result<Option<String>> {
+        self.read_bytes_if_file(name).and_then(|bytes| {
+            bytes
+                .map(|bytes| String::from_utf8(bytes).map_err(io::Error::other))
+                .transpose()
+        })
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static AFTER_OPEN_DIRECTORY: RefCell<Option<Box<dyn FnOnce()>>> = RefCell::new(None);
+}
+
+#[cfg(test)]
+pub(crate) fn set_after_open_directory_hook(hook: impl FnOnce() + 'static) {
+    AFTER_OPEN_DIRECTORY.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+}
+
+#[cfg(test)]
+fn run_after_open_directory_hook() {
+    AFTER_OPEN_DIRECTORY.with(|slot| {
+        if let Some(hook) = slot.borrow_mut().take() {
+            hook();
+        }
+    });
+}
+
+fn directory_open_error(path: &Path, error: rustix::io::Errno) -> io::Error {
+    // `O_NOFOLLOW` reports a symlink as ELOOP. Keep the established diagnostic string for callers
+    // and tests, while all other errors retain their normal kind and message.
+    if matches!(
+        error.raw_os_error(),
+        code if code == rustix::io::Errno::LOOP.raw_os_error()
+            || code == rustix::io::Errno::NOTDIR.raw_os_error()
+    ) {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("directory_symlink_unsupported: {}", path.display()),
+        )
+    } else {
+        error.into()
+    }
+}

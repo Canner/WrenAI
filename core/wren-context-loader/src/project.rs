@@ -208,7 +208,92 @@ pub(crate) fn sql_yml_statement(sql_yml: &str) -> Result<Option<String>, serde_y
 ///
 /// A view directory is a view when it has a `metadata.yml`, with or without a `sql.yml` — the
 /// same rule as `wren`, which also ignores a directory that holds only a `sql.yml`.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(unix, not(target_arch = "wasm32")))]
+pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<ProjectSources>> {
+    crate::digest::validate_source_directories(dir)?;
+    let root = crate::source_fs::SourceDir::open_root(dir)?;
+    let Some(wren_project_yml) = root.read_string_if_file("wren_project.yml".as_ref())? else {
+        return Ok(None);
+    };
+    let read_metadata = |parent: &crate::source_fs::SourceDir| -> std::io::Result<Vec<String>> {
+        let mut values = Vec::new();
+        for name in parent.names()? {
+            if crate::digest::is_hidden(&name) {
+                continue;
+            }
+            if let Ok(child) = parent.open_dir(&name) {
+                if let Some(contents) = child.read_string_if_file("metadata.yml".as_ref())? {
+                    values.push(contents);
+                }
+            }
+        }
+        Ok(values)
+    };
+    let model_ymls = match root.open_dir_if_exists("models".as_ref())? {
+        Some(dir) => read_metadata(&dir)?,
+        None => Vec::new(),
+    };
+    let cube_ymls = match root.open_dir_if_exists("cubes".as_ref())? {
+        Some(dir) => read_metadata(&dir)?,
+        None => Vec::new(),
+    };
+    let relationships_yml = root.read_string_if_file("relationships.yml".as_ref())?;
+    let cubes_yml = root.read_string_if_file("cubes.yml".as_ref())?;
+    let dashboards_yml = root.read_string_if_file("dashboards.yml".as_ref())?;
+    let mut views = Vec::new();
+    if let Some(view_root) = root.open_dir_if_exists("views".as_ref())? {
+        for name in view_root.names()? {
+            if crate::digest::is_hidden(&name) {
+                continue;
+            }
+            if let Ok(view) = view_root.open_dir(&name) {
+                if let Some(meta) = view.read_string_if_file("metadata.yml".as_ref())? {
+                    views.push((
+                        meta,
+                        view.read_string_if_file("sql.yml".as_ref())?
+                            .unwrap_or_default(),
+                    ));
+                }
+            }
+        }
+    }
+    let mut knowledge_sql_mds = Vec::new();
+    if let Some(knowledge) = root.open_dir_if_exists("knowledge".as_ref())? {
+        if let Some(sql) = knowledge.open_dir_if_exists("sql".as_ref())? {
+            for name in sql.names()? {
+                if crate::digest::is_hidden(&name)
+                    || std::path::Path::new(&name)
+                        .extension()
+                        .is_none_or(|ext| ext != "md")
+                {
+                    continue;
+                }
+                if let Some(contents) = sql.read_string_if_file(&name)? {
+                    knowledge_sql_mds.push((
+                        std::path::Path::new(&name)
+                            .file_stem()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into_owned(),
+                        contents,
+                    ));
+                }
+            }
+        }
+    }
+    Ok(Some(ProjectSources {
+        wren_project_yml,
+        model_ymls,
+        relationships_yml,
+        cubes_yml,
+        cube_ymls,
+        views,
+        knowledge_sql_mds,
+        dashboards_yml,
+    }))
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(unix)))]
 pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<ProjectSources>> {
     use std::fs;
 
@@ -292,7 +377,58 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
 /// legacy root `instructions.md` when present. Empty files contribute nothing. The same files are
 /// also returned one by one in [`KnowledgeRules::files`], in that order, so a host can show where
 /// each rule came from.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(unix, not(target_arch = "wasm32")))]
+pub fn read_knowledge_rules(dir: &std::path::Path) -> std::io::Result<KnowledgeRules> {
+    crate::digest::validate_source_directories(dir)?;
+    let root = crate::source_fs::SourceDir::open_root(dir)?;
+    let mut files = Vec::new();
+    if let Some(knowledge) = root.open_dir_if_exists("knowledge".as_ref())? {
+        if let Some(rules) = knowledge.open_dir_if_exists("rules".as_ref())? {
+            for name in rules.names()? {
+                if crate::digest::is_hidden(&name)
+                    || std::path::Path::new(&name)
+                        .extension()
+                        .is_none_or(|ext| ext != "md")
+                {
+                    continue;
+                }
+                if let Some(contents) = rules.read_string_if_file(&name)? {
+                    if !contents.trim().is_empty() {
+                        files.push(KnowledgeRuleFile {
+                            path: format!("knowledge/rules/{}", name.to_string_lossy()),
+                            content: contents.trim().to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    let legacy = root.read_string_if_file("instructions.md".as_ref())?;
+    let used_legacy = legacy.is_some();
+    if let Some(contents) = legacy.filter(|contents| !contents.trim().is_empty()) {
+        files.push(KnowledgeRuleFile {
+            path: "instructions.md".to_string(),
+            content: contents.trim().to_string(),
+        });
+    }
+    let content = files
+        .iter()
+        .map(|file| file.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let (declared_defaults, warnings) = declared_default_ids(&files);
+    for warning in warnings {
+        eprintln!("wren-context-loader: {warning}");
+    }
+    Ok(KnowledgeRules {
+        content,
+        used_legacy,
+        files,
+        declared_defaults,
+    })
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(unix)))]
 pub fn read_knowledge_rules(dir: &std::path::Path) -> std::io::Result<KnowledgeRules> {
     use std::fs;
 
@@ -724,7 +860,7 @@ pub struct KnowledgeRuleFile {
 /// document and the digest agree on what the project is. An entry that cannot be read is an error
 /// naming the directory: a project the loader could not read completely must not load as a
 /// smaller one.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(unix)))]
 fn list_dir(dir: &std::path::Path) -> std::io::Result<Vec<std::path::PathBuf>> {
     let mut paths = sorted_paths(
         std::fs::read_dir(dir)?.map(|entry| entry.map(|entry| entry.path())),
@@ -737,7 +873,7 @@ fn list_dir(dir: &std::path::Path) -> std::io::Result<Vec<std::path::PathBuf>> {
     Ok(paths)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), any(not(unix), test)))]
 fn sorted_paths(
     entries: impl Iterator<Item = std::io::Result<std::path::PathBuf>>,
     dir: &std::path::Path,
@@ -755,7 +891,7 @@ fn sorted_paths(
     Ok(paths)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(unix)))]
 fn read_if_exists(path: &std::path::Path) -> std::io::Result<Option<String>> {
     if path.is_file() {
         Ok(Some(std::fs::read_to_string(path)?))
@@ -1005,6 +1141,8 @@ fn cube_to_json(c: CubeFile) -> serde_json::Value {
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
+    #[cfg(unix)]
+    use std::fs;
     use std::io;
     use std::path::{Path, PathBuf};
 
@@ -1033,5 +1171,44 @@ mod tests {
             vec![Ok(PathBuf::from("b")), Ok(PathBuf::from("a"))];
         let paths = sorted_paths(entries.into_iter(), Path::new(".")).unwrap();
         assert_eq!(paths, [PathBuf::from("a"), PathBuf::from("b")]);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn directory_swap_after_open_never_reads_the_replacement_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let project = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(
+            project.path().join("wren_project.yml"),
+            "schema_version: 5\n",
+        )
+        .unwrap();
+        fs::create_dir_all(project.path().join("models/orders")).unwrap();
+        fs::write(
+            project.path().join("models/orders/metadata.yml"),
+            "name: safe\ntable_reference: safe\ncolumns: []\n",
+        )
+        .unwrap();
+        fs::create_dir_all(outside.path().join("orders")).unwrap();
+        fs::write(
+            outside.path().join("orders/metadata.yml"),
+            "name: outside\ntable_reference: outside\ncolumns: []\n",
+        )
+        .unwrap();
+        let source = project.path().join("models");
+        let moved = project.path().join("models-original");
+        let replacement = outside.path().to_path_buf();
+        crate::source_fs::set_after_open_directory_hook(move || {
+            fs::rename(&source, &moved).unwrap();
+            symlink(&replacement, &source).unwrap();
+        });
+
+        let error = match super::read_project_dir(project.path()) {
+            Ok(_) => panic!("reader must use the opened directory or fail"),
+            Err(error) => error.to_string(),
+        };
+        assert!(error.contains("directory_symlink_unsupported"), "{error}");
     }
 }

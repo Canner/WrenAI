@@ -315,9 +315,8 @@ impl RelationCollector {
     fn collect_select(&mut self, select: &Select) {
         let sources = self.select_sources(select);
         let mut columns = ScopedColumnCollector::default();
-        // A nested query must not contribute columns to this SELECT's scope. `Break` at the nested
-        // query is conservative for an expression that contains one: it may omit a later column,
-        // but can never fabricate provenance from the nested query.
+        // Nested queries must not contribute columns to this SELECT's scope, while expressions
+        // after a nested query still belong to this SELECT and must be retained.
         let _ = select.visit(&mut columns);
         let mut wildcards = Vec::new();
         for item in &select.projection {
@@ -398,6 +397,7 @@ impl RelationCollector {
 #[derive(Default)]
 struct ScopedColumnCollector {
     columns: Vec<ColumnReference>,
+    nested_query_depth: usize,
 }
 
 impl Visitor for ScopedColumnCollector {
@@ -405,10 +405,19 @@ impl Visitor for ScopedColumnCollector {
 
     fn pre_visit_query(&mut self, _query: &Query) -> ControlFlow<()> {
         // This collector is driven from a SELECT, so every query it encounters is nested.
-        ControlFlow::Break(())
+        self.nested_query_depth += 1;
+        ControlFlow::Continue(())
+    }
+
+    fn post_visit_query(&mut self, _query: &Query) -> ControlFlow<()> {
+        self.nested_query_depth -= 1;
+        ControlFlow::Continue(())
     }
 
     fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+        if self.nested_query_depth != 0 {
+            return ControlFlow::Continue(());
+        }
         match expr {
             Expr::Identifier(ident) => self.columns.push(ColumnReference {
                 qualifier: None,

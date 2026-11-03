@@ -30,6 +30,8 @@ mod impact;
 mod introspect;
 mod lineage;
 mod project;
+#[cfg(unix)]
+mod source_fs;
 
 pub use catalog::{
     capability_catalog, catalog_document, CapabilityCatalog, CatalogColumn, CatalogCube,

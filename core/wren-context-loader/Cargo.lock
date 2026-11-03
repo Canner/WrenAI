@@ -1035,6 +1035,7 @@ dependencies = [
 name = "wren-context-loader"
 version = "0.1.0"
 dependencies = [
+ "rustix",
  "serde",
  "serde_json",
  "serde_yaml",

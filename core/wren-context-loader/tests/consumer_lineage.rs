@@ -672,3 +672,30 @@ fn set_operation_projection_wildcards_keep_their_branch_sources() {
         "query:union-all"
     ));
 }
+
+#[test]
+fn outer_columns_after_nested_queries_still_resolve_to_their_cube() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    for (slug, sql) in [
+        (
+            "later-projection",
+            "SELECT (SELECT 1), om.total_value FROM order_metrics om",
+        ),
+        (
+            "later-expression",
+            "SELECT COALESCE((SELECT 1), om.total_value) FROM order_metrics om",
+        ),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+    let ctx = load(tmp.path());
+
+    for query in ["query:later-projection", "query:later-expression"] {
+        assert!(reaches(&ctx, "metric:order_metrics.total_value", query));
+    }
+}

@@ -23,5 +23,10 @@ sha2 = "0.10"
 sqlparser = { version = "0.58", features = ["visitor"] }
 thiserror = "2"
 
+[target.'cfg(unix)'.dependencies]
+# The locked graph already carries rustix 1.1.4 through tempfile. Native source traversal uses its
+# `openat` bindings so a directory is never re-resolved by path after it has been opened.
+rustix = { version = "1.1.4", features = ["fs"] }
+
 [dev-dependencies]
 tempfile = "3"

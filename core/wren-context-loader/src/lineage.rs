@@ -7,6 +7,9 @@
 //! relationships, cube base objects, view statements, consumer files — without executing SQL;
 //! SQL *text* is parsed (sqlparser) only to discover which relations it references, falling back
 //! to a whole-word scan (recorded in `diagnostics`) when a statement does not parse.
+//! Identifier and CTE scope handling follows sqlparser's `GenericDialect` representation and the
+//! loader's deterministic resolution policy; it is not a claim that every datasource executes
+//! quoted identifiers or CTE folding identically.
 //!
 //! Node id conventions (stable, queryable): `model:<name>`, `rel:<name>`, `cube:<name>`,
 //! `metric:<cube>.<measure>`, `dim:<cube>.<dimension>`, `view:<name>`, `query:<slug>`,
@@ -276,9 +279,11 @@ fn link_sql_consumer(
     }
 }
 
-/// The subset of `candidates` that `sql` references as a relation. Parses the SQL and intersects
-/// its relation names with `candidates`; when the SQL does not parse, degrades to the whole-word
-/// scan over every candidate and records the degradation against `node` in `diagnostics`.
+/// The manifest names resolved from relations that `sql` references. A parsed relation resolves
+/// to at most one candidate: exact spelling wins; a quoted miss has no match; an unquoted
+/// case-insensitive collision deterministically chooses the lexicographically smallest name.
+/// When SQL does not parse, this degrades to the established whole-word scan and records the
+/// degradation against `node` in `diagnostics`.
 fn referenced_names(
     references: Option<&consumers::SqlConsumerReferences>,
     sql: &str,
@@ -287,15 +292,10 @@ fn referenced_names(
     diagnostics: &mut Vec<String>,
 ) -> Vec<String> {
     match references {
-        Some(references) => candidates
+        Some(references) => references
+            .relations
             .iter()
-            .filter(|name| {
-                references
-                    .relations
-                    .iter()
-                    .any(|relation| identifier_matches_name(&relation.name, name))
-            })
-            .cloned()
+            .filter_map(|relation| resolve_relation_name(&relation.name, candidates))
             .collect(),
         None => {
             diagnostics.push(format!(
@@ -310,15 +310,29 @@ fn referenced_names(
     }
 }
 
-/// A parsed relation identifier resolves to a manifest name using the same quoted/unquoted rule
-/// as CTE scope matching. Manifest names are authored unquoted: a quoted SQL occurrence therefore
-/// needs identical text, while an unquoted occurrence is ASCII case-insensitive.
-fn identifier_matches_name(identifier: &sqlparser::ast::Ident, name: &str) -> bool {
-    if identifier.quote_style.is_some() {
-        identifier.value == name
-    } else {
-        identifier.value.eq_ignore_ascii_case(name)
+/// Resolve one parsed relation identifier using the same deterministic policy as the Python
+/// semantic gate. Exact spelling wins even for an unquoted identifier. A quoted identifier never
+/// falls back case-insensitively; an unquoted collision chooses lexical-minimum for stability.
+fn resolve_relation_name(
+    identifier: &sqlparser::ast::Ident,
+    candidates: &[String],
+) -> Option<String> {
+    if let Some(exact) = candidates.iter().find(|name| **name == identifier.value) {
+        return Some(exact.clone());
     }
+    if identifier.quote_style.is_some() {
+        return None;
+    }
+    candidates
+        .iter()
+        .filter(|name| name.eq_ignore_ascii_case(&identifier.value))
+        .min()
+        .cloned()
+}
+
+fn identifier_matches_name(identifier: &sqlparser::ast::Ident, name: &str) -> bool {
+    identifier.value == name
+        || (identifier.quote_style.is_none() && identifier.value.eq_ignore_ascii_case(name))
 }
 
 fn source_matches_cube(source: &consumers::SelectSource, cube: &str) -> bool {
@@ -406,4 +420,26 @@ fn statement_references(statement: &str, name: &str) -> bool {
         start = abs + name_bytes.len();
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relation_resolution_is_exact_first_quoted_strict_and_deterministic() {
+        let candidates = vec!["orders".to_string(), "Orders".to_string()];
+        let exact = sqlparser::ast::Ident::new("orders");
+        let folded = sqlparser::ast::Ident::new("ORDERS");
+        let quoted = sqlparser::ast::Ident::with_quote('"', "ORDERS");
+        assert_eq!(
+            resolve_relation_name(&exact, &candidates),
+            Some("orders".to_string())
+        );
+        assert_eq!(
+            resolve_relation_name(&folded, &candidates),
+            Some("Orders".to_string())
+        );
+        assert_eq!(resolve_relation_name(&quoted, &candidates), None);
+    }
 }
