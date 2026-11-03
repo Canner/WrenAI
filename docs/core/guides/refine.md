@@ -165,9 +165,9 @@ that the rate join yields one row per transaction, or which of several declared 
 columns is the right one; that a filter in an unrelated branch of the statement applies
 to the aggregated rows; and any flag written in a form outside the list above (it is
 treated as missing). A statement that cannot be parsed against the model schema gets no
-verdict: the engine runs it and reports its own error. Only `governed-stdio` enforces
-declarations; `wren query` does not. A project without declarations behaves exactly as
-before.
+verdict: the engine runs it and reports its own error. `wren serve agent`, the governed
+MCP server (`wren serve mcp --service-config`) and `governed-stdio` enforce declarations;
+`wren query` does not. A project without declarations behaves exactly as before.
 
 #### Declaring a view's columns
 
