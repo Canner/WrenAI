@@ -2372,10 +2372,13 @@ def test_a_cte_filtered_by_its_only_consumer_through_a_derived_table_is_pinned(a
     assert DATE_WINDOW_UNVERIFIED not in unverified
 
 
-def test_a_cte_that_nothing_reads_does_not_matter(adhoc):
+@pytest.mark.parametrize(
+    "unused", [f"SELECT id FROM orders WHERE {SCOPED}", "SELECT id FROM orders"]
+)
+def test_a_cte_that_nothing_reads_does_not_matter(adhoc, unused):
     found, unverified = windows_of(
         adhoc(),
-        f"WITH unused AS (SELECT id FROM orders WHERE {SCOPED}) "
+        f"WITH unused AS ({unused}) "
         f"SELECT COUNT(*) AS n FROM orders WHERE {SCOPED} AND {JUNE}",
     )
     assert found == [window("orders.order_date", "2026-06-01", "2026-07-01")]

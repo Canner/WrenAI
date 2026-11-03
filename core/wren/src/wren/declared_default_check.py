@@ -122,7 +122,6 @@ class _Statement:
         self.ast = ast
         self.checker = checker
         scopes = traverse_scope(ast)
-        self.scopes = scopes
         self._live_scopes = set()
 
         def visit(scope):
@@ -137,6 +136,9 @@ class _Statement:
 
         if scopes:
             visit(scopes[-1])
+        self.scopes = [
+            scope for scope in scopes if id(scope.expression) in self._live_scopes
+        ]
         self._scope_of = {id(scope.expression): scope for scope in scopes}
         self._origins: dict[int, _Origin] = {}
 
@@ -173,7 +175,7 @@ class _Statement:
             if (scope := self._scope_for(root)) is not None
         ]
         self._parents: dict[int, list[Scope]] = {}
-        for scope in scopes:
+        for scope in self.scopes:
             for _, source in self._read_sources(scope):
                 self._parents.setdefault(id(source.expression), []).append(scope)
             for branch in scope.union_scopes:
