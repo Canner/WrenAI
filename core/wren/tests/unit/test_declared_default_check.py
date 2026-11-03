@@ -739,3 +739,18 @@ def test_an_unused_aggregate_cannot_make_a_plain_read_aggregated(checker):
         )
         == []
     )
+
+
+def test_unused_currency_group_cannot_excuse_the_live_rate_join(checker):
+    sql = "WITH unused AS (SELECT p.currency,COUNT(*) FROM payments p GROUP BY p.currency) SELECT SUM(p.amount) FROM payments p JOIN orders o ON p.order_id=o.id JOIN customers c ON o.customer_id=c.id WHERE NOT c.is_test"
+    assert check(checker, sql) == [RATE]
+
+
+def test_a_live_currency_group_keeps_its_declared_rate_exception(checker):
+    sql = "SELECT p.currency,SUM(p.amount) FROM payments p JOIN orders o ON p.order_id=o.id JOIN customers c ON o.customer_id=c.id WHERE NOT c.is_test GROUP BY p.currency"
+    assert check(checker, sql) == []
+
+
+def test_an_unused_flag_group_cannot_excuse_live_account_reads(checker):
+    sql = "WITH unused AS (SELECT is_test,COUNT(*) FROM customers GROUP BY is_test) SELECT COUNT(*) FROM orders o JOIN customers c ON o.customer_id=c.id"
+    assert check(checker, sql) == [EXCLUDE]

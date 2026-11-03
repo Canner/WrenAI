@@ -189,9 +189,8 @@ class _Statement:
             if isinstance(source, exp.Table) and source.name
         }
         self.aggregates = [node for node in ast.find_all(exp.AggFunc) if live(node)]
-        self.aggregated = bool(self.aggregates) or any(
-            live(node) for node in ast.find_all(exp.Group)
-        )
+        self.groups = [node for node in ast.find_all(exp.Group) if live(node)]
+        self.aggregated = bool(self.aggregates or self.groups)
 
     @staticmethod
     def _read_sources(scope: Scope) -> list[tuple[str, Scope]]:
@@ -468,9 +467,7 @@ class _Statement:
         if any(self.polarity(c, rule) == "incl" for c in reaching):
             return True
         grouped = [
-            column
-            for group in self.ast.find_all(exp.Group)
-            for column in group.find_all(exp.Column)
+            column for group in self.groups for column in group.find_all(exp.Column)
         ]
         aggregated = [
             column
@@ -683,7 +680,7 @@ class _Statement:
             # Aggregate/group exceptions must address this consuming read too.
             if any(self.polarity(c, rule) == "incl" for c in applicable) or any(
                 credits(c) and flag in self.origin(c).taint
-                for container in [*self.ast.find_all(exp.Group), *self.aggregates]
+                for container in [*self.groups, *self.aggregates]
                 for c in container.find_all(exp.Column)
             ):
                 return True
@@ -708,7 +705,7 @@ class _Statement:
         if not any(self.taint(aggregate) & amounts for aggregate in self.aggregates):
             return False
         if rule.groups_by_currency and any(
-            self.taint(group) & currencies for group in self.ast.find_all(exp.Group)
+            self.taint(group) & currencies for group in self.groups
         ):
             return False
         if rule.filters_currency_literal and self._filters_currency_literal(currencies):
