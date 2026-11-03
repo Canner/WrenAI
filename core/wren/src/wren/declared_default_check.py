@@ -178,7 +178,7 @@ class _Statement:
             if isinstance(source, Scope) and alias in read
         ]
 
-    def _restricting(self, read: Scope) -> set[int]:
+    def _restricting(self, read: Scope, path, flag: Pair) -> set[int]:
         """The scopes (by expression id) whose row filters restrict the rows ``read`` yields.
 
         The read's own scope and every scope that consumes it (a CTE or derived table is read
@@ -188,29 +188,29 @@ class _Statement:
         an uncorrelated ``EXISTS``, anything under ``NOT`` or ``OR`` and a sibling set-operation
         branch filter none of those rows.
         """
-        consumers: dict[int, Scope] = {}
-        stack = [read]
-        while stack:
-            scope = stack.pop()
-            if id(scope.expression) not in consumers:
-                consumers[id(scope.expression)] = scope
-                stack += self._parents.get(id(scope.expression), [])
+        consumers = {id(scope.expression): scope for scope, _alias, _source in path}
         restricting: set[int] = set()
 
         def visit(scope: Scope) -> None:
             if id(scope.expression) in restricting:
                 return
             restricting.add(id(scope.expression))
-            for _, source in self._read_sources(scope):
-                visit(source)
+            nullable = {
+                join.this.alias_or_name
+                for join in scope.expression.args.get("joins") or []
+                if _outer(join)
+            }
+            for name, source in self._read_sources(scope):
+                if name not in nullable:
+                    visit(source)
             top = {id(c) for c in self._top_conjuncts(scope)}
             for sub in scope.subquery_scopes:
                 node = sub.expression.parent
                 while isinstance(node, (exp.Subquery, exp.Paren)):
                     node = node.parent
                 if id(node) in top and (
-                    isinstance(node, exp.In)
-                    or (isinstance(node, exp.Exists) and sub.external_columns)
+                    (isinstance(node, exp.In) and self._keyed_to_flag(node, flag))
+                    or (isinstance(node, exp.Exists) and self._exists_keyed(node, flag))
                 ):
                     visit(sub)
 
@@ -393,7 +393,11 @@ class _Statement:
         if self._is_flag(inner, flag):
             return "excl" if excluded else "incl"
         if isinstance(inner, exp.Exists):
-            return "excl" if self._selects_flag(inner, rule) else None
+            return (
+                "excl"
+                if self._exists_keyed(inner, flag) and self._selects_flag(inner, rule)
+                else None
+            )
         if isinstance(inner, exp.In):
             keyed = self._keyed_to_flag(inner, flag)
             return "excl" if keyed and self._selects_flag(inner, rule) else None
@@ -424,7 +428,9 @@ class _Statement:
         chosen = self.direct(selects[0].unalias()) if len(selects) == 1 else None
         if outer is None or chosen is None or chosen[0] != flag[0]:
             return False
-        return outer == chosen or frozenset((outer, chosen)) in self.checker.joins
+        return (outer == chosen and chosen in self.checker.entity_keys) or frozenset(
+            (outer, chosen)
+        ) in self.checker.joins
 
     def _selects_flag(self, subquery: exp.Expression, rule: ExcludeRows) -> bool:
         for where in subquery.find_all(exp.Where):
@@ -448,29 +454,215 @@ class _Statement:
         ]
         return any(flag in self.origin(column).taint for column in grouped + aggregated)
 
-    def fires_exclude(self, rule: ExcludeRows) -> bool:
-        if not (self.checker.covered_of(rule) & self.tables_read):
+    def _column_routes(self, column, visiting=frozenset()):
+        """Exact table instances and consuming aliases through pass-through columns."""
+        scope = self._scope_for(column)
+        while scope is not None and column.table not in scope.sources:
+            scope = scope.parent
+        if scope is None:
+            return []
+        source = scope.sources.get(column.table)
+        edge = (scope, column.table, source)
+        if isinstance(source, exp.Table):
+            return [(id(source), [edge])]
+        if not isinstance(source, Scope):
+            return []
+        key = (id(source.expression), column.name)
+        if key in visiting or column.name not in source.expression.named_selects:
+            return []
+        found = self._nth(
+            source, list(source.expression.named_selects).index(column.name)
+        )
+        routes = []
+        for projection, _owner in found:
+            inner = _unparen(projection.unalias())
+            if isinstance(inner, exp.Column):
+                routes += [
+                    (table, [edge, *route])
+                    for table, route in self._column_routes(inner, visiting | {key})
+                ]
+        return routes
+
+    def _read_paths(self, scope, alias, source, visiting=frozenset()):
+        edge = (scope, alias, source)
+        if id(scope.expression) in visiting:
+            return []
+        parents = []
+        for parent in self.scopes:
+            for name, child in self._read_sources(parent):
+                if child is scope:
+                    parents.append((parent, name, child))
+            if scope in parent.union_scopes:
+                parents.append((parent, None, scope))
+        if not parents:
+            return [[edge]]
+        return [
+            [edge, *path]
+            for parent, name, child in parents
+            for path in self._read_paths(
+                parent, name, child, visiting | {id(scope.expression)}
+            )
+        ]
+
+    @staticmethod
+    def _route_fits(route, path):
+        for owner, alias, source in route:
+            for read_owner, read_alias, read_source in path:
+                if owner is not read_owner or read_alias is None:
+                    continue
+                if (
+                    isinstance(source, Scope)
+                    and source is read_source
+                    and alias != read_alias
+                ):
+                    return False
+        return True
+
+    def _entity_key(self, left, right):
+        one, two = self.direct(left), self.direct(right)
+        if one is None or two is None:
             return False
+        return frozenset((one, two)) in self.checker.joins or (
+            one == two and one in self.checker.entity_keys
+        )
+
+    def _exists_keyed(self, node, flag):
+        query = _unparen(node.this)
+        if isinstance(query, exp.Subquery):
+            query = query.this
+        if not isinstance(query, exp.Select):
+            return False
+        scope = self._scope_for(query)
+        where = query.args.get("where")
+        if scope is None or where is None:
+            return False
+        for term in _conjuncts(where.this):
+            if not isinstance(term, exp.EQ):
+                continue
+            for inside, outside in (
+                (term.this, term.expression),
+                (term.expression, term.this),
+            ):
+                if not isinstance(inside, exp.Column) or not isinstance(
+                    outside, exp.Column
+                ):
+                    continue
+                if (
+                    inside.table in scope.sources
+                    and self.direct(inside) is not None
+                    and self.direct(inside)[0] == flag[0]
+                    and outside.table not in scope.sources
+                    and self._entity_key(inside, outside)
+                ):
+                    return True
+        return False
+
+    def _exclusion_graph(self, reaching, path):
+        graph = {}
+
+        def connect(left, right):
+            if not self._entity_key(left, right):
+                return
+            one = [
+                table
+                for table, route in self._column_routes(left)
+                if self._route_fits(route, path)
+            ]
+            two = [
+                table
+                for table, route in self._column_routes(right)
+                if self._route_fits(route, path)
+            ]
+            for a in one:
+                for b in two:
+                    graph.setdefault(a, set()).add(b)
+                    graph.setdefault(b, set()).add(a)
+
+        for term in reaching:
+            if isinstance(term, exp.EQ):
+                connect(term.this, term.expression)
+            elif isinstance(term, exp.In) and term.args.get("query") is not None:
+                chosen = term.args["query"].selects
+                if len(chosen) == 1:
+                    connect(term.this, chosen[0].unalias())
+            elif isinstance(term, exp.Not) and isinstance(_unparen(term.this), exp.In):
+                inner = _unparen(term.this)
+                chosen = getattr(inner.args.get("query"), "selects", [])
+                if len(chosen) == 1:
+                    connect(inner.this, chosen[0].unalias())
+            elif isinstance(term, exp.Not) and isinstance(
+                _unparen(term.this), exp.Exists
+            ):
+                for where in term.find_all(exp.Where):
+                    for atom in _conjuncts(where.this):
+                        if isinstance(atom, exp.EQ):
+                            connect(atom.this, atom.expression)
+        return graph
+
+    def fires_exclude(self, rule: ExcludeRows) -> bool:
         if rule.aggregated_only and not self.aggregated:
             return False
         covered = self.checker.covered_of(rule)
         return any(
-            not self._excluded(scope, rule)
+            not self._excluded(scope, alias, source, path, rule)
             for scope in self.scopes
-            if covered
-            & {s.name for s in scope.sources.values() if isinstance(s, exp.Table)}
+            for alias, source in scope.sources.items()
+            if isinstance(source, exp.Table) and source.name in covered
+            for path in self._read_paths(scope, alias, source)
         )
 
-    def _excluded(self, read: Scope, rule: ExcludeRows) -> bool:
-        """Whether the filters that restrict ``read``'s rows exclude the rule's flagged rows."""
-        restricting = self._restricting(read)
+    def _excluded(self, read, alias, source, path, rule):
+        flag = self.checker.flag_of(rule)
+        restricting = self._restricting(read, path, flag)
         reaching = [c for c, scope_id in self._filters if scope_id in restricting]
-        if rule.addresses_column and self._addresses(rule, reaching):
-            return True
-        for atom in self.checker.atoms_of(rule):
-            if any(self.canonical(c) == atom for c in reaching):
+        keys = [
+            atom
+            for scope in self.scopes
+            if id(scope.expression) in restricting
+            for join in scope.expression.args.get("joins") or []
+            if _outer(join)
+            if join.args.get("on") is not None
+            for atom in _conjuncts(join.args["on"])
+        ]
+        graph = self._exclusion_graph([*reaching, *keys], path)
+        connected, pending = set(), [id(source)]
+        while pending:
+            current = pending.pop()
+            if current not in connected:
+                connected.add(current)
+                pending += list(graph.get(current, ()))
+
+        def credits(node):
+            columns = list(node.find_all(exp.Column))
+            flagged = [
+                column
+                for column in columns
+                if (pair := self.direct(column)) is not None and pair[0] == flag[0]
+            ]
+            relevant = flagged if self.polarity(node, rule) is not None else columns
+            routes = [
+                (table, route)
+                for column in relevant
+                for table, route in self._column_routes(column)
+            ]
+            return bool(routes) and all(
+                table in connected and self._route_fits(route, path)
+                for table, route in routes
+            )
+
+        applicable = [term for term in reaching if credits(term)]
+        if rule.addresses_column and self._addresses(rule, applicable):
+            # Aggregate/group exceptions must address this consuming read too.
+            if any(self.polarity(c, rule) == "incl" for c in applicable) or any(
+                credits(c) and flag in self.origin(c).taint
+                for container in [*self.ast.find_all(exp.Group), *self.aggregates]
+                for c in container.find_all(exp.Column)
+            ):
                 return True
-        return any(self.polarity(c, rule) == "excl" for c in reaching)
+        for atom in self.checker.atoms_of(rule):
+            if any(self.canonical(c) == atom for c in applicable):
+                return True
+        return any(self.polarity(c, rule) == "excl" for c in applicable)
 
     # -- require_rate_join ----------------------------------------------
 
@@ -569,6 +761,12 @@ class DefaultsChecker:
             if isinstance(rule, ExcludeRows)
         }
         self.joins = self._join_pairs(manifest.get("relationships"))
+        self.entity_keys = set()
+        for model in manifest.get("models") or []:
+            key = model.get("primaryKey", model.get("primary_key"))
+            keys = [key] if isinstance(key, str) else key or []
+            if len(keys) == 1:
+                self.entity_keys.add((self.norm(model["name"]), self.norm(keys[0])))
 
     def _join_pairs(self, relationships) -> frozenset[frozenset[Pair]]:
         """The column pairs the manifest's relationships equate, one pair per relationship
@@ -645,7 +843,10 @@ class DefaultsChecker:
             statement = _Statement(qualified, self)
         except Exception:  # noqa: BLE001 - any parse/qualify failure is "no verdict"
             return None
-        from wren.declared_default_status import StatusUndetermined, judge  # noqa: PLC0415
+        from wren.declared_default_status import (  # noqa: PLC0415
+            StatusUndetermined,
+            judge,
+        )
 
         try:
             fired = []

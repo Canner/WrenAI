@@ -24,7 +24,7 @@ from wren.agent_sql import (  # noqa: E402
     QueryShapeError,
 )
 from wren.context import build_json  # noqa: E402
-from wren.declared_default_check import _Statement  # noqa: E402
+from wren.declared_default_check import DefaultsChecker, _Statement  # noqa: E402
 from wren.declared_default_fx import VIEW_MARK, evaluate  # noqa: E402
 from wren.declared_default_status import _Status, display  # noqa: E402
 
@@ -2593,3 +2593,98 @@ def test_ranked_rate_sources_cannot_prove_each_others_partition_keys(adhoc):
     with pytest.raises(DeclaredDefaultMissing) as raised:
         service.sql.prepare(sql)
     assert "convert-invoices-to-usd:rate_multi_match" in raised.value.rules
+
+
+def date_window_proof(sql):
+    tree = qualify(
+        sqlglot.parse_one(sql, read="duckdb"),
+        dialect="duckdb",
+        schema={
+            "orders": {"id": "INT", "order_date": "DATE"},
+            "customers": {"id": "INT"},
+        },
+        validate_qualify_columns=True,
+        identify=False,
+    )
+    gate = AdHocSQL.__new__(AdHocSQL)
+    gate.date_columns = frozenset({("orders", "order_date")})
+    return gate._date_windows(list(traverse_scope(tree)))
+
+
+def test_date_coverage_tracks_each_alias_of_the_same_cte():
+    prefix = "WITH shared AS (SELECT id,order_date FROM orders) SELECT COUNT(*) FROM shared a JOIN shared b ON a.id=b.id WHERE "
+    one = "a.order_date >= DATE '2026-06-01'"
+    assert date_window_proof(prefix + one)[1] is False
+    assert (
+        date_window_proof(prefix + one + " AND b.order_date >= DATE '2026-06-01'")[1]
+        is True
+    )
+
+
+def test_different_self_join_windows_are_kept_separate():
+    sql = "SELECT COUNT(*) FROM orders a JOIN orders b ON a.id=b.id WHERE a.order_date >= DATE '2026-06-01' AND b.order_date >= DATE '2026-05-01'"
+    windows, _ = date_window_proof(sql)
+    assert {entry["lower"] for entry in windows} == {"2026-06-01", "2026-05-01"}
+
+
+def test_nullable_side_on_window_cannot_certify_the_statement_period():
+    sql = "SELECT COUNT(*) FROM customers c LEFT JOIN orders o ON c.id=o.id AND o.order_date >= DATE '2026-06-01'"
+    windows, pinned = date_window_proof(sql)
+    assert len(windows) == 1 and pinned is False
+
+
+def test_real_adhoc_preserves_entity_keys_and_manifest_relationships(adhoc):
+    service = adhoc()
+    full = DefaultsChecker(
+        service.project.snapshot.declarations,
+        service.project.snapshot.manifest,
+        "duckdb",
+    )
+    assert service.sql.checker.joins == full.joins and full.joins
+    assert ("orders", "id") in service.sql.checker.entity_keys
+    sql = "SELECT COUNT(*) FROM orders o WHERE o.id IN (SELECT x.id FROM orders x WHERE NOT x.is_test AND x.status IN ('paid','shipped')) AND o.status IN ('paid','shipped')"
+    assert full.check(sqlglot.parse_one(sql, dialect="duckdb")) == []
+    assert service.sql.prepare(sql)
+
+
+def test_real_adhoc_relationship_exclusion_matches_governed_checker(adhoc):
+    template = adhoc()
+    root = template.project.root
+    customers = yaml.safe_load((root / "models/customers/metadata.yml").read_text())
+    customers["columns"].append({"name": "is_test", "type": "BOOLEAN"})
+    rule = """---
+defaults:
+  - id: exclude-test-customers
+    kind: exclude_rows
+    column: customers.is_test
+    exclude: true
+    covers: {reaching: customers, via: many_to_one}
+    unless: [addresses_column]
+---
+Test customers are excluded from business orders.
+"""
+    service = adhoc(
+        files={
+            "models/customers/metadata.yml": yaml.safe_dump(customers),
+            "models/customers/ref_sql.sql": "SELECT id, region, email, id = 1 AS is_test FROM synthetic.main.raw_customers",
+            "knowledge/rules/customer-tests.md": rule,
+        }
+    )
+    predicate = "o.customer_id NOT IN (SELECT c.id FROM customers c WHERE c.is_test)"
+    sql = f"SELECT COUNT(*) FROM orders o WHERE NOT o.is_test AND o.status IN ('paid','shipped') AND {predicate}"
+    # Governed stdio constructs this checker from the full built manifest.
+    checker = DefaultsChecker(
+        service.project.snapshot.declarations,
+        service.project.snapshot.manifest,
+        "duckdb",
+    )
+    assert checker.check(sqlglot.parse_one(sql, dialect="duckdb")) == []
+    without_relationships = DefaultsChecker(
+        service.project.snapshot.declarations,
+        {**service.project.snapshot.manifest, "relationships": []},
+        "duckdb",
+    )
+    assert "exclude-test-customers" in without_relationships.check(
+        sqlglot.parse_one(sql, dialect="duckdb")
+    )
+    assert service.sql.prepare(sql)

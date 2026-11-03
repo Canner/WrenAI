@@ -678,3 +678,21 @@ def test_both_rules_fire_in_declaration_order(checker):
 def test_any_checker_fault_earns_no_verdict(checker, monkeypatch, method, fault):
     monkeypatch.setattr(_Statement, method, MagicMock(side_effect=fault("boom")))
     assert check(checker, f"{COUNT}") is None
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT COUNT(*) FROM customers a JOIN customers b ON a.country=b.country WHERE NOT a.is_test",
+        "WITH shared AS (SELECT id,is_test FROM customers) SELECT COUNT(*) FROM shared WHERE NOT is_test UNION ALL SELECT COUNT(*) FROM shared",
+        "SELECT COUNT(*) FROM customers c WHERE 1 IN (SELECT 1 FROM customers x WHERE NOT x.is_test)",
+        "SELECT COUNT(*) FROM customers c WHERE c.id IN (SELECT 1 FROM customers x WHERE NOT x.is_test)",
+    ],
+)
+def test_exclusions_must_reach_each_alias_and_consuming_branch(checker, sql):
+    assert check(checker, sql) == [EXCLUDE]
+
+
+def test_a_shared_cte_with_each_consuming_alias_filtered_is_valid(checker):
+    sql = "WITH shared AS (SELECT id,is_test,country FROM customers) SELECT COUNT(*) FROM shared a JOIN shared b ON a.country=b.country WHERE NOT a.is_test AND NOT b.is_test"
+    assert check(checker, sql) == []

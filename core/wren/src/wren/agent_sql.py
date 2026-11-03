@@ -323,7 +323,7 @@ class AdHocSQL:
         self.views, self.broken_views = self._read_views(snapshot, catalog)
         self.checker = DefaultsChecker(
             snapshot.declarations,
-            {"models": models},
+            {**getattr(snapshot, "manifest", {}), "models": models},
             "duckdb",
             guarantees={
                 v["name"].lower(): v.get("guarantees") or []
@@ -694,6 +694,7 @@ class AdHocSQL:
         nothing either way. Nothing here reads what the worker wrote about its question.
         """
         windows, unpinned = [], set()
+        nullable_on = False
         marked = {}
         selects = []
         for scope in scopes:
@@ -711,8 +712,13 @@ class AdHocSQL:
                     if taken is not None:
                         for column, side, value, inclusive, edge in taken:
                             self._tighten(
-                                bounds.setdefault(column, {}), side, value, inclusive
+                                bounds.setdefault((column, edge), {}),
+                                side,
+                                value,
+                                inclusive,
                             )
+                            if join is not None and join.side in ("LEFT", "RIGHT"):
+                                nullable_on = True
                             marked.setdefault((id(scope), edge), set()).add(
                                 self._key(column)[0]
                             )
@@ -729,16 +735,22 @@ class AdHocSQL:
                     for term in self._conjuncts(condition):
                         if not self._is_null_check(term):
                             unpinned |= self._date_refs(scope, term)
-            windows += [self._window(column, sides) for column, sides in bounds.items()]
+            windows += [
+                self._window(column, sides) for (column, _edge), sides in bounds.items()
+            ]
         listed = {}
         for window in windows:
             if self._key(window["column"]) not in unpinned:
                 listed.setdefault(json.dumps(window, sort_keys=True), window)
-        pinned = not unpinned and self._every_read_bounded(
-            scopes,
-            selects,
-            marked,
-            {self._key(w["column"])[0] for w in listed.values()},
+        pinned = (
+            not unpinned
+            and not nullable_on
+            and self._every_read_bounded(
+                scopes,
+                selects,
+                marked,
+                {self._key(w["column"])[0] for w in listed.values()},
+            )
         )
         return list(listed.values()), pinned
 
@@ -765,11 +777,13 @@ class AdHocSQL:
 
         parents = {}
         for scope in scopes:
-            for _, source in used(scope):
+            for alias, source in used(scope):
                 if isinstance(source, Scope):
-                    parents.setdefault(id(source), {})[id(scope)] = scope
+                    parents.setdefault(id(source), []).append(
+                        (scope, ("s", id(source), alias))
+                    )
             for branch in scope.union_scopes:
-                parents.setdefault(id(branch), {})[id(scope)] = scope
+                parents.setdefault(id(branch), []).append((scope, ("u", id(branch))))
         reach_cache, bounded_cache, fine_cache = {}, {}, {}
 
         def reach(scope):
@@ -799,7 +813,7 @@ class AdHocSQL:
                     seen = set()
                     for alias, source in used(scope):
                         if isinstance(source, Scope):
-                            edge = ("s", id(source))
+                            edge = ("s", id(source), alias)
                             leads = model in reach(source)
                         else:
                             edge = ("t", alias)
@@ -818,15 +832,15 @@ class AdHocSQL:
             slot = (id(scope), model)
             if slot not in fine_cache:
                 fine_cache[slot] = False  # a scope is never its own consumer
-                owners = parents.get(id(scope), {}).values()
+                owners = parents.get(id(scope), [])
                 fine_cache[slot] = bounded(scope, model) or (
                     bool(owners)
                     and all(
                         fine(owner, model)
                         if scope in owner.union_scopes
-                        else model in marked.get((id(owner), ("s", id(scope))), ())
+                        else model in marked.get((id(owner), edge), ())
                         or fine(owner, model)
-                        for owner in owners
+                        for owner, edge in owners
                     )
                 )
             return fine_cache[slot]
@@ -926,7 +940,7 @@ class AdHocSQL:
                 return f"{source.name}.{node.name}", first or ("t", node.table)
             if not isinstance(source, Scope):
                 return None
-            first = first or ("s", id(source))
+            first = first or ("s", id(source), node.table)
             inner = next(
                 (
                     child.unalias()
