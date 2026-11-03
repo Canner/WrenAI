@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
+import math
 import os
+import selectors
 import subprocess
 import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -15,6 +18,7 @@ PROTOCOL = "warble-private-service/1"
 
 DEFAULT_CALL_TIMEOUT_S = 100.0
 ABANDONED_LIMIT = 1024
+CONTROL_WRITE_TIMEOUT_S = 0.1
 
 
 class TaskAborted(RuntimeError):
@@ -23,6 +27,8 @@ class TaskAborted(RuntimeError):
 
 class RuntimeIPC:
     def __init__(self, runtime: Path, init: dict, call_timeout_s: float | None = None):
+        if os.name != "posix":
+            raise RuntimeError("unsupported_platform: private IPC requires POSIX")
         self.pending = {}
         self.callbacks = {}
         self.cancel_callbacks = {}
@@ -34,6 +40,7 @@ class RuntimeIPC:
         self._wire_sequence = 0
         self.wire_ids = {}
         self._wire_owners = {}
+        self._wire_deadlines = {}
         # Ids the host gave up waiting for. A late reply or tool call for one of them is
         # answered or dropped; it is not a protocol violation and must not kill the runtime.
         self.abandoned = {}
@@ -57,6 +64,7 @@ class RuntimeIPC:
                 "PI_TELEMETRY": "0",
             },
         )
+        os.set_blocking(self.process.stdin.fileno(), False)
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
         try:
@@ -68,12 +76,57 @@ class RuntimeIPC:
             raise
 
     def _send(self, value):
-        raw = json.dumps(value, ensure_ascii=False)
-        if len(raw.encode()) > 1048576:
+        raw = (json.dumps(value, ensure_ascii=False) + "\n").encode()
+        if len(raw) > 1048577:
             raise ValueError("ipc_size")
-        with self.lock:
-            self.process.stdin.write(raw + "\n")
-            self.process.stdin.flush()
+        with self.state_lock:
+            wire = value.get("id")
+            deadline = self._wire_deadlines.get(wire)
+            owner = self._wire_owners.get(wire) if deadline is not None else None
+        deadline = (
+            deadline
+            if deadline is not None
+            else time.monotonic() + CONTROL_WRITE_TIMEOUT_S
+        )
+
+        def check():
+            if self.closed:
+                raise RuntimeError("runtime_unavailable")
+            if owner is not None and owner not in self.pending:
+                raise TaskAborted()
+            if time.monotonic() >= deadline:
+                raise concurrent.futures.TimeoutError()
+
+        acquired, sent = False, 0
+        try:
+            while not acquired:
+                check()
+                acquired = self.lock.acquire(
+                    timeout=min(0.01, max(0, deadline - time.monotonic()))
+                )
+            check()
+            with selectors.DefaultSelector() as selector:
+                selector.register(self.process.stdin, selectors.EVENT_WRITE)
+                while sent < len(raw):
+                    check()
+                    try:
+                        sent += os.write(
+                            self.process.stdin.fileno(), raw[sent : sent + 65536]
+                        )
+                    except BlockingIOError:
+                        selector.select(min(0.01, max(0, deadline - time.monotonic())))
+        except BaseException:
+            # A partial JSON frame cannot be abandoned and followed by another
+            # frame. End this stalled transport rather than corrupting its stream.
+            if sent:
+                try:
+                    self.process.kill()
+                except OSError:
+                    pass
+            raise
+        finally:
+            if acquired:
+                self.lock.release()
 
     def _tool(self, message):
         self._tool_thread.active = True
@@ -170,6 +223,7 @@ class RuntimeIPC:
                 self.cancel_callbacks.clear()
                 self.wire_ids.clear()
                 self._wire_owners.clear()
+                self._wire_deadlines.clear()
             # Stop queued callbacks before releasing any active callback. The
             # second shutdown joins them after their owners have been cancelled.
             self.pool.shutdown(wait=False, cancel_futures=True)
@@ -207,6 +261,14 @@ class RuntimeIPC:
         """
         if self.closed:
             raise RuntimeError("runtime_unavailable")
+        timeout = self._timeout()
+        if not math.isfinite(timeout) or (
+            timeout_s is not None and not math.isfinite(timeout_s)
+        ):
+            raise ValueError("invalid_ipc_timeout")
+        if timeout_s is not None:
+            timeout = min(timeout, max(0, timeout_s))
+        deadline = time.monotonic() + timeout
         ident = invocation_id or str(uuid.uuid4())
         future = concurrent.futures.Future()
         with self.state_lock:
@@ -222,6 +284,7 @@ class RuntimeIPC:
             self.pending[ident] = future
             self.wire_ids[ident] = wire
             self._wire_owners[wire] = ident
+            self._wire_deadlines[wire] = deadline
             if callback:
                 self.callbacks[ident] = callback
             if on_cancel:
@@ -230,10 +293,7 @@ class RuntimeIPC:
         try:
             self._send({"id": wire, "op": op, **values})
             # The runtime's own deadlines sit below this cap. The operator can override it.
-            timeout = self._timeout()
-            if timeout_s is not None:
-                timeout = min(timeout, max(0, timeout_s))
-            value, calls = future.result(timeout=timeout)
+            value, calls = future.result(timeout=max(0, deadline - time.monotonic()))
             completed = True
             if usage is not None and calls is not None:
                 usage["calls"] = calls
@@ -248,6 +308,7 @@ class RuntimeIPC:
                 self.pending.pop(ident, None)
                 self.wire_ids.pop(ident, None)
                 self._wire_owners.pop(wire, None)
+                self._wire_deadlines.pop(wire, None)
             cancel = self.cancel_callbacks.pop(ident, None)
             if cancel is not None and not completed:
                 self._cancel_callback(cancel)
@@ -341,7 +402,10 @@ class RuntimeIPC:
         for owner in list(self.cancel_callbacks):
             self.abort(owner)
         try:
-            self.process.stdin.close()
+            # Every writer is nonblocking and checks closed while owning this
+            # lock, so it releases before we close/reuse the pipe descriptor.
+            with self.lock:
+                self.process.stdin.close()
             self.process.wait(timeout=5)
         except Exception:
             self.process.kill()

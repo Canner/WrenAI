@@ -165,6 +165,11 @@ lines.on("line", (line) => {
       if (m.reply) send({ id: m.reply, value: "late" });
       if (m.tool_owner) send({ type: "tool_call", id: ++sequence, owner: m.tool_owner, name: "late", args: {} });
       return send({ id: m.id, value: true });
+    case "stop_reading":
+      send({ id: m.id, value: true });
+      lines.close();
+      process.stdin.pause();
+      return void setInterval(() => {}, 1000);
     case "stray":
       return send({ id: "never-sent", value: 1 });
     default:

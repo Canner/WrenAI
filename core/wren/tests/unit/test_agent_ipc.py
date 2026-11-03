@@ -47,6 +47,90 @@ def ops(ipc):
     return ipc.call("ops")
 
 
+@pytest.mark.parametrize("ending", ["deadline", "abort", "close", "queued_call"])
+def test_a_real_stalled_pipe_cannot_retain_a_call_or_its_write_lock(
+    ipc, monkeypatch, ending
+):
+    import os  # noqa: PLC0415
+    import threading  # noqa: PLC0415
+
+    runtime = ipc()
+    assert runtime.call("stop_reading") is True
+    outcome = []
+    stalled = threading.Event()
+    original_write = os.write
+    target_fd = runtime.process.stdin.fileno()
+
+    def write(fd, data):
+        try:
+            return original_write(fd, data)
+        except BlockingIOError:
+            if fd == target_fd:
+                stalled.set()
+            raise
+
+    monkeypatch.setattr(os, "write", write)
+
+    def send():
+        try:
+            runtime.call(
+                "huge",
+                invocation_id="blocked",
+                payload="x" * 524288,
+                timeout_s=0.2 if ending == "deadline" else 5,
+            )
+        except Exception as error:
+            outcome.append(error)
+
+    thread = threading.Thread(target=send)
+    thread.start()
+    try:
+        assert stalled.wait(1), "the fixture never filled the actual kernel pipe"
+        if ending == "queued_call":
+            started = time.monotonic()
+            with pytest.raises(RuntimeError):
+                runtime.call("queued", timeout_s=0.1)
+            assert time.monotonic() - started < 0.5
+        else:
+            started = time.monotonic()
+            if ending == "abort":
+                runtime.abort("blocked")
+            elif ending == "close":
+                runtime.close()
+            thread.join(0.7)
+            assert not thread.is_alive()
+            assert time.monotonic() - started < 0.8
+            assert outcome and isinstance(outcome[0], RuntimeError)
+    finally:
+        if runtime.process.poll() is None:
+            runtime.process.kill()
+        thread.join(3)
+        runtime.close()
+    assert not thread.is_alive() and not runtime._wire_deadlines
+
+
+def test_a_control_frame_has_its_own_bounded_pipe_write(ipc):
+    runtime = ipc()
+    assert runtime.call("stop_reading") is True
+    started = time.monotonic()
+    with pytest.raises(TimeoutError):
+        runtime._send({"type": "tool_result", "id": "tool", "value": "x" * 524288})
+    assert time.monotonic() - started < 0.5
+    runtime.reader.join(2)
+    assert runtime.closed
+
+
+@pytest.mark.parametrize("raw", ["inf", "nan"])
+def test_nonfinite_operator_timeout_cannot_disable_the_io_deadline(
+    ipc, monkeypatch, raw
+):
+    runtime = ipc()
+    monkeypatch.setenv("WREN_IPC_CALL_TIMEOUT_S", raw)
+    with pytest.raises(ValueError, match="invalid_ipc_timeout"):
+        runtime.call("authorize", request={})
+    assert not runtime.pending and not runtime._wire_deadlines
+
+
 def test_reader_exit_closes_the_pool_and_joins_active_callback_workers(ipc):
     import threading  # noqa: PLC0415
 
@@ -484,15 +568,19 @@ def test_a_dead_runtime_fails_before_registering_new_entries(ipc):
 
 
 def test_a_broken_pipe_during_send_clears_registered_entries(ipc, monkeypatch):
+    import os  # noqa: PLC0415
+
     runtime = ipc()
-    original = runtime._send
+    original = os.write
+    target_fd = runtime.process.stdin.fileno()
 
-    def break_pipe(frame):
-        runtime.process.kill()
-        runtime.process.wait(timeout=5)
-        original(frame)
+    def break_pipe(fd, data):
+        if fd == target_fd:
+            runtime.process.kill()
+            runtime.process.wait(timeout=5)
+        return original(fd, data)
 
-    monkeypatch.setattr(runtime, "_send", break_pipe)
+    monkeypatch.setattr(os, "write", break_pipe)
     with pytest.raises(BrokenPipeError):
         runtime.call("authorize", invocation_id="broken-pipe", request={})
     runtime.reader.join(3)
