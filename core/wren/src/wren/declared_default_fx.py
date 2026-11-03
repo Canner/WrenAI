@@ -408,7 +408,9 @@ class _Rate:
         if alias:
             clauses += self.st.roots
         for clause in clauses:
-            for node in clause.find_all(exp.EQ, exp.LTE):
+            for node in _conjuncts(clause):
+                if not isinstance(node, (exp.EQ, exp.LTE)):
+                    continue
                 for side, other in (
                     (node.this, node.expression),
                     (node.expression, node.this),
