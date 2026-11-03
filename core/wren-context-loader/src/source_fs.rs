@@ -21,6 +21,15 @@ pub(crate) struct SourceDir {
     display: PathBuf,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EntryKind {
+    Missing,
+    Directory,
+    Regular,
+    Symlink,
+    Other,
+}
+
 impl SourceDir {
     /// Open the caller-supplied project root. It is the trusted anchor for subsequent `openat`
     /// operations and may itself be a symlink, preserving the native API's existing behavior.
@@ -53,19 +62,46 @@ impl SourceDir {
     }
 
     pub(crate) fn open_dir_if_exists(&self, name: &OsStr) -> io::Result<Option<Self>> {
+        match self.entry_kind(name)? {
+            EntryKind::Missing | EntryKind::Regular | EntryKind::Other => Ok(None),
+            EntryKind::Directory => self.open_dir(name).map(Some),
+            EntryKind::Symlink => Err(directory_symlink_error(&self.display.join(name))),
+        }
+    }
+
+    /// Classify an immediate entry without resolving its final symlink component.
+    pub(crate) fn entry_kind(&self, name: &OsStr) -> io::Result<EntryKind> {
         let stat = match statat(&self.fd, name, AtFlags::SYMLINK_NOFOLLOW) {
             Ok(stat) => stat,
-            Err(error) if error == rustix::io::Errno::NOENT => return Ok(None),
+            Err(error) if error == rustix::io::Errno::NOENT => return Ok(EntryKind::Missing),
             Err(error) => return Err(error.into()),
         };
         let file_type = FileType::from_raw_mode(stat.st_mode);
-        if file_type.is_symlink() {
-            return Err(directory_symlink_error(&self.display.join(name)));
+        Ok(if file_type.is_dir() {
+            EntryKind::Directory
+        } else if file_type.is_file() {
+            EntryKind::Regular
+        } else if file_type.is_symlink() {
+            EntryKind::Symlink
+        } else {
+            EntryKind::Other
+        })
+    }
+
+    /// Classify a nested source entry. A final symlink remains a valid file only when its opened
+    /// target is regular; it is otherwise a refused traversal edge.
+    pub(crate) fn open_nested_dir(&self, name: &OsStr) -> io::Result<Option<Self>> {
+        match self.entry_kind(name)? {
+            EntryKind::Directory => self.open_dir(name).map(Some),
+            EntryKind::Symlink => {
+                if self.read_bytes_if_file(name)?.is_some() {
+                    Ok(None)
+                } else {
+                    Err(directory_symlink_error(&self.display.join(name)))
+                }
+            }
+            EntryKind::Missing | EntryKind::Regular | EntryKind::Other => Ok(None),
         }
-        if !file_type.is_dir() {
-            return Ok(None);
-        }
-        self.open_dir(name).map(Some)
     }
 
     /// List entries from this already-open directory. Names are sorted byte-wise as Rust paths

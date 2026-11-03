@@ -127,22 +127,27 @@ fn collect(
             continue;
         }
         let child = format!("{relative}/{}", name.to_string_lossy());
-        match dir.open_dir_if_exists(&name) {
-            Ok(Some(child_dir)) => collect(&child_dir, &child, out)?,
-            Ok(None) => {
+        match dir.entry_kind(&name)? {
+            crate::source_fs::EntryKind::Directory => {
+                let child_dir = dir.open_dir(&name)?;
+                collect(&child_dir, &child, out)?;
+            }
+            crate::source_fs::EntryKind::Regular => {
                 if let Some(bytes) = dir.read_bytes_if_file(&name)? {
                     out.push((child, bytes));
                 }
             }
-            Err(directory_error) => {
-                // A final file symlink remains supported; a symlink to a directory or an
-                // unresolved link stays a rejected traversal edge.
+            crate::source_fs::EntryKind::Symlink => {
                 if let Some(bytes) = dir.read_bytes_if_file(&name)? {
                     out.push((child, bytes));
                 } else {
-                    return Err(directory_error);
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("directory_symlink_unsupported: {child}"),
+                    ));
                 }
             }
+            crate::source_fs::EntryKind::Missing | crate::source_fs::EntryKind::Other => {}
         }
     }
     Ok(())

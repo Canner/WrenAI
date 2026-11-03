@@ -221,7 +221,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
             if crate::digest::is_hidden(&name) {
                 continue;
             }
-            if let Some(child) = parent.open_dir_if_exists(&name)? {
+            if let Some(child) = parent.open_nested_dir(&name)? {
                 if let Some(contents) = child.read_string_if_file("metadata.yml".as_ref())? {
                     values.push(contents);
                 }
@@ -246,7 +246,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
             if crate::digest::is_hidden(&name) {
                 continue;
             }
-            if let Some(view) = view_root.open_dir_if_exists(&name)? {
+            if let Some(view) = view_root.open_nested_dir(&name)? {
                 if let Some(meta) = view.read_string_if_file("metadata.yml".as_ref())? {
                     views.push((
                         meta,
@@ -1210,5 +1210,33 @@ mod tests {
             Err(error) => error.to_string(),
         };
         assert!(error.contains("directory_symlink_unsupported"), "{error}");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn nested_regular_file_symlink_is_ignored_like_an_ordinary_readme() {
+        use std::os::unix::fs::symlink;
+
+        let project = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(
+            project.path().join("wren_project.yml"),
+            "schema_version: 5\n",
+        )
+        .unwrap();
+        fs::create_dir_all(project.path().join("models/orders")).unwrap();
+        fs::write(
+            project.path().join("models/orders/metadata.yml"),
+            "name: safe\ntable_reference: safe\ncolumns: []\n",
+        )
+        .unwrap();
+        fs::write(outside.path().join("README.md"), "external notes").unwrap();
+        symlink(
+            outside.path().join("README.md"),
+            project.path().join("models/README.md"),
+        )
+        .unwrap();
+        let loaded = super::read_project_dir(project.path()).unwrap().unwrap();
+        assert_eq!(loaded.model_ymls.len(), 1);
     }
 }
