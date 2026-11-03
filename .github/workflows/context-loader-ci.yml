@@ -29,7 +29,12 @@ jobs:
     name: fmt, clippy, test
     runs-on: ubuntu-latest
     steps:
+      # No credentials persisted: this job builds and tests pull-request-authored code, and a
+      # build script or test could otherwise read the token out of the checkout. Nothing here
+      # touches git beyond the checkout itself.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -56,3 +61,8 @@ jobs:
 
       - name: cargo test
         run: cargo test
+
+      # Not cosmetic: with warnings denied, rustdoc fails on a public doc link to a private item,
+      # which neither clippy nor the tests see.
+      - name: cargo doc
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
