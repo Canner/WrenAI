@@ -12,11 +12,11 @@
 //! a statement that fails to parse is reported to the caller, who falls back to a whole-word text
 //! scan and records the degradation (no silent caps).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::ops::ControlFlow;
 
 use serde::Deserialize;
-use sqlparser::ast::{visit_relations, ObjectNamePart};
+use sqlparser::ast::{ObjectName, ObjectNamePart, Query, Visit, Visitor};
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 
@@ -96,16 +96,84 @@ pub(crate) fn parse_dashboards(yml: &str) -> Result<DashboardsFile, String> {
 /// GenericDialect. Compound names keep only their last part (`main.orders` → `orders`), since MDL
 /// node names are unqualified. Returns `None` when the SQL does not parse — the caller decides the
 /// fallback (whole-word scan) and records the degradation.
+///
+/// A name bound by a `WITH` clause is not a table read, so an unqualified reference to a CTE that
+/// is in scope is left out (matched case-insensitively, as SQL does for unquoted names). Scope
+/// follows SQL: a CTE is visible to the query body that carries the `WITH` and to the CTEs
+/// declared after it (to every sibling under `WITH RECURSIVE`), never to its own body, so
+/// `WITH orders AS (SELECT * FROM orders) SELECT * FROM orders` still reads the `orders` table
+/// inside the CTE body, and a CTE defined in a subquery shadows nothing outside that subquery.
 pub(crate) fn sql_table_names(sql: &str) -> Option<BTreeSet<String>> {
     let statements = Parser::parse_sql(&GenericDialect {}, sql).ok()?;
-    let mut names = BTreeSet::new();
-    let _: ControlFlow<()> = visit_relations(&statements, |relation| {
+    let mut collector = RelationCollector::default();
+    let _: ControlFlow<()> = statements.visit(&mut collector);
+    Some(collector.names)
+}
+
+/// Collects table-position relation names while tracking which CTE names are in scope.
+#[derive(Default)]
+struct RelationCollector {
+    names: BTreeSet<String>,
+    /// The CTE names (lowercased) visible to the query being visited, innermost query last.
+    scopes: Vec<Vec<String>>,
+    /// The scope a CTE body sees, keyed by the body's address. It differs from the scope of the
+    /// query that carries the `WITH`, because a CTE does not see itself or the CTEs after it.
+    cte_body_scopes: HashMap<*const Query, Vec<String>>,
+}
+
+impl Visitor for RelationCollector {
+    type Break = ();
+
+    fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
+        let inherited = self
+            .cte_body_scopes
+            .remove(&std::ptr::from_ref(query))
+            .or_else(|| self.scopes.last().cloned())
+            .unwrap_or_default();
+        let mut visible = inherited.clone();
+        if let Some(with) = &query.with {
+            let declared: Vec<String> = with
+                .cte_tables
+                .iter()
+                .map(|cte| cte.alias.name.value.to_lowercase())
+                .collect();
+            for (index, cte) in with.cte_tables.iter().enumerate() {
+                let sees = if with.recursive {
+                    declared.len()
+                } else {
+                    index
+                };
+                let mut scope = inherited.clone();
+                scope.extend(declared[..sees].iter().cloned());
+                self.cte_body_scopes
+                    .insert(std::ptr::from_ref(&*cte.query), scope);
+            }
+            visible.extend(declared);
+        }
+        self.scopes.push(visible);
+        ControlFlow::Continue(())
+    }
+
+    fn post_visit_query(&mut self, _query: &Query) -> ControlFlow<()> {
+        self.scopes.pop();
+        ControlFlow::Continue(())
+    }
+
+    fn pre_visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<()> {
+        if let [ObjectNamePart::Identifier(ident)] = relation.0.as_slice() {
+            let bound = self
+                .scopes
+                .last()
+                .is_some_and(|scope| scope.contains(&ident.value.to_lowercase()));
+            if bound {
+                return ControlFlow::Continue(());
+            }
+        }
         if let Some(ObjectNamePart::Identifier(ident)) = relation.0.last() {
-            names.insert(ident.value.clone());
+            self.names.insert(ident.value.clone());
         }
         ControlFlow::Continue(())
-    });
-    Some(names)
+    }
 }
 
 #[cfg(test)]

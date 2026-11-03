@@ -308,3 +308,89 @@ fn prepared_v2_preserves_host_analysis_and_consumer_totals() {
     assert_eq!(counts.dashboards, 1);
     assert!(MdlContext::unparseable().host_analysis().is_none());
 }
+
+fn reaches(ctx: &MdlContext, seed: &str, consumer: &str) -> bool {
+    impact(ctx, seed).downstream.contains(&consumer.to_string())
+}
+
+#[test]
+fn cr12_a_cte_named_like_a_model_is_not_a_read_of_that_model() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/shadowed.md",
+        "---\nsql: WITH orders AS (SELECT * FROM customers) SELECT COUNT(*) FROM orders\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(
+        !reaches(&ctx, "model:orders", "query:shadowed"),
+        "`orders` here is the CTE, so the model is not a dependency of the query"
+    );
+    assert!(
+        reaches(&ctx, "model:customers", "query:shadowed"),
+        "the CTE body still reads `customers`"
+    );
+}
+
+#[test]
+fn cr12_a_cte_body_that_reads_the_same_named_model_still_links_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/pass-through.md",
+        "---\nsql: WITH orders AS (SELECT * FROM orders WHERE total > 0) SELECT COUNT(*) FROM orders\n---\n",
+    );
+    write(
+        tmp.path(),
+        "knowledge/sql/later-sibling.md",
+        "---\nsql: WITH a AS (SELECT * FROM orders), orders AS (SELECT * FROM a) SELECT * FROM orders\n---\n",
+    );
+    write(
+        tmp.path(),
+        "knowledge/sql/outside-the-cte.md",
+        "---\nsql: SELECT * FROM (WITH orders AS (SELECT 1 AS id) SELECT * FROM orders) c JOIN orders o ON o.id = c.id\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    for query in [
+        "query:pass-through",
+        "query:later-sibling",
+        "query:outside-the-cte",
+    ] {
+        assert!(
+            reaches(&ctx, "model:orders", query),
+            "{query} reads the real `orders` model outside the scope of its CTE"
+        );
+    }
+}
+
+#[test]
+fn cr12_a_view_over_a_cte_named_like_a_model_does_not_depend_on_the_model() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "views/by_country/metadata.yml",
+        "name: by_country\n",
+    );
+    write(
+        tmp.path(),
+        "views/by_country/sql.yml",
+        "statement: WITH orders AS (SELECT * FROM customers) SELECT country FROM orders\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(!ctx
+        .lineage()
+        .edges
+        .iter()
+        .any(|e| e.from == "model:orders" && e.to == "view:by_country"));
+    assert!(ctx
+        .lineage()
+        .edges
+        .iter()
+        .any(|e| e.from == "model:customers" && e.to == "view:by_country"));
+}
