@@ -394,3 +394,71 @@ fn cr12_a_view_over_a_cte_named_like_a_model_does_not_depend_on_the_model() {
         .iter()
         .any(|e| e.from == "model:customers" && e.to == "view:by_country"));
 }
+
+#[test]
+fn cr14_view_backed_cube_resolves_to_view_node() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "views/big_orders/metadata.yml",
+        "name: big_orders\n",
+    );
+    write(
+        tmp.path(),
+        "views/big_orders/sql.yml",
+        "statement: SELECT id, total FROM orders WHERE total > 100\n",
+    );
+    write(
+        tmp.path(),
+        "cubes/big_order_metrics/metadata.yml",
+        r#"name: big_order_metrics
+base_object: big_orders
+measures:
+  - { name: big_total, expression: "SUM(total)", type: DOUBLE }
+dimensions: []
+time_dimensions: []
+"#,
+    );
+    let ctx = load(tmp.path());
+
+    let edges = &ctx.lineage().edges;
+    assert!(
+        edges
+            .iter()
+            .any(|e| e.from == "view:big_orders" && e.to == "cube:big_order_metrics"),
+        "the cube hangs off the view it is built on; edges were {edges:?}"
+    );
+    assert!(ctx.lineage().is_resolvable());
+    assert!(
+        ctx.host_analysis().is_some(),
+        "a resolvable graph keeps impact analysis available"
+    );
+    // The change to `orders` reaches the cube's metric through the view.
+    assert!(reaches(
+        &ctx,
+        "model:orders",
+        "metric:big_order_metrics.big_total"
+    ));
+}
+
+#[test]
+fn cr14_a_model_wins_when_a_model_and_a_view_share_the_cube_base_name() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(tmp.path(), "views/orders/metadata.yml", "name: orders\n");
+    write(
+        tmp.path(),
+        "views/orders/sql.yml",
+        "statement: SELECT * FROM customers\n",
+    );
+    let ctx = load(tmp.path());
+
+    let edges = &ctx.lineage().edges;
+    assert!(edges
+        .iter()
+        .any(|e| e.from == "model:orders" && e.to == "cube:order_metrics"));
+    assert!(!edges
+        .iter()
+        .any(|e| e.from == "view:orders" && e.to == "cube:order_metrics"));
+}

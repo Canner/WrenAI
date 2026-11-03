@@ -83,10 +83,19 @@ pub fn build(manifest: &Manifest) -> (LineageGraph, Vec<String>) {
     }
 
     // Cubes depend on their base object (a model or view); measures/dimensions depend on the cube.
+    // A base object that names a view and no model hangs off the `view:` node; a model wins a name
+    // clash, and a name that is neither stays a dangling `model:` edge so `is_resolvable` flags it.
     for cube in &manifest.cubes {
         let cid = cube_id(&cube.name);
         push_node(&mut nodes, cid.clone(), LineageKind::Cube);
-        push_edge(&mut edges, model_id(&cube.base_object), cid.clone());
+        let base_is_view = !model_names.contains(&cube.base_object)
+            && manifest.views.iter().any(|v| v.name == cube.base_object);
+        let base_id = if base_is_view {
+            view_id(&cube.base_object)
+        } else {
+            model_id(&cube.base_object)
+        };
+        push_edge(&mut edges, base_id, cid.clone());
         for measure in &cube.measures {
             let mid = metric_id(&cube.name, &measure.name);
             push_node(&mut nodes, mid.clone(), LineageKind::Metric);
