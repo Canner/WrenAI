@@ -47,7 +47,9 @@ def ops(ipc):
     return ipc.call("ops")
 
 
-@pytest.mark.parametrize("ending", ["deadline", "abort", "close", "queued_call"])
+@pytest.mark.parametrize(
+    "ending", ["deadline", "abort", "close", "queued_call", "queued_cancel"]
+)
 def test_a_real_stalled_pipe_cannot_retain_a_call_or_its_write_lock(
     ipc, monkeypatch, ending
 ):
@@ -86,10 +88,13 @@ def test_a_real_stalled_pipe_cannot_retain_a_call_or_its_write_lock(
     thread.start()
     try:
         assert stalled.wait(1), "the fixture never filled the actual kernel pipe"
-        if ending == "queued_call":
+        if ending in ("queued_call", "queued_cancel"):
             started = time.monotonic()
             with pytest.raises(RuntimeError):
-                runtime.call("queued", timeout_s=0.1)
+                runtime.call(
+                    "cancel" if ending == "queued_cancel" else "queued",
+                    timeout_s=5 if ending == "queued_cancel" else 0.1,
+                )
             assert time.monotonic() - started < 0.5
         else:
             started = time.monotonic()
@@ -109,15 +114,41 @@ def test_a_real_stalled_pipe_cannot_retain_a_call_or_its_write_lock(
     assert not thread.is_alive() and not runtime._wire_deadlines
 
 
-def test_a_control_frame_has_its_own_bounded_pipe_write(ipc):
+@pytest.mark.parametrize("reuse_request_id", [False, True])
+def test_a_control_frame_has_its_own_bounded_pipe_write(ipc, reuse_request_id):
+    import threading  # noqa: PLC0415
+
     runtime = ipc()
-    assert runtime.call("stop_reading") is True
-    started = time.monotonic()
-    with pytest.raises(TimeoutError):
-        runtime._send({"type": "tool_result", "id": "tool", "value": "x" * 524288})
-    assert time.monotonic() - started < 0.5
-    runtime.reader.join(2)
-    assert runtime.closed
+    task = None
+    ident = "tool"
+    if reuse_request_id:
+
+        def pending():
+            try:
+                runtime.call("hang", invocation_id="pending", timeout_s=2)
+            except RuntimeError:
+                pass
+
+        task = threading.Thread(target=pending)
+        task.start()
+        deadline = time.monotonic() + 1
+        while "pending" not in runtime.wire_ids and time.monotonic() < deadline:
+            time.sleep(0.005)
+        ident = runtime.wire_ids["pending"]
+    try:
+        assert runtime.call("stop_reading") is True
+        started = time.monotonic()
+        with pytest.raises(TimeoutError):
+            runtime._send({"type": "tool_result", "id": ident, "value": "x" * 524288})
+        assert time.monotonic() - started < 0.5
+        runtime.reader.join(2)
+        assert runtime.closed
+    finally:
+        if runtime.process.poll() is None:
+            runtime.process.kill()
+        if task:
+            task.join(3)
+            assert not task.is_alive()
 
 
 @pytest.mark.parametrize("raw", ["inf", "nan"])

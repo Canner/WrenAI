@@ -81,13 +81,19 @@ class RuntimeIPC:
             raise ValueError("ipc_size")
         with self.state_lock:
             wire = value.get("id")
-            deadline = self._wire_deadlines.get(wire)
+            deadline = (
+                None
+                if value.get("type") == "tool_result"
+                else self._wire_deadlines.get(wire)
+            )
             owner = self._wire_owners.get(wire) if deadline is not None else None
         deadline = (
             deadline
             if deadline is not None
             else time.monotonic() + CONTROL_WRITE_TIMEOUT_S
         )
+        if value.get("op") == "cancel":
+            deadline = min(deadline, time.monotonic() + CONTROL_WRITE_TIMEOUT_S)
 
         def check():
             if self.closed:
