@@ -1,0 +1,58 @@
+name: Context Loader
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'core/wren-context-loader/**'
+      - 'core/wren-core-base/**'
+      - '.github/workflows/context-loader-ci.yml'
+  pull_request:
+    paths:
+      - 'core/wren-context-loader/**'
+      - 'core/wren-core-base/**'
+      - '.github/workflows/context-loader-ci.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: core/wren-context-loader
+
+jobs:
+  check:
+    name: fmt, clippy, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # `core/wren-core-base` is a path dependency, so a change there breaks this crate without
+      # touching it — which is why this workflow watches that path too.
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            core/wren-context-loader/target/
+          key: context-loader-${{ hashFiles('core/wren-context-loader/Cargo.toml') }}
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cargo test

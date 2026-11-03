@@ -1,0 +1,24 @@
+name: inventory_levels
+properties:
+  description: "Month-end inventory snapshots per warehouse and product. units_on_hand is a BALANCE as of snapshot_date — not additive across dates."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: inventory_levels
+columns:
+  - name: snapshot_date
+    type: DATE
+    properties:
+      description: "Snapshot date; always the last day of a calendar month."
+  - name: warehouse_id
+    type: INTEGER
+    properties:
+      description: "FK to warehouses.id."
+  - name: product_id
+    type: INTEGER
+    properties:
+      description: "FK to products.id."
+  - name: units_on_hand
+    type: INTEGER
+    properties:
+      description: "Units in stock at snapshot time (point-in-time balance)."

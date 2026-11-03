@@ -1,0 +1,17 @@
+name: legacy_status_codes
+properties:
+  description: "Lookup for legacy_orders.stat numeric codes. Code 5 ('partial') was historically undocumented."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: legacy_status_codes
+primary_key: code
+columns:
+  - name: code
+    type: INTEGER
+    properties:
+      description: "Numeric status code used by legacy_orders.stat."
+  - name: label
+    type: VARCHAR
+    properties:
+      description: "Human-readable status label."
