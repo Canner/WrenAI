@@ -1338,3 +1338,44 @@ def test_an_aliased_cast_inside_a_derived_table_is_a_stable_name(real_project):
         real_project, "SELECT * FROM (SELECT id::BIGINT AS id FROM orders) s"
     )
     assert load_snapshot(real_project).unverified_views == ()
+
+
+def test_cr4_rule_body_never_names_a_denied_column():
+    mixed = "knowledge/rules/mixed.md"
+    only = "knowledge/rules/only.md"
+    r = reader(
+        {
+            "models": [model("customers", "Customers.", ("id", "email"))],
+            "knowledge_rules": [
+                {
+                    "path": mixed,
+                    "content": "---\ndefaults: []\n---\n# Matching\n\n"
+                    "Match people on customers.email when merging. Revenue is by region.\n\n"
+                    "- Never show Customers.Email in a report.\n- Round to cents.\n",
+                },
+                {
+                    "path": only,
+                    "content": "Match on customers.email. Also customers.email again.\n",
+                },
+            ],
+        },
+        denied=[("customers", "email")],
+    )
+    served = json.dumps(
+        [
+            r.documents()["rules"],
+            r.rules_document(),
+            r.read([f"rule:{mixed}", f"rule:{only}"]),
+            r.list(1),
+        ]
+    )
+    assert "email" not in served.lower()
+    body = {
+        x["path"]: x["content"]
+        for x in r.read([f"rule:{mixed}", f"rule:{only}"])["rules"]
+    }
+    assert "Revenue is by region." in body[mixed]
+    assert "- Round to cents." in body[mixed]
+    assert "# Matching" in body[mixed]
+    assert body[only] == ""
+    assert f"rule {only}" in r.list(1)["text"]

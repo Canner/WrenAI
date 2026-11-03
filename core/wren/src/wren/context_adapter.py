@@ -521,6 +521,47 @@ def _prose(
     return " ".join(kept) or None
 
 
+def _redact_rule_body(text: str, denied: frozenset) -> str:
+    """A rule file whose body keeps no sentence that names a denied ``model.column``.
+
+    The front-matter is carried verbatim (``strip_denied_declaration`` has already checked
+    it); the body is cut line by line so lists, headings and blank lines survive, and each
+    line loses the sentences ``_prose`` would drop from a description. A body left with no
+    text at all is empty.
+    """
+    if not denied:
+        return text
+    try:
+        front, _ = split_front_matter(text)
+    except ValueError:
+        front = None
+    lines = text.splitlines(keepends=True)
+    head = 0
+    if front is not None:
+        fences = 0
+        for index, line in enumerate(lines):
+            if line.strip("\ufeff").rstrip() == "---":
+                fences += 1
+                if fences == 2:
+                    head = index + 1
+                    break
+    body = []
+    for line in lines[head:]:
+        content = line.rstrip("\r\n")
+        if not content.strip() or not any(
+            _mentions_denied(s, None, denied) for s in _sentences(_one_line(content))
+        ):
+            body.append(line)
+            continue
+        kept = _prose(content, None, denied)
+        if kept:
+            indent = content[: len(content) - len(content.lstrip())]
+            body.append(indent + kept + line[len(content) :])
+    if not any(line.strip() for line in body):
+        body = []
+    return "".join(lines[:head] + body)
+
+
 def strip_denied_declaration(text: str, denied: frozenset = frozenset()) -> str:
     """A rule file without its ``denied_columns`` front-matter key.
 
@@ -657,7 +698,9 @@ class ContextReader:
 
     def _stripped(self, rule: dict) -> str:
         try:
-            return strip_denied_declaration(rule["content"], self.denied)
+            return _redact_rule_body(
+                strip_denied_declaration(rule["content"], self.denied), self.denied
+            )
         except DeniedColumnsInvalid as exc:
             raise DeniedColumnsInvalid(f"{rule['path']}: {exc.detail}") from None
 
