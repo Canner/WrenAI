@@ -42,6 +42,7 @@ class RuntimeIPC:
         )
         self.lock = threading.Lock()
         self.state_lock = threading.RLock()
+        self._tool_thread = threading.local()
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
         self.process = subprocess.Popen(
             ["node", str(runtime)],
@@ -75,6 +76,13 @@ class RuntimeIPC:
             self.process.stdin.flush()
 
     def _tool(self, message):
+        self._tool_thread.active = True
+        try:
+            self._handle_tool(message)
+        finally:
+            self._tool_thread.active = False
+
+    def _handle_tool(self, message):
         response = {
             "type": "tool_result",
             "id": message["id"],
@@ -84,7 +92,8 @@ class RuntimeIPC:
             owner = message["_owner"]
             with self.state_lock:
                 if (
-                    self.wire_ids.get(owner) != message["owner"]
+                    self.closed
+                    or self.wire_ids.get(owner) != message["owner"]
                     or owner not in self.pending
                 ):
                     raise PermissionError("task_ended")
@@ -152,12 +161,30 @@ class RuntimeIPC:
         except Exception:
             self.process.kill()
         finally:
-            for cancel in list(self.cancel_callbacks.values()):
-                self._cancel_callback(cancel)
-            for future in list(self.pending.values()):
+            with self.state_lock:
+                self.closed = True
+                cancels = list(self.cancel_callbacks.values())
+                futures = list(self.pending.values())
+                self.pending.clear()
+                self.callbacks.clear()
+                self.cancel_callbacks.clear()
+                self.wire_ids.clear()
+                self._wire_owners.clear()
+            # Stop queued callbacks before releasing any active callback. The
+            # second shutdown joins them after their owners have been cancelled.
+            self.pool.shutdown(wait=False, cancel_futures=True)
+            for future in futures:
                 if not future.done():
                     future.set_exception(RuntimeError("runtime_unavailable"))
-            self.pending.clear()
+            for cancel in cancels:
+                self._cancel_callback(cancel)
+            try:
+                if self.process.poll() is None:
+                    self.process.kill()
+                self.process.wait(timeout=5)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+            self.pool.shutdown(wait=True, cancel_futures=True)
 
     def call(
         self,
@@ -310,8 +337,6 @@ class RuntimeIPC:
             future.set_exception(TaskAborted())
 
     def close(self):
-        if self.closed:
-            return
         self.closed = True
         for owner in list(self.cancel_callbacks):
             self.abort(owner)
@@ -321,5 +346,10 @@ class RuntimeIPC:
         except Exception:
             self.process.kill()
             self.process.wait(timeout=5)
-        self.reader.join(timeout=5)
-        self.pool.shutdown(wait=True, cancel_futures=True)
+        internal = threading.current_thread() is self.reader or getattr(
+            self._tool_thread, "active", False
+        )
+        if not internal:
+            self.reader.join(timeout=5)
+        # The reader performs the final join after an internal close returns.
+        self.pool.shutdown(wait=not internal, cancel_futures=True)

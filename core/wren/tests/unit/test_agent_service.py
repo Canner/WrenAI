@@ -3531,3 +3531,46 @@ def test_authorization_wait_is_inside_the_task_deadline(service, monkeypatch):
     assert time.monotonic() - started < 0.7
     assert result == {"status": "unavailable", "reason": "timeout"}
     assert not instance.sessions[value.session_id]["results"]
+
+
+def test_close_interrupts_authorization_and_keeps_the_shared_runtime(
+    service, monkeypatch
+):
+    instance = service(runtime_path=FAKE_RUNTIME)
+    request = sql_request(instance, "SELECT COUNT(*) FROM customers")
+    session = instance.sessions[request.session_id]
+    entered = threading.Event()
+    original = instance.ipc._send
+
+    def delay_authorization(frame):
+        if frame.get("op") == "authorize":
+            frame["request"]["__test_delay_ms"] = 5000
+            original(frame)
+            entered.set()
+        else:
+            original(frame)
+
+    monkeypatch.setattr(instance.ipc, "_send", delay_authorization)
+    outcome = []
+
+    def execute():
+        outcome.append(
+            asyncio.run(safe(instance.execute, request, direct={"sql": request.sql}))
+        )
+
+    thread = threading.Thread(target=execute)
+    thread.start()
+    try:
+        assert entered.wait(5)
+        instance.close(request.session_id)
+        thread.join(0.7)
+        assert not thread.is_alive()
+        assert session["lock"].acquire(blocking=False)
+        session["lock"].release()
+        assert not session["results"] and not session["evidence"]
+        monkeypatch.setattr(instance.ipc, "_send", original)
+        assert instance.ipc.call("authorize", request={}) is True
+        assert instance.ipc.process.poll() is None
+    finally:
+        instance.ipc.close()
+        thread.join(5)

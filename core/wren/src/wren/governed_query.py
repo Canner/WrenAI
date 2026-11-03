@@ -71,6 +71,7 @@ class QueryLifetime:
         self.lock = threading.RLock()
         self.cancelled = False
         self.children = set()
+        self.cancel_hooks = set()
 
     def remaining(self):
         self.check()
@@ -97,9 +98,28 @@ class QueryLifetime:
         # close that races with Popen. Cancellation is idempotent.
         with self.lock:
             self.cancelled = True
+            hooks = list(self.cancel_hooks)
+            self.cancel_hooks.clear()
             for child in list(self.children):
                 _stop(child)
                 self.children.discard(child)
+        for hook in hooks:
+            try:
+                hook()
+            except Exception:
+                pass
+
+    @contextlib.contextmanager
+    def cancel_on(self, hook):
+        """Link another host wait to this lifetime without sharing its wire ID."""
+        with self.lock:
+            self.check()
+            self.cancel_hooks.add(hook)
+        try:
+            yield
+        finally:
+            with self.lock:
+                self.cancel_hooks.discard(hook)
 
     def query(self, engine, sql, limit):
         spec = {

@@ -47,6 +47,76 @@ def ops(ipc):
     return ipc.call("ops")
 
 
+def test_reader_exit_closes_the_pool_and_joins_active_callback_workers(ipc):
+    import threading  # noqa: PLC0415
+
+    runtime = ipc()
+    entered, release = threading.Event(), threading.Event()
+    outcome = []
+
+    def callback(*_):
+        entered.set()
+        assert release.wait(5)
+        return "late"
+
+    def invoke():
+        try:
+            runtime.call(
+                "invoke",
+                request=json.dumps(
+                    {"behavior": "script", "steps": [{"tool": "run_sql"}]}
+                ),
+                callback=callback,
+                on_cancel=release.set,
+            )
+        except RuntimeError as error:
+            outcome.append(error)
+
+    task = threading.Thread(target=invoke)
+    task.start()
+    try:
+        assert entered.wait(5)
+        # Occupy every pool slot, then leave a real queued job behind it.
+        for _ in range(7):
+            runtime.pool.submit(release.wait, 5)
+        queued = runtime.pool.submit(lambda: pytest.fail("queued work ran after EOF"))
+        runtime.process.kill()
+        runtime.reader.join(3)
+        task.join(3)
+        assert not runtime.reader.is_alive() and not task.is_alive()
+        assert outcome and runtime.closed
+        assert queued.cancelled()
+        assert all(not thread.is_alive() for thread in runtime.pool._threads)
+        with pytest.raises(RuntimeError, match="runtime_unavailable"):
+            runtime.call("authorize", request={})
+    finally:
+        release.set()
+        runtime.close()
+        task.join(5)
+
+
+def test_a_callback_can_close_the_runtime_without_joining_itself(ipc):
+    import threading  # noqa: PLC0415
+
+    runtime = ipc()
+    closed = threading.Event()
+
+    def callback(*_):
+        runtime.close()
+        closed.set()
+
+    with pytest.raises(RuntimeError, match="runtime_unavailable"):
+        runtime.call(
+            "invoke",
+            request=json.dumps({"behavior": "script", "steps": [{"tool": "run_sql"}]}),
+            callback=callback,
+        )
+    assert closed.wait(3)
+    runtime.reader.join(3)
+    assert not runtime.reader.is_alive()
+    assert all(not thread.is_alive() for thread in runtime.pool._threads)
+
+
 @pytest.mark.parametrize("error", [None, ""])
 def test_malformed_reply_fails_the_waiting_call_without_waiting_for_timeout(ipc, error):
     runtime = ipc(call_timeout_s=2)
@@ -396,14 +466,14 @@ def test_an_old_queued_tool_cannot_use_a_reused_callers_callback(ipc, monkeypatc
     assert not thread.is_alive() and len(errors) == 1
 
 
-def test_a_broken_runtime_pipe_does_not_accumulate_pending_entries(ipc):
+def test_a_dead_runtime_fails_before_registering_new_entries(ipc):
     runtime = ipc()
     runtime.process.kill()
     runtime.process.wait(timeout=5)
     runtime.reader.join(timeout=5)
     assert not runtime.reader.is_alive()
     for _ in range(3):
-        with pytest.raises(OSError):
+        with pytest.raises(RuntimeError, match="runtime_unavailable"):
             runtime.call("authorize", invocation_id="broken-pipe", request={})
         assert (
             not runtime.pending
@@ -411,6 +481,22 @@ def test_a_broken_runtime_pipe_does_not_accumulate_pending_entries(ipc):
             and not runtime.cancel_callbacks
         )
         assert not runtime.wire_ids and not runtime._wire_owners
+
+
+def test_a_broken_pipe_during_send_clears_registered_entries(ipc, monkeypatch):
+    runtime = ipc()
+    original = runtime._send
+
+    def break_pipe(frame):
+        runtime.process.kill()
+        runtime.process.wait(timeout=5)
+        original(frame)
+
+    monkeypatch.setattr(runtime, "_send", break_pipe)
+    with pytest.raises(BrokenPipeError):
+        runtime.call("authorize", invocation_id="broken-pipe", request={})
+    runtime.reader.join(3)
+    assert not runtime.pending and not runtime.wire_ids and not runtime._wire_owners
 
 
 def test_reader_cleanup_isolates_a_failing_cancel_callback(ipc):

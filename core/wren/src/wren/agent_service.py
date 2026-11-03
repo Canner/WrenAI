@@ -620,12 +620,8 @@ class Service:
         self.project.current()
         if session and (session["closed"] or session["caller"] != self.caller):
             return False
-        lifetime = current_lifetime()
-        timeout = {"timeout_s": lifetime.remaining()} if lifetime is not None else {}
-        value = self.ipc.call(
-            "authorize",
-            **timeout,
-            request={
+        value = self._authorize(
+            {
                 "caller": self.caller,
                 "project": self.pid,
                 "role": role,
@@ -648,6 +644,22 @@ class Service:
             }
         )
         return value is True
+
+    def _authorize(self, request):
+        lifetime = current_lifetime()
+        if lifetime is None:
+            return self.ipc.call("authorize", request=request)
+        ident = uid()
+        with lifetime.cancel_on(lambda: self.ipc.abort(ident)):
+            try:
+                return self.ipc.call(
+                    "authorize",
+                    invocation_id=ident,
+                    timeout_s=lifetime.remaining(),
+                    request=request,
+                )
+            finally:
+                lifetime.check()
 
     def require(self, *args, **kwargs):
         if not self.allowed(*args, **kwargs):
