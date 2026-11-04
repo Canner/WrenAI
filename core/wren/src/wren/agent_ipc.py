@@ -6,12 +6,15 @@ import concurrent.futures
 import json
 import math
 import os
+import queue
 import selectors
 import subprocess
 import threading
 import time
 import uuid
 from pathlib import Path
+
+from wren.governed_query import _stop as _stop_owned_process
 
 PROTOCOL = "warble-private-service/1"
 
@@ -21,6 +24,64 @@ ABANDONED_LIMIT = 1024
 CONTROL_WRITE_TIMEOUT_S = 0.1
 TOOL_SHUTDOWN_TIMEOUT_S = 1.0
 TOOL_CALL_CAPACITY = 128
+
+
+class DaemonThreadPoolExecutor(concurrent.futures.Executor):
+    """A fixed daemon-worker executor for host callbacks.
+
+    Callback admission is bounded separately by ``TOOL_CALL_CAPACITY``. Workers are daemon
+    threads so a non-cancellable provider callback cannot delay interpreter shutdown; callers
+    still receive normal ``Future`` completion for callbacks that finish.
+    """
+
+    def __init__(self, max_workers):
+        self._max_workers = max_workers
+        self._work_queue = queue.SimpleQueue()
+        self._threads = set()
+        self._lock = threading.Lock()
+        self._shutdown = False
+
+    def submit(self, fn, /, *args, **kwargs):
+        with self._lock:
+            if self._shutdown:
+                raise RuntimeError("cannot schedule new futures after shutdown")
+            future = concurrent.futures.Future()
+            self._work_queue.put((future, fn, args, kwargs))
+            if len(self._threads) < self._max_workers:
+                thread = threading.Thread(target=self._worker, daemon=True)
+                self._threads.add(thread)
+                thread.start()
+            return future
+
+    def _worker(self):
+        while True:
+            work = self._work_queue.get()
+            if work is None:
+                return
+            future, fn, args, kwargs = work
+            if not future.set_running_or_notify_cancel():
+                continue
+            try:
+                future.set_result(fn(*args, **kwargs))
+            except BaseException as error:
+                future.set_exception(error)
+
+    def shutdown(self, wait=True, *, cancel_futures=False):
+        # Deliberately do not join daemon workers: RuntimeIPC applies its separate bounded wait
+        # to futures, and an uncooperative callback must not make host teardown unbounded.
+        with self._lock:
+            if self._shutdown:
+                return
+            self._shutdown = True
+            if cancel_futures:
+                while True:
+                    try:
+                        future, _, _, _ = self._work_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                    future.cancel()
+            for _ in self._threads:
+                self._work_queue.put(None)
 
 
 class TaskAborted(RuntimeError):
@@ -53,7 +114,7 @@ class RuntimeIPC:
         self.state_lock = threading.RLock()
         self._tool_thread = threading.local()
         self._tool_futures = set()
-        self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+        self.pool = DaemonThreadPoolExecutor(max_workers=8)
         self.process = subprocess.Popen(
             ["node", str(runtime)],
             stdin=subprocess.PIPE,
@@ -128,10 +189,7 @@ class RuntimeIPC:
             # A partial JSON frame cannot be abandoned and followed by another
             # frame. End this stalled transport rather than corrupting its stream.
             if sent:
-                try:
-                    self.process.kill()
-                except OSError:
-                    pass
+                self._stop_runtime_process()
             raise
         finally:
             if acquired:
@@ -157,6 +215,13 @@ class RuntimeIPC:
             # after this bound; this does not terminate their external work.
             if active:
                 concurrent.futures.wait(active, timeout=TOOL_SHUTDOWN_TIMEOUT_S)
+
+    def _stop_runtime_process(self):
+        """Stop and reap the private runtime plus its owned process group."""
+        try:
+            _stop_owned_process(self.process)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
 
     def _handle_tool(self, message):
         response = {
@@ -259,7 +324,7 @@ class RuntimeIPC:
                     else:
                         future.set_result((m["value"], m.get("calls")))
         except Exception:
-            self.process.kill()
+            self._stop_runtime_process()
         finally:
             with self.state_lock:
                 self.closed = True
@@ -279,12 +344,7 @@ class RuntimeIPC:
                     future.set_exception(RuntimeError("runtime_unavailable"))
             for cancel in cancels:
                 self._cancel_callback(cancel)
-            try:
-                if self.process.poll() is None:
-                    self.process.kill()
-                self.process.wait(timeout=5)
-            except (OSError, subprocess.TimeoutExpired):
-                pass
+            self._stop_runtime_process()
             self._shutdown_pool(wait=True)
 
     def call(
@@ -453,10 +513,10 @@ class RuntimeIPC:
             # lock, so it releases before we close/reuse the pipe descriptor.
             with self.lock:
                 self.process.stdin.close()
-            self.process.wait(timeout=5)
         except Exception:
-            self.process.kill()
-            self.process.wait(timeout=5)
+            pass
+        finally:
+            self._stop_runtime_process()
         internal = threading.current_thread() is self.reader or getattr(
             self._tool_thread, "active", False
         )

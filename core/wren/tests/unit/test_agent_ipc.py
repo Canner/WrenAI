@@ -1,7 +1,11 @@
 """Host-side IPC behaviour against a scripted runtime (no model, no Warble)."""
 
 import json
+import os
 import shutil
+import signal
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -773,6 +777,105 @@ def test_teardown_does_not_wait_forever_for_a_non_cancellable_tool(
         runtime.reader.join(5)
         for thread in runtime.pool._threads:
             thread.join(2)
+
+
+def test_blocked_tool_callback_does_not_hold_interpreter_exit(tmp_path):
+    runtime_path = tmp_path / "blocked-tool.js"
+    runtime_path.write_text(
+        """
+const readline = require('node:readline');
+const send = value => process.stdout.write(JSON.stringify(value) + '\\n');
+readline.createInterface({input: process.stdin}).on('line', line => {
+  const message = JSON.parse(line);
+  if (message.op === 'init') {
+    send({id: message.id, value: {protocol: message.protocol, ir: '0.9', schema: '1'}});
+  } else if (message.op === 'invoke') {
+    send({type: 'tool_call', id: 'blocked-tool', owner: message.id, name: 'work', args: {}});
+  }
+});
+"""
+    )
+    source_root = Path(__file__).parents[2] / "src"
+    script = """
+import sys
+import threading
+from pathlib import Path
+from wren.agent_ipc import RuntimeIPC
+
+runtime = RuntimeIPC(Path(sys.argv[1]), {})
+entered = threading.Event()
+
+def callback(*_):
+    entered.set()
+    threading.Event().wait(60)
+
+def invoke():
+    try:
+        runtime.call('invoke', callback=callback)
+    except RuntimeError:
+        pass
+
+caller = threading.Thread(target=invoke)
+caller.start()
+if not entered.wait(2):
+    raise RuntimeError('callback_not_started')
+runtime.close()
+caller.join(2)
+if caller.is_alive():
+    raise RuntimeError('caller_not_released')
+print('closed')
+"""
+    env = os.environ | {"PYTHONPATH": str(source_root)}
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(runtime_path)],
+        capture_output=True,
+        env=env,
+        text=True,
+        timeout=3,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "closed"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups require POSIX")
+def test_close_terminates_runtime_process_group(tmp_path):
+    runtime_path = tmp_path / "process-group.js"
+    runtime_path.write_text(
+        """
+const {spawn} = require('node:child_process');
+const readline = require('node:readline');
+const send = value => process.stdout.write(JSON.stringify(value) + '\\n');
+readline.createInterface({input: process.stdin}).on('line', line => {
+  const message = JSON.parse(line);
+  if (message.op === 'init') {
+    send({id: message.id, value: {protocol: message.protocol, ir: '0.9', schema: '1'}});
+  } else if (message.op === 'spawn_child') {
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {stdio: 'ignore'});
+    send({id: message.id, value: child.pid});
+    setTimeout(() => process.exit(0), 20);
+  }
+});
+"""
+    )
+    runtime = RuntimeIPC(runtime_path, {})
+    child = runtime.call("spawn_child")
+    try:
+        runtime.close()
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            try:
+                os.kill(child, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("runtime child survived its owned process group")
+    finally:
+        try:
+            os.kill(child, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        runtime.close()
 
 
 @pytest.fixture
