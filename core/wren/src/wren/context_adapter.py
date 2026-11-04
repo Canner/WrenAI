@@ -896,7 +896,7 @@ class ContextReader:
         """
         if kind == "model":
             return frozenset({item["name"]})
-        if kind == "cube":
+        if kind == "cube" and item["base_object"] not in self._views:
             return frozenset({item["base_object"]})
         return frozenset(owner for owner, _ in self.denied)
 
@@ -1233,6 +1233,8 @@ class ContextReader:
         blocked = self.denied | frozenset(
             (owner, column.lower()) for owner, column in self._hidden
         )
+        if base in self._views:
+            blocked |= frozenset((base, column.lower()) for _, column in self.denied)
 
         def members(key: str) -> list[dict]:
             return [

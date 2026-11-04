@@ -50,6 +50,10 @@ MAX_STATUS_VALUES = 64
 _FENCE = "---"
 
 
+def _declaration_shaped(value):
+    return isinstance(value, dict) and "id" in value and "kind" in value
+
+
 def _duplicate_mapping_key(node, visited=None):
     """Check declaration mappings before YAML construction discards repeated keys."""
     visited = set() if visited is None else visited
@@ -627,10 +631,19 @@ class _Parser:
         except yaml.YAMLError:
             self.error(label, "front-matter is not valid YAML")
             return
-        if isinstance(data, list) and any(
-            isinstance(item, dict) and "id" in item and "kind" in item for item in data
-        ):
+        if isinstance(data, list) and any(_declaration_shaped(item) for item in data):
             self.error(label, "declarations require a mapping with a 'defaults' list")
+            return
+        if (
+            isinstance(data, dict)
+            and "defaults" not in data
+            and any(
+                isinstance(value, list)
+                and any(_declaration_shaped(item) for item in value)
+                for value in data.values()
+            )
+        ):
+            self.error(label, "declarations must be under the 'defaults' key")
             return
         if not isinstance(data, dict) or "defaults" not in data:
             return

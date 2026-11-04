@@ -749,6 +749,31 @@ def test_an_invalid_declaration_refuses_to_start_before_any_frame(declaring):
     declaring.factory.assert_not_called()
 
 
+@pytest.mark.parametrize("operation", ["inspect", "query"])
+def test_typo_declaration_envelope_refuses_startup_before_engine_or_frames(
+    bound_transport, monkeypatch, operation
+):
+    f = bound_transport
+    rules = f.project / "knowledge/rules"
+    rules.mkdir(parents=True)
+    (rules / "policy.md").write_text(
+        "---\ndefauts:\n  - id: exclude-test-accounts\n    kind: exclude_rows\n"
+        "    column: customers.is_test\n    exclude: true\n"
+        "    covers: {reaching: customers, via: many_to_one}\n---\nRule text.\n"
+    )
+    f.build.return_value = build_project_manifest(DECLARED_FIXTURE)
+    writer = MagicMock(wraps=transport._write)
+    monkeypatch.setattr(transport, "_write", writer)
+    request = {"id": 1, "operation": operation}
+    if operation == "query":
+        request.update(sql=EXCLUDE_MISSING, limit=5)
+    with pytest.raises(DeclarationError):
+        f.run((json.dumps(request) + "\n").encode())
+    f.factory.assert_not_called()
+    f.engine.query.assert_not_called()
+    writer.assert_not_called()
+
+
 def test_the_cli_reports_invalid_declarations_without_their_content(declaring):
     write_invalid_declaration(declaring)
     result = CliRunner().invoke(

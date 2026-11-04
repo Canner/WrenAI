@@ -537,6 +537,58 @@ def test_unrelated_sequence_front_matter_remains_prose(project, front):
     assert parse(project) == ([], [])
 
 
+@pytest.mark.parametrize(
+    "front",
+    [
+        "defauts:\n" + EXCLUDE,
+        "Defaults:\n" + EXCLUDE,
+    ],
+)
+def test_declaration_shaped_unknown_top_level_envelope_is_invalid(project, front):
+    (project / "knowledge/rules/typo.md").write_text("---\n" + front + "---\nProse.\n")
+    declarations, errors = parse(project)
+    assert not declarations and errors
+    assert "defaults" in str(errors)
+
+
+def test_typo_envelope_voids_otherwise_valid_rules_instead_of_enforcing_a_subset(
+    project,
+):
+    declare(project, EXCLUDE, "valid.md")
+    (project / "knowledge/rules/typo.md").write_text("---\ndefauts:\n" + RATE + "---\n")
+    declarations, errors = parse(project)
+    assert declarations == [] and errors
+
+
+@pytest.mark.parametrize(
+    "front",
+    [
+        "owner: analytics\nnotes: [prose, {id: note}, {kind: convention}]\n",
+        "defaults: []\nmetadata: {id: note, description: words}\n",
+        "metadata: {kind: guide, description: words}\n",
+        "metadata: {id: note, kind: guide}\n",
+        "defaults: []\nmetadata: [{id: note, kind: guide}]\n",
+    ],
+)
+def test_unrelated_mapping_metadata_does_not_look_like_a_declaration(project, front):
+    (project / "knowledge/rules/prose.md").write_text("---\n" + front + "---\nProse.\n")
+    assert parse(project) == ([], [])
+
+
+def test_valid_inherited_defaults_remain_enforced_with_the_merge_template(project):
+    front = (
+        "base: &base\n  defaults:\n"
+        + "\n".join("  " + line for line in EXCLUDE.splitlines())
+        + "\n<<: *base\n"
+    )
+    (project / "knowledge/rules/inherited.md").write_text(
+        "---\n" + front + "---\nProse.\n"
+    )
+    declarations, errors = parse(project)
+    assert not errors and len(declarations) == 1
+    assert declarations[0].id == "exclude-test-accounts"
+
+
 def test_yaml_merge_defaults_override_is_not_a_duplicate_key(project):
     (project / "knowledge/rules/merge.md").write_text(
         "---\nbase: &base\n  defaults: []\n<<: *base\ndefaults: []\nnote: earlier\nnote: later\n---\nProse.\n"

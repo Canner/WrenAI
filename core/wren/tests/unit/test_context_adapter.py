@@ -2391,6 +2391,58 @@ def test_cube_members_hide_same_named_hidden_base_columns_only(key, hidden_name)
     assert [member["name"] for member in customer_cube[key]] == ["PRIVATE_ID"]
 
 
+@pytest.mark.parametrize("key", ["measures", "dimensions", "time_dimensions"])
+@pytest.mark.parametrize("denied_name", ["email", "EMAIL"])
+def test_view_backed_cubes_follow_view_denied_names_and_keep_model_owner_scope(
+    key, denied_name
+):
+    private = {"name": denied_name, "type": "VARCHAR", "description": "Email summary."}
+    safe = {
+        "name": "public_count",
+        "type": "COUNT",
+        "description": "Uses email. Public count.",
+    }
+    r = reader(
+        {
+            "models": [
+                model("customers", columns=("id", "email")),
+                model("orders", columns=("id", "email")),
+            ],
+            "views": [
+                {
+                    "name": "customer_view",
+                    "columns": [{"name": "email", "type": "VARCHAR"}],
+                }
+            ],
+            "cubes": [
+                {
+                    "name": "view_cube",
+                    "base_object": "customer_view",
+                    "description": "Uses email. Public totals.",
+                    key: [private, safe],
+                },
+                {"name": "model_cube", "base_object": "orders", key: [private]},
+            ],
+        },
+        denied={("customers", "email")},
+    )
+    view_cube, model_cube = r.read(["view_cube", "model_cube"])["items"]
+    assert [m["name"] for m in view_cube[key]] == ["public_count"]
+    assert view_cube[key][0]["description"] == "Public count."
+    assert view_cube["description"] == "Public totals."
+    assert "email" not in json.dumps(view_cube).lower()
+    assert [m["name"] for m in model_cube[key]] == [denied_name]
+    assert model_cube[key][0]["description"] == "Email summary."
+    assert (
+        "email"
+        not in next(
+            line
+            for line in r.list(1)["text"].splitlines()
+            if line.startswith("cube view_cube:")
+        ).lower()
+    )
+
+
 @pytest.mark.parametrize("filename", ["customers.email.md", "EMAIL-notes.md"])
 def test_denied_rule_paths_use_one_opaque_selectable_identity_everywhere(filename):
     path = "knowledge/rules/" + filename
