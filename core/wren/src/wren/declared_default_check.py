@@ -731,7 +731,21 @@ class _Statement:
     # -- require_rate_join ----------------------------------------------
 
     def _condition_nodes(self, kind: type[exp.Expression]) -> list[exp.Expression]:
-        return [node for root in self.roots for node in root.find_all(kind)]
+        found: list[exp.Expression] = []
+
+        def visit(node: exp.Expression) -> None:
+            # A comparison below OR or NOT is not a condition guaranteed for every row.  In
+            # particular, it cannot establish the currency/date bound of a rate join.
+            if isinstance(_unparen(node), (exp.Or, exp.Not)):
+                return
+            if isinstance(node, kind):
+                found.append(node)
+            for child in node.iter_expressions():
+                visit(child)
+
+        for root in self.roots:
+            visit(root)
+        return found
 
     def fires_rate(self, rule: RequireRateJoin) -> bool:
         if rule.aggregated_only and not self.aggregated:

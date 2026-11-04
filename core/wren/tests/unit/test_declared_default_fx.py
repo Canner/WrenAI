@@ -247,6 +247,102 @@ def test_the_inner_join_inside_a_ranked_source_is_not_the_one_that_drops_rows(st
     assert f"{RATE}:base_currency_dropped" in violations(strict, inner_outside)
 
 
+def test_an_unused_rate_cte_does_not_create_a_second_attachment(strict):
+    sql = (
+        "WITH unused AS (SELECT * FROM fx_rates) "
+        "SELECT SUM(CASE WHEN p.currency = 'USD' THEN p.amount "
+        "ELSE p.amount * f.rate_to_usd END) FROM payments p "
+        f"ASOF LEFT JOIN fx_rates f ON {ON}"
+    )
+    assert violations(strict, sql) == []
+
+
+@pytest.mark.parametrize(
+    "clause",
+    [
+        "WHERE f.rate_to_usd IS NOT NULL",
+        "WHERE f.rate_to_usd > 0",
+        "WHERE f.rate_to_usd = 1",
+        "GROUP BY p.id, f.rate_to_usd HAVING f.rate_to_usd > 0",
+    ],
+    ids=["is-not-null", "positive", "equals", "having"],
+)
+def test_a_rate_predicate_after_a_left_join_drops_unmatched_base_rows(strict, clause):
+    sql = (
+        "SELECT SUM(CASE WHEN p.currency = 'USD' THEN p.amount "
+        "ELSE p.amount * f.rate_to_usd END) FROM payments p "
+        f"ASOF LEFT JOIN fx_rates f ON {ON} {clause}"
+    )
+    assert violations(strict, sql) == [f"{RATE}:base_currency_dropped"]
+
+
+@pytest.mark.parametrize(
+    "clause",
+    [
+        "WHERE f.rate_to_usd > 0 OR p.currency = 'USD'",
+        "WHERE COALESCE(f.rate_to_usd, 1) > 0",
+    ],
+    ids=["explicit-base-guard", "coalesce"],
+)
+def test_a_left_join_predicate_that_keeps_unmatched_base_rows_is_not_called_dropping(
+    strict, clause
+):
+    sql = (
+        "SELECT SUM(CASE WHEN p.currency = 'USD' THEN p.amount "
+        "ELSE p.amount * f.rate_to_usd END) FROM payments p "
+        f"ASOF LEFT JOIN fx_rates f ON {ON} {clause}"
+    )
+    assert f"{RATE}:base_currency_dropped" not in violations(strict, sql)
+
+
+def test_a_non_base_or_branch_does_not_preserve_unmatched_base_rows(strict):
+    sql = (
+        "SELECT SUM(CASE WHEN p.currency = 'USD' THEN p.amount "
+        "ELSE p.amount * f.rate_to_usd END) FROM payments p "
+        f"ASOF LEFT JOIN fx_rates f ON {ON} "
+        "WHERE p.currency = 'EUR' OR f.rate_to_usd > 0"
+    )
+    assert violations(strict, sql) == [f"{RATE}:base_currency_dropped"]
+
+
+def test_a_rate_predicate_after_a_left_join_excludes_an_unmatched_base_row_in_duckdb():
+    import duckdb  # noqa: PLC0415
+
+    with duckdb.connect() as db:
+        db.execute(
+            "CREATE TABLE payments(amount DOUBLE,currency VARCHAR,captured_at DATE)"
+        )
+        db.execute(
+            "CREATE TABLE fx_rates(currency VARCHAR,date DATE,rate_to_usd DOUBLE)"
+        )
+        db.execute("INSERT INTO payments VALUES (100,'USD','2025-01-02')")
+        sql = (
+            "SELECT SUM(p.amount) FROM payments p ASOF LEFT JOIN fx_rates f "
+            "ON f.currency = p.currency AND f.date <= p.captured_at "
+            "WHERE f.rate_to_usd IS NOT NULL"
+        )
+        assert db.execute(sql).fetchone() == (None,)
+
+
+def test_a_consuming_outer_where_on_a_ranked_rate_drops_base_rows(strict):
+    import duckdb  # noqa: PLC0415
+
+    sql = QUALIFIED.format(order="DESC") + " WHERE r.rate IS NOT NULL"
+    assert violations(strict, sql) == [f"{RATE}:base_currency_dropped"]
+    with duckdb.connect() as db:
+        db.execute(
+            "CREATE TABLE payments(id INT,amount DOUBLE,currency VARCHAR,captured_at DATE)"
+        )
+        db.execute(
+            "CREATE TABLE fx_rates(currency VARCHAR,date DATE,rate_to_usd DOUBLE)"
+        )
+        db.execute(
+            "INSERT INTO payments VALUES (1,100,'USD','2025-01-02'),(2,10,'EUR','2025-01-02')"
+        )
+        db.execute("INSERT INTO fx_rates VALUES ('EUR','2025-01-01',2)")
+        assert db.execute(sql).fetchone() == (20.0,)
+
+
 def test_match_single_alone_does_not_ask_for_the_base_currency():
     only_single = make_checker(match="single")
     assert violations(only_single, INNER_ASOF) == []

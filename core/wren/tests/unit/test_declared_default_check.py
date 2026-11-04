@@ -534,6 +534,8 @@ FX_BAD_DATES = {
     "bounded by an undeclared column": "f.date <= CAST(c.created_at AS DATE)",
     "between whose upper bound is not a declared date": "f.date BETWEEN CAST(p.captured_at AS DATE) AND CURRENT_DATE",
     "between literals": "f.date BETWEEN DATE '2020-01-01' AND DATE '2030-01-01'",
+    "disjoined with another predicate": "f.date <= CAST(p.captured_at AS DATE) OR p.id = -1",
+    "negated comparison": "NOT (f.date <= CAST(p.captured_at AS DATE))",
 }
 
 

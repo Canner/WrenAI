@@ -362,6 +362,8 @@ class _Rate:
     def _attachments(self) -> Iterator[tuple[str, exp.Select, exp.Join | None]]:
         """Each place a select takes the rate model (or a source built on it) into its FROM tree."""
         for select in self.st.ast.find_all(exp.Select):
+            if id(select) not in self.st._live_scopes:
+                continue
             source = select.args.get("from_") or select.args.get("from")
             if source is not None and self._reads(source.this):
                 yield "from", select, None
@@ -369,12 +371,122 @@ class _Rate:
                 if self._reads(join.this):
                     yield "join", select, join
 
-    @staticmethod
-    def _preserved(kind: str, select: exp.Select, join: exp.Join | None) -> bool:
+    def _belongs_to(self, column: exp.Column, scope: Scope, source) -> bool:
+        """``column`` is a reference to this exact source in this consuming scope."""
+        return (
+            self.st._scope_for(column) is scope
+            and scope.sources.get(column.table) is source
+        )
+
+    def _base_guard(self, node: exp.Expression) -> bool:
+        """``node`` is a declared-base test for every amount read by a consuming aggregate."""
+        return any(
+            self._base_test(node, aggregate) == "eq"
+            for aggregate in self.st.aggregates
+            if self.st.taint(aggregate) & self.amounts
+        )
+
+    def _coalesce_keeps_null(self, node: exp.Expression, scope: Scope, source) -> bool:
+        """A simple numeric ``COALESCE(rate, literal)`` comparison is true for NULL rate."""
+        if not isinstance(node, (exp.EQ, exp.NEQ, exp.GT, exp.GTE, exp.LT, exp.LTE)):
+            return False
+        for left, right, reverse in (
+            (node.this, node.expression, False),
+            (node.expression, node.this, True),
+        ):
+            coalesce, other = _unparen(left), _unparen(right)
+            if (
+                not isinstance(coalesce, exp.Coalesce)
+                or len(coalesce.expressions) != 1
+                or not isinstance(_unparen(coalesce.this), exp.Column)
+                or not self._belongs_to(_unparen(coalesce.this), scope, source)
+                or not isinstance(other, exp.Literal)
+                or other.is_string
+            ):
+                continue
+            fallback = _unparen(coalesce.expressions[0])
+            if not isinstance(fallback, exp.Literal) or fallback.is_string:
+                continue
+            try:
+                first, second = float(fallback.this), float(other.this)
+            except ValueError:
+                continue
+            if reverse:
+                first, second = second, first
+            return {
+                exp.EQ: first == second,
+                exp.NEQ: first != second,
+                exp.GT: first > second,
+                exp.GTE: first >= second,
+                exp.LT: first < second,
+                exp.LTE: first <= second,
+            }[type(node)]
+        return False
+
+    def _rejects_null_rate(self, node: exp.Expression, scope: Scope, source) -> bool:
+        """Whether a supported predicate is false/unknown for this source's NULL extension.
+
+        This intentionally proves only direct ``IS NOT NULL`` and ordinary comparisons.  An
+        ``OR`` rejects the NULL extension only when every branch does, so a base-currency guard
+        or a NULL-safe expression in either branch remains preserving.  Unknown functions are
+        not treated as NULL-safe guarantees.
+        """
+        node = _unparen(node)
+        if isinstance(node, exp.And):
+            return self._rejects_null_rate(
+                node.this, scope, source
+            ) or self._rejects_null_rate(node.expression, scope, source)
+        if isinstance(node, exp.Or):
+            # A rate-free branch is not a preservation proof.  Only the declared base guard
+            # establishes that every unmatched base-currency amount reaches this OR.
+            if self._base_guard(node.this) or self._base_guard(node.expression):
+                return False
+            return self._rejects_null_rate(
+                node.this, scope, source
+            ) or self._rejects_null_rate(node.expression, scope, source)
+
+        columns = list(node.find_all(exp.Column))
+        if not any(self._belongs_to(column, scope, source) for column in columns):
+            return False
+
+        if isinstance(node, exp.Not):
+            # ``NOT (rate IS NULL)`` is the qualified form of ``rate IS NOT NULL``.
+            return True
+        if isinstance(node, exp.Is):
+            # Only ``rate IS NULL`` retains a NULL-extended row.
+            return not isinstance(node.expression, exp.Null)
+        if isinstance(node, (exp.EQ, exp.NEQ, exp.GT, exp.GTE, exp.LT, exp.LTE)):
+            return not self._coalesce_keeps_null(node, scope, source)
+        # Do not assume an unrecognised predicate returns TRUE for NULL.
+        return True
+
+    def _preserved(self, kind: str, select: exp.Select, join: exp.Join | None) -> bool:
         """Whether rows of the other side survive when the rate has no match."""
         if kind == "join":
-            return join is not None and join.side in _PRESERVING_SIDES
-        return any(j.side in ("RIGHT", "FULL") for j in select.args.get("joins") or [])
+            if join is None or join.side not in _PRESERVING_SIDES:
+                return False
+            attachment = join.this
+        else:
+            if not any(
+                item.side in ("RIGHT", "FULL")
+                for item in select.args.get("joins") or []
+            ):
+                return False
+            attachment = (select.args.get("from_") or select.args.get("from")).this
+        scope = self.st._scope_for(select)
+        if scope is None:
+            return False
+        # ``scope.sources`` holds the resolved Table/Scope object.  Keep that identity rather
+        # than the syntactic table reference so a projected CTE/derived rate alias is matched in
+        # its consuming outer SELECT, not only at the inner physical rate read.
+        source = scope.sources.get(attachment.alias_or_name)
+        if source is None:
+            return False
+        return not any(
+            self._rejects_null_rate(clause.this, scope, source)
+            for key in ("where", "having")
+            if (clause := select.args.get(key)) is not None
+        )
 
     def _kept_by_outer(self, select: exp.Select) -> bool:
         """The select is the body of a derived source that an outer LEFT/FULL join keeps."""
