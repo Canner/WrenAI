@@ -73,6 +73,86 @@ time_dimensions:
     );
 }
 
+/// Adds a relationship-backed calculated field. Selecting `customer_name` makes the engine plan
+/// the declared relationship condition; a handwritten SQL JOIN does not use that MDL condition.
+fn add_relationship_calculation(dir: &Path) {
+    write(
+        dir,
+        "models/orders/metadata.yml",
+        r#"name: orders
+table_reference: { catalog: demo, schema: main, table: orders }
+primary_key: id
+columns:
+  - { name: id, type: INTEGER }
+  - { name: customer_id, type: INTEGER }
+  - { name: total, type: "DECIMAL(12,2)" }
+  - { name: placed_at, type: TIMESTAMP }
+  - { name: customer, type: customers, relationship: orders_customers }
+  - { name: customer_name, type: VARCHAR, is_calculated: true, expression: "customer.country" }
+  - { name: customer_label, type: VARCHAR, is_calculated: true, expression: "UPPER(customer_name)" }
+"#,
+    );
+}
+
+fn add_multihop_relationship_calculation(dir: &Path) {
+    add_relationship_calculation(dir);
+    write(
+        dir,
+        "models/customers/metadata.yml",
+        r#"name: customers
+table_reference: { catalog: demo, schema: main, table: customers }
+primary_key: id
+columns:
+  - { name: id, type: INTEGER }
+  - { name: country_id, type: INTEGER }
+  - { name: country, type: countries, relationship: customers_countries }
+  - { name: customer_country_name, type: VARCHAR, is_calculated: true, expression: "country.name" }
+"#,
+    );
+    write(
+        dir,
+        "models/countries/metadata.yml",
+        r#"name: countries
+table_reference: { catalog: demo, schema: main, table: countries }
+primary_key: id
+columns:
+  - { name: id, type: INTEGER }
+  - { name: name, type: VARCHAR }
+"#,
+    );
+    write(
+        dir,
+        "models/orders/metadata.yml",
+        r#"name: orders
+table_reference: { catalog: demo, schema: main, table: orders }
+primary_key: id
+columns:
+  - { name: id, type: INTEGER }
+  - { name: customer_id, type: INTEGER }
+  - { name: total, type: "DECIMAL(12,2)" }
+  - { name: placed_at, type: TIMESTAMP }
+  - { name: customer, type: customers, relationship: orders_customers }
+  - { name: customer_name, type: VARCHAR, is_calculated: true, expression: "customer.id" }
+  - { name: customer_label, type: VARCHAR, is_calculated: true, expression: "UPPER(customer_name)" }
+  - { name: customer_country_name, type: VARCHAR, is_calculated: true, expression: "customer.customer_country_name" }
+"#,
+    );
+    write(
+        dir,
+        "relationships.yml",
+        r#"relationships:
+  - name: orders_customers
+    models: [orders, customers]
+    join_type: MANY_TO_ONE
+    condition: "orders.customer_id = customers.id"
+  - name: customers_countries
+    models: [customers, countries]
+    join_type: MANY_TO_ONE
+    condition: "customers.country_id = countries.id"
+"#,
+    );
+}
+
 fn load(dir: &Path) -> MdlContext {
     let sources = read_project_dir(dir)
         .expect("read project dir")
@@ -148,6 +228,95 @@ fn confirmed_query_over_models_hangs_off_each_referenced_model() {
             "{model} must reach the confirmed query"
         );
     }
+}
+
+#[test]
+fn relationship_condition_reaches_a_consumer_of_its_calculated_column() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    add_relationship_calculation(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/customer-names.md",
+        "---\nsql: SELECT customer_name FROM orders\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(
+        reaches(&ctx, "rel:orders_customers", "query:customer-names"),
+        "a calculated relationship column reads the declared condition during planning"
+    );
+}
+
+#[test]
+fn relationship_condition_reaches_consumers_of_indirect_and_multihop_calculations() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    add_multihop_relationship_calculation(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/customer-label.md",
+        "---\nsql: SELECT customer_label FROM orders\n---\n",
+    );
+    write(
+        tmp.path(),
+        "knowledge/sql/customer-country.md",
+        "---\nsql: SELECT customer_country_name FROM orders\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(reaches(
+        &ctx,
+        "rel:orders_customers",
+        "query:customer-label"
+    ));
+    for relationship in ["rel:orders_customers", "rel:customers_countries"] {
+        assert!(
+            reaches(&ctx, relationship, "query:customer-country"),
+            "{relationship} is required by the calculated relationship path"
+        );
+    }
+}
+
+#[test]
+fn relationship_condition_reaches_a_view_of_its_calculated_column() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    add_relationship_calculation(tmp.path());
+    write(
+        tmp.path(),
+        "views/customer_names/metadata.yml",
+        "name: customer_names\n",
+    );
+    write(
+        tmp.path(),
+        "views/customer_names/sql.yml",
+        "statement: SELECT customer_name FROM orders\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(
+        reaches(&ctx, "rel:orders_customers", "view:customer_names"),
+        "the view's calculated field makes planning read the relationship condition"
+    );
+}
+
+#[test]
+fn a_handwritten_join_does_not_depend_on_the_declared_relationship_condition() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    add_relationship_calculation(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/handwritten-join.md",
+        "---\nsql: SELECT o.id FROM orders o JOIN customers c ON o.customer_id = c.id\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(
+        !reaches(&ctx, "rel:orders_customers", "query:handwritten-join"),
+        "a query-owned JOIN ON does not read the declared relationship condition"
+    );
 }
 
 #[test]

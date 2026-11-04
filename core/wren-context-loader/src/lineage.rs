@@ -15,8 +15,14 @@
 //! `metric:<cube>.<measure>`, `dim:<cube>.<dimension>`, `view:<name>`, `query:<slug>`,
 //! `dashboard:<name>`.
 
+use std::collections::HashSet;
+use std::ops::ControlFlow;
+
+use sqlparser::ast::{visit_expressions, Expr, Ident};
+use sqlparser::dialect::GenericDialect;
+use sqlparser::parser::Parser;
 use warble::{LineageEdge, LineageGraph, LineageKind, LineageNode};
-use wren_core_base::mdl::manifest::Manifest;
+use wren_core_base::mdl::manifest::{Manifest, Model};
 
 use crate::consumers::{self, RelationReference};
 use crate::project::ProjectSources;
@@ -130,6 +136,9 @@ pub fn build(manifest: &Manifest) -> (LineageGraph, Vec<String>) {
             &mut diagnostics,
         ) {
             push_edge(&mut edges, model_id(&model_name), vid.clone());
+        }
+        for relationship in relationships_used_by_consumer(manifest, references.as_ref()) {
+            push_edge(&mut edges, rel_id(&relationship), vid.clone());
         }
     }
 
@@ -277,6 +286,213 @@ fn link_sql_consumer(
             }
         }
     }
+    for relationship in relationships_used_by_consumer(manifest, references.as_ref()) {
+        push_edge(
+            &mut graph.edges,
+            rel_id(&relationship),
+            consumer.to_string(),
+        );
+    }
+}
+
+/// The declared relationship conditions a parsed consumer reads through calculated model fields.
+/// A query-owned `JOIN ... ON` is deliberately absent: it is not a reference to an MDL
+/// relationship condition. A malformed statement also has no relationship edge, because the
+/// fallback scanner cannot prove a calculated column was selected.
+fn relationships_used_by_consumer(
+    manifest: &Manifest,
+    references: Option<&consumers::SqlConsumerReferences>,
+) -> Vec<String> {
+    let Some(references) = references else {
+        return Vec::new();
+    };
+    let mut relationships = HashSet::new();
+    for model in &manifest.models {
+        for column in model.columns.iter().filter(|column| column.is_calculated) {
+            if !consumer_references_model_column(references, manifest, model, &column.name) {
+                continue;
+            }
+            let mut visiting = HashSet::new();
+            relationships.extend(calculated_column_relationships(
+                manifest,
+                model,
+                &column.name,
+                &mut visiting,
+            ));
+        }
+    }
+    let mut relationships: Vec<_> = relationships.into_iter().collect();
+    relationships.sort();
+    relationships
+}
+
+/// Does the statement read this precise semantic model column? The source and qualifier rules
+/// mirror cube-member provenance: direct relations only, with a bare column accepted only where
+/// its SELECT has a single source. A wildcard reads every column from its resolved model.
+fn consumer_references_model_column(
+    references: &consumers::SqlConsumerReferences,
+    manifest: &Manifest,
+    model: &Model,
+    column: &str,
+) -> bool {
+    references.selects.iter().any(|select| {
+        select.columns.iter().any(|reference| {
+            if !identifier_matches_name(&reference.name, column) {
+                return false;
+            }
+            match &reference.qualifier {
+                Some(qualifier) => {
+                    let mut sources = select
+                        .sources
+                        .iter()
+                        .filter(|source| source_matches_qualifier(source, qualifier));
+                    matches!(sources.next(), Some(source) if source_resolves_to_model(source, manifest, model))
+                        && sources.next().is_none()
+                }
+                None => {
+                    select.sources.len() == 1
+                        && source_resolves_to_model(&select.sources[0], manifest, model)
+                }
+            }
+        }) || select.wildcards.iter().any(|qualifier| {
+            select.sources.iter().any(|source| {
+                source_resolves_to_model(source, manifest, model)
+                    && qualifier
+                        .as_ref()
+                        .is_none_or(|qualifier| source_matches_qualifier(source, qualifier))
+            })
+        })
+    })
+}
+
+/// The named relationship conditions used while the engine plans one calculated column. This
+/// follows relationship handles in a compound field path (`customer.country.name`) and follows
+/// local calculated-field references recursively. It intentionally does not infer dependencies
+/// from arbitrary SQL text or handwritten joins.
+fn calculated_column_relationships(
+    manifest: &Manifest,
+    model: &Model,
+    column_name: &str,
+    visiting: &mut HashSet<(String, String)>,
+) -> Vec<String> {
+    if !visiting.insert((model.name.clone(), column_name.to_string())) {
+        return Vec::new();
+    }
+    let Some(column) = model
+        .columns
+        .iter()
+        .find(|column| column.is_calculated && column.name == column_name)
+    else {
+        return Vec::new();
+    };
+    let Some(expression) = &column.expression else {
+        return Vec::new();
+    };
+
+    let mut relationships = HashSet::new();
+    for path in expression_identifiers(expression) {
+        let Some(first) = path.first() else {
+            continue;
+        };
+        let Some(source) = model
+            .columns
+            .iter()
+            .find(|candidate| identifier_matches_name(first, &candidate.name))
+        else {
+            continue;
+        };
+        if source.relationship.is_none() {
+            if path.len() == 1 && source.is_calculated {
+                relationships.extend(calculated_column_relationships(
+                    manifest,
+                    model,
+                    &source.name,
+                    visiting,
+                ));
+            }
+            continue;
+        }
+
+        let Some((relationship, mut current_model)) = relationship_target(manifest, model, source)
+        else {
+            continue;
+        };
+        relationships.insert(relationship.name.clone());
+        let path_after_handle = &path[1..];
+        for (index, identifier) in path_after_handle.iter().enumerate() {
+            let Some(next) = current_model
+                .columns
+                .iter()
+                .find(|candidate| identifier_matches_name(identifier, &candidate.name))
+            else {
+                break;
+            };
+            if index + 1 == path_after_handle.len() {
+                if next.is_calculated {
+                    relationships.extend(calculated_column_relationships(
+                        manifest,
+                        current_model,
+                        &next.name,
+                        visiting,
+                    ));
+                }
+                break;
+            }
+            let Some((relationship, target)) = relationship_target(manifest, current_model, next)
+            else {
+                break;
+            };
+            relationships.insert(relationship.name.clone());
+            current_model = target;
+        }
+    }
+    relationships.into_iter().collect()
+}
+
+/// Parse a calculated expression as a SELECT item and retain identifier paths. Expressions that
+/// do not parse produce no new lineage edge instead of treating words in comments or strings as
+/// relationship navigation.
+fn expression_identifiers(expression: &str) -> Vec<Vec<Ident>> {
+    let Ok(statements) = Parser::parse_sql(&GenericDialect {}, &format!("SELECT {expression}"))
+    else {
+        return Vec::new();
+    };
+    let mut paths = Vec::new();
+    let _: ControlFlow<()> = visit_expressions(&statements, |expr| {
+        match expr {
+            Expr::Identifier(identifier) => paths.push(vec![identifier.clone()]),
+            Expr::CompoundIdentifier(identifiers) => paths.push(identifiers.clone()),
+            _ => {}
+        }
+        ControlFlow::Continue(())
+    });
+    paths
+}
+
+/// Find the target model for a relationship handle on `model`. The handle's declared type must be
+/// a member of the declared relationship, matching engine planning's validation rather than
+/// guessing another model with a coincidentally similar name.
+fn relationship_target<'a>(
+    manifest: &'a Manifest,
+    model: &Model,
+    column: &wren_core_base::mdl::manifest::Column,
+) -> Option<(&'a wren_core_base::mdl::manifest::Relationship, &'a Model)> {
+    let relationship_name = column.relationship.as_ref()?;
+    let relationship = manifest
+        .relationships
+        .iter()
+        .find(|relationship| relationship.name == *relationship_name)?;
+    if !relationship.models.iter().any(|name| name == &model.name) {
+        return None;
+    }
+    let target = manifest.models.iter().find(|candidate| {
+        candidate.name == column.r#type
+            && relationship
+                .models
+                .iter()
+                .any(|name| name == &candidate.name)
+    })?;
+    Some((relationship, target))
 }
 
 /// The manifest names resolved from relations that `sql` references. A parsed relation resolves
@@ -342,6 +558,31 @@ fn source_matches_cube(source: &consumers::SelectSource, cube: &str) -> bool {
         .as_ref()
         .and_then(RelationReference::unqualified_name)
         .is_some_and(|name| identifier_matches_name(name, cube))
+}
+
+/// Resolve a source once against the full semantic namespace before attributing a column to a
+/// model. This preserves exact-first/quoted-strict resolution when names differ only by case and
+/// when a model, view, or cube competes for the same spelling.
+fn source_resolves_to_model(
+    source: &consumers::SelectSource,
+    manifest: &Manifest,
+    model: &Model,
+) -> bool {
+    let Some(identifier) = source
+        .relation
+        .as_ref()
+        .and_then(RelationReference::unqualified_name)
+    else {
+        return false;
+    };
+    let mut candidates: Vec<String> = manifest
+        .models
+        .iter()
+        .map(|candidate| candidate.name.clone())
+        .collect();
+    candidates.extend(manifest.views.iter().map(|view| view.name.clone()));
+    candidates.extend(manifest.cubes.iter().map(|cube| cube.name.clone()));
+    resolve_relation_name(identifier, &candidates).is_some_and(|resolved| resolved == model.name)
 }
 
 fn source_matches_qualifier(
@@ -427,6 +668,10 @@ fn statement_references(statement: &str, name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wren_core_base::mdl::builder::{
+        ColumnBuilder, ManifestBuilder, ModelBuilder, RelationshipBuilder, ViewBuilder,
+    };
+    use wren_core_base::mdl::manifest::JoinType;
 
     #[test]
     fn relation_resolution_is_exact_first_quoted_strict_and_deterministic() {
@@ -443,5 +688,85 @@ mod tests {
             Some("Orders".to_string())
         );
         assert_eq!(resolve_relation_name(&quoted, &candidates), None);
+    }
+
+    #[test]
+    fn calculated_relationship_lineage_resolves_case_collisions_once() {
+        let manifest = ManifestBuilder::new()
+            .model(
+                ModelBuilder::new("orders")
+                    .column(ColumnBuilder::new("id", "INTEGER").build())
+                    .column(
+                        ColumnBuilder::new_relationship(
+                            "customer",
+                            "customers",
+                            "orders_customers",
+                        )
+                        .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_calculated("customer_name", "VARCHAR")
+                            .expression("customer.name")
+                            .build(),
+                    )
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("Orders")
+                    .column(ColumnBuilder::new("id", "INTEGER").build())
+                    .column(ColumnBuilder::new("customer_name", "VARCHAR").build())
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("customers")
+                    .column(ColumnBuilder::new("id", "INTEGER").build())
+                    .column(ColumnBuilder::new("name", "VARCHAR").build())
+                    .build(),
+            )
+            // Models precede views in the loader's established semantic namespace resolution.
+            .view(ViewBuilder::new("Orders").statement("SELECT 1").build())
+            .relationship(
+                RelationshipBuilder::new("orders_customers")
+                    .model("orders")
+                    .model("customers")
+                    .join_type(JoinType::ManyToOne)
+                    .condition("orders.id = customers.id")
+                    .build(),
+            )
+            .build();
+        let sources = ProjectSources {
+            wren_project_yml: String::new(),
+            model_ymls: Vec::new(),
+            relationships_yml: None,
+            cubes_yml: None,
+            cube_ymls: Vec::new(),
+            views: Vec::new(),
+            knowledge_sql_mds: vec![
+                (
+                    "case-exact".to_string(),
+                    "---\nsql: SELECT customer_name FROM Orders\n---\n".to_string(),
+                ),
+                (
+                    "case-lower".to_string(),
+                    "---\nsql: SELECT customer_name FROM orders\n---\n".to_string(),
+                ),
+            ],
+            dashboards_yml: None,
+        };
+        let (mut graph, mut diagnostics) = build(&manifest);
+        extend_with_consumers(&mut graph, &manifest, &sources, &mut diagnostics);
+
+        assert!(graph
+            .edges
+            .iter()
+            .any(|edge| { edge.from == "model:Orders" && edge.to == "query:case-exact" }));
+        assert!(!graph
+            .edges
+            .iter()
+            .any(|edge| { edge.from == "rel:orders_customers" && edge.to == "query:case-exact" }));
+        assert!(graph
+            .edges
+            .iter()
+            .any(|edge| { edge.from == "rel:orders_customers" && edge.to == "query:case-lower" }));
     }
 }
