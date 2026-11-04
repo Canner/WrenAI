@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import base64
 import copy
 import functools
 import hmac
 import json
+import math
 import os
 import re
 import shutil
@@ -468,6 +470,11 @@ def check_service_config(config) -> None:
     missing = [k for k in REQUIRED_CONFIG_KEYS if k not in config]
     if missing:
         raise ValueError(f"invalid_service_config: missing {', '.join(missing)}")
+    idle = config.get("idle_seconds", 1800)
+    if type(idle) not in (int, float) or (
+        isinstance(idle, float) and not math.isfinite(idle)
+    ):
+        raise ValueError("invalid_service_config: idle_seconds must be a finite number")
 
 
 def read_policy_presets(config: dict) -> tuple[str | None, dict[str, dict]]:
@@ -1854,6 +1861,14 @@ def create_service(
         raise ValueError("invalid_entry")
     engine = open_engine(root, config, connection_profile)
     try:
+        try:
+            engine_manifest = json.loads(base64.b64decode(engine.manifest_str))
+        except (AttributeError, TypeError, ValueError):
+            raise ContextChanged("the engine manifest could not be validated") from None
+        if engine_manifest != snapshot.manifest:
+            raise ContextChanged(
+                "the engine manifest differs from the validated context"
+            )
         return _assemble_service(
             root,
             bundle,

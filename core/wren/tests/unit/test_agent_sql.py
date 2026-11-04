@@ -2767,3 +2767,27 @@ Test customers are excluded from business orders.
         sqlglot.parse_one(sql, dialect="duckdb")
     )
     assert service.sql.prepare(sql)
+
+
+def _mixed_case_gate(denied=()):
+    model = {"name": "Orders", "columns": [{"name": "id", "type": "INTEGER"}]}
+    snap = SimpleNamespace(
+        catalog={"models": [model]}, manifest={}, declarations=(), denied=denied
+    )
+    return AdHocSQL(SimpleNamespace(snapshot=snap))
+
+
+@pytest.mark.parametrize("table", ["Orders", "orders", '"Orders"'])
+def test_qualified_mixed_case_models_remain_queryable(table):
+    prepared = _mixed_case_gate().prepare(f"SELECT COUNT(*) AS n FROM {table}")
+    assert prepared.sources == {"orders": []}
+
+
+def test_mixed_case_models_retain_rewritable_function_errors_and_denials():
+    with pytest.raises(QueryFormError) as caught:
+        _mixed_case_gate().prepare("SELECT now() FROM Orders")
+    assert caught.value.code == "unsupported_function"
+    with pytest.raises(PermissionError):
+        _mixed_case_gate({("Orders", "id")}).prepare("SELECT id FROM Orders")
+    with pytest.raises(PermissionError):
+        _mixed_case_gate().prepare("SELECT COUNT(*) FROM unknown")

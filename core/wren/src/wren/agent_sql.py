@@ -529,7 +529,7 @@ class AdHocSQL:
                 # whose every source is known gets the rewritable form error.
                 for scope in scopes:
                     for src in scope.sources.values():
-                        if isinstance(src, exp.Table) and src.name not in self.schema:
+                        if isinstance(src, exp.Table) and src.name.lower() not in known:
                             raise ValueError("unknown_model")
                 raise pending
             sources, physical = {}, []
@@ -542,14 +542,14 @@ class AdHocSQL:
                 # column references is still a model the statement reads.
                 for src in scope.sources.values():
                     if isinstance(src, exp.Table):
-                        if src.name not in self.schema:
+                        if src.name.lower() not in known:
                             raise ValueError("unknown_model")
-                        sources.setdefault(src.name, set())
+                        sources.setdefault(src.name.lower(), set())
                         physical.append(src)
                 for col in scope.columns:
                     src = scope.sources.get(col.table)
                     if isinstance(src, exp.Table):
-                        sources[src.name].add(col.name)
+                        sources[src.name.lower()].add(col.name)
                     elif not isinstance(src, Scope):
                         # Correlated references and ambiguous scope are not inferred.
                         raise ValueError("unresolved_column")

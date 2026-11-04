@@ -19,6 +19,7 @@ PROTOCOL = "warble-private-service/1"
 DEFAULT_CALL_TIMEOUT_S = 100.0
 ABANDONED_LIMIT = 1024
 CONTROL_WRITE_TIMEOUT_S = 0.1
+TOOL_SHUTDOWN_TIMEOUT_S = 1.0
 
 
 class TaskAborted(RuntimeError):
@@ -50,6 +51,7 @@ class RuntimeIPC:
         self.lock = threading.Lock()
         self.state_lock = threading.RLock()
         self._tool_thread = threading.local()
+        self._tool_futures = set()
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
         self.process = subprocess.Popen(
             ["node", str(runtime)],
@@ -141,6 +143,20 @@ class RuntimeIPC:
         finally:
             self._tool_thread.active = False
 
+    def _tool_finished(self, future):
+        with self.state_lock:
+            self._tool_futures.discard(future)
+
+    def _shutdown_pool(self, *, wait):
+        self.pool.shutdown(wait=False, cancel_futures=True)
+        if wait:
+            with self.state_lock:
+                active = tuple(self._tool_futures)
+            # Non-cancellable Python callbacks can outlive teardown. Stop waiting
+            # after this bound; this does not terminate their external work.
+            if active:
+                concurrent.futures.wait(active, timeout=TOOL_SHUTDOWN_TIMEOUT_S)
+
     def _handle_tool(self, message):
         response = {
             "type": "tool_result",
@@ -187,7 +203,10 @@ class RuntimeIPC:
                         if owner not in self.callbacks and not self._issued(wire):
                             raise ValueError("ipc_order")
                         m["_owner"] = owner
-                    self.pool.submit(self._tool, m)
+                    with self.state_lock:
+                        future = self.pool.submit(self._tool, m)
+                        self._tool_futures.add(future)
+                    future.add_done_callback(self._tool_finished)
                 else:
                     with self.state_lock:
                         owner = self._wire_owners.get(m["id"])
@@ -231,7 +250,7 @@ class RuntimeIPC:
                 self._wire_owners.clear()
                 self._wire_deadlines.clear()
             # Stop queued callbacks before releasing any active callback. The
-            # second shutdown joins them after their owners have been cancelled.
+            # bounded wait below lets cancellable work finish after owners are cancelled.
             self.pool.shutdown(wait=False, cancel_futures=True)
             for future in futures:
                 if not future.done():
@@ -244,7 +263,7 @@ class RuntimeIPC:
                 self.process.wait(timeout=5)
             except (OSError, subprocess.TimeoutExpired):
                 pass
-            self.pool.shutdown(wait=True, cancel_futures=True)
+            self._shutdown_pool(wait=True)
 
     def call(
         self,
@@ -421,5 +440,5 @@ class RuntimeIPC:
         )
         if not internal:
             self.reader.join(timeout=5)
-        # The reader performs the final join after an internal close returns.
-        self.pool.shutdown(wait=not internal, cancel_futures=True)
+        # The reader waits up to the callback bound after an internal close returns.
+        self._shutdown_pool(wait=not internal)

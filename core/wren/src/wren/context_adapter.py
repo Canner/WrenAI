@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
+from sqlglot import exp, parse_one
 
 from wren.agent_sql import model_schema, read_view_bodies, view_output_columns
 from wren.context import build_json
@@ -878,8 +879,25 @@ class ContextReader:
         return frozenset(owner for owner, _ in self.denied)
 
     def _relationship_denied(self, relationship: dict) -> bool:
-        return _mentions_denied(
-            str(relationship.get("condition") or ""), None, self.denied | self._hidden
+        blocked = self.denied | self._hidden
+        if not blocked:
+            return False
+        condition = str(relationship.get("condition") or "")
+        if _mentions_denied(condition, None, blocked):
+            return True
+        names = {column.casefold() for _, column in blocked}
+        owners = {name.casefold() for name in relationship.get("models") or []}
+        try:
+            expression = parse_one(condition, read="duckdb")
+        except Exception:  # noqa: BLE001 - unresolved conditions cannot prove disclosure safe
+            return True
+        if expression is None:
+            return True
+        # A known model qualifier can prove a same-named column belongs to a safe
+        # owner. Bare names and unknown aliases cannot resolve that ambiguity.
+        return any(
+            column.name.casefold() in names and column.table.casefold() not in owners
+            for column in expression.find_all(exp.Column)
         )
 
     def _columns(self, model: dict) -> list[dict]:

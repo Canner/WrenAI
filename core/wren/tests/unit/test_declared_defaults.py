@@ -542,3 +542,13 @@ def test_yaml_merge_defaults_override_is_not_a_duplicate_key(project):
         "---\nbase: &base\n  defaults: []\n<<: *base\ndefaults: []\nnote: earlier\nnote: later\n---\nProse.\n"
     )
     assert parse(project) == ([], [])
+
+
+@pytest.mark.parametrize(
+    "anchor", ["[customers]", "{name: customers}", "true", "null", "12"]
+)
+def test_non_string_covering_anchor_is_a_declaration_error(project, anchor):
+    declare(project, EXCLUDE.replace("reaching: customers", "reaching: " + anchor))
+    declarations, errors = parse(project)
+    assert errors and not declarations
+    assert any("covers.reaching must name a model" in error for error in errors)

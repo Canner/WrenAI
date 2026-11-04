@@ -82,11 +82,15 @@ Create a client JSON file with:
 - `args`: the service arguments shown above;
 - `skill`: absolute path to the exported planner skill;
 - `serviceCredentialEnv`: `["NVIDIA_INFERENCE_API_KEY"]`;
+- `serviceReplyTimeoutMs`: a positive integer MCP reply timeout in milliseconds;
 - optional `model` and `baseUrl` for the external planner.
 
-The client's MCP timeout is 200 seconds, above the example service's 120-second
-execution deadline plus 40-second host reply window. Increase `serviceReplyTimeoutMs`
-in `client.mjs` when increasing `execution.deadline_ms` or `WREN_IPC_CALL_TIMEOUT_S`.
+`serviceReplyTimeoutMs` is required and must be at most 2147483647. Set it above the
+service's effective host reply window, with time for reply delivery: for the example's
+120-second execution deadline plus 40-second IPC margin, use `200000`; for a 600-second
+deadline, use `700000`. If `WREN_IPC_CALL_TIMEOUT_S` overrides the host wait, allow more
+than that many seconds instead. A shorter client timeout cancels the MCP exchange
+before the service can return its structured completion or timeout reason.
 
 Create a JSON array of conversational questions, then run:
 
@@ -137,6 +141,10 @@ A service configuration that still carries `dataset`, `adhoc`, `metadata`, `rule
 `execution` holds the limits the host passes to the runtime as `init.limits`: `deadline_ms` (5000-600000, default 120000), `max_tokens`, `thinking` (`on`, `off` or `default`; `default` sends nothing so the provider's own setting applies), `max_turns`, `max_tool_calls`, `provider_max_retries` and `provider_max_retry_delay_ms`; `max_sql_attempts` (default 6, the cap on a task's SQL statements; see [Why a `run_sql` statement is refused](#why-a-run_sql-statement-is-refused)) is a host-side budget. All are optional, and so is `as_of`, a `YYYY-MM-DD` date (UTC) that stands for today in every task (see [Today's date for the worker](#todays-date-for-the-worker)); a value in any other form fails startup (`invalid_execution_config: as_of`). Unless `WREN_IPC_CALL_TIMEOUT_S` is set, the host waits `deadline_ms / 1000 + 40` seconds for one runtime call. If that wait ends first, the host attempts to send `cancel` for the task, answers any late tool call with a refusal, keeps the runtime running and reports `unavailable` with reason `timeout`. Cancellation delivery is best effort: if the control write cannot complete, ending the host task does not prove that provider work has stopped. The shared runtime stays alive for other sessions, so this is not a task-wide provider-work or billing cap. `max_tokens` caps the output of each provider request, not the total tokens of a task or session; it does not cap input tokens or billing. `max_turns` and `max_tool_calls` bound each component child's execution. Delegation starts another component child with its own counters and the same configured upper bounds; these are not a shared total over the root and all delegated work. There is no task-wide total token or tool-call cost cap. The runtime deadline and provider retry settings govern that invocation; `max_sql_attempts` counts SQL attempts in the host and carries across clarification continuation. A runtime that predates `init.limits` ignores those runtime limits; the host's own IPC and SQL lifetime bounds still apply.
 
 Governed SQL in both `serve agent` and controlled `serve mcp` runs in a fresh host-owned child interpreter with its own engine and database connection. The host bounds its lifetime by the task's remaining `execution.deadline_ms`; `AdHocSQL.execute` used outside a service task has a 90-second default. IPC timeout/abort, session close and service shutdown terminate and reap active query workers (TERM, then KILL if needed), and drop their late results. A new query does not reuse a timed-out connection or occupy an abandoned tool-pool slot. Connection setup and planning in that worker are inside the same bound; process startup adds overhead and connection-local state does not carry between queries. This is local process management, not an OS sandbox. Closing the connection on termination does **not** prove that every remote database immediately cancels its server-side statement: configure server-side statement/resource limits where needed. Ordinary `wren query` and legacy ungoverned `serve mcp` retain their existing execution path.
+
+Each wait for tool callbacks during IPC teardown is capped at one second. Queued callbacks
+are cancelled; a running, non-cancellable callback can outlive `close()` and still delay
+Python interpreter exit. This wait bound does not terminate the callback or provider work.
 
 The task clock starts before its first session/context revalidation and authorization, and each authorization wait is capped by the remaining task time. Each IPC call shares one deadline across the write-lock wait, request write and reply wait. Control and tool-result writes have a bounded write budget too. Canceling an incomplete frame ends that stalled transport, since another JSON frame cannot safely follow it; canceling a healthy task keeps the shared runtime available. Runtime context fingerprints run in a separate fixed-purpose child, under the same task lifetime, so a stalled filesystem read can be terminated on close or shutdown. A fingerprint check outside an active task has a 15-second bound. These checks keep the same content-hash algorithm and revalidation points, with a process-start cost per check; initial project loading at service startup remains synchronous.
 

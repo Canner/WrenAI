@@ -593,12 +593,16 @@ def test_an_old_queued_tool_cannot_use_a_reused_callers_callback(ipc, monkeypatc
     from wren.agent_ipc import ABANDONED_LIMIT  # noqa: PLC0415
 
     runtime = ipc(call_timeout_s=0.05)
+    from concurrent.futures import Future  # noqa: PLC0415
+
     queued = []
-    monkeypatch.setattr(
-        runtime.pool,
-        "submit",
-        lambda function, message: queued.append((function, message)),
-    )
+
+    def queue(function, message):
+        future = Future()
+        queued.append((function, message, future))
+        return future
+
+    monkeypatch.setattr(runtime.pool, "submit", queue)
     request = json.dumps({"behavior": "script", "steps": [{"tool": "run_sql"}]})
     with pytest.raises(RuntimeError):
         runtime.call(
@@ -628,12 +632,15 @@ def test_an_old_queued_tool_cannot_use_a_reused_callers_callback(ipc, monkeypatc
         while len(queued) < 2 and time.monotonic() < deadline:
             time.sleep(0.01)
         assert len(queued) == 2
-        function, old_message = queued[0]
+        function, old_message, future = queued[0]
         function(old_message)
+        future.set_result(None)
         assert not called
     finally:
         runtime.abort("shared")
         thread.join(5)
+        for _, _, future in queued:
+            future.cancel()
     assert not thread.is_alive() and len(errors) == 1
 
 
@@ -695,3 +702,69 @@ def test_reader_cleanup_isolates_a_failing_cancel_callback(ipc):
         assert future.done() and isinstance(future.exception(), RuntimeError)
     finally:
         runtime.cancel_callbacks.clear()
+
+
+@pytest.mark.parametrize("ending", ["close", "peer_exit"])
+def test_teardown_does_not_wait_forever_for_a_non_cancellable_tool(
+    ipc, monkeypatch, ending
+):
+    import threading  # noqa: PLC0415
+
+    import wren.agent_ipc as module  # noqa: PLC0415
+
+    monkeypatch.setattr(module, "TOOL_SHUTDOWN_TIMEOUT_S", 0.05, raising=False)
+    runtime = ipc()
+    entered, release, done = threading.Event(), threading.Event(), threading.Event()
+    outcome = []
+
+    def callback(*_):
+        entered.set()
+        release.wait(10)
+        return "released"
+
+    def invoke():
+        try:
+            runtime.call(
+                "invoke",
+                request=json.dumps(
+                    {"behavior": "script", "steps": [{"tool": "run_sql"}]}
+                ),
+                callback=callback,
+            )
+        except RuntimeError as error:
+            outcome.append(error)
+
+    task = threading.Thread(target=invoke)
+    closer = None
+    task.start()
+    try:
+        assert entered.wait(2)
+        if ending == "close":
+
+            def close():
+                runtime.close()
+                done.set()
+
+            closer = threading.Thread(target=close)
+            closer.start()
+            assert done.wait(2), "close waited indefinitely for the blocked callback"
+        else:
+            runtime.process.terminate()
+            runtime.reader.join(2)
+            assert not runtime.reader.is_alive(), (
+                "reader waited indefinitely for the blocked callback"
+            )
+        assert not release.is_set()
+        assert any(thread.is_alive() for thread in runtime.pool._threads)
+        task.join(1)
+        assert not task.is_alive() and outcome
+        assert runtime.process.poll() is not None
+    finally:
+        release.set()
+        if closer:
+            closer.join(5)
+        runtime.close()
+        task.join(5)
+        runtime.reader.join(5)
+        for thread in runtime.pool._threads:
+            thread.join(2)

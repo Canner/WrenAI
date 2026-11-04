@@ -3889,3 +3889,88 @@ def test_source_edit_during_final_startup_fingerprint_cannot_anchor_stale_catalo
         service(runtime_path=FAKE_RUNTIME)
     assert changed
     assert not spawned
+
+
+@pytest.mark.parametrize(
+    "idle", ["abc", "1800", None, True, [], {}, float("nan"), float("inf")]
+)
+def test_idle_seconds_invalid_values_fail_config_validation(idle):
+    from wren.agent_service import check_service_config  # noqa: PLC0415
+
+    config = {
+        "config_version": 2,
+        "caller": "planner",
+        "project_id": "fixture",
+        "policy": "policy.cedar",
+        "private_model": {},
+    }
+    config["idle_seconds"] = idle
+    with pytest.raises(ValueError, match="invalid_service_config: idle_seconds"):
+        check_service_config(config)
+
+
+@pytest.mark.parametrize("idle", [0, -1, 0.5, 1800])
+def test_numeric_idle_seconds_and_omitted_default_remain_valid(idle):
+    from wren.agent_service import check_service_config  # noqa: PLC0415
+
+    config = {
+        "config_version": 2,
+        "caller": "planner",
+        "project_id": "fixture",
+        "policy": "policy.cedar",
+        "private_model": {},
+    }
+    config.pop("idle_seconds", None)
+    check_service_config(config)
+    check_service_config({**config, "idle_seconds": idle})
+
+
+@pytest.mark.parametrize("restore_disk", [False, True])
+def test_engine_manifest_replacement_cannot_anchor_a_different_snapshot(
+    service, monkeypatch, restore_disk
+):
+    import wren.agent_service as module  # noqa: PLC0415
+    from wren.context_adapter import ContextChanged  # noqa: PLC0415
+
+    original = module.open_engine
+    engines = []
+
+    def replace_then_open(root, *args):
+        path = root / "target/mdl.json"
+        before = path.read_text()
+        manifest = json.loads(before)
+        manifest["models"][0]["refSql"] = (
+            "SELECT * FROM ("
+            + manifest["models"][0]["refSql"]
+            + ") changed WHERE FALSE"
+        )
+        path.write_text(json.dumps(manifest))
+        engine = original(root, *args)
+        engines.append(engine)
+        if restore_disk:
+            path.write_text(before)
+        return engine
+
+    monkeypatch.setattr(module, "open_engine", replace_then_open)
+    try:
+        with pytest.raises(ContextChanged):
+            service(runtime_path=FAKE_RUNTIME)
+        assert engines
+    finally:
+        for engine in engines:
+            engine.close()
+
+
+@needs_policy_runtime
+@pytest.mark.parametrize(
+    "preset,selected",
+    [("structure", {"structure"}), ("rules", {"rules"}), ("hidden", set())],
+)
+def test_adhoc_planner_metadata_still_obeys_preset_selection(service, preset, selected):
+    s = service(profile="adhoc", example_presets=True, preset=preset)
+    visible = {d["id"] for d in s.capabilities_public()["metadata_documents"]}
+    assert visible == selected
+    if selected:
+        documents = s.metadata(None, sorted(selected), "planner")
+        assert {d["id"] for d in documents} == selected
+    assert not s.allowed(None, "receive_metadata", "schema.denied", "unknown")

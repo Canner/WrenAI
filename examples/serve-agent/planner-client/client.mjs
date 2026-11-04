@@ -9,9 +9,10 @@ const [configPath, questionsPath, outputPath] = process.argv.slice(2);
 if (!configPath || !questionsPath || !outputPath) throw Error('Usage: client.mjs CLIENT_JSON QUESTIONS_JSON OUTPUT_JSON');
 const config = JSON.parse(await readFile(configPath));
 const questions = JSON.parse(await readFile(questionsPath));
-// Above the example's 120 s execution + 40 s host IPC reply window.
-// Increase this if execution.deadline_ms or WREN_IPC_CALL_TIMEOUT_S increases.
-const serviceReplyTimeoutMs = 200000;
+// The operator sets this above the service's effective host IPC wait, including its margin.
+const serviceReplyTimeoutMs = config.serviceReplyTimeoutMs;
+if (!Number.isInteger(serviceReplyTimeoutMs) || serviceReplyTimeoutMs < 1 || serviceReplyTimeoutMs > 2147483647)
+  throw Error('serviceReplyTimeoutMs must be an integer from 1 to 2147483647');
 const trace = { turns: [], calls: [], errors: [], completed: false };
 const client = new Client({ name: 'wren-external-pi-planner', version: '1.0.0' });
 // Only the explicitly named private credential reaches the service child.

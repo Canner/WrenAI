@@ -2195,3 +2195,65 @@ def test_cross_kind_name_collisions_have_distinct_readable_index_selectors():
     assert r.read([rule_selector])["rules"] == [{"path": path, "content": "Safe rule."}]
     assert r.read(["@context-1"])["items"][0]["name"] == "@context-1"
     assert all(len(page.encode()) <= 512 for page in pages)
+
+
+@pytest.mark.parametrize("hidden", [False, True])
+@pytest.mark.parametrize(
+    "condition", ["c.email = o.email", "email = other_email", 'c."email" = o.id']
+)
+def test_relationship_alias_and_bare_denied_columns_are_not_disclosed(
+    hidden, condition
+):
+    customers = model("customers", columns=("id", "email"))
+    customers["columns"][1]["is_hidden"] = hidden
+    denied = set() if hidden else {("customers", "email")}
+    r = reader(
+        {
+            "models": [customers, model("orders", columns=("id", "email"))],
+            "relationships": [
+                {
+                    "name": "unsafe",
+                    "models": ["customers", "orders"],
+                    "join_type": "MANY_TO_ONE",
+                    "condition": condition,
+                }
+            ],
+        },
+        denied=denied,
+    )
+    assert not r.read(["customers"])["items"][0].get("relationships")
+    assert "unsafe" not in r.structure_document()
+    assert r.denied == frozenset(denied)
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        "customers.id = orders.id",
+        "c.id = o.id",
+        "orders.email = customers.id",
+        "orders.email LIKE 'email%'",
+    ],
+)
+def test_provably_safe_relationship_conditions_survive_denial(condition):
+    r = reader(
+        {
+            "models": [
+                model("customers", columns=("id", "email")),
+                model("orders", columns=("id", "email")),
+            ],
+            "relationships": [
+                {
+                    "name": "safe",
+                    "models": ["customers", "orders"],
+                    "join_type": "MANY_TO_ONE",
+                    "condition": condition,
+                }
+            ],
+        },
+        denied={("customers", "email")},
+    )
+    assert (
+        r.read(["customers"])["items"][0]["relationships"][0]["condition"] == condition
+    )
+    assert "safe" in r.structure_document()

@@ -355,7 +355,7 @@ class _Parser:
                 f"{path} > covers", covers, {"reaching", "via", "except_models"}
             )
             anchor = covers.get("reaching")
-            if anchor not in self.models:
+            if not isinstance(anchor, str) or anchor not in self.models:
                 self.error(path, "covers.reaching must name a model")
                 anchor = None
             if covers.get("via") != "many_to_one":
