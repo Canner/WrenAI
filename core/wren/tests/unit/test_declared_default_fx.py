@@ -132,12 +132,9 @@ def test_every_literal_default_of_a_rate_column_is_refused(strict, default):
 
 GUARDED = {
     "default inside the base branch": "CASE WHEN p.currency = 'USD' THEN p.amount * COALESCE(f.rate_to_usd, 1) ELSE p.amount * f.rate_to_usd END",
-    "default in the else of a not-base test": "CASE WHEN p.currency <> 'USD' THEN p.amount * f.rate_to_usd ELSE p.amount * COALESCE(f.rate_to_usd, 1) END",
     "lower-case literal": "CASE WHEN p.currency = 'usd' THEN p.amount ELSE p.amount * f.rate_to_usd END",
     "inverse case inside the base branch": "CASE WHEN p.currency = 'USD' THEN p.amount * (CASE WHEN f.rate_to_usd IS NOT NULL THEN f.rate_to_usd ELSE 1 END) ELSE p.amount * f.rate_to_usd END",
-    "inverse case in the else of a not-base test": "CASE WHEN p.currency <> 'USD' THEN p.amount * f.rate_to_usd ELSE p.amount * (CASE WHEN f.rate_to_usd IS NOT NULL THEN f.rate_to_usd ELSE 1 END) END",
     "cast default inside the base branch": "CASE WHEN p.currency = 'USD' THEN p.amount * COALESCE(f.rate_to_usd, CAST(1 AS DOUBLE)) ELSE p.amount * f.rate_to_usd END",
-    "cast operator default in the else of a not-base test": "CASE WHEN p.currency <> 'USD' THEN p.amount * f.rate_to_usd ELSE p.amount * COALESCE(f.rate_to_usd, 1::DOUBLE) END",
 }
 
 
@@ -153,6 +150,9 @@ UNGUARDED_BRANCHES = {
     "inverse case in the non-base branch": "CASE WHEN p.currency = 'USD' THEN p.amount ELSE p.amount * (CASE WHEN f.rate_to_usd IS NOT NULL THEN f.rate_to_usd ELSE 1 END) END",
     "cast default in the non-base branch": "CASE WHEN p.currency = 'USD' THEN p.amount ELSE p.amount * COALESCE(f.rate_to_usd, CAST(1 AS DOUBLE)) END",
     "guard on another literal": "CASE WHEN p.currency = 'EUR' THEN p.amount * COALESCE(f.rate_to_usd, 1) ELSE p.amount END",
+    "default in the else of a not-base test": "CASE WHEN p.currency <> 'USD' THEN p.amount * f.rate_to_usd ELSE p.amount * COALESCE(f.rate_to_usd, 1) END",
+    "inverse case in the else of a not-base test": "CASE WHEN p.currency <> 'USD' THEN p.amount * f.rate_to_usd ELSE p.amount * (CASE WHEN f.rate_to_usd IS NOT NULL THEN f.rate_to_usd ELSE 1 END) END",
+    "cast operator default in the else of a not-base test": "CASE WHEN p.currency <> 'USD' THEN p.amount * f.rate_to_usd ELSE p.amount * COALESCE(f.rate_to_usd, 1::DOUBLE) END",
 }
 
 
@@ -161,6 +161,26 @@ UNGUARDED_BRANCHES = {
 )
 def test_a_default_in_a_branch_other_currencies_reach_is_refused(strict, amount):
     sql = f"SELECT SUM({amount}) FROM payments p ASOF LEFT JOIN fx_rates f ON {ON}"
+    assert violations(strict, sql) == [f"{RATE}:rate_default_literal"]
+
+
+def test_a_null_currency_reaches_the_else_of_a_not_base_case(strict):
+    import duckdb  # noqa: PLC0415
+
+    amount = (
+        "CASE WHEN p.currency <> 'USD' THEN p.amount * f.rate_to_usd "
+        "ELSE p.amount * COALESCE(f.rate_to_usd, 1) END"
+    )
+    sql = f"SELECT SUM({amount}) FROM payments p ASOF LEFT JOIN fx_rates f ON {ON}"
+    with duckdb.connect() as db:
+        db.execute(
+            "CREATE TABLE payments(amount DOUBLE,currency VARCHAR,captured_at DATE)"
+        )
+        db.execute(
+            "CREATE TABLE fx_rates(currency VARCHAR,date DATE,rate_to_usd DOUBLE)"
+        )
+        db.execute("INSERT INTO payments VALUES (100,NULL,'2025-01-02')")
+        assert db.execute(sql).fetchone() == (100.0,)
     assert violations(strict, sql) == [f"{RATE}:rate_default_literal"]
 
 
@@ -301,6 +321,38 @@ def test_a_non_base_or_branch_does_not_preserve_unmatched_base_rows(strict):
         "ELSE p.amount * f.rate_to_usd END) FROM payments p "
         f"ASOF LEFT JOIN fx_rates f ON {ON} "
         "WHERE p.currency = 'EUR' OR f.rate_to_usd > 0"
+    )
+    assert violations(strict, sql) == [f"{RATE}:base_currency_dropped"]
+
+
+def test_an_or_with_a_proven_coalesce_fallback_keeps_unmatched_base_rows(strict):
+    import duckdb  # noqa: PLC0415
+
+    sql = (
+        "SELECT SUM(CASE WHEN p.currency = 'USD' THEN p.amount "
+        "ELSE p.amount * f.rate_to_usd END) FROM payments p "
+        f"ASOF LEFT JOIN fx_rates f ON {ON} "
+        "WHERE f.rate_to_usd > 0 OR COALESCE(f.rate_to_usd, 1) > 0"
+    )
+    assert f"{RATE}:base_currency_dropped" not in violations(strict, sql)
+    with duckdb.connect() as db:
+        db.execute(
+            "CREATE TABLE payments(amount DOUBLE,currency VARCHAR,captured_at DATE)"
+        )
+        db.execute(
+            "CREATE TABLE fx_rates(currency VARCHAR,date DATE,rate_to_usd DOUBLE)"
+        )
+        db.execute("INSERT INTO payments VALUES (100,'USD','2025-01-02')")
+        assert db.execute(sql).fetchone() == (100.0,)
+
+
+def test_a_base_guard_for_another_amount_read_cannot_preserve_this_rate(strict):
+    sql = (
+        "SELECT SUM(CASE WHEN p.currency = 'USD' THEN p.amount "
+        "ELSE p.amount * f.rate_to_usd END) + SUM(other.amount) "
+        "FROM payments p CROSS JOIN payments other "
+        f"ASOF LEFT JOIN fx_rates f ON {ON} "
+        "WHERE other.currency = 'USD' OR f.rate_to_usd > 0"
     )
     assert violations(strict, sql) == [f"{RATE}:base_currency_dropped"]
 

@@ -378,12 +378,16 @@ class _Rate:
             and scope.sources.get(column.table) is source
         )
 
-    def _base_guard(self, node: exp.Expression) -> bool:
-        """``node`` is a declared-base test for every amount read by a consuming aggregate."""
+    def _base_guard(self, node: exp.Expression, scope: Scope, source) -> bool:
+        """``node`` guards an aggregate that consumes this exact rate attachment."""
         return any(
             self._base_test(node, aggregate) == "eq"
             for aggregate in self.st.aggregates
             if self.st.taint(aggregate) & self.amounts
+            and any(
+                self._belongs_to(column, scope, source)
+                for column in aggregate.find_all(exp.Column)
+            )
         )
 
     def _coalesce_keeps_null(self, node: exp.Expression, scope: Scope, source) -> bool:
@@ -423,6 +427,26 @@ class _Rate:
             }[type(node)]
         return False
 
+    def _proves_null_safe(self, node: exp.Expression, scope: Scope, source) -> bool:
+        """Whether one boolean branch is known TRUE for this attachment's NULL extension."""
+        node = _unparen(node)
+        if isinstance(node, exp.And):
+            return self._proves_null_safe(
+                node.this, scope, source
+            ) and self._proves_null_safe(node.expression, scope, source)
+        if isinstance(node, exp.Or):
+            return self._proves_null_safe(
+                node.this, scope, source
+            ) or self._proves_null_safe(node.expression, scope, source)
+        if self._base_guard(node, scope, source):
+            return True
+        columns = list(node.find_all(exp.Column))
+        if not any(self._belongs_to(column, scope, source) for column in columns):
+            return False
+        if isinstance(node, exp.Is):
+            return isinstance(node.expression, exp.Null)
+        return self._coalesce_keeps_null(node, scope, source)
+
     def _rejects_null_rate(self, node: exp.Expression, scope: Scope, source) -> bool:
         """Whether a supported predicate is false/unknown for this source's NULL extension.
 
@@ -438,8 +462,11 @@ class _Rate:
             ) or self._rejects_null_rate(node.expression, scope, source)
         if isinstance(node, exp.Or):
             # A rate-free branch is not a preservation proof.  Only the declared base guard
-            # establishes that every unmatched base-currency amount reaches this OR.
-            if self._base_guard(node.this) or self._base_guard(node.expression):
+            # or a rate expression proved TRUE for NULL establishes that every unmatched base
+            # currency amount reaches this OR.
+            if self._proves_null_safe(
+                node.this, scope, source
+            ) or self._proves_null_safe(node.expression, scope, source):
                 return False
             return self._rejects_null_rate(
                 node.this, scope, source
@@ -910,12 +937,6 @@ class _Rate:
                 if (
                     child is parent.args.get("true")
                     and self._base_test(parent.this, node) == "eq"
-                ):
-                    return True
-            elif isinstance(parent, exp.Case) and child is parent.args.get("default"):
-                if any(
-                    self._base_test(branch.this, node) == "neq"
-                    for branch in parent.args.get("ifs") or []
                 ):
                     return True
             child, parent = parent, parent.parent
