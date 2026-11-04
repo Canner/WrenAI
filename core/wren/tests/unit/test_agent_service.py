@@ -303,9 +303,10 @@ def test_a_view_the_host_cannot_read_stably_starts_and_is_named_in_the_audit(
     service, tmp_path
 ):
     manifest = service.root / "target/mdl.json"
-    built = json.loads(manifest.read_text())
-    built["views"][0]["statement"] = "SELECT COLUMNS('i.*') FROM invoices i"
-    manifest.write_text(json.dumps(built))
+    (service.root / "views/usd_line_value/sql.yml").write_text(
+        yaml.safe_dump({"statement": "SELECT COLUMNS('i.*') FROM invoices i"})
+    )
+    manifest.write_text(json.dumps(build_json(service.root)))
     sink = tmp_path / "unverified.jsonl"
     service(updates={"audit_path": str(sink)})
     unverified = audit_events(sink, "view_columns_unverified")
