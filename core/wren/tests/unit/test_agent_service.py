@@ -1669,8 +1669,9 @@ def test_describe_data_discloses_a_host_generated_summary(service, monkeypatch):
     assert done["status"] == "completed"
     text = done["result"]["text"]
     assert done["result"]["kind"] == "text" and seen["result"] == done["result"]
-    assert "orders: Customer orders. One row per order header." in text
-    assert "legacy_ord_id" not in text and "- customers" in text
+    assert "- Customer orders. One row per order header." in text
+    assert "legacy_ord_id" not in text
+    assert "- No business description provided." in text
     ev = s.evidence(Ref(session_id=r.session_id, evidence_ref=done["evidence_ref"]))
     assert ev["result"]["kind"] == "text"
     with pytest.raises(ValueError, match="invalid_request"):
@@ -4249,3 +4250,61 @@ def test_mcp_cleanup_remains_available_while_other_tool_responses_are_audit_gate
     assert asyncio.run(close.fn(session_id=r.session_id)) == {"status": "closed"}
     s.shutdown()
     assert s.audit_sink is None and s.ipc.process.poll() is not None
+
+
+@pytest.mark.parametrize("thinking", [[], {}, {"value": "on"}, 0, 1, 3.0, None])
+def test_non_string_non_boolean_thinking_is_a_controlled_config_error(thinking):
+    from wren.agent_service import execution_from_config  # noqa: PLC0415
+
+    with pytest.raises(ValueError, match="invalid_execution_config: thinking"):
+        execution_from_config({"execution": {"thinking": thinking}})
+
+
+@pytest.mark.parametrize(
+    "thinking,enabled",
+    [(True, True), (False, False), ("on", True), ("off", False), ("default", None)],
+)
+def test_documented_thinking_values_keep_the_runtime_contract(thinking, enabled):
+    from wren.agent_service import execution_from_config  # noqa: PLC0415
+
+    execution = execution_from_config({"execution": {"thinking": thinking}})
+    if enabled is None:
+        assert "enableThinking" not in execution.limits
+    else:
+        assert execution.limits["enableThinking"] is enabled
+    assert "enableThinking" not in execution_from_config({}).limits
+
+
+@needs_policy_runtime
+@pytest.mark.parametrize(
+    "profile,capability", [("analysis", "orders"), ("adhoc", "analytics")]
+)
+def test_hidden_describe_tool_omits_model_derived_labels_but_full_metadata_keeps_names(
+    service, monkeypatch, profile, capability
+):
+    original = yaml.safe_load((service.root / "models/orders/metadata.yml").read_text())
+    original["name"] = "legacy_orders"
+    original.setdefault("properties", {})["description"] = (
+        "Purchase records. One entry per completed checkout."
+    )
+    directory = service.root / "models/legacy_orders"
+    directory.mkdir()
+    (directory / "metadata.yml").write_text(yaml.safe_dump(original, sort_keys=False))
+    (service.root / "target/mdl.json").write_text(json.dumps(build_json(service.root)))
+    full = service(profile=profile, example_presets=True, preset="full")
+    authorized = full.metadata(None, ["structure"], "planner")
+    assert "legacy_orders" in authorized[0]["content"]
+    s = service(profile=profile, example_presets=True, preset="hidden")
+    assert s.capabilities_public()["metadata_documents"] == []
+    with pytest.raises(PermissionError):
+        s.metadata(None, ["structure"], "planner")
+    install_invoker(
+        monkeypatch,
+        s,
+        lambda callback: {"evidence": callback("describe_data", {})["evidence"]},
+    )
+    result = s.execute(ask_request(s, capability))
+    assert result["status"] == "completed"
+    text = result["result"]["text"]
+    assert "Purchase records. One entry per completed checkout." in text
+    assert "legacy_orders" not in text and "legacy orders" not in text

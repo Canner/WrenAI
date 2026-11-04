@@ -774,7 +774,7 @@ def test_a_denied_column_is_absent_from_every_projection():
     assert [c["name"] for c in read["columns"]] == ["id", "region", "tier"]
     assert read["columns"][2].get("relationship") is None
     assert read["description"] == "Customers. Region is shared."
-    assert r.describe().splitlines()[1] == "- customers: Customers. Region is shared."
+    assert r.describe().splitlines()[1] == "- Customers. Region is shared."
     assert "orders_customers" in r.structure_document()
 
 
@@ -2285,3 +2285,18 @@ def test_malformed_raw_denial_keys_fail_closed_with_matching_loader_grammar(key,
 def test_unrelated_malformed_frontmatter_is_not_a_near_miss_denial(key):
     text = f"---\n{key}: [bad\n---\n# Rules\n"
     assert strip_denied_declaration(text) == text
+
+
+@pytest.mark.parametrize(
+    "description", [None, "Purchase records. One entry per completed checkout."]
+)
+def test_business_description_uses_no_model_key_derived_label(description):
+    r = reader({"models": [model("legacy_orders", description=description)]})
+    assert r.read(["legacy_orders"])["items"][0]["name"] == "legacy_orders"
+    assert "legacy_orders" in r.structure_document()
+    text = r.describe()
+    assert "legacy_orders" not in text and "legacy orders" not in text
+    if description:
+        assert description in text
+    else:
+        assert len(text.splitlines()) == 2

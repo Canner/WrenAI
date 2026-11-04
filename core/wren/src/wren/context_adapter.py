@@ -1246,19 +1246,20 @@ class ContextReader:
     def describe(self) -> str:
         """One business line per model; any sentence that names an identifier is dropped.
 
-        No columns, types, relationships or physical tables. The private model can request it
-        but never rewrite it.
+        No model-derived labels, columns, types, relationships or physical tables. The
+        private model can request it but never rewrite it.
         """
         lines = [
             "Data available for analysis (business summary; technical names omitted):"
         ]
         for name, model in self._models.items():
-            label = name.replace("_", " ")
             raw = _prose(model.get("description"), name, self.denied) or ""
             kept = [
                 s for s in _sentences(raw) if not re.search(r"\b\w+(?:_\w+|\.\w+)\b", s)
             ]
-            lines.append(f"- {label}: {' '.join(kept)}" if kept else f"- {label}")
+            lines.append(
+                f"- {' '.join(kept)}" if kept else "- No business description provided."
+            )
         return "\n".join(lines)
 
     def structure_document(self) -> str:

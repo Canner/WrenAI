@@ -152,8 +152,11 @@ def execution_from_config(config: dict) -> Execution:
             limits[name] = integer(key, low, high)
     thinking = raw.get("thinking", "default")
     # YAML 1.1 reads a bare on/off as a boolean.
-    thinking = {True: "on", False: "off"}.get(thinking, thinking)
-    if thinking not in ("on", "off", "default"):
+    if thinking is True:
+        thinking = "on"
+    elif thinking is False:
+        thinking = "off"
+    if not isinstance(thinking, str) or thinking not in ("on", "off", "default"):
         raise ValueError(
             "invalid_execution_config: thinking must be on, off or default"
         )
