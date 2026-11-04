@@ -1,6 +1,7 @@
 """Exercise example MCP timeout configuration without importing providers or spawning services."""
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -92,3 +93,49 @@ def test_trace_symlink_never_truncates_or_chmods_its_target(failure):
     assert actual["targetContent"] == "original contents"
     assert actual["targetMode"] == 0o644 and actual["traceIsSymlink"]
     assert actual["error"] is not None
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_trace_hardlink_keeps_the_other_inode_contents_and_permissions(failure):
+    actual = probe(
+        {
+            "serviceReplyTimeoutMs": 200000,
+            "_probeHardlink": True,
+            "_probeFileChecks": True,
+            "_probeFailure": failure,
+        }
+    )
+    assert actual["error"] is None
+    assert actual["targetContent"] == "original contents"
+    assert actual["targetMode"] == 0o644 and actual["separateInodes"]
+    assert actual["traceMode"] == 0o600
+    assert actual["modesAtWrite"] == [0o600] * (1 if failure else 2)
+    assert actual["temporaryEntries"] == []
+
+
+def test_trace_write_failure_keeps_previous_file_and_cleans_up_temporary_files():
+    actual = probe(
+        {
+            "serviceReplyTimeoutMs": 200000,
+            "_probeExisting": True,
+            "_probeWriteFailure": True,
+        }
+    )
+    assert actual["error"] == "scripted trace write failure"
+    assert actual["traceRaw"] == "previous trace" and actual["traceMode"] == 0o644
+    assert actual["temporaryEntries"] == []
+
+
+def test_trace_directory_output_is_refused_without_leaving_temporary_files():
+    actual = probe({"serviceReplyTimeoutMs": 200000, "_probeDirectory": True})
+    assert actual["error"] is not None and actual["traceIsDirectory"]
+    assert actual["temporaryEntries"] == []
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="requires a real FIFO")
+def test_trace_fifo_output_is_refused_without_blocking(tmp_path):
+    output = tmp_path / "trace-fifo"
+    os.mkfifo(output)
+    actual = probe({"serviceReplyTimeoutMs": 200000, "_probeOutputPath": str(output)})
+    assert actual["error"] is not None and output.is_fifo()
+    assert list(tmp_path.iterdir()) == [output]

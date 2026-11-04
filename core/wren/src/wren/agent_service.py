@@ -1132,16 +1132,18 @@ class Service:
                     }
                 )
         budget = SqlBudget(self.execution.max_sql_attempts)
-        as_of = self.execution.as_of or today_utc()
+        as_of = self.execution.as_of
         resolution = None
         if continuation:
             pending = s["pending"].get(continuation["ref"])
             if not pending or pending.get("consumed"):
                 raise ValueError("context_changed")
             budget = pending.get("budget") or budget
+            as_of = pending.get("as_of", as_of)
             scopes.update(self.confirmed_scopes(pending.get("status_scopes", {})))
             context = {
                 "original_question": pending["question"],
+                **context,
                 "user_answer": continuation["answer"],
             }
             if pending.get("status_rule"):
@@ -1163,6 +1165,7 @@ class Service:
                 rule_id: display(self.status_rules[rule_id], scope)
                 for rule_id, scope in scopes.items()
             }
+        as_of = as_of or today_utc()
         ledger = {}
         usage = {}
         policy_denied = False
@@ -1597,6 +1600,8 @@ class Service:
                         "question": request.question,
                         "capability": request.capability,
                         "budget": budget,
+                        "as_of": as_of,
+                        "reply_to": reply,
                         "status_scopes": {
                             rule_id: display(self.status_rules[rule_id], scope)
                             for rule_id, scope in scopes.items()
@@ -1710,6 +1715,7 @@ class Service:
                 expected_revision=r.expected_revision,
                 capability=pending["capability"],
                 question=pending["question"],
+                reply_to=pending.get("reply_to"),
             )
         return self.execute(
             ask, continuation={"ref": r.continuation_ref, "answer": r.answer}

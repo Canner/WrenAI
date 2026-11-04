@@ -78,6 +78,8 @@ The common skill works with `profiles/analysis`, `profiles/counts` and the opt-i
 
 The private worker reads context in three steps: the first page of the index (one line per model, cube and view with its description and any declared default rules, plus a summary of the rule files) is already in its request; `list_context` pages through the rest, `select_context` names what it needs, and `read_context` returns those items in full with the rule files that concern them. A project larger than the budget is paged, never truncated or refused. A view lists its output columns only if its `views/<name>/metadata.yml` declares them: `columns: [{name, type, description}]` (`name` matches `^[a-z0-9_]+$`, `type` is not empty, `description` is optional and at most 400 characters). The loader carries the declaration without parsing SQL. At startup the host parses the view's `statement` the way a query reads it and refuses to start with `context_inconsistent` if the declared names differ from the statement's output (the message names columns, never the statement); a view whose statement the host cannot read, or whose output has no stable names (`COLUMNS(...)`, any unaliased projection anywhere in the statement other than a bare column or `*` such as `id::BIGINT`, `CAST(...)`, a literal or `SUM(x)`, a repeated name), is not checked and is named in one `view_columns_unverified {view}` audit event. A malformed or duplicate entry refuses to start with `view_columns_invalid`. `read_context` of a view returns `columns` (name, type, description) and the planner's `structure` document gets a column table under that view; the index line is unchanged, and a column named like any model's denied column is dropped, together with description sentences that name one. A view without `columns` reads as before. A bundle's `binding.yml` of `kind: prepared` is bound at startup to the loader's prepared context, so the static `context.json` it names is not shipped.
 
+Rule-body projections remove sentences naming a denied column, including its bare name without a model qualifier. This conservative name filter may also remove a generic same-word mention; other sentences, layout and supported front-matter are preserved.
+
 MCP tools: `capabilities`, `open_session`, `ask_data`, `continue_task`, `get_evidence`, `read_metadata`, `close_session`. A completed `ask_data` and `get_evidence` answer with the same `evidence` object (see [What a result's evidence tells the planner](#what-a-results-evidence-tells-the-planner)). Direct mode (`serve mcp`) substitutes `run_sql` for delegation/clarification: the caller's statement goes through exactly the planning gate, audit events and authorization the private worker's `run_sql` does, and a statement rejected before execution comes back as the `{error, code, hint}` answer described under [Why a `run_sql` statement is refused](#why-a-run_sql-statement-is-refused). Each direct call is its own task, so the per-task budgets below never carry from one call to the next. Each tool is registered only if the deployment policy permits it. Metadata resources and the capability list are filtered independently. Inspect tool schemas for the `request` wrapper and required revision fields.
 
 ## Independent example planner
@@ -348,7 +350,7 @@ The session is neither closed nor reopened, and a revision is never guessed. The
 
 ### Today's date for the worker
 
-The gate does not allow `now()` or `current_date`, so the worker needs the date from the host: every task's worker request carries `as_of`, the configured `execution.as_of` or, when that is not set, the host clock's UTC date taken as the task starts. The three example profiles' `data_worker/respond.md` tell the worker to resolve relative periods from it. `capabilities` reports `as_of` too (the fixed date, or `"clock"`), so a planner can tell the data's reference date from its own clock; a completed answer does not repeat it. The date is recorded in the audit's `task_completed` and `task_failed` events and in the internal evidence, and nowhere else.
+The gate does not allow `now()` or `current_date`, so the worker needs the date from the host: every task's worker request carries `as_of`, the configured `execution.as_of` or, when that is not set, the host clock's UTC date taken as the task starts. The three example profiles' `data_worker/respond.md` tell the worker to resolve relative periods from it. `capabilities` reports `as_of` too (the fixed date, or `"clock"`), so a planner can tell the data's reference date from its own clock; a completed answer does not repeat it. The date is recorded in the audit's `task_completed` and `task_failed` events and in the internal evidence, and nowhere else. Clarifications retain the first task date, including across UTC midnight or a month boundary; a new task takes a new clock date. A contextual clarification retains the prior result reference and reconstructs its rows and question only after renewed capability and result-disclosure authorization.
 
 ### Declared default rules
 
@@ -472,8 +474,12 @@ Hosted model acceptance is separate: run the independent planner with your own
 model credentials and inspect both its trace and the configured local audit.
 An `unavailable` attempt is not a pass, even when a later identical retry works.
 
-Planner traces use regular files with mode 0600, tightened before writing even
-for an existing file. Symbolic-link output paths are refused; trace output
+Planner traces are written to an exclusive sibling temporary file with mode
+0600 and atomically renamed into place after writing and closing. Existing
+regular output files are replaced rather than modified, preserving the contents
+and permissions of their other hard links. Failed writes retain the previous
+trace and clean up their temporary file. Symbolic-link and nonregular output
+paths are refused; trace output
 requires the platform's no-follow file-open support.
 
 The runtime preserves the original host task envelope (including the worker's

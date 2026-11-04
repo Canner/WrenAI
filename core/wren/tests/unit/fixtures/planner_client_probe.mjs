@@ -1,6 +1,7 @@
 // Run the actual example client against local in-memory SDK peers; no provider or child.
-import { readFile, writeFile, open, mkdtemp, chmod, stat, rm, symlink, lstat } from 'node:fs/promises';
+import { readFile, writeFile, open, mkdtemp, chmod, stat, rm, symlink, link, lstat, readdir, mkdir, rename, unlink } from 'node:fs/promises';
 import { constants } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import vm from 'node:vm';
@@ -10,14 +11,16 @@ const config = { command: 'fixture', args: [], skill: 'skill.md', ...JSON.parse(
 const timeouts = [];
 const modesAtWrite = [];
 const temporary = await mkdtemp(join(tmpdir(), 'wren-planner-probe-'));
-const outputPath = join(temporary, 'trace.json');
+const outputPath = config._probeOutputPath ?? join(temporary, 'trace.json');
 const targetPath = join(temporary, 'original.txt');
 const previousUmask = process.umask(0);
-if (config._probeSymlink) {
+if (config._probeSymlink || config._probeHardlink) {
   await writeFile(targetPath, 'original contents');
   await chmod(targetPath, 0o644);
-  await symlink(targetPath, outputPath);
+  if (config._probeSymlink) await symlink(targetPath, outputPath);
+  else await link(targetPath, outputPath);
 }
+if (config._probeDirectory) await mkdir(outputPath);
 if (config._probeExisting) {
   await writeFile(outputPath, 'previous trace');
   await chmod(outputPath, 0o644);
@@ -46,9 +49,10 @@ const context = vm.createContext({
 });
 const modules = {
   'node:fs': { constants },
+  'node:crypto': { randomUUID },
   'node:fs/promises': {
     readFile: async path => path === 'client.json' ? JSON.stringify(config) : path === 'questions.json' ? '["question"]' : 'skill',
-    writeFile,
+    writeFile, lstat, rename, unlink,
     open: async (...args) => {
       const file = await open(...args);
       return {
@@ -56,6 +60,10 @@ const modules = {
         stat: () => file.stat(),
         writeFile: async value => {
           modesAtWrite.push((await file.stat()).mode & 0o777);
+          if (config._probeWriteFailure) {
+            await file.writeFile('partial');
+            throw Error('scripted trace write failure');
+          }
           return file.writeFile(value);
         },
         close: () => file.close(),
@@ -88,6 +96,18 @@ try {
     result.targetMode = (await stat(targetPath)).mode & 0o777;
     result.traceIsSymlink = (await lstat(outputPath)).isSymbolicLink();
   }
+  if (config._probeHardlink) {
+    result.targetContent = await readFile(targetPath, 'utf8');
+    result.targetMode = (await stat(targetPath)).mode & 0o777;
+    result.separateInodes = (await stat(targetPath)).ino !== (await stat(outputPath)).ino;
+  }
+  if (config._probeWriteFailure) {
+    result.traceRaw = await readFile(outputPath, 'utf8');
+    result.traceMode = (await stat(outputPath)).mode & 0o777;
+  }
+  if (config._probeDirectory) result.traceIsDirectory = (await lstat(outputPath)).isDirectory();
+  if (config._probeHardlink || config._probeWriteFailure || config._probeDirectory)
+    result.temporaryEntries = (await readdir(temporary)).filter(name => !['trace.json', 'original.txt'].includes(name));
 
   if (config._probeFileChecks) {
     result.traceMode = (await stat(outputPath)).mode & 0o777;

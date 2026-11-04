@@ -4730,3 +4730,87 @@ def test_valid_selected_metadata_overrides_an_unused_invalid_fallback(service):
     assert {d["id"] for d in s.capabilities_public()["metadata_documents"]} == {
         "structure"
     }
+
+
+def test_clarifications_keep_the_first_task_date_across_utc_month_boundaries(
+    service, monkeypatch
+):
+    s = service(profile="adhoc", runtime_path=FAKE_RUNTIME)
+    seen = []
+
+    def clarify(callback):
+        return callback("clarify", {"missing": "analysis_definition"})
+
+    monkeypatch.setattr("wren.agent_service.today_utc", lambda: "2031-01-31")
+    worker_sees(monkeypatch, s, clarify, seen)
+    r = ask_request(s, "analytics").model_copy(update={"question": "Orders this month"})
+    first = s.execute(r)
+    monkeypatch.setattr("wren.agent_service.today_utc", lambda: "2031-02-01")
+    second = s.continue_task(
+        answering(first, r.session_id, 1, "clarify-again", "Explain")
+    )
+    monkeypatch.setattr("wren.agent_service.today_utc", lambda: "2031-03-01")
+    worker_sees(monkeypatch, s, count, seen)
+    done = s.continue_task(answering(second, r.session_id, 2, "finish", "Count orders"))
+    assert done["status"] == "completed"
+    assert [request["as_of"] for request in seen] == ["2031-01-31"] * 3
+    assert {event["as_of"] for event in events_named(s, "task_completed")} == {
+        "2031-01-31"
+    }
+    s.execute(r.model_copy(update={"request_id": "new-task", "expected_revision": 3}))
+    assert seen[-1]["as_of"] == "2031-03-01"
+
+
+@pytest.mark.parametrize("revoke_prior_result", [False, True])
+def test_follow_up_clarification_restores_prior_context_only_after_reauthorization(
+    service, monkeypatch, revoke_prior_result
+):
+    s = service(profile="adhoc", runtime_path=FAKE_RUNTIME)
+    worker_sees(monkeypatch, s, lambda callback: count(callback, "customers"))
+    original = ask_request(s, "analytics").model_copy(
+        update={"question": "Prior customer report"}
+    )
+    prior = s.execute(original)
+    follow_up = original.model_copy(
+        update={
+            "request_id": "follow-up",
+            "expected_revision": 1,
+            "question": "Use the second row of that report",
+            "reply_to": prior["result_ref"],
+        }
+    )
+    worker_sees(
+        monkeypatch,
+        s,
+        lambda callback: callback("clarify", {"missing": "analysis_definition"}),
+    )
+    clarification = s.execute(follow_up)
+    seen = []
+    worker_sees(monkeypatch, s, count, seen)
+    real_require = s.require
+
+    def require(session, action, kind, name, *args, **kwargs):
+        if revoke_prior_result and (action, kind, name) == (
+            "receive_answer",
+            "answer.sql_result",
+            "customers",
+        ):
+            raise PermissionError("denied")
+        return real_require(session, action, kind, name, *args, **kwargs)
+
+    monkeypatch.setattr(s, "require", require)
+    continuation = answering(
+        clarification, original.session_id, 2, "continued", "Use that report"
+    )
+    if revoke_prior_result:
+        with pytest.raises(PermissionError, match="denied"):
+            s.continue_task(continuation)
+        assert not seen
+    else:
+        assert s.continue_task(continuation)["status"] == "completed"
+        context = seen[0]["previous"]
+        assert context["rows"] == prior["result"]["rows"]
+        assert context["columns"] == prior["result"]["columns"]
+        assert context["original_question"] == original.question
+        assert context["user_answer"] == continuation.answer
+        assert seen[0]["question"] == follow_up.question

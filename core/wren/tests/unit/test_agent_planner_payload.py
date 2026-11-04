@@ -18,6 +18,7 @@ def test_reasoning_override_only_applies_to_default_luna():
     harness = r"""
 import {readFile} from 'node:fs/promises';
 import {constants} from 'node:fs';
+import {randomUUID} from 'node:crypto';
 import {SourceTextModule, SyntheticModule, createContext} from 'node:vm';
 const code = await readFile(process.argv[1], 'utf8');
 const seen = [];
@@ -33,7 +34,8 @@ for (const configured of [undefined, 'gpt-6-luna', 'another-model']) {
   class Client { async connect() {} async listTools() {return {tools:[]};} async close() {} }
   const exports = {
     'node:fs': {constants},
-    'node:fs/promises': {readFile: async path => path==='config' ? JSON.stringify({model:configured,skill:'skill',serviceReplyTimeoutMs:200000}) : path==='questions' ? '["question"]' : '', open: async () => ({stat: async () => ({isFile: () => true}),chmod: async () => {},writeFile: async () => {},close: async () => {}})},
+    'node:crypto': {randomUUID},
+    'node:fs/promises': {readFile: async path => path==='config' ? JSON.stringify({model:configured,skill:'skill',serviceReplyTimeoutMs:200000}) : path==='questions' ? '["question"]' : '', lstat: async () => ({isFile: () => true}),rename: async () => {},unlink: async () => {},open: async () => ({stat: async () => ({isFile: () => true}),chmod: async () => {},writeFile: async () => {},close: async () => {}})},
     '@earendil-works/pi-agent-core': {Agent},
     '@earendil-works/pi-ai/api/openai-completions': {streamSimple: (model,ctx,opts) => {const payload={reasoning_effort:'medium',marker:true};opts.onPayload(payload);seen.push(payload);}},
     '@modelcontextprotocol/sdk/client/index.js': {Client},

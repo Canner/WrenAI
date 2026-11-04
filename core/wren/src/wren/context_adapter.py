@@ -664,7 +664,7 @@ def _prose(
 
 
 def _redact_rule_body(text: str, denied: frozenset) -> str:
-    """A rule file whose body keeps no sentence that names a denied ``model.column``.
+    """A rule body with no sentence naming a denied qualified or bare column.
 
     The front-matter is carried verbatim (``strip_denied_declaration`` has already checked
     it); the body is cut line by line so lists, headings and blank lines survive, and each
@@ -673,6 +673,7 @@ def _redact_rule_body(text: str, denied: frozenset) -> str:
     """
     if not denied:
         return text
+    owners = frozenset(owner for owner, _ in denied)
     try:
         front, _ = split_front_matter(text)
     except ValueError:
@@ -704,11 +705,11 @@ def _redact_rule_body(text: str, denied: frozenset) -> str:
             continue
         content = line.rstrip("\r\n")
         if not content.strip() or not _mentions_denied(
-            _one_line(content), None, denied
+            _one_line(content), owners, denied
         ):
             body.append(line)
             continue
-        kept = _prose(content, None, denied)
+        kept = _prose(content, owners, denied)
         if kept:
             indent = content[: len(content) - len(content.lstrip())]
             body.append(indent + kept + line[len(content) :])

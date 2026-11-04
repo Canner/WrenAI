@@ -1,6 +1,7 @@
 // An independent pi planner with an MCP client. No private profile/context import.
-import { readFile, open } from 'node:fs/promises';
+import { readFile, open, lstat, rename, unlink } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { Agent } from '@earendil-works/pi-agent-core';
 import { streamSimple } from '@earendil-works/pi-ai/api/openai-completions';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -15,19 +16,40 @@ const serviceReplyTimeoutMs = config.serviceReplyTimeoutMs;
 if (!Number.isInteger(serviceReplyTimeoutMs) || serviceReplyTimeoutMs < 1 || serviceReplyTimeoutMs > 2147483647)
   throw Error('serviceReplyTimeoutMs must be an integer from 1 to 2147483647');
 const trace = { turns: [], calls: [], errors: [], completed: false };
+async function requireRegularTraceOutput() {
+  try {
+    if (!(await lstat(outputPath)).isFile()) throw Error('trace_output_not_regular');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+}
 async function writeTrace() {
   if (!Number.isInteger(fsConstants.O_NOFOLLOW)) throw Error('trace_no_follow_unsupported');
-  const flags = fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_TRUNC
+  await requireRegularTraceOutput();
+  const temporaryPath = `${outputPath}.${randomUUID()}.tmp`;
+  const flags = fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL
     | fsConstants.O_NOFOLLOW | (fsConstants.O_NONBLOCK ?? 0);
-  const file = await open(outputPath, flags, 0o600);
+  let file, owned = false;
   try {
+    file = await open(temporaryPath, flags, 0o600);
+    owned = true;
     if (!(await file.stat()).isFile()) throw Error('trace_output_not_regular');
-    // Creation mode does not tighten an existing file. Restrict this descriptor
-    // before any new trace bytes are written, independently of the umask.
     await file.chmod(0o600);
     await file.writeFile(JSON.stringify(trace, null, 2));
-  } finally {
     await file.close();
+    file = undefined;
+    await requireRegularTraceOutput();
+    await rename(temporaryPath, outputPath);
+    owned = false;
+  } finally {
+    try {
+      if (file) await file.close();
+    } finally {
+      if (owned) {
+        try { await unlink(temporaryPath); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+      }
+    }
   }
 }
 const client = new Client({ name: 'wren-external-pi-planner', version: '1.0.0' });

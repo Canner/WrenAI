@@ -1602,6 +1602,38 @@ def test_rule_body_never_names_a_denied_column():
     assert f"rule {only}" in r.list(1)["text"]
 
 
+@pytest.mark.parametrize("name", ["email", "EMAIL", "`email`", '"Email"'])
+def test_rule_body_redacts_bare_denied_names_without_losing_unrelated_sentences(name):
+    import re  # noqa: PLC0415
+
+    path = "knowledge/rules/mixed.md"
+    r = reader(
+        {
+            "models": [model("customers", "Customers.", ("id", "email"))],
+            "knowledge_rules": [
+                {
+                    "path": path,
+                    "content": f"---\ndefaults: []\n---\n# Rules\nNever display {name}. Revenue is by region.\n- Emailing customers is allowed.\n",
+                }
+            ],
+        },
+        denied=[("customers", "email")],
+    )
+    served = json.dumps(
+        [
+            r.documents()["rules"],
+            r.rules_document(),
+            r.read([f"rule:{path}"]),
+            r.list(1),
+        ]
+    )
+    assert not re.search(r"\bemail\b", served, re.IGNORECASE)
+    body = r.read([f"rule:{path}"])["rules"][0]["content"]
+    assert "Revenue is by region." in body
+    assert "- Emailing customers is allowed." in body and "# Rules" in body
+    assert body.startswith("---\ndefaults: []\n---\n")
+
+
 @pytest.mark.parametrize(
     "relative",
     [
