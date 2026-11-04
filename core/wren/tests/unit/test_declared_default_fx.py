@@ -107,6 +107,22 @@ def test_taking_one_only_for_the_base_currency_is_accepted(strict):
     assert result.fx_missing_rate_handling == "guarded_by_base_currency"
 
 
+def test_a_later_unguarded_rate_rule_keeps_the_missing_rate_caveat():
+    manifest, rules = declared()
+    rate = next(rule for rule in rules if isinstance(rule, RequireRateJoin))
+    checker = DefaultsChecker(
+        [
+            replace(rate, id="guarded", base_currency="USD", match=None),
+            replace(rate, id="unguarded", base_currency="EUR", match=None),
+        ],
+        manifest,
+        "duckdb",
+    )
+    result = verdict(checker, BASE_ONLY)
+    assert result.fx_missing_rate_handling == "unguarded_left_join"
+    assert "fx_missing_rate_handling" in result.unverified
+
+
 # -- how a default can be spelled --------------------------------------------
 
 DEFAULTS = {
@@ -786,6 +802,14 @@ def test_each_aggregated_alias_of_the_same_amount_group_needs_its_own_rate_join(
         bad + "\nJOIN fx_rates g ON g.currency = q.currency AND g.date <= q.captured_at"
     )
     assert make_checker().check(parse_one(good, dialect="duckdb")) == []
+
+
+def test_each_union_consumer_of_a_shared_amount_cte_needs_a_rate_join():
+    sql = """WITH amount AS (SELECT amount,currency,captured_at FROM payments)
+        SELECT SUM(a.amount*f.rate_to_usd) FROM amount a
+        JOIN fx_rates f ON f.currency=a.currency AND f.date<=a.captured_at
+        UNION ALL SELECT SUM(a.amount) FROM amount a"""
+    assert make_checker().check(parse_one(sql, dialect="duckdb")) == [RATE]
 
 
 def test_rate_joins_follow_aggregated_aliases_through_nested_ctes():

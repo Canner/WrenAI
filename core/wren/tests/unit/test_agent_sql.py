@@ -1440,6 +1440,28 @@ def test_a_view_value_joined_to_a_many_side_model_is_marked_duplicated(adhoc):
     ]
 
 
+def test_a_composite_key_requires_every_joined_key_for_view_aggregation():
+    schema = {
+        "invoice": {"tenant_id": "INT", "id": "INT", "value": "INT"},
+        "dimensions": {"tenant_id": "INT", "id": "INT"},
+    }
+    query = AdHocSQL.__new__(AdHocSQL)
+    query.primary_keys = {"dimensions": frozenset(("tenant_id", "id"))}
+
+    def duplicated(on):
+        tree = sqlglot.parse_one(
+            "SELECT SUM(v.value) FROM (SELECT tenant_id,id,value FROM invoice) v "
+            f"JOIN dimensions d ON {on}",
+            dialect="duckdb",
+        )
+        tree.find(exp.Subquery).meta[VIEW_MARK] = "invoice_value"
+        qualified = qualify(tree, dialect="duckdb", schema=schema, identify=True)
+        return query._duplicate_aggregation(list(traverse_scope(qualified)))
+
+    assert duplicated("v.id=d.id") is True
+    assert duplicated("v.id=d.id AND v.tenant_id=d.tenant_id") is False
+
+
 @pytest.mark.parametrize(
     "sql",
     [

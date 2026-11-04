@@ -229,7 +229,8 @@ def _evaluate(
                     found, rule_handling = fx.judge()
                     broken = [f"{rule.id}:{sub}" for sub in found]
                     if not broken:
-                        handling = handling or rule_handling
+                        if rule_handling == UNGUARDED_LEFT_JOIN or handling is None:
+                            handling = rule_handling or handling
                         if fx.shape_unverified():
                             unverified.append(FX_DEFAULT_SHAPE_UNVERIFIED)
                 if not broken and required_join_missing:

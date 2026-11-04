@@ -288,7 +288,12 @@ class AdHocSQL:
         self.denied = frozenset((m.lower(), c.lower()) for m, c in snapshot.denied)
         catalog = snapshot.catalog
         self.primary_keys = {
-            m["name"]: frozenset(m.get("primary_key") or []) for m in models
+            m["name"]: frozenset(
+                [m.get("primary_key")]
+                if isinstance(m.get("primary_key"), str)
+                else m.get("primary_key") or []
+            )
+            for m in models
         }
         self.cube_names = {c["name"].lower() for c in catalog.get("cubes") or []}
         self.cube_measures = {
@@ -432,6 +437,7 @@ class AdHocSQL:
             conditions = [j.args.get("on") for j in select.args.get("joins") or []] + [
                 w.this for w in [select.args.get("where")] if w is not None
             ]
+            matched_keys = {}
             for condition in conditions:
                 for node in condition.find_all(exp.EQ) if condition is not None else ():
                     sides = (node.this, node.expression)
@@ -439,12 +445,14 @@ class AdHocSQL:
                         continue
                     for mine, other in (sides, sides[::-1]):
                         source = scope.sources.get(other.table)
-                        if (
-                            mine.table in aggregated
-                            and isinstance(source, exp.Table)
-                            and other.name not in self.primary_keys.get(source.name, ())
-                        ):
-                            return True
+                        if mine.table in aggregated and isinstance(source, exp.Table):
+                            matched_keys.setdefault(source.name, set()).add(other.name)
+            if any(
+                keys and not keys <= matched_keys.get(model, set())
+                for model, keys in self.primary_keys.items()
+                if model in matched_keys
+            ):
+                return True
         return False
 
     @staticmethod

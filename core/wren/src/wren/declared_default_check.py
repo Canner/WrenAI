@@ -963,10 +963,6 @@ class _Statement:
         # A derived table can carry several physical amount aliases.  Preserve their routes
         # through CTEs: a rate attachment for the path to ``p`` cannot establish the path to
         # sibling alias ``q``.
-        covered_amount_tables = {
-            amount_reads[index][0] for index in covered_amount_reads
-        }
-        amount_tables = {table for table, _path in amount_reads}
         # When an aggregate actually consumes a rate value, every supplying
         # instance must carry both conditions; an unrelated complete join cannot
         # donate its proof to that value. No rate-valued expression is required.
@@ -997,14 +993,32 @@ class _Statement:
                     supplied |= matching(
                         column, expressions=True, expression_columns=value_columns
                     )
+        covered_amount_tables = {
+            amount_reads[index][0] for index in covered_amount_reads
+        }
+        amount_tables = {table for table, _path in amount_reads}
         uncovered_amount_tables = amount_tables - covered_amount_tables
-        # Multiple amount aliases each need a complete attachment. A single
-        # converted amount may instead carry its attachment through a CTE, but
-        # one converted alias cannot donate that proof to a bare sibling.
         if len(amount_tables) > 1 and uncovered_amount_tables:
             return True
         if uncovered_amount_tables and not supplied:
             return True
+        if isinstance(self.ast, exp.SetOperation):
+
+            def consumer(path):
+                return next(
+                    (
+                        id(scope.expression)
+                        for scope, _, _ in reversed(path)
+                        if isinstance(scope.expression, exp.Select)
+                    ),
+                    None,
+                )
+
+            complete_consumers = {consumer(reads[index][1]) for index in complete}
+            if any(
+                consumer(path) not in complete_consumers for _, path in amount_reads
+            ):
+                return True
         return not complete or not supplied <= complete
 
     def _amount_reads(self, amounts, expression=None):
