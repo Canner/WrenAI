@@ -2832,6 +2832,14 @@ def test_unused_cte_has_no_source_permission_or_observed_fact(unused):
     assert prepared.observed["date_windows"] == []
 
 
+def test_casefolded_consumed_cte_keeps_its_model_source():
+    prepared = _consumed_source_gate().prepare(
+        "WITH Live AS (SELECT id FROM orders) SELECT COUNT(*) FROM live"
+    )
+    assert prepared.sources == {"orders": ["id"]}
+    assert prepared.observed["models"] == ["orders"]
+
+
 @pytest.mark.parametrize(
     "sql",
     [

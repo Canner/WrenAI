@@ -115,6 +115,70 @@ def cte_reference_ids(ast: exp.Expression) -> set[int]:
     return found
 
 
+def _visible_cte_source(scope: Scope, node: exp.Table) -> Scope | None:
+    """Return the CTE that shadows an unqualified table reference, if known."""
+    if node.db or node.catalog:
+        return None
+    visible = {
+        name: source
+        for name, source in scope.cte_sources.items()
+        if name.casefold() == node.name.casefold()
+    }
+    if not visible:
+        return None
+
+    # Case-insensitive shadowing follows the nearest WITH, even when the parser
+    # kept an outer alias with the exact spelling.
+    owners = {}
+    parent = node.parent
+    while parent is not None:
+        owners[id(parent)] = len(owners)
+        parent = parent.parent
+    bindings = []
+    for source in visible.values():
+        cte = source.expression.find_ancestor(exp.CTE)
+        if cte is not None and cte.parent is not None:
+            owner = cte.parent.parent
+            if id(owner) in owners:
+                bindings.append((owners[id(owner)], source))
+    if not bindings:
+        return None
+    nearest = min(distance for distance, _ in bindings)
+    choices = {
+        id(source): source for distance, source in bindings if distance == nearest
+    }
+    return next(iter(choices.values())) if len(choices) == 1 else None
+
+
+def consumed_scopes(scopes: list[Scope]) -> list[Scope]:
+    """Return scopes that can contribute to a query's result.
+
+    CTE definitions are available to their parent scope without being consumed.
+    Follow one only when a reachable scope references it; scalar subqueries and
+    set-operation branches are themselves part of the reachable expression.
+    """
+    live = set()
+
+    def visit(scope: Scope) -> None:
+        if id(scope) in live:
+            return
+        live.add(id(scope))
+        for alias, node in scope.references:
+            source = (
+                _visible_cte_source(scope, node)
+                if isinstance(node, exp.Table)
+                else scope.sources.get(alias)
+            )
+            if isinstance(source, Scope):
+                visit(source)
+        for child in [*scope.union_scopes, *scope.subquery_scopes]:
+            visit(child)
+
+    if scopes:
+        visit(scopes[-1])
+    return [scope for scope in scopes if id(scope) in live]
+
+
 def require_source_tables(ast: exp.Expression) -> list[str]:
     """Return the tables a parsed query reads, refusing one that reads none.
 
@@ -129,55 +193,15 @@ def require_source_tables(ast: exp.Expression) -> list[str]:
     numbers the caller typed, never values read from a model.
     Only consumed scopes are followed; an unused CTE supplies no grounding.
     """
-    scopes = traverse_scope(ast)
-    tables, visited = set(), set()
-
-    def visit(scope):
-        if id(scope) in visited:
-            return
-        visited.add(id(scope))
+    scopes = consumed_scopes(traverse_scope(ast))
+    tables = set()
+    for scope in scopes:
         for alias, node in scope.references:
             if isinstance(node, exp.Table):
-                if not node.db and not node.catalog:
-                    visible = {
-                        name: source
-                        for name, source in scope.cte_sources.items()
-                        if name.casefold() == node.name.casefold()
-                    }
-                    if visible:
-                        # Case-insensitive shadowing follows the nearest WITH, even
-                        # when the parser kept an outer alias with the exact spelling.
-                        owners = {}
-                        parent = node.parent
-                        while parent is not None:
-                            owners[id(parent)] = len(owners)
-                            parent = parent.parent
-                        bindings = []
-                        for source in visible.values():
-                            cte = source.expression.find_ancestor(exp.CTE)
-                            if cte is not None and cte.parent is not None:
-                                owner = cte.parent.parent
-                                if id(owner) in owners:
-                                    bindings.append((owners[id(owner)], source))
-                        if bindings:
-                            nearest = min(distance for distance, _ in bindings)
-                            choices = {
-                                id(s): s
-                                for distance, s in bindings
-                                if distance == nearest
-                            }
-                            if len(choices) == 1:
-                                visit(next(iter(choices.values())))
-                        continue
+                if _visible_cte_source(scope, node) is not None:
+                    continue
                 if node.name:
                     tables.add(node.name)
-            elif isinstance(source := scope.sources.get(alias), Scope):
-                visit(source)
-        for child in [*scope.subquery_scopes, *scope.union_scopes]:
-            visit(child)
-
-    if scopes:
-        visit(scopes[-1])
     if not tables:
         raise NoSourceTablesError()
     return sorted(tables)

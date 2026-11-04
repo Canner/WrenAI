@@ -755,8 +755,9 @@ def test_a_checker_fault_refuses_before_execution(declaring, monkeypatch, fault)
     declaring.engine.query.assert_not_called()
 
 
-def test_unused_cte_cannot_label_a_literal_as_model_derived(bound_transport):
-    sql = "WITH unused AS (SELECT n FROM orders) SELECT 424 AS total"
+@pytest.mark.parametrize("source", ["orders", "unknown_model"])
+def test_unused_cte_cannot_label_a_literal_as_model_derived(bound_transport, source):
+    sql = f"WITH unused AS (SELECT n FROM {source}) SELECT 424 AS total"
     frame = query_frame(bound_transport, sql)
     assert frame["error"]["class"] == "ungrounded_literal"
     bound_transport.engine.query.assert_not_called()

@@ -45,6 +45,7 @@ from wren.governed_query import query as governed_query
 from wren.read_only import (
     UnsupportedFunctionError,
     check_read_only_query,
+    consumed_scopes,
     cte_reference_ids,
 )
 
@@ -177,26 +178,6 @@ def model_schema(models) -> dict:
         }
         for m in models
     }
-
-
-def _consumed_scopes(scopes):
-    """Scopes reached by the result, excluding CTEs merely available by name."""
-    live = set()
-
-    def visit(scope):
-        if id(scope) in live:
-            return
-        live.add(id(scope))
-        referenced = {alias for alias, _ in scope.references}
-        for alias, source in scope.sources.items():
-            if alias in referenced and isinstance(source, Scope):
-                visit(source)
-        for child in [*scope.union_scopes, *scope.subquery_scopes]:
-            visit(child)
-
-    if scopes:
-        visit(scopes[-1])
-    return [scope for scope in scopes if id(scope) in live]
 
 
 def read_view_bodies(schema: dict, catalog: dict, manifest: dict | None):
@@ -552,7 +533,7 @@ class AdHocSQL:
                         if isinstance(src, exp.Table) and src.name.lower() not in known:
                             raise ValueError("unknown_model")
                 raise pending
-            scopes = _consumed_scopes(scopes)
+            scopes = consumed_scopes(scopes)
             views_read = {
                 name for scope in scopes if (name := self._view_of(scope.expression))
             }
@@ -713,7 +694,7 @@ class AdHocSQL:
         and a comparison of two columns in a join condition are not date filters and count for
         nothing either way. Nothing here reads what the worker wrote about its question.
         """
-        scopes = _consumed_scopes(scopes)
+        scopes = consumed_scopes(scopes)
         windows, unpinned = [], set()
         nullable_on = False
         marked = {}
