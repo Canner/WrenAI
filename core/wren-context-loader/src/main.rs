@@ -15,7 +15,7 @@
 //! `parseable: false` with the assembly error attached. Only a genuinely unusable invocation — a
 //! path that is not a directory, an unwritable output file — exits non-zero.
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
 use wren_context_loader::{
@@ -97,7 +97,24 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, String> {
         }
     }
     let project_dir = project_dir.ok_or_else(|| "a project directory is required".to_string())?;
+    if out_path
+        .as_ref()
+        .zip(catalog_path.as_ref())
+        .is_some_and(|(out, catalog)| output_paths_match(out, catalog))
+    {
+        return Err("-o and --catalog-out must name different files".to_string());
+    }
     Ok((project_dir, out_path, catalog_path))
+}
+
+/// Compare the user-provided paths without resolving symlinks or touching the filesystem. This
+/// catches harmless lexical aliases such as `out.json` and `./out.json` before either writer runs.
+fn output_paths_match(left: &Path, right: &Path) -> bool {
+    left.components()
+        .filter(|component| !matches!(component, Component::CurDir))
+        .eq(right
+            .components()
+            .filter(|component| !matches!(component, Component::CurDir)))
 }
 
 /// Write the capability catalog. A directory that is not a wren project yields an empty catalog
