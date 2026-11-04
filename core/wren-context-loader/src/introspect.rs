@@ -7,6 +7,12 @@
 //! dimensional additivity: a `SUM` or `COUNT` may be a balance or snapshot, so it carries
 //! `additivity: None` rather than an unsupported green light.
 
+use sqlparser::{
+    ast::{BinaryOperator, DuplicateTreatment, Expr, Function, FunctionArguments},
+    dialect::GenericDialect,
+    parser::Parser,
+    tokenizer::Token,
+};
 use warble::{Additivity, ContextLoader, DimensionInfo, LineageGraph, MetricInfo, ModelInfo};
 use wren_core_base::mdl::manifest::Manifest;
 
@@ -208,35 +214,70 @@ impl ContextLoader for MdlContext {
 
 /// Report only non-additivity that an aggregation expression proves.
 ///
-/// `AVG`/`MIN`/`MAX`/`MEDIAN`/`STDDEV`/`VARIANCE`, any `DISTINCT`, and a ratio (`/`) are
-/// non-additive: decomposing them along dimensions can mislead. `SUM`, non-distinct `COUNT`, and
-/// unrecognized expressions return `None`: expression syntax cannot establish whether their input
-/// is additive across every business dimension or is a balance/snapshot. `SemiAdditive` requires
-/// explicit dimensional business semantics and is not inferred here. The prepared-context wire
-/// preserves this unknown as a null additivity value; a consumer must reject it rather than
-/// treating it as additive.
+/// `AVG`/`MIN`/`MAX`/`MEDIAN`/`STDDEV`/`VARIANCE`, actual `DISTINCT` aggregate arguments, and
+/// ratios of aggregate results are non-additive: decomposing them along dimensions can mislead.
+/// `SUM`, non-distinct `COUNT`, scalar division, and unrecognized expressions return `None`:
+/// expression syntax cannot establish whether their input is additive across every business
+/// dimension or is a balance/snapshot. `SemiAdditive` requires explicit dimensional business
+/// semantics and is not inferred here. The prepared-context wire preserves this unknown as a null
+/// additivity value; a consumer must reject it rather than treating it as additive.
 pub fn infer_additivity(expression: &str) -> Option<Additivity> {
-    let upper = expression.to_uppercase();
-    if upper.contains("DISTINCT") || upper.contains('/') {
-        return Some(Additivity::NonAdditive);
-    }
-    match leading_function(&upper).as_deref() {
-        Some("AVG" | "MIN" | "MAX" | "MEDIAN" | "STDDEV" | "VARIANCE") => {
+    let expression = parse_expression(expression)?;
+    match without_parentheses(&expression) {
+        Expr::Function(function) if function_is_nonadditive(function) => {
             Some(Additivity::NonAdditive)
         }
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Divide,
+            right,
+        } if is_aggregate_call(left) && is_aggregate_call(right) => Some(Additivity::NonAdditive),
         _ => None,
     }
 }
 
-/// The leading function name of an expression, e.g. `"SUM(amount)"` → `Some("SUM")`. Returns `None`
-/// when the expression is not a `fn(...)` call (a bare column reference).
-fn leading_function(upper_expr: &str) -> Option<String> {
-    let open = upper_expr.find('(')?;
-    let name = upper_expr[..open].trim();
-    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-        return None;
+fn parse_expression(expression: &str) -> Option<Expr> {
+    let dialect = GenericDialect {};
+    let mut parser = Parser::new(&dialect).try_with_sql(expression).ok()?;
+    let expression = parser.parse_expr().ok()?;
+    (parser.peek_token().token == Token::EOF).then_some(expression)
+}
+
+fn without_parentheses(expression: &Expr) -> &Expr {
+    match expression {
+        Expr::Nested(inner) => without_parentheses(inner),
+        other => other,
     }
-    Some(name.to_string())
+}
+
+fn function_is_nonadditive(function: &Function) -> bool {
+    let name = function.name.to_string().to_ascii_uppercase();
+    matches!(
+        name.as_str(),
+        "AVG" | "MIN" | "MAX" | "MEDIAN" | "STDDEV" | "VARIANCE"
+    ) || (is_aggregate_name(&name) && has_distinct_arguments(&function.args))
+}
+
+fn is_aggregate_call(expression: &Expr) -> bool {
+    matches!(
+        without_parentheses(expression),
+        Expr::Function(function) if is_aggregate_name(&function.name.to_string().to_ascii_uppercase())
+    )
+}
+
+fn is_aggregate_name(name: &str) -> bool {
+    matches!(
+        name,
+        "SUM" | "COUNT" | "AVG" | "MIN" | "MAX" | "MEDIAN" | "STDDEV" | "VARIANCE"
+    )
+}
+
+fn has_distinct_arguments(arguments: &FunctionArguments) -> bool {
+    matches!(
+        arguments,
+        FunctionArguments::List(args)
+            if args.duplicate_treatment == Some(DuplicateTreatment::Distinct)
+    )
 }
 
 fn normalize_type(t: &str) -> String {
@@ -280,6 +321,10 @@ mod tests {
             Some(Additivity::NonAdditive)
         );
         assert_eq!(
+            infer_additivity("SUM(DISTINCT amount)"),
+            Some(Additivity::NonAdditive)
+        );
+        assert_eq!(
             infer_additivity("AVG(amount)"),
             Some(Additivity::NonAdditive)
         );
@@ -295,6 +340,20 @@ mod tests {
         assert_eq!(
             infer_additivity("SUM(a) / SUM(b)"),
             Some(Additivity::NonAdditive)
+        );
+        assert_eq!(
+            infer_additivity("SUM(amount) / COUNT(*)"),
+            Some(Additivity::NonAdditive)
+        );
+        assert_eq!(infer_additivity("SUM(amount) / 2"), None);
+        assert_eq!(infer_additivity("SUM(distinct_count)"), None);
+        assert_eq!(
+            infer_additivity("SUM(CASE WHEN label = 'distinct' THEN amount ELSE 0 END)"),
+            None
+        );
+        assert_eq!(
+            infer_additivity("SUM(CASE WHEN path = '/' THEN amount ELSE 0 END)"),
+            None
         );
         // Unrecognized functions and bare columns need authored dimensional semantics.
         assert_eq!(infer_additivity("weird(x)"), None);
