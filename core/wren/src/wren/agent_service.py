@@ -1965,6 +1965,13 @@ def create_service(
     raw_config = yaml.safe_load(config_bytes.decode("utf-8"))
     check_service_config(raw_config)
     config = apply_policy_preset(raw_config, policy_preset)
+    selection = config.get("metadata_selection", [])
+    if not isinstance(selection, list) or not all(
+        isinstance(name, str) for name in selection
+    ):
+        raise ValueError(
+            "invalid_service_config: metadata_selection must be a list of document ids"
+        )
     if config.get("audit_path") and is_project_source_path(
         root, Path(config["audit_path"]).expanduser()
     ):

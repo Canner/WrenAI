@@ -4664,3 +4664,56 @@ def test_example_rate_view_uses_its_existing_rate_id_for_same_date_ties(reverse_
     by_id = {row[0]: row[3] for row in rows}
     assert len(rows) == len(module.INVOICES)
     assert by_id[4] == 1000.0 and by_id[1] == 100.0
+
+
+@pytest.mark.parametrize(
+    "selection",
+    [
+        "structure",
+        "",
+        None,
+        False,
+        0,
+        {},
+        {"structure": True},
+        [None],
+        [1],
+        ["structure", False],
+    ],
+)
+@pytest.mark.parametrize("preset", [None, "selected"])
+def test_invalid_effective_metadata_selection_refuses_before_runtime(
+    service, monkeypatch, selection, preset
+):
+    from wren import agent_service as module  # noqa: PLC0415
+
+    runtime = MagicMock(wraps=module.RuntimeIPC)
+    snapshot = MagicMock(wraps=module.load_snapshot)
+    engine = MagicMock(wraps=module.open_engine)
+    monkeypatch.setattr(module, "RuntimeIPC", runtime)
+    monkeypatch.setattr(module, "load_snapshot", snapshot)
+    monkeypatch.setattr(module, "open_engine", engine)
+    updates = {"metadata_selection": selection}
+    if preset:
+        updates = {
+            "metadata_selection": ["rules"],
+            "policy_presets": {preset: {"metadata_selection": selection}},
+        }
+    with pytest.raises(ValueError, match="invalid_service_config: metadata_selection"):
+        service(updates=updates, preset=preset, runtime_path=FAKE_RUNTIME)
+    runtime.assert_not_called()
+    snapshot.assert_not_called()
+    engine.assert_not_called()
+
+
+def test_valid_selected_metadata_overrides_an_unused_invalid_fallback(service):
+    s = service(
+        updates={
+            "metadata_selection": "unused",
+            "policy_presets": {"selected": {"metadata_selection": ["structure"]}},
+        },
+        preset="selected",
+    )
+    assert {d["id"] for d in s.capabilities_public()["metadata_documents"]} == {
+        "structure"
+    }
