@@ -55,6 +55,8 @@ The context loader refuses symlinks for source-directory roots (`models`, `cubes
 
 Saved-query consumer lineage is a structural extraction using sqlparser's `GenericDialect`. CTE shadowing currently uses case folding; it does not guarantee execution-equivalent provenance for every data source. Runtime SQL authorization and execution continue through the query gate and engine independently of this consumer-lineage extraction.
 
+Impact analysis preserves the complete transitive downstream list for every lineage seed. A densely connected project can therefore require quadratic time and output space; the loader does not truncate, cap, or otherwise omit consumers from that result.
+
 ## Deliver the planner skill
 
 Retrieve the bundled guide with `wren skills get wren-planner`. Put that output in a `wren-planner/SKILL.md` directory using the external agent's supported skill installation mechanism. Do not install it into a global agent directory without the user's instruction.

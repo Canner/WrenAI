@@ -23,7 +23,8 @@ use std::process::ExitCode;
 use std::os::unix::fs::MetadataExt;
 
 use wren_context_loader::{
-    capability_catalog, catalog_document, prepared_document, read_project_dir, MdlContext,
+    capability_catalog, capture_project, catalog_document, prepared_document, MdlContext,
+    ProjectSnapshot, ProjectSources,
 };
 
 fn main() -> ExitCode {
@@ -45,20 +46,29 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     }
 
-    let context = match load(&project_dir) {
-        Ok(context) => context,
-        Err(message) => {
-            eprintln!("{message}");
+    if !project_dir.is_dir() {
+        eprintln!("{} is not a directory", project_dir.display());
+        return ExitCode::from(1);
+    }
+    let snapshot = match capture_project(&project_dir) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            eprintln!("failed to read {}: {error}", project_dir.display());
             return ExitCode::from(1);
         }
     };
+    let context = load(&project_dir, snapshot.sources.as_ref());
 
-    if let Some(catalog_path) = catalog_path {
-        if let Err(message) = write_catalog(&project_dir, &catalog_path) {
-            eprintln!("{message}");
-            return ExitCode::from(1);
-        }
-    }
+    let catalog_document = match catalog_path.as_ref() {
+        Some(_) => match catalog_from_snapshot(&snapshot) {
+            Ok(document) => Some(document),
+            Err(message) => {
+                eprintln!("{message}");
+                return ExitCode::from(1);
+            }
+        },
+        None => None,
+    };
 
     let document = match prepared_document(&context) {
         Ok(document) => document,
@@ -67,6 +77,26 @@ fn main() -> ExitCode {
             return ExitCode::from(1);
         }
     };
+
+    match wren_context_loader::project_digest(&project_dir) {
+        Ok(digest) if digest == snapshot.digest => {}
+        Ok(_) => {
+            eprintln!("project changed while preparing context; retry the invocation");
+            return ExitCode::from(1);
+        }
+        Err(error) => {
+            eprintln!("failed to digest {}: {error}", project_dir.display());
+            return ExitCode::from(1);
+        }
+    }
+
+    if let Some(catalog_path) = catalog_path {
+        if let Err(e) = std::fs::write(&catalog_path, catalog_document.expect("catalog requested"))
+        {
+            eprintln!("failed to write {}: {e}", catalog_path.display());
+            return ExitCode::from(1);
+        }
+    }
 
     match out_path {
         Some(path) => {
@@ -485,21 +515,11 @@ fn source_name_is_hidden(name: &std::ffi::OsStr) -> bool {
     }
 }
 
-/// Write the capability catalog. A directory that is not a wren project yields an empty catalog
-/// (no models), mirroring how the prepared document reports `parseable: false` rather than
-/// failing: the host decides what an empty card means.
-fn write_catalog(project_dir: &Path, catalog_path: &Path) -> Result<(), String> {
-    let sources = read_project_dir(project_dir)
-        .map_err(|e| format!("failed to read {}: {e}", project_dir.display()))?;
-    let rules = wren_context_loader::read_knowledge_rules(project_dir).map_err(|e| {
-        format!(
-            "failed to read knowledge rules in {}: {e}",
-            project_dir.display()
-        )
-    })?;
-    let catalog = match &sources {
+/// Build the capability catalog from the same captured source bytes as the prepared document.
+fn catalog_from_snapshot(snapshot: &ProjectSnapshot) -> Result<String, String> {
+    let catalog = match &snapshot.sources {
         Some(sources) => capability_catalog(sources),
-        None => capability_catalog(&wren_context_loader::ProjectSources {
+        None => capability_catalog(&ProjectSources {
             wren_project_yml: String::new(),
             model_ymls: Vec::new(),
             relationships_yml: None,
@@ -510,33 +530,26 @@ fn write_catalog(project_dir: &Path, catalog_path: &Path) -> Result<(), String> 
             dashboards_yml: None,
         }),
     };
-    let digest = wren_context_loader::project_digest(project_dir)
-        .map_err(|e| format!("failed to digest {}: {e}", project_dir.display()))?;
-    let catalog = catalog.with_knowledge_rules(rules).with_digest(digest);
-    let document = catalog_document(&catalog)
-        .map_err(|e| format!("failed to serialize the capability catalog: {e}"))?;
-    std::fs::write(catalog_path, document)
-        .map_err(|e| format!("failed to write {}: {e}", catalog_path.display()))
+    let catalog = catalog
+        .with_knowledge_rules(snapshot.rules.clone())
+        .with_digest(snapshot.digest.clone());
+    catalog_document(&catalog)
+        .map_err(|e| format!("failed to serialize the capability catalog: {e}"))
 }
 
 /// Read and assemble the project, turning an assembly failure into an unparseable context rather
 /// than an error: that distinction is what `mdl_parseable` reports downstream.
-fn load(project_dir: &Path) -> Result<MdlContext, String> {
-    if !project_dir.is_dir() {
-        return Err(format!("{} is not a directory", project_dir.display()));
-    }
-    let sources = read_project_dir(project_dir)
-        .map_err(|e| format!("failed to read {}: {e}", project_dir.display()))?;
+fn load(project_dir: &Path, sources: Option<&ProjectSources>) -> MdlContext {
     let Some(sources) = sources else {
         // No `wren_project.yml`: not a wren project at all. Still a document — a profile bound
         // here must fail its `mdl_parseable` precondition, not fail to compile.
-        return Ok(MdlContext::unparseable_with_error(Some(format!(
+        return MdlContext::unparseable_with_error(Some(format!(
             "{} holds no wren_project.yml",
             project_dir.display()
-        ))));
+        )));
     };
-    Ok(match MdlContext::try_from_sources(&sources) {
+    match MdlContext::try_from_sources(sources) {
         Ok(context) => context,
         Err(e) => MdlContext::unparseable_with_error(Some(e.to_string())),
-    })
+    }
 }

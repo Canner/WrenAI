@@ -11,12 +11,26 @@
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::Read;
 use thiserror::Error;
 use wren_core_base::mdl::manifest::Manifest;
+
+#[cfg(not(target_arch = "wasm32"))]
+use sha2::{Digest, Sha256};
 
 /// A wren project assembled into a canonical MDL manifest.
 pub struct LoadedProject {
     pub manifest: Manifest,
+}
+
+/// A single native read of the inputs that feed both loader documents. Only semantic and rule
+/// files are retained; other digest-covered files are streamed directly into [`Self::digest`].
+#[cfg(not(target_arch = "wasm32"))]
+pub struct ProjectSnapshot {
+    pub sources: Option<ProjectSources>,
+    pub rules: KnowledgeRules,
+    pub digest: String,
 }
 
 #[derive(Debug, Error)]
@@ -372,6 +386,359 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
         knowledge_sql_mds,
         dashboards_yml,
     }))
+}
+
+/// Capture the project inputs once for the CLI's prepared document, catalog, and digest. This
+/// makes those outputs mutually coherent; it does not claim an atomic filesystem snapshot.
+#[cfg(all(unix, not(target_arch = "wasm32")))]
+pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot> {
+    let root = crate::source_fs::SourceDir::open_root(dir)?;
+    let mut capture = SourceCapture::default();
+    let mut entries: Vec<(String, bool)> = [
+        ("wren_project.yml".to_string(), false),
+        ("relationships.yml".to_string(), false),
+        ("cubes.yml".to_string(), false),
+        ("dashboards.yml".to_string(), false),
+        ("instructions.md".to_string(), false),
+        ("models/".to_string(), true),
+        ("cubes/".to_string(), true),
+        ("views/".to_string(), true),
+        ("knowledge/".to_string(), true),
+    ]
+    .into();
+    entries.sort_by(|left, right| left.0.as_bytes().cmp(right.0.as_bytes()));
+    for (entry, is_dir) in entries {
+        let name = entry.trim_end_matches('/');
+        if is_dir {
+            if let Some(child) = root.open_dir_if_exists(name.as_ref())? {
+                capture.capture_dir(&child, name)?;
+            }
+        } else if let Some(file) = root.open_regular_file(name.as_ref())? {
+            capture.capture_file(name, file)?;
+        }
+    }
+    let digest = capture.digest();
+    let sources = captured_sources(&capture.text)?;
+    let rules = captured_rules(&capture.text);
+    Ok(ProjectSnapshot {
+        sources,
+        rules,
+        digest,
+    })
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(unix)))]
+pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot> {
+    use std::fs;
+
+    validate_nonunix_file_slots(dir)?;
+    crate::digest::validate_source_directories(dir)?;
+    let mut files = Vec::new();
+    for name in [
+        "wren_project.yml",
+        "relationships.yml",
+        "cubes.yml",
+        "dashboards.yml",
+        "instructions.md",
+    ] {
+        let path = dir.join(name);
+        if path.is_file() {
+            files.push((name.to_string(), path));
+        }
+    }
+    files.extend(crate::digest::source_files(dir)?);
+    files.sort_by(|left, right| left.0.as_bytes().cmp(right.0.as_bytes()));
+    let mut capture = SourceCapture::default();
+    for (relative, path) in files {
+        capture.capture_file(&relative, fs::File::open(path)?)?;
+    }
+    let sources = captured_sources(&capture.text)?;
+    let rules = captured_rules(&capture.text);
+    let digest = capture.digest();
+    Ok(ProjectSnapshot {
+        sources,
+        rules,
+        digest,
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Default)]
+struct SourceCapture {
+    hasher: Sha256,
+    text: BTreeMap<String, String>,
+}
+
+#[cfg(all(unix, not(target_arch = "wasm32")))]
+impl SourceCapture {
+    fn capture_dir(
+        &mut self,
+        dir: &crate::source_fs::SourceDir,
+        prefix: &str,
+    ) -> std::io::Result<()> {
+        let mut entries = Vec::new();
+        for name in dir.names()? {
+            if crate::digest::is_hidden(&name) {
+                continue;
+            }
+            let name_text = crate::digest::source_name(&name)?;
+            let kind = dir.entry_kind(&name)?;
+            let path = format!(
+                "{prefix}/{name_text}{}",
+                if kind == crate::source_fs::EntryKind::Directory {
+                    "/"
+                } else {
+                    ""
+                }
+            );
+            entries.push((path, name, kind));
+        }
+        entries.sort_by(|left, right| left.0.as_bytes().cmp(right.0.as_bytes()));
+        for (path, name, kind) in entries {
+            match kind {
+                crate::source_fs::EntryKind::Directory => {
+                    reject_directory_file_slot(path.trim_end_matches('/'))?;
+                    self.capture_dir(&dir.open_dir(&name)?, path.trim_end_matches('/'))?;
+                }
+                crate::source_fs::EntryKind::Regular | crate::source_fs::EntryKind::Symlink => {
+                    let Some(file) = dir.open_regular_file(&name)? else {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidInput,
+                            "directory_symlink_unsupported",
+                        ));
+                    };
+                    self.capture_file(&path, file)?;
+                }
+                crate::source_fs::EntryKind::Missing | crate::source_fs::EntryKind::Other => {}
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl SourceCapture {
+    fn capture_file(&mut self, relative: &str, mut file: std::fs::File) -> std::io::Result<()> {
+        let expected = file.metadata()?.len();
+        self.hasher.update(relative.as_bytes());
+        self.hasher.update([0]);
+        self.hasher.update(expected.to_string().as_bytes());
+        self.hasher.update([0]);
+        let retain = captured_text_file(relative);
+        let mut retained = retain.then(Vec::new);
+        let mut total = 0;
+        let mut buffer = [0; 8192];
+        loop {
+            let count = file.read(&mut buffer)?;
+            if count == 0 {
+                break;
+            }
+            total += count as u64;
+            self.hasher.update(&buffer[..count]);
+            if let Some(retained) = &mut retained {
+                retained.extend_from_slice(&buffer[..count]);
+            }
+        }
+        if total != expected {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("file changed while hashing: {relative}"),
+            ));
+        }
+        if let Some(bytes) = retained {
+            self.text.insert(
+                relative.to_string(),
+                String::from_utf8(bytes).map_err(std::io::Error::other)?,
+            );
+        }
+        Ok(())
+    }
+
+    fn digest(&self) -> String {
+        self.hasher
+            .clone()
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn captured_text_file(path: &str) -> bool {
+    matches!(
+        path,
+        "wren_project.yml"
+            | "relationships.yml"
+            | "cubes.yml"
+            | "dashboards.yml"
+            | "instructions.md"
+    ) || direct_source_file(path, "models", "metadata.yml").is_some()
+        || direct_source_file(path, "models", "ref_sql.sql").is_some()
+        || direct_source_file(path, "cubes", "metadata.yml").is_some()
+        || direct_source_file(path, "views", "metadata.yml").is_some()
+        || direct_source_file(path, "views", "sql.yml").is_some()
+        || direct_file_in(path, "knowledge/sql").is_some_and(|name| name.ends_with(".md"))
+        || direct_file_in(path, "knowledge/rules").is_some_and(|name| name.ends_with(".md"))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn direct_source_file<'a>(path: &'a str, parent: &str, file: &str) -> Option<&'a str> {
+    let prefix = format!("{parent}/");
+    let rest = path.strip_prefix(&prefix)?;
+    let (child, leaf) = rest.split_once('/')?;
+    if leaf == file || (file.is_empty() && !leaf.contains('/')) {
+        Some(child)
+    } else {
+        None
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn reject_directory_file_slot(path: &str) -> std::io::Result<()> {
+    let error = if direct_source_file(path, "models", "metadata.yml").is_some()
+        || direct_source_file(path, "cubes", "metadata.yml").is_some()
+        || direct_source_file(path, "views", "metadata.yml").is_some()
+    {
+        Some("metadata_directory_unsupported")
+    } else if direct_source_file(path, "models", "ref_sql.sql").is_some() {
+        Some("ref_sql_directory_unsupported")
+    } else if direct_source_file(path, "views", "sql.yml").is_some() {
+        Some("sql_yml_directory_unsupported")
+    } else {
+        None
+    };
+    error.map_or(Ok(()), |message| {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            message,
+        ))
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn captured_sources(text: &BTreeMap<String, String>) -> std::io::Result<Option<ProjectSources>> {
+    let Some(wren_project_yml) = text.get("wren_project.yml").cloned() else {
+        return Ok(None);
+    };
+    let mut model_ymls = Vec::new();
+    let mut cube_ymls = Vec::new();
+    let mut views = Vec::new();
+    for (path, contents) in text {
+        if let Some(name) = direct_source_file(path, "models", "metadata.yml") {
+            model_ymls.push(apply_ref_sql_file(
+                contents.clone(),
+                text.get(&format!("models/{name}/ref_sql.sql")).cloned(),
+            )?);
+        }
+        if direct_source_file(path, "cubes", "metadata.yml").is_some() {
+            cube_ymls.push(contents.clone());
+        }
+        if let Some(name) = direct_source_file(path, "views", "metadata.yml") {
+            views.push((
+                contents.clone(),
+                text.get(&format!("views/{name}/sql.yml"))
+                    .cloned()
+                    .unwrap_or_default(),
+            ));
+        }
+    }
+    let mut knowledge_sql_mds = Vec::new();
+    for (path, contents) in text {
+        if let Some(name) = direct_file_in(path, "knowledge/sql") {
+            if let Some(slug) = name.strip_suffix(".md") {
+                knowledge_sql_mds.push((slug.to_string(), contents.clone()));
+            }
+        }
+    }
+    Ok(Some(ProjectSources {
+        wren_project_yml,
+        model_ymls,
+        relationships_yml: text.get("relationships.yml").cloned(),
+        cubes_yml: text.get("cubes.yml").cloned(),
+        cube_ymls,
+        views,
+        knowledge_sql_mds,
+        dashboards_yml: text.get("dashboards.yml").cloned(),
+    }))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn direct_file_in<'a>(path: &'a str, parent: &str) -> Option<&'a str> {
+    let name = path.strip_prefix(&format!("{parent}/"))?;
+    (!name.contains('/')).then_some(name)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn captured_rules(text: &BTreeMap<String, String>) -> KnowledgeRules {
+    let mut files = Vec::new();
+    for (path, contents) in text {
+        if let Some(name) = direct_file_in(path, "knowledge/rules") {
+            if name.ends_with(".md") && !contents.trim().is_empty() {
+                files.push(KnowledgeRuleFile {
+                    path: format!("knowledge/rules/{name}"),
+                    content: contents.trim().to_string(),
+                });
+            }
+        }
+    }
+    let used_legacy = text.contains_key("instructions.md");
+    if let Some(contents) = text
+        .get("instructions.md")
+        .filter(|contents| !contents.trim().is_empty())
+    {
+        files.push(KnowledgeRuleFile {
+            path: "instructions.md".to_string(),
+            content: contents.trim().to_string(),
+        });
+    }
+    let content = files
+        .iter()
+        .map(|file| file.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let (declared_defaults, warnings) = declared_default_ids(&files);
+    for warning in warnings {
+        eprintln!("wren-context-loader: {warning}");
+    }
+    KnowledgeRules {
+        content,
+        used_legacy,
+        files,
+        declared_defaults,
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(unix)))]
+fn validate_nonunix_file_slots(dir: &std::path::Path) -> std::io::Result<()> {
+    for parent in ["models", "cubes", "views"] {
+        let root = dir.join(parent);
+        if !root.is_dir() {
+            continue;
+        }
+        for child in list_dir(&root)?.into_iter().filter(|path| path.is_dir()) {
+            let metadata = child.join("metadata.yml");
+            if metadata.is_dir() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "metadata_directory_unsupported",
+                ));
+            }
+            if parent == "models" && child.join("ref_sql.sql").is_dir() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "ref_sql_directory_unsupported",
+                ));
+            }
+            if parent == "views" && child.join("sql.yml").is_dir() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "sql_yml_directory_unsupported",
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(unix)))]

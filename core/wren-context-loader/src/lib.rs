@@ -47,7 +47,7 @@ pub use project::{
     ProjectSources,
 };
 #[cfg(not(target_arch = "wasm32"))]
-pub use project::{read_knowledge_rules, read_project_dir};
+pub use project::{capture_project, read_knowledge_rules, read_project_dir, ProjectSnapshot};
 
 /// Render a project's Warble projection as a prepared-context document.
 ///

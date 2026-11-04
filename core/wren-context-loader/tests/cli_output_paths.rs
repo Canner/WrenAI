@@ -237,3 +237,24 @@ fn invalid_output_parents_are_rejected_before_the_other_write() {
         assert!(!catalog.exists());
     }
 }
+
+#[cfg(windows)]
+#[test]
+fn hardlinked_output_aliases_are_rejected_before_writing() {
+    let project = fixture("rules-wren");
+    let output = tempfile::tempdir().unwrap();
+    let out = output.path().join("out.json");
+    let hard_link = output.path().join("hard-link.json");
+    fs::write(&out, "retain").unwrap();
+    fs::hard_link(&out, &hard_link).unwrap();
+
+    let run = run_loader(&[
+        project.as_os_str(),
+        "-o".as_ref(),
+        out.as_os_str(),
+        "--catalog-out".as_ref(),
+        hard_link.as_os_str(),
+    ]);
+    assert_eq!(run.status.code(), Some(2), "{:?}", run.stderr);
+    assert_eq!(fs::read_to_string(out).unwrap(), "retain");
+}

@@ -237,7 +237,7 @@ fn validate_collect(dir: &crate::source_fs::SourceDir) -> io::Result<()> {
 }
 
 #[cfg(not(unix))]
-fn source_files(dir: &Path) -> io::Result<Vec<(String, std::path::PathBuf)>> {
+pub(crate) fn source_files(dir: &Path) -> io::Result<Vec<(String, std::path::PathBuf)>> {
     let mut files = Vec::new();
     for name in SOURCE_DIRS {
         let root = dir.join(name);
