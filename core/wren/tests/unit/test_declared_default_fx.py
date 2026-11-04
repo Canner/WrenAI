@@ -573,3 +573,151 @@ def test_computed_combined_amounts_keep_their_own_rate_suppliers_through_a_cte(s
     assert make_checker().check(parse_one(sql, dialect="duckdb")) == (
         [RATE] if swapped else []
     )
+
+
+@pytest.mark.parametrize(
+    "prefix,amount,currency,tail",
+    [
+        (
+            "",
+            "p.amount",
+            "other.currency",
+            "payments p JOIN payments other ON other.order_id=p.order_id",
+        ),
+        (
+            "WITH selected AS (SELECT amount,currency,order_id FROM payments) ",
+            "p.amount",
+            "other.currency",
+            "selected p JOIN selected other ON other.order_id=p.order_id",
+        ),
+    ],
+)
+def test_literal_currency_exception_tracks_aggregated_alias(
+    prefix, amount, currency, tail
+):
+    manifest, rules = declared()
+    rules = [
+        replace(r, filters_currency_literal=True, groups_by_currency=False)
+        for r in rules
+        if isinstance(r, RequireRateJoin)
+    ]
+    checker = DefaultsChecker(rules, manifest, "duckdb")
+    bad = prefix + f"SELECT SUM({amount}) FROM {tail} WHERE {currency}='USD'"
+    assert checker.check(parse_one(bad, dialect="duckdb")) == [RATE]
+    good = bad.replace(f"WHERE {currency}", "WHERE p.currency")
+    assert checker.check(parse_one(good, dialect="duckdb")) == []
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "SUM(p.amount*f.rate_to_usd), MAX(CASE WHEN p.currency='USD' THEN 1 ELSE 0 END)",
+        "SUM(CASE WHEN f.currency='USD' THEN p.amount ELSE p.amount*f.rate_to_usd END)",
+        "SUM(CASE WHEN p.currency<>'USD' THEN p.amount ELSE p.amount*f.rate_to_usd END)",
+        "SUM(CASE WHEN other.currency='USD' THEN p.amount ELSE p.amount*f.rate_to_usd END)",
+    ],
+)
+def test_base_guard_must_cover_rate_branch_for_actual_amount(strict, expression):
+    tail = f"payments p JOIN payments other ON other.order_id=p.order_id ASOF LEFT JOIN fx_rates f ON {ON}"
+    result = verdict(strict, f"SELECT {expression} FROM {tail}")
+    assert result.fx_missing_rate_handling == "unguarded_left_join"
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "SUM(CASE WHEN p.currency='USD' THEN p.amount ELSE p.amount*f.rate_to_usd END)",
+        "SUM(CASE WHEN p.currency<>'USD' THEN p.amount*f.rate_to_usd ELSE p.amount END)",
+        "SUM(p.amount * CASE WHEN p.currency='USD' THEN 1 ELSE f.rate_to_usd END)",
+    ],
+)
+def test_guarded_rate_branch_keeps_base_rows_with_real_duckdb(strict, expression):
+    import duckdb  # noqa: PLC0415
+
+    sql = f"SELECT {expression} FROM payments p ASOF LEFT JOIN fx_rates f ON {ON}"
+    assert verdict(strict, sql).fx_missing_rate_handling == "guarded_by_base_currency"
+    with duckdb.connect() as db:
+        db.execute(
+            "CREATE TABLE payments(amount DOUBLE,currency VARCHAR,captured_at DATE)"
+        )
+        db.execute(
+            "INSERT INTO payments VALUES (100,'USD','2025-01-02'),(10,'EUR','2025-01-02')"
+        )
+        db.execute(
+            "CREATE TABLE fx_rates(currency VARCHAR,date DATE,rate_to_usd DOUBLE)"
+        )
+        db.execute("INSERT INTO fx_rates VALUES ('EUR','2025-01-01',2)")
+        assert db.execute(sql).fetchone() == (120.0,)
+        unsafe = sql.replace("p.currency='USD'", "f.currency='USD'")
+        if unsafe != sql:
+            assert db.execute(unsafe).fetchone() == (20.0,)
+
+
+@pytest.mark.parametrize(
+    "guarded,sql",
+    [
+        (
+            None,
+            f"WITH converted AS (SELECT CASE WHEN p.currency='USD' THEN p.amount ELSE p.amount*f.rate_to_usd END AS value FROM payments p ASOF LEFT JOIN fx_rates f ON {ON}) SELECT SUM(value) FROM converted",
+        ),
+        (
+            True,
+            f"WITH amounts AS (SELECT amount,currency,captured_at FROM payments) SELECT SUM(CASE WHEN p.currency='USD' THEN p.amount ELSE p.amount*f.rate_to_usd END) FROM amounts p ASOF LEFT JOIN fx_rates f ON {ON}",
+        ),
+        (
+            False,
+            f"WITH amounts AS (SELECT amount,currency,captured_at FROM payments) SELECT SUM(CASE WHEN other.currency='USD' THEN p.amount ELSE p.amount*f.rate_to_usd END) FROM amounts p CROSS JOIN amounts other ASOF LEFT JOIN fx_rates f ON {ON}",
+        ),
+        (
+            False,
+            f"SELECT SUM(CASE WHEN p.currency='USD' THEN p.amount ELSE p.amount*f.rate_to_usd END),SUM(p.amount*f.rate_to_usd) FROM payments p ASOF LEFT JOIN fx_rates f ON {ON}",
+        ),
+        (
+            False,
+            f"SELECT SUM(CASE WHEN p.currency='USD' AND p.amount>0 THEN p.amount ELSE p.amount*f.rate_to_usd END) FROM payments p ASOF LEFT JOIN fx_rates f ON {ON}",
+        ),
+        (
+            True,
+            f"SELECT SUM(CASE WHEN p.currency<>'USD' AND p.amount>0 THEN p.amount*f.rate_to_usd ELSE p.amount END) FROM payments p ASOF LEFT JOIN fx_rates f ON {ON}",
+        ),
+    ],
+)
+def test_rate_guard_scope_and_branch_polarity_across_ctes(strict, guarded, sql):
+    result = verdict(strict, sql)
+    if guarded is None:
+        # A whole conversion CTE is conservatively rejected by the existing attachment proof.
+        assert result.violations == (
+            f"{RATE}:rate_multi_match",
+            f"{RATE}:base_currency_dropped",
+        )
+        return
+    expected = "guarded_by_base_currency" if guarded else "unguarded_left_join"
+    assert result.fx_missing_rate_handling == expected
+
+
+def test_literal_currency_cannot_borrow_a_sibling_union_consumer():
+    manifest, rules = declared()
+    rules = [
+        replace(r, filters_currency_literal=True, groups_by_currency=False)
+        for r in rules
+        if isinstance(r, RequireRateJoin)
+    ]
+    checker = DefaultsChecker(rules, manifest, "duckdb")
+    sql = "WITH shared AS (SELECT amount,currency FROM payments) SELECT SUM(amount) FROM shared WHERE currency='USD' UNION ALL SELECT SUM(amount) FROM shared"
+    assert checker.check(parse_one(sql, dialect="duckdb")) == [RATE]
+    assert (
+        checker.check(
+            parse_one(sql + " WHERE currency IN ('USD','EUR')", dialect="duckdb")
+        )
+        == []
+    )
+
+
+def test_other_payment_alias_cannot_guard_a_literal_rate_default(strict):
+    sql = f"SELECT SUM(CASE WHEN other.currency='USD' THEN p.amount*COALESCE(f.rate_to_usd,1) ELSE p.amount*f.rate_to_usd END) FROM payments p CROSS JOIN payments other ASOF LEFT JOIN fx_rates f ON {ON}"
+    assert f"{RATE}:rate_default_literal" in violations(strict, sql)
+
+
+def test_inverse_conjunction_else_is_not_a_base_only_literal_default(strict):
+    sql = f"SELECT SUM(p.amount * CASE WHEN p.currency<>'USD' AND p.amount>0 THEN f.rate_to_usd ELSE COALESCE(f.rate_to_usd,1) END) FROM payments p ASOF LEFT JOIN fx_rates f ON {ON}"
+    assert f"{RATE}:rate_default_literal" in violations(strict, sql)

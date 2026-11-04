@@ -391,3 +391,51 @@ def test_transfer_compacts_unused_arrow_buffers_and_rejects_binary():
     assert len(pickle.dumps(compact)) < 131072
     with pytest.raises(ValueError, match="unsupported_result"):
         _bounded_table(pa.table({"value": [b"binary"]}))
+
+
+@pytest.mark.parametrize("leader_exits", [True, False])
+def test_stop_kills_owned_helpers_after_leader_exit(tmp_path, leader_exits):
+    import signal  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+
+    ready = tmp_path / "helper.pid"
+    helper = (
+        "import os,signal,time,pathlib; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(%r).write_text(str(os.getpid())); time.sleep(30)"
+        % str(ready)
+    )
+    leader_code = (
+        "import subprocess,sys,time; subprocess.Popen([sys.executable,'-c',%r],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); %s"
+        % (helper, "time.sleep(0.3)" if leader_exits else "time.sleep(30)")
+    )
+    leader = subprocess.Popen(
+        [sys.executable, "-c", leader_code], start_new_session=True
+    )
+    try:
+        deadline = time.monotonic() + 3
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert ready.exists()
+        helper_pid = int(ready.read_text())
+        assert os.getpgid(helper_pid) == leader.pid
+        if leader_exits:
+            leader.wait(timeout=3)
+        workers._stop(leader)
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            status = subprocess.run(
+                ["ps", "-o", "stat=", "-p", str(helper_pid)],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            if not status or status.startswith("Z"):
+                break
+            time.sleep(0.01)
+        assert not status or status.startswith("Z"), "owned helper survived cleanup"
+        assert leader.poll() is not None
+    finally:
+        try:
+            os.killpg(leader.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        leader.wait(timeout=3)

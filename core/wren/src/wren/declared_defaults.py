@@ -139,7 +139,11 @@ def _rules_files(project_path: Path) -> list[Path]:
     files: list[Path] = []
     rules_dir = project_path / RULES_DIR
     if rules_dir.is_dir():
-        files.extend(sorted(rules_dir.glob("*.md")))
+        files.extend(
+            sorted(
+                path for path in rules_dir.glob("*.md") if not path.name.startswith(".")
+            )
+        )
     legacy = project_path / LEGACY_RULES_FILE
     if legacy.is_file():
         files.append(legacy)

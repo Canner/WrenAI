@@ -490,6 +490,18 @@ def _views_semantics(manifest: dict) -> dict:
     }
 
 
+def _relationships_semantics(manifest: dict) -> dict:
+    return {
+        relationship["name"]: (
+            relationship.get("models"),
+            relationship.get("joinType"),
+            _expression(relationship.get("condition")),
+        )
+        for relationship in manifest.get("relationships") or []
+        if isinstance(relationship, dict) and isinstance(relationship.get("name"), str)
+    }
+
+
 def _cube_expressions(cubes: list, time_key: str) -> dict:
     """``cube -> member-category -> member -> expression`` without prose or structural fields."""
     result = {}
@@ -543,6 +555,11 @@ def _check_execution_semantics(root: Path, manifest: dict, digest: str) -> None:
         ) from None
     checks = (
         ("models", _models_semantics(current), _models_semantics(manifest)),
+        (
+            "relationships",
+            _relationships_semantics(current),
+            _relationships_semantics(manifest),
+        ),
         ("views", _views_semantics(current), _views_semantics(manifest)),
         (
             "cube expressions",
@@ -1092,7 +1109,13 @@ class ContextReader:
                 if column.get(flag):
                     entry[flag] = True
             if column.get("enum_values"):
-                entry["enum_values"] = column["enum_values"]
+                values = [
+                    {**value, "meaning": meaning}
+                    for value in column["enum_values"]
+                    if (meaning := _prose(value.get("meaning"), name, self.denied))
+                ]
+                if values:
+                    entry["enum_values"] = values
             if column.get("relationship") in kept_relationships:
                 entry["relationship"] = column["relationship"]
             columns.append(entry)

@@ -739,7 +739,9 @@ class _Statement:
             self.taint(group) & currencies for group in self.groups
         ):
             return False
-        if rule.filters_currency_literal and self._filters_currency_literal(currencies):
+        if rule.filters_currency_literal and self._filters_currency_literal(
+            currencies, amounts
+        ):
             return False
         reads = [
             (id(source), path)
@@ -840,7 +842,53 @@ class _Statement:
                     )
         return not complete or not supplied <= complete
 
-    def _filters_currency_literal(self, currencies: set[Pair]) -> bool:
+    def _amount_reads(self, amounts, expression=None):
+        """Physical amount reads, including the exact CTE consumer of an aggregate."""
+        reads = []
+        for aggregate in self.aggregates if expression is None else [expression]:
+            for column in aggregate.find_all(exp.Column):
+                if not self.origin(column).taint & amounts:
+                    continue
+                for table, route in self._column_routes(
+                    column,
+                    expressions=True,
+                    expression_columns=lambda node: [
+                        c
+                        for c in node.find_all(exp.Column)
+                        if self.origin(c).taint & amounts
+                    ],
+                ):
+                    scope, alias, source = route[-1]
+                    for path in self._read_paths(scope, alias, source):
+                        if all(
+                            any(
+                                owner is p and alias == a and source is s
+                                for p, a, s in path
+                            )
+                            for owner, alias, source in route
+                        ):
+                            reads.append((table, path))
+        return reads
+
+    def _currency_reaches(self, column, table, path, terms):
+        """A currency belongs to this amount row, directly or by a declared entity key."""
+        graph = self._exclusion_graph(terms, path)
+        connected, pending = set(), [table]
+        while pending:
+            current = pending.pop()
+            if current not in connected:
+                connected.add(current)
+                pending.extend(graph.get(current, ()))
+        routes = self._column_routes(column)
+        return bool(routes) and all(
+            source in connected and self._route_fits(route, path)
+            for source, route in routes
+        )
+
+    def _filters_currency_literal(
+        self, currencies: set[Pair], amounts: set[Pair]
+    ) -> bool:
+        literals = []
         for conjunct in self.conjuncts:
             if isinstance(conjunct, exp.EQ):
                 for side, other in (
@@ -848,13 +896,24 @@ class _Statement:
                     (conjunct.expression, conjunct.this),
                 ):
                     if self.direct(side) in currencies and _is_string(other):
-                        return True
+                        literals.append((conjunct, side))
             elif isinstance(conjunct, exp.In) and conjunct.args.get("expressions"):
                 if self.direct(conjunct.this) in currencies and all(
                     _is_string(value) for value in conjunct.expressions
                 ):
-                    return True
-        return False
+                    literals.append((conjunct, conjunct.this))
+        reads = self._amount_reads(amounts)
+        for table, path in reads:
+            restricting = self._restricting(path[0][0], path, next(iter(currencies)))
+            terms = [term for term, scope in self._filters if scope in restricting]
+            if not any(
+                id(self._scope_for(term).expression) in restricting
+                and any(term is candidate for candidate in terms)
+                and self._currency_reaches(column, table, path, terms)
+                for term, column in literals
+            ):
+                return False
+        return bool(reads)
 
 
 def _is_string(node: exp.Expression) -> bool:

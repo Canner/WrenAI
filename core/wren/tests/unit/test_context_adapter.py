@@ -1950,3 +1950,65 @@ def test_cube_time_settings_must_match_the_built_manifest(field, authored, built
     }
     with pytest.raises(ContextInconsistent, match="cube"):
         adapter._check_consistent(catalog, manifest)
+
+
+@pytest.mark.parametrize("field", ["condition", "models", "joinType"])
+def test_relationship_execution_drift_refuses_stale_target(real_project, field):
+    source = real_project / "relationships.yml"
+    relations = yaml.safe_load(source.read_text())
+    relation = relations["relationships"][0]
+    if field == "condition":
+        relation[field] += " AND 1 = 0"
+    elif field == "models":
+        relation[field] = list(reversed(relation[field]))
+    else:
+        relation["join_type"] = "one_to_one"
+    source.write_text(yaml.safe_dump(relations))
+    with pytest.raises(ContextInconsistent, match="relationships"):
+        load_snapshot(real_project)
+    rebuild_target(real_project)
+    assert load_snapshot(real_project).manifest["relationships"]
+
+
+def test_enum_meanings_are_redacted_without_mutating_catalog():
+    catalog = {"models": [model("customers", columns=("id", "tier"))]}
+    values = [
+        {"value": "gold", "meaning": "Derived from customers.email."},
+        {
+            "value": "silver",
+            "meaning": "Public tier. Uses customers.email.",
+            "source": "metadata",
+        },
+    ]
+    catalog["models"][0]["columns"][1]["enum_values"] = values
+    r = reader(catalog, denied={("customers", "email")})
+    output = r.read(["customers"])["items"][0]["columns"][1]
+    assert output["enum_values"] == [
+        {"value": "silver", "meaning": "Public tier.", "source": "metadata"}
+    ]
+    assert values[0]["meaning"] == "Derived from customers.email."
+    assert values[1]["meaning"] == "Public tier. Uses customers.email."
+
+
+def test_relationship_prose_and_outer_whitespace_do_not_require_rebuild(real_project):
+    source = real_project / "relationships.yml"
+    document = yaml.safe_load(source.read_text())
+    relation = document["relationships"][0]
+    relation["description"] = "A new explanation of the same relationship."
+    relation["condition"] = "  " + relation["condition"] + "\n"
+    source.write_text(yaml.safe_dump(document))
+    assert load_snapshot(real_project).manifest["relationships"]
+
+
+def test_hidden_rules_stay_out_of_snapshot_and_fingerprint(real_project):
+    before = load_snapshot(real_project)
+    hidden = real_project / "knowledge/rules/.private.md"
+    visible = real_project / "knowledge/rules/conventions.md"
+    hidden.write_text(visible.read_text())
+    first = load_snapshot(real_project)
+    assert first.digest == before.digest
+    assert first.declarations == before.declarations
+    hidden.write_text(hidden.read_text() + "\nA private note.\n")
+    second = load_snapshot(real_project)
+    assert second.digest == before.digest
+    assert second.declarations == before.declarations

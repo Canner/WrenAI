@@ -400,6 +400,8 @@ def serve_agent_presets(
         config = yaml.safe_load(
             service_config.expanduser().resolve(strict=True).read_text()
         )
+        if not isinstance(config, dict):
+            raise ValueError("invalid_service_config")
         default, presets = read_policy_presets(config)
     except yaml.YAMLError:
         typer.echo("Cannot parse service config YAML.", err=True)

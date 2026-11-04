@@ -3683,3 +3683,35 @@ def test_close_interrupts_authorization_and_keeps_the_shared_runtime(
     finally:
         instance.ipc.close()
         thread.join(5)
+
+
+@pytest.mark.parametrize(
+    "text", ["", "# comment only\n", "[]", "a string", "123", "true"]
+)
+def test_agent_presets_rejects_non_mapping_yaml_as_controlled_error(tmp_path, text):
+    from typer.testing import CliRunner  # noqa: PLC0415
+
+    from wren.serve_cli import serve_app  # noqa: PLC0415
+
+    config = tmp_path / "config.yml"
+    config.write_text(text)
+    result = CliRunner().invoke(
+        serve_app, ["agent-presets", "--service-config", str(config)]
+    )
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert "Invalid presets: invalid_service_config." in result.output
+
+
+def test_agent_presets_empty_mapping_remains_valid(tmp_path):
+    from typer.testing import CliRunner  # noqa: PLC0415
+
+    from wren.serve_cli import serve_app  # noqa: PLC0415
+
+    config = tmp_path / "config.yml"
+    config.write_text("{}")
+    result = CliRunner().invoke(
+        serve_app, ["agent-presets", "--service-config", str(config)]
+    )
+    assert result.exit_code == 0
+    assert json.loads(result.output) == {"default": None, "presets": []}

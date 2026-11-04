@@ -53,6 +53,8 @@ def _stop(process):
             pass
 
     if process.poll() is not None:
+        if os.name == "posix":
+            send(signal.SIGKILL)
         return
     send(signal.SIGTERM)
     try:
@@ -60,6 +62,10 @@ def _stop(process):
     except subprocess.TimeoutExpired:
         send(signal.SIGKILL)
         process.wait(timeout=1)
+    else:
+        # A terminated leader may leave helpers that ignored TERM in its owned group.
+        if os.name == "posix":
+            send(signal.SIGKILL)
 
 
 class QueryLifetime:

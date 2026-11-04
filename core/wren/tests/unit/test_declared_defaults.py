@@ -488,3 +488,10 @@ def test_validate_project_reports_a_sale_statuses_error(project):
     errors = validate_project(project)
     assert [error.level for error in errors] == ["error"]
     assert "values must all belong to the domain" in str(errors[0])
+
+
+def test_hidden_rules_do_not_add_unfingerprinted_declarations(project):
+    declare(project, EXCLUDE, ".private.md")
+    assert parse(project) == ([], [])
+    declare(project, EXCLUDE, "public.md")
+    assert [rule.id for rule in parse(project)[0]] == ["exclude-test-accounts"]

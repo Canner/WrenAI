@@ -331,7 +331,18 @@ class _Rate:
             return True
         return bool(
             self.rule.filters_currency_literal
-            and self.st._filters_currency_literal(self.currencies)
+            and all(
+                self.st._filters_currency_literal(
+                    {self.st.checker.norm_pair(group.currency)},
+                    {self.st.checker.norm_pair(ref) for ref in group.columns},
+                )
+                for group in self.rule.amounts
+                if any(
+                    self.st.taint(a)
+                    & {self.st.checker.norm_pair(ref) for ref in group.columns}
+                    for a in self.st.aggregates
+                )
+            )
         )
 
     # -- where the rate comes from ---------------------------------------
@@ -607,11 +618,23 @@ class _Rate:
 
     # -- base currency ------------------------------------------------------
 
-    def _base_test(self, condition: exp.Expression) -> str | None:
+    def _base_test(
+        self, condition: exp.Expression, value: exp.Expression
+    ) -> str | None:
         """``eq`` / ``neq`` for ``<currency column> = / <> '<base>'`` among the conjuncts."""
-        known = self.currencies | {self.rate_currency}
+        known = self.currencies
+        owner = value
+        while owner.parent is not None and not self.st.taint(owner) & self.amounts:
+            owner = owner.parent
+        reads = self.st._amount_reads(self.amounts, owner)
+        terms = [
+            term for scope in self.st.scopes for term in self.st._top_conjuncts(scope)
+        ]
         for conjunct in _conjuncts(condition):
             if not isinstance(conjunct, (exp.EQ, exp.NEQ)):
+                continue
+            # A false conjunction need not falsify its currency test.
+            if isinstance(conjunct, exp.NEQ) and conjunct is not _unparen(condition):
                 continue
             for side, other in (
                 (conjunct.this, conjunct.expression),
@@ -623,15 +646,113 @@ class _Rate:
                     and isinstance(literal, exp.Literal)
                     and literal.is_string
                     and literal.this.casefold() == self.base
+                    and reads
+                    and all(
+                        self.st._currency_reaches(side, table, path, terms)
+                        for table, path in reads
+                    )
                 ):
                     return "eq" if isinstance(conjunct, exp.EQ) else "neq"
         return None
 
     def _has_base_guard(self) -> bool:
-        return any(
-            self._base_test(branch.this) is not None
-            for branch in self.st.ast.find_all(exp.If)
-        )
+        """Every rate value consumed by an amount aggregate excludes that amount's base rows."""
+        seen_rate = False
+
+        def excludes_base(condition, taken, reads):
+            condition = _unparen(condition)
+            if isinstance(condition, exp.Not):
+                return excludes_base(condition.this, not taken, reads)
+            if isinstance(condition, (exp.And, exp.Or)):
+                sides = [
+                    excludes_base(c, taken, reads)
+                    for c in (condition.this, condition.expression)
+                ]
+                return (
+                    any(sides)
+                    if (isinstance(condition, exp.And) == taken)
+                    else all(sides)
+                )
+            if not isinstance(condition, (exp.EQ, exp.NEQ)):
+                return False
+            if taken == isinstance(condition, exp.EQ):
+                return False
+            for column, literal in (
+                (condition.this, condition.expression),
+                (condition.expression, condition.this),
+            ):
+                literal = _unparen(literal)
+                if (
+                    self.st.direct(column) in self.currencies
+                    and isinstance(literal, exp.Literal)
+                    and literal.is_string
+                    and literal.this.casefold() == self.base
+                ):
+                    terms = [
+                        term
+                        for scope in self.st.scopes
+                        for term in self.st._top_conjuncts(scope)
+                    ]
+                    return bool(reads) and all(
+                        self.st._currency_reaches(column, table, path, terms)
+                        for table, path in reads
+                    )
+            return False
+
+        def uses(node, guards, reads, visiting=frozenset()):
+            node = _unparen(node.unalias())
+            if isinstance(node, exp.Column):
+                scope = self.st._scope_for(node)
+                source = scope.sources.get(node.table) if scope is not None else None
+                if isinstance(source, Scope):
+                    key = (id(source), node.name)
+                    names = list(source.expression.named_selects)
+                    if key in visiting or node.name not in names:
+                        return
+                    for projection, _ in self.st._nth(source, names.index(node.name)):
+                        yield from uses(projection, guards, reads, visiting | {key})
+                elif self.st.direct(node) in self.rate_values:
+                    yield any(
+                        excludes_base(condition, taken, reads)
+                        for condition, taken in guards
+                    )
+                return
+            if isinstance(node, exp.Case):
+                # Simple CASE is not a currency predicate proof.
+                previous = guards
+                for branch in node.args.get("ifs") or []:
+                    yield from uses(
+                        branch.args["true"],
+                        [*previous, (branch.this, True)],
+                        reads,
+                        visiting,
+                    )
+                    previous = [*previous, (branch.this, False)]
+                if node.args.get("default") is not None:
+                    yield from uses(node.args["default"], previous, reads, visiting)
+                return
+            if isinstance(node, exp.If):
+                for key, taken in (("true", True), ("false", False)):
+                    if node.args.get(key) is not None:
+                        yield from uses(
+                            node.args[key],
+                            [*guards, (node.this, taken)],
+                            reads,
+                            visiting,
+                        )
+                return
+            for child in node.iter_expressions():
+                yield from uses(child, guards, reads, visiting)
+
+        for aggregate in self.st.aggregates:
+            if not self.st.taint(aggregate) & self.amounts:
+                continue
+            reads = self.st._amount_reads(self.amounts, aggregate)
+            for guarded in uses(aggregate, [], reads):
+                seen_rate = True
+                if not guarded:
+                    return False
+        return seen_rate
 
     def _is_rate(self, node: exp.Expression) -> bool:
         return bool(self.st.taint(node) & self.rate_values)
@@ -681,12 +802,12 @@ class _Rate:
             if isinstance(parent, exp.If):
                 if (
                     child is parent.args.get("true")
-                    and self._base_test(parent.this) == "eq"
+                    and self._base_test(parent.this, node) == "eq"
                 ):
                     return True
             elif isinstance(parent, exp.Case) and child is parent.args.get("default"):
                 if any(
-                    self._base_test(branch.this) == "neq"
+                    self._base_test(branch.this, node) == "neq"
                     for branch in parent.args.get("ifs") or []
                 ):
                     return True
