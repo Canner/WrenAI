@@ -108,3 +108,48 @@ def test_governed_query_forces_semantic_policy_before_connector():
     with pytest.raises(WrenError):
         engine.query("SELECT * FROM outside_model", read_only=True)
     engine._get_connector.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "WITH unused AS (SELECT id FROM orders) SELECT 424 AS total",
+        "WITH unused AS (SELECT id FROM orders), literal AS (SELECT 424 AS total) SELECT total FROM literal",
+        "WITH live AS (SELECT id FROM orders), outer_cte AS (WITH live AS (SELECT 424 AS id) SELECT id FROM live) SELECT id FROM outer_cte",
+        "WITH RECURSIVE unused AS (SELECT id FROM orders UNION ALL SELECT id FROM unused) SELECT 424",
+        "WITH nested AS (WITH unused AS (SELECT id FROM orders) SELECT 424 AS total) SELECT total FROM nested",
+    ],
+)
+def test_unused_cte_tables_cannot_ground_literal_results(sql):
+    with pytest.raises(NoSourceTablesError):
+        require_source_tables(parse_one(sql, dialect="duckdb"))
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "WITH unused AS (SELECT id FROM customers), live AS (SELECT id FROM orders) SELECT id FROM live",
+        "WITH live AS (SELECT id FROM orders) SELECT id FROM LIVE",
+        "WITH RECURSIVE live AS (SELECT id FROM orders UNION ALL SELECT id FROM live) SELECT id FROM live",
+        "SELECT (SELECT COUNT(*) FROM orders)",
+        "SELECT id FROM (SELECT id FROM orders) s",
+    ],
+)
+def test_only_consumed_lexical_scopes_supply_grounding(sql):
+    assert require_source_tables(parse_one(sql, dialect="duckdb")) == ["orders"]
+
+
+def test_casefolded_inner_cte_shadows_outer_stored_source():
+    sql = "WITH named AS (SELECT id FROM orders) SELECT id FROM (WITH NAMED AS (SELECT 424 AS id) SELECT id FROM named) s"
+    with pytest.raises(NoSourceTablesError):
+        require_source_tables(parse_one(sql, dialect="duckdb"))
+
+
+def test_casefolded_inner_stored_cte_shadows_outer_literal():
+    sql = "WITH named AS (SELECT 424 AS id) SELECT id FROM (WITH NAMED AS (SELECT id FROM orders) SELECT id FROM named) s"
+    assert require_source_tables(parse_one(sql, dialect="duckdb")) == ["orders"]
+
+
+def test_a_later_nonrecursive_cte_does_not_hide_a_stored_source():
+    sql = "WITH first_cte AS (SELECT id FROM orders), orders AS (SELECT 424 AS id) SELECT id FROM first_cte"
+    assert require_source_tables(parse_one(sql, dialect="duckdb")) == ["orders"]

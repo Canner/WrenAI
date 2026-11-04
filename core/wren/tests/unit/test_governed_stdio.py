@@ -447,42 +447,6 @@ def test_definition_comes_from_executed_sql(bound_transport):
     }
 
 
-@pytest.mark.parametrize("valid", [True, False])
-def test_semantic_proof_is_derived_at_governed_transport_boundary(
-    bound_transport, valid
-):
-    bound_transport.build.return_value = {
-        "cubes": [
-            {
-                "name": "sales",
-                "measures": [{"name": "revenue", "expression": "SUM(amount)"}],
-                "dimensions": [{"name": "region"}],
-                "timeDimensions": [{"name": "day"}],
-            }
-        ]
-    }
-    sql = "SELECT revenue FROM sales WHERE day > '2026-01-01' AND " + (
-        "region = 'x'" if valid else "LOWER(region) = 'x'"
-    )
-    frames = bound_transport.run(
-        (
-            json.dumps({"id": 1, "operation": "query", "sql": sql, "limit": 5}) + "\n"
-        ).encode()
-    )
-    result = frames[-1]["result"]
-    assert result["definition"]["sql"] == sql
-    if valid:
-        assert result["semantics"] == {
-            "version": "1",
-            "sql": sql,
-            "metrics": [{"owner": "sales", "name": "revenue"}],
-            "dimensions": [{"owner": "sales", "name": "region"}],
-            "temporal_dimensions": [{"owner": "sales", "name": "day"}],
-        }
-    else:
-        assert "semantics" not in result
-
-
 JAFFLE_SHAPED = {
     "models": [{"name": "orders"}, {"name": "customers"}],
     "views": [{"name": "example_view"}],
@@ -777,3 +741,62 @@ def test_a_checker_without_a_verdict_never_blocks_a_query(declaring, monkeypatch
 def test_a_checker_fault_earns_no_verdict_not_a_refusal(declaring, monkeypatch, fault):
     monkeypatch.setattr(_Statement, "fires_exclude", MagicMock(side_effect=fault))
     assert "result" in query_frame(declaring, EXCLUDE_MISSING)
+
+
+def test_unused_cte_cannot_label_a_literal_as_model_derived(bound_transport):
+    sql = "WITH unused AS (SELECT n FROM orders) SELECT 424 AS total"
+    frame = query_frame(bound_transport, sql)
+    assert frame["error"]["class"] == "ungrounded_literal"
+    bound_transport.engine.query.assert_not_called()
+
+
+@pytest.mark.parametrize("condition", ["region = 'x'", "LOWER(region) = 'x'"])
+def test_real_strict_engine_refuses_cube_only_reads_before_semantic_proof(
+    bound_transport, monkeypatch, condition
+):
+    from wren.config import WrenConfig  # noqa: PLC0415
+    from wren.engine import WrenEngine  # noqa: PLC0415
+
+    f = bound_transport
+    f.profile.return_value = ("fixture", {"datasource": "duckdb"})
+    f.config.return_value = WrenConfig()
+    f.build.return_value = {
+        "catalog": "wren",
+        "schema": "public",
+        "models": [
+            {
+                "name": "orders",
+                "refSql": "SELECT 1 AS amount",
+                "columns": [{"name": "amount", "type": "DOUBLE"}],
+            }
+        ],
+        "cubes": [
+            {
+                "name": "sales",
+                "baseObject": "orders",
+                "measures": [
+                    {"name": "revenue", "expression": "SUM(amount)", "type": "DOUBLE"}
+                ],
+            }
+        ],
+    }
+    monkeypatch.setattr(transport, "WrenEngine", WrenEngine)
+    frame = query_frame(
+        f, f"SELECT revenue FROM sales WHERE day > '2026-01-01' AND {condition}"
+    )
+    assert frame["error"]["class"] == "cube_not_queryable"
+    assert "result" not in frame and "semantics" not in frame
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "WITH unused AS (SELECT id FROM customers), live AS (SELECT n FROM orders) SELECT n FROM live",
+        "WITH live AS (WITH unused AS (SELECT id FROM customers) SELECT n FROM orders) SELECT n FROM live",
+        "SELECT (SELECT COUNT(*) FROM orders) AS n",
+    ],
+)
+def test_consumed_cte_and_scalar_sources_reach_governed_engine(bound_transport, sql):
+    frame = query_frame(bound_transport, sql)
+    assert frame["result"]["definition"]["source_tables"] == ["orders"]
+    bound_transport.engine.query.assert_called_once_with(sql, limit=5, read_only=True)

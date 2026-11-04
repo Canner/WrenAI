@@ -1109,11 +1109,14 @@ class ContextReader:
                 if column.get(flag):
                     entry[flag] = True
             if column.get("enum_values"):
-                values = [
-                    {**value, "meaning": meaning}
-                    for value in column["enum_values"]
-                    if (meaning := _prose(value.get("meaning"), name, self.denied))
-                ]
+                values = []
+                for value in column["enum_values"]:
+                    if not _one_line(value.get("meaning")):
+                        enum_value = dict(value)
+                        enum_value.pop("meaning", None)
+                        values.append(enum_value)
+                    elif meaning := _prose(value["meaning"], name, self.denied):
+                        values.append({**value, "meaning": meaning})
                 if values:
                     entry["enum_values"] = values
             if column.get("relationship") in kept_relationships:

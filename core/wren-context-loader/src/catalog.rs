@@ -118,7 +118,8 @@ struct ViewMetaFile {
 #[derive(Debug, Serialize, PartialEq, Eq)]
 pub struct CatalogEnumValue {
     pub value: String,
-    pub meaning: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meaning: Option<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -449,7 +450,8 @@ fn enum_values(value: Option<serde_yaml::Value>) -> Vec<CatalogEnumValue> {
     match value {
         Some(serde_yaml::Value::Mapping(map)) => {
             for (key, meaning) in map {
-                if let (Some(value), Some(meaning)) = (scalar(&key), scalar(&meaning)) {
+                if let Some(value) = scalar(&key) {
+                    let meaning = scalar(&meaning).filter(|s| !s.trim().is_empty());
                     out.push(CatalogEnumValue { value, meaning });
                 }
             }
@@ -458,10 +460,18 @@ fn enum_values(value: Option<serde_yaml::Value>) -> Vec<CatalogEnumValue> {
             for item in items {
                 if let serde_yaml::Value::Mapping(map) = item {
                     let value = map.get("value").and_then(scalar);
-                    let meaning = map.get("meaning").and_then(scalar);
-                    if let (Some(value), Some(meaning)) = (value, meaning) {
+                    let meaning = map
+                        .get("meaning")
+                        .and_then(scalar)
+                        .filter(|s| !s.trim().is_empty());
+                    if let Some(value) = value {
                         out.push(CatalogEnumValue { value, meaning });
                     }
+                } else if let Some(value) = scalar(&item) {
+                    out.push(CatalogEnumValue {
+                        value,
+                        meaning: None,
+                    });
                 }
             }
         }
@@ -732,6 +742,41 @@ mod tests {
             views: Vec::new(),
             knowledge_sql_mds: Vec::new(),
             dashboards_yml: None,
+        }
+    }
+
+    #[test]
+    fn keeps_enum_values_without_meanings() {
+        for (authored, expected) in [
+            (
+                "{paid: active, shipped: null, cancelled: ''}",
+                serde_json::json!([
+                    {"value": "paid", "meaning": "active"},
+                    {"value": "shipped"}, {"value": "cancelled"}
+                ]),
+            ),
+            (
+                "[{value: paid, meaning: active}, {value: shipped}, {value: cancelled, meaning: null}, {value: pending, meaning: ' '} ]",
+                serde_json::json!([
+                    {"value": "paid", "meaning": "active"},
+                    {"value": "shipped"}, {"value": "cancelled"}, {"value": "pending"}
+                ]),
+            ),
+            (
+                "[paid, shipped, 3, true]",
+                serde_json::json!([
+                    {"value": "paid"}, {"value": "shipped"},
+                    {"value": "3"}, {"value": "true"}
+                ]),
+            ),
+        ] {
+            let model = format!(
+                "name: orders\ncolumns:\n  - name: status\n    type: VARCHAR\n    properties:\n      enum_values: {authored}\n"
+            );
+            let catalog = capability_catalog(&sources(&model));
+            let json: serde_json::Value =
+                serde_json::from_str(&catalog_document(&catalog).unwrap()).unwrap();
+            assert_eq!(json["models"][0]["columns"][0]["enum_values"], expected);
         }
     }
 

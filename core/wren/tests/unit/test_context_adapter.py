@@ -2012,3 +2012,48 @@ def test_hidden_rules_stay_out_of_snapshot_and_fingerprint(real_project):
     second = load_snapshot(real_project)
     assert second.digest == before.digest
     assert second.declarations == before.declarations
+
+
+def test_enum_without_authored_meaning_is_kept_but_redacted_meaning_is_not():
+    catalog = {"models": [model("customers", columns=("id", "tier"))]}
+    values = [
+        {"value": "missing"},
+        {"value": "null", "meaning": None},
+        {"value": "blank", "meaning": " "},
+        {"value": "safe", "meaning": "Public tier."},
+        {"value": "secret", "meaning": "Derived from customers.email."},
+    ]
+    catalog["models"][0]["columns"][1]["enum_values"] = values
+    r = reader(catalog, denied={("customers", "email")})
+    assert r.read(["customers"])["items"][0]["columns"][1]["enum_values"] == [
+        {"value": "missing"},
+        {"value": "null"},
+        {"value": "blank"},
+        {"value": "safe", "meaning": "Public tier."},
+    ]
+    assert values[1] == {"value": "null", "meaning": None}
+    assert values[-1]["meaning"] == "Derived from customers.email."
+
+
+def test_missing_enum_meanings_do_not_shrink_declared_status_domain(real_project):
+    source = real_project / "models/orders/metadata.yml"
+    document = yaml.safe_load(source.read_text())
+    status = next(c for c in document["columns"] if c["name"] == "status")
+    status["properties"]["enum_values"] = [
+        {"value": "paid", "meaning": "Payment received."},
+        {"value": "shipped"},
+        {"value": "cancelled", "meaning": ""},
+        {"value": "pending", "meaning": "Derived from customers.email."},
+    ]
+    source.write_text(yaml.safe_dump(document, sort_keys=False))
+    rebuild_target(real_project)
+    snap = load_snapshot(real_project)
+    rule = next(r for r in snap.declarations if r.id == "count-paid-and-shipped")
+    assert rule.domain == ("paid", "shipped", "cancelled", "pending")
+    output = ContextReader(snap, snap.denied, 4096).read(["orders"])
+    column = next(c for c in output["items"][0]["columns"] if c["name"] == "status")
+    assert column["enum_values"] == [
+        {"value": "paid", "meaning": "Payment received."},
+        {"value": "shipped"},
+        {"value": "cancelled"},
+    ]

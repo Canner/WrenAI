@@ -7,7 +7,7 @@ Database credentials and trusted model definitions remain host responsibilities.
 """
 
 from sqlglot import exp, parse
-from sqlglot.optimizer.scope import traverse_scope
+from sqlglot.optimizer.scope import Scope, traverse_scope
 
 from wren.model.error import ErrorCode, ErrorPhase, WrenError
 
@@ -127,15 +127,57 @@ def require_source_tables(ast: exp.Expression) -> list[str]:
 
     Callers check this before execution: a SELECT over literals alone returns
     numbers the caller typed, never values read from a model.
+    Only consumed scopes are followed; an unused CTE supplies no grounding.
     """
-    references = cte_reference_ids(ast)
-    tables = sorted(
-        {
-            table.name
-            for table in ast.find_all(exp.Table)
-            if table.name and id(table) not in references
-        }
-    )
+    scopes = traverse_scope(ast)
+    tables, visited = set(), set()
+
+    def visit(scope):
+        if id(scope) in visited:
+            return
+        visited.add(id(scope))
+        for alias, node in scope.references:
+            if isinstance(node, exp.Table):
+                if not node.db and not node.catalog:
+                    visible = {
+                        name: source
+                        for name, source in scope.cte_sources.items()
+                        if name.casefold() == node.name.casefold()
+                    }
+                    if visible:
+                        # Case-insensitive shadowing follows the nearest WITH, even
+                        # when the parser kept an outer alias with the exact spelling.
+                        owners = {}
+                        parent = node.parent
+                        while parent is not None:
+                            owners[id(parent)] = len(owners)
+                            parent = parent.parent
+                        bindings = []
+                        for source in visible.values():
+                            cte = source.expression.find_ancestor(exp.CTE)
+                            if cte is not None and cte.parent is not None:
+                                owner = cte.parent.parent
+                                if id(owner) in owners:
+                                    bindings.append((owners[id(owner)], source))
+                        if bindings:
+                            nearest = min(distance for distance, _ in bindings)
+                            choices = {
+                                id(s): s
+                                for distance, s in bindings
+                                if distance == nearest
+                            }
+                            if len(choices) == 1:
+                                visit(next(iter(choices.values())))
+                        continue
+                if node.name:
+                    tables.add(node.name)
+            elif isinstance(source := scope.sources.get(alias), Scope):
+                visit(source)
+        for child in [*scope.subquery_scopes, *scope.union_scopes]:
+            visit(child)
+
+    if scopes:
+        visit(scopes[-1])
     if not tables:
         raise NoSourceTablesError()
-    return tables
+    return sorted(tables)
