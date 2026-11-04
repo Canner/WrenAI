@@ -226,6 +226,8 @@ def require_source_tables(
     Callers check this before execution: a SELECT over literals alone returns
     numbers the caller typed, never values read from a model.
     Only consumed scopes are followed; an unused CTE supplies no grounding.
+    This is a statement read-set check, not a proof that every output cell is
+    model-derived; the legacy transport does not expose per-cell provenance.
     """
     scopes = consumed_scopes(traverse_scope(ast), dialect)
     tables = set()

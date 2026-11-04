@@ -381,6 +381,8 @@ class _Rate:
         for select in self.st.ast.find_all(exp.Select):
             if id(select) not in self.st._live_scopes:
                 continue
+            if not self.st.taint(select) & self.amounts:
+                continue
             source = select.args.get("from_") or select.args.get("from")
             if source is not None and self._reads(source.this):
                 yield "from", select, None

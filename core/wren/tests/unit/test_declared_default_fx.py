@@ -286,6 +286,16 @@ def test_an_unused_rate_cte_default_does_not_refuse_a_compliant_query(strict):
     assert violations(strict, sql) == []
 
 
+def test_a_scalar_rate_lookup_does_not_count_as_an_amount_attachment(strict):
+    sql = (
+        "SELECT SUM(CASE WHEN p.currency = 'USD' THEN p.amount "
+        "ELSE p.amount * f.rate_to_usd END), "
+        "(SELECT MAX(rate_to_usd) FROM fx_rates) AS observed_rate "
+        f"FROM payments p ASOF LEFT JOIN fx_rates f ON {ON}"
+    )
+    assert violations(strict, sql) == []
+
+
 @pytest.mark.parametrize(
     "clause",
     [

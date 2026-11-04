@@ -783,6 +783,24 @@ def test_every_other_shape_rejection_names_its_code(adhoc):
     assert "PRIVATE_SQL" not in json.dumps(answers)
 
 
+def test_a_null_neutralized_aggregate_cannot_back_a_worker_result():
+    sql = (
+        "SELECT 424 + COALESCE(SUM(amount), 0) * 0 FROM orders "
+        "WHERE NOT is_test AND status IN ('paid', 'shipped')"
+    )
+    with pytest.raises(QueryShapeError, match="unbacked_result"):
+        AdHocSQL._projection(sqlglot.parse_one(sql, dialect="duckdb").selects[0])
+
+    for supported in (
+        "SELECT COUNT(*) FROM orders WHERE NOT is_test AND status IN ('paid', 'shipped')",
+        "SELECT DATE_TRUNC('week', order_date), SUM(amount) FROM orders "
+        "WHERE NOT is_test AND status IN ('paid', 'shipped') GROUP BY 1",
+        "SELECT SUM(amount) * 2 FROM orders "
+        "WHERE NOT is_test AND status IN ('paid', 'shipped')",
+    ):
+        AdHocSQL._projection(sqlglot.parse_one(supported, dialect="duckdb").selects[0])
+
+
 def test_the_three_error_kinds_each_finish_inside_one_task(adhoc):
     s = adhoc()
     engine = "SELECT COUNT(*) FROM orders WHERE NOT is_test AND status IN ('paid', 'shipped') AND CAST('abc' AS INTEGER) = 1"

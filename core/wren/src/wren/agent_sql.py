@@ -1177,6 +1177,32 @@ class AdHocSQL:
             value.find_all(exp.AggFunc)
         ):
             raise QueryShapeError("unbacked_result")
+
+        # A null-normalized aggregate multiplied by zero cannot contribute a
+        # source-derived analytic value to a worker result. Keep this deliberately
+        # narrow: SQL NULL and non-finite arithmetic mean that not every zero
+        # multiplication is a constant-output proof.
+        def zero(node):
+            return (
+                isinstance(node, exp.Literal)
+                and not node.is_string
+                and Decimal(node.this) == 0
+            )
+
+        def normalized_aggregate(node):
+            return (
+                isinstance(node, exp.Coalesce)
+                and isinstance(node.this, exp.AggFunc)
+                and len(node.expressions) == 1
+                and zero(node.expressions[0])
+            )
+
+        if any(
+            (zero(mul.this) and normalized_aggregate(mul.expression))
+            or (zero(mul.expression) and normalized_aggregate(mul.this))
+            for mul in value.find_all(exp.Mul)
+        ):
+            raise QueryShapeError("unbacked_result")
         # Text-producing transforms can synthesize instruction/SQL strings from
         # numeric constants or fragments. Keep textual outputs as source columns.
         blocked = {

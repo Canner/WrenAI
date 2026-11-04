@@ -172,6 +172,17 @@ def test_only_consumed_lexical_scopes_supply_grounding(sql):
     assert require_source_tables(parse_one(sql, dialect="duckdb")) == ["orders"]
 
 
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT 424 AS value FROM orders",
+        "SELECT n FROM orders UNION ALL SELECT 424 AS n",
+    ],
+)
+def test_literal_outputs_do_not_change_the_statement_read_set(sql):
+    assert require_source_tables(parse_one(sql, dialect="duckdb")) == ["orders"]
+
+
 def test_casefolded_inner_cte_shadows_outer_stored_source():
     sql = "WITH named AS (SELECT id FROM orders) SELECT id FROM (WITH NAMED AS (SELECT 424 AS id) SELECT id FROM named) s"
     with pytest.raises(NoSourceTablesError):
