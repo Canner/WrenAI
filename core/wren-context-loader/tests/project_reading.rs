@@ -79,6 +79,22 @@ fn a_view_whose_statement_lives_in_its_metadata_is_read() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn a_non_project_directory_is_none_before_source_validation() {
+    use std::os::unix::fs::symlink;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    fs::create_dir_all(tmp.path().join("models")).unwrap();
+    symlink(outside.path(), tmp.path().join("models/link")).unwrap();
+
+    assert!(
+        read_project_dir(tmp.path()).unwrap().is_none(),
+        "a directory without wren_project.yml is not a project even if an ignored source root is malformed"
+    );
+}
+
 #[test]
 fn root_only_cubes_are_rejected_by_native_readers() {
     let tmp = tempfile::tempdir().unwrap();

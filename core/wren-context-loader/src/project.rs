@@ -472,11 +472,11 @@ fn apply_ref_sql_file(metadata: String, ref_sql_file: Option<String>) -> std::io
 /// the later host coherence check detects non-mirroring content.
 #[cfg(all(unix, not(target_arch = "wasm32")))]
 pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<ProjectSources>> {
-    crate::digest::validate_source_directories(dir)?;
     let root = crate::source_fs::SourceDir::open_root(dir)?;
     let Some(wren_project_yml) = root.read_string_if_file("wren_project.yml".as_ref())? else {
         return Ok(None);
     };
+    crate::digest::validate_source_directories(dir)?;
     let legacy_or_default_v1 = validate_native_schema_version(&wren_project_yml)?;
     if legacy_or_default_v1 {
         reject_native_flat_v1_sources(true, &native_flat_v1_sources_without_counterparts(&root)?)?;

@@ -192,9 +192,9 @@ pub struct CatalogView {
     /// `views/<name>/metadata.yml`. Carried as authored; omitted when there are none.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub guarantees: Vec<String>,
-    /// Output columns the view declares in `columns:` (name, type and description only). They
-    /// are authored, not derived from the view's SQL; a host that can parse the statement checks
-    /// them. Omitted when the view declares none.
+    /// Output columns the view declares in `columns:` (name, type and description only). Names
+    /// may be checked by a host that can parse the statement; types are author assertions, not
+    /// inferred from SQL by this loader. Omitted when the view declares none.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub columns: Vec<CatalogColumn>,
 }

@@ -392,6 +392,77 @@ time_dimensions: []
 }
 
 #[test]
+fn relationship_condition_reaches_dimensions_of_its_calculated_column() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    add_relationship_calculation(tmp.path());
+    write(
+        tmp.path(),
+        "cubes/order_metrics/metadata.yml",
+        r#"name: order_metrics
+base_object: orders
+measures: []
+dimensions:
+  - { name: customer_credit, expression: customer_credit, type: DECIMAL }
+time_dimensions:
+  - { name: customer_credit_at, expression: customer_credit, type: TIMESTAMP }
+"#,
+    );
+    let ctx = load(tmp.path());
+
+    for member in [
+        "dim:order_metrics.customer_credit",
+        "dim:order_metrics.customer_credit_at",
+    ] {
+        assert!(
+            has_edge(&ctx, "rel:orders_customers", member),
+            "planning {member} reads the declared relationship condition"
+        );
+    }
+}
+
+#[test]
+fn correlated_outer_cube_members_are_linked_but_inner_columns_do_not_borrow_them() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    for (slug, sql) in [
+        (
+            "correlated",
+            "SELECT 1 FROM order_metrics om WHERE EXISTS (SELECT 1 FROM orders o WHERE om.total_value > o.total)",
+        ),
+        (
+            "inner-only",
+            "SELECT 1 FROM order_metrics om WHERE EXISTS (SELECT total_value FROM orders o)",
+        ),
+        (
+            "shadowed",
+            "SELECT 1 FROM order_metrics om WHERE EXISTS (SELECT om.total_value FROM orders om)",
+        ),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+    let ctx = load(tmp.path());
+
+    assert!(reaches(
+        &ctx,
+        "metric:order_metrics.total_value",
+        "query:correlated"
+    ));
+    assert!(
+        !reaches(&ctx, "metric:order_metrics.total_value", "query:inner-only"),
+        "an unqualified inner column must not be attributed to the outer cube"
+    );
+    assert!(
+        !reaches(&ctx, "metric:order_metrics.total_value", "query:shadowed"),
+        "an inner source alias shadows the outer cube alias"
+    );
+}
+
+#[test]
 fn relationship_condition_reaches_consumers_of_indirect_and_multihop_calculations() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());

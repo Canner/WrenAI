@@ -340,6 +340,12 @@ impl RelationCollector {
         // Nested queries must not contribute columns to this SELECT's scope, while expressions
         // after a nested query still belong to this SELECT and must be retained.
         let _ = select.visit(&mut columns);
+        // A nested SELECT has its own sources, but a qualified reference that is not bound there
+        // can be correlated to this SELECT. Retain only those proven outer references; bare
+        // nested columns remain opaque because their source is not known here.
+        let mut correlated_columns = CorrelatedColumnCollector::new(&sources);
+        let _ = select.visit(&mut correlated_columns);
+        columns.columns.extend(correlated_columns.columns);
         if let Some(order_by) = order_by {
             let mut order_columns = ScopedColumnCollector::default();
             let _ = order_by.visit(&mut order_columns);
@@ -448,6 +454,138 @@ impl RelationCollector {
 struct ScopedColumnCollector {
     columns: Vec<ColumnReference>,
     nested_query_depth: usize,
+}
+
+/// Collect qualified references from a nested query only when that query does not bind the
+/// qualifier itself and the qualifier resolves to the immediately enclosing SELECT source.
+/// This is the small correlated-reference slice needed for member lineage; it intentionally does
+/// not infer provenance for bare columns, derived outputs, or arbitrary multi-level sources.
+struct CorrelatedColumnCollector<'a> {
+    outer_sources: &'a [SelectSource],
+    nested_source_scopes: Vec<Vec<Ident>>,
+    columns: Vec<ColumnReference>,
+}
+
+impl<'a> CorrelatedColumnCollector<'a> {
+    fn new(outer_sources: &'a [SelectSource]) -> Self {
+        Self {
+            outer_sources,
+            nested_source_scopes: Vec::new(),
+            columns: Vec::new(),
+        }
+    }
+}
+
+impl Visitor for CorrelatedColumnCollector<'_> {
+    type Break = ();
+
+    fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
+        self.nested_source_scopes
+            .push(query_source_qualifiers(query));
+        ControlFlow::Continue(())
+    }
+
+    fn post_visit_query(&mut self, _query: &Query) -> ControlFlow<()> {
+        self.nested_source_scopes.pop();
+        ControlFlow::Continue(())
+    }
+
+    fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+        let Expr::CompoundIdentifier(parts) = expr else {
+            return ControlFlow::Continue(());
+        };
+        let Some((name, qualifier)) = parts.split_last() else {
+            return ControlFlow::Continue(());
+        };
+        // Only a two-part reference is a table alias plus a column. Longer paths are physical or
+        // relationship navigation that this consumer parser cannot prove belongs to the cube.
+        if qualifier.len() != 1 {
+            return ControlFlow::Continue(());
+        }
+        let qualifier = &qualifier[0];
+        let bound_in_nested_scope = self.nested_source_scopes.iter().rev().any(|scope| {
+            scope
+                .iter()
+                .any(|candidate| identifiers_match(candidate, qualifier))
+        });
+        if !bound_in_nested_scope
+            && self
+                .outer_sources
+                .iter()
+                .any(|source| select_source_matches_qualifier(source, qualifier))
+        {
+            self.columns.push(ColumnReference {
+                qualifier: Some(qualifier.clone()),
+                name: name.clone(),
+            });
+        }
+        ControlFlow::Continue(())
+    }
+}
+
+fn select_source_matches_qualifier(source: &SelectSource, qualifier: &Ident) -> bool {
+    match &source.alias {
+        Some(alias) => identifiers_match(alias, qualifier),
+        None => source
+            .name
+            .as_ref()
+            .is_some_and(|name| identifiers_match(name, qualifier)),
+    }
+}
+
+/// The names a query's SELECT branches bind in their own source scope. This intentionally keeps
+/// only qualifier binding, rather than source provenance: a nested source must block an outer
+/// correlation even when it is a CTE, derived table, or other opaque relation.
+fn query_source_qualifiers(query: &Query) -> Vec<Ident> {
+    let mut qualifiers = Vec::new();
+    collect_set_expr_qualifiers(&query.body, &mut qualifiers);
+    qualifiers
+}
+
+fn collect_set_expr_qualifiers(expression: &SetExpr, qualifiers: &mut Vec<Ident>) {
+    match expression {
+        SetExpr::Select(select) => {
+            for table in &select.from {
+                collect_table_factor_qualifiers(&table.relation, qualifiers);
+                for join in &table.joins {
+                    collect_table_factor_qualifiers(&join.relation, qualifiers);
+                }
+            }
+        }
+        SetExpr::SetOperation { left, right, .. } => {
+            collect_set_expr_qualifiers(left, qualifiers);
+            collect_set_expr_qualifiers(right, qualifiers);
+        }
+        _ => {}
+    }
+}
+
+fn collect_table_factor_qualifiers(factor: &TableFactor, qualifiers: &mut Vec<Ident>) {
+    match factor {
+        TableFactor::Table { name, alias, .. } => {
+            if let Some(alias) = alias {
+                qualifiers.push(alias.name.clone());
+            } else if let Some(ObjectNamePart::Identifier(name)) = name.0.last() {
+                qualifiers.push(name.clone());
+            }
+        }
+        TableFactor::Derived {
+            alias: Some(alias), ..
+        }
+        | TableFactor::NestedJoin {
+            alias: Some(alias), ..
+        } => qualifiers.push(alias.name.clone()),
+        TableFactor::NestedJoin {
+            table_with_joins,
+            alias: None,
+        } => {
+            collect_table_factor_qualifiers(&table_with_joins.relation, qualifiers);
+            for join in &table_with_joins.joins {
+                collect_table_factor_qualifiers(&join.relation, qualifiers);
+            }
+        }
+        _ => {}
+    }
 }
 
 impl Visitor for ScopedColumnCollector {

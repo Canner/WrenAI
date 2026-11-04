@@ -122,15 +122,25 @@ pub fn build(manifest: &Manifest) -> (LineageGraph, Vec<String>) {
                 }
             }
         }
-        let dim_names = cube
+        let dims = cube
             .dimensions
             .iter()
-            .map(|d| d.name.clone())
-            .chain(cube.time_dimensions.iter().map(|d| d.name.clone()));
-        for dim_name in dim_names {
-            let did = dim_id(&cube.name, &dim_name);
+            .map(|dimension| (dimension.name.as_str(), dimension.expression.as_str()))
+            .chain(
+                cube.time_dimensions
+                    .iter()
+                    .map(|dimension| (dimension.name.as_str(), dimension.expression.as_str())),
+            );
+        for (dim_name, expression) in dims {
+            let did = dim_id(&cube.name, dim_name);
             push_node(&mut nodes, did.clone(), LineageKind::Dimension);
-            push_edge(&mut edges, cid.clone(), did);
+            push_edge(&mut edges, cid.clone(), did.clone());
+            if let Some(model) = base_model {
+                for relationship in relationships_used_by_cube_measure(manifest, model, expression)
+                {
+                    push_edge(&mut edges, rel_id(&relationship), did.clone());
+                }
+            }
         }
     }
 

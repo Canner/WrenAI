@@ -1,6 +1,7 @@
 //! A view's `columns:` declaration reaches the catalog as authored (name, type, description), is
 //! absent when not declared, and a declaration the loader cannot read in full is reported so a
-//! host can refuse to run.
+//! host can refuse to run. Types remain author assertions: the loader does not execute or infer
+//! the view statement's output schema.
 
 use std::fs;
 use std::path::Path;
@@ -69,6 +70,21 @@ fn a_declared_view_lists_name_type_and_description_only() {
     assert!(doc.get("view_columns_invalid").is_none());
     assert!(doc.get("diagnostics").is_none());
     assert_eq!(doc["catalog_version"], 1);
+}
+
+#[test]
+fn a_declared_view_column_type_is_an_author_assertion() {
+    let project = project_with_view_metadata(
+        "name: paid_orders\ncolumns:\n  - {name: order_id, type: VARCHAR}\n",
+    );
+    let doc = catalog_json(project.path());
+
+    assert_eq!(
+        view(&doc, "paid_orders")["columns"],
+        serde_json::json!([{ "name": "order_id", "type": "VARCHAR" }]),
+        "the catalog preserves the declaration rather than inferring the SELECT expression type"
+    );
+    assert!(doc.get("view_columns_invalid").is_none());
 }
 
 #[test]
