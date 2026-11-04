@@ -211,11 +211,56 @@ fn read_metadata_if_file(dir: &crate::source_fs::SourceDir) -> std::io::Result<O
     dir.read_string_if_file("metadata.yml".as_ref())
 }
 
+/// Read a model's metadata and apply the non-empty sibling `ref_sql.sql`, which is the authored
+/// source that takes precedence over an inline `ref_sql` field.
+#[cfg(all(unix, not(target_arch = "wasm32")))]
+fn read_model_metadata_if_file(
+    dir: &crate::source_fs::SourceDir,
+) -> std::io::Result<Option<String>> {
+    let Some(metadata) = read_metadata_if_file(dir)? else {
+        return Ok(None);
+    };
+    if dir.entry_kind("ref_sql.sql".as_ref())? == crate::source_fs::EntryKind::Directory {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "ref_sql_directory_unsupported",
+        ));
+    }
+    Ok(Some(apply_ref_sql_file(
+        metadata,
+        dir.read_string_if_file("ref_sql.sql".as_ref())?,
+    )?))
+}
+
+fn apply_ref_sql_file(metadata: String, ref_sql_file: Option<String>) -> std::io::Result<String> {
+    let Some(ref_sql) = ref_sql_file else {
+        return Ok(metadata);
+    };
+    let ref_sql = ref_sql.trim();
+    if ref_sql.is_empty() {
+        return Ok(metadata);
+    }
+
+    // Keep malformed/non-mapping metadata on the existing assembly-error path. The sibling file
+    // only overrides a valid mapping, as the native reader never turns a non-model into a model.
+    let Ok(serde_yaml::Value::Mapping(mut document)) = serde_yaml::from_str(&metadata) else {
+        return Ok(metadata);
+    };
+    document.insert(
+        serde_yaml::Value::String("ref_sql".into()),
+        serde_yaml::Value::String(ref_sql.into()),
+    );
+    serde_yaml::to_string(&document).map_err(std::io::Error::other)
+}
+
 /// Read a wren project directory into [`ProjectSources`] (native host only; the pure `assemble`
 /// path is what a WASM host feeds directly). Returns `None` if the directory has no
 /// `wren_project.yml` — i.e. it is not a wren project — so the caller can build an unparseable
 /// context. Model, cube, and view sub-directories are read in sorted order for deterministic
 /// output. Entries that cannot be read are an error; dot-named entries are not inputs.
+///
+/// A model's non-empty `ref_sql.sql` sibling overrides the inline `ref_sql` in its `metadata.yml`,
+/// matching the project reader used by the CLI.
 ///
 /// A view directory is a view when it has a `metadata.yml`, with or without a `sql.yml` — the
 /// same rule as `wren`, which also ignores a directory that holds only a `sql.yml`.
@@ -241,7 +286,20 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
         Ok(values)
     };
     let model_ymls = match root.open_dir_if_exists("models".as_ref())? {
-        Some(dir) => read_metadata(&dir)?,
+        Some(dir) => {
+            let mut values = Vec::new();
+            for name in dir.names()? {
+                if crate::digest::is_hidden(&name) {
+                    continue;
+                }
+                if let Some(model) = dir.open_nested_dir(&name)? {
+                    if let Some(contents) = read_model_metadata_if_file(&model)? {
+                        values.push(contents);
+                    }
+                }
+            }
+            values
+        }
         None => Vec::new(),
     };
     let cube_ymls = match root.open_dir_if_exists("cubes".as_ref())? {
@@ -319,6 +377,25 @@ fn read_metadata_if_file(path: &std::path::Path) -> std::io::Result<Option<Strin
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(unix)))]
+fn read_model_metadata_if_file(path: &std::path::Path) -> std::io::Result<Option<String>> {
+    let Some(metadata) = read_metadata_if_file(&path.join("metadata.yml"))? else {
+        return Ok(None);
+    };
+    let ref_sql = path.join("ref_sql.sql");
+    if ref_sql.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "ref_sql_directory_unsupported",
+        ));
+    }
+    let contents = ref_sql
+        .is_file()
+        .then(|| std::fs::read_to_string(ref_sql))
+        .transpose()?;
+    Ok(Some(apply_ref_sql_file(metadata, contents)?))
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(unix)))]
 pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<ProjectSources>> {
     use std::fs;
 
@@ -333,8 +410,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     let models_dir = dir.join("models");
     if models_dir.is_dir() {
         for model_dir in list_dir(&models_dir)?.into_iter().filter(|p| p.is_dir()) {
-            let meta = model_dir.join("metadata.yml");
-            if let Some(contents) = read_metadata_if_file(&meta)? {
+            if let Some(contents) = read_model_metadata_if_file(&model_dir)? {
                 model_ymls.push(contents);
             }
         }
@@ -1290,5 +1366,121 @@ mod tests {
             symlink(&outside_dir, &orders).unwrap();
         });
         assert!(super::read_project_dir(project.path()).is_err());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn model_ref_sql_file_overrides_inline_metadata() {
+        let project = tempfile::tempdir().unwrap();
+        fs::write(
+            project.path().join("wren_project.yml"),
+            "schema_version: 5\n",
+        )
+        .unwrap();
+        let model = project.path().join("models/orders");
+        fs::create_dir_all(&model).unwrap();
+        fs::write(
+            model.join("metadata.yml"),
+            "name: orders\nref_sql: SELECT * FROM inline_orders\ncolumns: []\n",
+        )
+        .unwrap();
+        fs::write(model.join("ref_sql.sql"), " SELECT * FROM file_orders \n").unwrap();
+
+        let sources = super::read_project_dir(project.path()).unwrap().unwrap();
+        let loaded = super::assemble(&sources).unwrap();
+        assert_eq!(
+            loaded.manifest.models[0].ref_sql(),
+            Some("SELECT * FROM file_orders")
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn model_ref_sql_file_supplies_a_model_source() {
+        let project = tempfile::tempdir().unwrap();
+        fs::write(
+            project.path().join("wren_project.yml"),
+            "schema_version: 5\n",
+        )
+        .unwrap();
+        let model = project.path().join("models/orders");
+        fs::create_dir_all(&model).unwrap();
+        fs::write(model.join("metadata.yml"), "name: orders\ncolumns: []\n").unwrap();
+        fs::write(model.join("ref_sql.sql"), "SELECT * FROM raw_orders\n").unwrap();
+
+        let sources = super::read_project_dir(project.path()).unwrap().unwrap();
+        let loaded = super::assemble(&sources).unwrap();
+        assert!(matches!(
+            loaded.manifest.models[0].source(),
+            wren_core_base::mdl::manifest::ModelSource::RefSql
+        ));
+        assert_eq!(
+            loaded.manifest.models[0].ref_sql(),
+            Some("SELECT * FROM raw_orders")
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn model_ref_sql_file_is_optional_and_ignores_empty_contents() {
+        let project = tempfile::tempdir().unwrap();
+        fs::write(
+            project.path().join("wren_project.yml"),
+            "schema_version: 5\n",
+        )
+        .unwrap();
+
+        let no_file = project.path().join("models/no_file");
+        fs::create_dir_all(&no_file).unwrap();
+        fs::write(
+            no_file.join("metadata.yml"),
+            "name: no_file\nref_sql: SELECT * FROM inline_no_file\ncolumns: []\n",
+        )
+        .unwrap();
+
+        let empty_file = project.path().join("models/empty_file");
+        fs::create_dir_all(&empty_file).unwrap();
+        fs::write(
+            empty_file.join("metadata.yml"),
+            "name: empty_file\nref_sql: SELECT * FROM inline_empty_file\ncolumns: []\n",
+        )
+        .unwrap();
+        fs::write(empty_file.join("ref_sql.sql"), " \n").unwrap();
+
+        let sources = super::read_project_dir(project.path()).unwrap().unwrap();
+        let loaded = super::assemble(&sources).unwrap();
+        assert_eq!(
+            loaded.manifest.models[0].ref_sql(),
+            Some("SELECT * FROM inline_empty_file")
+        );
+        assert_eq!(
+            loaded.manifest.models[1].ref_sql(),
+            Some("SELECT * FROM inline_no_file")
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn model_ref_sql_directory_is_an_error() {
+        let project = tempfile::tempdir().unwrap();
+        fs::write(
+            project.path().join("wren_project.yml"),
+            "schema_version: 5\n",
+        )
+        .unwrap();
+        let model = project.path().join("models/orders");
+        fs::create_dir_all(model.join("ref_sql.sql")).unwrap();
+        fs::write(
+            model.join("metadata.yml"),
+            "name: orders\nref_sql: SELECT * FROM inline_orders\ncolumns: []\n",
+        )
+        .unwrap();
+
+        let error = match super::read_project_dir(project.path()) {
+            Ok(_) => panic!("a ref_sql.sql directory must not be ignored"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("ref_sql_directory_unsupported"));
     }
 }
