@@ -771,61 +771,144 @@ fn statement_references(statement: &str, name: &str) -> bool {
 }
 
 /// Remove lexical regions which cannot name a SQL relation without requiring a successful SQL
-/// parse. The fallback deliberately remains small: it knows SQL line/block comments and ordinary
-/// single-quoted string literals (including doubled-quote and backslash escapes), while retaining
-/// quoted identifiers and all executable tokens for the existing whole-word matcher.
+/// parse. This keeps quoted identifiers executable, but skips SQL string forms and comments,
+/// including nested block comments, so delimiter-looking text in either cannot hide a later
+/// relation or invent an edge.
 fn fallback_executable_text(statement: &str) -> String {
+    enum State {
+        Normal,
+        SingleQuoted,
+        DoubleQuoted,
+        LineComment,
+        BlockComment(usize),
+        DollarQuoted(String),
+    }
+
     let bytes = statement.as_bytes();
     let mut executable = String::with_capacity(statement.len());
     let mut index = 0;
+    let mut state = State::Normal;
     while index < bytes.len() {
-        match bytes[index..] {
-            [b'-', b'-', ..] => {
-                executable.push(' ');
-                index += 2;
-                while index < bytes.len() && !matches!(bytes[index], b'\n' | b'\r') {
-                    index += 1;
+        match &mut state {
+            State::Normal => match bytes[index..] {
+                [b'-', b'-', ..] => {
+                    executable.push(' ');
+                    index += 2;
+                    state = State::LineComment;
                 }
-            }
-            [b'/', b'*', ..] => {
-                executable.push(' ');
-                index += 2;
-                while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/')
-                {
-                    index += 1;
+                [b'/', b'*', ..] => {
+                    executable.push(' ');
+                    index += 2;
+                    state = State::BlockComment(1);
                 }
-                index = (index + 2).min(bytes.len());
-            }
-            [b'\'', ..] => {
-                executable.push(' ');
-                index += 1;
-                while index < bytes.len() {
-                    if bytes[index] == b'\'' {
-                        index += 1;
-                        if index < bytes.len() && bytes[index] == b'\'' {
-                            index += 1;
-                            continue;
-                        }
-                        break;
-                    }
-                    if bytes[index] == b'\\' && index + 1 < bytes.len() {
-                        index += 2;
+                [b'\'', ..] => {
+                    executable.push(' ');
+                    index += 1;
+                    state = State::SingleQuoted;
+                }
+                [b'"', ..] => {
+                    executable.push('"');
+                    index += 1;
+                    state = State::DoubleQuoted;
+                }
+                _ => {
+                    if let Some(delimiter) = dollar_quote_delimiter(&statement[index..]) {
+                        executable.push(' ');
+                        index += delimiter.len();
+                        state = State::DollarQuoted(delimiter.to_string());
                     } else {
-                        index += 1;
+                        let character = statement[index..]
+                            .chars()
+                            .next()
+                            .expect("index is within UTF-8 input");
+                        executable.push(character);
+                        index += character.len_utf8();
                     }
                 }
+            },
+            State::SingleQuoted => {
+                if bytes[index] == b'\'' {
+                    index += 1;
+                    if index < bytes.len() && bytes[index] == b'\'' {
+                        index += 1;
+                    } else {
+                        state = State::Normal;
+                    }
+                } else if bytes[index] == b'\\' && index + 1 < bytes.len() {
+                    index += 2;
+                } else {
+                    index += 1;
+                }
             }
-            _ => {
+            State::DoubleQuoted => {
                 let character = statement[index..]
                     .chars()
                     .next()
                     .expect("index is within UTF-8 input");
                 executable.push(character);
                 index += character.len_utf8();
+                if character == '"' {
+                    if bytes.get(index) == Some(&b'"') {
+                        executable.push('"');
+                        index += 1;
+                    } else {
+                        state = State::Normal;
+                    }
+                }
+            }
+            State::LineComment => {
+                if matches!(bytes[index], b'\n' | b'\r') {
+                    state = State::Normal;
+                } else {
+                    index += 1;
+                }
+            }
+            State::BlockComment(depth) => match bytes[index..] {
+                [b'/', b'*', ..] => {
+                    *depth += 1;
+                    index += 2;
+                }
+                [b'*', b'/', ..] => {
+                    *depth -= 1;
+                    index += 2;
+                    if *depth == 0 {
+                        state = State::Normal;
+                    }
+                }
+                _ => index += 1,
+            },
+            State::DollarQuoted(delimiter) => {
+                if statement[index..].starts_with(delimiter.as_str()) {
+                    index += delimiter.len();
+                    state = State::Normal;
+                } else {
+                    let character = statement[index..]
+                        .chars()
+                        .next()
+                        .expect("index is within UTF-8 input");
+                    index += character.len_utf8();
+                }
             }
         }
     }
     executable
+}
+
+/// The dollar-quoted string delimiter at the beginning of `text`, if any. DuckDB accepts the
+/// empty `$$` delimiter and ASCII identifier-style tags such as `$tag$`.
+fn dollar_quote_delimiter(text: &str) -> Option<&str> {
+    let bytes = text.as_bytes();
+    if bytes.first() != Some(&b'$') {
+        return None;
+    }
+    let end = bytes[1..]
+        .iter()
+        .position(|byte| *byte == b'$')
+        .map(|offset| offset + 1)?;
+    bytes[1..end]
+        .iter()
+        .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
+        .then_some(&text[..=end])
 }
 
 #[cfg(test)]
@@ -856,8 +939,24 @@ mod tests {
     #[test]
     fn fallback_reference_scan_ignores_comments_and_string_literals() {
         assert!(statement_references("SELCT orders", "orders"));
+        assert!(statement_references(
+            "SELCT * FROM \"--\", orders",
+            "orders"
+        ));
+        assert!(statement_references(
+            "SELCT * FROM \"/*\", orders",
+            "orders"
+        ));
         assert!(!statement_references(
             "SELCT 'orders' /* orders */ -- orders\n",
+            "orders"
+        ));
+        assert!(!statement_references(
+            "SELCT $tag$orders$tag$ FROM",
+            "orders"
+        ));
+        assert!(!statement_references(
+            "SELCT /* outer /* orders */ still outer */ FROM",
             "orders"
         ));
     }
