@@ -150,6 +150,7 @@ class _Statement:
         filters: list[exp.Expression] = [
             w.this for w in ast.find_all(exp.Where) if live(w)
         ]
+        exclusion_filters = [*filters]
         joins = [
             (join, on)
             for join in ast.find_all(exp.Join)
@@ -157,22 +158,36 @@ class _Statement:
             if (on := join.args.get("on")) is not None
         ]
         filters += [h.this for h in ast.find_all(exp.Having) if live(h)]
-        filters += [q.this for q in ast.find_all(exp.Qualify) if live(q)]
+        exclusion_filters += [h.this for h in ast.find_all(exp.Having) if live(h)]
+        qualifies = [q for q in ast.find_all(exp.Qualify) if live(q)]
+        filters += [q.this for q in qualifies]
+        exclusion_filters += [
+            q.this for q in qualifies if self._qualify_restricts_rows(q)
+        ]
         self.roots = [*filters, *(on for _, on in joins)]
         self.conjuncts = [c for root in filters for c in _conjuncts(root)]
         # What reaches the fact rows: WHERE and the ON of an inner or comma join. A nullable-side
         # ON conjunct of an outer join narrows that side only, so an exclusion cannot rest on it.
         reaching = [(c, root) for root in filters for c in _conjuncts(root)]
+        exclusion_reaching = [
+            (c, root) for root in exclusion_filters for c in _conjuncts(root)
+        ]
         for join, on in joins:
             kept = [c for c in _conjuncts(on) if _restricts(join, c)]
             self.conjuncts += kept
             if not _outer(join):
                 reaching += [(c, on) for c in kept]
+                exclusion_reaching += [(c, on) for c in kept]
         # Each filter is kept with the scope it sits in: whether it restricts a given read of a
         # covered model depends on how that read reaches the result (``_restricting``).
         self._filters = [
             (conjunct, id(scope.expression))
             for conjunct, root in reaching
+            if (scope := self._scope_for(root)) is not None
+        ]
+        self._exclusion_filters = [
+            (conjunct, id(scope.expression))
+            for conjunct, root in exclusion_reaching
             if (scope := self._scope_for(root)) is not None
         ]
         self._parents: dict[int, list[Scope]] = {}
@@ -195,6 +210,27 @@ class _Statement:
         self.groups = [node for node in ast.find_all(exp.Group) if live(node)]
         self.aggregated = bool(self.aggregates or self.groups)
 
+    def _qualify_restricts_rows(self, qualify: exp.Qualify) -> bool:
+        """Whether a QUALIFY predicate removes source rows before this select computes a value.
+
+        QUALIFY runs after a select's grouping and window expressions.  Unless the select has
+        neither, its predicate cannot prove that an aggregate/window result omitted a row.  A
+        nested select's computation is independent: its own scope is judged separately.
+        """
+        scope = self._scope_for(qualify)
+        if scope is None or not isinstance(scope.expression, exp.Select):
+            return False
+        select = scope.expression
+        if select.args.get("group") is not None:
+            return False
+        roots = [*select.selects, qualify.this]
+        return not any(
+            computation.find_ancestor(exp.Select) is select
+            for root in roots
+            for kind in (exp.AggFunc, exp.Window)
+            for computation in root.find_all(kind)
+        )
+
     @staticmethod
     def _read_sources(scope: Scope) -> list[tuple[str, Scope]]:
         """The CTEs and derived tables ``scope`` reads from (not the CTEs merely in scope)."""
@@ -205,7 +241,9 @@ class _Statement:
             if isinstance(source, Scope) and alias in read
         ]
 
-    def _restricting(self, read: Scope, path, flag: Pair) -> set[int]:
+    def _restricting(
+        self, read: Scope, path, flag: Pair, *, exclusion_only=False
+    ) -> set[int]:
         """The scopes (by expression id) whose row filters restrict the rows ``read`` yields.
 
         The read's own scope and every scope that consumes it (a CTE or derived table is read
@@ -241,7 +279,8 @@ class _Statement:
                     visit(source)
             # Reuse only row-restricting roots (WHERE/HAVING/QUALIFY and inner ON).
             # Outer/semi/anti ON subqueries cannot donate an exclusion either.
-            top = {id(c) for c, owner in self._filters if owner == id(scope.expression)}
+            filters = self._exclusion_filters if exclusion_only else self._filters
+            top = {id(c) for c, owner in filters if owner == id(scope.expression)}
             for sub in scope.subquery_scopes:
                 node = sub.expression.parent
                 while isinstance(node, (exp.Subquery, exp.Paren)):
@@ -678,8 +717,10 @@ class _Statement:
 
     def _excluded(self, read, alias, source, path, rule):
         flag = self.checker.flag_of(rule)
-        restricting = self._restricting(read, path, flag)
-        reaching = [c for c, scope_id in self._filters if scope_id in restricting]
+        restricting = self._restricting(read, path, flag, exclusion_only=True)
+        reaching = [
+            c for c, scope_id in self._exclusion_filters if scope_id in restricting
+        ]
         keys = [
             atom
             for scope in self.scopes

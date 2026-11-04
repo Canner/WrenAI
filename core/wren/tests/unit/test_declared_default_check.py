@@ -8,7 +8,7 @@ from sqlglot import parse_one
 
 from wren.context import build_json
 from wren.declared_default_check import DefaultsChecker, _Statement
-from wren.declared_defaults import read_declared_defaults
+from wren.declared_defaults import ColumnRef, ExcludeRows, read_declared_defaults
 
 pytestmark = pytest.mark.unit
 
@@ -81,6 +81,48 @@ def test_the_atom_may_live_in_a_join_condition_or_having(checker):
         )
         == []
     )
+
+
+def test_qualify_cannot_exclude_rows_after_a_window_aggregate(checker):
+    sql = (
+        "SELECT COUNT(*) OVER () AS total FROM orders o "
+        "JOIN customers c ON o.customer_id = c.id QUALIFY NOT c.is_test"
+    )
+    assert check(checker, sql) == [EXCLUDE]
+
+
+def test_qualify_cannot_exclude_rows_after_a_grouped_aggregate():
+    rule = ExcludeRows(
+        id=EXCLUDE,
+        column=ColumnRef("customers", "is_test"),
+        exclude=True,
+        anchor="customers",
+        covered=frozenset({"customers", "orders"}),
+        aggregated_only=True,
+        addresses_column=False,
+        filtered_by=(),
+    )
+    strict = DefaultsChecker([rule], build_json(FIXTURE), "duckdb")
+    sql = (
+        "SELECT c.is_test, COUNT(*) FROM orders o "
+        "JOIN customers c ON o.customer_id = c.id GROUP BY c.is_test "
+        "QUALIFY NOT c.is_test"
+    )
+    assert check(strict, sql) == [EXCLUDE]
+
+
+def test_where_and_a_filtered_cte_still_exclude_before_an_outer_aggregate(checker):
+    where = (
+        "SELECT COUNT(*) OVER () AS total FROM orders o "
+        "JOIN customers c ON o.customer_id = c.id WHERE NOT c.is_test"
+    )
+    filtered_cte = (
+        "WITH visible_orders AS (SELECT o.id FROM orders o "
+        "JOIN customers c ON o.customer_id = c.id WHERE NOT c.is_test) "
+        "SELECT COUNT(*) FROM visible_orders"
+    )
+    assert check(checker, where) == []
+    assert check(checker, filtered_cte) == []
 
 
 def test_anti_joins_on_the_flag_satisfy_the_rule(checker):

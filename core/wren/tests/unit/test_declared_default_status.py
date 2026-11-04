@@ -170,6 +170,14 @@ def test_no_status_predicate_at_all_is_missing():
     assert outcome("SELECT status, COUNT(*) FROM orders GROUP BY status") == "missing"
 
 
+def test_status_scope_still_uses_qualify_after_a_window_computation():
+    sql = (
+        "SELECT status, ROW_NUMBER() OVER () AS row_number FROM orders "
+        "QUALIFY status IN ('paid', 'shipped')"
+    )
+    assert outcome(sql) == "satisfied"
+
+
 @pytest.mark.parametrize(
     "where",
     [
