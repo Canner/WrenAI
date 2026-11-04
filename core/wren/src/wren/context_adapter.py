@@ -717,6 +717,15 @@ def _redact_rule_body(text: str, denied: frozenset) -> str:
     return "".join(lines[:head] + body)
 
 
+def _mentions_denied_key(text: str) -> bool:
+    if DENIED_KEY in text.lower():
+        return True
+    return any(
+        re.fullmatch(r"denied[_-]?columns?", token, re.IGNORECASE)
+        for token in re.findall(r"[A-Za-z0-9_-]+", text)
+    )
+
+
 def strip_denied_declaration(text: str, denied: frozenset = frozenset()) -> str:
     """A rule file without its ``denied_columns`` front-matter key.
 
@@ -732,13 +741,17 @@ def strip_denied_declaration(text: str, denied: frozenset = frozenset()) -> str:
     try:
         front, body = split_front_matter(text)
     except ValueError:
+        if _mentions_denied_key(text):
+            raise DeniedColumnsInvalid("front-matter is unreadable") from None
         return text
     if front is None:
+        if _mentions_denied_key(text):
+            raise DeniedColumnsInvalid("front-matter is required")
         return text
     try:
         data = yaml.safe_load(front)
     except yaml.YAMLError:
-        if DENIED_KEY in front.lower():
+        if _mentions_denied_key(front):
             raise DeniedColumnsInvalid("front-matter is unreadable") from None
         data = None
         remaining = front

@@ -362,7 +362,8 @@ class _Parser:
                 self.error(path, "covers.via must be 'many_to_one'")
             excepted = covers.get("except_models", [])
             if not isinstance(excepted, list) or any(
-                name not in self.models for name in excepted
+                not isinstance(name, str) or name not in self.models
+                for name in excepted
             ):
                 self.error(path, "covers.except_models must list model names")
             else:
@@ -443,7 +444,7 @@ class _Parser:
                 f"{path} > rate", rate, {"model", "currency", "date", "match"}
             )
             rate_model = rate.get("model")
-            if rate_model not in self.models:
+            if not isinstance(rate_model, str) or rate_model not in self.models:
                 self.error(path, "rate.model must name a model")
                 rate_model = None
             rate_currency = self.column(path, rate.get("currency"), "rate.currency")

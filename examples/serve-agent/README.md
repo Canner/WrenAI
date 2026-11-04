@@ -53,6 +53,13 @@ For direct tools with the same boundary, replace `serve agent` with `serve mcp`,
 
 The context loader refuses symlinks for source-directory roots (`models`, `cubes`, `views`, `knowledge`) and nested directory or unresolved symlinks. This prevents cycles and keeps its readers and the host's change digest consistent. Valid file symlinks remain supported: their relative path and target bytes contribute to the digest, and edits to the target invalidate context. Managed source names must be valid UTF-8; other names are refused with `non_utf8_source_name`. Dot-hidden entries remain ignored.
 
+The loader reads managed source files, including supported regular-file symlink targets,
+in full. There is no per-file or aggregate memory cap for project loading. A subprocess
+timeout bounds elapsed time, not memory; streaming a change digest does not make loading
+memory-bounded. The project root and its source files are administered by a trusted author.
+Avoid placing very large data files in metadata sources, or apply external OS resource
+limits when operating the service.
+
 Saved-query consumer lineage is a structural extraction using sqlparser's `GenericDialect`. CTE shadowing currently uses case folding; it does not guarantee execution-equivalent provenance for every data source. Runtime SQL authorization and execution continue through the query gate and engine independently of this consumer-lineage extraction.
 
 Impact analysis preserves the complete transitive downstream list for every lineage seed. Its per-seed traversal is O(V*(V+E)), while complete downstream output is O(V²): a dense graph can therefore require cubic CPU time and quadratic output space. The loader does not truncate, cap, or otherwise omit consumers from that result.
@@ -310,6 +317,11 @@ A rule file may declare defaults in its front-matter (`defaults:`); the host che
 When a rule is `overridable_by_caller: true` and a worker's statement broke it, the worker may call `clarify` with `missing: status_scope` (any other rule, or no violation in the task, answers `{"error": "clarification_not_applicable"}`). The task ends as `needs_clarification`; the host asks the question in the wording the policy permits (see [Clarification questions follow the same policy](#clarification-questions-follow-the-same-policy)). The `answer` of `continue_task` is read as a comma-separated list of statuses (`、` `;` and line breaks also separate); it must fall inside the rule's domain, or the question is asked once more, and a second unusable answer ends the task as `unavailable` with reason `worker` (`detail: status_scope_unresolved`). The confirmed set (`caller_scope_confirmed {request_id, rule, scope}` in the audit) replaces the declared values as the comparison target for that one rule and nothing else: the other rules, the denylist, the read-only check and the join limit are unchanged. It belongs to the task and to follow-ups that name its result in `reply_to` (`caller_scope_inherited`); a follow-up whose statement keeps a different set is a violation again and asks again, and a new task starts with no scope.
 
 `checks` in the evidence (internal, and as the `answer.evidence.checks` field of [what the planner sees](#what-a-results-evidence-tells-the-planner)) record each declared rule as `{applicable, result}` with `satisfied`, `not_applicable`, `satisfied_by_definition` (every read of the models the rule concerns lies inside a view whose `guarantees` names the rule) or `satisfied_by_caller_scope` (which also carries `scope`). A view is expanded in place, so the models it reads are authorized, tracked and checked like any other source; its guarantee excuses only the rules it names, and only for the reads inside it. A cube is not a table and a cube measure is not a column: reading either by name is refused as `unsupported_query` with code `cube_not_a_table`.
+
+A view's `guarantees` are trusted declarations by the project author. The host does not
+prove that the view's SQL body satisfies those rules. Authors must maintain the declarations
+when changing the view; `satisfied_by_definition` records reliance on that author claim,
+not a host validation of the body.
 
 Some meanings are beyond what any check can read. Front-matter may list them under `semantics:` as `{id, models, note}` (a model or view name in `models`); a statement that touches one of the models gets the id in `unverified` (the `answer.evidence.unverified` field), next to the ids the host adds itself: `fx_missing_rate_handling` (an unguarded LEFT join), `fx_default_shape_unverified` (a `COALESCE` / `IF` / `CASE` over a rate whose default is not a plain number or NULL, or whose test is not `IS [NOT] NULL`: `COALESCE(rate, 2 - 1)` passes the rate checks and is reported here) and `duplicate_aggregation` (an aggregate over a view's value in a select that joins the view to a model on a column that is not the model's key). The loader refuses a `semantics` block it cannot read in full, and the service refuses an entry that names an unknown model or view or a denied column.
 

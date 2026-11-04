@@ -803,9 +803,11 @@ def test_strip_denied_declaration_removes_only_the_denylist_key():
     only = "---\ndenied_columns: [a.b]\n---\n# Title\n\nbody\n"
     assert strip_denied_declaration(only) == "# Title\n\nbody\n"
     plain = "# no front matter\ndenied_columns: [a.b]\n"
-    assert strip_denied_declaration(plain) == plain
+    with pytest.raises(DeniedColumnsInvalid):
+        strip_denied_declaration(plain)
     unclosed = "---\ndenied_columns: [a.b]\nnever closed"
-    assert strip_denied_declaration(unclosed) == unclosed
+    with pytest.raises(DeniedColumnsInvalid):
+        strip_denied_declaration(unclosed)
     untouched = "---\ndefaults: []\n---\nbody\n"
     assert strip_denied_declaration(untouched) == untouched
 
@@ -2257,3 +2259,29 @@ def test_provably_safe_relationship_conditions_survive_denial(condition):
         r.read(["customers"])["items"][0]["relationships"][0]["condition"] == condition
     )
     assert "safe" in r.structure_document()
+
+
+@pytest.mark.parametrize(
+    "key", ["Denied-Columns", "deniedColumns", "denied_column", "DENIED_COLUMNS"]
+)
+@pytest.mark.parametrize("fence", ["closed", "open", "missing"])
+def test_malformed_raw_denial_keys_fail_closed_with_matching_loader_grammar(key, fence):
+    declaration = f"{key}: [customers.email\n"
+    text = (
+        "---\n" + declaration + "---\n# Rules"
+        if fence == "closed"
+        else "---\n" + declaration
+        if fence == "open"
+        else declaration
+    )
+    with pytest.raises(DeniedColumnsInvalid):
+        strip_denied_declaration(text)
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["undenied-columns", "denied-columns-note", "deniedColumnsExtra", "unrelated"],
+)
+def test_unrelated_malformed_frontmatter_is_not_a_near_miss_denial(key):
+    text = f"---\n{key}: [bad\n---\n# Rules\n"
+    assert strip_denied_declaration(text) == text

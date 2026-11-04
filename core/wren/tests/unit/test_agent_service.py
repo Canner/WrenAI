@@ -3974,3 +3974,60 @@ def test_adhoc_planner_metadata_still_obeys_preset_selection(service, preset, se
         documents = s.metadata(None, sorted(selected), "planner")
         assert {d["id"] for d in documents} == selected
     assert not s.allowed(None, "receive_metadata", "schema.denied", "unknown")
+
+
+def test_continuation_close_cancels_its_first_actual_fingerprint_worker(service):
+    import os  # noqa: PLC0415
+    import threading  # noqa: PLC0415
+    import time  # noqa: PLC0415
+
+    from wren.governed_query import QueryCancelled  # noqa: PLC0415
+
+    s = service(profile="adhoc")
+    session_id = s.open()["session_id"]
+    s.sessions[session_id]["pending"]["resume"] = {
+        "capability": "analytics",
+        "question": "Count orders",
+    }
+    stalled = s.project.root / "continuation.fifo"
+    os.mkfifo(stalled)
+    s.project.paths.append(stalled)
+    outcome = []
+
+    def resume():
+        try:
+            s.continue_task(
+                Continue(
+                    session_id=session_id,
+                    request_id="resume-one",
+                    expected_revision=0,
+                    continuation_ref="resume",
+                    answer="yes",
+                )
+            )
+        except BaseException as error:
+            outcome.append(error)
+
+    thread = threading.Thread(target=resume)
+    thread.start()
+    try:
+        deadline = time.monotonic() + 3
+        lifetime = None
+        while time.monotonic() < deadline:
+            lifetime = s.sessions[session_id].get("query_lifetime")
+            if lifetime is not None and lifetime.children:
+                break
+            time.sleep(0.01)
+        assert lifetime is not None and lifetime.children, (
+            "continuation did not register its fingerprint worker"
+        )
+        s.close(session_id)
+        thread.join(2)
+        assert not thread.is_alive()
+        assert outcome and isinstance(outcome[0], QueryCancelled)
+        assert not lifetime.children
+        assert s.sessions[session_id]["active"] is None
+    finally:
+        s.close(session_id)
+        thread.join(3)
+        stalled.unlink()

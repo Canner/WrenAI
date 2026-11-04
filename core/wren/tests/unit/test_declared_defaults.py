@@ -552,3 +552,28 @@ def test_non_string_covering_anchor_is_a_declaration_error(project, anchor):
     declarations, errors = parse(project)
     assert errors and not declarations
     assert any("covers.reaching must name a model" in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    "value", ["[[orders]]", "[{name: orders}]", "[null]", "[true]"]
+)
+def test_non_string_excepted_models_are_controlled_errors(project, value):
+    declare(
+        project,
+        EXCLUDE.replace(
+            "via: many_to_one}", "via: many_to_one, except_models: " + value + "}"
+        ),
+    )
+    declarations, errors = parse(project)
+    assert not declarations
+    assert any(
+        "covers.except_models must list model names" in error for error in errors
+    )
+
+
+@pytest.mark.parametrize("value", ["[fx_rates]", "{name: fx_rates}", "null", "true"])
+def test_non_string_rate_model_is_a_controlled_error(project, value):
+    declare(project, RATE.replace("model: fx_rates", "model: " + value))
+    declarations, errors = parse(project)
+    assert not declarations
+    assert any("rate.model must name a model" in error for error in errors)

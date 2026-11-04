@@ -207,6 +207,12 @@ start when the declared names differ from the statement's output (a statement wh
 names are not stable, such as an unaliased `id::BIGINT` anywhere in the statement, or `COLUMNS(...)`, is not checked), and a
 malformed or duplicate entry is reported as `view_columns_invalid`. Views without `columns` behave as before.
 
+A view may also name declared rule ids in `guarantees`. These are trusted claims by the
+project author: the host does not prove that the view's SQL body satisfies the named rules.
+Keep the claims in step with any change to the view. An evidence result of
+`satisfied_by_definition` means the host relied on that declaration for the covered view
+reads; it does not mean the host verified the body against the rule.
+
 ### 2. Let `usage` compound from every confirmed answer
 
 The day-to-day `usage` guide stores confirmed answers automatically:

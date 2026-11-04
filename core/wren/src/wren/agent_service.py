@@ -1585,17 +1585,22 @@ class Service:
         return "failed" if pending.get("retried") or rule is None else "reask"
 
     def continue_task(self, r: Continue):
-        s = self.session(r.session_id)
-        pending = s["pending"].get(r.continuation_ref)
-        if not pending:
-            raise ValueError("context_changed")
-        ask = Ask(
-            session_id=r.session_id,
-            request_id=r.request_id,
-            expected_revision=r.expected_revision,
-            capability=pending["capability"],
-            question=pending["question"],
-        )
+        # Only read session-owned state here; execute registers the cancellable
+        # lifetime before session/current performs any filesystem work.
+        with self.lock:
+            s = self.sessions.get(r.session_id)
+            if not s or s["closed"] or s["caller"] != self.caller:
+                raise ValueError("session_expired")
+            pending = s["pending"].get(r.continuation_ref)
+            if not pending:
+                raise ValueError("context_changed")
+            ask = Ask(
+                session_id=r.session_id,
+                request_id=r.request_id,
+                expected_revision=r.expected_revision,
+                capability=pending["capability"],
+                question=pending["question"],
+            )
         return self.execute(
             ask, continuation={"ref": r.continuation_ref, "answer": r.answer}
         )

@@ -179,6 +179,26 @@ def model_schema(models) -> dict:
     }
 
 
+def _consumed_scopes(scopes):
+    """Scopes reached by the result, excluding CTEs merely available by name."""
+    live = set()
+
+    def visit(scope):
+        if id(scope) in live:
+            return
+        live.add(id(scope))
+        referenced = {alias for alias, _ in scope.references}
+        for alias, source in scope.sources.items():
+            if alias in referenced and isinstance(source, Scope):
+                visit(source)
+        for child in [*scope.union_scopes, *scope.subquery_scopes]:
+            visit(child)
+
+    if scopes:
+        visit(scopes[-1])
+    return [scope for scope in scopes if id(scope) in live]
+
+
 def read_view_bodies(schema: dict, catalog: dict, manifest: dict | None):
     """The views the catalog lists, as parsed bodies over models: ``(usable, broken)``.
 
@@ -532,6 +552,10 @@ class AdHocSQL:
                         if isinstance(src, exp.Table) and src.name.lower() not in known:
                             raise ValueError("unknown_model")
                 raise pending
+            scopes = _consumed_scopes(scopes)
+            views_read = {
+                name for scope in scopes if (name := self._view_of(scope.expression))
+            }
             sources, physical = {}, []
             for scope in scopes:
                 if not isinstance(
@@ -659,8 +683,14 @@ class AdHocSQL:
             "models": sorted(sources),
             "columns": {m: sorted(c) for m, c in sorted(sources.items())},
             "joins": joins,
-            "aggregated": tree.find(exp.AggFunc) is not None
-            or tree.find(exp.Group) is not None,
+            "aggregated": any(
+                scope.expression.args.get("group") is not None
+                or any(
+                    aggregate.find_ancestor(exp.Select) is scope.expression
+                    for aggregate in scope.expression.find_all(exp.AggFunc)
+                )
+                for scope in scopes
+            ),
             "filters": filters,
             "status_literals": {k: sorted(v) for k, v in sorted(literals.items())},
         }
@@ -683,6 +713,7 @@ class AdHocSQL:
         and a comparison of two columns in a join condition are not date filters and count for
         nothing either way. Nothing here reads what the worker wrote about its question.
         """
+        scopes = _consumed_scopes(scopes)
         windows, unpinned = [], set()
         nullable_on = False
         marked = {}
@@ -1237,6 +1268,8 @@ class AdHocSQL:
                         if v == v.to_integral_value() and abs(v) <= 2**53 - 1
                         else str(v)
                     )
+                elif type(v) is int and abs(v) > 2**53 - 1:
+                    v = str(v)
                 if v is not None and not isinstance(v, (str, int, float, bool)):
                     raise ValueError("unsupported_result")
                 if isinstance(v, str) and len(v) > 256:

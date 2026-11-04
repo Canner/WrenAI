@@ -2791,3 +2791,99 @@ def test_mixed_case_models_retain_rewritable_function_errors_and_denials():
         _mixed_case_gate({("Orders", "id")}).prepare("SELECT id FROM Orders")
     with pytest.raises(PermissionError):
         _mixed_case_gate().prepare("SELECT COUNT(*) FROM unknown")
+
+
+def _consumed_source_gate():
+    models = [
+        {"name": "customers", "columns": [{"name": "id", "type": "INT"}]},
+        {
+            "name": "orders",
+            "columns": [
+                {"name": "id", "type": "INT"},
+                {"name": "order_date", "type": "DATE"},
+            ],
+        },
+    ]
+    snapshot = SimpleNamespace(
+        catalog={"models": models},
+        manifest={"models": models},
+        declarations=(),
+        denied=(),
+    )
+    return AdHocSQL(SimpleNamespace(snapshot=snapshot))
+
+
+@pytest.mark.parametrize(
+    "unused",
+    [
+        "SELECT id FROM orders",
+        "SELECT COUNT(*) AS n FROM orders",
+        "SELECT id FROM orders WHERE order_date >= DATE '2026-06-01' AND order_date < DATE '2026-07-01'",
+    ],
+)
+def test_unused_cte_has_no_source_permission_or_observed_fact(unused):
+    prepared = _consumed_source_gate().prepare(
+        f"WITH unused AS ({unused}) SELECT id FROM customers"
+    )
+    assert prepared.sources == {"customers": ["id"]}
+    assert prepared.observed["models"] == ["customers"]
+    assert not prepared.observed["aggregated"]
+    assert prepared.observed["filters"] == []
+    assert prepared.observed["date_windows"] == []
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "WITH live AS (SELECT id,order_date FROM orders), nested AS (SELECT id FROM live WHERE order_date >= DATE '2026-06-01') SELECT COUNT(*) FROM nested",
+        "WITH live AS (WITH ignored AS (SELECT id FROM customers) SELECT id,order_date FROM orders WHERE order_date >= DATE '2026-06-01') SELECT COUNT(*) FROM live",
+    ],
+)
+def test_consumed_nested_ctes_keep_their_sources_and_windows(sql):
+    prepared = _consumed_source_gate().prepare(sql)
+    assert prepared.sources.keys() == {"orders"}
+    assert prepared.observed["models"] == ["orders"]
+    assert prepared.observed["date_windows"]
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "WITH unused AS (SELECT id FROM orders) SELECT COUNT(*) FROM customers",
+        "SELECT COUNT(*) FROM customers SEMI JOIN orders ON orders.id = customers.id",
+        "SELECT id FROM customers UNION ALL SELECT id FROM orders",
+    ],
+)
+def test_scope_pruning_retains_consumed_join_and_set_sources(sql):
+    prepared = _consumed_source_gate().prepare(sql)
+    expected = {"customers"} if sql.startswith("WITH") else {"customers", "orders"}
+    assert prepared.sources.keys() == expected
+
+
+@pytest.mark.parametrize(
+    "value,expected_type",
+    [
+        (2**53 + 1, str),
+        (-(2**53 + 1), str),
+        (2**53 - 1, int),
+        (-(2**53 - 1), int),
+        (True, bool),
+        (False, bool),
+    ],
+)
+def test_native_integer_wire_values_preserve_exactness_and_boolean_types(
+    monkeypatch, value, expected_type
+):
+    import pyarrow as pa  # noqa: PLC0415
+
+    import wren.agent_sql as module  # noqa: PLC0415
+
+    query = AdHocSQL.__new__(AdHocSQL)
+    query.project = SimpleNamespace(engine=object(), current=lambda: None)
+    monkeypatch.setattr(
+        module, "governed_query", lambda *_: pa.table({"value": [value]})
+    )
+    result, _ = query.execute(("SELECT value", [], [], ["value"], {}, {}, []))
+    actual = result["rows"][0]["c1"]
+    assert type(actual) is expected_type
+    assert actual == (str(value) if expected_type is str else value)
