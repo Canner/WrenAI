@@ -20,6 +20,7 @@ DEFAULT_CALL_TIMEOUT_S = 100.0
 ABANDONED_LIMIT = 1024
 CONTROL_WRITE_TIMEOUT_S = 0.1
 TOOL_SHUTDOWN_TIMEOUT_S = 1.0
+TOOL_CALL_CAPACITY = 128
 
 
 class TaskAborted(RuntimeError):
@@ -200,13 +201,34 @@ class RuntimeIPC:
                     with self.state_lock:
                         wire = m.get("owner")
                         owner = self._wire_owners.get(wire)
-                        if owner not in self.callbacks and not self._issued(wire):
-                            raise ValueError("ipc_order")
-                        m["_owner"] = owner
-                    with self.state_lock:
-                        future = self.pool.submit(self._tool, m)
-                        self._tool_futures.add(future)
-                    future.add_done_callback(self._tool_finished)
+                        if owner not in self.callbacks or owner not in self.pending:
+                            if not self._issued(wire):
+                                raise ValueError("ipc_order")
+                            future = None
+                        else:
+                            # Finished calls release capacity even if their done
+                            # callback is still waiting for this state lock.
+                            self._tool_futures = {
+                                f for f in self._tool_futures if not f.done()
+                            }
+                            if len(self._tool_futures) >= TOOL_CALL_CAPACITY:
+                                raise ValueError("ipc_tool_capacity")
+                            m["_owner"] = owner
+                            future = self.pool.submit(self._tool, m)
+                            self._tool_futures.add(future)
+                    if future is None:
+                        # Retired owners keep the late-call refusal contract but
+                        # cannot consume executor or admission capacity.
+                        self._send(
+                            {
+                                "type": "tool_result",
+                                "id": m["id"],
+                                "owner": wire,
+                                "error": "tool_denied",
+                            }
+                        )
+                    else:
+                        future.add_done_callback(self._tool_finished)
                 else:
                     with self.state_lock:
                         owner = self._wire_owners.get(m["id"])

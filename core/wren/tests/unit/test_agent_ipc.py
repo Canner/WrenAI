@@ -773,3 +773,170 @@ def test_teardown_does_not_wait_forever_for_a_non_cancellable_tool(
         runtime.reader.join(5)
         for thread in runtime.pool._threads:
             thread.join(2)
+
+
+@pytest.fixture
+def tool_flood_runtime(tmp_path):
+    import threading  # noqa: PLC0415
+
+    peer = tmp_path / "tool-flood.js"
+    peer.write_text("""
+const readline = require('node:readline');
+const results = [];
+let sequence = 0;
+const send = value => process.stdout.write(JSON.stringify(value) + '\\n');
+readline.createInterface({input:process.stdin}).on('line', line => {
+ const m = JSON.parse(line);
+ if (m.type === 'tool_result') {results.push(m.error || null); return;}
+ if (m.op === 'init') return send({id:m.id,value:{protocol:m.protocol,ir:'0.9',schema:'1'}});
+ if (m.op === 'hold') return;
+ if (m.op === 'burst') {
+  for(let i=0;i<m.count;i++) send({type:'tool_call',id:++sequence,owner:m.owner,name:'work',args:{}});
+ }
+ if (m.op === 'complete') send({id:m.owner,value:'finished'});
+ return send({id:m.id,value:m.op === 'results' ? results : true});
+});
+""")
+    runtime = RuntimeIPC(peer, {})
+    release = threading.Event()
+    callers = []
+
+    def start_owner(ident):
+        outcome = []
+
+        def callback(*_):
+            assert release.wait(5)
+            return "done"
+
+        def invoke():
+            try:
+                outcome.append(
+                    runtime.call(
+                        "hold",
+                        invocation_id=ident,
+                        callback=callback,
+                        on_cancel=release.set,
+                        timeout_s=5,
+                    )
+                )
+            except RuntimeError as error:
+                outcome.append(error)
+
+        thread = threading.Thread(target=invoke)
+        callers.append(thread)
+        thread.start()
+        deadline = time.monotonic() + 3
+        while ident not in runtime.wire_ids and time.monotonic() < deadline:
+            time.sleep(0.001)
+        assert ident in runtime.wire_ids
+        return runtime.wire_ids[ident], thread, outcome
+
+    yield runtime, start_owner, release
+    release.set()
+    runtime.close()
+    for thread in callers:
+        thread.join(3)
+        assert not thread.is_alive()
+
+
+def test_runtime_admits_128_tool_calls_then_aborts_all_pending_owners(
+    tool_flood_runtime,
+):
+    runtime, start_owner, release = tool_flood_runtime
+    first, first_thread, first_outcome = start_owner("first")
+    second, second_thread, second_outcome = start_owner("second")
+    assert runtime.call("burst", owner=first, count=64) is True
+    assert runtime.call("burst", owner=second, count=64) is True
+    assert len(runtime._tool_futures) == 128
+    assert runtime.process.poll() is None and not runtime.closed
+    with pytest.raises(RuntimeError, match="runtime_unavailable"):
+        runtime.call("burst", owner=first, count=1)
+    first_thread.join(3)
+    second_thread.join(3)
+    runtime.reader.join(3)
+    assert not first_thread.is_alive() and not second_thread.is_alive()
+    assert all(
+        len(result) == 1
+        and isinstance(result[0], RuntimeError)
+        and str(result[0]) == "runtime_unavailable"
+        for result in (first_outcome, second_outcome)
+    )
+    assert release.is_set() and runtime.closed and not runtime.reader.is_alive()
+    assert runtime.process.poll() is not None and not runtime.pending
+    assert not runtime._tool_futures
+
+
+def test_finished_tool_futures_release_capacity_even_before_the_done_hook_returns(
+    tool_flood_runtime, monkeypatch
+):
+    import threading  # noqa: PLC0415
+
+    runtime, start_owner, release = tool_flood_runtime
+    owner, _, _ = start_owner("reused-capacity")
+    finish_release = threading.Event()
+    original = runtime._tool_finished
+
+    def held_finished(future):
+        assert finish_release.wait(5)
+        original(future)
+
+    monkeypatch.setattr(runtime, "_tool_finished", held_finished)
+    try:
+        assert runtime.call("burst", owner=owner, count=128) is True
+        release.set()
+        deadline = time.monotonic() + 3
+        while (
+            sum(f.done() for f in runtime._tool_futures) < 8
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.001)
+        assert sum(f.done() for f in runtime._tool_futures) == 8
+        # The eight completed calls no longer consume admission capacity even
+        # while their bookkeeping hook holds the worker threads.
+        assert runtime.call("burst", owner=owner, count=8) is True
+        assert not runtime.closed
+    finally:
+        finish_release.set()
+    deadline = time.monotonic() + 3
+    while runtime._tool_futures and time.monotonic() < deadline:
+        time.sleep(0.001)
+    assert not runtime._tool_futures
+    release.clear()
+    assert runtime.call("burst", owner=owner, count=128) is True
+    assert len(runtime._tool_futures) == 128 and not runtime.closed
+
+
+def test_retired_tool_frames_are_refused_without_executor_admission(
+    tool_flood_runtime, monkeypatch
+):
+    runtime, start_owner, _ = tool_flood_runtime
+    owner, thread, outcome = start_owner("retired")
+    assert runtime.call("complete", owner=owner) is True
+    thread.join(3)
+    assert outcome == ["finished"] and not thread.is_alive()
+    active, _, _ = start_owner("still-active")
+    assert runtime.call("burst", owner=active, count=128) is True
+    assert len(runtime._tool_futures) == 128
+    submitted = []
+    original = runtime.pool.submit
+
+    def submit(*args, **kwargs):
+        submitted.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(runtime.pool, "submit", submit)
+    assert runtime.call("burst", owner=owner, count=129) is True
+    assert submitted == [] and len(runtime._tool_futures) == 128
+    assert runtime.call("results") == ["tool_denied"] * 129
+    assert runtime.process.poll() is None and not runtime.closed
+
+
+def test_a_tool_frame_for_an_unissued_owner_still_aborts_the_runtime(
+    tool_flood_runtime,
+):
+    runtime, _, _ = tool_flood_runtime
+    with pytest.raises(RuntimeError, match="runtime_unavailable"):
+        runtime.call("burst", owner="never-issued", count=1)
+    runtime.reader.join(3)
+    assert runtime.closed and not runtime.reader.is_alive()
+    assert runtime.process.poll() is not None and not runtime._tool_futures

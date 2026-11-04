@@ -2300,3 +2300,60 @@ def test_business_description_uses_no_model_key_derived_label(description):
         assert description in text
     else:
         assert len(text.splitlines()) == 2
+
+
+@pytest.mark.parametrize("mention", ["orders", "Orders", "ORDERS"])
+def test_prose_rules_attach_case_insensitively_without_matching_neighbor_names(mention):
+    r = reader(
+        {
+            "models": [model("orders")],
+            "knowledge_rules": [
+                {
+                    "path": "knowledge/rules/relevant.md",
+                    "content": f"{mention} must exclude cancellations.",
+                },
+                {
+                    "path": "knowledge/rules/unrelated.md",
+                    "content": "PreOrders and orders_archive are unrelated.",
+                },
+                {
+                    "path": "knowledge/rules/front-only.md",
+                    "content": "---\ndescription: Orders\n---\nNothing applicable here.",
+                },
+            ],
+        }
+    )
+    assert [rule["path"] for rule in r.read(["orders"])["rules"]] == [
+        "knowledge/rules/relevant.md"
+    ]
+
+
+@pytest.mark.parametrize("key", ["measures", "dimensions", "time_dimensions"])
+@pytest.mark.parametrize("hidden_name", ["private_id", "Private_ID"])
+def test_cube_members_hide_same_named_hidden_base_columns_only(key, hidden_name):
+    orders = model("orders")
+    orders["columns"].append(
+        {"name": hidden_name, "type": "VARCHAR", "is_hidden": True}
+    )
+    private = {
+        "name": "PRIVATE_ID",
+        "type": "VARCHAR",
+        "description": "Internal identifier.",
+    }
+    safe = {"name": "id", "type": "VARCHAR", "description": "Public identifier."}
+    r = reader(
+        {
+            "models": [orders, model("customers", columns=("id", hidden_name))],
+            "cubes": [
+                {"name": "order_cube", "base_object": "orders", key: [private, safe]},
+                {"name": "customer_cube", "base_object": "customers", key: [private]},
+            ],
+        }
+    )
+    order_cube, customer_cube, order_model = r.read(
+        ["order_cube", "customer_cube", "orders"]
+    )["items"]
+    assert [column["name"] for column in order_model["columns"]] == ["id"]
+    assert [member["name"] for member in order_cube[key]] == ["id"]
+    assert order_cube[key][0]["description"] == "Public identifier."
+    assert [member["name"] for member in customer_cube[key]] == ["PRIVATE_ID"]

@@ -1142,7 +1142,9 @@ class ContextReader:
             paths.append(path)
 
     def _rules_about(self, model: str) -> list[dict]:
-        pattern = re.compile(rf"(?<![A-Za-z0-9_]){re.escape(model)}(?![A-Za-z0-9_])")
+        pattern = re.compile(
+            rf"(?<![A-Za-z0-9_]){re.escape(model)}(?![A-Za-z0-9_])", re.IGNORECASE
+        )
         about = []
         for rule in self._rules:
             declared = any(
@@ -1202,12 +1204,15 @@ class ContextReader:
     def _cube_item(self, cube: dict) -> dict:
         base = cube["base_object"]
         scope = self._scope("cube", cube)
+        blocked = self.denied | frozenset(
+            (owner, column.lower()) for owner, column in self._hidden
+        )
 
         def members(key: str) -> list[dict]:
             return [
                 member(m)
                 for m in cube.get(key) or []
-                if (base, str(m["name"]).lower()) not in self.denied
+                if (base, str(m["name"]).lower()) not in blocked
             ]
 
         def member(m: dict) -> dict:

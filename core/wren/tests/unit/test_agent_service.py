@@ -4308,3 +4308,21 @@ def test_hidden_describe_tool_omits_model_derived_labels_but_full_metadata_keeps
     text = result["result"]["text"]
     assert "Purchase records. One entry per completed checkout." in text
     assert "legacy_orders" not in text and "legacy orders" not in text
+
+
+@pytest.mark.parametrize("presets", [[], "", 0, False, 0.0])
+def test_falsy_nonmapping_policy_presets_are_invalid(presets):
+    with pytest.raises(ValueError, match="invalid_policy_preset"):
+        read_policy_presets({"policy_presets": presets})
+
+
+@pytest.mark.parametrize(
+    "config", [{}, {"policy_presets": None}, {"policy_presets": {}}]
+)
+def test_absent_null_and_empty_mapping_policy_presets_remain_valid(config):
+    assert read_policy_presets(config) == (None, {})
+
+
+def test_empty_list_policy_presets_refuses_service_startup(service):
+    with pytest.raises(ValueError, match="invalid_policy_preset"):
+        service(updates={"policy_presets": []})

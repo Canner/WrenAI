@@ -483,7 +483,9 @@ def check_service_config(config) -> None:
 def read_policy_presets(config: dict) -> tuple[str | None, dict[str, dict]]:
     """Validate operator-named presets; each may override only PRESET_KEYS."""
     reject_legacy(config)
-    presets = config.get("policy_presets") or {}
+    presets = config.get("policy_presets")
+    if presets is None:
+        presets = {}
     default = config.get("default_preset")
     if not isinstance(presets, dict) or (
         default is not None and (not isinstance(default, str) or default not in presets)

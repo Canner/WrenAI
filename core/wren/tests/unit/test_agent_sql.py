@@ -2895,3 +2895,29 @@ def test_native_integer_wire_values_preserve_exactness_and_boolean_types(
     actual = result["rows"][0]["c1"]
     assert type(actual) is expected_type
     assert actual == (str(value) if expected_type is str else value)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT id FROM outer_orders",
+        "WITH report AS (SELECT id FROM outer_orders) SELECT id FROM report",
+    ],
+)
+def test_governed_nested_views_remain_refused_before_execution(query):
+    models = [{"name": "orders", "columns": [{"name": "id", "type": "INTEGER"}]}]
+    views = [
+        {"name": "inner_orders", "statement": "SELECT id FROM orders"},
+        {"name": "outer_orders", "statement": "SELECT id FROM inner_orders"},
+    ]
+    snapshot = SimpleNamespace(
+        catalog={"models": models, "views": [{"name": view["name"]} for view in views]},
+        manifest={"models": models, "views": views},
+        declarations=(),
+        denied=(),
+    )
+    gate = AdHocSQL(SimpleNamespace(snapshot=snapshot))
+    assert gate.prepare("SELECT id FROM inner_orders").sources == {"orders": ["id"]}
+    with pytest.raises(QueryFormError) as caught:
+        gate.prepare(query)
+    assert caught.value.code == "unsupported_source"

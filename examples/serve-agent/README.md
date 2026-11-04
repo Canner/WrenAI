@@ -155,6 +155,15 @@ Python interpreter exit. This wait bound does not terminate the callback or prov
 
 The task clock starts before its first session/context revalidation and authorization, and each authorization wait is capped by the remaining task time. Each IPC call shares one deadline across the write-lock wait, request write and reply wait. Control and tool-result writes have a bounded write budget too. Canceling an incomplete frame ends that stalled transport, since another JSON frame cannot safely follow it; canceling a healthy task keeps the shared runtime available. Runtime context fingerprints run in a separate fixed-purpose child, under the same task lifetime, so a stalled filesystem read can be terminated on close or shutdown. A fingerprint check outside an active task has a 15-second bound. These checks keep the same content-hash algorithm and revalidation points, with a process-start cost per check; initial project loading at service startup remains synchronous.
 
+The shared runtime admits at most 128 unfinished tool calls in total, counting
+both running callbacks and queued work across all invocations. A 129th call
+closes that runtime and fails every request then waiting on it as
+`unavailable` with reason `service`; it is not a per-request busy response.
+Restart the service to create a fresh runtime. Late calls for an already-ended
+invocation receive `tool_denied` without entering the executor. This admission
+bound does not terminate non-cancellable external callbacks or prove that
+provider work or billing has stopped.
+
 Before a query result crosses into the host, the child validates its shape, supported scalar types and 256-character string-cell limit, compacts Arrow buffers, and caps the serialized response at 128 KiB. The host enforces that frame limit before deserialization and retains its final 32 KiB JSON result limit. These bounds cover transfer and host deserialization. A row limit does not bound a cell's size or the connector's allocation: the child/database may already have materialized a large value before validation, and this service supplies no hard memory limit for either process or remote database.
 
 A runtime that reports usage sends one `calls` entry per provider attempt (a retried 429 is its own entry) with every reply. The host never forwards it: it goes to the audit only, as one `model_call {request_id, turn, elapsed_ms, input, output, reasoning, cache_read, stop_reason, raw_stop_reason, tool_calls, status}` event per entry, written before the task's `task_completed` or `task_failed`. `input` excludes `cache_read`. An entry is recorded only if it has exactly those ten fields, every number is a non-negative integer and every label matches `[a-z0-9_]{0,32}`; anything else is dropped and counted in one `model_calls_dropped {request_id, count}` event. A runtime that sends no usage produces no `model_call` events, and that is not an error. When a task fails, `task_failed` also carries `turns` and `tool_calls` (the runtime's own counters when it reports them, otherwise `null`) and `sql_attempts` (the host's count of the task's SQL statements); `detail` keeps the runtime's exact failure code, for example `service_unavailable:turn_limit`.
@@ -461,6 +470,11 @@ than silently truncate. These are bounded analytical queries, not unrestricted
 SQL access. Arbitrary prose rules are model interpreted and are not proof of
 correctness; the defaults the fixture declares are enforced on every statement
 (see [Declared default rules](#declared-default-rules)) and prose around them is not.
+
+This governed SQL gate accepts view bodies over bound models, but refuses a view
+that reads another view with `unsupported_source` before execution, including
+when it is referenced by a larger query. The ordinary Wren engine supports
+recursive view expansion; that capability does not expand this agent gate.
 
 Decimal results retain their exact value across the runtime's JSON wire: integral
 values within JavaScript's safe integer range are JSON integers; larger integers
