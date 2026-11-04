@@ -1008,8 +1008,9 @@ class _Statement:
                 return next(
                     (
                         id(scope.expression)
-                        for scope, _, _ in reversed(path)
+                        for scope, _, _ in path
                         if isinstance(scope.expression, exp.Select)
+                        and isinstance(scope.expression.parent, exp.SetOperation)
                     ),
                     None,
                 )
