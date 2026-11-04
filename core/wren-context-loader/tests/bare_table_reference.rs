@@ -104,3 +104,46 @@ fn empty_relationships_yml_is_treated_as_no_relationships() {
         "the model must still load when relationships.yml is empty"
     );
 }
+
+#[test]
+fn authored_cube_hierarchies_reach_the_manifest_in_key_order() {
+    let tmp = tempfile::tempdir().unwrap();
+    bare_tableref_project(tmp.path());
+    write(
+        tmp.path(),
+        "cubes/order_metrics/metadata.yml",
+        r#"name: order_metrics
+base_object: customers
+measures: []
+dimensions:
+  - { name: country, expression: country, type: VARCHAR }
+  - { name: city, expression: city, type: VARCHAR }
+time_dimensions: []
+hierarchies:
+  geography: [country, city]
+  locality: [city]
+"#,
+    );
+    write(
+        tmp.path(),
+        "cubes/no_hierarchy/metadata.yml",
+        "name: no_hierarchy\nbase_object: customers\nmeasures: []\ndimensions: []\ntime_dimensions: []\n",
+    );
+
+    let sources = read_project_dir(tmp.path()).unwrap().unwrap();
+    let assembled = assemble(&sources).unwrap();
+    let manifest = serde_json::to_value(&assembled.manifest).unwrap();
+    let cube = |name: &str| {
+        manifest["cubes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|cube| cube["name"] == name)
+            .unwrap()
+    };
+    assert_eq!(
+        cube("order_metrics")["hierarchies"],
+        serde_json::json!({ "geography": ["country", "city"], "locality": ["city"] })
+    );
+    assert_eq!(cube("no_hierarchy")["hierarchies"], serde_json::json!({}));
+}

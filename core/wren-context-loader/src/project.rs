@@ -168,6 +168,8 @@ struct CubeFile {
     dimensions: Vec<CubeMemberFile>,
     #[serde(default)]
     time_dimensions: Vec<CubeMemberFile>,
+    #[serde(default)]
+    hierarchies: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1230,15 +1232,13 @@ fn cube_member_to_json(m: CubeMemberFile) -> serde_json::Value {
 }
 
 fn cube_to_json(c: CubeFile) -> serde_json::Value {
-    // `hierarchies` is a BTreeMap in the Manifest; an empty map keeps deterministic output.
-    let empty: BTreeMap<String, Vec<String>> = BTreeMap::new();
     serde_json::json!({
         "name": c.name,
         "baseObject": c.base_object,
         "measures": c.measures.into_iter().map(cube_member_to_json).collect::<Vec<_>>(),
         "dimensions": c.dimensions.into_iter().map(cube_member_to_json).collect::<Vec<_>>(),
         "timeDimensions": c.time_dimensions.into_iter().map(cube_member_to_json).collect::<Vec<_>>(),
-        "hierarchies": empty,
+        "hierarchies": c.hierarchies,
     })
 }
 
