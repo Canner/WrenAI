@@ -446,11 +446,12 @@ class AdHocSQL:
                     for mine, other in (sides, sides[::-1]):
                         source = scope.sources.get(other.table)
                         if mine.table in aggregated and isinstance(source, exp.Table):
-                            matched_keys.setdefault(source.name, set()).add(other.name)
+                            matched_keys.setdefault(
+                                id(source), (source.name, set())
+                            )[1].add(other.name)
             if any(
-                keys and not keys <= matched_keys.get(model, set())
-                for model, keys in self.primary_keys.items()
-                if model in matched_keys
+                not (keys := self.primary_keys.get(model)) or not keys <= matched
+                for model, matched in matched_keys.values()
             ):
                 return True
         return False
