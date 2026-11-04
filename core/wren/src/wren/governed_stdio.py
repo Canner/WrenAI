@@ -56,6 +56,11 @@ ERROR_MESSAGES: dict[str, str] = {
         "below (its wording is in the project's knowledge rules), then run the "
         "query again."
     ),
+    "declared_default_undetermined": (
+        "The query was not executed because the host could not check it against "
+        "the project's declared default rules. Rewrite the SQL using plain "
+        "references to bound models and columns."
+    ),
     "policy_rejected": (
         "The read-only analytical policy rejected the query: use one SELECT over "
         "the bound models with standard analytical functions only."
@@ -107,6 +112,10 @@ class _DeclaredDefaultMissing(ValueError):
         self.rule_ids = rule_ids
 
 
+class _DeclaredDefaultUndetermined(ValueError):
+    """The checker could not determine whether the SQL satisfies declared rules."""
+
+
 def classify_error(error: BaseException) -> str:
     """Map an exception to one key of ``ERROR_MESSAGES``; never reads its text."""
     if isinstance(error, _RequestError):
@@ -115,6 +124,8 @@ def classify_error(error: BaseException) -> str:
         return "result_too_large"
     if isinstance(error, _DeclaredDefaultMissing):
         return "declared_default_missing"
+    if isinstance(error, _DeclaredDefaultUndetermined):
+        return "declared_default_undetermined"
     if isinstance(error, NoSourceTablesError):
         return "ungrounded_literal"
     if isinstance(error, WrenError):
@@ -204,8 +215,12 @@ def serve(project: Path) -> None:
                             phase=ErrorPhase.SQL_POLICY_CHECK,
                         )
                     source_tables = require_source_tables(ast)
-                    if checker is not None and (fired := checker.check(ast)):
-                        raise _DeclaredDefaultMissing(fired)
+                    if checker is not None:
+                        fired = checker.check(ast)
+                        if fired is None:
+                            raise _DeclaredDefaultUndetermined
+                        if fired:
+                            raise _DeclaredDefaultMissing(fired)
                     result = engine.query(
                         request["sql"], limit=request["limit"], read_only=True
                     )

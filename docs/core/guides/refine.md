@@ -180,10 +180,14 @@ What the check does not verify: that the rate is actually multiplied into the am
 that the rate join yields one row per transaction, or which of several declared date
 columns is the right one; that a filter in an unrelated branch of the statement applies
 to the aggregated rows; and any flag written in a form outside the list above (it is
-treated as missing). A statement that cannot be parsed against the model schema gets no
-verdict. `wren serve agent` and governed MCP (`wren serve mcp --service-config`)
-refuse it as `declared_default_undetermined` without execution. On `governed-stdio`,
-the engine runs it and reports its own error. These three paths enforce declarations;
+treated as missing). A statement that cannot be parsed against the model schema, or whose
+declared rules cannot be checked, gets no verdict. `wren serve agent`, governed MCP
+(`wren serve mcp --service-config`) and `wren governed-stdio` all refuse it as
+`declared_default_undetermined` before execution. A valid predicate outside the checker's
+supported forms, such as `status LIKE 'paid%'` for a `sale_statuses` declaration, must
+be rewritten into a supported form before it can run. A checker failure also refuses
+the query; it cannot silently turn enforcement off.
+These paths enforce declarations within those limits;
 `wren query` does not. A project without declarations behaves exactly as before.
 
 #### Declaring a view's columns

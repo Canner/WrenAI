@@ -1,4 +1,4 @@
-"""Exercise the transport with a captured synthetic binding; never open a database."""
+"""Exercise the bound transport with synthetic and local DuckDB fixtures."""
 
 import io
 import json
@@ -684,16 +684,16 @@ def test_a_refused_query_does_not_end_the_session_and_the_repair_executes(declar
     assert declaring.engine.query.call_count == 1
 
 
-def test_sql_the_checker_cannot_analyze_reaches_the_engine_which_reports_its_own_class(
+def test_sql_the_checker_cannot_analyze_is_refused_before_the_engine(
     declaring,
 ):
     declaring.engine.query.side_effect = WrenError(
         ErrorCode.GENERIC_USER_ERROR, "x", phase=ErrorPhase.SQL_EXECUTION
     )
     frame = query_frame(declaring, "SELECT COUNT(nope) FROM orders")
-    assert frame["error"]["class"] == "execution_failed"
+    assert frame["error"]["class"] == "declared_default_undetermined"
     assert "rule_ids" not in frame["error"]
-    declaring.engine.query.assert_called_once()
+    declaring.engine.query.assert_not_called()
 
 
 def test_other_classes_never_carry_rule_ids(declaring):
@@ -732,15 +732,27 @@ def test_the_checker_is_what_stops_a_missing_default(declaring, monkeypatch):
     declaring.engine.query.assert_called_once()
 
 
-def test_a_checker_without_a_verdict_never_blocks_a_query(declaring, monkeypatch):
+def test_a_checker_without_a_verdict_refuses_before_execution(declaring, monkeypatch):
     monkeypatch.setattr(transport.DefaultsChecker, "check", lambda self, ast: None)
-    assert "result" in query_frame(declaring, EXCLUDE_MISSING)
+    frame = query_frame(
+        declaring, EXCLUDE_MISSING + " /* secret-token /private/path */"
+    )
+    assert frame["error"]["class"] == "declared_default_undetermined"
+    assert set(frame["error"]) == {"class", "message"}
+    assert "secret-token" not in json.dumps(
+        frame
+    ) and "/private/path" not in json.dumps(frame)
+    declaring.engine.query.assert_not_called()
 
 
 @pytest.mark.parametrize("fault", [RecursionError, RuntimeError, KeyError])
-def test_a_checker_fault_earns_no_verdict_not_a_refusal(declaring, monkeypatch, fault):
+def test_a_checker_fault_refuses_before_execution(declaring, monkeypatch, fault):
     monkeypatch.setattr(_Statement, "fires_exclude", MagicMock(side_effect=fault))
-    assert "result" in query_frame(declaring, EXCLUDE_MISSING)
+    assert (
+        query_frame(declaring, EXCLUDE_MISSING)["error"]["class"]
+        == "declared_default_undetermined"
+    )
+    declaring.engine.query.assert_not_called()
 
 
 def test_unused_cte_cannot_label_a_literal_as_model_derived(bound_transport):
@@ -800,3 +812,70 @@ def test_consumed_cte_and_scalar_sources_reach_governed_engine(bound_transport, 
     frame = query_frame(bound_transport, sql)
     assert frame["result"]["definition"]["source_tables"] == ["orders"]
     bound_transport.engine.query.assert_called_once_with(sql, limit=5, read_only=True)
+
+
+def test_real_governed_stdio_refuses_valid_status_like_without_a_verdict(
+    bound_transport, monkeypatch, tmp_path
+):
+    import duckdb  # noqa: PLC0415
+
+    from wren.config import WrenConfig  # noqa: PLC0415
+    from wren.engine import WrenEngine  # noqa: PLC0415
+
+    f = bound_transport
+    database = tmp_path / "database"
+    database.mkdir()
+    with duckdb.connect(str(database / "fixture.duckdb")) as db:
+        db.execute("CREATE TABLE raw_orders(status VARCHAR, is_test BOOLEAN)")
+        db.execute(
+            "INSERT INTO raw_orders VALUES ('paid',false),('paid',false),('shipped',false),('paid',true)"
+        )
+    f.profile.return_value = (
+        "fixture",
+        {"datasource": "duckdb", "url": str(database), "format": "duckdb"},
+    )
+    f.config.return_value = WrenConfig()
+    f.build.return_value = {
+        "catalog": "wren",
+        "schema": "public",
+        "models": [
+            {
+                "name": "orders",
+                "refSql": "SELECT status,is_test FROM fixture.main.raw_orders",
+                "columns": [
+                    {"name": "status", "type": "VARCHAR"},
+                    {"name": "is_test", "type": "BOOLEAN"},
+                ],
+            }
+        ],
+    }
+    rules = f.project / "knowledge/rules"
+    rules.mkdir(parents=True)
+    (rules / "statuses.md").write_text(
+        "---\ndefaults:\n  - id: paid-orders\n    kind: sale_statuses\n    column: orders.status\n    values: [paid]\n    domain: [paid, shipped]\n---\nStatus contract.\n"
+    )
+    monkeypatch.setattr(transport, "WrenEngine", WrenEngine)
+    query = MagicMock(side_effect=AssertionError("unverified SQL reached engine"))
+    monkeypatch.setattr(WrenEngine, "query", query)
+    frame = query_frame(
+        f, "SELECT COUNT(*) AS n FROM orders WHERE status LIKE 'paid%' AND NOT is_test"
+    )
+    assert frame["error"]["class"] == "declared_default_undetermined"
+    assert "result" not in frame
+    query.assert_not_called()
+
+
+def test_an_undetermined_query_does_not_end_the_session_and_repair_executes(
+    declaring, monkeypatch
+):
+    monkeypatch.setattr(
+        transport.DefaultsChecker, "check", MagicMock(side_effect=[None, []])
+    )
+    requests = [
+        {"id": i, "operation": "query", "sql": sql, "limit": 5}
+        for i, sql in enumerate([EXCLUDE_MISSING, EXCLUDE_OK], 1)
+    ]
+    frames = declaring.run(("\n".join(json.dumps(r) for r in requests) + "\n").encode())
+    assert frames[1]["error"]["class"] == "declared_default_undetermined"
+    assert "result" in frames[2]
+    declaring.engine.query.assert_called_once_with(EXCLUDE_OK, limit=5, read_only=True)
