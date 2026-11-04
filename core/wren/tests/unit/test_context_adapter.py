@@ -4,6 +4,7 @@ import json
 import stat
 import sys
 import textwrap
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -507,6 +508,56 @@ def test_one_oversized_line_is_clipped_to_the_budget_but_never_dropped():
     assert all(len(t.encode()) <= 600 for t in texts)
     joined = "\n".join(texts)
     assert "model big: " in joined and "model small: ok" in joined
+
+
+@pytest.mark.parametrize("long_part", ["name", "tag"])
+def test_complete_pages_fit_the_utf8_budget_even_with_long_names_or_tags(long_part):
+    name = "模型" * 600 if long_part == "name" else "orders"
+    declarations = (
+        (replace(EXCLUDE_TEST, id="規則" * 600),) if long_part == "tag" else ()
+    )
+    r = reader(
+        {"models": [model(name, "description"), model("small", "ok")]},
+        budget=600,
+        declarations=declarations,
+    )
+    texts = [r.list(n)["text"] for n in range(1, r.pages + 1)]
+    assert all(len(text.encode()) <= 600 for text in texts)
+    assert any("small" in text for text in texts)
+    if long_part == "name":
+        line = next(
+            line
+            for text in texts
+            for line in text.splitlines()
+            if line.startswith("model ")
+        )
+        selector = line.removeprefix("model ").split(": ", 1)[0]
+        assert len(selector.encode()) < 100
+        assert r.select([selector]) == {"selected": [selector]}
+        assert r.read([selector])["items"][0]["name"] == name
+        assert r.read([name])["items"][0]["name"] == name
+
+
+def test_compact_context_selectors_cannot_shadow_authored_names_or_rule_selectors():
+    name = "模型" * 600
+    r = reader(
+        {
+            "models": [model(name), model("@context-1")],
+            "views": [{"name": "@context-2", "statement": "SELECT 1"}],
+        },
+        budget=600,
+    )
+    text = "\n".join(r.list(n)["text"] for n in range(1, r.pages + 1))
+    selector = next(
+        line.removeprefix("model ").split(": ", 1)[0]
+        for line in text.splitlines()
+        if line.startswith("model ") and "模型" in line
+    )
+    assert selector not in {"@context-1", "@context-2"}
+    assert len(selector.encode()) < 100
+    assert r.read([selector])["items"][0]["name"] == name
+    assert r.read(["@context-1"])["items"][0]["name"] == "@context-1"
+    assert r.read(["@context-2"])["items"][0]["kind"] == "view"
 
 
 def test_a_budget_below_the_floor_is_refused():

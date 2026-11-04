@@ -660,8 +660,8 @@ def _declaration_models(declaration) -> set:
 class ContextReader:
     """``list`` -> ``select`` -> ``read`` over a snapshot, plus the planner category views.
 
-    ``budget_bytes`` bounds the first page of ``list`` (which also carries the rules summary):
-    that page is the worker's initial input. Later pages are as large as the budget allows. A
+    ``budget_bytes`` bounds every page of ``list`` (the first also carries the rules summary).
+    That page is the worker's initial input. A
     project too big for one page is paged, never truncated and never refused.
     """
 
@@ -688,6 +688,7 @@ class ContextReader:
             }
             for r in catalog.get("knowledge_rules") or []
         ]
+        self._selectors = {}
         by_id = {d.id: d for d in snapshot.declarations}
         for rule in self._rules:
             rule["declarations"] = [by_id[i] for i in rule["ids"] if i in by_id]
@@ -756,6 +757,9 @@ class ContextReader:
     def _item_lines(self) -> list[tuple[str, str, str]]:
         lines = []
         tables = (("model", self._models), ("cube", self._cubes), ("view", self._views))
+        occupied = {name for _, items in tables for name in items}
+        occupied.update(f"{RULE_PREFIX}{rule['path']}" for rule in self._rules)
+        sequence = 0
         for kind, items in tables:
             for name, item in items.items():
                 description = _prose(
@@ -766,8 +770,22 @@ class ContextReader:
                     tag = f" [defaults: {','.join(ids)}]"
                 if kind == "view" and item.get("guarantees"):
                     tag = f" [guarantees: {','.join(item['guarantees'])}]"
+                selector = name
+                if len(f"{kind} {name}: ".encode()) > self.budget // 4:
+                    # Keep the complete authored name available via read_context;
+                    # clipping an ID alone would leave the item unselectable.
+                    while True:
+                        sequence += 1
+                        selector = f"@context-{sequence}"
+                        if selector not in occupied:
+                            break
+                    occupied.add(selector)
+                    self._selectors[selector] = (kind, item)
+                    description = (
+                        f"{_clip(name, 80)}; {description or '(no description)'}"
+                    )
                 lines.append(
-                    (f"{kind} {name}: ", description or "(no description)", tag)
+                    (f"{kind} {selector}: ", description or "(no description)", tag)
                 )
         return lines
 
@@ -802,7 +820,15 @@ class ContextReader:
     def _paginate(self) -> list[str]:
         rules = self._rules_block()
         rules_bytes = sum(len(x.encode()) + 1 for x in rules)
-        header_room = 160
+        counts = f"{len(self._models)} models, {len(self._cubes)} cubes, {len(self._views)} views"
+        # At most one page per item, plus the initial rules page. Reserve the
+        # actual maximum header/footer size before packing any content.
+        maximum = len(self._lines) + 1
+        header_room = (
+            len(f"context index (page {maximum}/{maximum}): {counts}".encode())
+            + len(f"more: call list_context with page={maximum}".encode())
+            + 2
+        )
         pages: list[list[str]] = [[]]
         used = rules_bytes + header_room
         for prefix, description, tag in self._lines:
@@ -812,13 +838,13 @@ class ContextReader:
                 pages.append([])
                 used = header_room
             if used + size > self.budget:
-                room = self.budget - used - len((prefix + tag).encode()) - 1
-                line = prefix + _clip(description, max(16, room)) + tag
+                room = self.budget - used - len(prefix.encode()) - 1
+                tag = _clip(tag, min(len(tag.encode()), max(0, room // 2)))
+                line = prefix + _clip(description, room - len(tag.encode())) + tag
                 size = len(line.encode()) + 1
             pages[-1].append(line)
             used += size
         total = len(pages)
-        counts = f"{len(self._models)} models, {len(self._cubes)} cubes, {len(self._views)} views"
         texts = []
         for number, lines in enumerate(pages, start=1):
             body = [f"context index (page {number}/{total}): {counts}", *lines]
@@ -854,6 +880,8 @@ class ContextReader:
     def _resolve(self, ident: str):
         if not isinstance(ident, str):
             return None
+        if ident in self._selectors:
+            return self._selectors[ident]
         if ident.startswith(RULE_PREFIX):
             path = ident[len(RULE_PREFIX) :]
             return next((("rule", r) for r in self._rules if r["path"] == path), None)
