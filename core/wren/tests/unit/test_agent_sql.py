@@ -16,7 +16,7 @@ from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.scope import traverse_scope
 
 pytest.importorskip("mcp")
-from wren.agent_service import Ask, Ref, build_mcp, create_service  # noqa: E402
+from wren.agent_service import Ask, Ref, build_mcp, create_service, safe  # noqa: E402
 from wren.agent_sql import (  # noqa: E402
     AdHocSQL,
     DeclaredDefaultMissing,
@@ -1012,6 +1012,26 @@ def test_an_unknown_model_is_terminal_even_beside_a_function_miss(adhoc):
     ):
         with pytest.raises(PermissionError, match="query_denied:unknown_model"):
             s.sql.prepare(sql)
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT missing_field FROM missing_model",
+        "SELECT g.missing_field FROM orders o JOIN missing_model g ON g.id=o.id",
+    ],
+)
+def test_unknown_source_is_terminal_before_bad_column_qualification(adhoc, sql):
+    s = adhoc()
+    with pytest.raises(PermissionError, match="query_denied:unknown_model"):
+        s.sql.prepare(sql)
+    assert asyncio.run(safe(ask, s, sql)) == {"status": "denied"}
+    assert not any(event.get("event") == "private_sql" for event in s.audit)
+
+
+def test_known_source_bad_column_remains_rewritable(adhoc):
+    with pytest.raises(QueryFormError, match="unresolved_column"):
+        adhoc().sql.prepare("SELECT missing_field FROM orders")
 
 
 def test_an_unexpected_planner_error_is_rewritable_never_terminal(adhoc, monkeypatch):

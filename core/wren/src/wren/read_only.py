@@ -7,6 +7,7 @@ Database credentials and trusted model definitions remain host responsibilities.
 """
 
 from sqlglot import exp, parse
+from sqlglot.optimizer.scope import traverse_scope
 
 from wren.model.error import ErrorCode, ErrorPhase, WrenError
 
@@ -98,10 +99,26 @@ class NoSourceTablesError(WrenError):
         )
 
 
+def cte_reference_ids(ast: exp.Expression) -> set[int]:
+    """Table nodes naming a CTE visible at that reference, with conservative case folding."""
+    found = set()
+    for scope in traverse_scope(ast):
+        visible = {name.casefold() for name in scope.cte_sources}
+        for _alias, node in scope.references:
+            if (
+                isinstance(node, exp.Table)
+                and not node.db
+                and not node.catalog
+                and node.name.casefold() in visible
+            ):
+                found.add(id(node))
+    return found
+
+
 def require_source_tables(ast: exp.Expression) -> list[str]:
     """Return the tables a parsed query reads, refusing one that reads none.
 
-    A query's own CTE names are not sources. They are compared
+    A query's CTE names are not sources where that CTE is visible. They are compared
     case-insensitively: a reference that differs from a CTE alias only in case
     or quoting may resolve to that CTE (DuckDB does so), and excluding it can
     only refuse more queries, never admit one. A table function such as
@@ -111,12 +128,12 @@ def require_source_tables(ast: exp.Expression) -> list[str]:
     Callers check this before execution: a SELECT over literals alone returns
     numbers the caller typed, never values read from a model.
     """
-    aliases = {cte.alias_or_name.casefold() for cte in ast.find_all(exp.CTE)}
+    references = cte_reference_ids(ast)
     tables = sorted(
         {
             table.name
             for table in ast.find_all(exp.Table)
-            if table.name and table.name.casefold() not in aliases
+            if table.name and id(table) not in references
         }
     )
     if not tables:

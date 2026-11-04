@@ -42,7 +42,11 @@ from sqlglot.optimizer.scope import Scope, ScopeType, traverse_scope
 from wren.declared_default_check import DefaultsChecker
 from wren.declared_default_fx import VIEW_MARK, evaluate
 from wren.governed_query import query as governed_query
-from wren.read_only import UnsupportedFunctionError, check_read_only_query
+from wren.read_only import (
+    UnsupportedFunctionError,
+    check_read_only_query,
+    cte_reference_ids,
+)
 
 
 class QueryShapeError(PermissionError):
@@ -175,27 +179,6 @@ def model_schema(models) -> dict:
     }
 
 
-def _cte_references(tree) -> set[int]:
-    """The ids of the table nodes that name a CTE visible at their own position.
-
-    A CTE reference parses as a table node, so a name that is not a model is a physical read
-    unless the scope the node sits in resolves it to the very CTE defined for it.
-    """
-    found = set()
-    for scope in traverse_scope(tree):
-        for alias, node in scope.references:
-            visible = scope.cte_sources.get(node.name) if node.name else None
-            if (
-                isinstance(node, exp.Table)
-                and not node.db
-                and not node.catalog
-                and visible is not None
-                and scope.sources.get(alias) is visible
-            ):
-                found.add(id(node))
-    return found
-
-
 def read_view_bodies(schema: dict, catalog: dict, manifest: dict | None):
     """The views the catalog lists, as parsed bodies over models: ``(usable, broken)``.
 
@@ -225,7 +208,7 @@ def read_view_bodies(schema: dict, catalog: dict, manifest: dict | None):
                 validate_qualify_columns=True,
                 identify=False,
             )
-            from_ctes = _cte_references(qualified)
+            from_ctes = cte_reference_ids(qualified)
             if any(
                 t.db or t.catalog or (t.name not in schema and id(t) not in from_ctes)
                 for t in qualified.find_all(exp.Table)
@@ -349,7 +332,7 @@ class AdHocSQL:
 
     def _expand_views(self, tree):
         """Replace every reference to a view by its marked body; return the names read."""
-        shadowed = _cte_references(tree)
+        shadowed = cte_reference_ids(tree)
         read = []
         for table in list(tree.find_all(exp.Table)):
             name = table.name.lower()
@@ -383,13 +366,13 @@ class AdHocSQL:
         Cubes answer through the engine's cube query, not through ``FROM <cube>`` or a measure
         summed as if some model held it.
         """
-        shadowed = {cte.alias.lower() for cte in tree.find_all(exp.CTE)}
+        shadowed = cte_reference_ids(tree)
         for table in tree.find_all(exp.Table):
             name = table.name.lower()
             if (
                 name in self.cube_names
                 and table.name not in self.schema
-                and name not in shadowed
+                and id(table) not in shadowed
             ):
                 raise QueryFormError("cube_not_a_table")
         if not self.cube_measures:
@@ -511,6 +494,13 @@ class AdHocSQL:
                 raise ValueError("complexity_limit")
             if len(list(tree.find_all(exp.Join))) > MAX_JOINS:
                 raise ValueError("join_limit")
+            shadowed = cte_reference_ids(tree)
+            known = {name.lower() for name in self.schema}
+            if any(
+                id(table) not in shadowed and table.name.lower() not in known
+                for table in tree.find_all(exp.Table)
+            ):
+                raise ValueError("unknown_model")
             unqualified = tree.copy()
             tree = qualify(
                 tree,

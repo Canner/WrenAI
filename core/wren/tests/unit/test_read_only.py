@@ -5,12 +5,41 @@ import json
 from unittest.mock import Mock
 
 import pytest
+from sqlglot import parse_one
 
 from wren.engine import WrenEngine
 from wren.model.error import ErrorCode, ErrorPhase, WrenError
-from wren.read_only import validate_read_only_query
+from wren.read_only import (
+    NoSourceTablesError,
+    require_source_tables,
+    validate_read_only_query,
+)
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT id FROM orders WHERE id IN (WITH orders AS (SELECT 1 AS id) SELECT id FROM orders)",
+        "WITH orders AS (SELECT id FROM orders) SELECT id FROM orders",
+        "WITH orders AS (SELECT 1 AS id) SELECT id FROM main.orders",
+    ],
+)
+def test_only_a_cte_visible_at_the_reference_can_hide_a_stored_source(sql):
+    assert require_source_tables(parse_one(sql, dialect="duckdb")) == ["orders"]
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        'WITH Orders AS (SELECT 1 AS id) SELECT id FROM "orders"',
+        "WITH Orders AS (SELECT 1 AS id), x AS (SELECT id FROM orders) SELECT id FROM x",
+    ],
+)
+def test_visible_casefolded_cte_references_still_read_no_stored_source(sql):
+    with pytest.raises(NoSourceTablesError):
+        require_source_tables(parse_one(sql, dialect="duckdb"))
 
 
 @pytest.mark.parametrize(
