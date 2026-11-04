@@ -536,6 +536,7 @@ FX_BAD_DATES = {
     "between literals": "f.date BETWEEN DATE '2020-01-01' AND DATE '2030-01-01'",
     "disjoined with another predicate": "f.date <= CAST(p.captured_at AS DATE) OR p.id = -1",
     "negated comparison": "NOT (f.date <= CAST(p.captured_at AS DATE))",
+    "upper bound extends past the transaction": "f.date <= p.captured_at + INTERVAL 1 DAY",
 }
 
 
@@ -596,6 +597,33 @@ def test_a_hard_coded_rate_currency_does_not_satisfy_the_rule(checker):
         "ON f.currency = 'EUR' AND f.date <= p.captured_at WHERE NOT c.is_test"
     )
     assert check(checker, sql) == [RATE]
+
+
+@pytest.mark.parametrize(
+    "currency",
+    [
+        "CONCAT(p.currency, '_old')",
+        "CAST(p.currency AS VARCHAR)",
+    ],
+)
+def test_a_computed_rate_currency_does_not_satisfy_the_rule(checker, currency):
+    sql = (
+        f"SELECT SUM(p.amount * f.rate_to_usd) FROM {CHARGES} JOIN fx_rates f "
+        f"ON f.currency = {currency} AND f.date <= p.captured_at "
+        "WHERE NOT c.is_test"
+    )
+    assert check(checker, sql) == [RATE]
+
+
+def test_a_cte_currency_alias_still_satisfies_the_rate_rule(checker):
+    sql = (
+        "WITH source AS (SELECT order_id, amount, currency AS c, captured_at FROM payments) "
+        "SELECT SUM(p.amount * f.rate_to_usd) FROM source p "
+        "JOIN fx_rates f ON f.currency = p.c AND f.date <= p.captured_at "
+        "JOIN orders o ON p.order_id = o.id JOIN customers c ON o.customer_id = c.id "
+        "WHERE NOT c.is_test"
+    )
+    assert check(checker, sql) == []
 
 
 def test_lateral_asof_and_cte_conversions_are_recognised(checker):

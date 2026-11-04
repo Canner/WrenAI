@@ -813,7 +813,7 @@ class _Statement:
             ):
                 if (
                     self.direct(side) == rate_currency
-                    and self.taint(other) & currencies
+                    and self.direct(other) in currencies
                 ):
                     matched_rates = matching(side)
                     currency_joined |= matched_rates
@@ -832,7 +832,10 @@ class _Statement:
         )
         for side, other in bounds:
             column = _uncast_temporal(side)
-            if self.direct(column) == rate_date and self.taint(other) & dates:
+            if (
+                self.direct(column) == rate_date
+                and self.direct(_uncast_temporal(other)) in dates
+            ):
                 matched_rates = matching(column)
                 date_bounded |= matched_rates
                 for rate in matched_rates:

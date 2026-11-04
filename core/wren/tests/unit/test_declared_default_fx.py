@@ -8,7 +8,7 @@ from sqlglot import exp, parse_one
 
 from wren.context import build_json
 from wren.declared_default_check import DefaultsChecker
-from wren.declared_default_fx import evaluate
+from wren.declared_default_fx import VIEW_MARK, evaluate
 from wren.declared_default_status import fold_all
 from wren.declared_defaults import (
     ColumnRef,
@@ -571,6 +571,38 @@ def test_a_scope_for_one_rule_does_not_excuse_another_that_would_otherwise_pass(
     kept = evaluate(checker, ast, {"keep-paid-shipped": fold_all(["paid"])})
     assert list(kept.violations) == []
     assert kept.checks["keep-usd-eur"]["result"] == "satisfied"
+
+
+def test_a_confirmed_scope_still_checks_a_guaranteed_view():
+    manifest, _ = declared()
+    rule = status_rule(
+        "keep-paid-shipped",
+        "status",
+        ("paid", "shipped"),
+        ("paid", "shipped", "cancelled"),
+    )
+    checker = DefaultsChecker(
+        [rule], manifest, "duckdb", guarantees={"trusted": [rule.id]}
+    )
+    ast = parse_one(
+        "SELECT COUNT(*) FROM (SELECT id, status FROM orders "
+        "WHERE status IN ('paid', 'shipped')) trusted",
+        dialect="duckdb",
+    )
+    next(ast.find_all(exp.Subquery)).meta[VIEW_MARK] = "trusted"
+
+    definition = evaluate(checker, ast)
+    assert definition.checks[rule.id]["result"] == "satisfied_by_definition"
+
+    narrowed = evaluate(checker, ast, {rule.id: fold_all(["paid"])})
+    assert narrowed.violations == (f"{rule.id}:superset",)
+
+    confirmed = evaluate(checker, ast, {rule.id: fold_all(["paid", "shipped"])})
+    assert confirmed.checks[rule.id] == {
+        "applicable": True,
+        "result": "satisfied_by_caller_scope",
+        "scope": ["paid", "shipped"],
+    }
 
 
 def test_a_passthrough_alias_preserves_the_rank_proof():

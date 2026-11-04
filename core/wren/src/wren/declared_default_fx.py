@@ -270,13 +270,21 @@ def _status(
     target = confirmed if confirmed is not None else fold_all(rule.values)
     outside = [read for key, read in reads.items() if key not in inside]
     aggregated_ok = not rule.aggregated_only or statement.aggregated
-    if reads and not outside and aggregated_ok:
+    if confirmed is None and reads and not outside and aggregated_ok:
         return (
             SATISFIED,
             True,
             {"applicable": True, "result": "satisfied_by_definition"},
         )
-    outcome = judge(statement, checker, rule, target, inside).outcome
+    # A caller-confirmed scope is a runtime constraint, so it must be checked against
+    # a guaranteed view's actual filter rather than excusing that view by declaration.
+    outcome = judge(
+        statement,
+        checker,
+        rule,
+        target,
+        frozenset() if confirmed is not None else inside,
+    ).outcome
     if outcome == NOT_APPLICABLE:
         return outcome, False, None
     if outcome == SATISFIED and confirmed is not None:
