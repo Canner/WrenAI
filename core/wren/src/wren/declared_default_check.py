@@ -787,7 +787,24 @@ class _Statement:
                 if table == read and self._route_fits(route, path)
             }
 
+        # A declaration names a model column, while a query can read that column through
+        # several physical aliases.  Keep those reads separate: a complete rate attachment
+        # for ``payments p`` does not establish anything for ``payments q``.
+        amount_reads = self._amount_reads(amounts)
+
+        def matched_amount_reads(column):
+            column = _uncast_temporal(column)
+            if not isinstance(column, exp.Column):
+                return set()
+            return {
+                index
+                for table, route in self._column_routes(column)
+                for index, (read, path) in enumerate(amount_reads)
+                if table == read and self._route_fits(route, path)
+            }
+
         currency_joined, date_bounded = set(), set()
+        currency_for_rate, date_for_rate = {}, {}
         for node in self._condition_nodes(exp.EQ):
             for side, other in (
                 (node.this, node.expression),
@@ -797,7 +814,12 @@ class _Statement:
                     self.direct(side) == rate_currency
                     and self.taint(other) & currencies
                 ):
-                    currency_joined |= matching(side)
+                    matched_rates = matching(side)
+                    currency_joined |= matched_rates
+                    for rate in matched_rates:
+                        currency_for_rate.setdefault(rate, set()).update(
+                            matched_amount_reads(other)
+                        )
         bounds = (
             [(node.this, node.expression) for node in self._condition_nodes(exp.LTE)]
             + [(node.expression, node.this) for node in self._condition_nodes(exp.GTE)]
@@ -810,7 +832,12 @@ class _Statement:
         for side, other in bounds:
             column = _uncast_temporal(side)
             if self.direct(column) == rate_date and self.taint(other) & dates:
-                date_bounded |= matching(column)
+                matched_rates = matching(column)
+                date_bounded |= matched_rates
+                for rate in matched_rates:
+                    date_for_rate.setdefault(rate, set()).update(
+                        matched_amount_reads(other)
+                    )
         # An equality to a bounded scalar MAX(date) carries that upper bound
         # to the compared rate instance. Both instances still need their own
         # currency join; a free-standing bounded alias is not such a proof.
@@ -833,6 +860,31 @@ class _Statement:
                     if origins and origins <= currency_joined & date_bounded:
                         date_bounded |= matching(column)
         complete = currency_joined & date_bounded
+        covered_amount_reads = set().union(
+            *(
+                currency_for_rate.get(rate, set()) & date_for_rate.get(rate, set())
+                for rate in complete
+            )
+        )
+        # Preserve the existing CTE/derived-source proof rules, but do not let a rate join
+        # for one direct alias satisfy a sibling alias of the same declared model column.
+        # The direct scope test avoids treating a rate CTE's internal source as a second
+        # consuming amount alias in its outer query.
+        direct_amount_reads = {
+            id(source)
+            for aggregate in self.aggregates
+            for column in aggregate.find_all(exp.Column)
+            if self.origin(column).taint & amounts
+            for scope in [self._scope_for(column)]
+            if scope is not None
+            for source in [scope.sources.get(column.table)]
+            if isinstance(source, exp.Table)
+        }
+        covered_amount_tables = {
+            amount_reads[index][0] for index in covered_amount_reads
+        }
+        if len(direct_amount_reads) > 1 and direct_amount_reads - covered_amount_tables:
+            return True
         # When an aggregate actually consumes a rate value, every supplying
         # instance must carry both conditions; an unrelated complete join cannot
         # donate its proof to that value. No rate-valued expression is required.

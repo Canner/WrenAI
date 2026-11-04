@@ -346,10 +346,10 @@ def test_an_or_with_a_proven_coalesce_fallback_keeps_unmatched_base_rows(strict)
         assert db.execute(sql).fetchone() == (100.0,)
 
 
-def test_a_base_guard_for_another_amount_read_cannot_preserve_this_rate(strict):
+def test_a_base_guard_for_another_alias_cannot_preserve_this_rate(strict):
     sql = (
         "SELECT SUM(CASE WHEN p.currency = 'USD' THEN p.amount "
-        "ELSE p.amount * f.rate_to_usd END) + SUM(other.amount) "
+        "ELSE p.amount * f.rate_to_usd END) "
         "FROM payments p CROSS JOIN payments other "
         f"ASOF LEFT JOIN fx_rates f ON {ON} "
         "WHERE other.currency = 'USD' OR f.rate_to_usd > 0"
@@ -707,6 +707,18 @@ def test_currency_and_date_cannot_be_pooled_across_amount_groups():
         FROM payments p JOIN orders o ON o.id=p.order_id
         JOIN fx_rates f ON f.currency=p.currency AND f.date<=o.placed_at"""
     assert make_checker().check(parse_one(sql, dialect="duckdb")) == [RATE]
+
+
+def test_each_aggregated_alias_of_the_same_amount_group_needs_its_own_rate_join():
+    bad = """SELECT SUM(p.amount) + SUM(q.amount)
+        FROM payments p JOIN payments q ON p.order_id = q.order_id
+        JOIN fx_rates f ON f.currency = p.currency AND f.date <= p.captured_at"""
+    assert make_checker().check(parse_one(bad, dialect="duckdb")) == [RATE]
+
+    good = (
+        bad + "\nJOIN fx_rates g ON g.currency = q.currency AND g.date <= q.captured_at"
+    )
+    assert make_checker().check(parse_one(good, dialect="duckdb")) == []
 
 
 @pytest.mark.parametrize("swapped", [False, True])
