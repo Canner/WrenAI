@@ -402,7 +402,7 @@ class _Statement:
         return None
 
     def _null_check_on_flag_model(self, node: exp.Expression, flag: Pair) -> bool:
-        """``<column> IS NULL`` where the column belongs to the flag's own model.
+        """A NULL flag or a missing row identified by its declared entity key.
 
         A LEFT JOIN that keeps rows without a flag row tests the join key, not the
         flag itself.
@@ -410,7 +410,11 @@ class _Statement:
         if not (isinstance(node, exp.Is) and isinstance(node.expression, exp.Null)):
             return False
         column = self.direct(node.this)
-        return column is not None and column[0] == flag[0]
+        return column == flag or (
+            column is not None
+            and column[0] == flag[0]
+            and column in self.checker.entity_keys
+        )
 
     def _negated(
         self, inner: exp.Expression, rule: ExcludeRows, flag: Pair
@@ -478,8 +482,8 @@ class _Statement:
         ]
         return any(flag in self.origin(column).taint for column in grouped + aggregated)
 
-    def _column_routes(self, column, visiting=frozenset()):
-        """Exact table instances and consuming aliases through pass-through columns."""
+    def _column_routes(self, column, visiting=frozenset(), *, expressions=False):
+        """Exact table instances and consuming aliases (pass-through by default)."""
         scope = self._scope_for(column)
         while scope is not None and column.table not in scope.sources:
             scope = scope.parent
@@ -500,10 +504,19 @@ class _Statement:
         routes = []
         for projection, _owner in found:
             inner = _unparen(projection.unalias())
-            if isinstance(inner, exp.Column):
+            columns = (
+                [inner]
+                if isinstance(inner, exp.Column)
+                else list(inner.find_all(exp.Column))
+                if expressions
+                else []
+            )
+            for child in columns:
                 routes += [
                     (table, [edge, *route])
-                    for table, route in self._column_routes(inner, visiting | {key})
+                    for table, route in self._column_routes(
+                        child, visiting | {key}, expressions=expressions
+                    )
                 ]
         return routes
 
@@ -712,33 +725,83 @@ class _Statement:
             return False
         if rule.filters_currency_literal and self._filters_currency_literal(currencies):
             return False
-        currency_joined = any(
-            (self.direct(a) == rate_currency and self.taint(b) & currencies)
-            or (self.direct(b) == rate_currency and self.taint(a) & currencies)
-            for node in self._condition_nodes(exp.EQ)
-            for a, b in [(node.this, node.expression)]
-        )
-        date_bounded = (
-            any(
-                self.direct(_uncast_temporal(low)) == rate_date
-                and self.taint(high) & dates
-                for node in self._condition_nodes(exp.LTE)
-                for low, high in [(node.this, node.expression)]
-            )
-            or any(
-                self.direct(_uncast_temporal(low)) == rate_date
-                and self.taint(high) & dates
-                for node in self._condition_nodes(exp.GTE)
-                for high, low in [(node.this, node.expression)]
-            )
-            or any(
-                self.direct(_uncast_temporal(node.this)) == rate_date
-                and self.taint(node.args["high"]) & dates
+        reads = [
+            (id(source), path)
+            for scope in self.scopes
+            for alias, source in scope.sources.items()
+            if isinstance(source, exp.Table)
+            and source.name == self.checker.norm(rule.rate_model)
+            for path in self._read_paths(scope, alias, source)
+        ]
+
+        def matching(column, *, expressions=False):
+            return {
+                index
+                for table, route in self._column_routes(column, expressions=expressions)
+                for index, (read, path) in enumerate(reads)
+                if table == read and self._route_fits(route, path)
+            }
+
+        currency_joined, date_bounded = set(), set()
+        for node in self._condition_nodes(exp.EQ):
+            for side, other in (
+                (node.this, node.expression),
+                (node.expression, node.this),
+            ):
+                if (
+                    self.direct(side) == rate_currency
+                    and self.taint(other) & currencies
+                ):
+                    currency_joined |= matching(side)
+        bounds = (
+            [(node.this, node.expression) for node in self._condition_nodes(exp.LTE)]
+            + [(node.expression, node.this) for node in self._condition_nodes(exp.GTE)]
+            + [
+                (node.this, node.args["high"])
                 for node in self._condition_nodes(exp.Between)
                 if node.args.get("high") is not None
-            )
+            ]
         )
-        return not (currency_joined and date_bounded)
+        for side, other in bounds:
+            column = _uncast_temporal(side)
+            if self.direct(column) == rate_date and self.taint(other) & dates:
+                date_bounded |= matching(column)
+        # An equality to a bounded scalar MAX(date) carries that upper bound
+        # to the compared rate instance. Both instances still need their own
+        # currency join; a free-standing bounded alias is not such a proof.
+        for node in self._condition_nodes(exp.EQ):
+            for side, other in (
+                (node.this, node.expression),
+                (node.expression, node.this),
+            ):
+                column = _uncast_temporal(side)
+                if self.direct(column) != rate_date or not isinstance(
+                    other, exp.Subquery
+                ):
+                    continue
+                query = other.this
+                if not isinstance(query, exp.Select) or len(query.selects) != 1:
+                    continue
+                value = _unparen(query.selects[0].unalias())
+                if isinstance(value, exp.Max) and self.direct(value.this) == rate_date:
+                    origins = matching(value.this)
+                    if origins and origins <= currency_joined & date_bounded:
+                        date_bounded |= matching(column)
+        complete = currency_joined & date_bounded
+        # When an aggregate actually consumes a rate value, every supplying
+        # instance must carry both conditions; an unrelated complete join cannot
+        # donate its proof to that value. No rate-valued expression is required.
+        rate_values = {
+            (self.checker.norm(rule.rate_model), self.checker.norm(column))
+            for column in self.checker.schema.get(rule.rate_model, ())
+        } - {rate_currency, rate_date}
+        supplied = set()
+        for aggregate in self.aggregates:
+            if self.taint(aggregate) & amounts:
+                for column in aggregate.find_all(exp.Column):
+                    if self.taint(column) & rate_values:
+                        supplied |= matching(column, expressions=True)
+        return not complete or not supplied <= complete
 
     def _filters_currency_literal(self, currencies: set[Pair]) -> bool:
         for conjunct in self.conjuncts:

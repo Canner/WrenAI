@@ -147,6 +147,13 @@ class _Status:
                     seen[id(source)] = source
         self.instances = list(seen.values())
         self.instance_ids = frozenset(seen)
+        self.paths = [
+            (id(source), path)
+            for scope in statement.scopes
+            for alias, source in scope.sources.items()
+            if isinstance(source, exp.Table) and id(source) in self.instance_ids
+            for path in statement._read_paths(scope, alias, source)
+        ]
         self._traced: dict[int, frozenset[int] | _Tainted] = {}
 
     def applicable(self) -> bool:
@@ -356,9 +363,24 @@ class _Status:
             if not reads:
                 continue
             _, may, nulls = self._eval(conjunct)
-            for read in reads:
-                kept, null_kept = retained.get(read, (self.domain, True))
-                retained[read] = (kept & may, null_kept and _TRUE in nulls)
+            scope = self.st._scope_for(conjunct)
+            routes = [
+                (table, route)
+                for column in _own_columns(conjunct)
+                if self._trace(column)
+                for table, route in self.st._column_routes(column)
+            ]
+            for index, (read, path) in enumerate(self.paths):
+                own_routes = [route for table, route in routes if table == read]
+                if (
+                    read not in reads
+                    or not any(owner is scope for owner, _, _ in path)
+                    or not own_routes
+                    or not all(self.st._route_fits(route, path) for route in own_routes)
+                ):
+                    continue
+                kept, null_kept = retained.get(index, (self.domain, True))
+                retained[index] = (kept & may, null_kept and _TRUE in nulls)
         return retained
 
     def judge(self, target: frozenset[str]) -> str:
@@ -366,8 +388,8 @@ class _Status:
             return NOT_APPLICABLE
         retained = self.retained()
         found = set()
-        for read in self.instances:
-            entry = retained.get(id(read))
+        for index, _read in enumerate(self.paths):
+            entry = retained.get(index)
             if entry is None:
                 found.add(MISSING)
                 continue

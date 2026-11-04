@@ -457,6 +457,14 @@ class _Rate:
         return False
 
     def _latest_one(self, select, clauses, alias=None, fixed=None):
+        # QUALIFY runs after aggregation: a rank cannot undo duplicate rates
+        # already consumed by SUM (including duplicates in the same group).
+        if select.args.get("group") is not None or any(
+            aggregate.find_ancestor(exp.Select) is select
+            and aggregate.find_ancestor(exp.Window) is None
+            for aggregate in select.find_all(exp.AggFunc)
+        ):
+            return False
         for window in select.find_all(exp.Window):
             if (
                 not isinstance(window.this, exp.RowNumber)

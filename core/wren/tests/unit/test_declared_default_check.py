@@ -416,7 +416,7 @@ NULL_TOLERANT = {
     "key is null first": "(c.id IS NULL OR c.is_test = FALSE)",
     "key is null last": "(c.is_test = FALSE OR c.id IS NULL)",
     "unparenthesised": "c.id IS NULL OR NOT c.is_test",
-    "another column of the flag's model": "c.country IS NULL OR c.is_test = FALSE",
+    "flag itself is null": "c.is_test IS NULL OR c.is_test = FALSE",
 }
 
 
@@ -428,6 +428,7 @@ def test_a_left_join_that_keeps_rows_without_a_customer_satisfies_the_rule(
 
 
 NULL_TOLERANT_MISSES = {
+    "nullable non-key": "c.country IS NULL OR c.is_test = FALSE",
     "is null on another model": "(o.id IS NULL OR c.is_test = FALSE)",
     "another model's column in a null-check": "(o.customer_id IS NULL OR c.is_test = FALSE)",
     "non-null disjunct": "(c.is_test = FALSE OR c.country = 'US')",

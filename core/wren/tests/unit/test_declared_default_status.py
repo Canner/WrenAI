@@ -57,6 +57,22 @@ def count(where: str) -> str:
     return f"SELECT COUNT(*) FROM orders WHERE {where}"
 
 
+@pytest.mark.parametrize("second_filter", ["", "WHERE status IN ('paid','shipped')"])
+def test_shared_cte_consumers_keep_separate_status_obligations(second_filter):
+    sql = f"""WITH raw AS (SELECT status FROM orders)
+        SELECT COUNT(*) FROM raw WHERE status IN ('paid','shipped')
+        UNION ALL SELECT COUNT(*) FROM raw {second_filter}"""
+    import duckdb  # noqa: PLC0415
+
+    with duckdb.connect() as db:
+        db.execute("CREATE TABLE orders(status VARCHAR)")
+        db.execute(
+            "INSERT INTO orders VALUES ('paid'),('shipped'),('pending'),('cancelled')"
+        )
+        assert db.execute(sql).fetchall() == [(2,), (2 if second_filter else 4,)]
+    assert outcome(sql) == ("satisfied" if second_filter else "missing")
+
+
 @pytest.mark.parametrize(
     "where,expected",
     [

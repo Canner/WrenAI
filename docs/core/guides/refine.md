@@ -115,20 +115,20 @@ silently turn enforcement off.
   reaches it through a chain of `MANY_TO_ONE` relationships in the MDL (`except_models`
   removes a model and what is reachable only through it). The check is satisfied by a
   `WHERE`, `HAVING` or `QUALIFY` filter, or the ON condition of an INNER or comma join,
-  that excludes the flag in one of these forms, anywhere in the statement and through
+  that reaches the covered read and excludes the flag in one of these forms, through
   CTEs, derived tables and subqueries: `NOT c`, `c = FALSE`,
   `c IS FALSE`, `c IS NOT TRUE`, `c IS DISTINCT FROM TRUE`, `c <> TRUE`,
   `COALESCE(c, FALSE) = FALSE`, `c = FALSE OR c IS NULL`, and
   `NOT EXISTS` / `NOT IN` over a subquery that selects `c = TRUE`. `exclude` must be a
-  boolean. In the `OR` form the null check may be on any column of the flag's own model,
+  boolean. In the `OR` form the null check may be on the flag itself or a declared
+  single-column primary key of the flag's model,
   so a `LEFT JOIN` that keeps rows without a match can write
-  `k.id IS NULL OR k.c = FALSE`; a null check on another model's column, or any other
-  extra disjunct, does not qualify. No outer-join ON predicate is accepted as an
-  exclusion, because it does not remove rows of the preserved side: put the exclusion in
-  `WHERE` or in an INNER or comma join's ON. The check is not scope-aware: an exclusion
-  inside a nested inner-join group, a subquery or a CTE that the statement outer-joins is
-  accepted although it does not reach the preserved side's rows, so write it in the outer
-  `WHERE`.
+  `k.id IS NULL OR k.c = FALSE`; a null check on a nullable non-key column, another
+  model's column, or any other extra disjunct does not qualify. An outer-join ON
+  predicate cannot exclude the preserved side's rows: put that exclusion in `WHERE`
+  or in an INNER or comma join's ON. A filter inside a subquery or CTE satisfies only
+  the covered reads it reaches. Outer-joining that filtered source does not satisfy
+  a separate covered read on the preserved side; that read needs its own filter.
 - **`require_rate_join`**: statements that aggregate a listed amount column must read the
   rate model joined on one of the declared currency columns and bounded
   `rate.date <= <expression over a declared transaction-date column>` (an inner
@@ -136,14 +136,20 @@ silently turn enforcement off.
   `rate.date BETWEEN ... AND <upper bound>` all qualify; only the upper bound is checked,
   and a cast of the rate date to a date or timestamp type, such as `rate.date::date` or
   `CAST(rate.date AS DATE)`, is looked through).
-  Same-day equality and an unbounded latest rate do not.
+  The currency and date predicates must bound the same rate instance. When an aggregate
+  uses a rate value, that supplying instance needs both predicates; an unrelated join
+  cannot supply them. Same-day equality and an unbounded latest rate do not qualify.
 - **`sale_statuses`**: statements that read the status column's model must keep exactly the
   declared set of status values (`values`) out of the column's whole value set (`domain`,
   or else the `enum_values` the column lists). The check computes which values the
   statement's filters still return (`=`, `<>`, `IN`, `NOT IN`, `IS [NOT] NULL`, with
-  `AND` / `OR` / `NOT` and `LOWER`, `UPPER` or `TRIM` around the column; case is ignored)
+  `AND` / `OR` / `NOT` and `LOWER`, `UPPER` or `TRIM` around the column)
   rather than looking for a filter, so `NOT IN ('cancelled')` keeps every other value in
-  the domain. `overridable_by_caller: true` lets a host that supports it take a confirmed
+  the domain. Bare-column comparisons ignore case. Explicit `LOWER`/`UPPER` operations
+  are evaluated for ASCII values and compared with literals as written:
+  `UPPER(status) IN ('paid', 'shipped')` does not retain declared lowercase values.
+  Non-ASCII case mappings have no verdict because they depend on the database and locale.
+  `overridable_by_caller: true` lets a host that supports it take a confirmed
   set from the user instead. Each read of the model is judged on its own: a nullable-side
   ON predicate of an outer join restricts that read (`customers c LEFT JOIN orders o ON
   c.id = o.customer_id AND o.status IN ('paid', 'shipped')` with `SUM(o.amount)` is
