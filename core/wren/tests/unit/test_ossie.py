@@ -230,7 +230,7 @@ def test_pick_expression_prefers_named_dialect():
             {"dialect": "SNOWFLAKE", "expression": "LOWER(x)::VARCHAR"},
         ]
     }
-    assert _pick_expression(expr, "SNOWFLAKE") == ("LOWER(x)::VARCHAR", "SNOWFLAKE")
+    assert _pick_expression(expr, "SNOWFLAKE") == "LOWER(x)::VARCHAR"
 
 
 def test_pick_expression_falls_back_to_ansi_sql():
@@ -240,12 +240,12 @@ def test_pick_expression_falls_back_to_ansi_sql():
             {"dialect": "MDX", "expression": "[x] + 1"},
         ]
     }
-    assert _pick_expression(expr, "SNOWFLAKE") == ("x + 1", "ANSI_SQL")
+    assert _pick_expression(expr, "SNOWFLAKE") == "x + 1"
 
 
 def test_pick_expression_falls_back_to_first():
     expr = {"dialects": [{"dialect": "MDX", "expression": "[x]"}]}
-    assert _pick_expression(expr, "SNOWFLAKE") == ("[x]", "MDX")
+    assert _pick_expression(expr, "SNOWFLAKE") == "[x]"
 
 
 def test_pick_expression_skips_empty_preferred_and_uses_ansi():
@@ -256,7 +256,7 @@ def test_pick_expression_skips_empty_preferred_and_uses_ansi():
             {"dialect": "ANSI_SQL", "expression": "SUM(x)"},
         ]
     }
-    assert _pick_expression(expr, "SNOWFLAKE") == ("SUM(x)", "ANSI_SQL")
+    assert _pick_expression(expr, "SNOWFLAKE") == "SUM(x)"
 
 
 def test_pick_expression_skips_empty_ansi_and_uses_first_nonempty():
@@ -269,16 +269,16 @@ def test_pick_expression_skips_empty_ansi_and_uses_first_nonempty():
             {"dialect": "MDX", "expression": "[x]"},
         ]
     }
-    assert _pick_expression(expr, "SNOWFLAKE") == ("[x]", "MDX")
+    assert _pick_expression(expr, "SNOWFLAKE") == "[x]"
 
 
 def test_pick_expression_shorthand_string():
-    assert _pick_expression("x", "ANSI_SQL") == ("x", "ANSI_SQL")
+    assert _pick_expression("x", "ANSI_SQL") == "x"
 
 
 def test_pick_expression_empty():
-    assert _pick_expression({}, "ANSI_SQL") == ("", "ANSI_SQL")
-    assert _pick_expression(None, "ANSI_SQL") == ("", "ANSI_SQL")
+    assert _pick_expression({}, "ANSI_SQL") == ""
+    assert _pick_expression(None, "ANSI_SQL") == ""
 
 
 # ── Unit: _is_calculated_expression ───────────────────────────────────────
@@ -292,6 +292,7 @@ def test_pick_expression_empty():
         ("Amount", "amount", False),
         ("src_col", "renamed", False),
         ('"src col"', "renamed", False),
+        ("`src col`", "renamed", False),
         ('"src.col"', "renamed", False),
         ('"src""col"', "renamed", False),
         ('"amount"', "amount", False),
@@ -2030,13 +2031,7 @@ def test_roundtrip_preserves_field_classification_across_dialects(
     expected_dialect,
     expression,
 ):
-    """Keep MDL physical renames when the export dialect reads quotes as strings.
-
-    Databricks/Spark label the original Wren SQL without transpiling it, so a
-    double-quoted physical identifier needs an explicit false WREN marker.
-    Calculated bare aliases need the opposite marker in every dialect. ANSI
-    exports keep their identifier meaning when imported into Databricks.
-    """
+    """Preserve engine SQL semantics regardless of the selected dialect label."""
     manifest = {
         "data_source": data_source,
         "models": [
@@ -2078,8 +2073,6 @@ def test_roundtrip_preserves_field_classification_across_dialects(
         "dialects": [{"dialect": expected_dialect, "expression": expression}]
     }
     expected_flags = {"not_null": True}
-    if expected_dialect in {"DATABRICKS", "SPARK"} and expression.startswith('"'):
-        expected_flags["is_calculated"] = False
     assert _wren_data(fields["customer_id"]) == expected_flags
     assert _wren_data(fields["copied_id"]) == {
         "not_null": True,
@@ -2102,29 +2095,33 @@ def test_roundtrip_preserves_field_classification_across_dialects(
 
 
 @pytest.mark.parametrize(
-    "data_source, entries, is_calculated, missing_ref",
+    "data_source, entries, is_calculated, expected_calculated, missing_ref",
     [
         (
             "databricks",
             [("DATABRICKS", ""), ("ANSI_SQL", '"missing field" + 1')],
             None,
+            True,
             "missing field",
         ),
         (
             "databricks",
             [("SNOWFLAKE", '"missing field" + 1')],
             None,
+            True,
             "missing field",
         ),
         (
             "databricks",
             [("ANSI_SQL", ""), ("SNOWFLAKE", '"missing field" + 1')],
             None,
+            True,
             "missing field",
         ),
         (
             "databricks",
             [("ANSI_SQL", '"missing field"')],
+            True,
             True,
             "missing field",
         ),
@@ -2132,6 +2129,7 @@ def test_roundtrip_preserves_field_classification_across_dialects(
             "postgres",
             [("DATABRICKS", '"missing field"')],
             None,
+            False,
             None,
         ),
         (
@@ -2141,18 +2139,34 @@ def test_roundtrip_preserves_field_classification_across_dialects(
                 ("DATABRICKS", '"missing field"'),
             ],
             None,
+            False,
             None,
+        ),
+        (
+            "databricks",
+            [("DATABRICKS", '"missing field" + 1')],
+            None,
+            True,
+            "missing field",
+        ),
+        (
+            "postgres",
+            [("SPARK", "`missing field` + 1")],
+            None,
+            True,
+            "missing field",
         ),
     ],
 )
-def test_import_reference_warnings_use_selected_expression_dialect(
-    tmp_path: Path, data_source, entries, is_calculated, missing_ref
+def test_import_reference_warnings_use_engine_expression_grammar(
+    tmp_path: Path,
+    data_source,
+    entries,
+    is_calculated,
+    expected_calculated,
+    missing_ref,
 ):
-    """Analyze selected SQL, including fallback and explicit calculated aliases.
-
-    A double-quoted ANSI/Snowflake column must trigger an undeclared-field
-    warning; the same text is a string literal in Databricks and reads no field.
-    """
+    """Select by label, then analyze verbatim SQL with the engine's quoting."""
     field = {
         "name": "result",
         "datatype": "Integer",
@@ -2185,7 +2199,7 @@ def test_import_reference_warnings_use_selected_expression_dialect(
         _write_ossie(tmp_path, dump_ossie(doc)), data_source=data_source
     )
     column = rebuilt["models"][0]["columns"][0]
-    assert column["isCalculated"] is True
+    assert column["isCalculated"] is expected_calculated
     if missing_ref is None:
         assert errors == []
     else:
@@ -2194,6 +2208,145 @@ def test_import_reference_warnings_use_selected_expression_dialect(
         assert "reference undeclared field(s)" in errors[0].message
         assert f"'{missing_ref}' (used by result)" in errors[0].message
         assert "ignored field" not in errors[0].message
+
+
+def _import_expression_fields(tmp_path, fields):
+    doc = {
+        "version": "0.2.0.dev0",
+        "name": "shop",
+        "datasets": [{"name": "orders", "source": "raw_orders", "fields": fields}],
+    }
+    return build_json_from_ossie(
+        _write_ossie(tmp_path, dump_ossie(doc)), data_source="databricks"
+    )
+
+
+@pytest.mark.parametrize(
+    "expression",
+    ["customer_id + 1", "orders.customer_id", "'literal'", "SUM(customer_id)", "*"],
+)
+def test_import_rejects_false_marker_on_non_column_expression(tmp_path, expression):
+    """An explicit physical marker cannot make computed SQL a source column."""
+    _, errors = _import_expression_fields(
+        tmp_path,
+        [
+            {
+                "name": "result",
+                "datatype": "Integer",
+                "expression": expression,
+                "custom_extensions": [
+                    {"vendor_name": "WREN", "data": '{"is_calculated": false}'}
+                ],
+            }
+        ],
+    )
+    assert len(errors) == 1
+    assert errors[0].level == "error"
+    assert "field 'result'" in errors[0].message
+    assert "is_calculated: false" in errors[0].message
+    assert "single unqualified column" in errors[0].message
+
+
+@pytest.mark.parametrize(
+    "expression", [None, "", "  ", "result", '"result"', "`result`"]
+)
+def test_import_rejects_true_marker_without_calculated_expression(tmp_path, expression):
+    """A calculated marker must not create an empty expression or self-reference."""
+    field = {
+        "name": "result",
+        "datatype": "Integer",
+        "custom_extensions": [
+            {"vendor_name": "WREN", "data": '{"is_calculated": true}'}
+        ],
+    }
+    if expression is not None:
+        field["expression"] = expression
+    _, errors = _import_expression_fields(tmp_path, [field])
+    assert len(errors) == 1
+    assert errors[0].level == "error"
+    assert "field 'result'" in errors[0].message
+    assert "is_calculated: true" in errors[0].message
+    assert "refers to itself" in errors[0].message
+
+
+@pytest.mark.parametrize("expression", ["usr_id", '"user id"', "`user id`"])
+def test_import_accepts_false_marker_on_physical_identifier(tmp_path, expression):
+    """Hand-written false markers accept either engine identifier quote style."""
+    rebuilt, errors = _import_expression_fields(
+        tmp_path,
+        [
+            {
+                "name": "result",
+                "datatype": "Integer",
+                "expression": expression,
+                "custom_extensions": [
+                    {"vendor_name": "WREN", "data": '{"is_calculated": false}'}
+                ],
+            }
+        ],
+    )
+    assert errors == []
+    column = rebuilt["models"][0]["columns"][0]
+    assert column["isCalculated"] is False
+    assert column["expression"] == expression
+
+
+@pytest.mark.parametrize(
+    "expression", ["customer_id", '"customer_id"', "`customer_id`"]
+)
+@pytest.mark.parametrize("marker", [None, True, False, "true"])
+def test_import_warns_about_ambiguous_unmarked_alias(tmp_path, expression, marker):
+    """Legacy aliases need a diagnostic when the same name is a declared field."""
+    alias = {"name": "copied_id", "datatype": "Integer", "expression": expression}
+    if marker is not None:
+        alias["custom_extensions"] = [
+            {"vendor_name": "WREN", "data": json.dumps({"is_calculated": marker})}
+        ]
+    rebuilt, errors = _import_expression_fields(
+        tmp_path,
+        [
+            {"name": "customer_id", "datatype": "Integer", "expression": "usr_id"},
+            alias,
+        ],
+    )
+    columns = {c["name"]: c for c in rebuilt["models"][0]["columns"]}
+    assert columns["copied_id"]["isCalculated"] is (marker is True)
+    if isinstance(marker, bool):
+        assert errors == []
+    else:
+        assert len(errors) == 1
+        assert errors[0].level == "warning"
+        assert "copied_id" in errors[0].message
+        assert "customer_id" in errors[0].message
+        assert "physical source column" in errors[0].message
+        assert "is_calculated: true" in errors[0].message
+
+
+@pytest.mark.parametrize("expression", [None, "", "  "])
+@pytest.mark.parametrize("spec_version", ["0.1.1", "0.2.0.dev0"])
+def test_export_missing_calculated_expression_does_not_create_self_reference(
+    tmp_path, expression, spec_version
+):
+    """An export fallback to the field name must not add a calculated marker."""
+    column = {"name": "result", "type": "INTEGER", "is_calculated": True}
+    if expression is not None:
+        column["expression"] = expression
+    doc, errors = export_ossie_from_manifest(
+        {
+            "models": [
+                {"name": "orders", "ref_sql": "SELECT 1 AS result", "columns": [column]}
+            ]
+        },
+        spec_version=spec_version,
+    )
+    assert errors == []
+    sm = doc["semantic_model"][0] if spec_version == "0.1.1" else doc
+    assert "is_calculated" not in _wren_data(sm["datasets"][0]["fields"][0])
+    rebuilt, errors = build_json_from_ossie(
+        _write_ossie(tmp_path, dump_ossie(doc)), data_source="duckdb"
+    )
+    assert errors == []
+    assert rebuilt["models"][0]["columns"][0]["isCalculated"] is False
 
 
 def test_dump_ossie_is_yaml_in_authoring_order():
