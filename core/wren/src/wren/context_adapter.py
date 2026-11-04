@@ -20,6 +20,7 @@ import re
 import subprocess
 import tempfile
 from bisect import bisect_right
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -921,7 +922,8 @@ class ContextReader:
             ("view", self._views),
             ("rule", {f"{RULE_PREFIX}{r['path']}": r for r in self._rules}),
         )
-        occupied = {name for _, items in tables for name in items}
+        name_counts = Counter(name for _, items in tables for name in items)
+        occupied = set(name_counts)
         sequence = 0
         for kind, items in tables:
             for name, item in items.items():
@@ -936,7 +938,10 @@ class ContextReader:
                 if kind == "rule":
                     description = "Business rule file"
                 selector = name
-                if len(f"{kind} {name}: ".encode()) > self.budget // 4:
+                if (
+                    name_counts[name] > 1
+                    or len(f"{kind} {name}: ".encode()) > self.budget // 4
+                ):
                     # Keep the complete authored name available via read_context;
                     # clipping an ID alone would leave the item unselectable.
                     while True:

@@ -1991,6 +1991,8 @@ def _assemble_service(
         project.paths.append(preset_path)
         policies.append(preset_path.read_text())
     project.version = project.fingerprint()
+    if project_digest(root) != snapshot.digest:
+        raise ContextChanged("the project changed while the service was starting")
     selection = config.get("metadata_selection", [])
     metadata_condition = (
         " || ".join(f"resource.name == {json.dumps(n)}" for n in selection) or "false"

@@ -2148,3 +2148,50 @@ def test_long_rule_path_gets_readable_collision_free_index_selector():
     assert all(
         len(r.list(page)["text"].encode()) <= 2048 for page in range(1, r.pages + 1)
     )
+
+
+def test_cross_kind_name_collisions_have_distinct_readable_index_selectors():
+    path = "knowledge/rules/" + "交易" * 200 + ".md"
+    r = reader(
+        {
+            "models": [model("shared"), model("@context-1")],
+            "cubes": [
+                {
+                    "name": "shared",
+                    "base_object": "shared",
+                    "measures": [],
+                    "dimensions": [],
+                    "time_dimensions": [],
+                }
+            ],
+            "views": [{"name": "shared", "columns": []}],
+            "knowledge_rules": [{"path": path, "content": "Safe rule."}],
+        },
+        budget=512,
+    )
+    pages = [r.list(page)["text"] for page in range(1, r.pages + 1)]
+    selectors = []
+    for kind in ("model", "cube", "view"):
+        lines = [
+            line
+            for page in pages
+            for line in page.splitlines()
+            if line.startswith(kind + " ") and ": shared;" in line
+        ]
+        assert len(lines) == 1
+        selector = lines[0].split(": ", 1)[0].split(" ", 1)[1]
+        selectors.append(selector)
+        item = r.read([selector])["items"][0]
+        assert (item["kind"], item["name"]) == (kind, "shared")
+    assert len(set(selectors)) == 3 and "@context-1" not in selectors
+    rule_line = next(
+        line
+        for page in pages
+        for line in page.splitlines()
+        if line.startswith("rule @context-")
+    )
+    rule_selector = rule_line.split(": ", 1)[0].split(" ", 1)[1]
+    assert rule_selector not in [*selectors, "@context-1"]
+    assert r.read([rule_selector])["rules"] == [{"path": path, "content": "Safe rule."}]
+    assert r.read(["@context-1"])["items"][0]["name"] == "@context-1"
+    assert all(len(page.encode()) <= 512 for page in pages)

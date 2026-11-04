@@ -3850,3 +3850,42 @@ def test_service_constructor_failure_closes_its_actual_runtime_and_keeps_primary
                 runtime.close()
             except RuntimeError:
                 pass
+
+
+@pytest.mark.parametrize("timing", ["before", "after"])
+def test_source_edit_during_final_startup_fingerprint_cannot_anchor_stale_catalog(
+    service, monkeypatch, timing
+):
+    import wren.agent_service as module  # noqa: PLC0415
+    from wren.context_adapter import ContextChanged  # noqa: PLC0415
+
+    original = module.Project.fingerprint
+    changed = []
+    spawned = []
+    create_ipc = module.RuntimeIPC
+
+    def capture_ipc(*args, **kwargs):
+        spawned.append(True)
+        return create_ipc(*args, **kwargs)
+
+    def fingerprint(project):
+        final = any(path.name == "policy-0.cedar" for path in project.paths)
+
+        def edit():
+            rule = project.root / "knowledge/rules/conventions.md"
+            rule.write_text(rule.read_text() + "\nChanged after catalog capture.\n")
+            changed.append(True)
+
+        if final and not changed and timing == "before":
+            edit()
+        value = original(project)
+        if final and not changed and timing == "after":
+            edit()
+        return value
+
+    monkeypatch.setattr(module.Project, "fingerprint", fingerprint)
+    monkeypatch.setattr(module, "RuntimeIPC", capture_ipc)
+    with pytest.raises(ContextChanged):
+        service(runtime_path=FAKE_RUNTIME)
+    assert changed
+    assert not spawned
