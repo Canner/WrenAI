@@ -1763,6 +1763,13 @@ def test_create_refuses_without_a_git_identity_before_creating_anything(
     ):
         monkeypatch.delenv(var, raising=False)
 
+    # Git may synthesize an identity from the local account and hostname.
+    # This case requires a configured identity so it actually exercises the
+    # missing-identity refusal on machines where that fallback succeeds.
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "user.useConfigOnly")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "true")
+
     target = tmp_path / "proj"
     target.mkdir()
     (target / "model.yml").write_text("name: orders\n")

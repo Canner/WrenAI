@@ -1839,12 +1839,13 @@ def status_reads(s, sql):
     status = _Status(_Statement(qualified, checker), checker, rule, frozenset())
     kept = status.retained()
     reads = []
-    for read in status.instances:
-        node, view = read, None
+    instances = {id(read): read for read in status.instances}
+    for index, (read, _path) in enumerate(status.paths):
+        node, view = instances[read], None
         while node is not None and view is None:
             view = node.meta.get(VIEW_MARK)
             node = node.parent
-        entry = kept.get(id(read))
+        entry = kept.get(index)
         reads.append((view, None if entry is None else display(rule, entry[0])))
     return reads
 
