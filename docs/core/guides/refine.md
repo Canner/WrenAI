@@ -129,6 +129,9 @@ silently turn enforcement off.
   or in an INNER or comma join's ON. A filter inside a subquery or CTE satisfies only
   the covered reads it reaches. Outer-joining that filtered source does not satisfy
   a separate covered read on the preserved side; that read needs its own filter.
+  Nested inner-join groups remain a limitation: an inner ON filter inside an
+  outer-joined group can be accepted even though it does not remove preserved-side
+  rows. Put the required exclusion in the outer `WHERE` for that shape.
 - **`require_rate_join`**: statements that aggregate a listed amount column must read the
   rate model joined on one of the declared currency columns and bounded
   `rate.date <= <expression over a declared transaction-date column>` (an inner
