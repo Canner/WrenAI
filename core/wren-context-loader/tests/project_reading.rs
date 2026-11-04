@@ -120,36 +120,36 @@ fn root_only_cubes_are_rejected_by_native_readers() {
 #[test]
 fn root_cube_mirror_requires_usable_matching_directory_semantics() {
     let cases = [
-        ("empty", ""),
-        ("comment-only", "# draft\n"),
-        ("non-mapping", "just prose\n"),
-        ("invalid", "name: order_metrics\n"),
+        ("empty", String::new()),
+        ("comment-only", "# draft\n".to_string()),
+        ("non-mapping", "just prose\n".to_string()),
+        ("invalid", "name: order_metrics\n".to_string()),
         (
             "different-name",
-            "name: other_metrics\nbase_object: orders\nmeasures: []\ndimensions: []\ntime_dimensions: []\n",
+            CUBE_METADATA.replacen("name: order_metrics", "name: other_metrics", 1),
         ),
         (
             "different-definition",
-            "name: order_metrics\nbase_object: orders\nmeasures:\n  - { name: total_value, expression: \"SUM(other)\", type: DOUBLE }\ndimensions: []\ntime_dimensions: []\n",
+            CUBE_METADATA.replacen("SUM(total)", "SUM(other)", 1),
         ),
         (
             "different-base-object",
-            "name: order_metrics\nbase_object: other\nmeasures:\n  - { name: total_value, expression: \"SUM(total)\", type: DOUBLE }\ndimensions: []\ntime_dimensions: []\n",
+            CUBE_METADATA.replacen("base_object: orders", "base_object: other", 1),
         ),
         (
             "different-member-type",
-            "name: order_metrics\nbase_object: orders\nmeasures:\n  - { name: total_value, expression: \"SUM(total)\", type: INTEGER }\ndimensions: []\ntime_dimensions: []\n",
+            CUBE_METADATA.replacen("type: DOUBLE", "type: INTEGER", 1),
         ),
         (
             "different-hierarchy",
-            "name: order_metrics\nbase_object: orders\nmeasures:\n  - { name: total_value, expression: \"SUM(total)\", type: DOUBLE }\ndimensions: []\ntime_dimensions: []\nhierarchies: { drill: [total_value] }\n",
+            format!("{CUBE_METADATA}hierarchies: {{ drill: [total_value] }}\n"),
         ),
     ];
     for (name, metadata) in cases {
         let tmp = tempfile::tempdir().unwrap();
         project(tmp.path());
         write(tmp.path(), "cubes.yml", ROOT_CUBE);
-        write(tmp.path(), "cubes/order_metrics/metadata.yml", metadata);
+        write(tmp.path(), "cubes/order_metrics/metadata.yml", &metadata);
         for result in [
             read_project_dir(tmp.path()).map(|_| ()),
             capture_project(tmp.path()).map(|_| ()),
