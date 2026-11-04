@@ -349,7 +349,7 @@ def serve(project: Path) -> None:
                             "Query only unqualified bound models.",
                             phase=ErrorPhase.SQL_POLICY_CHECK,
                         )
-                    source_tables = require_source_tables(ast)
+                    source_tables = require_source_tables(ast, dialect)
                     if checker is not None:
                         fired = checker.check(ast)
                         if fired is None:

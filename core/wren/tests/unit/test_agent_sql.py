@@ -24,6 +24,7 @@ from wren.agent_sql import (  # noqa: E402
     QueryDenied,
     QueryFormError,
     QueryShapeError,
+    read_view_bodies,
 )
 from wren.context import build_json  # noqa: E402
 from wren.declared_default_check import DefaultsChecker, _Statement  # noqa: E402
@@ -1341,6 +1342,16 @@ def test_cte_reference_in_view_body_is_not_external(adhoc):
     assert s.sql.broken_views == set()
     prepared = s.sql.prepare("SELECT COUNT(*) FROM paid_ids")
     assert prepared.observed["models"] == ["orders"]
+
+
+def test_an_unquoted_lowercase_view_body_model_matches_mixed_case_schema():
+    usable, broken = read_view_bodies(
+        {"Orders": {"id": "integer"}},
+        {"views": [{"name": "mixed_case_view"}]},
+        {"views": [{"name": "mixed_case_view", "statement": "SELECT id FROM orders"}]},
+    )
+    assert set(usable) == {"mixed_case_view"}
+    assert broken == set()
 
 
 def test_a_cte_defined_later_or_elsewhere_is_still_external(adhoc):

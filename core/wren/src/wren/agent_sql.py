@@ -210,8 +210,11 @@ def read_view_bodies(schema: dict, catalog: dict, manifest: dict | None):
                 identify=False,
             )
             from_ctes = cte_reference_ids(qualified)
+            models = {model.lower() for model in schema}
             if any(
-                t.db or t.catalog or (t.name not in schema and id(t) not in from_ctes)
+                t.db
+                or t.catalog
+                or (t.name.lower() not in models and id(t) not in from_ctes)
                 for t in qualified.find_all(exp.Table)
             ):
                 raise ValueError("reads more than models")

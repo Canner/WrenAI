@@ -4,6 +4,7 @@ import base64
 import json
 from unittest.mock import Mock
 
+import pyarrow as pa
 import pytest
 from sqlglot import parse_one
 
@@ -41,6 +42,20 @@ def test_only_a_cte_visible_at_the_reference_can_hide_a_stored_source(sql):
 def test_visible_casefolded_cte_references_still_read_no_stored_source(sql):
     with pytest.raises(NoSourceTablesError):
         require_source_tables(parse_one(sql, dialect="duckdb"))
+
+
+def test_postgres_quoted_cte_does_not_shadow_a_differently_cased_model():
+    ast = parse_one(
+        'WITH "Orders" AS (SELECT 1 AS id) SELECT id FROM orders', dialect="postgres"
+    )
+    assert require_source_tables(ast, "postgres") == ["orders"]
+
+    exact = parse_one(
+        'WITH "Orders" AS (SELECT 1 AS id) SELECT id FROM "Orders"',
+        dialect="postgres",
+    )
+    with pytest.raises(NoSourceTablesError):
+        require_source_tables(exact, "postgres")
 
 
 @pytest.mark.parametrize(
@@ -108,6 +123,24 @@ def test_governed_query_forces_semantic_policy_before_connector():
     with pytest.raises(WrenError):
         engine.query("SELECT * FROM outside_model", read_only=True)
     engine._get_connector.assert_not_called()
+
+
+def test_governed_query_runs_an_allowed_read_only_query():
+    manifest = base64.b64encode(
+        json.dumps({"models": [{"name": "orders"}], "views": []}).encode()
+    ).decode()
+    engine = WrenEngine(manifest, "duckdb", {})
+    connector = Mock()
+    expected = pa.table({"id": [1]})
+    connector.query.return_value = expected
+    engine.dry_plan = Mock(return_value="SELECT id FROM orders")
+    engine._get_connector = Mock(return_value=connector)
+
+    assert engine.query(
+        "SELECT id FROM orders", limit=5, read_only=True
+    ).to_pylist() == [{"id": 1}]
+    engine.dry_plan.assert_called_once_with("SELECT id FROM orders", None)
+    connector.query.assert_called_once_with("SELECT id FROM orders", 5)
 
 
 @pytest.mark.parametrize(

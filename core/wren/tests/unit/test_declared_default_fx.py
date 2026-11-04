@@ -277,6 +277,15 @@ def test_an_unused_rate_cte_does_not_create_a_second_attachment(strict):
     assert violations(strict, sql) == []
 
 
+def test_an_unused_rate_cte_default_does_not_refuse_a_compliant_query(strict):
+    sql = (
+        "WITH unused AS (SELECT COALESCE(f.rate_to_usd, 1) AS rate FROM fx_rates f) "
+        "SELECT SUM(CASE WHEN p.currency = 'USD' THEN p.amount "
+        f"ELSE p.amount * f.rate_to_usd END) FROM payments p ASOF LEFT JOIN fx_rates f ON {ON}"
+    )
+    assert violations(strict, sql) == []
+
+
 @pytest.mark.parametrize(
     "clause",
     [

@@ -99,36 +99,69 @@ class NoSourceTablesError(WrenError):
         )
 
 
-def cte_reference_ids(ast: exp.Expression) -> set[int]:
-    """Table nodes naming a CTE visible at that reference, with conservative case folding."""
+def _identifier_key(name: str, quoted: bool, dialect: str | None) -> str:
+    """Identifier equality for the dialects that governed stdio supports."""
+    if dialect == "postgres":
+        return name if quoted else name.lower()
+    # DuckDB compares quoted and unquoted identifiers without case sensitivity.
+    return name.casefold()
+
+
+def _cte_matches(source: Scope, name: str, quoted: bool, dialect: str | None) -> bool:
+    parent = source.expression.parent
+    cte = (
+        parent
+        if isinstance(parent, exp.CTE)
+        else source.expression.find_ancestor(exp.CTE)
+    )
+    alias = cte.args.get("alias") if cte is not None else None
+    identifier = alias.this if isinstance(alias, exp.TableAlias) else None
+    cte_name = identifier.name if isinstance(identifier, exp.Identifier) else None
+    if cte_name is None:
+        return False
+    return _identifier_key(name, quoted, dialect) == _identifier_key(
+        cte_name, bool(identifier.args.get("quoted")), dialect
+    )
+
+
+def cte_reference_ids(ast: exp.Expression, dialect: str | None = "duckdb") -> set[int]:
+    """Table nodes naming a visible CTE using the database identifier rules."""
     found = set()
     for scope in traverse_scope(ast):
-        visible = {name.casefold() for name in scope.cte_sources}
         for _alias, node in scope.references:
             if (
                 isinstance(node, exp.Table)
                 and not node.db
                 and not node.catalog
-                and node.name.casefold() in visible
+                and any(
+                    _cte_matches(
+                        source,
+                        node.name,
+                        bool(node.this.args.get("quoted")),
+                        dialect,
+                    )
+                    for source in scope.cte_sources.values()
+                )
             ):
                 found.add(id(node))
     return found
 
 
-def _visible_cte_source(scope: Scope, node: exp.Table) -> Scope | None:
+def _visible_cte_source(
+    scope: Scope, node: exp.Table, dialect: str | None = "duckdb"
+) -> Scope | None:
     """Return the CTE that shadows an unqualified table reference, if known."""
     if node.db or node.catalog:
         return None
     visible = {
-        name: source
-        for name, source in scope.cte_sources.items()
-        if name.casefold() == node.name.casefold()
+        id(source): source
+        for source in scope.cte_sources.values()
+        if _cte_matches(source, node.name, bool(node.this.args.get("quoted")), dialect)
     }
     if not visible:
         return None
 
-    # Case-insensitive shadowing follows the nearest WITH, even when the parser
-    # kept an outer alias with the exact spelling.
+    # Identifier-matched shadowing follows the nearest WITH.
     owners = {}
     parent = node.parent
     while parent is not None:
@@ -150,7 +183,7 @@ def _visible_cte_source(scope: Scope, node: exp.Table) -> Scope | None:
     return next(iter(choices.values())) if len(choices) == 1 else None
 
 
-def consumed_scopes(scopes: list[Scope]) -> list[Scope]:
+def consumed_scopes(scopes: list[Scope], dialect: str | None = "duckdb") -> list[Scope]:
     """Return scopes that can contribute to a query's result.
 
     CTE definitions are available to their parent scope without being consumed.
@@ -165,7 +198,7 @@ def consumed_scopes(scopes: list[Scope]) -> list[Scope]:
         live.add(id(scope))
         for alias, node in scope.references:
             source = (
-                _visible_cte_source(scope, node)
+                _visible_cte_source(scope, node, dialect)
                 if isinstance(node, exp.Table)
                 else scope.sources.get(alias)
             )
@@ -179,13 +212,14 @@ def consumed_scopes(scopes: list[Scope]) -> list[Scope]:
     return [scope for scope in scopes if id(scope) in live]
 
 
-def require_source_tables(ast: exp.Expression) -> list[str]:
+def require_source_tables(
+    ast: exp.Expression, dialect: str | None = "duckdb"
+) -> list[str]:
     """Return the tables a parsed query reads, refusing one that reads none.
 
-    A query's CTE names are not sources where that CTE is visible. They are compared
-    case-insensitively: a reference that differs from a CTE alias only in case
-    or quoting may resolve to that CTE (DuckDB does so), and excluding it can
-    only refuse more queries, never admit one. A table function such as
+    A query's CTE names are not sources where that CTE is visible. DuckDB compares
+    quoted and unquoted names case-insensitively, whereas PostgreSQL preserves quoted
+    spelling while folding unquoted names. A table function such as
     ``generate_series(1, 12)`` parses as a table with an empty name and reads
     no stored data, so it is not a source either.
 
@@ -193,12 +227,12 @@ def require_source_tables(ast: exp.Expression) -> list[str]:
     numbers the caller typed, never values read from a model.
     Only consumed scopes are followed; an unused CTE supplies no grounding.
     """
-    scopes = consumed_scopes(traverse_scope(ast))
+    scopes = consumed_scopes(traverse_scope(ast), dialect)
     tables = set()
     for scope in scopes:
         for alias, node in scope.references:
             if isinstance(node, exp.Table):
-                if _visible_cte_source(scope, node) is not None:
+                if _visible_cte_source(scope, node, dialect) is not None:
                     continue
                 if node.name:
                     tables.add(node.name)

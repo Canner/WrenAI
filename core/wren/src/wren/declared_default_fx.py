@@ -922,6 +922,9 @@ class _Rate:
     def _defaults(self) -> Iterator[exp.Expression]:
         """Nodes that replace a missing rate value with a literal."""
         for node in self.st.ast.find_all(exp.Coalesce, exp.If):
+            scope = self.st._scope_for(node)
+            if scope is None or id(scope.expression) not in self.st._live_scopes:
+                continue
             if isinstance(node, exp.Coalesce):
                 args = [node.this, *node.expressions]
                 if any(self._is_rate(a) for a in args) and any(
