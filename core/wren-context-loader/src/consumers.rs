@@ -7,6 +7,8 @@
 //!   frontmatter block (`nl`, `sql`, `source`, `tags`); only `sql` matters for lineage.
 //! - `dashboards.yml` — a minimal declarative dashboard spec: `dashboards[].name` +
 //!   `panels[].sql` (a raw query) or `panels[].cube` + `measures` (declared cube references).
+//!   Authors should choose one form per panel. When both are authored, this structural lineage
+//!   reader records their union; it does not establish renderer precedence or execution validity.
 //!
 //! Table extraction parses SQL with `sqlparser` (GenericDialect) and collects every relation name;
 //! a statement that fails to parse is reported to the caller, who falls back to a whole-word text
@@ -79,9 +81,11 @@ pub(crate) struct DashboardSpec {
     pub panels: Vec<PanelSpec>,
 }
 
-/// One panel — either a raw SQL query (`sql`, references *discovered* by parsing) or a declared
-/// cube reference (`cube` + `measures`, dangling if the target doesn't exist — deliberately loud,
-/// like a cube's `base_object`).
+/// One panel — normally either a raw SQL query (`sql`, references *discovered* by parsing) or a
+/// declared cube reference (`cube` + `measures`, dangling if the target doesn't exist —
+/// deliberately loud, like a cube's `base_object`). When both forms are authored, this loader
+/// preserves the structural union rather than inferring display precedence; authors should choose
+/// one form per panel.
 #[derive(Debug, Deserialize)]
 pub(crate) struct PanelSpec {
     #[serde(default)]

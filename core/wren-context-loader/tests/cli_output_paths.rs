@@ -17,6 +17,14 @@ fn run_loader(args: &[&std::ffi::OsStr]) -> std::process::Output {
         .unwrap()
 }
 
+fn run_loader_from(dir: &Path, args: &[&std::ffi::OsStr]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_wren-context-loader"))
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .unwrap()
+}
+
 #[test]
 fn duplicate_output_destinations_are_rejected_before_writing() {
     let output = tempfile::tempdir().unwrap();
@@ -65,6 +73,26 @@ fn duplicate_output_destinations_are_rejected_before_writing() {
         !stdout.stdout.is_empty(),
         "omitting -o still writes to stdout"
     );
+}
+
+#[test]
+fn distinct_relative_output_destinations_are_written_in_the_current_directory() {
+    let output = tempfile::tempdir().unwrap();
+    let project = fixture("rules-wren");
+    let run = run_loader_from(
+        output.path(),
+        &[
+            project.as_os_str(),
+            "-o".as_ref(),
+            "context.json".as_ref(),
+            "--catalog-out".as_ref(),
+            "catalog.json".as_ref(),
+        ],
+    );
+
+    assert!(run.status.success(), "{:?}", run.stderr);
+    assert!(output.path().join("context.json").is_file());
+    assert!(output.path().join("catalog.json").is_file());
 }
 
 #[cfg(unix)]

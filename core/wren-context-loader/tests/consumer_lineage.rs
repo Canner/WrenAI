@@ -309,6 +309,28 @@ fn relationship_condition_reaches_a_consumer_of_its_calculated_column() {
 }
 
 #[test]
+fn relationship_condition_reaches_a_consumer_of_a_correlated_calculated_column() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    add_relationship_calculation(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/correlated-customer-name.md",
+        "---\nsql: SELECT 1 FROM orders o WHERE EXISTS (SELECT o.customer_name)\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(
+        reaches(
+            &ctx,
+            "rel:orders_customers",
+            "query:correlated-customer-name"
+        ),
+        "a correlated outer calculated column reads the declared condition during planning"
+    );
+}
+
+#[test]
 fn hidden_calculated_columns_do_not_create_consumer_relationship_edges() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());
@@ -635,6 +657,31 @@ fn dashboard_declared_cube_panel_links_cube_and_measures() {
     assert!(impact(&ctx, "model:customers")
         .downstream
         .contains(&"dashboard:exec-weekly".to_string()));
+}
+
+#[test]
+fn dashboard_panel_with_both_forms_keeps_all_authored_dependencies() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "dashboards.yml",
+        r#"dashboards:
+  - name: mixed-panel
+    panels:
+      - sql: SELECT * FROM customers
+        cube: order_metrics
+        measures: [total_value]
+"#,
+    );
+    let ctx = load(tmp.path());
+
+    for source in ["model:customers", "metric:order_metrics.total_value"] {
+        assert!(
+            reaches(&ctx, source, "dashboard:mixed-panel"),
+            "structural lineage preserves the authored {source} dependency"
+        );
+    }
 }
 
 #[test]

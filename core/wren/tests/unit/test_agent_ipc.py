@@ -155,6 +155,157 @@ def test_a_control_frame_has_its_own_bounded_pipe_write(ipc, reuse_request_id):
             assert not task.is_alive()
 
 
+def test_an_active_tool_result_gets_a_bounded_payload_write_allowance(ipc, monkeypatch):
+    import concurrent.futures  # noqa: PLC0415
+    import os  # noqa: PLC0415
+
+    runtime = ipc()
+    owner, wire = "active-owner", "active-wire"
+    with runtime.state_lock:
+        runtime.pending[owner] = concurrent.futures.Future()
+        runtime.wire_ids[owner] = wire
+        runtime._wire_owners[wire] = owner
+        runtime._wire_deadlines[wire] = time.monotonic() + 2
+
+    original_write = os.write
+    target_fd = runtime.process.stdin.fileno()
+    writes = 0
+
+    def slow_first_payload_write(fd, data):
+        nonlocal writes
+        if fd == target_fd:
+            writes += 1
+            if writes == 1:
+                return original_write(fd, data[:1])
+            if writes == 2:
+                time.sleep(0.15)
+        return original_write(fd, data)
+
+    monkeypatch.setattr(os, "write", slow_first_payload_write)
+    try:
+        runtime._send(
+            {
+                "type": "tool_result",
+                "id": "tool-call",
+                "owner": wire,
+                "value": "x" * 524288,
+            }
+        )
+        assert writes >= 2
+        assert not runtime.closed
+    finally:
+        with runtime.state_lock:
+            runtime.pending.pop(owner, None)
+            runtime.wire_ids.pop(owner, None)
+            runtime._wire_owners.pop(wire, None)
+            runtime._wire_deadlines.pop(wire, None)
+        runtime.close()
+
+
+def test_a_tool_result_cannot_outlive_its_owner_deadline(ipc, monkeypatch):
+    import concurrent.futures  # noqa: PLC0415
+    import os  # noqa: PLC0415
+
+    runtime = ipc()
+    owner, wire = "expiring-owner", "expiring-wire"
+    with runtime.state_lock:
+        runtime.pending[owner] = concurrent.futures.Future()
+        runtime.wire_ids[owner] = wire
+        runtime._wire_owners[wire] = owner
+        runtime._wire_deadlines[wire] = time.monotonic() + 0.05
+
+    original_write = os.write
+    target_fd = runtime.process.stdin.fileno()
+    writes = 0
+
+    def slow_first_payload_write(fd, data):
+        nonlocal writes
+        if fd == target_fd:
+            writes += 1
+            if writes == 1:
+                return original_write(fd, data[:1])
+            if writes == 2:
+                time.sleep(0.15)
+        return original_write(fd, data)
+
+    monkeypatch.setattr(os, "write", slow_first_payload_write)
+    try:
+        with pytest.raises(TimeoutError):
+            runtime._send(
+                {
+                    "type": "tool_result",
+                    "id": "tool-call",
+                    "owner": wire,
+                    "value": "x" * 524288,
+                }
+            )
+        assert runtime.closed
+    finally:
+        runtime.close()
+
+
+def test_a_cancelled_owner_stops_a_partial_tool_result_write(ipc, monkeypatch):
+    import concurrent.futures  # noqa: PLC0415
+    import os  # noqa: PLC0415
+    import threading  # noqa: PLC0415
+
+    runtime = ipc()
+    owner, wire = "cancelled-owner", "cancelled-wire"
+    with runtime.state_lock:
+        runtime.pending[owner] = concurrent.futures.Future()
+        runtime.wire_ids[owner] = wire
+        runtime._wire_owners[wire] = owner
+        runtime._wire_deadlines[wire] = time.monotonic() + 2
+
+    original_write = os.write
+    target_fd = runtime.process.stdin.fileno()
+    entered, release = threading.Event(), threading.Event()
+    writes, outcome = 0, []
+
+    def block_second_payload_write(fd, data):
+        nonlocal writes
+        if fd == target_fd:
+            writes += 1
+            if writes == 1:
+                return original_write(fd, data[:1])
+            if writes == 2:
+                entered.set()
+                assert release.wait(2), (
+                    "the test did not release the stalled payload write"
+                )
+        return original_write(fd, data)
+
+    monkeypatch.setattr(os, "write", block_second_payload_write)
+
+    def send():
+        try:
+            runtime._send(
+                {
+                    "type": "tool_result",
+                    "id": "tool-call",
+                    "owner": wire,
+                    "value": "x" * 524288,
+                }
+            )
+        except BaseException as error:
+            outcome.append(error)
+
+    thread = threading.Thread(target=send)
+    thread.start()
+    try:
+        assert entered.wait(1), "the payload write did not reach its controlled stall"
+        runtime.abort(owner)
+        release.set()
+        thread.join(1)
+        assert not thread.is_alive()
+        assert outcome and isinstance(outcome[0], Exception)
+        assert runtime.closed
+    finally:
+        release.set()
+        thread.join(3)
+        runtime.close()
+
+
 @pytest.mark.parametrize("raw", ["inf", "nan"])
 def test_nonfinite_operator_timeout_cannot_disable_the_io_deadline(
     ipc, monkeypatch, raw

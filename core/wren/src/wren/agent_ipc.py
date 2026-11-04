@@ -22,6 +22,9 @@ PROTOCOL = "warble-private-service/1"
 DEFAULT_CALL_TIMEOUT_S = 100.0
 ABANDONED_LIMIT = 1024
 CONTROL_WRITE_TIMEOUT_S = 0.1
+# Tool-result payloads receive at most their owner's remaining deadline and this 1 MiB/s
+# allowance. A stalled partial frame still closes the shared transport; it is not restarted.
+TOOL_RESULT_WRITE_BYTES_PER_SECOND = 1024 * 1024
 TOOL_SHUTDOWN_TIMEOUT_S = 1.0
 TOOL_CALL_CAPACITY = 128
 
@@ -143,19 +146,28 @@ class RuntimeIPC:
         raw = (json.dumps(value, ensure_ascii=False) + "\n").encode()
         if len(raw) > 1048577:
             raise ValueError("ipc_size")
+        tool_result = value.get("type") == "tool_result"
         with self.state_lock:
-            wire = value.get("id")
-            deadline = (
-                None
-                if value.get("type") == "tool_result"
-                else self._wire_deadlines.get(wire)
-            )
+            # A tool result's `id` is the tool-call id, while `owner` names the invocation
+            # whose deadline and cancellation state govern the response.
+            wire = value.get("owner") if tool_result else value.get("id")
+            deadline = self._wire_deadlines.get(wire)
             owner = self._wire_owners.get(wire) if deadline is not None else None
-        deadline = (
-            deadline
-            if deadline is not None
-            else time.monotonic() + CONTROL_WRITE_TIMEOUT_S
-        )
+        now = time.monotonic()
+        if tool_result and deadline is not None:
+            # A result can be nearly 1 MiB, so it receives a bounded allowance based on a
+            # minimum 1 MiB/s pipe throughput. It can never outlive its invocation.
+            payload_deadline = (
+                now
+                + CONTROL_WRITE_TIMEOUT_S
+                + (len(raw) / TOOL_RESULT_WRITE_BYTES_PER_SECOND)
+            )
+            deadline = min(deadline, payload_deadline)
+        else:
+            # Controls and late/unknown tool results must not retain the shared writer.
+            deadline = (
+                deadline if deadline is not None else now + CONTROL_WRITE_TIMEOUT_S
+            )
         if value.get("op") == "cancel":
             deadline = min(deadline, time.monotonic() + CONTROL_WRITE_TIMEOUT_S)
 
