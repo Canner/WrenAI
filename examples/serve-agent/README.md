@@ -329,6 +329,16 @@ An optional operator-only `audit_path` records bounded decision and query diagno
 
 ## Support boundary
 
+A `SUM` or `COUNT` expression alone does not establish additivity across
+dimensions. The loader leaves that additivity unknown while keeping the metric
+declared and discoverable; snapshot balances, for example, need evidence about
+which dimensions can be summed. This introduces no new declaration schema.
+
+With published Warble 0.13, a pinned metric whose required additivity is unknown
+returns `Unanswerable`; an existential selection containing only such unknown
+metrics returns `Fail`. Both reject the additivity constraint. Ordinary metric
+discovery remains available.
+
 The runtime admits read-only analytical skill components with one model step, a root and declared leaf workers, and exact borrowed tool mappings. Context reading is performed by authored tool behavior. Unsupported effects, conditional steps, params, typed context requirements and deeper component graphs fail admission. This does not claim full Warble IR support.
 
 HTTP sharing/authentication, durable sessions, arbitrary business-rule interpretation, operating-system isolation from the same local user, and private network hosting are outside this example. A client ignoring the skill still encounters service authorization checks. Filesystem/DB credentials held independently by the client are outside this service boundary.
