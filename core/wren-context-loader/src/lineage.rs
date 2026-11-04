@@ -106,10 +106,21 @@ pub fn build(manifest: &Manifest) -> (LineageGraph, Vec<String>) {
             model_id(&cube.base_object)
         };
         push_edge(&mut edges, base_id, cid.clone());
+        let base_model = manifest
+            .models
+            .iter()
+            .find(|model| model.name == cube.base_object);
         for measure in &cube.measures {
             let mid = metric_id(&cube.name, &measure.name);
             push_node(&mut nodes, mid.clone(), LineageKind::Metric);
-            push_edge(&mut edges, cid.clone(), mid);
+            push_edge(&mut edges, cid.clone(), mid.clone());
+            if let Some(model) = base_model {
+                for relationship in
+                    relationships_used_by_cube_measure(manifest, model, &measure.expression)
+                {
+                    push_edge(&mut edges, rel_id(&relationship), mid.clone());
+                }
+            }
         }
         let dim_names = cube
             .dimensions
@@ -153,6 +164,37 @@ pub fn build(manifest: &Manifest) -> (LineageGraph, Vec<String>) {
     }
 
     (LineageGraph { nodes, edges }, diagnostics)
+}
+
+/// The relationship conditions a cube measure reads through a calculated column on its base
+/// model. Unlike a SQL consumer there is no relation scope to resolve: a measure expression is
+/// anchored to exactly that model, so only a direct calculated-column identifier is eligible.
+fn relationships_used_by_cube_measure(
+    manifest: &Manifest,
+    model: &Model,
+    expression: &str,
+) -> Vec<String> {
+    let mut relationships = HashSet::new();
+    for path in expression_identifiers(expression) {
+        let [identifier] = path.as_slice() else {
+            continue;
+        };
+        let Some(column) = model.columns.iter().find(|column| {
+            column.is_calculated && identifier_matches_name(identifier, &column.name)
+        }) else {
+            continue;
+        };
+        let mut visiting = HashSet::new();
+        relationships.extend(calculated_column_relationships(
+            manifest,
+            model,
+            &column.name,
+            &mut visiting,
+        ));
+    }
+    let mut relationships: Vec<_> = relationships.into_iter().collect();
+    relationships.sort();
+    relationships
 }
 
 /// Extend an already-built graph with **consumer nodes** from the project's saved artifacts:

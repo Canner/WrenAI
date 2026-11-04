@@ -7,8 +7,13 @@
 //! dimensional additivity: a `SUM` or `COUNT` may be a balance or snapshot, so it carries
 //! `additivity: None` rather than an unsupported green light.
 
+use std::collections::{HashMap, HashSet};
+
 use sqlparser::{
-    ast::{BinaryOperator, DuplicateTreatment, Expr, Function, FunctionArguments},
+    ast::{
+        BinaryOperator, DuplicateTreatment, Expr, Function, FunctionArg, FunctionArgExpr,
+        FunctionArguments,
+    },
     dialect::GenericDialect,
     parser::Parser,
     tokenizer::Token,
@@ -166,6 +171,25 @@ impl MdlContext {
             });
         }
 
+        // `metric_additive` is currently addressed by metric name alone across the prepared
+        // context wire. Keep legal same-named cube measures, but erase a conflicting answer
+        // before serialization so an external consumer cannot accidentally select the first cube.
+        let mut additivity_by_name = HashMap::new();
+        let mut ambiguous_names = HashSet::new();
+        for metric in metrics.iter().filter(|metric| metric.declared) {
+            match additivity_by_name.insert(metric.name.clone(), metric.additivity) {
+                Some(previous) if previous != metric.additivity => {
+                    ambiguous_names.insert(metric.name.clone());
+                }
+                _ => {}
+            }
+        }
+        for metric in metrics.iter_mut() {
+            if metric.declared && ambiguous_names.contains(&metric.name) {
+                metric.additivity = None;
+            }
+        }
+
         let (lineage, lineage_diagnostics) = lineage::build(manifest);
         MdlContext {
             parseable: true,
@@ -210,6 +234,20 @@ impl ContextLoader for MdlContext {
     fn lineage_diagnostics(&self) -> &[String] {
         &self.lineage_diagnostics
     }
+    fn metric_additivity(&self, metric: &str) -> Option<Additivity> {
+        // The public predicate has no owner argument. A legal duplicate measure name therefore
+        // cannot safely borrow whichever cube happened to be projected first: it is answerable
+        // only when every declared match carries the same known value.
+        let mut matches = self
+            .metrics
+            .iter()
+            .filter(|candidate| candidate.declared && candidate.name == metric);
+        let additivity = matches.next()?.additivity;
+        matches
+            .all(|candidate| candidate.additivity == additivity)
+            .then_some(additivity)
+            .flatten()
+    }
 }
 
 /// Report only non-additivity that an aggregation expression proves.
@@ -231,7 +269,9 @@ pub fn infer_additivity(expression: &str) -> Option<Additivity> {
             left,
             op: BinaryOperator::Divide,
             right,
-        } if is_aggregate_call(left) && is_aggregate_call(right) => Some(Additivity::NonAdditive),
+        } if is_aggregate_result(left) && is_aggregate_result(right) => {
+            Some(Additivity::NonAdditive)
+        }
         _ => None,
     }
 }
@@ -263,6 +303,26 @@ fn is_aggregate_call(expression: &Expr) -> bool {
         without_parentheses(expression),
         Expr::Function(function) if is_aggregate_name(&function.name.to_string().to_ascii_uppercase())
     )
+}
+
+/// `NULLIF(aggregate, fallback)` preserves the aggregate-result shape used by a ratio while
+/// avoiding a division-by-zero value. Other scalar wrappers remain unknown: their algebra alone
+/// does not establish business-dimensional additivity.
+fn is_aggregate_result(expression: &Expr) -> bool {
+    let expression = without_parentheses(expression);
+    is_aggregate_call(expression)
+        || matches!(
+            expression,
+            Expr::Function(Function { name, args: FunctionArguments::List(arguments), .. })
+                if name.to_string().eq_ignore_ascii_case("NULLIF")
+                    && matches!(
+                        arguments.args.as_slice(),
+                        [
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(first)),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(_)),
+                        ] if is_aggregate_call(first)
+                    )
+        )
 }
 
 fn is_aggregate_name(name: &str) -> bool {
@@ -297,6 +357,12 @@ fn is_numeric_type(t: &str) -> bool {
         "INT"
             | "INTEGER"
             | "BIGINT"
+            | "HUGEINT"
+            | "UHUGEINT"
+            | "UBIGINT"
+            | "UINTEGER"
+            | "USMALLINT"
+            | "UTINYINT"
             | "SMALLINT"
             | "TINYINT"
             | "DECIMAL"
@@ -345,7 +411,12 @@ mod tests {
             infer_additivity("SUM(amount) / COUNT(*)"),
             Some(Additivity::NonAdditive)
         );
+        assert_eq!(
+            infer_additivity("SUM(amount) / NULLIF(COUNT(*), 0)"),
+            Some(Additivity::NonAdditive)
+        );
         assert_eq!(infer_additivity("SUM(amount) / 2"), None);
+        assert_eq!(infer_additivity("SUM(amount) / NULLIF(2, 0)"), None);
         assert_eq!(infer_additivity("SUM(distinct_count)"), None);
         assert_eq!(
             infer_additivity("SUM(CASE WHEN label = 'distinct' THEN amount ELSE 0 END)"),
@@ -394,8 +465,68 @@ mod tests {
         assert!(!is_temporal_type("TEXT"));
         assert!(is_numeric_type("INT"));
         assert!(is_numeric_type("BIGINT"));
+        for numeric in [
+            "HUGEINT",
+            "UHUGEINT",
+            "UBIGINT",
+            "UINTEGER",
+            "USMALLINT",
+            "UTINYINT",
+        ] {
+            assert!(is_numeric_type(numeric), "{numeric} is numeric in DuckDB");
+        }
         assert!(is_numeric_type("DECIMAL(10,2)"));
         assert!(!is_numeric_type("TEXT"));
         assert!(!is_numeric_type("DATE"));
+    }
+
+    #[test]
+    fn duplicate_declared_measure_names_are_not_resolved_by_cube_order() {
+        use warble::ContextLoader;
+        use wren_core_base::mdl::manifest::Manifest;
+
+        let manifest: Manifest = serde_json::from_str(
+            r#"{
+              "catalog":"wren","schema":"public","models":[],"relationships":[],
+              "cubes":[
+                {"name":"first","baseObject":"orders","measures":[{"name":"shared","expression":"AVG(amount)","type":"DOUBLE"}],"dimensions":[],"timeDimensions":[],"hierarchies":{}},
+                {"name":"second","baseObject":"orders","measures":[{"name":"shared","expression":"SUM(amount)","type":"DOUBLE"}],"dimensions":[],"timeDimensions":[],"hierarchies":{}}
+              ],"views":[]
+            }"#,
+        )
+        .unwrap();
+        let reverse: Manifest = serde_json::from_str(
+            r#"{
+              "catalog":"wren","schema":"public","models":[],"relationships":[],
+              "cubes":[
+                {"name":"second","baseObject":"orders","measures":[{"name":"shared","expression":"SUM(amount)","type":"DOUBLE"}],"dimensions":[],"timeDimensions":[],"hierarchies":{}},
+                {"name":"first","baseObject":"orders","measures":[{"name":"shared","expression":"AVG(amount)","type":"DOUBLE"}],"dimensions":[],"timeDimensions":[],"hierarchies":{}}
+              ],"views":[]
+            }"#,
+        )
+        .unwrap();
+
+        for manifest in [&manifest, &reverse] {
+            let ctx = MdlContext::from_manifest(manifest);
+            assert_eq!(
+                ctx.metric_additivity("shared"),
+                None,
+                "an unqualified duplicate must not inherit either cube's answer"
+            );
+            assert!(ctx.can_answer("metric_additive"));
+            assert_eq!(
+                ctx.metrics().iter().filter(|m| m.name == "shared").count(),
+                2
+            );
+            let prepared = warble::PreparedContext::from_json(
+                &crate::prepared_document(&ctx).expect("prepared document"),
+            )
+            .expect("published context parses");
+            assert_eq!(
+                prepared.metric_additivity("shared"),
+                None,
+                "the prepared-context wire must preserve the same conservative ambiguity"
+            );
+        }
     }
 }

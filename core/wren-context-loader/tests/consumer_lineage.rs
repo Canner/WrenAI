@@ -249,6 +249,34 @@ fn relationship_condition_reaches_a_consumer_of_its_calculated_column() {
 }
 
 #[test]
+fn relationship_condition_reaches_a_measure_of_its_calculated_column() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    add_relationship_calculation(tmp.path());
+    write(
+        tmp.path(),
+        "cubes/order_metrics/metadata.yml",
+        r#"name: order_metrics
+base_object: orders
+measures:
+  - { name: customer_total, expression: "SUM(customer_name)", type: DOUBLE }
+dimensions: []
+time_dimensions: []
+"#,
+    );
+    let ctx = load(tmp.path());
+
+    assert!(
+        reaches(
+            &ctx,
+            "rel:orders_customers",
+            "metric:order_metrics.customer_total"
+        ),
+        "planning a measure over a calculated relationship field reads the declared condition"
+    );
+}
+
+#[test]
 fn relationship_condition_reaches_consumers_of_indirect_and_multihop_calculations() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());

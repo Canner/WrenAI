@@ -16,6 +16,7 @@
 //! path that is not a directory, an unwritable output file — exits non-zero.
 
 use std::collections::VecDeque;
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
@@ -91,8 +92,10 @@ fn main() -> ExitCode {
     }
 
     if let Some(catalog_path) = catalog_path {
-        if let Err(e) = std::fs::write(&catalog_path, catalog_document.expect("catalog requested"))
-        {
+        if let Err(e) = write_output(
+            &catalog_path,
+            catalog_document.expect("catalog requested").as_bytes(),
+        ) {
             eprintln!("failed to write {}: {e}", catalog_path.display());
             return ExitCode::from(1);
         }
@@ -100,7 +103,7 @@ fn main() -> ExitCode {
 
     match out_path {
         Some(path) => {
-            if let Err(e) = std::fs::write(&path, document) {
+            if let Err(e) = write_output(&path, document.as_bytes()) {
                 eprintln!("failed to write {}: {e}", path.display());
                 return ExitCode::from(1);
             }
@@ -108,6 +111,25 @@ fn main() -> ExitCode {
         None => println!("{document}"),
     }
     ExitCode::SUCCESS
+}
+
+fn write_output(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("output path {} has no parent directory", path.display()),
+        )
+    })?;
+    // `persist` replaces the final directory entry atomically on supported native platforms. The
+    // preflight still owns parent traversal and digest-input rejection; this closes only a later
+    // replacement of the final component with a symlink, without claiming a hostile-parent guard.
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+    temporary.write_all(contents)?;
+    temporary.flush()?;
+    temporary
+        .persist(path)
+        .map(|_| ())
+        .map_err(|error| error.error)
 }
 
 type ParsedArgs = (PathBuf, Option<PathBuf>, Option<PathBuf>);
@@ -551,5 +573,56 @@ fn load(project_dir: &Path, sources: Option<&ProjectSources>) -> MdlContext {
     match MdlContext::try_from_sources(sources) {
         Ok(context) => context,
         Err(e) => MdlContext::unparseable_with_error(Some(e.to_string())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_writable_output, write_output};
+
+    #[cfg(unix)]
+    #[test]
+    fn output_write_does_not_follow_a_final_symlink_replaced_after_validation() {
+        use std::fs;
+        use std::os::unix::fs::symlink;
+
+        let output = tempfile::tempdir().unwrap();
+        let source = tempfile::tempdir().unwrap();
+        let destination = output.path().join("prepared.json");
+        let protected = source.path().join("wren_project.yml");
+        fs::write(&destination, "safe before validation").unwrap();
+        fs::write(&protected, "source stays unchanged").unwrap();
+
+        validate_writable_output(&destination).unwrap();
+        fs::remove_file(&destination).unwrap();
+        symlink(&protected, &destination).unwrap();
+
+        write_output(&destination, b"prepared document").unwrap();
+
+        assert_eq!(
+            fs::read_to_string(&protected).unwrap(),
+            "source stays unchanged"
+        );
+        assert_eq!(
+            fs::read_to_string(&destination).unwrap(),
+            "prepared document"
+        );
+        assert!(!fs::symlink_metadata(&destination)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
+
+    #[test]
+    fn output_write_still_replaces_an_existing_regular_file() {
+        use std::fs;
+
+        let output = tempfile::tempdir().unwrap();
+        let destination = output.path().join("prepared.json");
+        fs::write(&destination, "old document").unwrap();
+
+        write_output(&destination, b"new document").unwrap();
+
+        assert_eq!(fs::read_to_string(destination).unwrap(), "new document");
     }
 }
