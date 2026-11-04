@@ -1320,6 +1320,16 @@ def test_unreadable_current_sources_are_a_controlled_inconsistency(
         load_snapshot(real_project)
 
 
+def test_source_builder_exit_is_a_controlled_inconsistency(real_project, monkeypatch):
+    def terminated(_):
+        raise SystemExit("private source detail")
+
+    monkeypatch.setattr(adapter, "build_json", terminated)
+    with pytest.raises(ContextInconsistent, match="cannot be compared") as raised:
+        load_snapshot(real_project)
+    assert "private source detail" not in str(raised.value)
+
+
 def test_source_change_during_current_build_is_context_changed(
     real_project, monkeypatch
 ):

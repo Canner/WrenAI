@@ -525,7 +525,15 @@ def _check_execution_semantics(root: Path, manifest: dict, digest: str) -> None:
     try:
         current = build_json(root)
         mirror = _root_cube_mirror(root)
-    except (OSError, ValueError, TypeError, KeyError, AttributeError, yaml.YAMLError):
+    except (
+        OSError,
+        ValueError,
+        TypeError,
+        KeyError,
+        AttributeError,
+        yaml.YAMLError,
+        SystemExit,
+    ):
         if project_digest(root) != digest:
             raise ContextChanged(
                 "the project changed while its semantics were being read"
