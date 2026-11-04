@@ -5,10 +5,12 @@
 //! It is read from the authored project files (not from the assembled `Manifest`, which keeps no
 //! `properties`) with lenient, allow-listed structs: every field that is not named here is dropped
 //! on read, so a new authored field never reaches the catalog by default. Nothing in the catalog
-//! is computed from data, and no SQL — `ref_sql`, view statements, calculated-column or measure
-//! expressions, saved queries — is carried. The one free-text slice is the project's business rules
-//! (`knowledge/rules/*.md`, legacy `instructions.md`), carried whole as authored prose; the
-//! prepared-context document cannot carry them because Warble owns that format.
+//! is computed from data, and no query SQL — `ref_sql`, view statements, calculated-column or
+//! measure expressions, saved queries — is carried. Authored relationship join conditions are the
+//! deliberate structural exception: a planner needs them to form a declared join. The one free-text
+//! slice is the project's business rules (`knowledge/rules/*.md`, legacy `instructions.md`),
+//! carried whole as authored prose; the prepared-context document cannot carry them because Warble
+//! owns that format.
 //!
 //! The consuming host applies its own allow-list again when it renders the catalog into a card;
 //! this module is the first of the two layers, not the only one.
@@ -819,6 +821,49 @@ columns:
         assert!(!json.contains("sample_values"));
         assert!(!json.contains("amount * 100"));
         assert_eq!(catalog.models[0].columns[1].is_calculated, Some(true));
+        assert!(catalog.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn root_cube_descriptions_override_directory_mirror_prose() {
+        let mut sources = sources("name: orders\ncolumns: []\n");
+        sources.cubes_yml = Some(
+            r#"- name: order_metrics
+  base_object: orders
+  properties: { description: Root cube description. }
+  measures:
+    - name: total_value
+      expression: "SUM(total)"
+      type: DOUBLE
+      properties: { description: Root measure description. }
+  dimensions: []
+  time_dimensions: []
+"#
+            .into(),
+        );
+        sources.cube_ymls = vec![r#"name: order_metrics
+base_object: orders
+properties: { description: Directory cube prose. }
+measures:
+  - name: total_value
+    expression: "SUM(total)"
+    type: DOUBLE
+    properties: { description: Directory measure prose. }
+dimensions: []
+time_dimensions: []
+"#
+        .into()];
+
+        let catalog = capability_catalog(&sources);
+        assert_eq!(catalog.cubes.len(), 1);
+        assert_eq!(
+            catalog.cubes[0].description.as_deref(),
+            Some("Root cube description.")
+        );
+        assert_eq!(
+            catalog.cubes[0].measures[0].description.as_deref(),
+            Some("Root measure description.")
+        );
         assert!(catalog.diagnostics.is_empty());
     }
 

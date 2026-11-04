@@ -463,6 +463,9 @@ fn apply_ref_sql_file(metadata: String, ref_sql_file: Option<String>) -> std::io
 ///
 /// The native engine reads cubes from `cubes/<name>/metadata.yml`; a non-empty root `cubes.yml`
 /// may mirror those files but cannot be the only native cube source.
+/// Mirror validation compares executable cube semantics, not descriptive properties. A non-empty
+/// root list remains the catalog authority, so its cube and member descriptions intentionally
+/// override directory prose without requiring an engine rebuild.
 /// Schema versions 1 through 5 are accepted for this directory layout, but the legacy v1 flat
 /// `models/*.yml`, `cubes/*.yml`, and `views.yml` sources need corresponding directory-layout
 /// counterparts before native loading. Existing mixed projects retain their directory sources;
@@ -1826,7 +1829,8 @@ pub struct ProjectSources {
     pub model_ymls: Vec<String>,
     pub relationships_yml: Option<String>,
     /// Optional root cube list for pure/in-memory callers. A native directory project may use it
-    /// as a mirror only when it also has per-cube metadata files.
+    /// as a mirror only when it also has per-cube metadata files. Its cube and member descriptions
+    /// intentionally override directory prose; mirror validation covers executable semantics only.
     pub cubes_yml: Option<String>,
     /// Per-cube `cubes/<name>/metadata.yml` contents (wren CLI layout). Used unless the root
     /// `cubes.yml` yields at least one cube, which then takes precedence (see `authored_cubes`).
@@ -1850,10 +1854,12 @@ pub struct ProjectSources {
 ///
 /// Precedence: a root `cubes.yml` that yields at least one cube wins and the per-cube files
 /// (`cubes/<name>/metadata.yml`, the layout the wren CLI reads) are ignored, never merged, so a
-/// project that keeps a root mirror beside the directory does not get every cube twice. A root
-/// file that is absent, empty, comment-only or `[]` declares nothing, so the per-cube files are
-/// used. A root file that does not parse is an error and yields no cubes. A per-cube file that is
-/// empty or not a mapping is skipped, as wren skips it.
+/// project that keeps a root mirror beside the directory does not get every cube twice. Root cube
+/// and member descriptions intentionally win over directory prose; the native mirror check only
+/// requires executable semantics to agree. A root file that is absent, empty, comment-only or
+/// `[]` declares nothing, so the per-cube files are used. A root file that does not parse is an
+/// error and yields no cubes. A per-cube file that is empty or not a mapping is skipped, as wren
+/// skips it.
 ///
 /// `assemble` and the catalog both read cubes through this one function, so they cannot disagree
 /// about which cubes exist.
