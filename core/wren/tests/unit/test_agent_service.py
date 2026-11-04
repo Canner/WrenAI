@@ -1564,6 +1564,9 @@ def test_audit_path_streams_json_lines_before_shutdown(service, tmp_path):
 
 
 def test_audit_records_task_outcomes(service, monkeypatch, tmp_path):
+    import wren.agent_service as agent_service  # noqa: PLC0415
+
+    monkeypatch.setattr(agent_service.time, "time", lambda: 1_700_000_000.0)
     sink = tmp_path / "outcomes.jsonl"
     s = service(updates={"audit_path": str(sink)})
     r = request(s)
