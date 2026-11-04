@@ -1029,16 +1029,19 @@ class Service:
             if previous.get("sources"):
                 context = {**context, "original_question": previous["question"]}
             carried = (previous.get("internal") or {}).get("caller_scope")
-            if carried and carried.get("rule") in self.status_rules:
-                rule = self.status_rules[carried["rule"]]
-                scopes[rule.id] = fold_all(carried["values"])
-                context = {**context, "status_scope": display(rule, scopes[rule.id])}
+            carried_scopes = (previous.get("internal") or {}).get("caller_scopes", {})
+            if not carried_scopes and carried:
+                carried_scopes = {carried["rule"]: carried["values"]}
+            scopes.update(self.confirmed_scopes(carried_scopes))
+            for rule_id, scope in scopes.items():
+                rule = self.status_rules[rule_id]
+                context = {**context, "status_scope": display(rule, scope)}
                 self.record(
                     {
                         "event": "caller_scope_inherited",
                         "request_id": request.request_id,
                         "rule": rule.id,
-                        "scope": display(rule, scopes[rule.id]),
+                        "scope": display(rule, scope),
                     }
                 )
         budget = SqlBudget(self.execution.max_sql_attempts)
@@ -1049,6 +1052,7 @@ class Service:
             if not pending or pending.get("consumed"):
                 raise ValueError("context_changed")
             budget = pending.get("budget") or budget
+            scopes.update(self.confirmed_scopes(pending.get("status_scopes", {})))
             context = {
                 "original_question": pending["question"],
                 "user_answer": continuation["answer"],
@@ -1067,6 +1071,11 @@ class Service:
                             "scope": display(rule, resolution),
                         }
                     )
+        if len(scopes) > 1:
+            context["status_scopes"] = {
+                rule_id: display(self.status_rules[rule_id], scope)
+                for rule_id, scope in scopes.items()
+            }
         ledger = {}
         usage = {}
         policy_denied = False
@@ -1247,12 +1256,16 @@ class Service:
                     return {"error": "query_unavailable", "hint": UNAVAILABLE_HINT}
                 lifetime.check()
                 internal["as_of"] = as_of
+                caller_scopes = {}
                 for rule_id, check in prepared.checks.items():
                     if check["result"] == "satisfied_by_caller_scope":
+                        caller_scopes[rule_id] = check["scope"]
                         internal["caller_scope"] = {
                             "rule": rule_id,
                             "values": check["scope"],
                         }
+                if caller_scopes:
+                    internal["caller_scopes"] = caller_scopes
                 token = uid()
                 ledger[token] = {
                     "result": result,
@@ -1441,6 +1454,10 @@ class Service:
                         "question": request.question,
                         "capability": request.capability,
                         "budget": budget,
+                        "status_scopes": {
+                            rule_id: display(self.status_rules[rule_id], scope)
+                            for rule_id, scope in scopes.items()
+                        },
                         **{
                             key: saved[key]
                             for key in (
@@ -1529,6 +1546,22 @@ class Service:
             if policy_denied:
                 raise PermissionError("denied") from None
             raise
+
+    def confirmed_scopes(self, carried: dict) -> dict[str, frozenset[str]]:
+        """Restore each host-confirmed rule independently, preserving its exact set."""
+        scopes = {}
+        for rule_id, values in carried.items():
+            rule = self.status_rules.get(rule_id)
+            scope = fold_all(values)
+            if (
+                rule is None
+                or not rule.overridable_by_caller
+                or not scope
+                or not scope <= fold_all(rule.domain)
+            ):
+                raise ValueError("context_changed")
+            scopes[rule_id] = scope
+        return scopes
 
     def resolve_status_scope(self, pending: dict, answer: str):
         """What a continuation's answer makes of the status-scope question: the folded set, or

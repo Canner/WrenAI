@@ -37,7 +37,7 @@ try {
   const agent = new Agent({ initialState: { model, tools, systemPrompt: await readFile(config.skill, 'utf8') },
     toolExecution: 'sequential', streamFn: (_m, ctx, opts) => {
       if (++turnRequests > 12 || ++totalRequests > 100) throw Error('model_budget');
-      return streamSimple(model, ctx, { ...opts, apiKey: process.env.OPENAI_API_KEY, maxTokens: 2048, onPayload: payload => { payload.reasoning_effort = "none"; } });
+      return streamSimple(model, ctx, { ...opts, apiKey: process.env.OPENAI_API_KEY, maxTokens: 2048, onPayload: payload => { if (model.id === 'gpt-6-luna') payload.reasoning_effort = "none"; } });
     },
   });
   for (const question of questions) {

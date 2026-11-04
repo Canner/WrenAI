@@ -3715,3 +3715,58 @@ def test_agent_presets_empty_mapping_remains_valid(tmp_path):
     )
     assert result.exit_code == 0
     assert json.loads(result.output) == {"default": None, "presets": []}
+
+
+@pytest.mark.parametrize("retry", [False, True])
+def test_status_scopes_survive_two_clarifications_and_follow_up(
+    service, monkeypatch, tmp_path, retry
+):
+    extra = tmp_path / "fixture/project/knowledge/rules/z-second-status.md"
+    extra.write_text(
+        "---\ndefaults:\n  - id: second-status\n    kind: sale_statuses\n    column: orders.status\n    values: [shipped]\n    overridable_by_caller: true\n---\nAnother declared status comparison.\n"
+    )
+    s = service(profile="adhoc", runtime_path=FAKE_RUNTIME)
+    session = s.open()["session_id"]
+    worker_sees(monkeypatch, s, clarifying(PAID, []))
+    first = s.execute(asking(s, session, 0, "one"))
+    second = s.continue_task(answering(first, session, 1, "two", "paid"))
+    assert second["status"] == "needs_clarification"
+    assert s.sessions[session]["pending"][second["continuation_ref"]][
+        "status_scopes"
+    ] == {RULE: ["paid"]}
+    revision = 2
+    if retry:
+        second = s.continue_task(
+            answering(second, session, revision, "retry", "unknown status")
+        )
+        revision += 1
+        assert second["status"] == "needs_clarification"
+    worker_sees(monkeypatch, s, finishing(PAID))
+    done = s.continue_task(answering(second, session, revision, "three", "paid"))
+    assert done["status"] == "completed"
+    for rule in (RULE, "second-status"):
+        assert internal_of(s, done)["checks"][rule] == {
+            "applicable": True,
+            "result": "satisfied_by_caller_scope",
+            "scope": ["paid"],
+        }
+    follow = s.execute(asking(s, session, revision + 1, "four", done["result_ref"]))
+    assert follow["status"] == "completed"
+    assert all(
+        internal_of(s, follow)["checks"][rule]["result"] == "satisfied_by_caller_scope"
+        for rule in (RULE, "second-status")
+    )
+
+
+def test_restored_status_scope_cannot_introduce_unconfirmed_domain_values(
+    service, monkeypatch
+):
+    s = service(profile="adhoc", runtime_path=FAKE_RUNTIME)
+    session = s.open()["session_id"]
+    worker_sees(monkeypatch, s, clarifying(PAID, []))
+    first = s.execute(asking(s, session, 0, "one"))
+    pending = s.sessions[session]["pending"][first["continuation_ref"]]
+    pending["status_scopes"] = {RULE: ["not-a-declared-status"]}
+    with pytest.raises(ValueError, match="context_changed"):
+        s.continue_task(answering(first, session, 1, "two", "paid"))
+    assert not events_named(s, "private_sql")

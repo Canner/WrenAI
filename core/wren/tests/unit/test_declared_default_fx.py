@@ -721,3 +721,30 @@ def test_other_payment_alias_cannot_guard_a_literal_rate_default(strict):
 def test_inverse_conjunction_else_is_not_a_base_only_literal_default(strict):
     sql = f"SELECT SUM(p.amount * CASE WHEN p.currency<>'USD' AND p.amount>0 THEN f.rate_to_usd ELSE COALESCE(f.rate_to_usd,1) END) FROM payments p ASOF LEFT JOIN fx_rates f ON {ON}"
     assert f"{RATE}:rate_default_literal" in violations(strict, sql)
+
+
+@pytest.mark.parametrize(
+    "prefix,tail",
+    [
+        ("", "payments p JOIN payments other ON p.order_id=other.order_id"),
+        (
+            "WITH selected AS (SELECT amount,currency,order_id FROM payments) ",
+            "selected p JOIN selected other ON p.order_id=other.order_id",
+        ),
+    ],
+)
+def test_currency_grouping_exception_tracks_actual_aggregated_alias(prefix, tail):
+    manifest, rules = declared()
+    rules = [
+        replace(r, filters_currency_literal=False, groups_by_currency=True)
+        for r in rules
+        if isinstance(r, RequireRateJoin)
+    ]
+    checker = DefaultsChecker(rules, manifest, "duckdb")
+    bad = (
+        prefix
+        + f"SELECT other.currency,SUM(p.amount) FROM {tail} GROUP BY other.currency"
+    )
+    assert checker.check(parse_one(bad, dialect="duckdb")) == [RATE]
+    good = bad.replace("other.currency", "p.currency")
+    assert checker.check(parse_one(good, dialect="duckdb")) == []

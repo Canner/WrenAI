@@ -324,26 +324,21 @@ class _Rate:
 
     def excused(self) -> bool:
         """The rule's own ``unless`` flags already excuse the statement."""
-        if self.rule.groups_by_currency and any(
-            self.st.taint(group) & self.currencies
-            for group in self.st.ast.find_all(exp.Group)
-        ):
-            return True
-        return bool(
-            self.rule.filters_currency_literal
-            and all(
-                self.st._filters_currency_literal(
-                    {self.st.checker.norm_pair(group.currency)},
-                    {self.st.checker.norm_pair(ref) for ref in group.columns},
-                )
-                for group in self.rule.amounts
-                if any(
-                    self.st.taint(a)
-                    & {self.st.checker.norm_pair(ref) for ref in group.columns}
-                    for a in self.st.aggregates
-                )
-            )
-        )
+        for group in self.rule.amounts:
+            amounts = {self.st.checker.norm_pair(ref) for ref in group.columns}
+            if not any(self.st.taint(a) & amounts for a in self.st.aggregates):
+                continue
+            currencies = {self.st.checker.norm_pair(group.currency)}
+            if self.rule.groups_by_currency and self.st._groups_by_currency(
+                currencies, amounts
+            ):
+                continue
+            if self.rule.filters_currency_literal and self.st._filters_currency_literal(
+                currencies, amounts
+            ):
+                continue
+            return False
+        return True
 
     # -- where the rate comes from ---------------------------------------
 

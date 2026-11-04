@@ -735,9 +735,7 @@ class _Statement:
         rate_currency, rate_date = norm(rule.rate_currency), norm(rule.rate_date)
         if not any(self.taint(aggregate) & amounts for aggregate in self.aggregates):
             return False
-        if rule.groups_by_currency and any(
-            self.taint(group) & currencies for group in self.groups
-        ):
+        if rule.groups_by_currency and self._groups_by_currency(currencies, amounts):
             return False
         if rule.filters_currency_literal and self._filters_currency_literal(
             currencies, amounts
@@ -911,6 +909,26 @@ class _Statement:
                 and any(term is candidate for candidate in terms)
                 and self._currency_reaches(column, table, path, terms)
                 for term, column in literals
+            ):
+                return False
+        return bool(reads)
+
+    def _groups_by_currency(self, currencies: set[Pair], amounts: set[Pair]) -> bool:
+        reads = self._amount_reads(amounts)
+        for table, path in reads:
+            owners = {id(scope.expression) for scope, _, _ in path}
+            terms = [
+                term
+                for scope in self.scopes
+                if id(scope.expression) in owners
+                for term in self._top_conjuncts(scope)
+            ]
+            if not any(
+                id(self._scope_for(group).expression) in owners
+                and self.direct(column) in currencies
+                and self._currency_reaches(column, table, path, terms)
+                for group in self.groups
+                for column in group.find_all(exp.Column)
             ):
                 return False
         return bool(reads)
