@@ -4706,6 +4706,19 @@ def test_invalid_effective_metadata_selection_refuses_before_runtime(
     engine.assert_not_called()
 
 
+def test_valid_metadata_override_starts_with_the_scripted_runtime(service):
+    s = service(
+        updates={
+            "metadata_selection": "unused",
+            "policy_presets": {"selected": {"metadata_selection": ["structure"]}},
+        },
+        preset="selected",
+        runtime_path=FAKE_RUNTIME,
+    )
+    assert s.config["metadata_selection"] == ["structure"]
+
+
+@needs_policy_runtime
 def test_valid_selected_metadata_overrides_an_unused_invalid_fallback(service):
     s = service(
         updates={
