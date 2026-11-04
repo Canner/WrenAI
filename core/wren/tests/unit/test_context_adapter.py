@@ -2057,3 +2057,94 @@ def test_missing_enum_meanings_do_not_shrink_declared_status_domain(real_project
         {"value": "shipped"},
         {"value": "cancelled"},
     ]
+
+
+def test_hidden_relationship_condition_is_omitted_without_expanding_denied():
+    customers = model("customers", columns=("id", "secret"))
+    customers["columns"][1]["is_hidden"] = True
+    r = reader(
+        {
+            "models": [customers, model("orders", columns=("id", "customer_id"))],
+            "relationships": [
+                {
+                    "name": "private_join",
+                    "models": ["customers", "orders"],
+                    "join_type": "MANY_TO_ONE",
+                    "condition": '"customers" . "secret" = orders.customer_id',
+                }
+            ],
+        }
+    )
+    assert "secret" not in r.structure_document()
+    assert not r.denied
+    assert not r.read(["customers"])["items"][0].get("relationships")
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_rule_body_split_qualified_identifier_is_redacted_with_layout(newline):
+    content = "# Safe title\n\n- Keep this bullet.\nMatch on customers.\nemail for identity.\n\n- Keep the last bullet.\n"
+    content = content.replace("\n", newline)
+    r = reader(
+        {
+            "models": [model("customers", columns=("id", "email"))],
+            "knowledge_rules": [
+                {"path": "knowledge/rules/split.md", "content": content}
+            ],
+        },
+        denied={("customers", "email")},
+    )
+    served = r.rules_document()
+    assert "email" not in served.lower()
+    assert ("# Safe title" + newline * 2 + "- Keep this bullet.") in served
+    assert (newline * 2 + "- Keep the last bullet.") in served
+
+
+@pytest.mark.parametrize(
+    "reference",
+    ['"customers" . "email"', "`customers` . `email`", "[customers] . [email]"],
+)
+def test_front_matter_denied_references_use_qualified_matcher(reference):
+    content = "---\nnote: '" + reference + "'\n---\nSafe body.\n"
+    with pytest.raises(DeniedColumnsInvalid):
+        strip_denied_declaration(content, frozenset({("customers", "email")}))
+
+
+def test_rules_omitted_from_summary_stay_discoverable_on_bounded_index_pages():
+    rules = [
+        {"path": f"knowledge/rules/{i:03d}-交易規則.md", "content": f"Safe rule {i}."}
+        for i in range(40)
+    ]
+    r = reader({"models": [model("orders")], "knowledge_rules": rules}, budget=2048)
+    pages = [r.list(page)["text"] for page in range(1, r.pages + 1)]
+    assert all(len(page.encode()) <= 2048 for page in pages)
+    assert r.pages > 1
+    for rule in rules:
+        ident = "rule:" + rule["path"]
+        assert any(ident in page for page in pages)
+        assert r.read([ident])["rules"] == [
+            {"path": rule["path"], "content": rule["content"]}
+        ]
+
+
+def test_long_rule_path_gets_readable_collision_free_index_selector():
+    path = "knowledge/rules/" + "很長" * 1000 + ".md"
+    r = reader(
+        {
+            "models": [model("@context-1")],
+            "knowledge_rules": [{"path": path, "content": "Safe text."}],
+        },
+        budget=2048,
+    )
+    lines = [
+        line
+        for page in range(1, r.pages + 1)
+        for line in r.list(page)["text"].splitlines()
+        if line.startswith("rule @context-")
+    ]
+    assert lines
+    selector = lines[0].split(": ", 1)[0].removeprefix("rule ")
+    assert selector != "@context-1"
+    assert r.read([selector])["rules"] == [{"path": path, "content": "Safe text."}]
+    assert all(
+        len(r.list(page)["text"].encode()) <= 2048 for page in range(1, r.pages + 1)
+    )

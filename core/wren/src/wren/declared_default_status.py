@@ -262,7 +262,7 @@ class _Status:
             return inner.lower() if isinstance(node, exp.Lower) else inner.upper()
         if isinstance(node, exp.Trim) and node.args.get("expression") is None:
             inner = self._text(node.this)
-            return None if inner is None else inner.strip()
+            return None if inner is None else inner.strip(" ")
         return None
 
     def _hit(self, side, texts):
@@ -279,11 +279,14 @@ class _Status:
             if isinstance(node, exp.Upper):
                 return transform(node.this, value).upper()
             if isinstance(node, exp.Trim):
-                return transform(node.this, value).strip()
+                return transform(node.this, value).strip(" ")
             return value
 
         if not any(isinstance(n, (exp.Lower, exp.Upper)) for n in side.walk()):
-            return fold_all(texts) & self.domain
+            wanted = fold_all(texts)
+            return frozenset(
+                value for value in self.domain if fold(transform(side, value)) in wanted
+            )
         if any(not value.isascii() for value in (*self.rule.domain, *texts)):
             raise StatusUndetermined("case_mapping")
         return frozenset(

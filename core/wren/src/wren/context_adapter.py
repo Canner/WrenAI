@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 import tempfile
+from bisect import bisect_right
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -613,6 +614,17 @@ def _sentences(text: str) -> list[str]:
     return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
 
 
+def _qualified_reference(owner: str, column: str) -> re.Pattern:
+    def identifier(name):
+        plain = re.escape(name)
+        return rf'(?:{plain}|"{plain}"|`{plain}`|\[{plain}\])'
+
+    return re.compile(
+        rf"(?<!\w){identifier(owner)}\s*\.\s*{identifier(column)}(?!\w)",
+        re.IGNORECASE,
+    )
+
+
 def _mentions_denied(
     sentence: str, model: str | frozenset | None, denied: frozenset
 ) -> bool:
@@ -623,13 +635,8 @@ def _mentions_denied(
     """
     owners = {model} if isinstance(model, str) else (model or frozenset())
 
-    def identifier(name):
-        plain = re.escape(name)
-        return rf'(?:{plain}|"{plain}"|`{plain}`|\[{plain}\])'
-
     for owner, column in denied:
-        qualified = rf"(?<!\w){identifier(owner)}\s*\.\s*{identifier(column)}(?!\w)"
-        if re.search(qualified, sentence, re.IGNORECASE):
+        if _qualified_reference(owner, column).search(sentence):
             return True
         if owner in owners and re.search(
             rf"\b{re.escape(column)}\b", sentence, re.IGNORECASE
@@ -646,14 +653,9 @@ def _prose(
     # whitespace around its dot, which is not a prose sentence boundary.
     normalised = _one_line(text)
 
-    def identifier(name):
-        plain = re.escape(name)
-        return rf'(?:{plain}|"{plain}"|`{plain}`|\[{plain}\])'
-
     for owner, column in denied:
-        pattern = rf"(?<!\w){identifier(owner)}\s*\.\s*{identifier(column)}(?!\w)"
-        normalised = re.sub(
-            pattern, lambda _: f"{owner}.{column}", normalised, flags=re.IGNORECASE
+        normalised = _qualified_reference(owner, column).sub(
+            lambda _: f"{owner}.{column}", normalised
         )
     kept = [s for s in _sentences(normalised) if not _mentions_denied(s, model, denied)]
     return " ".join(kept) or None
@@ -683,8 +685,21 @@ def _redact_rule_body(text: str, denied: frozenset) -> str:
                 if fences == 2:
                     head = index + 1
                     break
-    body = []
+    body_text = "".join(lines[head:])
+    offsets = [0]
     for line in lines[head:]:
+        offsets.append(offsets[-1] + len(line))
+    spanning = set()
+    for owner, column in denied:
+        for match in _qualified_reference(owner, column).finditer(body_text):
+            first = bisect_right(offsets, match.start()) - 1
+            last = bisect_right(offsets, match.end() - 1) - 1
+            if first != last:
+                spanning.update(range(first, last + 1))
+    body = []
+    for index, line in enumerate(lines[head:]):
+        if index in spanning:
+            continue
         content = line.rstrip("\r\n")
         if not content.strip() or not _mentions_denied(
             _one_line(content), None, denied
@@ -747,9 +762,9 @@ def strip_denied_declaration(text: str, denied: frozenset = frozenset()) -> str:
     served = [remaining]
     if data is not None:
         served.append(yaml.safe_dump(data, allow_unicode=True, default_flow_style=None))
-    lowered = "\n".join(served).lower()
+    served_text = "\n".join(served)
     for owner, column in denied:
-        if f"{owner}.{column}".lower() in lowered:
+        if _mentions_denied(served_text, None, frozenset({(owner, column)})):
             raise DeniedColumnsInvalid(f"{owner}.{column} remains in the front-matter")
     return stripped
 
@@ -811,6 +826,12 @@ class ContextReader:
         self.budget = budget_bytes
         catalog = snapshot.catalog
         self._models = {m["name"]: m for m in catalog.get("models") or []}
+        self._hidden = frozenset(
+            (model["name"], column["name"])
+            for model in self._models.values()
+            for column in model.get("columns") or []
+            if column.get("is_hidden")
+        )
         self._cubes = {c["name"]: c for c in catalog.get("cubes") or []}
         self._views = {v["name"]: v for v in catalog.get("views") or []}
         self._relationships = [
@@ -857,7 +878,7 @@ class ContextReader:
 
     def _relationship_denied(self, relationship: dict) -> bool:
         return _mentions_denied(
-            str(relationship.get("condition") or ""), None, self.denied
+            str(relationship.get("condition") or ""), None, self.denied | self._hidden
         )
 
     def _columns(self, model: dict) -> list[dict]:
@@ -894,9 +915,13 @@ class ContextReader:
 
     def _item_lines(self) -> list[tuple[str, str, str]]:
         lines = []
-        tables = (("model", self._models), ("cube", self._cubes), ("view", self._views))
+        tables = (
+            ("model", self._models),
+            ("cube", self._cubes),
+            ("view", self._views),
+            ("rule", {f"{RULE_PREFIX}{r['path']}": r for r in self._rules}),
+        )
         occupied = {name for _, items in tables for name in items}
-        occupied.update(f"{RULE_PREFIX}{rule['path']}" for rule in self._rules)
         sequence = 0
         for kind, items in tables:
             for name, item in items.items():
@@ -908,6 +933,8 @@ class ContextReader:
                     tag = f" [defaults: {','.join(ids)}]"
                 if kind == "view" and item.get("guarantees"):
                     tag = f" [guarantees: {','.join(item['guarantees'])}]"
+                if kind == "rule":
+                    description = "Business rule file"
                 selector = name
                 if len(f"{kind} {name}: ".encode()) > self.budget // 4:
                     # Keep the complete authored name available via read_context;

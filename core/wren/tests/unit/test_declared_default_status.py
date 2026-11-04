@@ -494,3 +494,31 @@ def test_case_mapping_checks_the_original_domain_before_casefolding():
     rule = replace(RULE, values=("ß",), domain=("ß", "cancelled"))
     with pytest.raises(StatusUndetermined, match="case_mapping"):
         outcome(count("UPPER(status) = 'SS'"), rule=rule)
+
+
+@pytest.mark.parametrize(
+    "value,predicate,expected",
+    [
+        ("paid ", "TRIM(status) = 'paid '", "subset"),
+        ("paid ", "TRIM(status) = 'paid'", "satisfied"),
+        ("\tpaid\t", "TRIM(status) = 'paid'", "subset"),
+        ("\tpaid\t", "TRIM(status) = '\tpaid\t'", "satisfied"),
+        ("\tpaid\t", "LOWER(TRIM(status)) = '\tpaid\t'", "satisfied"),
+        ("paid", "status = TRIM('\tpaid\t')", "subset"),
+    ],
+)
+def test_default_trim_only_removes_spaces_on_bare_and_case_wrapped_status(
+    value, predicate, expected
+):
+    from dataclasses import replace  # noqa: PLC0415
+
+    import duckdb  # noqa: PLC0415
+
+    rule = replace(RULE, values=(value,), domain=(value, "other"))
+    sql = count(predicate)
+    with duckdb.connect() as db:
+        db.execute("CREATE TABLE orders(status VARCHAR)")
+        db.execute("INSERT INTO orders VALUES (?)", [value])
+        actual = db.execute(sql).fetchone()[0]
+    assert actual == (1 if expected == "satisfied" else 0)
+    assert outcome(sql, rule=rule) == expected

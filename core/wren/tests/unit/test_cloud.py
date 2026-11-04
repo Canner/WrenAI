@@ -1769,6 +1769,7 @@ def test_create_refuses_without_a_git_identity_before_creating_anything(
     monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
     monkeypatch.setenv("GIT_CONFIG_KEY_0", "user.useConfigOnly")
     monkeypatch.setenv("GIT_CONFIG_VALUE_0", "true")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
 
     target = tmp_path / "proj"
     target.mkdir()

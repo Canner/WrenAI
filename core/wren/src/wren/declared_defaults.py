@@ -568,9 +568,24 @@ class _Parser:
         if front is None:
             return
         try:
+            node = yaml.compose(front, Loader=yaml.SafeLoader)
+            if isinstance(node, yaml.MappingNode):
+                seen_defaults = False
+                for key, _ in node.value:
+                    if key.tag != "tag:yaml.org,2002:str" or key.value != "defaults":
+                        continue
+                    if seen_defaults:
+                        self.error(label, "duplicate top-level key 'defaults'")
+                        return
+                    seen_defaults = True
             data = yaml.safe_load(front)
         except yaml.YAMLError:
             self.error(label, "front-matter is not valid YAML")
+            return
+        if isinstance(data, list) and any(
+            isinstance(item, dict) and "id" in item and "kind" in item for item in data
+        ):
+            self.error(label, "declarations require a mapping with a 'defaults' list")
             return
         if not isinstance(data, dict) or "defaults" not in data:
             return

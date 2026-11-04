@@ -291,7 +291,9 @@ def test_unknown_subcommand_is_flagged(tmp_path, monkeypatch):
 def test_the_planner_skill_states_the_evidence_and_clarification_contracts():
     """The skill has to say what the service's disclosure modes and clarification expect, and
     must not hand the planner a way around a service limit."""
-    text = (_SKILLS_CONTENT / "wren-planner" / "SKILL.md").read_text()
+    from wren.skills_delivery import get_skill  # noqa: PLC0415
+
+    text = get_skill("wren-planner")
     for needle in (
         "comma-separated list of status values",
         "Ask the user first",

@@ -495,3 +495,50 @@ def test_hidden_rules_do_not_add_unfingerprinted_declarations(project):
     assert parse(project) == ([], [])
     declare(project, EXCLUDE, "public.md")
     assert [rule.id for rule in parse(project)[0]] == ["exclude-test-accounts"]
+
+
+def test_duplicate_top_level_defaults_cannot_remove_enforced_rules(project):
+    path = project / "knowledge/rules/duplicate.md"
+    path.write_text(f"---\ndefaults:\n{EXCLUDE}defaults: []\n---\nProse.\n")
+    declarations, errors = parse(project)
+    assert not declarations
+    assert errors and "duplicate" in str(errors).lower()
+
+
+@pytest.mark.parametrize(
+    "front",
+    [
+        "- {id: x, kind: exclude_rows, column: customers.is_test}\n",
+        "- {id: 12, kind: not_a_valid_kind}\n",
+        "- prose\n- {id: x, kind: sale_statuses}\n",
+    ],
+)
+def test_declaration_shaped_sequence_front_matter_is_invalid(project, front):
+    path = project / "knowledge/rules/sequence.md"
+    path.write_text("---\n" + front + "---\nProse.\n")
+    declarations, errors = parse(project)
+    assert not declarations
+    assert errors and "mapping" in str(errors).lower()
+
+
+@pytest.mark.parametrize(
+    "front",
+    [
+        "- prose\n- other prose\n",
+        "- {id: prose}\n",
+        "- {kind: exclude_rows}\n",
+        "- {title: note, body: prose}\n",
+    ],
+)
+def test_unrelated_sequence_front_matter_remains_prose(project, front):
+    (project / "knowledge/rules/prose-sequence.md").write_text(
+        "---\n" + front + "---\nProse.\n"
+    )
+    assert parse(project) == ([], [])
+
+
+def test_yaml_merge_defaults_override_is_not_a_duplicate_key(project):
+    (project / "knowledge/rules/merge.md").write_text(
+        "---\nbase: &base\n  defaults: []\n<<: *base\ndefaults: []\nnote: earlier\nnote: later\n---\nProse.\n"
+    )
+    assert parse(project) == ([], [])

@@ -3770,3 +3770,83 @@ def test_restored_status_scope_cannot_introduce_unconfirmed_domain_values(
     with pytest.raises(ValueError, match="context_changed"):
         s.continue_task(answering(first, session, 1, "two", "paid"))
     assert not events_named(s, "private_sql")
+
+
+@pytest.mark.parametrize("default", [[], {}, 1, False])
+def test_default_policy_preset_requires_string_before_lookup(default):
+    with pytest.raises(ValueError, match="invalid_policy_preset"):
+        read_policy_presets({"default_preset": default})
+
+
+@pytest.mark.parametrize(
+    "failure,expected",
+    [
+        ("cancel", {"status": "unavailable", "reason": "timeout"}),
+        ("deadline", {"status": "unavailable", "reason": "timeout"}),
+        ("changed", {"status": "context_changed"}),
+        ("typed_changed", {"status": "context_changed"}),
+    ],
+)
+def test_direct_query_terminal_errors_do_not_become_engine_rewrites(
+    service, monkeypatch, failure, expected
+):
+    from wren.context_adapter import ContextChanged  # noqa: PLC0415
+    from wren.governed_query import QueryCancelled  # noqa: PLC0415
+    from wren.model.error import DatabaseTimeoutError  # noqa: PLC0415
+
+    s = service(runtime_path=FAKE_RUNTIME)
+    errors = {
+        "cancel": QueryCancelled("query_cancelled"),
+        "deadline": DatabaseTimeoutError("deadline"),
+        "changed": ValueError("context_changed"),
+        "typed_changed": ContextChanged("private source changed"),
+    }
+
+    def fail(prepared):
+        raise errors[failure]
+
+    monkeypatch.setattr(s.sql, "execute", fail)
+    result = sent(s, sql_request(s, JOINED))
+    assert result == expected
+    assert not events_named(s, "private_sql_failed")
+
+
+@pytest.mark.parametrize("close_fails", [False, True])
+def test_service_constructor_failure_closes_its_actual_runtime_and_keeps_primary_error(
+    service, monkeypatch, close_fails
+):
+    import wren.agent_service as module  # noqa: PLC0415
+
+    made = []
+    original = module.RuntimeIPC
+
+    def create(*args, **kwargs):
+        runtime = original(*args, **kwargs)
+        made.append(runtime)
+        close = runtime.close
+
+        def cleanup():
+            close()
+            if close_fails:
+                raise RuntimeError("cleanup failure")
+
+        monkeypatch.setattr(runtime, "close", cleanup)
+        return runtime
+
+    def fail_constructor(*args, **kwargs):
+        raise RuntimeError("constructor failure")
+
+    monkeypatch.setattr(module, "RuntimeIPC", create)
+    monkeypatch.setattr(module, "Service", fail_constructor)
+    try:
+        with pytest.raises(RuntimeError, match="constructor failure"):
+            service(runtime_path=FAKE_RUNTIME)
+        assert len(made) == 1
+        assert made[0].process.poll() is not None
+        assert not made[0].reader.is_alive()
+    finally:
+        for runtime in made:
+            try:
+                runtime.close()
+            except RuntimeError:
+                pass

@@ -476,7 +476,7 @@ def read_policy_presets(config: dict) -> tuple[str | None, dict[str, dict]]:
     presets = config.get("policy_presets") or {}
     default = config.get("default_preset")
     if not isinstance(presets, dict) or (
-        default is not None and default not in presets
+        default is not None and (not isinstance(default, str) or default not in presets)
     ):
         raise ValueError("invalid_policy_preset")
     for name, overrides in presets.items():
@@ -1241,7 +1241,11 @@ class Service:
                     )
                 try:
                     result, internal = self.sql.execute(prepared)
+                except (QueryCancelled, DatabaseTimeoutError, ContextChanged):
+                    raise
                 except Exception as exc:
+                    if isinstance(exc, ValueError) and str(exc) == "context_changed":
+                        raise
                     self.record(
                         {
                             "event": "private_sql_failed",
@@ -1642,6 +1646,8 @@ async def safe(fn, *args, **kwargs):
         return {"status": "denied"}
     except Conflict as exc:
         return {"status": "conflict", "reason": exc.reason, "revision": exc.revision}
+    except ContextChanged:
+        return {"status": "context_changed"}
     except ValueError as exc:
         code = str(exc)
         if code in {"session_expired", "context_changed"}:
@@ -2010,7 +2016,14 @@ def _assemble_service(
         },
         call_timeout_s=execution.call_timeout_s,
     )
-    service = Service(project, config, profile, ipc, mode, execution)
+    try:
+        service = Service(project, config, profile, ipc, mode, execution)
+    except BaseException:
+        try:
+            ipc.close()
+        except Exception:
+            pass
+        raise
     if config.get("audit_path"):
         # Explicit local operator sink (JSON lines); never exposed as a resource or tool.
         audit_path = Path(config["audit_path"]).expanduser()
