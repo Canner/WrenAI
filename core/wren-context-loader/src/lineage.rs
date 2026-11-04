@@ -780,6 +780,7 @@ fn fallback_executable_text(statement: &str) -> String {
         SingleQuoted,
         EscapedSingleQuoted,
         DoubleQuoted,
+        BacktickQuoted,
         LineComment,
         BlockComment(usize),
         DollarQuoted(String),
@@ -816,6 +817,11 @@ fn fallback_executable_text(statement: &str) -> String {
                     executable.push('"');
                     index += 1;
                     state = State::DoubleQuoted;
+                }
+                [b'`', ..] => {
+                    executable.push('`');
+                    index += 1;
+                    state = State::BacktickQuoted;
                 }
                 _ => {
                     if let Some(delimiter) = dollar_quote_delimiter(&statement[index..]) {
@@ -868,6 +874,22 @@ fn fallback_executable_text(statement: &str) -> String {
                 if character == '"' {
                     if bytes.get(index) == Some(&b'"') {
                         executable.push('"');
+                        index += 1;
+                    } else {
+                        state = State::Normal;
+                    }
+                }
+            }
+            State::BacktickQuoted => {
+                let character = statement[index..]
+                    .chars()
+                    .next()
+                    .expect("index is within UTF-8 input");
+                executable.push(character);
+                index += character.len_utf8();
+                if character == '`' {
+                    if bytes.get(index) == Some(&b'`') {
+                        executable.push('`');
                         index += 1;
                     } else {
                         state = State::Normal;
@@ -965,6 +987,8 @@ mod tests {
             "SELCT * FROM \"/*\", orders",
             "orders"
         ));
+        assert!(statement_references("SELCT * FROM `--`, orders", "orders"));
+        assert!(statement_references("SELCT * FROM `/*`, orders", "orders"));
         assert!(statement_references(r"SELCT '\' FROM orders", "orders"));
         assert!(!statement_references(
             "SELCT 'orders' /* orders */ -- orders\n",
