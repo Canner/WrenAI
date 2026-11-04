@@ -245,6 +245,37 @@ fn native_readers_reject_flat_v1_sources_but_keep_directory_layouts() {
             1
         );
     }
+
+    let tmp = tempfile::tempdir().unwrap();
+    project(tmp.path());
+    write(
+        tmp.path(),
+        "wren_project.yml",
+        "schema_version: 1\nname: mirrored\ncatalog: wren\nschema: public\ndata_source: duckdb\n",
+    );
+    write(
+        tmp.path(),
+        "models/orders.yml",
+        "name: orders\ncolumns: []\n",
+    );
+    write(
+        tmp.path(),
+        "cubes/order_metrics.yml",
+        "name: order_metrics\n",
+    );
+    write(
+        tmp.path(),
+        "cubes/order_metrics/metadata.yml",
+        CUBE_METADATA,
+    );
+    write(tmp.path(), "views.yml", "views: []\n");
+    write(
+        tmp.path(),
+        "views/current/metadata.yml",
+        "name: current\nstatement: SELECT 1\n",
+    );
+    assert!(read_project_dir(tmp.path()).unwrap().is_some());
+    assert!(capture_project(tmp.path()).unwrap().sources.is_some());
 }
 
 #[test]

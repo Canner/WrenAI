@@ -184,7 +184,7 @@ fn reject_native_flat_v1_sources(
     Err(std::io::Error::new(
         std::io::ErrorKind::InvalidInput,
         format!(
-            "legacy flat schema_version 1 sources ({}) are unsupported by the native loader; migrate to the directory layout (models/<name>/metadata.yml, cubes/<name>/metadata.yml, views/<name>/metadata.yml)",
+            "legacy flat-only schema_version 1 sources ({}) are unsupported by the native loader; add corresponding directory layout sources (models/<name>/metadata.yml, cubes/<name>/metadata.yml, views/<name>/metadata.yml) before native loading",
             flat_source_paths.join(", ")
         ),
     ))
@@ -464,7 +464,9 @@ fn apply_ref_sql_file(metadata: String, ref_sql_file: Option<String>) -> std::io
 /// The native engine reads cubes from `cubes/<name>/metadata.yml`; a non-empty root `cubes.yml`
 /// may mirror those files but cannot be the only native cube source.
 /// Schema versions 1 through 5 are accepted for this directory layout, but the legacy v1 flat
-/// `models/*.yml`, `cubes/*.yml`, and `views.yml` layout must be migrated before native loading.
+/// `models/*.yml`, `cubes/*.yml`, and `views.yml` sources need corresponding directory-layout
+/// counterparts before native loading. Existing mixed projects retain their directory sources;
+/// the later host coherence check detects non-mirroring content.
 #[cfg(all(unix, not(target_arch = "wasm32")))]
 pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<ProjectSources>> {
     crate::digest::validate_source_directories(dir)?;
@@ -473,7 +475,10 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
         return Ok(None);
     };
     let legacy_or_default_v1 = validate_native_schema_version(&wren_project_yml)?;
-    reject_native_flat_v1_sources(legacy_or_default_v1, &native_flat_v1_source_paths(&root)?)?;
+    reject_native_flat_v1_sources(
+        legacy_or_default_v1,
+        &native_flat_v1_sources_without_counterparts(&root)?,
+    )?;
     let read_metadata = |parent: &crate::source_fs::SourceDir| -> std::io::Result<Vec<String>> {
         let mut values = Vec::new();
         for name in parent.names()? {
@@ -576,7 +581,9 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
 }
 
 #[cfg(all(unix, not(target_arch = "wasm32")))]
-fn native_flat_v1_source_paths(root: &crate::source_fs::SourceDir) -> std::io::Result<Vec<String>> {
+fn native_flat_v1_sources_without_counterparts(
+    root: &crate::source_fs::SourceDir,
+) -> std::io::Result<Vec<String>> {
     let mut paths = Vec::new();
     for parent in ["models", "cubes"] {
         let Some(dir) = root.open_dir_if_exists(parent.as_ref())? else {
@@ -588,12 +595,39 @@ fn native_flat_v1_source_paths(root: &crate::source_fs::SourceDir) -> std::io::R
             }
             let name_text = crate::digest::source_name(&name)?;
             let path = format!("{parent}/{name_text}");
-            if is_flat_v1_source_path(&path) && dir.open_regular_file(&name)?.is_some() {
+            let Some(stem) = name_text.strip_suffix(".yml") else {
+                continue;
+            };
+            let has_counterpart = dir
+                .open_nested_dir(std::ffi::OsStr::new(stem))?
+                .map(|child| child.open_regular_file("metadata.yml".as_ref()))
+                .transpose()?
+                .is_some();
+            if is_flat_v1_source_path(&path)
+                && dir.open_regular_file(&name)?.is_some()
+                && !has_counterpart
+            {
                 paths.push(path);
             }
         }
     }
-    if root.open_regular_file("views.yml".as_ref())?.is_some() {
+    let has_view_counterpart = root
+        .open_dir_if_exists("views".as_ref())?
+        .map(|views| {
+            views.names()?.into_iter().try_fold(false, |found, name| {
+                if found || crate::digest::is_hidden(&name) {
+                    return Ok::<bool, std::io::Error>(found);
+                }
+                Ok(views
+                    .open_nested_dir(&name)?
+                    .map(|view| view.open_regular_file("metadata.yml".as_ref()))
+                    .transpose()?
+                    .is_some())
+            })
+        })
+        .transpose()?
+        .unwrap_or(false);
+    if root.open_regular_file("views.yml".as_ref())?.is_some() && !has_view_counterpart {
         paths.push("views.yml".to_string());
     }
     paths.sort();
@@ -856,7 +890,10 @@ fn captured_sources(
         return Ok(None);
     };
     let legacy_or_default_v1 = validate_native_schema_version(&wren_project_yml)?;
-    reject_native_flat_v1_sources(legacy_or_default_v1, flat_v1_source_paths)?;
+    reject_native_flat_v1_sources(
+        legacy_or_default_v1,
+        &captured_flat_v1_sources_without_counterparts(text, flat_v1_source_paths),
+    )?;
     let mut model_ymls = Vec::new();
     let mut cube_ymls = Vec::new();
     let mut views = Vec::new();
@@ -899,6 +936,36 @@ fn captured_sources(
     };
     validate_native_cube_source(&sources)?;
     Ok(Some(sources))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn captured_flat_v1_sources_without_counterparts(
+    text: &BTreeMap<String, String>,
+    flat_v1_source_paths: &[String],
+) -> Vec<String> {
+    flat_v1_source_paths
+        .iter()
+        .filter(|path| {
+            if path.as_str() == "views.yml" {
+                !text
+                    .keys()
+                    .any(|path| direct_source_file(path, "views", "metadata.yml").is_some())
+            } else {
+                let counterpart = direct_file_in(path, "models")
+                    .or_else(|| direct_file_in(path, "cubes"))
+                    .and_then(|name| name.strip_suffix(".yml"))
+                    .map(|name| {
+                        if path.starts_with("models/") {
+                            format!("models/{name}/metadata.yml")
+                        } else {
+                            format!("cubes/{name}/metadata.yml")
+                        }
+                    });
+                counterpart.is_none_or(|path| !text.contains_key(&path))
+            }
+        })
+        .cloned()
+        .collect()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1026,7 +1093,9 @@ fn validate_nonunix_file_slots(dir: &std::path::Path) -> std::io::Result<()> {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(unix)))]
-fn native_flat_v1_source_paths(dir: &std::path::Path) -> std::io::Result<Vec<String>> {
+fn native_flat_v1_sources_without_counterparts(
+    dir: &std::path::Path,
+) -> std::io::Result<Vec<String>> {
     let mut paths = Vec::new();
     for parent in ["models", "cubes"] {
         let root = dir.join(parent);
@@ -1038,11 +1107,21 @@ fn native_flat_v1_source_paths(dir: &std::path::Path) -> std::io::Result<Vec<Str
                 let Some(name) = path.file_name().and_then(std::ffi::OsStr::to_str) else {
                     continue;
                 };
-                paths.push(format!("{parent}/{name}"));
+                let Some(stem) = name.strip_suffix(".yml") else {
+                    continue;
+                };
+                if !root.join(stem).join("metadata.yml").is_file() {
+                    paths.push(format!("{parent}/{name}"));
+                }
             }
         }
     }
-    if dir.join("views.yml").is_file() {
+    let has_view_counterpart = dir.join("views").is_dir()
+        && list_dir(&dir.join("views"))?
+            .into_iter()
+            .filter(|path| path.is_dir())
+            .any(|path| path.join("metadata.yml").is_file());
+    if dir.join("views.yml").is_file() && !has_view_counterpart {
         paths.push("views.yml".to_string());
     }
     paths.sort();
@@ -1093,7 +1172,10 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     crate::digest::validate_source_directories(dir)?;
     let wren_project_yml = fs::read_to_string(&wren_project_path)?;
     let legacy_or_default_v1 = validate_native_schema_version(&wren_project_yml)?;
-    reject_native_flat_v1_sources(legacy_or_default_v1, &native_flat_v1_source_paths(dir)?)?;
+    reject_native_flat_v1_sources(
+        legacy_or_default_v1,
+        &native_flat_v1_sources_without_counterparts(dir)?,
+    )?;
 
     let mut model_ymls = Vec::new();
     let models_dir = dir.join("models");
