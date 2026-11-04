@@ -761,3 +761,80 @@ def test_a_live_currency_group_keeps_its_declared_rate_exception(checker):
 def test_an_unused_flag_group_cannot_excuse_live_account_reads(checker):
     sql = "WITH unused AS (SELECT is_test,COUNT(*) FROM customers GROUP BY is_test) SELECT COUNT(*) FROM orders o JOIN customers c ON o.customer_id=c.id"
     assert check(checker, sql) == [EXCLUDE]
+
+
+@pytest.fixture
+def join_rows():
+    import duckdb  # noqa: PLC0415
+
+    with duckdb.connect() as db:
+        db.execute("CREATE TABLE customers(id INTEGER, is_test BOOLEAN)")
+        db.execute("INSERT INTO customers VALUES (1, false), (2, true)")
+        db.execute("CREATE TABLE orders(id INTEGER, customer_id INTEGER)")
+        db.execute("INSERT INTO orders VALUES (10, 1), (20, 2)")
+        yield db
+
+
+@pytest.mark.parametrize("side", ["RIGHT", "FULL"])
+def test_filtered_from_source_cannot_exclude_preserved_outer_rows(
+    checker, join_rows, side
+):
+    sql = f"WITH clean AS (SELECT id FROM customers WHERE NOT is_test) SELECT COUNT(*) FROM clean x {side} JOIN customers c ON x.id=c.id"
+    assert join_rows.execute(sql).fetchone() == (2,)
+    assert check(checker, sql) == [EXCLUDE]
+
+
+def test_a_later_right_join_null_extends_earlier_derived_join_sources(
+    checker, join_rows
+):
+    sql = "WITH clean AS (SELECT id FROM customers WHERE NOT is_test) SELECT COUNT(*) FROM orders o JOIN clean x ON o.customer_id=x.id RIGHT JOIN customers c ON x.id=c.id"
+    assert join_rows.execute(sql).fetchone() == (2,)
+    assert check(checker, sql) == [EXCLUDE]
+
+
+@pytest.mark.parametrize("side", ["LEFT", "INNER"])
+def test_filtered_from_source_still_restricts_nonpreserved_partner(
+    checker, join_rows, side
+):
+    sql = f"WITH clean AS (SELECT id FROM customers WHERE NOT is_test) SELECT COUNT(*) FROM clean x {side} JOIN customers c ON x.id=c.id"
+    assert join_rows.execute(sql).fetchone() == (1,)
+    assert check(checker, sql) == []
+
+
+def test_filtered_right_preserved_source_still_restricts_partner(checker, join_rows):
+    sql = "WITH clean AS (SELECT id FROM customers WHERE NOT is_test) SELECT COUNT(*) FROM customers c RIGHT JOIN clean x ON x.id=c.id"
+    assert join_rows.execute(sql).fetchone() == (1,)
+    assert check(checker, sql) == []
+
+
+@pytest.mark.parametrize(
+    "predicate",
+    [
+        "c.id IN (SELECT id FROM customers x WHERE NOT x.is_test)",
+        "EXISTS (SELECT 1 FROM customers x WHERE x.id=c.id AND NOT x.is_test)",
+    ],
+)
+@pytest.mark.parametrize(
+    "shape,count",
+    [
+        ("left_preserved", 2),
+        ("right_preserved", 2),
+        ("full", 3),
+        ("inner", 1),
+        ("where", 1),
+    ],
+)
+def test_subquery_filter_credit_follows_its_actual_join_clause(
+    checker, join_rows, predicate, shape, count
+):
+    sql = on_clause(shape, predicate)
+    execution_sql = sql
+    if shape not in {"inner", "where"}:
+        # DuckDB rejects subqueries directly in non-inner ON clauses. Compute the
+        # same per-customer predicate before the join to verify its preserved rows.
+        execution_sql = (
+            f"WITH scoped_customers AS (SELECT c.*, {predicate} AS allowed FROM customers c) "
+            + on_clause(shape, "c.allowed").replace("customers c", "scoped_customers c")
+        )
+    assert join_rows.execute(execution_sql).fetchone() == (count,)
+    assert check(checker, sql) == ([] if shape in {"inner", "where"} else [EXCLUDE])

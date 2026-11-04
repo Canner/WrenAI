@@ -272,11 +272,11 @@ def _bounded_table(table):
         if pa.types.is_dictionary(column.type):
             column = column.dictionary_decode()
         kind = column.type
-        if (
-            pa.types.is_string(kind)
-            or pa.types.is_large_string(kind)
-            or pa.types.is_string_view(kind)
-        ):
+        if hasattr(pa.types, "is_string_view") and pa.types.is_string_view(kind):
+            # utf8_length does not have a string-view kernel on every supported Arrow.
+            column = column.cast(pa.string())
+            kind = column.type
+        if pa.types.is_string(kind) or pa.types.is_large_string(kind):
             if pc.max(pc.utf8_length(column)).as_py() > 256:
                 raise ValueError("result_limit")
         elif not (

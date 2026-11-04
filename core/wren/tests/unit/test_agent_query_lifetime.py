@@ -439,3 +439,36 @@ def test_stop_kills_owned_helpers_after_leader_exit(tmp_path, leader_exits):
         except ProcessLookupError:
             pass
         leader.wait(timeout=3)
+
+
+def test_bounded_table_works_without_optional_string_view_predicate(monkeypatch):
+    from decimal import Decimal  # noqa: PLC0415
+
+    import pyarrow as pa  # noqa: PLC0415
+
+    table = pa.table(
+        {
+            "integer": [17],
+            "decimal": [Decimal("123456789012345678.01")],
+            "text": ["kept"],
+        }
+    )
+    monkeypatch.delattr(pa.types, "is_string_view", raising=False)
+    assert workers._bounded_table(table).to_pylist() == table.to_pylist()
+    with pytest.raises(ValueError, match="result_limit"):
+        workers._bounded_table(pa.table({"text": ["x" * 257]}))
+    with pytest.raises(ValueError, match="unsupported_result"):
+        workers._bounded_table(pa.table({"binary": [b"not a supported cell"]}))
+
+
+def test_bounded_table_keeps_available_string_view_validation():
+    import pyarrow as pa  # noqa: PLC0415
+
+    if not hasattr(pa, "string_view"):
+        pytest.skip("installed Arrow has no string-view type")
+    table = pa.table({"text": pa.array(["kept"], type=pa.string_view())})
+    assert workers._bounded_table(table).to_pylist() == [{"text": "kept"}]
+    with pytest.raises(ValueError, match="result_limit"):
+        workers._bounded_table(
+            pa.table({"text": pa.array(["x" * 257], type=pa.string_view())})
+        )

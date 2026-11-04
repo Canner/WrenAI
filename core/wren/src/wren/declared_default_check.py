@@ -221,15 +221,26 @@ class _Statement:
             if id(scope.expression) in restricting:
                 return
             restricting.add(id(scope.expression))
-            nullable = {
-                join.this.alias_or_name
-                for join in scope.expression.args.get("joins") or []
-                if _outer(join)
-            }
+            nullable = set()
+            source = scope.expression.args.get("from_") or scope.expression.args.get(
+                "from"
+            )
+            earlier = {source.this.alias_or_name} if source is not None else set()
+            for join in scope.expression.args.get("joins") or []:
+                name = join.this.alias_or_name
+                if _outer(join):
+                    side = (join.side or "").upper()
+                    if side in {"RIGHT", "FULL"}:
+                        nullable.update(earlier)
+                    if side != "RIGHT":
+                        nullable.add(name)
+                earlier.add(name)
             for name, source in self._read_sources(scope):
                 if name not in nullable:
                     visit(source)
-            top = {id(c) for c in self._top_conjuncts(scope)}
+            # Reuse only row-restricting roots (WHERE/HAVING/QUALIFY and inner ON).
+            # Outer/semi/anti ON subqueries cannot donate an exclusion either.
+            top = {id(c) for c, owner in self._filters if owner == id(scope.expression)}
             for sub in scope.subquery_scopes:
                 node = sub.expression.parent
                 while isinstance(node, (exp.Subquery, exp.Paren)):
