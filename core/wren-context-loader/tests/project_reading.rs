@@ -320,6 +320,32 @@ fn native_readers_reject_flat_v1_sources_but_keep_directory_layouts() {
     assert!(capture_project(tmp.path()).unwrap().sources.is_some());
 }
 
+#[cfg(unix)]
+#[test]
+fn non_v1_ignores_root_views_yml_without_reading_or_digesting_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    project(tmp.path());
+    let baseline = capture_project(tmp.path()).unwrap();
+
+    write(tmp.path(), "views.yml", "views: first ignored value\n");
+    assert!(read_project_dir(tmp.path()).unwrap().is_some());
+    let first = capture_project(tmp.path()).unwrap();
+    assert_eq!(first.digest, baseline.digest);
+
+    write(tmp.path(), "views.yml", "views: changed ignored value\n");
+    let second = capture_project(tmp.path()).unwrap();
+    assert_eq!(second.digest, baseline.digest);
+
+    fs::remove_file(tmp.path().join("views.yml")).unwrap();
+    assert!(Command::new("mkfifo")
+        .arg(tmp.path().join("views.yml"))
+        .status()
+        .unwrap()
+        .success());
+    assert!(read_project_dir(tmp.path()).unwrap().is_some());
+    assert_eq!(capture_project(tmp.path()).unwrap().digest, baseline.digest);
+}
+
 #[test]
 fn sql_yml_wins_over_an_inline_statement() {
     let tmp = tempfile::tempdir().unwrap();

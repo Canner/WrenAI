@@ -661,20 +661,21 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
             if let Some(child) = root.open_dir_if_exists(name.as_ref())? {
                 capture.capture_dir(&child, name)?;
             }
-        } else if name == "views.yml"
-            && capture
-                .text
-                .get("wren_project.yml")
-                .map(|project| validate_native_schema_version(project))
-                .transpose()?
-                .unwrap_or(false)
-        {
-            if root.open_regular_file(name.as_ref())?.is_some() {
-                capture.flat_v1_source_paths.push(name.to_string());
-            }
+        } else if name == "views.yml" {
+            // Root views.yml is only a legacy-v1 source. Defer looking at it until the project
+            // configuration is captured, so newer projects preserve the longstanding ignore rule.
         } else if let Some(file) = root.open_regular_file(name.as_ref())? {
             capture.capture_file(name, file)?;
         }
+    }
+    let legacy_or_default_v1 = capture
+        .text
+        .get("wren_project.yml")
+        .map(|project| validate_native_schema_version(project))
+        .transpose()?
+        .unwrap_or(false);
+    if legacy_or_default_v1 && root.open_regular_file("views.yml".as_ref())?.is_some() {
+        capture.flat_v1_source_paths.push("views.yml".to_string());
     }
     let digest = capture.digest();
     let sources = captured_sources(&capture.text, &capture.flat_v1_source_paths)?;
