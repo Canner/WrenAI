@@ -462,7 +462,6 @@ struct ScopedColumnCollector {
 /// not infer provenance for bare columns, derived outputs, or arbitrary multi-level sources.
 struct CorrelatedColumnCollector<'a> {
     outer_sources: &'a [SelectSource],
-    nested_source_scopes: Vec<Vec<Ident>>,
     columns: Vec<ColumnReference>,
 }
 
@@ -470,7 +469,6 @@ impl<'a> CorrelatedColumnCollector<'a> {
     fn new(outer_sources: &'a [SelectSource]) -> Self {
         Self {
             outer_sources,
-            nested_source_scopes: Vec::new(),
             columns: Vec::new(),
         }
     }
@@ -480,17 +478,72 @@ impl Visitor for CorrelatedColumnCollector<'_> {
     type Break = ();
 
     fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
-        self.nested_source_scopes
-            .push(query_source_qualifiers(query));
+        collect_correlated_query_columns(query, self.outer_sources, &mut self.columns);
+        ControlFlow::Continue(())
+    }
+}
+
+/// Examine each immediate SELECT branch of a nested query with that branch's own source scope.
+/// The outer visitor will invoke this once for every nested `Query`, so nested queries are skipped
+/// here and handled later rather than being assigned the parent branch's aliases.
+fn collect_correlated_query_columns(
+    query: &Query,
+    outer_sources: &[SelectSource],
+    columns: &mut Vec<ColumnReference>,
+) {
+    collect_correlated_set_expr_columns(&query.body, outer_sources, columns);
+}
+
+fn collect_correlated_set_expr_columns(
+    expression: &SetExpr,
+    outer_sources: &[SelectSource],
+    columns: &mut Vec<ColumnReference>,
+) {
+    match expression {
+        SetExpr::Select(select) => {
+            let local_qualifiers = select_source_qualifiers(select);
+            let mut collector = CorrelatedBranchColumnCollector {
+                outer_sources,
+                local_qualifiers,
+                columns,
+                nested_query_depth: 0,
+            };
+            let _ = select.visit(&mut collector);
+        }
+        SetExpr::SetOperation { left, right, .. } => {
+            collect_correlated_set_expr_columns(left, outer_sources, columns);
+            collect_correlated_set_expr_columns(right, outer_sources, columns);
+        }
+        // A nested `Query` gets its own callback in the outer visitor. The remaining set
+        // expressions do not expose a direct SELECT scope.
+        _ => {}
+    }
+}
+
+struct CorrelatedBranchColumnCollector<'a> {
+    outer_sources: &'a [SelectSource],
+    local_qualifiers: Vec<Ident>,
+    columns: &'a mut Vec<ColumnReference>,
+    nested_query_depth: usize,
+}
+
+impl Visitor for CorrelatedBranchColumnCollector<'_> {
+    type Break = ();
+
+    fn pre_visit_query(&mut self, _query: &Query) -> ControlFlow<()> {
+        self.nested_query_depth += 1;
         ControlFlow::Continue(())
     }
 
     fn post_visit_query(&mut self, _query: &Query) -> ControlFlow<()> {
-        self.nested_source_scopes.pop();
+        self.nested_query_depth -= 1;
         ControlFlow::Continue(())
     }
 
     fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+        if self.nested_query_depth != 0 {
+            return ControlFlow::Continue(());
+        }
         let Expr::CompoundIdentifier(parts) = expr else {
             return ControlFlow::Continue(());
         };
@@ -503,12 +556,11 @@ impl Visitor for CorrelatedColumnCollector<'_> {
             return ControlFlow::Continue(());
         }
         let qualifier = &qualifier[0];
-        let bound_in_nested_scope = self.nested_source_scopes.iter().rev().any(|scope| {
-            scope
-                .iter()
-                .any(|candidate| identifiers_match(candidate, qualifier))
-        });
-        if !bound_in_nested_scope
+        let bound_in_local_scope = self
+            .local_qualifiers
+            .iter()
+            .any(|candidate| identifiers_match(candidate, qualifier));
+        if !bound_in_local_scope
             && self
                 .outer_sources
                 .iter()
@@ -533,31 +585,18 @@ fn select_source_matches_qualifier(source: &SelectSource, qualifier: &Ident) -> 
     }
 }
 
-/// The names a query's SELECT branches bind in their own source scope. This intentionally keeps
-/// only qualifier binding, rather than source provenance: a nested source must block an outer
+/// The names one SELECT branch binds in its own source scope. This intentionally keeps only
+/// qualifier binding, rather than source provenance: a nested source must block an outer
 /// correlation even when it is a CTE, derived table, or other opaque relation.
-fn query_source_qualifiers(query: &Query) -> Vec<Ident> {
+fn select_source_qualifiers(select: &Select) -> Vec<Ident> {
     let mut qualifiers = Vec::new();
-    collect_set_expr_qualifiers(&query.body, &mut qualifiers);
-    qualifiers
-}
-
-fn collect_set_expr_qualifiers(expression: &SetExpr, qualifiers: &mut Vec<Ident>) {
-    match expression {
-        SetExpr::Select(select) => {
-            for table in &select.from {
-                collect_table_factor_qualifiers(&table.relation, qualifiers);
-                for join in &table.joins {
-                    collect_table_factor_qualifiers(&join.relation, qualifiers);
-                }
-            }
+    for table in &select.from {
+        collect_table_factor_qualifiers(&table.relation, &mut qualifiers);
+        for join in &table.joins {
+            collect_table_factor_qualifiers(&join.relation, &mut qualifiers);
         }
-        SetExpr::SetOperation { left, right, .. } => {
-            collect_set_expr_qualifiers(left, qualifiers);
-            collect_set_expr_qualifiers(right, qualifiers);
-        }
-        _ => {}
     }
+    qualifiers
 }
 
 fn collect_table_factor_qualifiers(factor: &TableFactor, qualifiers: &mut Vec<Ident>) {
@@ -572,7 +611,34 @@ fn collect_table_factor_qualifiers(factor: &TableFactor, qualifiers: &mut Vec<Id
         TableFactor::Derived {
             alias: Some(alias), ..
         }
+        | TableFactor::TableFunction {
+            alias: Some(alias), ..
+        }
+        | TableFactor::Function {
+            alias: Some(alias), ..
+        }
+        | TableFactor::UNNEST {
+            alias: Some(alias), ..
+        }
+        | TableFactor::JsonTable {
+            alias: Some(alias), ..
+        }
+        | TableFactor::OpenJsonTable {
+            alias: Some(alias), ..
+        }
         | TableFactor::NestedJoin {
+            alias: Some(alias), ..
+        }
+        | TableFactor::Pivot {
+            alias: Some(alias), ..
+        }
+        | TableFactor::Unpivot {
+            alias: Some(alias), ..
+        }
+        | TableFactor::MatchRecognize {
+            alias: Some(alias), ..
+        }
+        | TableFactor::XmlTable {
             alias: Some(alias), ..
         } => qualifiers.push(alias.name.clone()),
         TableFactor::NestedJoin {
