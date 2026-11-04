@@ -461,7 +461,6 @@ class _Rate:
         # already consumed by SUM (including duplicates in the same group).
         if select.args.get("group") is not None or any(
             aggregate.find_ancestor(exp.Select) is select
-            and aggregate.find_ancestor(exp.Window) is None
             for aggregate in select.find_all(exp.AggFunc)
         ):
             return False

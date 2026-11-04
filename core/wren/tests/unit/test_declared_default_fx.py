@@ -481,6 +481,29 @@ def test_a_postaggregate_rank_cannot_remove_already_aggregated_rate_duplicates(s
     assert violations(strict, sql) == [f"{RATE}:rate_multi_match"]
 
 
+def test_local_window_sum_already_consumes_duplicate_rates_before_qualify(strict):
+    import duckdb  # noqa: PLC0415
+
+    sql = """SELECT SUM(CASE WHEN p.currency='USD' THEN p.amount ELSE p.amount*f.rate_to_usd END)
+        OVER (PARTITION BY p.id)
+        FROM payments p LEFT JOIN fx_rates f
+        ON f.currency=p.currency AND f.date<=p.captured_at
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY p.id ORDER BY f.date DESC)=1"""
+    with duckdb.connect() as db:
+        db.execute(
+            "CREATE TABLE payments(id INT, amount INT, currency VARCHAR, captured_at DATE)"
+        )
+        db.execute(
+            "CREATE TABLE fx_rates(currency VARCHAR, date DATE, rate_to_usd INT)"
+        )
+        db.execute("INSERT INTO payments VALUES (1,100,'EUR','2026-06-02')")
+        db.execute(
+            "INSERT INTO fx_rates VALUES ('EUR','2026-06-01',2),('EUR','2026-06-01',2)"
+        )
+        assert db.execute(sql).fetchone() == (400,)
+    assert violations(strict, sql) == [f"{RATE}:rate_multi_match"]
+
+
 @pytest.mark.parametrize("value", ["p.amount", "p.amount*f.rate_to_usd"])
 def test_a_rate_alias_cannot_borrow_another_alias_date_bound(value):
     sql = f"""SELECT SUM({value}) FROM payments p
