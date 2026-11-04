@@ -379,7 +379,11 @@ fn relationships_used_by_consumer(
     };
     let mut relationships = HashSet::new();
     for model in &manifest.models {
-        for column in model.columns.iter().filter(|column| column.is_calculated) {
+        for column in model
+            .columns
+            .iter()
+            .filter(|column| column.is_calculated && !column.is_hidden)
+        {
             if !consumer_references_model_column(references, manifest, model, &column.name) {
                 continue;
             }
@@ -684,14 +688,13 @@ fn source_matches_qualifier(
     source: &consumers::SelectSource,
     qualifier: &sqlparser::ast::Ident,
 ) -> bool {
-    source
-        .alias
-        .as_ref()
-        .is_some_and(|alias| consumers::identifiers_match(alias, qualifier))
-        || source
+    match &source.alias {
+        Some(alias) => consumers::identifiers_match(alias, qualifier),
+        None => source
             .name
             .as_ref()
-            .is_some_and(|name| consumers::identifiers_match(name, qualifier))
+            .is_some_and(|name| consumers::identifiers_match(name, qualifier)),
+    }
 }
 
 /// Whether a cube member is referenced from this cube. Qualified columns resolve within the

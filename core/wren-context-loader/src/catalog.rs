@@ -681,15 +681,26 @@ pub fn capability_catalog(sources: &ProjectSources) -> CapabilityCatalog {
                         Vec::new()
                     }
                 };
+                let guarantees = v
+                    .guarantees
+                    .unwrap_or_default()
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(|(index, id)| match id {
+                        serde_yaml::Value::String(id) => Some(id),
+                        _ => {
+                            diagnostics.push(CatalogDiagnostic::Message(format!(
+                                "views/{}/metadata.yml: guarantees[{index}] must be a string",
+                                v.name
+                            )));
+                            None
+                        }
+                    })
+                    .collect();
                 views.push(CatalogView {
                     name: v.name,
                     description: v.properties.description,
-                    guarantees: v
-                        .guarantees
-                        .unwrap_or_default()
-                        .iter()
-                        .filter_map(|id| id.as_str().map(str::to_owned))
-                        .collect(),
+                    guarantees,
                     columns,
                 });
             }

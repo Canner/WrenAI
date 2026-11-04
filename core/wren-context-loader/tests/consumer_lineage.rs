@@ -96,6 +96,43 @@ columns:
     );
 }
 
+fn add_hidden_relationship_calculation(dir: &Path) {
+    write(
+        dir,
+        "models/orders/metadata.yml",
+        r#"name: orders
+table_reference: { catalog: demo, schema: main, table: orders }
+primary_key: id
+columns:
+  - { name: id, type: INTEGER }
+  - { name: customer_id, type: INTEGER }
+  - { name: total, type: "DECIMAL(12,2)" }
+  - { name: placed_at, type: TIMESTAMP }
+  - { name: customer, type: customers, relationship: orders_customers }
+  - { name: hidden_customer_credit, type: "DECIMAL(12,2)", is_calculated: true, is_hidden: true, expression: "customer.credit_limit" }
+"#,
+    );
+}
+
+fn add_visible_calculation_with_hidden_relationship_dependency(dir: &Path) {
+    write(
+        dir,
+        "models/orders/metadata.yml",
+        r#"name: orders
+table_reference: { catalog: demo, schema: main, table: orders }
+primary_key: id
+columns:
+  - { name: id, type: INTEGER }
+  - { name: customer_id, type: INTEGER }
+  - { name: total, type: "DECIMAL(12,2)" }
+  - { name: placed_at, type: TIMESTAMP }
+  - { name: customer, type: customers, relationship: orders_customers }
+  - { name: hidden_customer_credit, type: "DECIMAL(12,2)", is_calculated: true, is_hidden: true, expression: "customer.credit_limit" }
+  - { name: visible_customer_credit, type: "DECIMAL(12,2)", is_calculated: true, expression: "hidden_customer_credit" }
+"#,
+    );
+}
+
 fn add_multihop_relationship_calculation(dir: &Path) {
     add_relationship_calculation(dir);
     write(
@@ -247,6 +284,48 @@ fn relationship_condition_reaches_a_consumer_of_its_calculated_column() {
     assert!(
         reaches(&ctx, "rel:orders_customers", "query:customer-names"),
         "a calculated relationship column reads the declared condition during planning"
+    );
+}
+
+#[test]
+fn hidden_calculated_columns_do_not_create_consumer_relationship_edges() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    add_hidden_relationship_calculation(tmp.path());
+    for (slug, sql) in [
+        ("hidden-wildcard", "SELECT * FROM orders"),
+        (
+            "hidden-explicit",
+            "SELECT hidden_customer_credit FROM orders",
+        ),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+    let ctx = load(tmp.path());
+
+    for query in ["query:hidden-wildcard", "query:hidden-explicit"] {
+        assert!(
+            !reaches(&ctx, "rel:orders_customers", query),
+            "{query} must not claim an engine-rejected hidden calculation reads the relationship"
+        );
+    }
+
+    let visible = tempfile::tempdir().unwrap();
+    base_project(visible.path());
+    add_visible_calculation_with_hidden_relationship_dependency(visible.path());
+    write(
+        visible.path(),
+        "knowledge/sql/visible-dependency.md",
+        "---\nsql: SELECT visible_customer_credit FROM orders\n---\n",
+    );
+    let visible = load(visible.path());
+    assert!(
+        reaches(&visible, "rel:orders_customers", "query:visible-dependency"),
+        "a visible calculation still plans its hidden internal dependency"
     );
 }
 
@@ -967,6 +1046,43 @@ fn qualified_cube_members_must_resolve_to_the_cube_source() {
         "metric:order_metrics.total_value",
         "query:cube-qualified"
     ));
+}
+
+#[test]
+fn an_alias_hides_a_source_name_for_qualified_cube_members() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    for (slug, sql) in [
+        (
+            "aliased",
+            "SELECT om.total_value FROM order_metrics om JOIN om AS x ON TRUE",
+        ),
+        (
+            "original-name",
+            "SELECT order_metrics.total_value FROM order_metrics om",
+        ),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+    let ctx = load(tmp.path());
+
+    assert!(reaches(
+        &ctx,
+        "metric:order_metrics.total_value",
+        "query:aliased"
+    ));
+    assert!(
+        !reaches(
+            &ctx,
+            "metric:order_metrics.total_value",
+            "query:original-name"
+        ),
+        "a table alias hides its original source name"
+    );
 }
 
 #[test]

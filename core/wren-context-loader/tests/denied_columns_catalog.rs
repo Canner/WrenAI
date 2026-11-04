@@ -148,7 +148,10 @@ fn a_value_that_is_not_a_list_of_names_is_invalid() {
 fn unreadable_front_matter_that_mentions_the_key_fails_closed() {
     for text in [
         "---\ndenied_columns: [customers.email]\n# never closed\n",
+        "---\nDenied-Columns: [customers.email]\n# never closed\n",
         "---\ndenied_columns: [customers.email\n---\nbody\n",
+        "---\nDenied-Columns: [customers.email\n---\nbody\n",
+        "---\nDENIED_COLUMNS: [customers.email\n---\nbody\n",
     ] {
         let project = project_with_rule(text);
         let doc = catalog_json(project.path());
@@ -210,6 +213,7 @@ fn a_rule_file_without_front_matter_that_mentions_the_key_fails_closed() {
         "# Notes\n\n---\ndenied_columns: [customers.email]\n---\n",
         "denied_columns: [customers.email]\n",
         "Remember to list customers.email under denied_columns.\n",
+        "Remember to list customers.email under Denied-Columns.\n",
     ] {
         let project = project_with_rule(text);
         let doc = catalog_json(project.path());
@@ -311,6 +315,34 @@ fn view_guarantees_are_carried_as_authored() {
     for view in doc["views"].as_array().unwrap() {
         assert!(view.get("guarantees").is_none());
     }
+}
+
+#[test]
+fn non_string_view_guarantees_are_diagnosed_without_dropping_valid_ids() {
+    let project = tempfile::tempdir().unwrap();
+    copy_dir(&fixture("denied-wren"), project.path());
+    fs::write(
+        project.path().join("views/revenue/metadata.yml"),
+        "name: revenue\nguarantees: [exclude-test-accounts, 2024, true]\n",
+    )
+    .unwrap();
+
+    let doc = catalog_json(project.path());
+    assert_eq!(
+        doc["views"][0]["guarantees"],
+        serde_json::json!(["exclude-test-accounts"])
+    );
+    let diagnostics = doc["diagnostics"].as_array().unwrap();
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .as_str()
+            .is_some_and(|message| message.contains("views/revenue/metadata.yml: guarantees[1]"))
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .as_str()
+            .is_some_and(|message| message.contains("views/revenue/metadata.yml: guarantees[2]"))
+    }));
 }
 
 #[test]

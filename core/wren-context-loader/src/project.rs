@@ -1313,7 +1313,7 @@ const DENIED_COLUMNS_KEY: &str = "denied_columns";
 pub(crate) fn denied_column_declarations(files: &[KnowledgeRuleFile]) -> Vec<DeniedDeclaration> {
     let mut out = Vec::new();
     for file in files {
-        let mentions_key = file.content.contains(DENIED_COLUMNS_KEY);
+        let mentions_key = mentions_denied_key_or_near_miss(&file.content);
         let front = match front_matter(&file.content) {
             Ok(Some(front)) => front,
             Ok(None) => {
@@ -1396,6 +1396,16 @@ fn mentions_key_as_a_word(text: &str) -> bool {
         let after = text[at + found.len()..].chars().next();
         !before.is_some_and(part_of_a_name) && !after.is_some_and(part_of_a_name)
     })
+}
+
+/// Whether raw text contains the exact key or an ASCII-token near-miss. This is used only when
+/// front-matter cannot be parsed: a declaration must not become a silent no-op merely because
+/// the spelling that would have been rejected in parsed YAML made that YAML unreadable.
+fn mentions_denied_key_or_near_miss(text: &str) -> bool {
+    text.contains(DENIED_COLUMNS_KEY)
+        || text
+            .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-'))
+            .any(is_near_miss_key)
 }
 
 /// A key that case-insensitively matches `denied[_-]?columns?` without being `denied_columns`.
