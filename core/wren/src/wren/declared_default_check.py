@@ -997,9 +997,13 @@ class _Statement:
                     supplied |= matching(
                         column, expressions=True, expression_columns=value_columns
                     )
-        # A bare amount can only use the complete attachment for its own read.
-        # A converted value may instead carry that attachment through a CTE.
-        if amount_tables - covered_amount_tables and not supplied:
+        uncovered_amount_tables = amount_tables - covered_amount_tables
+        # Multiple amount aliases each need a complete attachment. A single
+        # converted amount may instead carry its attachment through a CTE, but
+        # one converted alias cannot donate that proof to a bare sibling.
+        if len(amount_tables) > 1 and uncovered_amount_tables:
+            return True
+        if uncovered_amount_tables and not supplied:
             return True
         return not complete or not supplied <= complete
 
