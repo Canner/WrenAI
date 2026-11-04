@@ -2,18 +2,25 @@
 
 import base64
 import json
+import math
 import os
 import sys
 from pathlib import Path
 
 import pyarrow as pa
+import yaml
 from sqlglot import exp, parse_one
 
 from wren.agent_project import require_profile_pin
 from wren.config import load_config
 from wren.context import build_json
+from wren.context_adapter import _mentions_denied_key
 from wren.declared_default_check import DefaultsChecker
-from wren.declared_defaults import read_declared_defaults
+from wren.declared_defaults import (
+    _rules_files,
+    read_declared_defaults,
+    split_front_matter,
+)
 from wren.engine import WrenEngine
 from wren.mdl.cte_rewriter import get_sqlglot_dialect
 from wren.model.data_source import DataSource
@@ -68,8 +75,8 @@ ERROR_MESSAGES: dict[str, str] = {
     ),
     "invalid_sql": "The SQL could not be parsed or planned against the semantic context.",
     "execution_failed": (
-        "The data source rejected the query at execution time, for example an "
-        "unknown column or a type mismatch."
+        "The query could not produce a supported result, for example a data-source "
+        "execution error or a non-finite numeric value."
     ),
     "timeout": "The query exceeded the statement time limit.",
     "datasource_unavailable": "The bound data source could not be reached.",
@@ -103,6 +110,10 @@ class _RequestError(ValueError):
 
 class _ResultTooLarge(ValueError):
     """A well-formed result that does not fit the byte limit."""
+
+
+class _UnsupportedResult(ValueError):
+    """The query produced a value that the governed transport cannot represent."""
 
 
 def _json_text(value):
@@ -152,6 +163,10 @@ def _copy_remaining(value, budget):
             budget = _copy_remaining(item, budget - bool(index))
     elif hasattr(value, "as_buffer"):
         budget -= value.as_buffer().size + 2
+    elif pa.types.is_floating(kind):
+        if not math.isfinite(value.as_py()):
+            raise _UnsupportedResult
+        budget -= 1
     else:
         budget -= 1
     if budget < 0:
@@ -208,6 +223,8 @@ def classify_error(error: BaseException) -> str:
         return "invalid_request"
     if isinstance(error, _ResultTooLarge):
         return "result_too_large"
+    if isinstance(error, _UnsupportedResult):
+        return "execution_failed"
     if isinstance(error, _DeclaredDefaultMissing):
         return "declared_default_missing"
     if isinstance(error, _DeclaredDefaultUndetermined):
@@ -235,11 +252,43 @@ def classify_error(error: BaseException) -> str:
     return "internal"
 
 
+def _require_legacy_policy_support(project: Path) -> None:
+    """Refuse declarations this legacy transport cannot enforce, without a loader."""
+    message = (
+        "Legacy governed-stdio cannot enforce project denied-column policy. "
+        "Use 'wren serve mcp --service-config <config>' instead."
+    )
+    for path in _rules_files(project):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            raise ValueError(message) from None
+        try:
+            front, _ = split_front_matter(text)
+        except ValueError:
+            # Leave unrelated malformed default rules to their existing diagnostic.
+            if _mentions_denied_key(text):
+                raise ValueError(message) from None
+            continue
+        candidate = text if front is None else front
+        if _mentions_denied_key(candidate):
+            raise ValueError(message)
+        if front is not None:
+            try:
+                data = yaml.safe_load(front)
+            except yaml.YAMLError:
+                continue
+            # YAML escapes and aliases must not hide a declaration from the guard.
+            if _mentions_denied_key(yaml.safe_dump(data, allow_unicode=True)):
+                raise ValueError(message)
+
+
 def serve(project: Path) -> None:
     """Capture one project's manifest, policy and credentials before accepting work."""
     project = project.resolve(strict=True)
     if not (project / "wren_project.yml").is_file():
         raise ValueError("A bound project is required")
+    _require_legacy_policy_support(project)
     require_profile_pin(project)
     _, profile = resolve_profile_for_project(project)
     profile = expand_profile_secrets(profile, project_path=project)
@@ -249,7 +298,7 @@ def serve(project: Path) -> None:
     declarations = read_declared_defaults(project, manifest)
     checker = DefaultsChecker(declarations, manifest, dialect) if declarations else None
     encoded = base64.b64encode(json.dumps(manifest).encode()).decode()
-    home = Path(os.environ.get("WREN_HOME", Path.home() / ".wren"))
+    home = Path(os.environ.get("WREN_HOME", Path.home() / ".wren")).expanduser()
     with WrenEngine(encoded, datasource, profile, config=load_config(home)) as engine:
         if checker is None:
             _write({"id": 0, "protocol": PROTOCOL})

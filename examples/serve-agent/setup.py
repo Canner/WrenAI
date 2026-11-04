@@ -91,10 +91,12 @@ FX_RATES = [
 
 
 STATUSES = ("paid", "shipped", "cancelled", "pending")
+# Fixture rate IDs are unique. Equal-date rates use the greatest ID as the
+# example's authored tie rule; duplicate currency/date rows are not rejected.
 STATUS_VIEW = """SELECT invoice_id, customer_id, invoice_date, usd_value FROM (
   SELECT i.id AS invoice_id, i.customer_id AS customer_id, i.invoice_date AS invoice_date,
          CASE WHEN i.currency = 'USD' THEN i.amount ELSE i.amount * r.rate_to_usd END AS usd_value,
-         ROW_NUMBER() OVER (PARTITION BY i.id ORDER BY r.rate_date DESC) AS rn
+         ROW_NUMBER() OVER (PARTITION BY i.id ORDER BY r.rate_date DESC, r.id DESC) AS rn
   FROM invoices i
   LEFT JOIN fx_rates r ON r.currency = i.currency AND r.rate_date <= i.invoice_date
 ) ranked WHERE rn = 1"""

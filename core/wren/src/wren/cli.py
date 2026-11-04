@@ -428,6 +428,12 @@ def main(
       }
     """
     if ctx.invoked_subcommand is not None:
+        if read_only:
+            typer.echo(
+                "Error: place --read-only after the subcommand, e.g. 'wren query --read-only'.",
+                err=True,
+            )
+            raise typer.Exit(2)
         return
     if sql is None:
         typer.echo(ctx.get_help())

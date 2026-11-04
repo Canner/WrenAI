@@ -968,10 +968,20 @@ class Service:
         return s
 
     def close(self, ident):
+        s = self.sessions.get(ident)
+        if not s or s["caller"] != self.caller:
+            return {"status": "closed"}
+        # Cancel before waiting for result-store cleanup, including an admission
+        # already inside the lock, so close cannot block its own cancellation.
+        s["closed"] = True
+        lifetime = s.get("query_lifetime")
+        if lifetime is not None:
+            lifetime.cancel()
         with self.lock:
-            s = self.sessions.get(ident)
-            if s and s["caller"] == self.caller:
+            if self.sessions.get(ident) is s:
                 s["closed"] = True
+                # An admission already inside the lock may have registered a
+                # lifetime after the first cancellation snapshot.
                 lifetime = s.get("query_lifetime")
                 if lifetime is not None:
                     lifetime.cancel()
@@ -1493,42 +1503,88 @@ class Service:
                 if ended is not None:
                     # Whatever the runtime handed back after the task ended is dropped.
                     raise ended
-            with self.lock:
-                self.session(s["id"])
-                lifetime.check()
-                if (
-                    not isinstance(raw, dict)
-                    or set(raw) != {"evidence"}
-                    or raw["evidence"] not in ledger
-                ):
+            self.session(s["id"])
+            lifetime.check()
+            if (
+                not isinstance(raw, dict)
+                or set(raw) != {"evidence"}
+                or raw["evidence"] not in ledger
+            ):
+                self.record(
+                    {
+                        "event": "task_failed",
+                        "request_id": request.request_id,
+                        "reason": "invalid_evidence",
+                        # Shape only: the worker's text never enters the audit.
+                        "raw_type": type(raw).__name__,
+                        "raw_keys": sorted(raw)[:8] if isinstance(raw, dict) else None,
+                        "turns": None,
+                        "tool_calls": None,
+                        "sql_attempts": budget.attempts,
+                        "as_of": as_of,
+                    }
+                )
+                raise ValueError("invalid_evidence")
+            saved = ledger[raw["evidence"]]
+            for model, columns in saved.get("sources", {}).items():
+                self.require(
+                    s, "receive_answer", "answer.sql_result", model, columns=columns
+                )
+            if saved.get("result", {}).get("kind") == "text":
+                # Host-generated prose has its own disclosure gate.
+                self.require(
+                    s, "receive_answer", "answer.description", request.capability
+                )
+            self.require(s, "receive_answer", "answer.approved", request.capability)
+            if "clarification" in saved:
+                question = saved["clarification"]
+                if saved.get("status_rule"):
+                    question = self.clarification_question(
+                        s, request, self.status_rules[saved["status_rule"]]
+                    )
+            else:
+                ref, ev = uid(), uid()
+                public = {
+                    "result": saved["result"],
+                    "conditions": saved["conditions"],
+                    "internal": saved["internal"],
+                    "completed_at": time.time(),
+                    "capability": request.capability,
+                    "sources": saved.get("sources", {}),
+                    "question": getattr(request, "question", ""),
+                }
+                try:
+                    # Project pending evidence without exposing it in session stores
+                    # while its disclosure checks perform filesystem and IPC waits.
+                    evidence = self.project_evidence(
+                        {**s, "results": {}, "evidence": {ev: public}}, ev
+                    )
+                except ValueError:
                     self.record(
                         {
                             "event": "task_failed",
                             "request_id": request.request_id,
                             "reason": "invalid_evidence",
-                            # Shape only: the worker's text never enters the audit.
-                            "raw_type": type(raw).__name__,
-                            "raw_keys": sorted(raw)[:8]
-                            if isinstance(raw, dict)
-                            else None,
+                            "detail": "projection",
                             "turns": None,
                             "tool_calls": None,
                             "sql_attempts": budget.attempts,
                             "as_of": as_of,
                         }
                     )
-                    raise ValueError("invalid_evidence")
-                saved = ledger[raw["evidence"]]
-                for model, columns in saved.get("sources", {}).items():
-                    self.require(
-                        s, "receive_answer", "answer.sql_result", model, columns=columns
-                    )
-                if saved.get("result", {}).get("kind") == "text":
-                    # Host-generated prose has its own disclosure gate.
-                    self.require(
-                        s, "receive_answer", "answer.description", request.capability
-                    )
-                self.require(s, "receive_answer", "answer.approved", request.capability)
+                    raise
+            with self.lock:
+                # The filesystem and authorization waits above cannot hold up
+                # close(). Recheck the binding before committing any result.
+                lifetime.check()
+                self.ensure_audit()
+                if (
+                    self.sessions.get(s["id"]) is not s
+                    or s["closed"]
+                    or s["caller"] != self.caller
+                    or s["active"] != owner
+                ):
+                    raise PermissionError("task_ended")
                 revision = s["revision"] + 1
                 response = {
                     "session_id": s["id"],
@@ -1555,47 +1611,14 @@ class Service:
                             if key in saved
                         },
                     }
-                    question = saved["clarification"]
-                    if saved.get("status_rule"):
-                        question = self.clarification_question(
-                            s, request, self.status_rules[saved["status_rule"]]
-                        )
                     response.update(
                         status="needs_clarification",
                         question=question,
                         continuation_ref=ref,
                     )
                 else:
-                    ref, ev = uid(), uid()
-                    public = {
-                        "result": saved["result"],
-                        "conditions": saved["conditions"],
-                        "internal": saved["internal"],
-                        "completed_at": time.time(),
-                        "capability": request.capability,
-                        "sources": saved.get("sources", {}),
-                        "question": getattr(request, "question", ""),
-                    }
                     s["results"][ref] = public
                     s["evidence"][ev] = public
-                    try:
-                        evidence = self.project_evidence(s, ev)
-                    except ValueError:
-                        # Evidence the host cannot project is not delivered, and is not kept.
-                        del s["results"][ref], s["evidence"][ev]
-                        self.record(
-                            {
-                                "event": "task_failed",
-                                "request_id": request.request_id,
-                                "reason": "invalid_evidence",
-                                "detail": "projection",
-                                "turns": None,
-                                "tool_calls": None,
-                                "sql_attempts": budget.attempts,
-                                "as_of": as_of,
-                            }
-                        )
-                        raise
                     response.update(
                         status="completed",
                         result_ref=ref,

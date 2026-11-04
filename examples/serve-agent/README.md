@@ -190,6 +190,14 @@ loop, without the task deadline or disconnect cancellation of controlled
 before Python row conversion and accounts for encoded rows incrementally.
 Connector-side query execution and Arrow materialization can allocate data before
 those checks; this is not a connector or process memory limit.
+Non-finite numeric results, including nested NaN/infinity values, return the
+documented `execution_failed` class instead of being substituted with data.
+The policy configuration path honors `~` in `WREN_HOME`.
+Projects declaring `denied_columns` must use controlled
+`wren serve mcp --service-config <config>` or `serve agent`: the legacy command
+refuses startup before inspecting metadata or executing queries because it cannot
+enforce that project policy. Malformed or misspelled declarations also refuse
+startup; projects without this policy retain the legacy transport.
 
 A runtime that reports usage sends one `calls` entry per provider attempt (a retried 429 is its own entry) with every reply. The host never forwards it: it goes to the audit only, as one `model_call {request_id, turn, elapsed_ms, input, output, reasoning, cache_read, stop_reason, raw_stop_reason, tool_calls, status}` event per entry, written before the task's `task_completed` or `task_failed`. `input` excludes `cache_read`. An entry is recorded only if it has exactly those ten fields, every number is a non-negative integer and every label matches `[a-z0-9_]{0,32}`; anything else is dropped and counted in one `model_calls_dropped {request_id, count}` event. A runtime that sends no usage produces no `model_call` events, and that is not an error. When a task fails, `task_failed` also carries `turns` and `tool_calls` (the runtime's own counters when it reports them, otherwise `null`) and `sql_attempts` (the host's count of the task's SQL statements); `detail` keeps the runtime's exact failure code, for example `service_unavailable:turn_limit`.
 
@@ -494,6 +502,11 @@ Regional revenues are East 300, South 260 and North 220. Weekly revenues are
 60, 220 and 500 for UTC weeks beginning 2025-12-29, 2026-01-05 and 2026-01-12.
 Customer email exists in the synthetic source but is denied by the project,
 including use in filters or ordering. Public metadata is disabled by default.
+
+The fixture's rate IDs and currency/date pairs are unique. In the example's
+`usd_line_value` view, equal rate dates are ordered by descending rate ID, using
+that existing unique key. This is an authored tie rule for the example; duplicate
+currency/date rows are selected by that rule rather than rejected.
 
 Queries must pass a closed read-only AST/function gate. Writes, external file or
 network readers, qualified external sources, recursive/correlated queries,

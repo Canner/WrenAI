@@ -139,6 +139,40 @@ def test_captures_once_and_always_queries_read_only(bound_transport):
     f.engine.__exit__.assert_called_once()
 
 
+@pytest.mark.parametrize("operation", ["query", "inspect"])
+@pytest.mark.parametrize(
+    "rule",
+    [
+        "---\ndenied_columns: [orders.private_value]\n---\n",
+        "---\ndenied_columns: [orders.private_value\n---\n",
+        "---\nDenied_Columns: [orders.private_value]\n---\n",
+        "---\ndenied-column: [orders.private_value]\n---\n",
+        "---\nbase: &p {denied_columns: [orders.private_value]}\n<<: *p\n---\n",
+        "---\npolicy: {denied_columns: [orders.private_value]}\n---\n",
+        '---\n"denied\\x5fcolumns": [orders.private_value]\n---\n',
+        "---\ndenied_columns: [orders.private_value]\n",
+        "denied_columns: [orders.private_value]\n",
+    ],
+)
+def test_legacy_denied_policy_refuses_before_bootstrap(
+    bound_transport, operation, rule
+):
+    f = bound_transport
+    rules = f.project / "knowledge" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "sensitive-rule-name.md").write_text(rule)
+    request = {"id": 1, "operation": operation}
+    if operation == "query":
+        request.update(sql="SELECT * FROM orders", limit=1)
+    with pytest.raises(ValueError) as raised:
+        f.run((json.dumps(request) + "\n").encode())
+    assert "wren serve mcp --service-config" in str(raised.value)
+    for sensitive in ("private_value", "sensitive-rule-name", str(f.project)):
+        assert sensitive not in str(raised.value)
+    for called in (f.profile, f.build, f.factory, f.engine.query):
+        called.assert_not_called()
+
+
 def test_profile_secrets_come_from_the_bound_project_not_the_cwd(
     bound_transport, monkeypatch, tmp_path
 ):
@@ -976,3 +1010,32 @@ def test_result_budget_preserves_legacy_row_limit_and_small_nested_values(
     assert frames[-1]["result"]["rows"] == json.loads(
         json.dumps(table.to_pylist(), default=str)
     )
+
+
+def test_legacy_transport_expands_tilde_home_for_governed_policy(
+    bound_transport, monkeypatch, tmp_path
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("WREN_HOME", "~/governed-policy")
+    bound_transport.run(b'{"id":1,"operation":"inspect"}\n')
+    bound_transport.config.assert_called_once_with(tmp_path / "governed-policy")
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("nested", [False, True])
+def test_nonfinite_result_has_a_documented_error_without_replacing_data(
+    bound_transport, value, nested
+):
+    bound_transport.engine.query.return_value = pa.table(
+        {"n": [[value]] if nested else [value]}
+    )
+    frames = bound_transport.run(
+        b'{"id":1,"operation":"query","sql":"SELECT n FROM orders","limit":1}\n'
+    )
+    assert frames[-1] == {
+        "id": 1,
+        "error": {
+            "class": "execution_failed",
+            "message": transport.ERROR_MESSAGES["execution_failed"],
+        },
+    }

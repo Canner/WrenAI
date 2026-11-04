@@ -4523,3 +4523,144 @@ def test_startup_fingerprint_checks_the_bytes_it_actually_hashes(
             "mcp",
         )
     assert changed
+
+
+@pytest.mark.skipif(
+    os.name != "posix", reason="requires a real FIFO fingerprint worker"
+)
+def test_close_cancels_final_delivery_fingerprint_worker(
+    service, monkeypatch, tmp_path
+):
+    s = service(runtime_path=FAKE_RUNTIME)
+    request = ask_request(s)
+    fifo = tmp_path / "final-fingerprint"
+    os.mkfifo(fifo)
+    entered, finishing = threading.Event(), threading.Event()
+    outcome = []
+    original = s.project.current
+    worker = None
+
+    def current():
+        if (
+            threading.current_thread() is worker
+            and finishing.is_set()
+            and not entered.is_set()
+        ):
+            s.project.paths.append(fifo)
+            entered.set()
+        return original()
+
+    monkeypatch.setattr(s.project, "current", current)
+
+    def invoke(callback):
+        result = count(callback)
+        finishing.set()
+        return result
+
+    install_invoker(monkeypatch, s, invoke)
+
+    def execute():
+        try:
+            outcome.append(s.execute(request))
+        except BaseException as error:
+            outcome.append(error)
+
+    worker = threading.Thread(target=execute, daemon=True)
+    closing = threading.Thread(target=lambda: s.close(request.session_id), daemon=True)
+    lifetime = None
+    try:
+        worker.start()
+        assert entered.wait(5)
+        lifetime = s.sessions[request.session_id]["query_lifetime"]
+        deadline = time.monotonic() + 3
+        while not lifetime.children and time.monotonic() < deadline:
+            time.sleep(0.001)
+        assert lifetime.children and worker.is_alive()
+        closing.start()
+        closing.join(2)
+        assert not closing.is_alive(), (
+            "session close waited behind the stalled final fingerprint"
+        )
+        worker.join(2)
+        assert (
+            not worker.is_alive() and outcome and isinstance(outcome[0], BaseException)
+        )
+        assert not lifetime.children and s.sessions[request.session_id]["closed"]
+        assert not s.sessions[request.session_id]["results"]
+    finally:
+        if lifetime is not None:
+            lifetime.cancel()
+        worker.join(3)
+        if closing.ident is not None:
+            closing.join(3)
+
+
+def test_close_does_not_wait_for_final_evidence_disclosure(service, monkeypatch):
+    s = service(runtime_path=FAKE_RUNTIME)
+    request = ask_request(s)
+    entered, release = threading.Event(), threading.Event()
+    original = s.project_evidence
+    outcome = []
+    install_invoker(monkeypatch, s, count)
+
+    def stalled(*args):
+        entered.set()
+        assert release.wait(5)
+        return original(*args)
+
+    monkeypatch.setattr(s, "project_evidence", stalled)
+
+    def execute():
+        try:
+            outcome.append(s.execute(request))
+        except BaseException as error:
+            outcome.append(error)
+
+    worker = threading.Thread(target=execute, daemon=True)
+    closing = threading.Thread(target=lambda: s.close(request.session_id), daemon=True)
+    try:
+        worker.start()
+        assert entered.wait(5)
+        closing.start()
+        closing.join(1)
+        assert not closing.is_alive()
+        assert not s.sessions[request.session_id]["results"]
+    finally:
+        release.set()
+        worker.join(3)
+        if closing.ident is not None:
+            closing.join(3)
+    assert not worker.is_alive() and isinstance(outcome[0], BaseException)
+    assert not s.sessions[request.session_id]["results"]
+    assert not s.sessions[request.session_id]["evidence"]
+
+
+@pytest.mark.parametrize("reverse_rates", [False, True])
+def test_example_rate_view_uses_its_existing_rate_id_for_same_date_ties(reverse_rates):
+    import duckdb  # noqa: PLC0415
+
+    spec = importlib.util.spec_from_file_location(
+        "example_rate_tie", EXAMPLES / "setup.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert len({row[0] for row in module.FX_RATES}) == len(module.FX_RATES)
+    assert len({(row[1], row[2]) for row in module.FX_RATES}) == len(module.FX_RATES)
+    rates = [*module.FX_RATES, (99, "2026-01-08", "EUR", 2.5)]
+    if reverse_rates:
+        rates.reverse()
+    with duckdb.connect() as connection:
+        connection.execute(
+            "CREATE TABLE invoices(id INTEGER, customer_id INTEGER, invoice_date DATE, amount DOUBLE, currency VARCHAR)"
+        )
+        connection.executemany(
+            "INSERT INTO invoices VALUES (?, ?, ?, ?, ?)", module.INVOICES
+        )
+        connection.execute(
+            "CREATE TABLE fx_rates(id INTEGER, rate_date DATE, currency VARCHAR, rate_to_usd DOUBLE)"
+        )
+        connection.executemany("INSERT INTO fx_rates VALUES (?, ?, ?, ?)", rates)
+        rows = connection.execute(module.STATUS_VIEW).fetchall()
+    by_id = {row[0]: row[3] for row in rows}
+    assert len(rows) == len(module.INVOICES)
+    assert by_id[4] == 1000.0 and by_id[1] == 100.0
