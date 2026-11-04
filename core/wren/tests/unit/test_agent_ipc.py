@@ -201,6 +201,11 @@ def test_reader_exit_closes_the_pool_and_joins_active_callback_workers(ipc):
         assert not runtime.reader.is_alive() and not task.is_alive()
         assert outcome and runtime.closed
         assert queued.cancelled()
+        # Directly submitted pool jobs are not tracked callback futures. Wait
+        # for their threads to consume the shutdown sentinel before checking exit.
+        deadline = time.monotonic() + 1
+        for thread in runtime.pool._threads:
+            thread.join(max(0, deadline - time.monotonic()))
         assert all(not thread.is_alive() for thread in runtime.pool._threads)
         with pytest.raises(RuntimeError, match="runtime_unavailable"):
             runtime.call("authorize", request={})
