@@ -503,6 +503,38 @@ def test_an_invocation_id_still_pending_or_abandoned_cannot_be_reused(ipc, monke
     assert runtime.call("authorize", request={}) is True
 
 
+def test_a_retired_owner_still_receives_a_bounded_tool_denial(ipc):
+    runtime = ipc()
+    owner, wire = "retired-owner", "retired-wire"
+    with runtime.state_lock:
+        runtime.wire_ids[owner] = wire
+        runtime._wire_owners[wire] = owner
+        runtime._wire_deadlines[wire] = time.monotonic() + 2
+
+    try:
+        runtime._send(
+            {
+                "type": "tool_result",
+                "id": "late-tool-call",
+                "owner": wire,
+                "error": "tool_denied",
+            }
+        )
+        denied = [
+            result for result in ops(runtime) if result.get("type") == "tool_result"
+        ]
+        assert denied == [
+            {
+                "type": "tool_result",
+                "owner": wire,
+                "error": "tool_denied",
+            }
+        ]
+        assert runtime.process.poll() is None
+    finally:
+        runtime.close()
+
+
 def test_a_reply_for_an_id_the_host_never_sent_is_still_a_protocol_violation(ipc):
     runtime = ipc()
     runtime._send({"id": "s-1", "op": "stray"})

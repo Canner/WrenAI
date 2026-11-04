@@ -153,6 +153,12 @@ class RuntimeIPC:
             wire = value.get("owner") if tool_result else value.get("id")
             deadline = self._wire_deadlines.get(wire)
             owner = self._wire_owners.get(wire) if deadline is not None else None
+            active_owner = owner is not None and owner in self.pending
+        if tool_result and not active_owner:
+            # A late tool call still needs its bounded `tool_denied` frame so the runtime can
+            # retire it. It is no longer an active invocation result, so neither its deadline nor
+            # its pending-state check may suppress that denial.
+            deadline, owner = None, None
         now = time.monotonic()
         if tool_result and deadline is not None:
             # A result can be nearly 1 MiB, so it receives a bounded allowance based on a
