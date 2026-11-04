@@ -311,3 +311,20 @@ def test_the_planner_skill_states_the_evidence_and_clarification_contracts():
         assert needle in text, needle
     for forbidden in ("ignore the service", "bypass the", "override the service limit"):
         assert forbidden not in text.lower()
+    # Bind the disclosure rule to the preset description and the presentation
+    # workflow, rather than accepting a detached phrase anywhere in the skill.
+    discovery = text.split("## Discover before planning\n", 1)[1].split("\n## ", 1)[0]
+    preset_contract = next(
+        paragraph
+        for paragraph in discovery.split("\n\n")
+        if "capabilities.policy_preset.name" in paragraph
+    )
+    assert (
+        "Read only the fields that are present and never ask the service for one that is absent"
+        in preset_contract
+    )
+    presentation = text.split("## Check and present\n", 1)[1].split("\n## ", 1)[0]
+    assert (
+        "Read the evidence fields that are present, and say no more than they do:"
+        in presentation
+    )
