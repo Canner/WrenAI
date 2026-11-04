@@ -1255,6 +1255,32 @@ def test_stale_calculated_column_expression_refuses_to_start(real_project):
         load_snapshot(real_project)
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("type", "VARCHAR"), ("not_null", False)],
+)
+def test_stale_model_column_type_or_flag_refuses_to_start(real_project, field, value):
+    source = real_project / "models/orders/metadata.yml"
+    metadata = yaml.safe_load(source.read_text())
+    metadata["columns"][0][field] = value
+    source.write_text(yaml.safe_dump(metadata, sort_keys=False))
+    with pytest.raises(ContextInconsistent, match="models"):
+        load_snapshot(real_project)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("primary_key", "customer_id"), ("base_object", "customers")],
+)
+def test_stale_model_key_or_base_object_refuses_to_start(real_project, field, value):
+    source = real_project / "models/orders/metadata.yml"
+    metadata = yaml.safe_load(source.read_text())
+    metadata[field] = value
+    source.write_text(yaml.safe_dump(metadata, sort_keys=False))
+    with pytest.raises(ContextInconsistent, match="models"):
+        load_snapshot(real_project)
+
+
 def test_root_cube_mirror_expression_must_match_the_cli_source(real_project):
     cube = {
         "name": "order_totals",
@@ -1281,6 +1307,31 @@ def test_description_only_source_change_does_not_require_a_rebuild(real_project)
     metadata.setdefault("properties", {})["description"] = "Updated prose only."
     source.write_text(yaml.safe_dump(metadata, sort_keys=False))
     assert load_snapshot(real_project).manifest["models"]
+
+
+def test_unreadable_current_sources_are_a_controlled_inconsistency(
+    real_project, monkeypatch
+):
+    def unreadable(_):
+        raise yaml.YAMLError("bad source")
+
+    monkeypatch.setattr(adapter, "build_json", unreadable)
+    with pytest.raises(ContextInconsistent, match="cannot be compared"):
+        load_snapshot(real_project)
+
+
+def test_source_change_during_current_build_is_context_changed(
+    real_project, monkeypatch
+):
+    source = real_project / "models/orders/ref_sql.sql"
+
+    def moving(_):
+        source.write_text(source.read_text() + "\n")
+        raise yaml.YAMLError("changed")
+
+    monkeypatch.setattr(adapter, "build_json", moving)
+    with pytest.raises(ContextChanged, match="semantics"):
+        load_snapshot(real_project)
 
 
 def test_the_real_loader_carries_and_verifies_the_fixtures_view_columns(real_project):

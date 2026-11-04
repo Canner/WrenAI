@@ -22,6 +22,8 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import yaml
+
 from wren.agent_sql import model_schema, read_view_bodies, view_output_columns
 from wren.context import build_json
 from wren.declared_defaults import (
@@ -244,9 +246,7 @@ def load_snapshot(project_root: Path, loader: Path | None = None) -> Snapshot:
     denied = _denied(catalog)
     manifest = _read_manifest(root)
     _check_consistent(catalog, manifest)
-    _check_execution_semantics(root, manifest)
-    if project_digest(root) != after:
-        raise ContextChanged("the project changed while its semantics were being read")
+    _check_execution_semantics(root, manifest, after)
     unverified_views = _check_view_columns(catalog, manifest)
     _check_denied_exist(denied, catalog)
     _check_semantics(catalog, denied)
@@ -460,17 +460,24 @@ def _models_semantics(manifest: dict) -> dict:
     for model in manifest.get("models") or []:
         if not isinstance(model, dict) or not isinstance(model.get("name"), str):
             continue
-        calculated = {
-            column["name"]: _expression(column.get("expression"))
+        columns = {
+            column["name"]: (
+                column.get("type"),
+                column.get("notNull"),
+                column.get("relationship"),
+                column.get("isCalculated"),
+                _expression(column.get("expression")),
+                column.get("isHidden"),
+            )
             for column in model.get("columns") or []
-            if isinstance(column, dict)
-            and isinstance(column.get("name"), str)
-            and column.get("expression") is not None
+            if isinstance(column, dict) and isinstance(column.get("name"), str)
         }
         result[model["name"]] = (
             model.get("tableReference"),
+            model.get("baseObject"),
             _expression(model.get("refSql")),
-            calculated,
+            model.get("primaryKey"),
+            columns,
         )
     return result
 
@@ -509,20 +516,23 @@ def _root_cube_mirror(root: Path) -> list | None:
     path = root / "cubes.yml"
     if not path.is_file():
         return None
-    try:
-        import yaml  # noqa: PLC0415
-
-        value = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, yaml.YAMLError):
-        # A parseable loader has already validated this file. Preserve its controlled error if a
-        # project changes under us; the enclosing digest check reports that race.
-        return None
+    value = yaml.safe_load(path.read_text(encoding="utf-8"))
     return value if isinstance(value, list) and value else None
 
 
-def _check_execution_semantics(root: Path, manifest: dict) -> None:
+def _check_execution_semantics(root: Path, manifest: dict, digest: str) -> None:
     """Refuse serving when the engine artifact and current source disagree about SQL behavior."""
-    current = build_json(root)
+    try:
+        current = build_json(root)
+        mirror = _root_cube_mirror(root)
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, yaml.YAMLError):
+        if project_digest(root) != digest:
+            raise ContextChanged(
+                "the project changed while its semantics were being read"
+            ) from None
+        raise ContextInconsistent(
+            "project sources cannot be compared to target/mdl.json; run `wren context build`"
+        ) from None
     checks = (
         ("models", _models_semantics(current), _models_semantics(manifest)),
         ("views", _views_semantics(current), _views_semantics(manifest)),
@@ -537,13 +547,14 @@ def _check_execution_semantics(root: Path, manifest: dict) -> None:
             raise ContextInconsistent(
                 f"target/mdl.json differs from project sources in {kind}; run `wren context build`"
             )
-    mirror = _root_cube_mirror(root)
     if mirror is not None and _cube_expressions(
         mirror, "time_dimensions"
     ) != _cube_expressions(current.get("cubes") or [], "timeDimensions"):
         raise ContextInconsistent(
             "cubes.yml differs from per-cube expressions; update the mirror before serving"
         )
+    if project_digest(root) != digest:
+        raise ContextChanged("the project changed while its semantics were being read")
 
 
 def _check_denied_exist(denied: frozenset, catalog: dict) -> None:
