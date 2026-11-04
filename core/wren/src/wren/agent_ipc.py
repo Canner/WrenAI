@@ -147,17 +147,19 @@ class RuntimeIPC:
         if len(raw) > 1048577:
             raise ValueError("ipc_size")
         tool_result = value.get("type") == "tool_result"
+        tool_denial = (
+            tool_result and value.get("error") == "tool_denied" and "value" not in value
+        )
         with self.state_lock:
             # A tool result's `id` is the tool-call id, while `owner` names the invocation
             # whose deadline and cancellation state govern the response.
             wire = value.get("owner") if tool_result else value.get("id")
             deadline = self._wire_deadlines.get(wire)
             owner = self._wire_owners.get(wire) if deadline is not None else None
-            active_owner = owner is not None and owner in self.pending
-        if tool_result and not active_owner:
-            # A late tool call still needs its bounded `tool_denied` frame so the runtime can
-            # retire it. It is no longer an active invocation result, so neither its deadline nor
-            # its pending-state check may suppress that denial.
+        if tool_denial:
+            # A tool denial is a control frame, not an invocation result. It must reach the
+            # runtime even if its owner retires between the tool-call check and this write, but it
+            # retains the control budget and never permits a successful late value.
             deadline, owner = None, None
         now = time.monotonic()
         if tool_result and deadline is not None:

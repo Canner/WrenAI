@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from wren.agent_ipc import PROTOCOL, RuntimeIPC
+from wren.agent_ipc import PROTOCOL, RuntimeIPC, TaskAborted
 
 FAKE_RUNTIME = Path(__file__).parent / "fixtures/fake_runtime.js"
 
@@ -529,6 +529,32 @@ def test_a_retired_owner_still_receives_a_bounded_tool_denial(ipc):
                 "owner": wire,
                 "error": "tool_denied",
             }
+        ]
+        assert runtime.process.poll() is None
+    finally:
+        runtime.close()
+
+
+def test_a_retired_owner_cannot_send_a_successful_tool_value(ipc):
+    runtime = ipc()
+    owner, wire = "retired-owner", "retired-wire"
+    with runtime.state_lock:
+        runtime.wire_ids[owner] = wire
+        runtime._wire_owners[wire] = owner
+        runtime._wire_deadlines[wire] = time.monotonic() + 2
+
+    try:
+        with pytest.raises(TaskAborted):
+            runtime._send(
+                {
+                    "type": "tool_result",
+                    "id": "late-tool-call",
+                    "owner": wire,
+                    "value": "late-success",
+                }
+            )
+        assert not [
+            result for result in ops(runtime) if result.get("type") == "tool_result"
         ]
         assert runtime.process.poll() is None
     finally:
