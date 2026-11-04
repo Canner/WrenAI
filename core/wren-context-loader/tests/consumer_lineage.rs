@@ -219,6 +219,27 @@ fn no_consumer_files_means_no_consumer_nodes_and_no_diagnostics() {
 }
 
 #[test]
+fn an_empty_dashboards_document_adds_no_consumer_nodes_or_diagnostics() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(tmp.path(), "dashboards.yml", "# none\n");
+    let ctx = load(tmp.path());
+
+    assert!(ctx.lineage_diagnostics().is_empty());
+    assert!(
+        !ctx.lineage()
+            .nodes
+            .iter()
+            .any(|node| node.id.starts_with("dashboard:")),
+        "an empty optional dashboard document does not create a phantom consumer"
+    );
+    assert_eq!(
+        ctx.host_analysis().unwrap().consumers.unwrap().dashboards,
+        0
+    );
+}
+
+#[test]
 fn confirmed_query_over_a_cube_makes_the_metric_reach_the_query() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());

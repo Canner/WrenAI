@@ -66,3 +66,18 @@ jobs:
       # which neither clippy nor the tests see.
       - name: cargo doc
         run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+
+  windows-test:
+    name: cargo test (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo test
+        working-directory: core/wren-context-loader
+        run: cargo test --locked

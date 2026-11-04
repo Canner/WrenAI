@@ -28,12 +28,26 @@ pub const CATALOG_VERSION: u32 = 1;
 
 #[derive(Debug, Default, Deserialize)]
 struct Properties {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "optional_description")]
     description: Option<String>,
     /// Authored enum meanings, `{ "A": "active", "I": "inactive" }`. Free-form keys are kept as
     /// written; the host renders them as `value = meaning`.
     #[serde(default)]
     enum_values: Option<serde_yaml::Value>,
+}
+
+/// Descriptions are optional catalog prose. A malformed prose value must not discard the semantic
+/// object that owns it; only scalar text is retained for the JSON catalog.
+fn optional_description<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(
+        Option::<serde_yaml::Value>::deserialize(deserializer)?.and_then(|value| match value {
+            serde_yaml::Value::String(description) => Some(description),
+            _ => None,
+        }),
+    )
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -821,6 +835,19 @@ columns:
         assert!(!json.contains("sample_values"));
         assert!(!json.contains("amount * 100"));
         assert_eq!(catalog.models[0].columns[1].is_calculated, Some(true));
+        assert!(catalog.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn a_non_string_description_does_not_drop_its_model_or_columns() {
+        let catalog = capability_catalog(&sources(
+            "name: orders\nproperties: { description: { draft: true } }\ncolumns:\n  - { name: id, type: INTEGER }\n",
+        ));
+
+        assert_eq!(catalog.models.len(), 1);
+        assert_eq!(catalog.models[0].name, "orders");
+        assert_eq!(catalog.models[0].description, None);
+        assert_eq!(catalog.models[0].columns.len(), 1);
         assert!(catalog.diagnostics.is_empty());
     }
 
