@@ -34,6 +34,7 @@ primary_key: id
 columns:
   - { name: id, type: INTEGER }
   - { name: country, type: VARCHAR }
+  - { name: credit_limit, type: "DECIMAL(12,2)" }
 "#,
     );
     write(
@@ -89,6 +90,7 @@ columns:
   - { name: placed_at, type: TIMESTAMP }
   - { name: customer, type: customers, relationship: orders_customers }
   - { name: customer_name, type: VARCHAR, is_calculated: true, expression: "customer.country" }
+  - { name: customer_credit, type: "DECIMAL(12,2)", is_calculated: true, expression: "customer.credit_limit" }
   - { name: customer_label, type: VARCHAR, is_calculated: true, expression: "UPPER(customer_name)" }
 "#,
     );
@@ -259,7 +261,7 @@ fn relationship_condition_reaches_a_measure_of_its_calculated_column() {
         r#"name: order_metrics
 base_object: orders
 measures:
-  - { name: customer_total, expression: "SUM(customer_name)", type: DOUBLE }
+  - { name: customer_total, expression: "SUM(customer_credit)", type: DOUBLE }
 dimensions: []
 time_dimensions: []
 "#,
@@ -273,6 +275,40 @@ time_dimensions: []
             "metric:order_metrics.customer_total"
         ),
         "planning a measure over a calculated relationship field reads the declared condition"
+    );
+}
+
+#[test]
+fn relationship_condition_reaches_a_qualified_measure_of_its_calculated_column_only() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    add_relationship_calculation(tmp.path());
+    write(
+        tmp.path(),
+        "cubes/order_metrics/metadata.yml",
+        r#"name: order_metrics
+base_object: orders
+measures:
+  - { name: qualified_customer_total, expression: "SUM(orders.customer_credit)", type: DOUBLE }
+  - { name: wrong_qualifier_total, expression: "SUM(customers.customer_credit)", type: DOUBLE }
+dimensions: []
+time_dimensions: []
+"#,
+    );
+    let ctx = load(tmp.path());
+
+    assert!(has_edge(
+        &ctx,
+        "rel:orders_customers",
+        "metric:order_metrics.qualified_customer_total"
+    ));
+    assert!(
+        !has_edge(
+            &ctx,
+            "rel:orders_customers",
+            "metric:order_metrics.wrong_qualifier_total"
+        ),
+        "a relationship path must not be inferred from a different qualifier"
     );
 }
 

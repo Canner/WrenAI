@@ -168,7 +168,8 @@ pub fn build(manifest: &Manifest) -> (LineageGraph, Vec<String>) {
 
 /// The relationship conditions a cube measure reads through a calculated column on its base
 /// model. Unlike a SQL consumer there is no relation scope to resolve: a measure expression is
-/// anchored to exactly that model, so only a direct calculated-column identifier is eligible.
+/// anchored to exactly that model, so only a direct calculated-column identifier or a two-part
+/// reference qualified by that exact base model is eligible.
 fn relationships_used_by_cube_measure(
     manifest: &Manifest,
     model: &Model,
@@ -176,8 +177,12 @@ fn relationships_used_by_cube_measure(
 ) -> Vec<String> {
     let mut relationships = HashSet::new();
     for path in expression_identifiers(expression) {
-        let [identifier] = path.as_slice() else {
-            continue;
+        let identifier = match path.as_slice() {
+            [identifier] => identifier,
+            [qualifier, identifier] if identifier_matches_name(qualifier, &model.name) => {
+                identifier
+            }
+            _ => continue,
         };
         let Some(column) = model.columns.iter().find(|column| {
             column.is_calculated && identifier_matches_name(identifier, &column.name)
