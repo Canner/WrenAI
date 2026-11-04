@@ -1297,7 +1297,7 @@ def test_root_cube_mirror_expression_must_match_the_cli_source(real_project):
     assert load_snapshot(real_project).manifest["cubes"]
     cube["measures"][0]["expression"] = "SUM(order_total)"
     (real_project / "cubes.yml").write_text(yaml.safe_dump([cube], sort_keys=False))
-    with pytest.raises(ContextInconsistent, match="cubes.yml"):
+    with pytest.raises(ContextLoaderFailed, match="cubes.yml.*exact semantic mirror"):
         load_snapshot(real_project)
 
 
