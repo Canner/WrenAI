@@ -166,3 +166,74 @@ fn output_in_an_untracked_target_directory_remains_valid() {
     assert!(prepared.is_file());
     assert!(catalog.is_file());
 }
+
+#[cfg(unix)]
+#[test]
+fn source_links_and_hardlinks_are_rejected_before_any_output() {
+    use std::os::unix::fs::symlink;
+
+    let project = tempfile::tempdir().unwrap();
+    fs::write(
+        project.path().join("wren_project.yml"),
+        "schema_version: 5\n",
+    )
+    .unwrap();
+    let knowledge = project.path().join("knowledge");
+    fs::create_dir(&knowledge).unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let linked_source = knowledge.join("catalog.json");
+    let outside_target = outside.path().join("outside.json");
+    symlink(&outside_target, &linked_source).unwrap();
+    let ordinary = outside.path().join("ordinary.json");
+    let linked_run = run_loader(&[
+        project.path().as_os_str(),
+        "-o".as_ref(),
+        linked_source.as_os_str(),
+        "--catalog-out".as_ref(),
+        ordinary.as_os_str(),
+    ]);
+    assert_eq!(linked_run.status.code(), Some(2));
+    assert!(!outside_target.exists());
+    assert!(!ordinary.exists());
+
+    let hard_link = outside.path().join("wren-project-link.yml");
+    fs::hard_link(project.path().join("wren_project.yml"), &hard_link).unwrap();
+    let hard_link_run = run_loader(&[
+        project.path().as_os_str(),
+        "-o".as_ref(),
+        hard_link.as_os_str(),
+        "--catalog-out".as_ref(),
+        ordinary.as_os_str(),
+    ]);
+    assert_eq!(hard_link_run.status.code(), Some(2));
+    assert_eq!(
+        fs::read_to_string(project.path().join("wren_project.yml")).unwrap(),
+        "schema_version: 5\n"
+    );
+    assert!(!ordinary.exists());
+}
+
+#[test]
+fn invalid_output_parents_are_rejected_before_the_other_write() {
+    let project = fixture("rules-wren");
+    let output = tempfile::tempdir().unwrap();
+    let catalog = output.path().join("catalog.json");
+    let missing_parent = output.path().join("missing/out.json");
+    let regular_parent = output.path().join("regular");
+    fs::write(&regular_parent, "not a directory").unwrap();
+    let through_file_parent = regular_parent.join("../out.json");
+    let directory = output.path().join("directory");
+    fs::create_dir(&directory).unwrap();
+
+    for prepared in [&missing_parent, &through_file_parent, &directory] {
+        let run = run_loader(&[
+            project.as_os_str(),
+            "-o".as_ref(),
+            prepared.as_os_str(),
+            "--catalog-out".as_ref(),
+            catalog.as_os_str(),
+        ]);
+        assert_eq!(run.status.code(), Some(2), "{:?}", run.stderr);
+        assert!(!catalog.exists());
+    }
+}

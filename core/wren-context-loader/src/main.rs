@@ -118,21 +118,74 @@ fn validate_output_paths(
     catalog_path: Option<&Path>,
 ) -> Result<(), String> {
     let project_dir = resolve_output_path(project_dir)?;
-    let out_path = out_path.map(resolve_output_path).transpose()?;
-    let catalog_path = catalog_path.map(resolve_output_path).transpose()?;
+    let out_path = out_path.map(resolve_output_destination).transpose()?;
+    let catalog_path = catalog_path.map(resolve_output_destination).transpose()?;
 
     for path in out_path.iter().chain(catalog_path.iter()) {
-        if digest_covers_output(&project_dir, path) {
+        if digest_covers_output(&project_dir, &path.logical)
+            || digest_covers_output(&project_dir, &path.resolved)
+            || output_aliases_digest_input(&project_dir, &path.resolved)?
+        {
             return Err(format!(
                 "output path {} is covered by the project digest",
-                path.display()
+                path.resolved.display()
             ));
         }
+        validate_writable_output(&path.resolved)?;
     }
 
     if let Some((out, catalog)) = out_path.as_ref().zip(catalog_path.as_ref()) {
-        if output_paths_match(out, catalog)? {
+        if output_paths_match(&out.resolved, &catalog.resolved)? {
             return Err("-o and --catalog-out must name different files".to_string());
+        }
+    }
+    Ok(())
+}
+
+struct OutputDestination {
+    /// The fully resolved destination, used for identity comparison and final-file validation.
+    resolved: PathBuf,
+    /// The location reached after resolving the parent but before following a final file symlink.
+    /// This preserves whether a write would replace a digest-covered source entry through a link.
+    logical: PathBuf,
+}
+
+fn resolve_output_destination(path: &Path) -> Result<OutputDestination, String> {
+    let resolved = resolve_output_path(path)?;
+    let logical = match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) => resolve_output_path(parent)?.join(name),
+        _ => resolved.clone(),
+    };
+    Ok(OutputDestination { resolved, logical })
+}
+
+fn validate_writable_output(path: &Path) -> Result<(), String> {
+    let parent = path.parent().ok_or_else(|| {
+        format!(
+            "failed to resolve output path {}: no parent directory",
+            path.display()
+        )
+    })?;
+    let parent_metadata = std::fs::metadata(parent).map_err(|error| {
+        format!(
+            "failed to resolve output path {}: parent {}: {error}",
+            path.display(),
+            parent.display()
+        )
+    })?;
+    if !parent_metadata.is_dir() {
+        return Err(format!(
+            "failed to resolve output path {}: parent {} is not a directory",
+            path.display(),
+            parent.display()
+        ));
+    }
+    if let Some(metadata) = existing_output_metadata(path)? {
+        if !metadata.is_file() {
+            return Err(format!(
+                "failed to resolve output path {}: destination is not a regular file",
+                path.display()
+            ));
         }
     }
     Ok(())
@@ -177,11 +230,25 @@ fn resolve_output_path(path: &Path) -> Result<PathBuf, String> {
                         target_components.extend(pending);
                         pending = target_components;
                     }
-                    Ok(_) => resolved.push(prefix),
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    Ok(metadata) => {
+                        if !pending.is_empty() && !metadata.is_dir() {
+                            return Err(format!(
+                                "failed to resolve output path {}: {} is not a directory",
+                                path.display(),
+                                candidate.display()
+                            ));
+                        }
                         resolved.push(prefix);
-                        append_lexical_components(&mut resolved, pending);
-                        return Ok(resolved);
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        if pending.is_empty() {
+                            return Ok(candidate);
+                        }
+                        return Err(format!(
+                            "failed to resolve output path {}: missing path component {}",
+                            path.display(),
+                            candidate.display()
+                        ));
                     }
                     Err(error) => {
                         return Err(format!(
@@ -194,6 +261,23 @@ fn resolve_output_path(path: &Path) -> Result<PathBuf, String> {
             OwnedComponent::Root => resolved.push(std::path::MAIN_SEPARATOR_STR),
             OwnedComponent::Current => {}
             OwnedComponent::Parent => {
+                if !resolved.as_os_str().is_empty()
+                    && !std::fs::metadata(&resolved)
+                        .map_err(|error| {
+                            format!(
+                                "failed to resolve output path {}: {}",
+                                path.display(),
+                                error
+                            )
+                        })?
+                        .is_dir()
+                {
+                    return Err(format!(
+                        "failed to resolve output path {}: {} is not a directory",
+                        path.display(),
+                        resolved.display()
+                    ));
+                }
                 resolved.pop();
             }
         }
@@ -220,19 +304,6 @@ fn path_components(path: &Path) -> VecDeque<OwnedComponent> {
             Component::Normal(name) => OwnedComponent::Normal(name.to_owned()),
         })
         .collect()
-}
-
-fn append_lexical_components(path: &mut PathBuf, components: VecDeque<OwnedComponent>) {
-    for component in components {
-        match component {
-            OwnedComponent::Prefix(prefix) | OwnedComponent::Normal(prefix) => path.push(prefix),
-            OwnedComponent::Root => path.push(std::path::MAIN_SEPARATOR_STR),
-            OwnedComponent::Current => {}
-            OwnedComponent::Parent => {
-                path.pop();
-            }
-        }
-    }
 }
 
 /// Compare resolved paths and, when both targets already exist, their filesystem identities so
@@ -288,6 +359,99 @@ fn digest_covers_output(project_dir: &Path, output: &Path) -> bool {
         || SOURCE_DIRS
             .iter()
             .any(|name| output.starts_with(project_dir.join(name)))
+}
+
+/// Detect an output outside the project that is an existing hard link to a covered input. Path
+/// checks alone cannot see that write target, but overwriting it would still mutate the source.
+fn output_aliases_digest_input(project_dir: &Path, output: &Path) -> Result<bool, String> {
+    let Some(output_metadata) = existing_output_metadata(output)? else {
+        return Ok(false);
+    };
+    const ROOT_FILES: [&str; 5] = [
+        "wren_project.yml",
+        "relationships.yml",
+        "cubes.yml",
+        "dashboards.yml",
+        "instructions.md",
+    ];
+    const SOURCE_DIRS: [&str; 4] = ["models", "cubes", "views", "knowledge"];
+
+    for name in ROOT_FILES {
+        if let Some(metadata) = existing_output_metadata(&project_dir.join(name))? {
+            if metadata.is_file() && same_file(&output_metadata, &metadata) {
+                return Ok(true);
+            }
+        }
+    }
+    for name in SOURCE_DIRS {
+        if source_directory_has_output_alias(&project_dir.join(name), &output_metadata)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn source_directory_has_output_alias(
+    directory: &Path,
+    output: &std::fs::Metadata,
+) -> Result<bool, String> {
+    let metadata = match std::fs::symlink_metadata(directory) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => {
+            return Err(format!(
+                "failed to inspect source directory {}: {error}",
+                directory.display()
+            ));
+        }
+    };
+    if !metadata.file_type().is_dir() {
+        return Ok(false);
+    }
+    for entry in std::fs::read_dir(directory).map_err(|error| {
+        format!(
+            "failed to inspect source directory {}: {error}",
+            directory.display()
+        )
+    })? {
+        let entry = entry.map_err(|error| {
+            format!(
+                "failed to inspect source directory {}: {error}",
+                directory.display()
+            )
+        })?;
+        let name = entry.file_name();
+        if source_name_is_hidden(&name) {
+            continue;
+        }
+        let path = entry.path();
+        let entry_type = entry.file_type().map_err(|error| {
+            format!("failed to inspect source entry {}: {error}", path.display())
+        })?;
+        if entry_type.is_dir() {
+            if source_directory_has_output_alias(&path, output)? {
+                return Ok(true);
+            }
+        } else if (entry_type.is_file() || entry_type.is_symlink())
+            && existing_output_metadata(&path)?
+                .is_some_and(|metadata| metadata.is_file() && same_file(output, &metadata))
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn source_name_is_hidden(name: &std::ffi::OsStr) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        name.as_bytes().first() == Some(&b'.')
+    }
+    #[cfg(not(unix))]
+    {
+        name.to_str().is_some_and(|name| name.starts_with('.'))
+    }
 }
 
 /// Write the capability catalog. A directory that is not a wren project yields an empty catalog
