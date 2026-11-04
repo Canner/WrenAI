@@ -141,6 +141,7 @@ class _Statement:
         ]
         self._scope_of = {id(scope.expression): scope for scope in scopes}
         self._origins: dict[int, _Origin] = {}
+        self._complete_rate_rules: set[str] = set()
 
         def live(node):
             scope = self._scope_for(node)
@@ -860,30 +861,22 @@ class _Statement:
                     if origins and origins <= currency_joined & date_bounded:
                         date_bounded |= matching(column)
         complete = currency_joined & date_bounded
+        if complete:
+            self._complete_rate_rules.add(rule.id)
         covered_amount_reads = set().union(
             *(
                 currency_for_rate.get(rate, set()) & date_for_rate.get(rate, set())
                 for rate in complete
             )
         )
-        # Preserve the existing CTE/derived-source proof rules, but do not let a rate join
-        # for one direct alias satisfy a sibling alias of the same declared model column.
-        # The direct scope test avoids treating a rate CTE's internal source as a second
-        # consuming amount alias in its outer query.
-        direct_amount_reads = {
-            id(source)
-            for aggregate in self.aggregates
-            for column in aggregate.find_all(exp.Column)
-            if self.origin(column).taint & amounts
-            for scope in [self._scope_for(column)]
-            if scope is not None
-            for source in [scope.sources.get(column.table)]
-            if isinstance(source, exp.Table)
-        }
+        # A derived table can carry several physical amount aliases.  Preserve their routes
+        # through CTEs: a rate attachment for the path to ``p`` cannot establish the path to
+        # sibling alias ``q``.
         covered_amount_tables = {
             amount_reads[index][0] for index in covered_amount_reads
         }
-        if len(direct_amount_reads) > 1 and direct_amount_reads - covered_amount_tables:
+        amount_tables = {table for table, _path in amount_reads}
+        if len(amount_tables) > 1 and amount_tables - covered_amount_tables:
             return True
         # When an aggregate actually consumes a rate value, every supplying
         # instance must carry both conditions; an unrelated complete join cannot

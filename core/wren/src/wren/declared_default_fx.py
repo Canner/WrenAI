@@ -217,14 +217,23 @@ def _evaluate(
             if applicable and whole:
                 entry = {"applicable": True, "result": "satisfied_by_definition"}
             else:
-                broken = [rule.id] if seen.fires_rate(rule) else []
-                if applicable and not broken and not fx.excused():
+                required_join_missing = seen.fires_rate(rule)
+                # A malformed rate predicate has no established attachment, so retain the
+                # ordinary rule id. If one attachment is complete but a sibling amount path
+                # is missing, retain the more specific base/single-match diagnosis when it
+                # independently applies to that complete attachment.
+                extended_evidence = (
+                    not required_join_missing or rule.id in seen._complete_rate_rules
+                )
+                if applicable and extended_evidence and not fx.excused():
                     found, rule_handling = fx.judge()
                     broken = [f"{rule.id}:{sub}" for sub in found]
                     if not broken:
                         handling = handling or rule_handling
                         if fx.shape_unverified():
                             unverified.append(FX_DEFAULT_SHAPE_UNVERIFIED)
+                if not broken and required_join_missing:
+                    broken = [rule.id]
         violations += broken
         if entry is None:
             entry = {
