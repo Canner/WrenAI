@@ -59,12 +59,17 @@ fn entries_from_every_rule_file_are_merged_deduplicated_and_sorted() {
 
 #[test]
 fn the_front_matter_stays_in_the_rule_content() {
-    let doc = catalog_json(&fixture("denied-wren"));
+    let project = fixture("denied-wren");
+    let doc = catalog_json(&project);
     let rules = doc["knowledge_rules"].as_array().unwrap();
-    assert!(rules[0]["content"]
-        .as_str()
-        .unwrap()
-        .starts_with("---\ndenied_columns: [customers.email]\n---"));
+    let content = rules[0]["content"].as_str().unwrap();
+    let path = rules[0]["path"].as_str().unwrap();
+    let source = fs::read_to_string(project.join(path)).unwrap();
+    assert_eq!(
+        content.as_bytes(),
+        source.trim().as_bytes(),
+        "{path} must keep its trimmed source bytes verbatim"
+    );
 }
 
 #[test]
