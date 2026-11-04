@@ -153,6 +153,7 @@ The `data` field is per spec a JSON string. Wren also tolerates a raw YAML dict 
 | `column_types` | semantic_model: `{dataset: {field: type}}`<br/>dataset: `{field: type}` | Column types — Ossie has no native type system. |
 | `primary_key` | semantic_model: `{dataset: column}`<br/>dataset: `column` | Pick one column when Ossie defines a composite primary key. |
 | `type`, `not_null` | field | Per-field overrides. |
+| `is_calculated` | field | `true` makes a bare-column expression read another semantic field instead of renaming a physical source column. The exporter preserves calculated aliases with this flag. |
 
 ## Precedence
 
@@ -238,7 +239,15 @@ Every primary key column must also be declared as a field. A key that names an u
 
 ### Calculated fields over undeclared columns
 
-A field whose expression is more than its own column name becomes a calculated column, and the engine resolves a calculated expression against the model's **declared** columns, not the source table. `full_name: first_name || ' ' || last_name` therefore fails every query on the model unless `first_name` and `last_name` are fields too. Validate warns and prints the fields to add:
+A single unqualified column expression is a [physical-column rename](/oss/reference/mdl#column-rename-via-expression): `name: customer_name` with `expression: c_name` reads `c_name` directly from the source table. Quoted identifiers are supported, and the source column does not need its own declared field. To read another semantic field instead, set `{"is_calculated": true}` in the field's `WREN` extension; export adds this flag for calculated aliases so their meaning survives reimport.
+
+Earlier exports did not carry this flag. Add it to existing bare aliases that intentionally read another semantic field, or export them again from the original Wren project. Import warns when an unmarked bare expression names another declared field in the same dataset: it may be a legacy calculated alias or an intentional rename of a same-named source column. It still imports as a physical rename. Set `is_calculated: true` for a semantic alias, or `false` to confirm the physical mapping and silence the warning.
+
+Import selects the preferred dialect's nonempty expression, then falls back to `ANSI_SQL`, then to the first nonempty entry. The selected text is kept verbatim, so classification and undeclared-field checks use Wren's expression grammar, just as the engine does. Double quotes and backticks both quote identifiers. For example, `"user id"` remains a physical identifier even in an entry labelled `DATABRICKS` or `SPARK`; the label selects the entry and does not change how Wren interprets its text. Bare-string shorthand uses the same grammar.
+
+Export keeps the original Wren SQL expression and labels it with the selected dialect; it does not transpile the expression. Calculated bare aliases carry `{"is_calculated": true}`; physical renames need no calculation marker, including double-quoted names exported from Databricks/Spark. The flag shares the existing field-level `WREN` block with metadata such as `not_null`. On import, an explicit `false` with a nonempty expression must name exactly one unqualified source column; arithmetic, qualified references and literals are rejected. An explicit `true` needs a nonempty expression that does not simply refer to the field itself. Export does not add a calculated marker when a missing or blank expression falls back to the field name.
+
+Other expressions become calculated columns, and the engine resolves a calculated expression against the model's **declared** columns, not the source table. `full_name: first_name || ' ' || last_name` therefore fails every query on the model unless `first_name` and `last_name` are fields too. Validate warns and prints the fields to add:
 
 ```text
 [WARNING] dataset 'customers': calculated field(s) reference undeclared field(s):
@@ -376,7 +385,7 @@ wren context export ossie --spec-version 0.2.0.dev0   # draft layout (root-level
 wren context export ossie --strict                # treat warnings as errors
 ```
 
-By default the exporter writes the released `0.1.1` layout (`version: "0.1.1"`, one `semantic_model[]` entry). `--spec-version 0.2.0.dev0` writes the draft layout instead: the model's keys at the document root and an OSI-portable `datatype` on every field and metric whose Wren type maps to the enum. In both cases, calculated-column expressions travel as `fields[].expression.dialects` and primary keys (single or composite) as `dataset.primary_key`, both portable Ossie fields; only the Wren details Ossie has no field for — the exact column type (`WREN.column_types`, kept even when the draft layout also writes the mapped `field.datatype`) and `not_null` — go into the `WREN` extension blocks the importer looks for. That is why `export ossie` → `import ossie` (or `build --from-ossie`) reproduces the models, column types, expressions and relationships the export carried, whichever layout you pick. The round trip covers only what is exported: views, cube dimensions, access controls, navigation columns and relationships with unsupported conditions are left out, each with a warning (see [Export mapping](#export-mapping)), so keep the wren project if you depend on them. Without `--dialect`, expressions are labelled `ANSI_SQL` (or `SNOWFLAKE` / `DATABRICKS` when the project's `data_source` is one of those, matching the importer's inference).
+By default the exporter writes the released `0.1.1` layout (`version: "0.1.1"`, one `semantic_model[]` entry). `--spec-version 0.2.0.dev0` writes the draft layout instead: the model's keys at the document root and an OSI-portable `datatype` on every field and metric whose Wren type maps to the enum. In both cases, physical-column renames and calculated expressions travel as `fields[].expression.dialects` and primary keys (single or composite) as `dataset.primary_key`, both portable Ossie fields; only the Wren details Ossie has no field for — the exact column type (`WREN.column_types`, kept even when the draft layout also writes the mapped `field.datatype`), `not_null`, and the distinction between a calculated bare alias and a physical rename — go into the `WREN` extension blocks the importer looks for. That is why `export ossie` → `import ossie` (or `build --from-ossie`) reproduces the models, column types, expressions and relationships the export carried, whichever layout you pick. The round trip covers only what is exported: views, cube dimensions, access controls, navigation columns and relationships with unsupported conditions are left out, each with a warning (see [Export mapping](#export-mapping)), so keep the wren project if you depend on them. Without `--dialect`, expressions are labelled `ANSI_SQL` (or `SNOWFLAKE` / `DATABRICKS` when the project's `data_source` is one of those, matching the importer's inference).
 
 ### Export mapping
 
@@ -388,7 +397,7 @@ By default the exporter writes the released `0.1.1` layout (`version: "0.1.1"`, 
 | `model.ref_sql` | `dataset.source` as the inline SQL |
 | `model.primary_key` (string or list) | `dataset.primary_key: [..]` |
 | `model.properties.description` | `dataset.description` |
-| `column.name` + `column.expression` (calculated) | `dataset.fields[]` with `expression.dialects[{dialect, expression}]` |
+| `column.name` + `column.expression` (physical rename or calculated) | `dataset.fields[]` with `expression.dialects[{dialect, expression}]`; field-level `WREN.is_calculated: true` distinguishes calculated bare aliases from physical renames using Wren's expression grammar |
 | `column.type` | The exact type in the dataset's `WREN.column_types` block; with `--spec-version 0.2.0.dev0` also `field.datatype` (Ossie's portable enum: `String`, `Integer`, `Decimal`, `Float`, `Boolean`, `Date`, `Time`, `DateTime`, `DateTimeTz`) |
 | `column.type` date/time | `field.dimension.is_time: true` |
 | `column.not_null` (non-PK) | field-level `WREN: {"not_null": true}` |

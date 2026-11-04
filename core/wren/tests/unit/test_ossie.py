@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 
@@ -287,14 +288,29 @@ def test_pick_expression_empty():
     "expr, fname, expected",
     [
         ("amount", "amount", False),  # bare identity
-        ("Amount", "amount", True),  # different identifier — treat as calc
+        # Bare aliases use MDL's physical-column rename form (see #2823).
+        ("Amount", "amount", False),
+        ("src_col", "renamed", False),
+        ('"src col"', "renamed", False),
+        ("`src col`", "renamed", False),
+        ('"src.col"', "renamed", False),
+        ('"src""col"', "renamed", False),
+        ('"amount"', "amount", False),
+        ("orders.amount", "amount", True),  # qualified / relationship ref
+        ('"orders"."amount"', "amount", True),
         ("amount * 1.1", "amount", True),  # arithmetic
         ("SUM(amount)", "amount", True),  # aggregation
         ("a || b", "concat", True),  # concat
+        ("'src_col'", "renamed", True),  # string literal, not an identifier
+        ("*", "renamed", True),
+        ("CASE WHEN first_name", "renamed", True),  # parse failure
+        ('"unterminated', "renamed", True),  # tokenizer failure
+        ("src_col; other_col", "renamed", True),  # not one column expression
         ("", "x", False),
     ],
 )
 def test_is_calculated_expression(expr, fname, expected):
+    """Only bare column references and empty expressions avoid calculation."""
     assert _is_calculated_expression(expr, fname) is expected
 
 
@@ -545,6 +561,54 @@ def test_build_calculated_field_over_declared_columns_is_clean():
     assert not any("undeclared field" in e.message for e in errors)
 
 
+@pytest.mark.parametrize(
+    "expression, dialect",
+    [
+        ("usr_id", "ANSI_SQL"),
+        ("Amount", "ANSI_SQL"),
+        ('"user id"', "ANSI_SQL"),
+        ('"usr.id"', "ANSI_SQL"),
+        ('"us""r_id"', "ANSI_SQL"),
+        ("`user id`", "DATABRICKS"),
+    ],
+)
+def test_import_bare_column_rename_reads_the_physical_column(
+    tmp_path: Path, expression: str, dialect: str
+):
+    """A physical rename needs no separate semantic field for its source column."""
+    doc = {
+        "version": "0.1.1",
+        "custom_extensions": [
+            {"vendor_name": "WREN", "data": json.dumps({"dialect": dialect})}
+        ],
+        "semantic_model": [
+            {
+                "name": "shop",
+                "datasets": [
+                    {
+                        "name": "customers",
+                        "source": "customers",
+                        "fields": [
+                            {
+                                "name": "customer_id",
+                                "datatype": "Integer",
+                                "expression": expression,
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    manifest, errors = build_manifest_from_ossie(
+        _write_ossie(tmp_path, dump_ossie(doc)), data_source="duckdb"
+    )
+    assert errors == [], [str(e) for e in errors]
+    column = manifest["models"][0]["columns"][0]
+    assert column["is_calculated"] is False
+    assert column["expression"] == expression
+
+
 def test_build_calculated_field_ignores_qualified_nested_and_unparseable(
     tmp_path: Path,
 ):
@@ -554,16 +618,30 @@ def test_build_calculated_field_ignores_qualified_nested_and_unparseable(
     body = _customers_with(
         "          - name: order_total\n"
         "            expression: orders.amount * 2\n"
+        "          - name: order_amount\n"
+        "            expression: orders.amount\n"
+        "          - name: quoted_order_amount\n"
+        '            expression: \'"orders"."amount"\'\n'
         "          - name: max_order\n"
         "            expression: (SELECT MAX(amount) FROM orders)\n"
         "          - name: broken\n"
         "            expression: CASE WHEN first_name\n"
     )
-    _, errors = build_manifest_from_ossie(
+    manifest, errors = build_manifest_from_ossie(
         _write_ossie(tmp_path, body), data_source="postgres"
     )
     assert [e for e in errors if e.level == "error"] == []
     assert not any("undeclared field" in e.message for e in errors)
+    columns = {c["name"]: c for c in manifest["models"][0]["columns"]}
+    for name, expression in {
+        "order_total": "orders.amount * 2",
+        "order_amount": "orders.amount",
+        "quoted_order_amount": '"orders"."amount"',
+        "max_order": "(SELECT MAX(amount) FROM orders)",
+        "broken": "CASE WHEN first_name",
+    }.items():
+        assert columns[name]["is_calculated"] is True
+        assert columns[name]["expression"] == expression
 
 
 def test_build_primary_key_over_undeclared_field_errors(tmp_path: Path):
@@ -1805,6 +1883,470 @@ def test_export_then_import_preserves_models_and_relationships(tmp_path: Path):
     assert rebuilt["_instructions"].startswith("Revenue is USD.")
     # Exported metrics come back as instruction notes (importer behaviour).
     assert "total_revenue" in rebuilt["_instructions"]
+
+
+@pytest.mark.parametrize("spec_version", ["0.1.1", "0.2.0.dev0"])
+@pytest.mark.parametrize(
+    "expression, expected",
+    [("usr_id", 7), ('"user id"', 7), ("customer_id", 999), ('"customer_id"', 999)],
+)
+def test_physical_rename_roundtrip_preserves_query_results_and_calculated_alias(
+    tmp_path: Path, spec_version: str, expression: str, expected: int
+):
+    """Exercise export/import/project build and real native planning + execution.
+
+    raw_orders also has a customer_id with a different value: dropping the
+    physical mapping returns a plausible but incorrect result instead of an
+    error. A calculated alias must read the semantic customer_id, not that
+    same-named source column.
+    """
+    import duckdb  # noqa: PLC0415
+
+    from wren import WrenEngine  # noqa: PLC0415
+    from wren.context import (  # noqa: PLC0415
+        build_json,
+        build_manifest,
+        convert_mdl_to_project,
+        validate_project,
+        write_project_files,
+    )
+
+    db_dir = tmp_path / "data"
+    db_dir.mkdir()
+    with duckdb.connect(str(db_dir / "warehouse.duckdb")) as db:
+        db.execute(
+            'CREATE TABLE raw_orders (usr_id INTEGER, "user id" INTEGER, customer_id INTEGER)'
+        )
+        db.execute("INSERT INTO raw_orders VALUES (7, 7, 999)")
+
+    original = {
+        "catalog": "wren",
+        "schema": "public",
+        "dataSource": "duckdb",
+        "models": [
+            {
+                "name": "orders",
+                "tableReference": {
+                    "catalog": "warehouse",
+                    "schema": "main",
+                    "table": "raw_orders",
+                },
+                "columns": [
+                    {
+                        "name": "customer_id",
+                        "type": "INTEGER",
+                        "isCalculated": False,
+                        "expression": expression,
+                    },
+                    {
+                        "name": "copied_id",
+                        "type": "INTEGER",
+                        "isCalculated": True,
+                        "expression": "customer_id",
+                        "notNull": True,
+                    },
+                    {
+                        "name": "next_id",
+                        "type": "INTEGER",
+                        "isCalculated": True,
+                        "expression": "customer_id + 1",
+                    },
+                ],
+            }
+        ],
+        "relationships": [],
+        "views": [],
+    }
+    original_project = tmp_path / "original"
+    write_project_files(
+        convert_mdl_to_project(original, default_name="shop"), original_project
+    )
+    assert validate_project(original_project) == []
+    doc, errors = export_ossie_from_manifest(
+        build_manifest(original_project), spec_version=spec_version
+    )
+    assert errors == []
+    ossie_path = _write_ossie(tmp_path, dump_ossie(doc))
+    imported, errors = build_json_from_ossie(ossie_path, data_source="duckdb")
+    assert errors == []
+    imported_project = tmp_path / "imported"
+    write_project_files(
+        convert_mdl_to_project(imported, default_name="shop"), imported_project
+    )
+    assert validate_project(imported_project) == []
+    rebuilt = build_json(imported_project)
+
+    for manifest in (original, rebuilt):
+        encoded = base64.b64encode(json.dumps(manifest).encode()).decode()
+        with WrenEngine(
+            encoded,
+            "duckdb",
+            {"url": str(db_dir), "format": "duckdb"},
+            fallback=False,
+        ) as engine:
+            rows = engine.query(
+                "SELECT customer_id, copied_id, next_id FROM orders"
+            ).to_pylist()
+        assert rows == [
+            {"customer_id": expected, "copied_id": expected, "next_id": expected + 1}
+        ]
+
+    columns = {c["name"]: c for c in rebuilt["models"][0]["columns"]}
+    assert columns["customer_id"]["isCalculated"] is False
+    if expression != "customer_id":
+        assert columns["customer_id"]["expression"] == expression
+    assert columns["copied_id"]["isCalculated"] is True
+    assert columns["copied_id"]["expression"] == "customer_id"
+    assert columns["copied_id"]["notNull"] is True
+    assert columns["next_id"]["isCalculated"] is True
+    sm = doc["semantic_model"][0] if spec_version == "0.1.1" else doc
+    fields = {field["name"]: field for field in sm["datasets"][0]["fields"]}
+    assert _wren_data(fields["copied_id"]) == {
+        "not_null": True,
+        "is_calculated": True,
+    }
+    # Ordinary calculated expressions and physical renames need no new marker.
+    assert "custom_extensions" not in fields["next_id"]
+    assert "custom_extensions" not in fields["customer_id"]
+
+
+@pytest.mark.parametrize("spec_version", ["0.1.1", "0.2.0.dev0"])
+@pytest.mark.parametrize(
+    "data_source, import_data_source, dialect, expected_dialect",
+    [
+        ("databricks", "databricks", None, "DATABRICKS"),
+        ("databricks", "databricks", "SPARK", "SPARK"),
+        ("snowflake", "snowflake", None, "SNOWFLAKE"),
+        ("duckdb", "databricks", None, "ANSI_SQL"),
+        ("postgres", "databricks", None, "ANSI_SQL"),
+    ],
+)
+@pytest.mark.parametrize("expression", ["usr_id", '"user id"', '"usr.id"'])
+def test_roundtrip_preserves_field_classification_across_dialects(
+    tmp_path: Path,
+    spec_version,
+    data_source,
+    import_data_source,
+    dialect,
+    expected_dialect,
+    expression,
+):
+    """Preserve engine SQL semantics regardless of the selected dialect label."""
+    manifest = {
+        "data_source": data_source,
+        "models": [
+            {
+                "name": "orders",
+                "table_reference": {"schema": "main", "table": "raw_orders"},
+                "columns": [
+                    {
+                        "name": "customer_id",
+                        "type": "INTEGER",
+                        "is_calculated": False,
+                        "expression": expression,
+                        "not_null": True,
+                    },
+                    {
+                        "name": "copied_id",
+                        "type": "INTEGER",
+                        "is_calculated": True,
+                        "expression": "customer_id",
+                        "not_null": True,
+                    },
+                    {
+                        "name": "next_id",
+                        "type": "INTEGER",
+                        "is_calculated": True,
+                        "expression": "customer_id + 1",
+                    },
+                ],
+            }
+        ],
+    }
+    doc, errors = export_ossie_from_manifest(
+        manifest, dialect=dialect, spec_version=spec_version
+    )
+    assert errors == []
+    sm = doc["semantic_model"][0] if spec_version == "0.1.1" else doc
+    fields = {field["name"]: field for field in sm["datasets"][0]["fields"]}
+    assert fields["customer_id"]["expression"] == {
+        "dialects": [{"dialect": expected_dialect, "expression": expression}]
+    }
+    expected_flags = {"not_null": True}
+    assert _wren_data(fields["customer_id"]) == expected_flags
+    assert _wren_data(fields["copied_id"]) == {
+        "not_null": True,
+        "is_calculated": True,
+    }
+    assert "custom_extensions" not in fields["next_id"]
+
+    ossie_path = _write_ossie(tmp_path, dump_ossie(doc))
+    rebuilt, errors = build_json_from_ossie(ossie_path, data_source=import_data_source)
+    assert errors == []
+    columns = {column["name"]: column for column in rebuilt["models"][0]["columns"]}
+    assert columns["customer_id"]["isCalculated"] is False
+    assert columns["customer_id"]["expression"] == expression
+    assert columns["customer_id"]["notNull"] is True
+    assert columns["copied_id"]["isCalculated"] is True
+    assert columns["copied_id"]["expression"] == "customer_id"
+    assert columns["copied_id"]["notNull"] is True
+    assert columns["next_id"]["isCalculated"] is True
+    assert columns["next_id"]["expression"] == "customer_id + 1"
+
+
+@pytest.mark.parametrize(
+    "data_source, entries, is_calculated, expected_calculated, missing_ref",
+    [
+        (
+            "databricks",
+            [("DATABRICKS", ""), ("ANSI_SQL", '"missing field" + 1')],
+            None,
+            True,
+            "missing field",
+        ),
+        (
+            "databricks",
+            [("SNOWFLAKE", '"missing field" + 1')],
+            None,
+            True,
+            "missing field",
+        ),
+        (
+            "databricks",
+            [("ANSI_SQL", ""), ("SNOWFLAKE", '"missing field" + 1')],
+            None,
+            True,
+            "missing field",
+        ),
+        (
+            "databricks",
+            [("ANSI_SQL", '"missing field"')],
+            True,
+            True,
+            "missing field",
+        ),
+        (
+            "postgres",
+            [("DATABRICKS", '"missing field"')],
+            None,
+            False,
+            None,
+        ),
+        (
+            "databricks",
+            [
+                ("ANSI_SQL", '"ignored field" + 1'),
+                ("DATABRICKS", '"missing field"'),
+            ],
+            None,
+            False,
+            None,
+        ),
+        (
+            "databricks",
+            [("DATABRICKS", '"missing field" + 1')],
+            None,
+            True,
+            "missing field",
+        ),
+        (
+            "postgres",
+            [("SPARK", "`missing field` + 1")],
+            None,
+            True,
+            "missing field",
+        ),
+    ],
+)
+def test_import_reference_warnings_use_engine_expression_grammar(
+    tmp_path: Path,
+    data_source,
+    entries,
+    is_calculated,
+    expected_calculated,
+    missing_ref,
+):
+    """Select by label, then analyze verbatim SQL with the engine's quoting."""
+    field = {
+        "name": "result",
+        "datatype": "Integer",
+        "expression": {
+            "dialects": [
+                {"dialect": dialect, "expression": expression}
+                for dialect, expression in entries
+            ]
+        },
+    }
+    if is_calculated is not None:
+        field["custom_extensions"] = [
+            {
+                "vendor_name": "WREN",
+                "data": json.dumps({"is_calculated": is_calculated}),
+            }
+        ]
+    doc = {
+        "version": "0.1.1",
+        "semantic_model": [
+            {
+                "name": "shop",
+                "datasets": [
+                    {"name": "orders", "source": "raw_orders", "fields": [field]}
+                ],
+            }
+        ],
+    }
+    rebuilt, errors = build_json_from_ossie(
+        _write_ossie(tmp_path, dump_ossie(doc)), data_source=data_source
+    )
+    column = rebuilt["models"][0]["columns"][0]
+    assert column["isCalculated"] is expected_calculated
+    if missing_ref is None:
+        assert errors == []
+    else:
+        assert len(errors) == 1
+        assert errors[0].level == "warning"
+        assert "reference undeclared field(s)" in errors[0].message
+        assert f"'{missing_ref}' (used by result)" in errors[0].message
+        assert "ignored field" not in errors[0].message
+
+
+def _import_expression_fields(tmp_path, fields):
+    doc = {
+        "version": "0.2.0.dev0",
+        "name": "shop",
+        "datasets": [{"name": "orders", "source": "raw_orders", "fields": fields}],
+    }
+    return build_json_from_ossie(
+        _write_ossie(tmp_path, dump_ossie(doc)), data_source="databricks"
+    )
+
+
+@pytest.mark.parametrize(
+    "expression",
+    ["customer_id + 1", "orders.customer_id", "'literal'", "SUM(customer_id)", "*"],
+)
+def test_import_rejects_false_marker_on_non_column_expression(tmp_path, expression):
+    """An explicit physical marker cannot make computed SQL a source column."""
+    _, errors = _import_expression_fields(
+        tmp_path,
+        [
+            {
+                "name": "result",
+                "datatype": "Integer",
+                "expression": expression,
+                "custom_extensions": [
+                    {"vendor_name": "WREN", "data": '{"is_calculated": false}'}
+                ],
+            }
+        ],
+    )
+    assert len(errors) == 1
+    assert errors[0].level == "error"
+    assert "field 'result'" in errors[0].message
+    assert "is_calculated: false" in errors[0].message
+    assert "single unqualified column" in errors[0].message
+
+
+@pytest.mark.parametrize(
+    "expression", [None, "", "  ", "result", '"result"', "`result`"]
+)
+def test_import_rejects_true_marker_without_calculated_expression(tmp_path, expression):
+    """A calculated marker must not create an empty expression or self-reference."""
+    field = {
+        "name": "result",
+        "datatype": "Integer",
+        "custom_extensions": [
+            {"vendor_name": "WREN", "data": '{"is_calculated": true}'}
+        ],
+    }
+    if expression is not None:
+        field["expression"] = expression
+    _, errors = _import_expression_fields(tmp_path, [field])
+    assert len(errors) == 1
+    assert errors[0].level == "error"
+    assert "field 'result'" in errors[0].message
+    assert "is_calculated: true" in errors[0].message
+    assert "refers to itself" in errors[0].message
+
+
+@pytest.mark.parametrize("expression", ["usr_id", '"user id"', "`user id`"])
+def test_import_accepts_false_marker_on_physical_identifier(tmp_path, expression):
+    """Hand-written false markers accept either engine identifier quote style."""
+    rebuilt, errors = _import_expression_fields(
+        tmp_path,
+        [
+            {
+                "name": "result",
+                "datatype": "Integer",
+                "expression": expression,
+                "custom_extensions": [
+                    {"vendor_name": "WREN", "data": '{"is_calculated": false}'}
+                ],
+            }
+        ],
+    )
+    assert errors == []
+    column = rebuilt["models"][0]["columns"][0]
+    assert column["isCalculated"] is False
+    assert column["expression"] == expression
+
+
+@pytest.mark.parametrize(
+    "expression", ["customer_id", '"customer_id"', "`customer_id`"]
+)
+@pytest.mark.parametrize("marker", [None, True, False, "true"])
+def test_import_warns_about_ambiguous_unmarked_alias(tmp_path, expression, marker):
+    """Legacy aliases need a diagnostic when the same name is a declared field."""
+    alias = {"name": "copied_id", "datatype": "Integer", "expression": expression}
+    if marker is not None:
+        alias["custom_extensions"] = [
+            {"vendor_name": "WREN", "data": json.dumps({"is_calculated": marker})}
+        ]
+    rebuilt, errors = _import_expression_fields(
+        tmp_path,
+        [
+            {"name": "customer_id", "datatype": "Integer", "expression": "usr_id"},
+            alias,
+        ],
+    )
+    columns = {c["name"]: c for c in rebuilt["models"][0]["columns"]}
+    assert columns["copied_id"]["isCalculated"] is (marker is True)
+    if isinstance(marker, bool):
+        assert errors == []
+    else:
+        assert len(errors) == 1
+        assert errors[0].level == "warning"
+        assert "copied_id" in errors[0].message
+        assert "customer_id" in errors[0].message
+        assert "physical source column" in errors[0].message
+        assert "is_calculated: true" in errors[0].message
+
+
+@pytest.mark.parametrize("expression", [None, "", "  "])
+@pytest.mark.parametrize("spec_version", ["0.1.1", "0.2.0.dev0"])
+def test_export_missing_calculated_expression_does_not_create_self_reference(
+    tmp_path, expression, spec_version
+):
+    """An export fallback to the field name must not add a calculated marker."""
+    column = {"name": "result", "type": "INTEGER", "is_calculated": True}
+    if expression is not None:
+        column["expression"] = expression
+    doc, errors = export_ossie_from_manifest(
+        {
+            "models": [
+                {"name": "orders", "ref_sql": "SELECT 1 AS result", "columns": [column]}
+            ]
+        },
+        spec_version=spec_version,
+    )
+    assert errors == []
+    sm = doc["semantic_model"][0] if spec_version == "0.1.1" else doc
+    assert "is_calculated" not in _wren_data(sm["datasets"][0]["fields"][0])
+    rebuilt, errors = build_json_from_ossie(
+        _write_ossie(tmp_path, dump_ossie(doc)), data_source="duckdb"
+    )
+    assert errors == []
+    assert rebuilt["models"][0]["columns"][0]["isCalculated"] is False
 
 
 def test_dump_ossie_is_yaml_in_authoring_order():
