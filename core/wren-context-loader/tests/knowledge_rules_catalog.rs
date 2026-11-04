@@ -34,17 +34,26 @@ fn prepared(dir: &Path) -> String {
 
 #[test]
 fn rule_files_are_carried_whole_in_path_order() {
-    let doc = catalog_json(&fixture("rules-wren"));
+    let project = fixture("rules-wren");
+    let doc = catalog_json(&project);
+    let rules = doc["knowledge_rules"].as_array().unwrap();
     assert_eq!(
-        doc["knowledge_rules"],
-        serde_json::json!([
-            {
-                "path": "knowledge/rules/a-revenue.md",
-                "content": "# Revenue\n\nRevenue means SUM(orders.amount) over non-refunded orders."
-            },
-            { "path": "knowledge/rules/b-money.md", "content": "# Money\n\nAll amounts are USD." }
-        ])
+        rules
+            .iter()
+            .map(|rule| rule["path"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["knowledge/rules/a-revenue.md", "knowledge/rules/b-money.md"]
     );
+    for rule in rules {
+        let content = rule["content"].as_str().unwrap();
+        let path = rule["path"].as_str().unwrap();
+        let source = fs::read_to_string(project.join(path)).unwrap();
+        assert_eq!(
+            content.as_bytes(),
+            source.trim().as_bytes(),
+            "{path} must keep its trimmed source bytes verbatim"
+        );
+    }
     assert!(doc.get("knowledge_rules_used_legacy").is_none());
     assert_eq!(doc["catalog_version"], 1);
 }
