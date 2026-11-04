@@ -1002,7 +1002,7 @@ class _Statement:
             return True
         if uncovered_amount_tables and not supplied:
             return True
-        if isinstance(self.ast, exp.SetOperation):
+        if self.ast.find(exp.SetOperation) is not None:
 
             def consumer(path):
                 return next(
@@ -1018,6 +1018,8 @@ class _Statement:
             if any(
                 consumer(path) not in complete_consumers for _, path in amount_reads
             ):
+                if not isinstance(self.ast, exp.SetOperation):
+                    raise ValueError("ambiguous shared CTE rate consumer")
                 return True
         return not complete or not supplied <= complete
 
