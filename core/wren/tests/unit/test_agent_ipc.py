@@ -416,8 +416,15 @@ def test_an_abort_ends_the_wait_now_and_drops_whatever_the_runtime_sends_later(i
     thread = threading.Thread(target=waiting)
     thread.start()
     deadline = time.monotonic() + 5
-    while "inv-abort" not in runtime.pending and time.monotonic() < deadline:
+    wire = None
+    # Registration precedes the write. This test needs the peer's late-frame
+    # behavior, so wait until it has actually received the invocation.
+    while time.monotonic() < deadline:
+        wire = next((o["id"] for o in ops(runtime) if o.get("op") == "invoke"), None)
+        if wire is not None:
+            break
         time.sleep(0.02)
+    assert wire is not None, "the scripted runtime never received the invocation"
     runtime.abort("inv-abort")
     thread.join(timeout=5)
     assert not thread.is_alive()
@@ -433,7 +440,7 @@ def test_an_abort_ends_the_wait_now_and_drops_whatever_the_runtime_sends_later(i
         time.sleep(0.05)
     assert {
         "op": "cancel",
-        "owner": next(o["id"] for o in seen if o.get("op") == "invoke"),
+        "owner": wire,
     } in [{"op": o.get("op"), "owner": o.get("owner")} for o in seen]
     assert [o["error"] for o in seen if o.get("type") == "tool_result"] == [
         "tool_denied"
@@ -441,6 +448,55 @@ def test_an_abort_ends_the_wait_now_and_drops_whatever_the_runtime_sends_later(i
     time.sleep(0.2)
     assert runtime.process.poll() is None
     assert runtime.call("authorize", request={}) is True
+
+
+def test_an_abort_before_the_write_never_sends_the_invocation(ipc, monkeypatch):
+    import threading  # noqa: PLC0415
+
+    from wren.agent_ipc import TaskAborted  # noqa: PLC0415
+
+    runtime = ipc()
+    entered, release = threading.Event(), threading.Event()
+    original = runtime._send
+    outcome = []
+
+    def held_send(frame):
+        if frame.get("op") == "invoke":
+            entered.set()
+            assert release.wait(5), "the controlled write was never released"
+        return original(frame)
+
+    def waiting():
+        try:
+            outcome.append(invoke(runtime, "late_tool_call", "before-send"))
+        except Exception as exc:  # noqa: BLE001
+            outcome.append(exc)
+
+    monkeypatch.setattr(runtime, "_send", held_send)
+    thread = threading.Thread(target=waiting)
+    thread.start()
+    try:
+        assert entered.wait(3)
+        assert "before-send" in runtime.pending
+        wire = runtime.wire_ids["before-send"]
+        assert not any(o.get("op") == "invoke" for o in ops(runtime))
+        runtime.abort("before-send")
+        release.set()
+        thread.join(3)
+        assert not thread.is_alive()
+        assert len(outcome) == 1 and isinstance(outcome[0], TaskAborted)
+        assert "before-send" in runtime.abandoned
+        assert not runtime.pending and not runtime.callbacks and not runtime.wire_ids
+        seen = ops(runtime)
+        assert not any(o.get("op") == "invoke" for o in seen)
+        assert any(o.get("op") == "cancel" and o.get("owner") == wire for o in seen)
+        assert runtime.process.poll() is None
+        assert runtime.call("authorize", request={}) is True
+    finally:
+        release.set()
+        if thread.is_alive():
+            runtime.abort("before-send")
+        thread.join(3)
 
 
 @pytest.mark.parametrize("frame", ["reply", "tool_owner"])
