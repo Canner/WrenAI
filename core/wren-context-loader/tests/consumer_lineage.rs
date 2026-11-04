@@ -8,7 +8,7 @@
 use std::fs;
 use std::path::Path;
 
-use warble::ContextLoader;
+use warble::{verify_context_preconditions, ContextLoader};
 use wren_context_loader::{read_project_dir, MdlContext};
 
 fn write(dir: &Path, rel: &str, contents: &str) {
@@ -476,6 +476,43 @@ fn prepared_v2_preserves_host_analysis_and_consumer_totals() {
     assert!(counts.queries >= 2);
     assert_eq!(counts.dashboards, 1);
     assert!(MdlContext::unparseable().host_analysis().is_none());
+}
+
+#[test]
+fn prepared_context_keeps_expression_only_additivity_unknown_and_rejects_it() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/driftwood-wren");
+    let document = wren_context_loader::prepared_document(&load(&dir)).unwrap();
+    let parsed = warble::PreparedContext::from_json(&document).unwrap();
+
+    assert_eq!(parsed.metric_additivity("mrr"), None);
+    assert_eq!(parsed.metric_additivity("active_subscriptions"), None);
+    assert_eq!(
+        parsed.metric_additivity("avg_order_value"),
+        Some(warble::Additivity::NonAdditive)
+    );
+    assert!(
+        parsed.can_answer("metric_additive"),
+        "published Warble reports this coarse capability from a declared metric"
+    );
+    verify_context_preconditions(&serde_json::json!([{"predicate": "has_metric"}]), &parsed)
+        .expect("unknown additivity does not make a declared measure disappear");
+
+    // A pinned unknown gets the public consumer's specific unanswerable outcome.
+    let pinned = verify_context_preconditions(
+        &serde_json::json!([{"predicate": "metric_additive", "args": {"metric": "mrr"}}]),
+        &parsed,
+    )
+    .expect_err("a metric with unknown dimensional additivity must be rejected");
+    assert!(pinned.to_string().contains("unanswerable"), "{pinned}");
+
+    // The published coarse capability still says a declared metric exists; with no approved
+    // measure, its existential evaluation fails rather than passing.
+    let existential = verify_context_preconditions(
+        &serde_json::json!([{"predicate": "metric_additive"}]),
+        &parsed,
+    )
+    .expect_err("declared but unknown metrics must not satisfy the existential predicate");
+    assert!(existential.to_string().contains("failed"), "{existential}");
 }
 
 fn reaches(ctx: &MdlContext, seed: &str, consumer: &str) -> bool {

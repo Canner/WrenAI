@@ -1,6 +1,7 @@
 //! Integration tests over the real `examples/jaffle-wren` project. It declares a `revenue` cube
-//! (Phase 2), so `metric_additive` is answerable — `total_revenue` (SUM) is additive and
-//! `avg_order_value` (AVG) is not. Existence predicates also hold via plain model columns. The
+//! (Phase 2), so `metric_additive` can report proven non-additivity — `total_revenue` (SUM) is
+//! unknown without dimensional business semantics and `avg_order_value` (AVG) is non-additive.
+//! Existence predicates also hold via plain model columns. The
 //! cube-*less* case (where `metric_additive` is unanswerable) is covered by a synthetic manifest in
 //! the crate's unit tests.
 
@@ -57,18 +58,18 @@ fn existence_predicates_hold_via_columns() {
 }
 
 #[test]
-fn metric_additive_answerable_via_revenue_cube() {
+fn expression_only_measures_keep_additivity_unknown() {
     let ctx = jaffle_wren();
-    // The revenue cube declares measures ⇒ additivity is expressible ⇒ answerable.
+    // The published contract exposes the coarse predicate for declared measures; a pinned SUM
+    // still reports unknown because expression syntax lacks dimensional business semantics.
     assert!(
         ctx.can_answer("metric_additive"),
-        "the revenue cube makes metric_additive answerable"
+        "the published predicate recognizes declared measures"
     );
-    // Additivity is inferred from each measure's aggregation.
     assert_eq!(
         ctx.metric_additivity("total_revenue"),
-        Some(Additivity::Additive),
-        "total_revenue = SUM(amount) is additive"
+        None,
+        "SUM(amount) cannot prove business-dimensional additivity"
     );
     assert_eq!(
         ctx.metric_additivity("avg_order_value"),

@@ -3,9 +3,9 @@
 //! The projection is deliberately **loose for existence, strict for semantics** (the Phase 2
 //! predicate-semantics decision): a queryable quantity is either a declared cube measure *or* a
 //! plain numeric column (so `has_metric` holds on cube-less projects), but additivity is only
-//! expressible for a declared measure — an implicit column carries `additivity: None`, which is
-//! what makes `metric_additive` unanswerable (a `can_answer=false` loud-fail) rather than silently
-//! `false`.
+//! reported when the expression proves a measure non-additive. An expression alone cannot prove
+//! dimensional additivity: a `SUM` or `COUNT` may be a balance or snapshot, so it carries
+//! `additivity: None` rather than an unsupported green light.
 
 use warble::{Additivity, ContextLoader, DimensionInfo, LineageGraph, MetricInfo, ModelInfo};
 use wren_core_base::mdl::manifest::Manifest;
@@ -88,15 +88,15 @@ impl MdlContext {
         let mut time_dimensions = Vec::new();
         let mut models = Vec::new();
 
-        // Declared cube members: measures are metrics (additivity determinable); cube dimensions
-        // and time-dimensions are dimensions.
+        // Declared cube members: measures are metrics (proven non-additivity may be projected);
+        // cube dimensions and time-dimensions are dimensions.
         for cube in &manifest.cubes {
             for measure in &cube.measures {
                 metrics.push(MetricInfo {
                     name: measure.name.clone(),
                     owner: cube.name.clone(),
                     declared: true,
-                    additivity: Some(infer_additivity(&measure.expression)),
+                    additivity: infer_additivity(&measure.expression),
                 });
             }
             for dim in &cube.dimensions {
@@ -206,22 +206,25 @@ impl ContextLoader for MdlContext {
     }
 }
 
-/// Classify a measure's additivity from the leading aggregation of its expression.
+/// Report only non-additivity that an aggregation expression proves.
 ///
-/// Additive (delta attributes cleanly to per-dimension contributions that sum to the whole):
-/// `SUM`, non-distinct `COUNT`. Everything else — `AVG`/`MIN`/`MAX`/`MEDIAN`/`STDDEV`/`VARIANCE`,
-/// any `DISTINCT`, and any ratio (`/`) — is non-additive: decomposing it along dimensions can
-/// mislead. Unrecognized aggregations are treated as non-additive (conservative: never green-light
-/// a decomposition we cannot vouch for). `SemiAdditive` is not produced here — it needs
-/// knowledge-layer input (a later vocabulary batch).
-pub fn infer_additivity(expression: &str) -> Additivity {
+/// `AVG`/`MIN`/`MAX`/`MEDIAN`/`STDDEV`/`VARIANCE`, any `DISTINCT`, and a ratio (`/`) are
+/// non-additive: decomposing them along dimensions can mislead. `SUM`, non-distinct `COUNT`, and
+/// unrecognized expressions return `None`: expression syntax cannot establish whether their input
+/// is additive across every business dimension or is a balance/snapshot. `SemiAdditive` requires
+/// explicit dimensional business semantics and is not inferred here. The prepared-context wire
+/// preserves this unknown as a null additivity value; a consumer must reject it rather than
+/// treating it as additive.
+pub fn infer_additivity(expression: &str) -> Option<Additivity> {
     let upper = expression.to_uppercase();
     if upper.contains("DISTINCT") || upper.contains('/') {
-        return Additivity::NonAdditive;
+        return Some(Additivity::NonAdditive);
     }
     match leading_function(&upper).as_deref() {
-        Some("SUM") | Some("COUNT") => Additivity::Additive,
-        _ => Additivity::NonAdditive,
+        Some("AVG" | "MIN" | "MAX" | "MEDIAN" | "STDDEV" | "VARIANCE") => {
+            Some(Additivity::NonAdditive)
+        }
+        _ => None,
     }
 }
 
@@ -269,21 +272,33 @@ mod tests {
 
     #[test]
     fn additivity_heuristic() {
-        assert_eq!(infer_additivity("SUM(amount)"), Additivity::Additive);
-        assert_eq!(infer_additivity("sum(amount)"), Additivity::Additive);
-        assert_eq!(infer_additivity("COUNT(*)"), Additivity::Additive);
+        assert_eq!(infer_additivity("SUM(amount)"), None);
+        assert_eq!(infer_additivity("sum(amount)"), None);
+        assert_eq!(infer_additivity("COUNT(*)"), None);
         assert_eq!(
             infer_additivity("COUNT(DISTINCT customer_id)"),
-            Additivity::NonAdditive
+            Some(Additivity::NonAdditive)
         );
-        assert_eq!(infer_additivity("AVG(amount)"), Additivity::NonAdditive);
-        assert_eq!(infer_additivity("MIN(amount)"), Additivity::NonAdditive);
-        assert_eq!(infer_additivity("MAX(amount)"), Additivity::NonAdditive);
+        assert_eq!(
+            infer_additivity("AVG(amount)"),
+            Some(Additivity::NonAdditive)
+        );
+        assert_eq!(
+            infer_additivity("MIN(amount)"),
+            Some(Additivity::NonAdditive)
+        );
+        assert_eq!(
+            infer_additivity("MAX(amount)"),
+            Some(Additivity::NonAdditive)
+        );
         // ratio
-        assert_eq!(infer_additivity("SUM(a) / SUM(b)"), Additivity::NonAdditive);
-        // unrecognized → conservative non-additive
-        assert_eq!(infer_additivity("weird(x)"), Additivity::NonAdditive);
-        assert_eq!(infer_additivity("bare_column"), Additivity::NonAdditive);
+        assert_eq!(
+            infer_additivity("SUM(a) / SUM(b)"),
+            Some(Additivity::NonAdditive)
+        );
+        // Unrecognized functions and bare columns need authored dimensional semantics.
+        assert_eq!(infer_additivity("weird(x)"), None);
+        assert_eq!(infer_additivity("bare_column"), None);
     }
 
     #[test]

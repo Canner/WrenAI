@@ -119,12 +119,9 @@ fn cubes_directory_is_loaded_when_no_root_cubes_yml() {
 
     assert!(
         ctx.can_answer("metric_additive"),
-        "the cube from cubes/<name>/metadata.yml makes additivity answerable"
+        "the published predicate recognizes declared measures"
     );
-    assert_eq!(
-        ctx.metric_additivity("total_value"),
-        Some(Additivity::Additive)
-    );
+    assert_eq!(ctx.metric_additivity("total_value"), None);
     assert_eq!(
         ctx.metric_additivity("avg_value"),
         Some(Additivity::NonAdditive)
