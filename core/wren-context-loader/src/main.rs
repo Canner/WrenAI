@@ -315,7 +315,9 @@ fn output_paths_match(left: &Path, right: &Path) -> Result<bool, String> {
     let left_metadata = existing_output_metadata(left)?;
     let right_metadata = existing_output_metadata(right)?;
     match (left_metadata, right_metadata) {
-        (Some(left), Some(right)) => Ok(same_file(&left, &right)),
+        (Some(left_metadata), Some(right_metadata)) => {
+            same_file(left, &left_metadata, right, &right_metadata)
+        }
         _ => Ok(false),
     }
 }
@@ -332,13 +334,39 @@ fn existing_output_metadata(path: &Path) -> Result<Option<std::fs::Metadata>, St
 }
 
 #[cfg(unix)]
-fn same_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
-    left.dev() == right.dev() && left.ino() == right.ino()
+fn same_file(
+    _: &Path,
+    left: &std::fs::Metadata,
+    _: &Path,
+    right: &std::fs::Metadata,
+) -> Result<bool, String> {
+    Ok(left.dev() == right.dev() && left.ino() == right.ino())
 }
 
-#[cfg(not(unix))]
-fn same_file(_: &std::fs::Metadata, _: &std::fs::Metadata) -> bool {
-    false
+#[cfg(windows)]
+fn same_file(
+    left_path: &Path,
+    _: &std::fs::Metadata,
+    right_path: &Path,
+    _: &std::fs::Metadata,
+) -> Result<bool, String> {
+    same_file::is_same_file(left_path, right_path).map_err(|error| {
+        format!(
+            "failed to compare output paths {} and {}: {error}",
+            left_path.display(),
+            right_path.display()
+        )
+    })
+}
+
+#[cfg(all(not(unix), not(windows)))]
+fn same_file(
+    _: &Path,
+    _: &std::fs::Metadata,
+    _: &Path,
+    _: &std::fs::Metadata,
+) -> Result<bool, String> {
+    Ok(false)
 }
 
 /// Return whether writing `output` would add or replace an input covered by the project digest.
@@ -377,14 +405,15 @@ fn output_aliases_digest_input(project_dir: &Path, output: &Path) -> Result<bool
     const SOURCE_DIRS: [&str; 4] = ["models", "cubes", "views", "knowledge"];
 
     for name in ROOT_FILES {
-        if let Some(metadata) = existing_output_metadata(&project_dir.join(name))? {
-            if metadata.is_file() && same_file(&output_metadata, &metadata) {
+        let source = project_dir.join(name);
+        if let Some(metadata) = existing_output_metadata(&source)? {
+            if metadata.is_file() && same_file(output, &output_metadata, &source, &metadata)? {
                 return Ok(true);
             }
         }
     }
     for name in SOURCE_DIRS {
-        if source_directory_has_output_alias(&project_dir.join(name), &output_metadata)? {
+        if source_directory_has_output_alias(&project_dir.join(name), output, &output_metadata)? {
             return Ok(true);
         }
     }
@@ -393,6 +422,7 @@ fn output_aliases_digest_input(project_dir: &Path, output: &Path) -> Result<bool
 
 fn source_directory_has_output_alias(
     directory: &Path,
+    output_path: &Path,
     output: &std::fs::Metadata,
 ) -> Result<bool, String> {
     let metadata = match std::fs::symlink_metadata(directory) {
@@ -429,14 +459,15 @@ fn source_directory_has_output_alias(
             format!("failed to inspect source entry {}: {error}", path.display())
         })?;
         if entry_type.is_dir() {
-            if source_directory_has_output_alias(&path, output)? {
+            if source_directory_has_output_alias(&path, output_path, output)? {
                 return Ok(true);
             }
-        } else if (entry_type.is_file() || entry_type.is_symlink())
-            && existing_output_metadata(&path)?
-                .is_some_and(|metadata| metadata.is_file() && same_file(output, &metadata))
-        {
-            return Ok(true);
+        } else if entry_type.is_file() || entry_type.is_symlink() {
+            if let Some(metadata) = existing_output_metadata(&path)? {
+                if metadata.is_file() && same_file(output_path, output, &path, &metadata)? {
+                    return Ok(true);
+                }
+            }
         }
     }
     Ok(false)

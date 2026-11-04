@@ -321,6 +321,14 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
             }
             if let Some(view) = view_root.open_nested_dir(&name)? {
                 if let Some(meta) = read_metadata_if_file(&view)? {
+                    if view.entry_kind("sql.yml".as_ref())?
+                        == crate::source_fs::EntryKind::Directory
+                    {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidInput,
+                            "sql_yml_directory_unsupported",
+                        ));
+                    }
                     views.push((
                         meta,
                         view.read_string_if_file("sql.yml".as_ref())?
@@ -440,7 +448,14 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
         for view_dir in list_dir(&views_dir)?.into_iter().filter(|p| p.is_dir()) {
             let meta = view_dir.join("metadata.yml");
             if let Some(contents) = read_metadata_if_file(&meta)? {
-                let sql = read_if_exists(&view_dir.join("sql.yml"))?.unwrap_or_default();
+                let sql_path = view_dir.join("sql.yml");
+                if sql_path.is_dir() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "sql_yml_directory_unsupported",
+                    ));
+                }
+                let sql = read_if_exists(&sql_path)?.unwrap_or_default();
                 views.push((contents, sql));
             }
         }

@@ -272,7 +272,13 @@ fn link_sql_consumer(
         } else if let Some(cube) = manifest.cubes.iter().find(|c| c.name == name) {
             push_edge(&mut graph.edges, cube_id(&name), consumer.to_string());
             for measure in &cube.measures {
-                if member_is_referenced(references.as_ref(), sql, &cube.name, &measure.name) {
+                if member_is_referenced(
+                    references.as_ref(),
+                    sql,
+                    manifest,
+                    &cube.name,
+                    &measure.name,
+                ) {
                     push_edge(
                         &mut graph.edges,
                         metric_id(&cube.name, &measure.name),
@@ -286,7 +292,7 @@ fn link_sql_consumer(
                 .map(|d| d.name.as_str())
                 .chain(cube.time_dimensions.iter().map(|d| d.name.as_str()));
             for dim_name in dim_names {
-                if member_is_referenced(references.as_ref(), sql, &cube.name, dim_name) {
+                if member_is_referenced(references.as_ref(), sql, manifest, &cube.name, dim_name) {
                     push_edge(
                         &mut graph.edges,
                         dim_id(&cube.name, dim_name),
@@ -562,12 +568,36 @@ fn identifier_matches_name(identifier: &sqlparser::ast::Ident, name: &str) -> bo
         || (identifier.quote_style.is_none() && identifier.value.eq_ignore_ascii_case(name))
 }
 
-fn source_matches_cube(source: &consumers::SelectSource, cube: &str) -> bool {
-    source
+fn source_resolves_to_cube(
+    source: &consumers::SelectSource,
+    manifest: &Manifest,
+    cube: &str,
+) -> bool {
+    let Some(identifier) = source
         .relation
         .as_ref()
         .and_then(RelationReference::unqualified_name)
-        .is_some_and(|name| identifier_matches_name(name, cube))
+    else {
+        return false;
+    };
+    let mut candidates: Vec<String> = manifest
+        .models
+        .iter()
+        .map(|candidate| candidate.name.clone())
+        .collect();
+    candidates.extend(manifest.views.iter().map(|view| view.name.clone()));
+    candidates.extend(
+        manifest
+            .cubes
+            .iter()
+            .map(|candidate| candidate.name.clone()),
+    );
+    let Some(resolved) = resolve_relation_name(identifier, &candidates) else {
+        return false;
+    };
+    resolved == cube
+        && !manifest.models.iter().any(|model| model.name == resolved)
+        && !manifest.views.iter().any(|view| view.name == resolved)
 }
 
 /// Resolve a source once against the full semantic namespace before attributing a column to a
@@ -616,6 +646,7 @@ fn source_matches_qualifier(
 fn member_is_referenced(
     references: Option<&consumers::SqlConsumerReferences>,
     sql: &str,
+    manifest: &Manifest,
     cube: &str,
     member: &str,
 ) -> bool {
@@ -633,16 +664,19 @@ fn member_is_referenced(
                         .sources
                         .iter()
                         .filter(|source| source_matches_qualifier(source, qualifier));
-                    matches!(sources.next(), Some(source) if source_matches_cube(source, cube))
+                    matches!(sources.next(), Some(source) if source_resolves_to_cube(source, manifest, cube))
                         && sources.next().is_none()
                 }
-                None => select.sources.len() == 1 && source_matches_cube(&select.sources[0], cube),
+                None => {
+                    select.sources.len() == 1
+                        && source_resolves_to_cube(&select.sources[0], manifest, cube)
+                }
             }
         });
         column_matches
             || select.wildcards.iter().any(|qualifier| {
                 select.sources.iter().any(|source| {
-                    source_matches_cube(source, cube)
+                    source_resolves_to_cube(source, manifest, cube)
                         && qualifier
                             .as_ref()
                             .is_none_or(|qualifier| source_matches_qualifier(source, qualifier))

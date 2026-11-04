@@ -6,6 +6,10 @@ use warble::{HostAnalysis, HostConsumers, HostImpact, LineageGraph, LineageKind,
 
 /// Analyze every declared seed. A malformed graph supplies no analysis, whereas
 /// a valid empty graph explicitly supplies an empty analysis and zero consumers.
+///
+/// The prepared-context contract exposes the complete transitive downstream list for every seed.
+/// Consequently, a densely connected graph can require quadratic traversal time and output space;
+/// this adapter deliberately preserves that information rather than truncating an impact result.
 pub(crate) fn analyze(graph: &LineageGraph) -> Option<HostAnalysis> {
     let kinds: BTreeMap<_, _> = graph
         .nodes

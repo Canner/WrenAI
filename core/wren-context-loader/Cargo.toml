@@ -28,5 +28,10 @@ thiserror = "2"
 # `openat` bindings so a directory is never re-resolved by path after it has been opened.
 rustix = { version = "1.1.4", features = ["fs"] }
 
+[target.'cfg(windows)'.dependencies]
+# Stable file identity for hard-link output protection. std's Windows file-index accessors remain
+# nightly-only, while this crate obtains the identity through supported handle APIs.
+same-file = "1.0.6"
+
 [dev-dependencies]
 tempfile = "3"

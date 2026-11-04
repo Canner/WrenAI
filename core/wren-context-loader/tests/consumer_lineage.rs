@@ -760,6 +760,34 @@ fn under_recursive_a_cte_sees_its_later_siblings() {
 }
 
 #[test]
+fn nested_cube_sources_keep_exact_first_case_identity() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "cubes/Orders/metadata.yml",
+        r#"name: Orders
+base_object: orders
+measures:
+  - { name: total_value, expression: "SUM(total)", type: DOUBLE }
+dimensions: []
+time_dimensions: []
+"#,
+    );
+    write(
+        tmp.path(),
+        "knowledge/sql/nested-case.md",
+        "---\nsql: SELECT 1 FROM Orders WHERE EXISTS (SELECT total_value FROM orders)\n---\n",
+    );
+
+    let ctx = load(tmp.path());
+    assert!(
+        !reaches(&ctx, "metric:Orders.total_value", "query:nested-case"),
+        "the outer case-distinct cube must not borrow an inner member"
+    );
+}
+
+#[test]
 fn cte_names_match_case_insensitively() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());

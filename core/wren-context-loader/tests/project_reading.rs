@@ -78,6 +78,25 @@ fn sql_yml_wins_over_an_inline_statement() {
 }
 
 #[test]
+fn a_sql_yml_directory_is_not_silently_treated_as_an_absent_statement() {
+    let tmp = tempfile::tempdir().unwrap();
+    project(tmp.path());
+    write(
+        tmp.path(),
+        "views/big/metadata.yml",
+        "name: big\nstatement: SELECT 1\n",
+    );
+    fs::create_dir_all(tmp.path().join("views/big/sql.yml")).unwrap();
+
+    let error = match read_project_dir(tmp.path()) {
+        Ok(_) => panic!("sql.yml directories are invalid inputs"),
+        Err(error) => error,
+    };
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(error.to_string(), "sql_yml_directory_unsupported");
+}
+
+#[test]
 fn a_view_with_no_statement_anywhere_is_an_error_and_a_diagnostic() {
     let tmp = tempfile::tempdir().unwrap();
     project(tmp.path());
