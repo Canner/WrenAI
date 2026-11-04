@@ -527,3 +527,49 @@ def test_computed_rate_value_keeps_its_consuming_alias_obligation():
         JOIN rates f ON f.currency=p.currency
         JOIN rates g ON g.currency=p.currency AND g.date<=p.captured_at"""
     assert make_checker().check(parse_one(sql, dialect="duckdb")) == [RATE]
+
+
+@pytest.mark.parametrize(
+    "projection,joins,expected",
+    [
+        ("SUM(p.amount*f.rate_to_usd),SUM(o.order_total)", "", [RATE]),
+        (
+            "SUM(p.amount*f.rate_to_usd),SUM(o.order_total*g.rate_to_usd)",
+            "JOIN fx_rates g ON g.currency=o.currency AND g.date<=o.placed_at",
+            [],
+        ),
+        (
+            "SUM(p.amount*f.rate_to_usd+o.order_total*g.rate_to_usd)",
+            "JOIN fx_rates g ON g.currency=o.currency AND g.date<=o.placed_at",
+            [],
+        ),
+        ("SUM(p.amount*f.rate_to_usd)", "", []),
+    ],
+)
+def test_each_aggregated_amount_group_has_its_own_rate_proof(
+    projection, joins, expected
+):
+    sql = f"""SELECT {projection} FROM payments p JOIN orders o ON o.id=p.order_id
+        JOIN fx_rates f ON f.currency=p.currency AND f.date<=p.captured_at {joins}"""
+    assert make_checker().check(parse_one(sql, dialect="duckdb")) == expected
+
+
+def test_currency_and_date_cannot_be_pooled_across_amount_groups():
+    sql = """SELECT SUM(p.amount*f.rate_to_usd),SUM(o.order_total)
+        FROM payments p JOIN orders o ON o.id=p.order_id
+        JOIN fx_rates f ON f.currency=p.currency AND f.date<=o.placed_at"""
+    assert make_checker().check(parse_one(sql, dialect="duckdb")) == [RATE]
+
+
+@pytest.mark.parametrize("swapped", [False, True])
+def test_computed_combined_amounts_keep_their_own_rate_suppliers_through_a_cte(swapped):
+    payment_rate, order_rate = ("g", "f") if swapped else ("f", "g")
+    sql = f"""WITH converted AS (
+        SELECT p.amount*{payment_rate}.rate_to_usd+o.order_total*{order_rate}.rate_to_usd AS total
+        FROM payments p JOIN orders o ON o.id=p.order_id
+        JOIN fx_rates f ON f.currency=p.currency AND f.date<=p.captured_at
+        JOIN fx_rates g ON g.currency=o.currency AND g.date<=o.placed_at)
+        SELECT SUM(total) FROM converted"""
+    assert make_checker().check(parse_one(sql, dialect="duckdb")) == (
+        [RATE] if swapped else []
+    )

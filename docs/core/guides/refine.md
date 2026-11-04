@@ -133,7 +133,7 @@ silently turn enforcement off.
   outer-joined group can be accepted even though it does not remove preserved-side
   rows. Put the required exclusion in the outer `WHERE` for that shape.
 - **`require_rate_join`**: statements that aggregate a listed amount column must read the
-  rate model joined on one of the declared currency columns and bounded
+  rate model joined on that amount group's declared currency column and bounded
   `rate.date <= <expression over a declared transaction-date column>` (an inner
   `MAX(date)`, `ORDER BY date DESC LIMIT 1`, `LATERAL`, `ASOF JOIN` and
   `rate.date BETWEEN ... AND <upper bound>` all qualify; only the upper bound is checked,
@@ -142,6 +142,9 @@ silently turn enforcement off.
   The currency and date predicates must bound the same rate instance. When an aggregate
   uses a rate value, that supplying instance needs both predicates; an unrelated join
   cannot supply them. Same-day equality and an unbounded latest rate do not qualify.
+  Each amount group with an aggregated column needs its own proof, using that group's
+  currency and transaction dates. Nonaggregated groups add no obligation. The currency
+  grouping and literal-filter exemptions also apply to the corresponding amount group.
 - **`sale_statuses`**: statements that read the status column's model must keep exactly the
   declared set of status values (`values`) out of the column's whole value set (`domain`,
   or else the `enum_values` the column lists). The check computes which values the

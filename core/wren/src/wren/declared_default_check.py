@@ -482,7 +482,14 @@ class _Statement:
         ]
         return any(flag in self.origin(column).taint for column in grouped + aggregated)
 
-    def _column_routes(self, column, visiting=frozenset(), *, expressions=False):
+    def _column_routes(
+        self,
+        column,
+        visiting=frozenset(),
+        *,
+        expressions=False,
+        expression_columns=None,
+    ):
         """Exact table instances and consuming aliases (pass-through by default)."""
         scope = self._scope_for(column)
         while scope is not None and column.table not in scope.sources:
@@ -504,18 +511,24 @@ class _Statement:
         routes = []
         for projection, _owner in found:
             inner = _unparen(projection.unalias())
-            columns = (
-                [inner]
-                if isinstance(inner, exp.Column)
-                else list(inner.find_all(exp.Column))
-                if expressions
-                else []
-            )
+            if isinstance(inner, exp.Column):
+                columns = [inner]
+            elif expressions:
+                columns = (
+                    expression_columns(inner)
+                    if expression_columns is not None
+                    else list(inner.find_all(exp.Column))
+                )
+            else:
+                columns = []
             for child in columns:
                 routes += [
                     (table, [edge, *route])
                     for table, route in self._column_routes(
-                        child, visiting | {key}, expressions=expressions
+                        child,
+                        visiting | {key},
+                        expressions=expressions,
+                        expression_columns=expression_columns,
                     )
                 ]
         return routes
@@ -712,10 +725,13 @@ class _Statement:
     def fires_rate(self, rule: RequireRateJoin) -> bool:
         if rule.aggregated_only and not self.aggregated:
             return False
+        return any(self._fires_rate_group(rule, group) for group in rule.amounts)
+
+    def _fires_rate_group(self, rule, amount_group):
         norm = self.checker.norm_pair
-        amounts = {norm(ref) for group in rule.amounts for ref in group.columns}
-        currencies = {norm(group.currency) for group in rule.amounts}
-        dates = {norm(ref) for group in rule.amounts for ref in group.dates}
+        amounts = {norm(ref) for ref in amount_group.columns}
+        currencies = {norm(amount_group.currency)}
+        dates = {norm(ref) for ref in amount_group.dates}
         rate_currency, rate_date = norm(rule.rate_currency), norm(rule.rate_date)
         if not any(self.taint(aggregate) & amounts for aggregate in self.aggregates):
             return False
@@ -734,10 +750,14 @@ class _Statement:
             for path in self._read_paths(scope, alias, source)
         ]
 
-        def matching(column, *, expressions=False):
+        def matching(column, *, expressions=False, expression_columns=None):
             return {
                 index
-                for table, route in self._column_routes(column, expressions=expressions)
+                for table, route in self._column_routes(
+                    column,
+                    expressions=expressions,
+                    expression_columns=expression_columns,
+                )
                 for index, (read, path) in enumerate(reads)
                 if table == read and self._route_fits(route, path)
             }
@@ -795,12 +815,29 @@ class _Statement:
             (self.checker.norm(rule.rate_model), self.checker.norm(column))
             for column in self.checker.schema.get(rule.rate_model, ())
         } - {rate_currency, rate_date}
+        all_amounts = {norm(ref) for group in rule.amounts for ref in group.columns}
+
+        def value_columns(node):
+            taint = self.taint(node)
+            if not taint & rate_values or (taint & all_amounts and not taint & amounts):
+                return []
+            if isinstance(node, exp.Column):
+                return [node]
+            # A sum may combine independently converted amount groups. Follow
+            # this group's terms and rate-only siblings, including inside CTEs.
+            return [
+                column
+                for child in node.iter_expressions()
+                for column in value_columns(child)
+            ]
+
         supplied = set()
         for aggregate in self.aggregates:
             if self.taint(aggregate) & amounts:
-                for column in aggregate.find_all(exp.Column):
-                    if self.taint(column) & rate_values:
-                        supplied |= matching(column, expressions=True)
+                for column in value_columns(aggregate):
+                    supplied |= matching(
+                        column, expressions=True, expression_columns=value_columns
+                    )
         return not complete or not supplied <= complete
 
     def _filters_currency_literal(self, currencies: set[Pair]) -> bool:

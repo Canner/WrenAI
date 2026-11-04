@@ -514,7 +514,6 @@ DATES = {
     "correlated max": "f.date = (SELECT MAX(x.date) FROM fx_rates x WHERE x.currency = p.currency AND x.date <= CAST(p.captured_at AS DATE))",
     "on or before": "f.date <= CAST(p.captured_at AS DATE)",
     "reversed": "CAST(p.captured_at AS DATE) >= f.date",
-    "order date": "f.date <= CAST(o.placed_at AS DATE)",
     "between with a declared upper bound": "f.date BETWEEN CAST(p.captured_at AS DATE) - INTERVAL 7 DAY AND CAST(p.captured_at AS DATE)",
 }
 
@@ -527,6 +526,7 @@ def test_a_rate_join_bounded_on_or_before_a_declared_date_satisfies_the_rule(
 
 
 FX_BAD_DATES = {
+    "another amount group's date": "f.date <= CAST(o.placed_at AS DATE)",
     "same day": "f.date = CAST(p.captured_at AS DATE)",
     "latest rate": "f.date = (SELECT MAX(date) FROM fx_rates)",
     "strictly before": "f.date < CAST(p.captured_at AS DATE)",
@@ -656,6 +656,12 @@ def test_per_currency_and_single_currency_queries_are_exempt(checker, sql):
 def test_a_non_literal_currency_filter_is_not_an_exemption(checker):
     sql = f"SELECT SUM(p.amount) FROM {CHARGES} WHERE NOT c.is_test AND p.currency = o.currency"
     assert check(checker, sql) == [RATE]
+
+
+def test_a_currency_literal_exempts_only_its_aggregated_amount_group(checker):
+    sql = f"SELECT SUM(p.amount),SUM(o.order_total) FROM {CHARGES} WHERE NOT c.is_test AND p.currency='USD'"
+    assert check(checker, sql) == [RATE]
+    assert check(checker, sql + " AND o.currency='USD'") == []
 
 
 @pytest.mark.parametrize(
