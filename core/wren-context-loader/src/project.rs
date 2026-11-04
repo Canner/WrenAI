@@ -195,6 +195,51 @@ struct CubeMemberFile {
     r#type: String,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct CubeMemberSignature {
+    name: String,
+    expression: String,
+    r#type: String,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct CubeSignature {
+    name: String,
+    base_object: String,
+    measures: Vec<CubeMemberSignature>,
+    dimensions: Vec<CubeMemberSignature>,
+    time_dimensions: Vec<CubeMemberSignature>,
+    hierarchies: BTreeMap<String, Vec<String>>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl From<CubeFile> for CubeSignature {
+    fn from(cube: CubeFile) -> Self {
+        let members = |members: Vec<CubeMemberFile>| {
+            let mut members = members
+                .into_iter()
+                .map(|member| CubeMemberSignature {
+                    name: member.name,
+                    expression: member.expression.trim().to_string(),
+                    r#type: member.r#type,
+                })
+                .collect::<Vec<_>>();
+            members.sort();
+            members
+        };
+        Self {
+            name: cube.name,
+            base_object: cube.base_object,
+            measures: members(cube.measures),
+            dimensions: members(cube.dimensions),
+            time_dimensions: members(cube.time_dimensions),
+            hierarchies: cube.hierarchies,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct ViewMetaFile {
     name: String,
@@ -681,23 +726,48 @@ fn captured_sources(text: &BTreeMap<String, String>) -> std::io::Result<Option<P
 
 #[cfg(not(target_arch = "wasm32"))]
 fn validate_native_cube_source(sources: &ProjectSources) -> std::io::Result<()> {
-    if !sources.cube_ymls.is_empty() {
-        return Ok(());
-    }
     let Some(root) = &sources.cubes_yml else {
         return Ok(());
     };
-    let Ok(cubes) = parse_doc_or_default::<Vec<CubeFile>>(root) else {
+    let Ok(root_cubes) = parse_doc_or_default::<Vec<CubeFile>>(root) else {
         // Preserve the existing assembly diagnostic for malformed root input.
         return Ok(());
     };
-    if cubes.is_empty() {
+    if root_cubes.is_empty() {
         return Ok(());
     }
-    Err(std::io::Error::new(
+    let directory_cubes = sources
+        .cube_ymls
+        .iter()
+        .map(|yml| parse_mapping_doc::<CubeFile>(yml))
+        .collect::<Result<Option<Vec<_>>, _>>();
+    let Some(directory_cubes) = directory_cubes.ok().flatten() else {
+        return Err(native_cube_mirror_error());
+    };
+
+    let mut root_signatures = root_cubes
+        .into_iter()
+        .map(CubeSignature::from)
+        .collect::<Vec<_>>();
+    let mut directory_signatures = directory_cubes
+        .into_iter()
+        .map(CubeSignature::from)
+        .collect::<Vec<_>>();
+    root_signatures.sort();
+    directory_signatures.sort();
+    if root_signatures == directory_signatures {
+        Ok(())
+    } else {
+        Err(native_cube_mirror_error())
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn native_cube_mirror_error() -> std::io::Error {
+    std::io::Error::new(
         std::io::ErrorKind::InvalidInput,
-        "non-empty cubes.yml requires cubes/<name>/metadata.yml for native projects",
-    ))
+        "non-empty cubes.yml requires an exact semantic mirror in cubes/<name>/metadata.yml for native projects",
+    )
 }
 
 #[cfg(not(target_arch = "wasm32"))]

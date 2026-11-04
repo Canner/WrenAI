@@ -33,8 +33,19 @@ const ROOT_CUBE: &str = r#"- name: order_metrics
   base_object: orders
   measures:
     - { name: total_value, expression: "SUM(total)", type: DOUBLE }
+    - { name: order_count, expression: "COUNT(*)", type: BIGINT }
   dimensions: []
   time_dimensions: []
+"#;
+
+const CUBE_METADATA: &str = r#"name: order_metrics
+base_object: orders
+description: Directory prose does not affect execution semantics.
+measures:
+  - { name: order_count, expression: "COUNT(*)", type: BIGINT, description: "A count." }
+  - { name: total_value, expression: "SUM(total)", type: DOUBLE, description: "A sum." }
+dimensions: []
+time_dimensions: []
 "#;
 
 fn statements(dir: &Path) -> Vec<(String, String)> {
@@ -104,6 +115,79 @@ fn root_only_cubes_are_rejected_by_native_readers() {
         !context.exists(),
         "the loader must fail before writing output"
     );
+}
+
+#[test]
+fn root_cube_mirror_requires_usable_matching_directory_semantics() {
+    let cases = [
+        ("empty", ""),
+        ("comment-only", "# draft\n"),
+        ("non-mapping", "just prose\n"),
+        ("invalid", "name: order_metrics\n"),
+        (
+            "different-name",
+            "name: other_metrics\nbase_object: orders\nmeasures: []\ndimensions: []\ntime_dimensions: []\n",
+        ),
+        (
+            "different-definition",
+            "name: order_metrics\nbase_object: orders\nmeasures:\n  - { name: total_value, expression: \"SUM(other)\", type: DOUBLE }\ndimensions: []\ntime_dimensions: []\n",
+        ),
+        (
+            "different-base-object",
+            "name: order_metrics\nbase_object: other\nmeasures:\n  - { name: total_value, expression: \"SUM(total)\", type: DOUBLE }\ndimensions: []\ntime_dimensions: []\n",
+        ),
+        (
+            "different-member-type",
+            "name: order_metrics\nbase_object: orders\nmeasures:\n  - { name: total_value, expression: \"SUM(total)\", type: INTEGER }\ndimensions: []\ntime_dimensions: []\n",
+        ),
+        (
+            "different-hierarchy",
+            "name: order_metrics\nbase_object: orders\nmeasures:\n  - { name: total_value, expression: \"SUM(total)\", type: DOUBLE }\ndimensions: []\ntime_dimensions: []\nhierarchies: { drill: [total_value] }\n",
+        ),
+    ];
+    for (name, metadata) in cases {
+        let tmp = tempfile::tempdir().unwrap();
+        project(tmp.path());
+        write(tmp.path(), "cubes.yml", ROOT_CUBE);
+        write(tmp.path(), "cubes/order_metrics/metadata.yml", metadata);
+        for result in [
+            read_project_dir(tmp.path()).map(|_| ()),
+            capture_project(tmp.path()).map(|_| ()),
+        ] {
+            let error = result.expect_err(name);
+            assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput, "{name}");
+            assert!(
+                error.to_string().contains("exact semantic mirror"),
+                "{name}: {error}"
+            );
+        }
+    }
+
+    let duplicate = tempfile::tempdir().unwrap();
+    project(duplicate.path());
+    write(duplicate.path(), "cubes.yml", ROOT_CUBE);
+    write(duplicate.path(), "cubes/first/metadata.yml", CUBE_METADATA);
+    write(duplicate.path(), "cubes/second/metadata.yml", CUBE_METADATA);
+    for result in [
+        read_project_dir(duplicate.path()).map(|_| ()),
+        capture_project(duplicate.path()).map(|_| ()),
+    ] {
+        assert!(
+            result.is_err(),
+            "duplicate directory cube names must not be hidden"
+        );
+    }
+
+    let tmp = tempfile::tempdir().unwrap();
+    project(tmp.path());
+    write(tmp.path(), "cubes.yml", ROOT_CUBE);
+    write(
+        tmp.path(),
+        "cubes/order_metrics/metadata.yml",
+        CUBE_METADATA,
+    );
+    assert!(read_project_dir(tmp.path()).unwrap().is_some());
+    assert!(capture_project(tmp.path()).unwrap().sources.is_some());
 }
 
 #[test]

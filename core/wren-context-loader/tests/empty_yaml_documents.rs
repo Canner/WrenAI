@@ -177,13 +177,9 @@ fn per_cube_metadata_is_read_when_the_root_cubes_yml_has_no_entries() {
 
 #[test]
 fn pure_project_sources_root_entries_win_over_per_cube_metadata_and_are_never_merged() {
-    let sources = sources_with(
-        None,
-        &[
-            ("cubes.yml", ROOT_CUBE),
-            ("cubes/dir_cube/metadata.yml", DIRECTORY_CUBE),
-        ],
-    );
+    let mut sources = sources_with(None, &[]);
+    sources.cubes_yml = Some(ROOT_CUBE.to_string());
+    sources.cube_ymls = vec![DIRECTORY_CUBE.to_string()];
     let expected = vec!["root_cube".to_string()];
     assert_eq!(cube_names(&sources), (expected.clone(), expected));
 }
