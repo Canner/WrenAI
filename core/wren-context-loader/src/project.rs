@@ -475,10 +475,9 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
         return Ok(None);
     };
     let legacy_or_default_v1 = validate_native_schema_version(&wren_project_yml)?;
-    reject_native_flat_v1_sources(
-        legacy_or_default_v1,
-        &native_flat_v1_sources_without_counterparts(&root)?,
-    )?;
+    if legacy_or_default_v1 {
+        reject_native_flat_v1_sources(true, &native_flat_v1_sources_without_counterparts(&root)?)?;
+    }
     let read_metadata = |parent: &crate::source_fs::SourceDir| -> std::io::Result<Vec<String>> {
         let mut values = Vec::new();
         for name in parent.names()? {
@@ -602,6 +601,7 @@ fn native_flat_v1_sources_without_counterparts(
                 .open_nested_dir(std::ffi::OsStr::new(stem))?
                 .map(|child| child.open_regular_file("metadata.yml".as_ref()))
                 .transpose()?
+                .flatten()
                 .is_some();
             if is_flat_v1_source_path(&path)
                 && dir.open_regular_file(&name)?.is_some()
@@ -622,6 +622,7 @@ fn native_flat_v1_sources_without_counterparts(
                     .open_nested_dir(&name)?
                     .map(|view| view.open_regular_file("metadata.yml".as_ref()))
                     .transpose()?
+                    .flatten()
                     .is_some())
             })
         })
@@ -660,7 +661,14 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
             if let Some(child) = root.open_dir_if_exists(name.as_ref())? {
                 capture.capture_dir(&child, name)?;
             }
-        } else if name == "views.yml" {
+        } else if name == "views.yml"
+            && capture
+                .text
+                .get("wren_project.yml")
+                .map(|project| validate_native_schema_version(project))
+                .transpose()?
+                .unwrap_or(false)
+        {
             if root.open_regular_file(name.as_ref())?.is_some() {
                 capture.flat_v1_source_paths.push(name.to_string());
             }
@@ -703,7 +711,13 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
     for (relative, path) in files {
         capture.capture_file(&relative, fs::File::open(path)?)?;
     }
-    if dir.join("views.yml").is_file() {
+    let legacy_or_default_v1 = capture
+        .text
+        .get("wren_project.yml")
+        .map(|project| validate_native_schema_version(project))
+        .transpose()?
+        .unwrap_or(false);
+    if legacy_or_default_v1 && dir.join("views.yml").is_file() {
         capture.flat_v1_source_paths.push("views.yml".to_string());
     }
     let sources = captured_sources(&capture.text, &capture.flat_v1_source_paths)?;
@@ -890,10 +904,12 @@ fn captured_sources(
         return Ok(None);
     };
     let legacy_or_default_v1 = validate_native_schema_version(&wren_project_yml)?;
-    reject_native_flat_v1_sources(
-        legacy_or_default_v1,
-        &captured_flat_v1_sources_without_counterparts(text, flat_v1_source_paths),
-    )?;
+    if legacy_or_default_v1 {
+        reject_native_flat_v1_sources(
+            true,
+            &captured_flat_v1_sources_without_counterparts(text, flat_v1_source_paths),
+        )?;
+    }
     let mut model_ymls = Vec::new();
     let mut cube_ymls = Vec::new();
     let mut views = Vec::new();
@@ -1172,10 +1188,9 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     crate::digest::validate_source_directories(dir)?;
     let wren_project_yml = fs::read_to_string(&wren_project_path)?;
     let legacy_or_default_v1 = validate_native_schema_version(&wren_project_yml)?;
-    reject_native_flat_v1_sources(
-        legacy_or_default_v1,
-        &native_flat_v1_sources_without_counterparts(dir)?,
-    )?;
+    if legacy_or_default_v1 {
+        reject_native_flat_v1_sources(true, &native_flat_v1_sources_without_counterparts(dir)?)?;
+    }
 
     let mut model_ymls = Vec::new();
     let models_dir = dir.join("models");

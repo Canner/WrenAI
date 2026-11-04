@@ -778,6 +778,7 @@ fn fallback_executable_text(statement: &str) -> String {
     enum State {
         Normal,
         SingleQuoted,
+        EscapedSingleQuoted,
         DoubleQuoted,
         LineComment,
         BlockComment(usize),
@@ -805,6 +806,11 @@ fn fallback_executable_text(statement: &str) -> String {
                     executable.push(' ');
                     index += 1;
                     state = State::SingleQuoted;
+                }
+                [b'e' | b'E', b'\'', ..] => {
+                    executable.push(' ');
+                    index += 2;
+                    state = State::EscapedSingleQuoted;
                 }
                 [b'"', ..] => {
                     executable.push('"');
@@ -834,8 +840,20 @@ fn fallback_executable_text(statement: &str) -> String {
                     } else {
                         state = State::Normal;
                     }
-                } else if bytes[index] == b'\\' && index + 1 < bytes.len() {
+                } else {
+                    index += 1;
+                }
+            }
+            State::EscapedSingleQuoted => {
+                if bytes[index] == b'\\' && index + 1 < bytes.len() {
                     index += 2;
+                } else if bytes[index] == b'\'' {
+                    index += 1;
+                    if index < bytes.len() && bytes[index] == b'\'' {
+                        index += 1;
+                    } else {
+                        state = State::Normal;
+                    }
                 } else {
                     index += 1;
                 }
@@ -947,8 +965,13 @@ mod tests {
             "SELCT * FROM \"/*\", orders",
             "orders"
         ));
+        assert!(statement_references(r"SELCT '\' FROM orders", "orders"));
         assert!(!statement_references(
             "SELCT 'orders' /* orders */ -- orders\n",
+            "orders"
+        ));
+        assert!(!statement_references(
+            r"SELCT E'orders\'not executable' FROM",
             "orders"
         ));
         assert!(!statement_references(

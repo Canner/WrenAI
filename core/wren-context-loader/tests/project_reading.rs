@@ -188,6 +188,17 @@ fn root_cube_mirror_requires_usable_matching_directory_semantics() {
     );
     assert!(read_project_dir(tmp.path()).unwrap().is_some());
     assert!(capture_project(tmp.path()).unwrap().sources.is_some());
+
+    let tmp = tempfile::tempdir().unwrap();
+    project(tmp.path());
+    write(
+        tmp.path(),
+        "models/legacy.yml",
+        "name: legacy\ncolumns: []\n",
+    );
+    write(tmp.path(), "views.yml", "views: []\n");
+    assert!(read_project_dir(tmp.path()).unwrap().is_some());
+    assert!(capture_project(tmp.path()).unwrap().sources.is_some());
 }
 
 #[test]
@@ -223,6 +234,37 @@ fn native_readers_reject_flat_v1_sources_but_keep_directory_layouts() {
                     "{version_name} {path}: {error}"
                 );
             }
+        }
+    }
+
+    for (path, contents, empty_counterpart) in [
+        (
+            "models/orders.yml",
+            "name: orders\ncolumns: []\n",
+            "models/orders",
+        ),
+        (
+            "cubes/order_metrics.yml",
+            "name: order_metrics\n",
+            "cubes/order_metrics",
+        ),
+        ("views.yml", "views: []\n", "views/current"),
+    ] {
+        let tmp = tempfile::tempdir().unwrap();
+        write(
+            tmp.path(),
+            "wren_project.yml",
+            "schema_version: 1\nname: legacy\ncatalog: wren\nschema: public\ndata_source: duckdb\n",
+        );
+        write(tmp.path(), path, contents);
+        fs::create_dir_all(tmp.path().join(empty_counterpart)).unwrap();
+        for result in [
+            read_project_dir(tmp.path()).map(|_| ()),
+            capture_project(tmp.path()).map(|_| ()),
+        ] {
+            let error = result.expect_err(path);
+            assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+            assert!(error.to_string().contains("flat-only"), "{path}: {error}");
         }
     }
 
