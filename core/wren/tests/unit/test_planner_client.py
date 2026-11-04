@@ -59,3 +59,22 @@ def test_invalid_or_missing_reply_timeout_fails_before_any_connection(settings):
         == "serviceReplyTimeoutMs must be an integer from 1 to 2147483647"
     )
     assert actual["clients"] == 0 and actual["timeouts"] == []
+
+
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("failure", [False, True])
+def test_actual_trace_files_are_private_for_success_and_error_paths(existing, failure):
+    actual = probe(
+        {
+            "serviceReplyTimeoutMs": 200000,
+            "_probeFileChecks": True,
+            "_probeExisting": existing,
+            "_probeFailure": failure,
+        }
+    )
+    assert actual["error"] is None
+    assert actual["traceMode"] == 0o600
+    assert actual["modesAtWrite"] == [0o600] * (1 if failure else 2)
+    assert actual["trace"]["completed"] is (not failure)
+    assert len(actual["trace"]["errors"]) == (1 if failure else 0)
+    assert actual["exitCode"] == (1 if failure else 0)

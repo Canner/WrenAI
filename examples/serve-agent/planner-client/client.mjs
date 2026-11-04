@@ -1,5 +1,5 @@
 // An independent pi planner with an MCP client. No private profile/context import.
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, open } from 'node:fs/promises';
 import { Agent } from '@earendil-works/pi-agent-core';
 import { streamSimple } from '@earendil-works/pi-ai/api/openai-completions';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -14,6 +14,17 @@ const serviceReplyTimeoutMs = config.serviceReplyTimeoutMs;
 if (!Number.isInteger(serviceReplyTimeoutMs) || serviceReplyTimeoutMs < 1 || serviceReplyTimeoutMs > 2147483647)
   throw Error('serviceReplyTimeoutMs must be an integer from 1 to 2147483647');
 const trace = { turns: [], calls: [], errors: [], completed: false };
+async function writeTrace() {
+  const file = await open(outputPath, 'w', 0o600);
+  try {
+    // Creation mode does not tighten an existing file. Restrict this descriptor
+    // before any new trace bytes are written, independently of the umask.
+    await file.chmod(0o600);
+    await file.writeFile(JSON.stringify(trace, null, 2));
+  } finally {
+    await file.close();
+  }
+}
 const client = new Client({ name: 'wren-external-pi-planner', version: '1.0.0' });
 // Only the explicitly named private credential reaches the service child.
 const env = { PATH: process.env.PATH, ...(config.env ?? {}) };
@@ -48,7 +59,7 @@ try {
     const last = agent.state.messages.at(-1);
     if (last?.role !== 'assistant' || last.stopReason !== 'stop') { trace.providerError = String(last?.errorMessage ?? last?.stopReason ?? 'missing').replaceAll(process.env.OPENAI_API_KEY ?? 'NO_KEY', '[REDACTED]').slice(0, 500); throw Error('planner_incomplete'); }
     trace.turns.push({ question, answer: last.content.filter(p => p.type === 'text').map(p => p.text).join(''), calls: trace.calls.length - start });
-    await writeFile(outputPath, JSON.stringify(trace, null, 2));
+    await writeTrace();
   }
   trace.completed = true;
 } catch (error) {
@@ -57,5 +68,5 @@ try {
 } finally {
   trace.requests = totalRequests;
   await client.close();
-  await writeFile(outputPath, JSON.stringify(trace, null, 2));
+  await writeTrace();
 }
