@@ -53,6 +53,7 @@ from wren.governed_query import (
     require_platform,
 )
 from wren.model.error import DatabaseTimeoutError
+from wren.project_fingerprint import is_project_source_path
 
 
 def uid():
@@ -1737,7 +1738,9 @@ def open_engine(root: Path, config: dict, connection_profile: str | None):
     if connection_profile:
         from wren.profile import expand_profile_secrets, list_profiles  # noqa: PLC0415
 
-        connection = expand_profile_secrets(dict(list_profiles()[connection_profile]))
+        connection = expand_profile_secrets(
+            dict(list_profiles()[connection_profile]), project_path=root
+        )
     mdl = str(root / "target/mdl.json")
     if connection is not None and (not isinstance(connection, dict) or not connection):
         raise ValueError("explicit_connection_required")
@@ -1775,6 +1778,10 @@ def create_service(
     raw_config = yaml.safe_load(config_path.read_text())
     check_service_config(raw_config)
     config = apply_policy_preset(raw_config, policy_preset)
+    if config.get("audit_path") and is_project_source_path(
+        root, Path(config["audit_path"]).expanduser()
+    ):
+        raise ValueError("audit_path_overlaps_project")
     execution = execution_from_config(config)
     capabilities_path = bundle / "capabilities.yml"
     profile = Profile.model_validate(

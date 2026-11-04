@@ -145,7 +145,7 @@ def serve(project: Path) -> None:
         raise ValueError("A bound project is required")
     require_profile_pin(project)
     _, profile = resolve_profile_for_project(project)
-    profile = expand_profile_secrets(profile)
+    profile = expand_profile_secrets(profile, project_path=project)
     datasource = profile.pop("datasource")
     manifest = build_json(project)
     dialect = get_sqlglot_dialect(DataSource(datasource))

@@ -70,7 +70,9 @@ def bound_transport(tmp_path, monkeypatch):
     factory = MagicMock(return_value=engine)
     config = MagicMock(return_value={})
     monkeypatch.setattr(transport, "resolve_profile_for_project", profile)
-    monkeypatch.setattr(transport, "expand_profile_secrets", lambda value: dict(value))
+    monkeypatch.setattr(
+        transport, "expand_profile_secrets", lambda value, **_: dict(value)
+    )
     monkeypatch.setattr(transport, "build_json", build)
     monkeypatch.setattr(transport, "load_config", config)
     monkeypatch.setattr(transport, "WrenEngine", factory)
@@ -136,6 +138,26 @@ def test_captures_once_and_always_queries_read_only(bound_transport):
         "SELECT n FROM orders", limit=5, read_only=True
     )
     f.engine.__exit__.assert_called_once()
+
+
+def test_profile_secrets_come_from_the_bound_project_not_the_cwd(
+    bound_transport, monkeypatch, tmp_path
+):
+    from wren.profile import expand_profile_secrets  # noqa: PLC0415
+
+    f = bound_transport
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (f.project / ".env").write_text("BOUND_TRANSPORT_SECRET=project-secret\n")
+    monkeypatch.chdir(elsewhere)
+    monkeypatch.delenv("BOUND_TRANSPORT_SECRET", raising=False)
+    f.profile.return_value = (
+        "fixture",
+        {"datasource": "duckdb", "path": "${BOUND_TRANSPORT_SECRET}"},
+    )
+    monkeypatch.setattr(transport, "expand_profile_secrets", expand_profile_secrets)
+    f.run(b'{"id":1,"operation":"inspect"}\n')
+    assert f.factory.call_args.args[2]["path"] == "project-secret"
 
 
 @pytest.mark.parametrize(

@@ -1238,7 +1238,15 @@ class AdHocSQL:
                 if isinstance(v, (date, datetime)):
                     v = v.isoformat()
                 elif isinstance(v, Decimal):
-                    v = float(v)
+                    if not v.is_finite():
+                        raise ValueError("unsupported_result")
+                    # The runtime also parses JSON in JavaScript. Larger integers
+                    # and fractional decimals must cross that wire as exact text.
+                    v = (
+                        int(v)
+                        if v == v.to_integral_value() and abs(v) <= 2**53 - 1
+                        else str(v)
+                    )
                 if v is not None and not isinstance(v, (str, int, float, bool)):
                     raise ValueError("unsupported_result")
                 if isinstance(v, str) and len(v) > 256:

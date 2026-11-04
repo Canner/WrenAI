@@ -827,6 +827,53 @@ def test_an_unpinned_project_never_connects_through_the_active_profile(
     build.assert_not_called()
 
 
+def test_named_profile_expands_secrets_from_the_bound_project(tmp_path, monkeypatch):
+    import wren.agent_service as agent_service  # noqa: PLC0415
+    import wren.cli  # noqa: PLC0415
+    import wren.profile as profiles  # noqa: PLC0415
+
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / ".env").write_text("BOUND_PROFILE_SECRET=project-secret\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("BOUND_PROFILE_SECRET", raising=False)
+    monkeypatch.setattr(
+        profiles,
+        "list_profiles",
+        lambda: {"named": {"datasource": "duckdb", "path": "${BOUND_PROFILE_SECRET}"}},
+    )
+    build = MagicMock()
+    monkeypatch.setattr(wren.cli, "_build_engine", build)
+    agent_service.open_engine(root, {}, "named")
+    assert json.loads(build.call_args.args[1])["path"] == "project-secret"
+    assert "BOUND_PROFILE_SECRET" not in os.environ
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "models/audit.jsonl",
+        "cubes/audit.jsonl",
+        "views/audit.jsonl",
+        "knowledge/audit.jsonl",
+        "instructions.md",
+        "dashboards.yml",
+    ],
+)
+def test_audit_sink_cannot_be_a_covered_project_source(service, monkeypatch, relative):
+    import wren.agent_service as agent_service  # noqa: PLC0415
+
+    sink = service.root / relative
+    sink.parent.mkdir(exist_ok=True)
+    original = sink.read_bytes() if sink.exists() else None
+    engine = MagicMock()
+    monkeypatch.setattr(agent_service, "open_engine", engine)
+    with pytest.raises(ValueError, match="audit_path_overlaps_project"):
+        service(updates={"audit_path": str(sink)})
+    engine.assert_not_called()
+    assert (sink.read_bytes() if sink.exists() else None) == original
+
+
 def test_internal_evidence_retained_but_not_projected(service):
     s = service()
     r = request(s)

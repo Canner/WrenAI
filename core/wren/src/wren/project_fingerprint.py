@@ -24,6 +24,17 @@ _DIGEST_ROOT_FILES = (
 _DIGEST_DIRS = ("models", "cubes", "views", "knowledge")
 
 
+def is_project_source_path(root: Path, path: Path) -> bool:
+    """Whether a resolved output sink overlaps the project's source namespace."""
+    try:
+        relative = path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return relative.as_posix() in _DIGEST_ROOT_FILES or (
+        bool(relative.parts) and relative.parts[0] in _DIGEST_DIRS
+    )
+
+
 def _source_name_bytes(name):
     try:
         return name.encode("utf-8")

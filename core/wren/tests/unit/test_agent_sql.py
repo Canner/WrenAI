@@ -4,7 +4,9 @@ import asyncio
 import importlib.util
 import json
 import os
+from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import sqlglot
@@ -34,6 +36,34 @@ needs_policy_runtime = pytest.mark.skipif(
 )
 
 
+@pytest.mark.parametrize(
+    "value,kind",
+    [
+        (Decimal("42"), int),
+        (Decimal("9007199254740991"), int),
+        (Decimal("-9007199254740991"), int),
+        (Decimal("9007199254740992"), str),
+        (Decimal("-9007199254740992"), str),
+        (Decimal("9007199254740993"), str),
+        (Decimal("123456789012345.678901"), str),
+    ],
+)
+def test_decimal_results_retain_their_exact_value(monkeypatch, value, kind):
+    import pyarrow as pa  # noqa: PLC0415
+
+    import wren.agent_sql as agent_sql  # noqa: PLC0415
+
+    query = AdHocSQL.__new__(AdHocSQL)
+    query.project = SimpleNamespace(engine=object(), current=lambda: None)
+    monkeypatch.setattr(
+        agent_sql, "governed_query", lambda *_: pa.table({"value": [value]})
+    )
+    result, _ = query.execute(("SELECT value", [], [], ["value"], {}, {}, []))
+    actual = result["rows"][0]["c1"]
+    assert Decimal(str(actual)) == value
+    assert isinstance(actual, kind)
+
+
 @pytest.fixture
 def adhoc(tmp_path):
     runtime, compiler = os.getenv("WARBLE_SERVICE"), os.getenv("WARBLE_BIN")
@@ -45,10 +75,18 @@ def adhoc(tmp_path):
     spec.loader.exec_module(module)
     services = []
 
-    def make(policy="", files=None):
+    def make(policy="", files=None, excluded_orders=False):
         dest = tmp_path / f"fixture{len(services)}"
         module.prepare_adhoc(dest)
         root = dest / "project"
+        if excluded_orders:
+            import duckdb  # noqa: PLC0415
+
+            with duckdb.connect(str(dest / "data/synthetic.duckdb")) as db:
+                db.execute(
+                    "INSERT INTO raw_orders VALUES (101,1,'2026-01-01',1000,FALSE,'cancelled'), (102,1,'2026-01-01',1000,FALSE,'pending')"
+                )
+                assert db.execute("SELECT COUNT(*) FROM raw_orders").fetchone() == (14,)
         for name, text in (files or {}).items():
             (root / name).parent.mkdir(parents=True, exist_ok=True)
             (root / name).write_text(text)
@@ -134,6 +172,16 @@ def test_actual_adhoc_queries(adhoc, sql, rows):
     result = ask(adhoc(), sql)
     assert result["status"] == "completed"
     assert result["result"]["rows"] == rows
+
+
+def test_executed_status_filter_excludes_rows_present_in_the_database(adhoc):
+    s = adhoc(excluded_orders=True)
+    result = ask(
+        s,
+        "SELECT COUNT(*), SUM(amount) FROM orders WHERE NOT is_test AND status IN ('paid','shipped')",
+    )
+    assert result["status"] == "completed"
+    assert result["result"]["rows"] == [{"c1": 12, "c2": 780.0}]
 
 
 @pytest.mark.parametrize(
