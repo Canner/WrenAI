@@ -77,6 +77,7 @@ pub fn build(manifest: &Manifest) -> (LineageGraph, Vec<String>) {
     let mut diagnostics: Vec<String> = Vec::new();
 
     let model_names: Vec<String> = manifest.models.iter().map(|m| m.name.clone()).collect();
+    let view_names: Vec<String> = manifest.views.iter().map(|v| v.name.clone()).collect();
 
     for model in &manifest.models {
         push_node(&mut nodes, model_id(&model.name), LineageKind::Model);
@@ -122,20 +123,29 @@ pub fn build(manifest: &Manifest) -> (LineageGraph, Vec<String>) {
         }
     }
 
-    // Views depend on every model their statement references. Discovered by SQL parse; a
-    // statement that does not parse degrades to the whole-word scan, recorded honestly.
+    // Views depend on every semantic model or view their statement references. Discovered by SQL
+    // parse; a statement that does not parse degrades to the whole-word scan, recorded honestly.
     for view in &manifest.views {
         let vid = view_id(&view.name);
         push_node(&mut nodes, vid.clone(), LineageKind::View);
         let references = consumers::sql_consumer_references(&view.statement);
-        for model_name in referenced_names(
+        let mut candidates = model_names.clone();
+        candidates.extend(view_names.iter().cloned());
+        for name in referenced_names(
             references.as_ref(),
             &view.statement,
-            &model_names,
+            &candidates,
             &vid,
             &mut diagnostics,
         ) {
-            push_edge(&mut edges, model_id(&model_name), vid.clone());
+            // Models deliberately win an exact model/view name collision, matching consumers and
+            // the engine's relation resolution. A differently cased exact view still wins before
+            // the unquoted case-insensitive fallback to a model.
+            if model_names.contains(&name) {
+                push_edge(&mut edges, model_id(&name), vid.clone());
+            } else if view_names.contains(&name) {
+                push_edge(&mut edges, view_id(&name), vid.clone());
+            }
         }
         for relationship in relationships_used_by_consumer(manifest, references.as_ref()) {
             push_edge(&mut edges, rel_id(&relationship), vid.clone());

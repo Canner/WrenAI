@@ -482,6 +482,13 @@ fn reaches(ctx: &MdlContext, seed: &str, consumer: &str) -> bool {
     impact(ctx, seed).downstream.contains(&consumer.to_string())
 }
 
+fn has_edge(ctx: &MdlContext, from: &str, to: &str) -> bool {
+    ctx.lineage()
+        .edges
+        .iter()
+        .any(|edge| edge.from == from && edge.to == to)
+}
+
 #[test]
 fn a_cte_named_like_a_model_is_not_a_read_of_that_model() {
     let tmp = tempfile::tempdir().unwrap();
@@ -562,6 +569,42 @@ fn a_view_over_a_cte_named_like_a_model_does_not_depend_on_the_model() {
         .edges
         .iter()
         .any(|e| e.from == "model:customers" && e.to == "view:by_country"));
+}
+
+#[test]
+fn views_chain_with_exact_first_case_resolution() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(tmp.path(), "views/Orders/metadata.yml", "name: Orders\n");
+    write(
+        tmp.path(),
+        "views/Orders/sql.yml",
+        "statement: SELECT id, total FROM orders\n",
+    );
+    write(
+        tmp.path(),
+        "views/order_report/metadata.yml",
+        "name: order_report\n",
+    );
+    write(
+        tmp.path(),
+        "views/order_report/sql.yml",
+        "statement: SELECT id, total FROM Orders\n",
+    );
+    write(
+        tmp.path(),
+        "knowledge/sql/order-report.md",
+        "---\nsql: SELECT total FROM order_report\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(has_edge(&ctx, "view:Orders", "view:order_report"));
+    assert!(has_edge(&ctx, "view:order_report", "query:order-report"));
+    assert!(
+        !has_edge(&ctx, "model:orders", "view:order_report"),
+        "the exact `Orders` view wins before case-insensitive model fallback"
+    );
+    assert!(reaches(&ctx, "model:orders", "query:order-report"));
 }
 
 #[test]
