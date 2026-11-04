@@ -861,7 +861,12 @@ class Service:
                 "active": None,
                 "lock": threading.Lock(),
             }
-        return {"session_id": ident, "revision": 0, **self.capabilities_public()}
+        try:
+            return {"session_id": ident, "revision": 0, **self.capabilities_public()}
+        except BaseException:
+            with self.lock:
+                self.sessions.pop(ident, None)
+            raise
 
     def session(self, ident):
         s = self.sessions.get(ident)
@@ -1976,7 +1981,14 @@ def _assemble_service(
     if config.get("audit_path"):
         # Explicit local operator sink (JSON lines); never exposed as a resource or tool.
         audit_path = Path(config["audit_path"]).expanduser()
-        fd = os.open(audit_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            fd = os.open(audit_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except BaseException:
+            try:
+                ipc.close()
+            except Exception:
+                pass
+            raise
         service.audit_sink = os.fdopen(fd, "w")
     service.record(reader.loaded_event())
     for view in snapshot.unverified_views:

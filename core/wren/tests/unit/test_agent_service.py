@@ -1484,6 +1484,67 @@ def test_http_transport_serves_capabilities_behind_token(service):
     assert not thread.is_alive()
 
 
+@pytest.mark.parametrize(
+    "error", [RuntimeError("capabilities_failed"), concurrent.futures.TimeoutError()]
+)
+def test_failed_open_removes_only_its_new_session(service, monkeypatch, error):
+    s = service()
+    old = s.open()["session_id"]
+    original = s.capabilities_public
+
+    def fail():
+        raise error
+
+    monkeypatch.setattr(s, "capabilities_public", fail)
+    for _ in range(3):
+        with pytest.raises(type(error)) as caught:
+            s.open()
+        assert caught.value is error
+        assert set(s.sessions) == {old}
+    monkeypatch.setattr(s, "capabilities_public", original)
+    assert s.open()["session_id"] != old
+
+
+@pytest.mark.parametrize("cleanup_error", [False, True])
+def test_failed_audit_open_reaps_the_started_runtime(
+    service, monkeypatch, tmp_path, cleanup_error
+):
+    import wren.agent_service as agent_service  # noqa: PLC0415
+
+    started = []
+    closers = []
+    original = agent_service.RuntimeIPC
+
+    def track(*args, **kwargs):
+        ipc = original(*args, **kwargs)
+        started.append(ipc)
+        closers.append(ipc.close)
+        if cleanup_error:
+            close = ipc.close
+
+            def close_then_fail():
+                close()
+                raise RuntimeError("cleanup_failed")
+
+            ipc.close = close_then_fail
+        return ipc
+
+    monkeypatch.setattr(agent_service, "RuntimeIPC", track)
+    sink = tmp_path / "existing-audit.jsonl"
+    sink.write_text("retain prior audit\n")
+    try:
+        with pytest.raises(FileExistsError) as caught:
+            service(updates={"audit_path": str(sink)})
+        assert caught.value.filename == str(sink)
+        assert sink.read_text() == "retain prior audit\n"
+        assert len(started) == 1
+        assert started[0].process.poll() is not None
+        assert not started[0].reader.is_alive()
+    finally:
+        for close in closers:
+            close()
+
+
 def test_audit_path_streams_json_lines_before_shutdown(service, tmp_path):
     sink = tmp_path / "audit.jsonl"
     s = service(selection=["structure"], updates={"audit_path": str(sink)})
