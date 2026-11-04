@@ -478,6 +478,8 @@ def check_service_config(config) -> None:
         isinstance(idle, float) and not math.isfinite(idle)
     ):
         raise ValueError("invalid_service_config: idle_seconds must be a finite number")
+    if idle < 0:
+        raise ValueError("invalid_service_config: idle_seconds must not be negative")
 
 
 def read_policy_presets(config: dict) -> tuple[str | None, dict[str, dict]]:
@@ -725,6 +727,25 @@ class Service:
             )
         if rules and documents["rules"]["content"]:
             self.require(session, "receive_metadata", "knowledge.rules", "rules", role)
+
+    def require_context_lookup(self, session, role, ids):
+        """Authorize a lookup before it can confirm a restricted name exists."""
+        allowed = {
+            "structure": self.allowed(
+                session, "receive_metadata", "schema.structure", "structure", role
+            ),
+            "rules": not self.project.documents["rules"]["content"]
+            or self.allowed(
+                session, "receive_metadata", "knowledge.rules", "rules", role
+            ),
+        }
+        if all(allowed.values()):
+            return
+        if not any(allowed.values()) or any(
+            needed and not allowed[kind]
+            for kind, needed in self.project.reader.lookup_categories(ids).items()
+        ):
+            raise PermissionError("denied")
 
     def record_model_calls(self, request_id: str, calls) -> None:
         """One ``model_call`` audit event per provider attempt the runtime reported.
@@ -1180,6 +1201,7 @@ class Service:
             if name == "select_context":
                 if set(args or {}) != {"ids"}:
                     raise ValueError("invalid_request")
+                self.require_context_lookup(s, "worker", args["ids"])
                 out = reader.select(args["ids"])
                 if "selected" in out:
                     self.record(
@@ -1193,6 +1215,7 @@ class Service:
             if name == "read_context":
                 if set(args or {}) != {"ids"}:
                     raise ValueError("invalid_request")
+                self.require_context_lookup(s, "worker", args["ids"])
                 out = reader.read(args["ids"])
                 if "items" in out:
                     self.require_context(
@@ -1915,7 +1938,8 @@ def create_service(
     root = discover(project_path)
     bundle = agent_profile.expanduser().resolve(strict=True)
     config_path = service_config.expanduser().resolve(strict=True)
-    raw_config = yaml.safe_load(config_path.read_text())
+    config_bytes = config_path.read_bytes()
+    raw_config = yaml.safe_load(config_bytes.decode("utf-8"))
     check_service_config(raw_config)
     config = apply_policy_preset(raw_config, policy_preset)
     if config.get("audit_path") and is_project_source_path(
@@ -1924,8 +1948,9 @@ def create_service(
         raise ValueError("audit_path_overlaps_project")
     execution = execution_from_config(config)
     capabilities_path = bundle / "capabilities.yml"
+    capabilities_bytes = capabilities_path.read_bytes()
     profile = Profile.model_validate(
-        yaml.safe_load(capabilities_path.read_text())
+        yaml.safe_load(capabilities_bytes.decode("utf-8"))
     ).model_dump()
     if profile["version"] != "wren-agent-capabilities/1" or len(
         {c["id"] for c in profile["capabilities"]}
@@ -1973,6 +1998,7 @@ def create_service(
             snapshot,
             reader,
             execution,
+            {config_path: config_bytes, capabilities_path: capabilities_bytes},
         )
     except BaseException:
         if hasattr(engine, "close"):
@@ -2081,10 +2107,12 @@ def _assemble_service(
     snapshot,
     reader,
     execution,
+    parsed_sources,
 ):
     if project_digest(root) != snapshot.digest:
         raise ContextChanged("the project changed while the service was starting")
     project = Project(root, config, engine, snapshot, reader)
+    project.startup_sources = parsed_sources
     project.paths += [config_path, capabilities_path]
     project.paths += sorted(
         p for p in bundle.rglob("*") if p.is_file() and p not in project.paths
@@ -2092,11 +2120,15 @@ def _assemble_service(
     project.version = project.fingerprint()
     policy_path = contained(config_path.parent, config["policy"])
     project.paths.append(policy_path)
-    policies = [policy_path.read_text()]
+    policy_bytes = policy_path.read_bytes()
+    project.startup_sources[policy_path] = policy_bytes
+    policies = [policy_bytes.decode("utf-8")]
     if config.get("preset_policy"):
         preset_path = contained(config_path.parent, config["preset_policy"])
         project.paths.append(preset_path)
-        policies.append(preset_path.read_text())
+        preset_bytes = preset_path.read_bytes()
+        project.startup_sources[preset_path] = preset_bytes
+        policies.append(preset_bytes.decode("utf-8"))
     project.version = project.fingerprint()
     if project_digest(root) != snapshot.digest:
         raise ContextChanged("the project changed while the service was starting")

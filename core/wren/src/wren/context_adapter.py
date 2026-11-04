@@ -856,11 +856,19 @@ class ContextReader:
         ]
         self._rules = [
             {
-                "path": r["path"],
+                "path": (
+                    f"@rule-{index + 1}"
+                    if _mentions_denied(
+                        r["path"],
+                        frozenset(owner for owner, _ in self.denied),
+                        self.denied,
+                    )
+                    else r["path"]
+                ),
                 "content": self._stripped(r),
                 "ids": _front_ids(r["content"]),
             }
-            for r in catalog.get("knowledge_rules") or []
+            for index, r in enumerate(catalog.get("knowledge_rules") or [])
         ]
         self._selectors = {}
         by_id = {d.id: d for d in snapshot.declarations}
@@ -1110,6 +1118,23 @@ class ContextReader:
         if (problem := self._check_ids(ids)) is not None:
             return problem
         return {"selected": list(dict.fromkeys(ids))}
+
+    def lookup_categories(self, ids) -> dict:
+        """Gate lookup output without distinguishing unknown from restricted IDs.
+
+        Known IDs need their own category, including compact selectors. An unknown
+        guess needs both, so a partially authorized caller gets the same refusal
+        for an unknown ID as for an existing item it cannot receive.
+        """
+        resolved = (
+            [self._resolve(ident) for ident in ids] if isinstance(ids, list) else []
+        )
+        if not resolved or any(item is None for item in resolved):
+            return {"structure": True, "rules": True}
+        return {
+            "structure": any(kind != "rule" for kind, _ in resolved),
+            "rules": any(kind == "rule" for kind, _ in resolved),
+        }
 
     def read(self, ids) -> dict:
         """The named items in full: columns, enum meanings and the rule files that concern them."""

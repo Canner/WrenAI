@@ -50,6 +50,29 @@ MAX_STATUS_VALUES = 64
 _FENCE = "---"
 
 
+def _duplicate_mapping_key(node, visited=None):
+    """Check declaration mappings before YAML construction discards repeated keys."""
+    visited = set() if visited is None else visited
+    if id(node) in visited:
+        return None
+    visited.add(id(node))
+    if isinstance(node, yaml.MappingNode):
+        seen = set()
+        for key, value in node.value:
+            if isinstance(key, yaml.ScalarNode):
+                identity = (key.tag, key.value)
+                if identity in seen:
+                    return key.value
+                seen.add(identity)
+            if duplicate := _duplicate_mapping_key(value, visited):
+                return duplicate
+    elif isinstance(node, yaml.SequenceNode):
+        for item in node.value:
+            if duplicate := _duplicate_mapping_key(item, visited):
+                return duplicate
+    return None
+
+
 class DeclarationError(ValueError):
     """Declared default rules are invalid; ``errors`` holds ``(path, message)`` pairs."""
 
@@ -569,17 +592,38 @@ class _Parser:
         if front is None:
             return
         try:
-            node = yaml.compose(front, Loader=yaml.SafeLoader)
-            if isinstance(node, yaml.MappingNode):
-                seen_defaults = False
-                for key, _ in node.value:
-                    if key.tag != "tag:yaml.org,2002:str" or key.value != "defaults":
-                        continue
-                    if seen_defaults:
-                        self.error(label, "duplicate top-level key 'defaults'")
-                        return
-                    seen_defaults = True
-            data = yaml.safe_load(front)
+            loader = yaml.SafeLoader(front)
+            try:
+                node = loader.get_single_node()
+                if isinstance(node, yaml.MappingNode):
+                    seen_defaults = False
+                    for key, _ in node.value:
+                        if (
+                            key.tag != "tag:yaml.org,2002:str"
+                            or key.value != "defaults"
+                        ):
+                            continue
+                        if seen_defaults:
+                            self.error(label, "duplicate top-level key 'defaults'")
+                            return
+                        seen_defaults = True
+                    # Preserve YAML merge overrides, then inspect only the
+                    # effective declaration envelope, including inherited ones.
+                    loader.flatten_mapping(node)
+                    for key, value in reversed(node.value):
+                        if (
+                            key.tag == "tag:yaml.org,2002:str"
+                            and key.value == "defaults"
+                        ):
+                            if duplicate := _duplicate_mapping_key(value):
+                                self.error(
+                                    label, f"duplicate key '{duplicate}' in defaults"
+                                )
+                                return
+                            break
+                data = loader.construct_document(node) if node is not None else None
+            finally:
+                loader.dispose()
         except yaml.YAMLError:
             self.error(label, "front-matter is not valid YAML")
             return

@@ -1,5 +1,6 @@
 // Run the actual example client against local in-memory SDK peers; no provider or child.
-import { readFile, writeFile, open, mkdtemp, chmod, stat, rm } from 'node:fs/promises';
+import { readFile, writeFile, open, mkdtemp, chmod, stat, rm, symlink, lstat } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import vm from 'node:vm';
@@ -10,7 +11,13 @@ const timeouts = [];
 const modesAtWrite = [];
 const temporary = await mkdtemp(join(tmpdir(), 'wren-planner-probe-'));
 const outputPath = join(temporary, 'trace.json');
+const targetPath = join(temporary, 'original.txt');
 const previousUmask = process.umask(0);
+if (config._probeSymlink) {
+  await writeFile(targetPath, 'original contents');
+  await chmod(targetPath, 0o644);
+  await symlink(targetPath, outputPath);
+}
 if (config._probeExisting) {
   await writeFile(outputPath, 'previous trace');
   await chmod(outputPath, 0o644);
@@ -38,6 +45,7 @@ const context = vm.createContext({
   process: { argv: ['node', clientPath, 'client.json', 'questions.json', outputPath], env: {} },
 });
 const modules = {
+  'node:fs': { constants },
   'node:fs/promises': {
     readFile: async path => path === 'client.json' ? JSON.stringify(config) : path === 'questions.json' ? '["question"]' : 'skill',
     writeFile,
@@ -45,6 +53,7 @@ const modules = {
       const file = await open(...args);
       return {
         chmod: mode => file.chmod(mode),
+        stat: () => file.stat(),
         writeFile: async value => {
           modesAtWrite.push((await file.stat()).mode & 0o777);
           return file.writeFile(value);
@@ -74,6 +83,12 @@ try {
 }
 const result = { timeouts, clients, error };
 try {
+  if (config._probeSymlink) {
+    result.targetContent = await readFile(targetPath, 'utf8');
+    result.targetMode = (await stat(targetPath)).mode & 0o777;
+    result.traceIsSymlink = (await lstat(outputPath)).isSymbolicLink();
+  }
+
   if (config._probeFileChecks) {
     result.traceMode = (await stat(outputPath)).mode & 0o777;
     result.trace = JSON.parse(await readFile(outputPath, 'utf8'));

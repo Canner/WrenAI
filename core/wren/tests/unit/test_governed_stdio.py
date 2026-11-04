@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pyarrow as pa
 import pytest
 from typer.testing import CliRunner
 
@@ -64,9 +65,7 @@ def bound_transport(tmp_path, monkeypatch):
     build = MagicMock(return_value=manifest)
     engine = MagicMock()
     engine.__enter__.return_value = engine
-    engine.query.return_value = SimpleNamespace(
-        column_names=["n"], to_pylist=lambda: [{"n": 1}]
-    )
+    engine.query.return_value = pa.table({"n": [1]})
     factory = MagicMock(return_value=engine)
     config = MagicMock(return_value={})
     monkeypatch.setattr(transport, "resolve_profile_for_project", profile)
@@ -208,8 +207,8 @@ def test_sanitizes_query_failure_and_oversized_output(bound_transport):
         "error": {"class": "internal", "message": transport.ERROR_MESSAGES["internal"]},
     }
     bound_transport.engine.query.side_effect = None
-    bound_transport.engine.query.return_value = SimpleNamespace(
-        column_names=["n"], to_pylist=lambda: [{"n": "x" * transport.MAX_RESULT}]
+    bound_transport.engine.query.return_value = pa.table(
+        {"n": ["x" * transport.MAX_RESULT]}
     )
     frames = bound_transport.run(
         b'{"id":1,"operation":"query","sql":"SELECT n FROM orders","limit":1}\n'
@@ -880,3 +879,100 @@ def test_an_undetermined_query_does_not_end_the_session_and_repair_executes(
     assert frames[1]["error"]["class"] == "declared_default_undetermined"
     assert "result" in frames[2]
     declaring.engine.query.assert_called_once_with(EXCLUDE_OK, limit=5, read_only=True)
+
+
+@pytest.mark.parametrize(
+    "shape",
+    ["large_string", "nested_nulls", "escaped_rows", "column_name", "nested_keys"],
+)
+def test_result_budget_is_checked_before_bulk_python_row_copy(bound_transport, shape):
+    import pyarrow as pa  # noqa: PLC0415
+
+    if shape == "large_string":
+        table = pa.table({"n": ["x" * (transport.MAX_RESULT + 1)]})
+    elif shape == "nested_nulls":
+        table = pa.table(
+            {
+                "n": pa.ListArray.from_arrays(
+                    pa.array([0, transport.MAX_RESULT + 1]),
+                    pa.nulls(transport.MAX_RESULT + 1),
+                )
+            }
+        )
+    elif shape == "escaped_rows":
+        table = pa.table({"n": ["\x00" * 32] * 7000})
+    elif shape == "nested_keys":
+        fields = {"x" * (transport.MAX_RESULT // 8) + str(i): None for i in range(8)}
+        table = pa.table({"n": [fields]})
+    else:
+        table = pa.table({"x" * transport.MAX_RESULT: [None]})
+    copied = []
+
+    class ObservedResult:
+        schema = table.schema
+        column_names = table.column_names
+        nbytes = table.nbytes
+
+        def to_pylist(self):
+            copied.append(table.num_rows)
+            return table.to_pylist()
+
+        def to_batches(self, **kwargs):
+            class ObservedBatch:
+                def __init__(self, batch):
+                    self.batch = batch
+                    self.columns = batch.columns
+                    self.num_rows = batch.num_rows
+
+                def to_pylist(self):
+                    copied.append(self.num_rows)
+                    return self.batch.to_pylist()
+
+            for batch in table.to_batches(**kwargs):
+                yield ObservedBatch(batch)
+
+    bound_transport.engine.query.return_value = ObservedResult()
+    frames = bound_transport.run(
+        b'{"id":1,"operation":"query","sql":"SELECT n FROM orders","limit":10000}\n'
+    )
+    assert frames[-1]["error"]["class"] == "result_too_large"
+    if shape == "escaped_rows":
+        assert 0 < sum(copied) < table.num_rows
+    else:
+        assert copied == []
+
+
+@pytest.mark.parametrize(
+    "shape", ["many_rows", "nested", "dictionary", "struct", "map", "empty"]
+)
+def test_result_budget_preserves_legacy_row_limit_and_small_nested_values(
+    bound_transport, shape
+):
+    import pyarrow as pa  # noqa: PLC0415
+
+    if shape == "many_rows":
+        table = pa.table({"n": list(range(10000))})
+    elif shape == "nested":
+        table = pa.table({"n": [[1, None, 2], []]})
+    elif shape == "struct":
+        table = pa.table({"n": [{"a": [None, True], "b": 3}, None]})
+    elif shape == "map":
+        table = pa.table(
+            {
+                "n": pa.array(
+                    [[("a", 1), ("b", None)], []], type=pa.map_(pa.string(), pa.int64())
+                )
+            }
+        )
+    elif shape == "empty":
+        table = pa.table({"n": pa.array([], type=pa.string())})
+    else:
+        values = pa.array(["ok", "unused" * transport.MAX_RESULT])
+        table = pa.table({"n": pa.DictionaryArray.from_arrays(pa.array([0]), values)})
+    bound_transport.engine.query.return_value = table
+    frames = bound_transport.run(
+        b'{"id":1,"operation":"query","sql":"SELECT n FROM orders","limit":10000}\n'
+    )
+    assert frames[-1]["result"]["rows"] == json.loads(
+        json.dumps(table.to_pylist(), default=str)
+    )

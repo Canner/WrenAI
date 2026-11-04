@@ -6,8 +6,8 @@ from pathlib import Path
 
 import yaml
 
-from wren.context_adapter import ContextReader, Snapshot
-from wren.project_fingerprint import fingerprint_sources
+from wren.context_adapter import ContextChanged, ContextReader, Snapshot
+from wren.project_fingerprint import SourceBytesChanged, fingerprint_sources
 
 
 def discover(explicit: Path | None) -> Path:
@@ -68,6 +68,7 @@ class Project:
         self.snapshot, self.reader = snapshot, reader
         self.documents = reader.documents()
         self.paths = [root / "target/mdl.json"]
+        self.startup_sources = {}
         self.version = self.fingerprint()
 
     def describe(self) -> str:
@@ -75,7 +76,12 @@ class Project:
         return self.reader.describe()
 
     def fingerprint(self):
-        return fingerprint_sources(self.root, self.paths)
+        try:
+            if self.startup_sources:
+                return fingerprint_sources(self.root, self.paths, self.startup_sources)
+            return fingerprint_sources(self.root, self.paths)
+        except SourceBytesChanged:
+            raise ContextChanged("a parsed startup source changed") from None
 
     def current(self):
         from wren.governed_query import fingerprint  # noqa: PLC0415

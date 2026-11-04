@@ -2357,3 +2357,26 @@ def test_cube_members_hide_same_named_hidden_base_columns_only(key, hidden_name)
     assert [member["name"] for member in order_cube[key]] == ["id"]
     assert order_cube[key][0]["description"] == "Public identifier."
     assert [member["name"] for member in customer_cube[key]] == ["PRIVATE_ID"]
+
+
+@pytest.mark.parametrize("filename", ["customers.email.md", "EMAIL-notes.md"])
+def test_denied_rule_paths_use_one_opaque_selectable_identity_everywhere(filename):
+    path = "knowledge/rules/" + filename
+    content = "Customers should be counted."
+    r = reader(
+        {
+            "models": [model("customers", columns=("id", "email"))],
+            "knowledge_rules": [{"path": path, "content": content}],
+        },
+        denied={("customers", "email")},
+    )
+    attached = r.read(["customers"])["rules"]
+    assert len(attached) == 1
+    public_path = attached[0]["path"]
+    selector = "rule:" + public_path
+    assert "email" not in public_path.lower()
+    assert r.select([selector]) == {"selected": [selector]}
+    assert r.read([selector])["rules"] == attached
+    output = json.dumps([r.list(1), attached, r.rules_document(), r.documents()])
+    assert "email" not in output.lower()
+    assert public_path in r.rules_document() and content in r.rules_document()

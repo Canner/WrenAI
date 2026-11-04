@@ -172,13 +172,20 @@ def _collect(directory: Path, relative: str, files: dict[str, Path]) -> None:
             files[child] = entry
 
 
-def fingerprint_sources(root, paths):
+class SourceBytesChanged(ValueError):
+    """A startup input differs from the bytes its consumer parsed."""
+
+
+def fingerprint_sources(root, paths, expected_sources=None):
     root = Path(root)
     digest = hashlib.sha256()
     digest.update(b"project\0" + project_digest(root).encode() + b"\0")
     for item in paths:
         path = Path(item)
         data = path.read_bytes()
+        if expected_sources is not None and path in expected_sources:
+            if data != expected_sources[path]:
+                raise SourceBytesChanged("startup source changed")
         digest.update(str(path).encode() + b"\0")
         digest.update(str(len(data)).encode() + b"\0" + data)
     return digest.hexdigest()

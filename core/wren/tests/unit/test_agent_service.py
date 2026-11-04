@@ -3910,7 +3910,7 @@ def test_idle_seconds_invalid_values_fail_config_validation(idle):
         check_service_config(config)
 
 
-@pytest.mark.parametrize("idle", [0, -1, 0.5, 1800])
+@pytest.mark.parametrize("idle", [0, 0.5, 1800])
 def test_numeric_idle_seconds_and_omitted_default_remain_valid(idle):
     from wren.agent_service import check_service_config  # noqa: PLC0415
 
@@ -4326,3 +4326,200 @@ def test_absent_null_and_empty_mapping_policy_presets_remain_valid(config):
 def test_empty_list_policy_presets_refuses_service_startup(service):
     with pytest.raises(ValueError, match="invalid_policy_preset"):
         service(updates={"policy_presets": []})
+
+
+@pytest.mark.parametrize("idle", [-1, -0.01])
+def test_negative_idle_seconds_cannot_create_an_already_expired_service(idle):
+    from wren.agent_service import check_service_config  # noqa: PLC0415
+
+    config = {
+        "config_version": 2,
+        "caller": "planner",
+        "project_id": "fixture",
+        "policy": "policy.cedar",
+        "private_model": {},
+        "idle_seconds": idle,
+    }
+    with pytest.raises(ValueError, match="invalid_service_config: idle_seconds"):
+        check_service_config(config)
+
+
+@pytest.mark.parametrize("exists", [True, False])
+@pytest.mark.parametrize("tool", ["select_context", "read_context"])
+@pytest.mark.parametrize(
+    "kind,known,unknown",
+    [
+        ("schema.structure", "orders", "missing_orders"),
+        (
+            "knowledge.rules",
+            "rule:knowledge/rules/conventions.md",
+            "rule:knowledge/rules/missing.md",
+        ),
+    ],
+)
+def test_context_tool_denies_restricted_and_unknown_ids_identically(
+    service, monkeypatch, tool, kind, known, unknown, exists
+):
+    s = service(runtime_path=FAKE_RUNTIME)
+    original = s.allowed
+    checked = []
+
+    def invoke(callback):
+        def allowed(session, action, resource_kind, name, role="planner", **kwargs):
+            if (
+                action == "receive_metadata"
+                and role == "worker"
+                and resource_kind == kind
+            ):
+                return False
+            return original(session, action, resource_kind, name, role, **kwargs)
+
+        monkeypatch.setattr(s, "allowed", allowed)
+        ident = known if exists else unknown
+        with pytest.raises(PermissionError, match="denied") as denied:
+            callback(tool, {"ids": [ident]})
+        checked.append(ident)
+        raise denied.value
+
+    install_invoker(monkeypatch, s, invoke)
+    with pytest.raises(PermissionError, match="denied"):
+        s.execute(ask_request(s))
+    assert checked == [known if exists else unknown]
+
+
+@pytest.mark.parametrize("changed_file", ["config", "capabilities"])
+def test_parsed_startup_files_cannot_be_replaced_during_compile(
+    service, monkeypatch, changed_file
+):
+    import wren.agent_service as module  # noqa: PLC0415
+    from wren.context_adapter import ContextChanged  # noqa: PLC0415
+
+    original = module.subprocess.run
+    changed = []
+    started = []
+    create_ipc = module.RuntimeIPC
+
+    def compile_then_replace(command, *args, **kwargs):
+        result = original(command, *args, **kwargs)
+        if len(command) > 1 and command[1] == "compile":
+            if changed_file == "config":
+                path = service.root / "service.yml"
+                data = yaml.safe_load(path.read_text())
+                data["idle_seconds"] = 1234
+            else:
+                path = EXAMPLES / "profiles/analysis/capabilities.yml"
+                # Modify only a private staged copy of the profile bundle.
+                path = bundle / path.name
+                data = yaml.safe_load(path.read_text())
+                data["capabilities"][0]["description"] += " Updated during compile."
+            path.write_text(yaml.safe_dump(data, sort_keys=False))
+            changed.append(True)
+        return result
+
+    import shutil  # noqa: PLC0415
+
+    bundle = service.root.parent / "startup-profile"
+    shutil.copytree(EXAMPLES / "profiles/analysis", bundle)
+    monkeypatch.setattr(module.subprocess, "run", compile_then_replace)
+
+    def capture(*args, **kwargs):
+        started.append(True)
+        return create_ipc(*args, **kwargs)
+
+    monkeypatch.setattr(module, "RuntimeIPC", capture)
+    with pytest.raises(ContextChanged):
+        module.create_service(
+            service.root,
+            bundle,
+            service.root / "service.yml",
+            FAKE_RUNTIME,
+            os.environ["WARBLE_BIN"],
+            "mcp",
+        )
+    assert changed and not started
+
+
+@pytest.mark.parametrize(
+    "denied_kind,ident",
+    [
+        ("knowledge.rules", "orders"),
+        ("schema.structure", "rule:knowledge/rules/conventions.md"),
+    ],
+)
+def test_context_selection_preserves_authorized_partial_metadata(
+    service, monkeypatch, denied_kind, ident
+):
+    s = service(runtime_path=FAKE_RUNTIME)
+    original = s.allowed
+
+    def invoke(callback):
+        def allowed(session, action, kind, name, role="planner", **kwargs):
+            if (
+                action == "receive_metadata"
+                and role == "worker"
+                and kind == denied_kind
+            ):
+                return False
+            return original(session, action, kind, name, role, **kwargs)
+
+        monkeypatch.setattr(s, "allowed", allowed)
+        assert callback("select_context", {"ids": [ident]}) == {"selected": [ident]}
+        return count(callback)
+
+    install_invoker(monkeypatch, s, invoke)
+    assert s.execute(ask_request(s))["status"] == "completed"
+
+
+@pytest.mark.parametrize("changed_file", ["config", "capabilities"])
+def test_startup_fingerprint_checks_the_bytes_it_actually_hashes(
+    service, monkeypatch, changed_file
+):
+    import shutil  # noqa: PLC0415
+
+    import wren.agent_service as module  # noqa: PLC0415
+    from wren.context_adapter import ContextChanged  # noqa: PLC0415
+
+    bundle = service.root.parent / "read-swap-profile"
+    shutil.copytree(EXAMPLES / "profiles/analysis", bundle)
+    target = (
+        service.root / "service.yml"
+        if changed_file == "config"
+        else bundle / "capabilities.yml"
+    )
+    original_run, original_read = module.subprocess.run, Path.read_bytes
+    armed, changed = [], []
+
+    def compile_then_arm(command, *args, **kwargs):
+        result = original_run(command, *args, **kwargs)
+        if len(command) > 1 and command[1] == "compile":
+            armed.append(True)
+        return result
+
+    def read_replaced(path):
+        before = original_read(path)
+        if path == target and armed and not changed:
+            changed.append(True)
+            data = yaml.safe_load(before)
+            if changed_file == "config":
+                data["idle_seconds"] = 1234
+            else:
+                data["capabilities"][0]["description"] += " Replacement."
+            path.write_bytes(yaml.safe_dump(data, sort_keys=False).encode())
+            try:
+                return original_read(path)
+            finally:
+                path.write_bytes(before)
+        return before
+
+    monkeypatch.setattr(module.subprocess, "run", compile_then_arm)
+    monkeypatch.setattr(Path, "read_bytes", read_replaced)
+    with pytest.raises(ContextChanged):
+        module.create_service(
+            service.root,
+            bundle,
+            service.root / "service.yml",
+            FAKE_RUNTIME,
+            os.environ["WARBLE_BIN"],
+            "mcp",
+        )
+    assert changed

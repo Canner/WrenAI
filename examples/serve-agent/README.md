@@ -64,6 +64,12 @@ Saved-query consumer lineage is a structural extraction using sqlparser's `Gener
 
 Impact analysis preserves the complete transitive downstream list for every lineage seed. Its per-seed traversal is O(V*(V+E)), while complete downstream output is O(V²): a dense graph can therefore require cubic CPU time and quadratic output space. The loader does not truncate, cap, or otherwise omit consumers from that result.
 
+For native directory projects, a non-empty root `cubes.yml` is a semantic mirror:
+cube names, base objects, members, expressions, types and hierarchies must agree
+with the directory definitions. Descriptions are authored catalog prose; the
+root list is authoritative for cube and member descriptions, so prose-only
+differences do not require an engine rebuild.
+
 ## Deliver the planner skill
 
 Retrieve the bundled guide with `wren skills get wren-planner`. Put that output in a `wren-planner/SKILL.md` directory using the external agent's supported skill installation mechanism. Do not install it into a global agent directory without the user's instruction.
@@ -128,6 +134,11 @@ An `audit_path` must be outside `models/`, `cubes/`, `views/`, `knowledge/` and 
 root source files covered by the project digest. Startup rejects an overlapping
 resolved path before opening the database or creating the audit file.
 
+`idle_seconds` must be a finite, non-negative number (default 1800). Startup
+fingerprinting checks the exact bytes consumed for service configuration,
+capabilities and policy; a replacement during startup is refused as
+`context_changed`.
+
 ### Migrating a version 1 service.yml
 
 A service configuration that still carries `dataset`, `adhoc`, `metadata`, `rules` or `query_scope` (also inside a preset) is refused at startup with `legacy_service_config` and a message naming each key; nothing is ignored silently. One without `config_version: 2`, or with a key outside the version 2 set, is refused with `invalid_service_config`.
@@ -142,6 +153,10 @@ A service configuration that still carries `dataset`, `adhoc`, `metadata`, `rule
 ### Denied columns
 
 `denied_columns` entries must read `model.column` (lower-case) and name a column the project has; a scalar value counts as a one-entry list. A malformed entry, an unknown column, a near-miss key (`Denied_Columns`, `denied-columns`, `denied_column`), or a rule file that mentions the key but has no readable front-matter, or has front-matter without a top-level key of exactly that name (a merge key, a nested mapping, a top-level list, a comment, a misspelling) makes the loader mark the catalog invalid and the service refuse to start (`denied_columns_invalid`). A denied column is removed from every metadata projection (the structure document, the worker's index and reads, the business summary of `describe_data`), together with its enum meanings, any cube member of that name, and any relationship or description sentence that names it (a bare column name in a view description is treated as that column, since a view has no resolvable owner). The `denied_columns` key is removed from the rule text the service serves: the front-matter is parsed as YAML, so every spelling the loader accepts is dropped, and if a denied `model.column` still appears in the remaining front-matter (for example in a `defaults` entry, in any rule file, and also when it is written with a YAML escape such as `"customers\x2eemail"`) the service refuses to start (`denied_columns_invalid`) rather than show it. Private SQL that references one, directly or through a CTE, a subquery or a `SELECT *` expansion, is an authorization failure: the task ends as `denied` and nothing runs. This is a project-level denylist, not a per-caller access-control system.
+
+A rule path that names a denied column uses an opaque, snapshot-local identifier
+consistently in the context index, selection, reads and rules document. Pass the
+returned rule IDs verbatim when requesting their contents.
 
 ### Execution limits
 
@@ -165,6 +180,13 @@ bound does not terminate non-cancellable external callbacks or prove that
 provider work or billing has stopped.
 
 Before a query result crosses into the host, the child validates its shape, supported scalar types and 256-character string-cell limit, compacts Arrow buffers, and caps the serialized response at 128 KiB. The host enforces that frame limit before deserialization and retains its final 32 KiB JSON result limit. These bounds cover transfer and host deserialization. A row limit does not bound a cell's size or the connector's allocation: the child/database may already have materialized a large value before validation, and this service supplies no hard memory limit for either process or remote database.
+
+The hidden legacy `wren governed-stdio` command has a separate synchronous query
+loop, without the task deadline or disconnect cancellation of controlled
+`serve agent` / `serve mcp`. Its 1 MiB result budget checks logical Arrow values
+before Python row conversion and accounts for encoded rows incrementally.
+Connector-side query execution and Arrow materialization can allocate data before
+those checks; this is not a connector or process memory limit.
 
 A runtime that reports usage sends one `calls` entry per provider attempt (a retried 429 is its own entry) with every reply. The host never forwards it: it goes to the audit only, as one `model_call {request_id, turn, elapsed_ms, input, output, reasoning, cache_read, stop_reason, raw_stop_reason, tool_calls, status}` event per entry, written before the task's `task_completed` or `task_failed`. `input` excludes `cache_read`. An entry is recorded only if it has exactly those ten fields, every number is a non-negative integer and every label matches `[a-z0-9_]{0,32}`; anything else is dropped and counted in one `model_calls_dropped {request_id, count}` event. A runtime that sends no usage produces no `model_call` events, and that is not an error. When a task fails, `task_failed` also carries `turns` and `tool_calls` (the runtime's own counters when it reports them, otherwise `null`) and `sql_attempts` (the host's count of the task's SQL statements); `detail` keeps the runtime's exact failure code, for example `service_unavailable:turn_limit`.
 
@@ -319,6 +341,10 @@ The gate does not allow `now()` or `current_date`, so the worker needs the date 
 
 ### Declared default rules
 
+Repeated mapping keys inside `defaults`, including nested declaration mappings,
+are invalid. Standard YAML merge overrides remain supported; unrelated prose
+front-matter retains its existing treatment.
+
 A rule file may declare defaults in its front-matter (`defaults:`); the host checks every statement against them before it can run. `exclude_rows` requires the statement to exclude the flagged rows of every model it covers. It accepts no outer-join ON predicate at all: put the exclusion in `WHERE`, or in the ON of an INNER or comma join. Unused CTE definitions add no reads or aggregation obligations; actual scalar subqueries, EXISTS and IN reads still count. Exclusion is checked for each physical table alias and each consuming CTE/derived-table path: filtering one alias or one CTE consumer does not excuse another. An exclusion on a related entity must connect that read through declared relationship keys (or the same declared primary key); a constant or unrelated positive `IN` cannot establish it. Keyed `NOT IN` and correlated `NOT EXISTS` remain recognised by the default checker, but the agent SQL form gate still rejects correlated SQL. These supported shapes do not establish arbitrary SQL equivalence. `require_rate_join` requires an aggregate over a listed amount column to join the rate model on the amount's currency and on-or-before the amount's date; two optional keys tighten it: `match: single` requires the rate source to yield one row per amount row (an `ASOF JOIN`, or a derived source that keeps the newest row per amount through `ROW_NUMBER() ... ORDER BY date DESC` = 1; every partition key must be fixed by equality to the amount side or a literal at each consuming join; a date-range join against `PARTITION BY currency, rate_date` cannot establish a single match. Rank bounds preserve direction (`rn = 1`, `1 = rn`, `rn <= 1`, `1 >= rn`); `1 <= rn`, an OR branch, another alias's rank or mutually constrained rate sources cannot establish it. Unproved shapes and ordinary `date <=` joins are refused as `rate_multi_match`), and `base_currency: USD` names the currency whose amounts need no rate. With a base currency, an inner join of the rate model is refused (`base_currency_dropped`: the base-currency rows have no rate row and would vanish), and so is any literal default of a rate column outside a branch that only the base currency reaches (`rate_default_literal`: `COALESCE(rate, 1)` would turn a missing EUR rate into 1). A LEFT join that takes the base currency from the amount itself (`CASE WHEN currency = 'USD' THEN amount ELSE amount * rate END`) satisfies the rule; a LEFT join with neither guard nor default also passes, and the host records `observed.fx_missing_rate_handling = "unguarded_left_join"` so a later stage can say that the missing-rate behaviour was not verified.
 
 `sale_statuses` (`column: <model>.<column>`, `values: [...]`, optional `domain: [...]`, `overridable_by_caller: true|false`, `when: aggregated`) requires the statement to keep exactly the declared status values. The host does not look for a filter; it computes which of the column's `domain` values the statement's filters still return (`=`, `<>`, `!=`, `IN`, `NOT IN`, `IS [NOT] NULL`, combined with `AND` / `OR` / `NOT`, with `LOWER`, `UPPER` or `TRIM` around the column), so `status NOT IN ('cancelled', 'pending')` keeps whatever else the domain lists. Bare-column comparisons retain declaration case folding; this does not certify mixed-case storage or guess a database collation. Explicit ASCII `LOWER`/`UPPER` operations on columns and literals are evaluated before comparison: `UPPER(status) IN ('paid', 'shipped')` keeps no declared values and is refused, while uppercase literals or `UPPER('paid')` retain support. Non-ASCII case mappings under these functions have no verdict because database/locale mappings vary. No new storage-normalisation declaration is introduced. The `domain` is the declaration's own list, or else the `enum_values` the project lists for the column; with neither the declaration is invalid. Each read of the model is judged on its own: a nullable-side ON predicate of an outer join restricts that read (`customers c LEFT JOIN orders o ON c.id = o.customer_id AND o.status IN ('paid', 'shipped')` with `SUM(o.amount)` is satisfied), while a preserved-side, FULL, SEMI/ANTI or unnamed join-group ON predicate never counts. A `status_scope` cannot clear a statement that keeps NULL statuses (`... OR status IS NULL` is always a superset), so the worker has to rewrite it. A kept set that is a proper subset is refused as `<id>:subset`, one that holds a value it should not as `<id>:superset`, and no status predicate at all as `<id>:missing`. A predicate on the column that the host does not evaluate (a comparison with another column, a function, a subquery, `LIKE`, a `CASE`) gets no verdict: `declared_default_undetermined` with the rule id.
@@ -434,6 +460,10 @@ model calls replaced only where hostile outputs or concurrency must be forced.
 Hosted model acceptance is separate: run the independent planner with your own
 model credentials and inspect both its trace and the configured local audit.
 An `unavailable` attempt is not a pass, even when a later identical retry works.
+
+Planner traces use regular files with mode 0600, tightened before writing even
+for an existing file. Symbolic-link output paths are refused; trace output
+requires the platform's no-follow file-open support.
 
 The runtime preserves the original host task envelope (including the worker's
 context index) across private component delegation so a coordinator's

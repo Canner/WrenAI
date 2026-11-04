@@ -577,3 +577,49 @@ def test_non_string_rate_model_is_a_controlled_error(project, value):
     declarations, errors = parse(project)
     assert not declarations
     assert any("rate.model must name a model" in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    "before,after",
+    [
+        ("exclude: true", "exclude: true\n    exclude: false"),
+        ("exclude: true", "exclude: 1\n    exclude: true"),
+        ("kind: exclude_rows", "kind: invalid\n    kind: exclude_rows"),
+        ("id: exclude-test-accounts", "id: ignored\n    id: exclude-test-accounts"),
+        ("reaching: customers", "reaching: ignored, reaching: customers"),
+    ],
+)
+def test_duplicate_declaration_mapping_keys_cannot_change_enforced_rules(
+    project, before, after
+):
+    declare(project, EXCLUDE.replace(before, after))
+    declarations, errors = parse(project)
+    assert not declarations and errors
+    assert "duplicate" in str(errors).lower()
+
+
+def test_inherited_defaults_still_reject_duplicate_declaration_keys(project):
+    front = (
+        "base: &base\n  defaults:\n"
+        + "\n".join(
+            "  " + line
+            for line in EXCLUDE.replace(
+                "exclude: true", "exclude: false\n    exclude: true"
+            ).splitlines()
+        )
+        + "\n<<: *base\n"
+    )
+    (project / "knowledge/rules/inherited.md").write_text(
+        "---\n" + front + "---\nProse.\n"
+    )
+    declarations, errors = parse(project)
+    assert not declarations and errors and "duplicate" in str(errors).lower()
+
+
+def test_explicit_yaml_merge_override_inside_a_declaration_remains_valid(project):
+    declare(
+        project,
+        "  - <<: {kind: exclude_rows, column: customers.is_test, exclude: false, covers: {reaching: customers, via: many_to_one}}\n    id: exclude-test-accounts\n    exclude: true\n",
+    )
+    declarations, errors = parse(project)
+    assert errors == [] and len(declarations) == 1 and declarations[0].exclude is True

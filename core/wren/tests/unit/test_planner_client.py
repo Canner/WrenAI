@@ -78,3 +78,17 @@ def test_actual_trace_files_are_private_for_success_and_error_paths(existing, fa
     assert actual["trace"]["completed"] is (not failure)
     assert len(actual["trace"]["errors"]) == (1 if failure else 0)
     assert actual["exitCode"] == (1 if failure else 0)
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_trace_symlink_never_truncates_or_chmods_its_target(failure):
+    actual = probe(
+        {
+            "serviceReplyTimeoutMs": 200000,
+            "_probeSymlink": True,
+            "_probeFailure": failure,
+        }
+    )
+    assert actual["targetContent"] == "original contents"
+    assert actual["targetMode"] == 0o644 and actual["traceIsSymlink"]
+    assert actual["error"] is not None

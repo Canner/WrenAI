@@ -6,6 +6,7 @@ import os
 import sys
 from pathlib import Path
 
+import pyarrow as pa
 from sqlglot import exp, parse_one
 
 from wren.agent_project import require_profile_pin
@@ -102,6 +103,91 @@ class _RequestError(ValueError):
 
 class _ResultTooLarge(ValueError):
     """A well-formed result that does not fit the byte limit."""
+
+
+def _json_text(value):
+    return json.dumps(value, default=str, allow_nan=False, separators=(",", ":"))
+
+
+def _copy_remaining(value, budget):
+    """Check logical Arrow values before constructing a Python row.
+
+    Buffers remain Arrow views here. In particular, a large string or a list of
+    nulls cannot trigger an oversized ``as_py``/``to_pylist`` allocation. This
+    does not constrain allocations already made inside the connector.
+    """
+    kind = value.type
+    if not value.is_valid:
+        budget -= 4
+    elif pa.types.is_dictionary(kind) or pa.types.is_union(kind):
+        return _copy_remaining(value.value, budget)
+    elif pa.types.is_struct(kind):
+        budget -= 2
+        for index, field in enumerate(kind):
+            budget -= len(field.name.encode()) + 3 + bool(index)
+            budget = _copy_remaining(value[index], budget)
+    elif pa.types.is_map(kind):
+        pairs = value.values
+        if len(pairs) > budget:
+            raise _ResultTooLarge
+        budget -= 2
+        for index, pair in enumerate(pairs):
+            budget = _copy_remaining(pair[0], budget - 3 - bool(index))
+            budget = _copy_remaining(pair[1], budget)
+    elif any(
+        check(kind)
+        for check in (
+            pa.types.is_list,
+            pa.types.is_large_list,
+            pa.types.is_fixed_size_list,
+            getattr(pa.types, "is_list_view", lambda _: False),
+            getattr(pa.types, "is_large_list_view", lambda _: False),
+        )
+    ):
+        values = value.values
+        if len(values) > budget:
+            raise _ResultTooLarge
+        budget -= 2
+        for index, item in enumerate(values):
+            budget = _copy_remaining(item, budget - bool(index))
+    elif hasattr(value, "as_buffer"):
+        budget -= value.as_buffer().size + 2
+    else:
+        budget -= 1
+    if budget < 0:
+        raise _ResultTooLarge
+    return budget
+
+
+def _query_result(table, definition, semantics, ident):
+    columns, names_size = [], 0
+    for field in table.schema:
+        names_size += len(field.name.encode()) + 3
+        if names_size > MAX_RESULT:
+            raise _ResultTooLarge
+        columns.append(field.name)
+    value = {"columns": columns, "rows": [], "definition": definition}
+    if semantics is not None:
+        value["semantics"] = semantics
+    used = len(_json_text({"id": ident, "result": value}).encode())
+    if used > MAX_RESULT:
+        raise _ResultTooLarge
+    copy_budget = MAX_RESULT - used
+    row_keys = (
+        sum(len(name.encode()) + 3 for name in columns) + max(0, len(columns) - 1) + 2
+    )
+    for batch in table.to_batches(max_chunksize=1):
+        if not batch.num_rows:
+            continue
+        copy_budget -= row_keys + bool(value["rows"])
+        for column in batch.columns:
+            copy_budget = _copy_remaining(column[0], copy_budget)
+        row = batch.to_pylist()[0]
+        used += len(_json_text(row).encode()) + bool(value["rows"])
+        if used > MAX_RESULT:
+            raise _ResultTooLarge
+        value["rows"].append(row)
+    return value
 
 
 class _DeclaredDefaultMissing(ValueError):
@@ -231,14 +317,8 @@ def serve(project: Path) -> None:
                             clause.this.sql() for clause in ast.find_all(exp.Where)
                         ],
                     }
-                    value = {
-                        "columns": result.column_names,
-                        "rows": result.to_pylist(),
-                        "definition": definition,
-                    }
                     semantics = query_semantics(ast, request["sql"], manifest)
-                    if semantics is not None:
-                        value["semantics"] = semantics
+                    value = _query_result(result, definition, semantics, request["id"])
                 else:
                     raise _RequestError("Unsupported operation")
                 _write({"id": request["id"], "result": value})
@@ -255,7 +335,7 @@ def serve(project: Path) -> None:
 
 
 def _write(value: dict) -> None:
-    output = json.dumps(value, default=str, allow_nan=False, separators=(",", ":"))
+    output = _json_text(value)
     if len(output.encode()) > MAX_RESULT:
         raise _ResultTooLarge("Result exceeds byte limit")
     print(output, flush=True)

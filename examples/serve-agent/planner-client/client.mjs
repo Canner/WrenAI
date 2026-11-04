@@ -1,5 +1,6 @@
 // An independent pi planner with an MCP client. No private profile/context import.
 import { readFile, open } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
 import { Agent } from '@earendil-works/pi-agent-core';
 import { streamSimple } from '@earendil-works/pi-ai/api/openai-completions';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -15,8 +16,12 @@ if (!Number.isInteger(serviceReplyTimeoutMs) || serviceReplyTimeoutMs < 1 || ser
   throw Error('serviceReplyTimeoutMs must be an integer from 1 to 2147483647');
 const trace = { turns: [], calls: [], errors: [], completed: false };
 async function writeTrace() {
-  const file = await open(outputPath, 'w', 0o600);
+  if (!Number.isInteger(fsConstants.O_NOFOLLOW)) throw Error('trace_no_follow_unsupported');
+  const flags = fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_TRUNC
+    | fsConstants.O_NOFOLLOW | (fsConstants.O_NONBLOCK ?? 0);
+  const file = await open(outputPath, flags, 0o600);
   try {
+    if (!(await file.stat()).isFile()) throw Error('trace_output_not_regular');
     // Creation mode does not tighten an existing file. Restrict this descriptor
     // before any new trace bytes are written, independently of the umask.
     await file.chmod(0o600);
