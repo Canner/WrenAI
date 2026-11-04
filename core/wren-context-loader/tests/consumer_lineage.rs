@@ -1049,6 +1049,40 @@ fn qualified_cube_members_must_resolve_to_the_cube_source() {
 }
 
 #[test]
+fn cube_member_lineage_resolves_model_cube_name_collisions_exact_first() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "cubes/orders_caps/metadata.yml",
+        r#"name: Orders
+base_object: orders
+measures:
+  - { name: total_value, expression: "SUM(total)", type: DOUBLE }
+dimensions: []
+time_dimensions: []
+"#,
+    );
+    for (slug, sql) in [
+        ("model", "SELECT m.total_value FROM orders m"),
+        ("cube", "SELECT m.total_value FROM Orders m"),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+    let ctx = load(tmp.path());
+
+    assert!(
+        !reaches(&ctx, "metric:Orders.total_value", "query:model"),
+        "the exact model spelling must not borrow the case-distinct cube member"
+    );
+    assert!(reaches(&ctx, "metric:Orders.total_value", "query:cube"));
+}
+
+#[test]
 fn an_alias_hides_a_source_name_for_qualified_cube_members() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());

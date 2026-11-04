@@ -123,6 +123,54 @@ where
     serde_yaml::from_value(value).map(Some)
 }
 
+/// Match the native CLI's supported project-schema gate without changing the pure
+/// [`ProjectSources`]/[`assemble`] contract. Missing schema versions default to 1; otherwise the
+/// conversion follows the CLI's `int(...)` behavior before checking the supported 1..=5 range.
+#[cfg(not(target_arch = "wasm32"))]
+fn validate_native_schema_version(yml: &str) -> std::io::Result<()> {
+    let Ok(serde_yaml::Value::Mapping(project)) = serde_yaml::from_str::<serde_yaml::Value>(yml)
+    else {
+        // Keep malformed and non-mapping documents on the existing assembly/unparseable-context
+        // path. This guard is only the native layout-version check.
+        return Ok(());
+    };
+    let Some(raw) = project.get("schema_version") else {
+        return Ok(());
+    };
+    let version = match raw {
+        serde_yaml::Value::Bool(value) => Ok(i64::from(*value)),
+        serde_yaml::Value::Number(value) => value
+            .as_i64()
+            .or_else(|| {
+                value
+                    .as_f64()
+                    .filter(|value| value.is_finite())
+                    .and_then(|value| {
+                        (value >= i64::MIN as f64 && value <= i64::MAX as f64)
+                            .then_some(value as i64)
+                    })
+            })
+            .ok_or(()),
+        serde_yaml::Value::String(value) => value.trim().parse::<i64>().map_err(|_| ()),
+        _ => Err(()),
+    }
+    .map_err(|()| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "invalid schema_version in wren_project.yml: expected an integer",
+        )
+    })?;
+    if !(1..=5).contains(&version) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "unsupported schema_version {version} in wren_project.yml; please upgrade wren CLI"
+            ),
+        ));
+    }
+    Ok(())
+}
+
 /// `relationships.yml` has two authored shapes: the original bare list, and the
 /// `relationships:` keyed mapping that the wren CLI (project schema_version 5) scaffolds and
 /// requires. Accept both; rejecting the keyed form would silently strip every join from any
@@ -339,6 +387,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     let Some(wren_project_yml) = root.read_string_if_file("wren_project.yml".as_ref())? else {
         return Ok(None);
     };
+    validate_native_schema_version(&wren_project_yml)?;
     let read_metadata = |parent: &crate::source_fs::SourceDir| -> std::io::Result<Vec<String>> {
         let mut values = Vec::new();
         for name in parent.names()? {
@@ -680,6 +729,7 @@ fn captured_sources(text: &BTreeMap<String, String>) -> std::io::Result<Option<P
     let Some(wren_project_yml) = text.get("wren_project.yml").cloned() else {
         return Ok(None);
     };
+    validate_native_schema_version(&wren_project_yml)?;
     let mut model_ymls = Vec::new();
     let mut cube_ymls = Vec::new();
     let mut views = Vec::new();
@@ -891,6 +941,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     }
     crate::digest::validate_source_directories(dir)?;
     let wren_project_yml = fs::read_to_string(&wren_project_path)?;
+    validate_native_schema_version(&wren_project_yml)?;
 
     let mut model_ymls = Vec::new();
     let models_dir = dir.join("models");
@@ -1762,7 +1813,7 @@ mod tests {
     use std::io;
     use std::path::{Path, PathBuf};
 
-    use super::sorted_paths;
+    use super::{assemble, sorted_paths, validate_native_schema_version, ProjectSources};
 
     #[test]
     fn an_unreadable_directory_entry_is_an_error_naming_the_directory() {
@@ -1787,6 +1838,69 @@ mod tests {
             vec![Ok(PathBuf::from("b")), Ok(PathBuf::from("a"))];
         let paths = sorted_paths(entries.into_iter(), Path::new(".")).unwrap();
         assert_eq!(paths, [PathBuf::from("a"), PathBuf::from("b")]);
+    }
+
+    #[test]
+    fn native_schema_version_matches_cli_defaults_and_conversion() {
+        for yml in [
+            "name: demo\n",
+            "schema_version: 1\n",
+            "schema_version: 5\n",
+            "schema_version: true\n",
+            "schema_version: 2.5\n",
+            "schema_version: '2'\n",
+        ] {
+            assert!(validate_native_schema_version(yml).is_ok(), "{yml:?}");
+        }
+        for yml in [
+            "schema_version: 0\n",
+            "schema_version: 6\n",
+            "schema_version: false\n",
+            "schema_version: null\n",
+            "schema_version: '2.0'\n",
+            "schema_version: [2]\n",
+        ] {
+            assert!(validate_native_schema_version(yml).is_err(), "{yml:?}");
+        }
+
+        let sources = ProjectSources {
+            wren_project_yml: "schema_version: 99\n".to_string(),
+            model_ymls: Vec::new(),
+            relationships_yml: None,
+            cubes_yml: None,
+            cube_ymls: Vec::new(),
+            views: Vec::new(),
+            knowledge_sql_mds: Vec::new(),
+            dashboards_yml: None,
+        };
+        assert!(
+            assemble(&sources).is_ok(),
+            "pure source assembly stays version-agnostic"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn native_reader_and_capture_reject_unsupported_schema_versions() {
+        let project = tempfile::tempdir().unwrap();
+        fs::write(
+            project.path().join("wren_project.yml"),
+            "schema_version: 99\n",
+        )
+        .unwrap();
+
+        let reader_error = match super::read_project_dir(project.path()) {
+            Err(error) => error,
+            Ok(_) => panic!("unsupported schema version must be rejected by native reader"),
+        };
+        let capture_error = match super::capture_project(project.path()) {
+            Err(error) => error,
+            Ok(_) => panic!("unsupported schema version must be rejected by native capture"),
+        };
+        for error in [reader_error, capture_error] {
+            assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+            assert!(error.to_string().contains("unsupported schema_version 99"));
+        }
     }
 
     #[test]

@@ -305,24 +305,31 @@ fn is_aggregate_call(expression: &Expr) -> bool {
     )
 }
 
-/// `NULLIF(aggregate, fallback)` preserves the aggregate-result shape used by a ratio while
-/// avoiding a division-by-zero value. Other scalar wrappers remain unknown: their algebra alone
-/// does not establish business-dimensional additivity.
+/// `NULLIF(aggregate, fallback)` and `COALESCE(aggregate, fallback, ..)` preserve the
+/// aggregate-result shape used by a ratio while avoiding a division-by-zero or null value. Other
+/// scalar wrappers remain unknown: their algebra alone does not establish business-dimensional
+/// additivity.
 fn is_aggregate_result(expression: &Expr) -> bool {
     let expression = without_parentheses(expression);
-    is_aggregate_call(expression)
-        || matches!(
-            expression,
-            Expr::Function(Function { name, args: FunctionArguments::List(arguments), .. })
-                if name.to_string().eq_ignore_ascii_case("NULLIF")
-                    && matches!(
-                        arguments.args.as_slice(),
-                        [
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(first)),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(_)),
-                        ] if is_aggregate_call(first)
-                    )
-        )
+    is_aggregate_call(expression) || aggregate_wrapper_first_argument(expression)
+}
+
+fn aggregate_wrapper_first_argument(expression: &Expr) -> bool {
+    let Expr::Function(Function {
+        name,
+        args: FunctionArguments::List(arguments),
+        ..
+    }) = expression
+    else {
+        return false;
+    };
+    let [FunctionArg::Unnamed(FunctionArgExpr::Expr(first)), rest @ ..] = arguments.args.as_slice()
+    else {
+        return false;
+    };
+    let name = name.to_string().to_ascii_uppercase();
+    ((name == "NULLIF" && rest.len() == 1) || (name == "COALESCE" && !rest.is_empty()))
+        && is_aggregate_call(first)
 }
 
 fn is_aggregate_name(name: &str) -> bool {
@@ -415,8 +422,14 @@ mod tests {
             infer_additivity("SUM(amount) / NULLIF(COUNT(*), 0)"),
             Some(Additivity::NonAdditive)
         );
+        assert_eq!(
+            infer_additivity("SUM(amount) / COALESCE(COUNT(*), 0)"),
+            Some(Additivity::NonAdditive)
+        );
         assert_eq!(infer_additivity("SUM(amount) / 2"), None);
         assert_eq!(infer_additivity("SUM(amount) / NULLIF(2, 0)"), None);
+        assert_eq!(infer_additivity("SUM(amount) / COALESCE(2, 0)"), None);
+        assert_eq!(infer_additivity("COALESCE(SUM(amount), 0)"), None);
         assert_eq!(infer_additivity("SUM(distinct_count)"), None);
         assert_eq!(
             infer_additivity("SUM(CASE WHEN label = 'distinct' THEN amount ELSE 0 END)"),
