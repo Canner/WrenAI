@@ -1029,9 +1029,16 @@ def test_unknown_source_is_terminal_before_bad_column_qualification(adhoc, sql):
     assert not any(event.get("event") == "private_sql" for event in s.audit)
 
 
-def test_known_source_bad_column_remains_rewritable(adhoc):
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT missing_field FROM orders",
+        'WITH VirtualOnly AS (SELECT 1 AS id) SELECT missing_field FROM "virtualonly"',
+    ],
+)
+def test_known_source_bad_column_remains_rewritable(adhoc, sql):
     with pytest.raises(QueryFormError, match="unresolved_column"):
-        adhoc().sql.prepare("SELECT missing_field FROM orders")
+        adhoc().sql.prepare(sql)
 
 
 def test_an_unexpected_planner_error_is_rewritable_never_terminal(adhoc, monkeypatch):

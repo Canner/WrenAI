@@ -35,6 +35,7 @@ def test_only_a_cte_visible_at_the_reference_can_hide_a_stored_source(sql):
     [
         'WITH Orders AS (SELECT 1 AS id) SELECT id FROM "orders"',
         "WITH Orders AS (SELECT 1 AS id), x AS (SELECT id FROM orders) SELECT id FROM x",
+        "WITH RECURSIVE x(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM x WHERE n<2) SELECT n FROM x",
     ],
 )
 def test_visible_casefolded_cte_references_still_read_no_stored_source(sql):
