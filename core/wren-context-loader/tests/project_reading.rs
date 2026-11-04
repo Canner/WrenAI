@@ -3,6 +3,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 use wren_context_loader::{
     assemble, capability_catalog, capture_project, project_digest, read_knowledge_rules,
@@ -27,6 +28,14 @@ fn project(dir: &Path) {
         "name: orders\ntable_reference: { catalog: demo, schema: main, table: orders }\nprimary_key: id\ncolumns:\n  - { name: id, type: INTEGER }\n  - { name: total, type: INTEGER }\n",
     );
 }
+
+const ROOT_CUBE: &str = r#"- name: order_metrics
+  base_object: orders
+  measures:
+    - { name: total_value, expression: "SUM(total)", type: DOUBLE }
+  dimensions: []
+  time_dimensions: []
+"#;
 
 fn statements(dir: &Path) -> Vec<(String, String)> {
     let sources = read_project_dir(dir).unwrap().unwrap();
@@ -56,6 +65,44 @@ fn a_view_whose_statement_lives_in_its_metadata_is_read() {
             "SELECT id FROM orders WHERE total > 100".to_string()
         )],
         "the wren CLI accepts an inline statement, so a view without sql.yml is still a view"
+    );
+}
+
+#[test]
+fn root_only_cubes_are_rejected_by_native_readers() {
+    let tmp = tempfile::tempdir().unwrap();
+    project(tmp.path());
+    write(tmp.path(), "cubes.yml", ROOT_CUBE);
+
+    for result in [
+        read_project_dir(tmp.path()).map(|_| ()),
+        capture_project(tmp.path()).map(|_| ()),
+    ] {
+        let error = result.expect_err("root-only cubes.yml is not an engine-readable v5 source");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+        assert!(
+            error.to_string().contains("cubes/<name>/metadata.yml"),
+            "{error}"
+        );
+    }
+
+    let output = tempfile::tempdir().unwrap();
+    let context = output.path().join("context.json");
+    let run = Command::new(env!("CARGO_BIN_EXE_wren-context-loader"))
+        .arg(tmp.path())
+        .arg("-o")
+        .arg(&context)
+        .output()
+        .unwrap();
+    assert!(!run.status.success());
+    assert!(
+        String::from_utf8_lossy(&run.stderr).contains("cubes/<name>/metadata.yml"),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert!(
+        !context.exists(),
+        "the loader must fail before writing output"
     );
 }
 

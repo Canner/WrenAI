@@ -2,14 +2,14 @@
 //! `relationships.yml` as a `relationships:` keyed mapping (the CLI both scaffolds and
 //! *requires* this form — it silently loads 0 relationships from a bare list), join types
 //! in SCREAMING_SNAKE_CASE, and per-cube `cubes/<name>/metadata.yml` files instead of a
-//! root `cubes.yml`. The original bare-list + root-cubes shape is covered by the
-//! `jaffle_wren` tests; this file guards that both generations of project load identically.
+//! root-only `cubes.yml`. A root list may mirror the directory sources, while the pure
+//! `ProjectSources` API retains root-list support for library callers.
 
 use std::fs;
 use std::path::Path;
 
 use warble::{Additivity, ContextLoader};
-use wren_context_loader::{read_project_dir, MdlContext};
+use wren_context_loader::{capture_project, read_project_dir, MdlContext};
 
 fn write(dir: &Path, rel: &str, contents: &str) {
     let path = dir.join(rel);
@@ -130,28 +130,33 @@ fn cubes_directory_is_loaded_when_no_root_cubes_yml() {
 }
 
 #[test]
-fn root_cubes_yml_wins_over_cubes_directory() {
+fn root_cube_mirror_is_accepted_with_cube_directory() {
     let tmp = tempfile::tempdir().unwrap();
     v5_project(tmp.path());
-    // A root mirror that declares a *different* cube name: if both sources were merged,
-    // the project would carry two cubes; precedence means only the root one loads.
+    // The engine reads the directory source; the native loader accepts a matching root mirror
+    // without merging the two representations.
     write(
         tmp.path(),
         "cubes.yml",
-        r#"- name: root_metrics
+        r#"- name: order_metrics
   base_object: orders
   measures:
-    - { name: root_total, expression: "SUM(total)", type: DOUBLE }
+    - { name: total_value, expression: "SUM(total)", type: DOUBLE }
+    - { name: avg_value, expression: "AVG(total)", type: DOUBLE }
   dimensions: []
-  time_dimensions: []
+  time_dimensions:
+    - { name: placed_at, expression: placed_at, type: TIMESTAMP }
 "#,
     );
     let ctx = load(tmp.path());
 
-    assert!(ctx.lineage().contains("cube:root_metrics"));
+    assert!(ctx.lineage().contains("cube:order_metrics"));
+
+    let captured = capture_project(tmp.path()).unwrap();
+    let captured = MdlContext::try_from_sources(captured.sources.as_ref().unwrap()).unwrap();
     assert!(
-        !ctx.lineage().contains("cube:order_metrics"),
-        "cubes/ directory must be ignored when a root cubes.yml exists (no double-loading)"
+        captured.lineage().contains("cube:order_metrics"),
+        "the captured reader must preserve root-plus-directory source compatibility"
     );
 }
 

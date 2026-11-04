@@ -1,6 +1,8 @@
 //! Assemble an on-disk **wren project** (the split-file, `schema_version: 2` layout: a
-//! `wren_project.yml` + per-model `models/<name>/metadata.yml` + `relationships.yml` + optional
-//! `cubes.yml` + `views/<name>/{metadata,sql}.yml`) into a canonical [`wren_core_base::mdl::Manifest`].
+//! `wren_project.yml` + per-model `models/<name>/metadata.yml` + `relationships.yml` +
+//! per-cube `cubes/<name>/metadata.yml` + `views/<name>/{metadata,sql}.yml`) into a canonical
+//! [`wren_core_base::mdl::Manifest`]. Native project reads require the per-cube layout; the pure
+//! [`ProjectSources`] API also accepts a root `cubes.yml` list for library callers.
 //!
 //! The engine-consumed MDL format is the single camelCase `Manifest`; a wren *project* is the
 //! authored, split, snake_case form the `wren` CLI compiles into that manifest. This loader does
@@ -282,6 +284,9 @@ fn apply_ref_sql_file(metadata: String, ref_sql_file: Option<String>) -> std::io
 ///
 /// A view directory is a view when it has a `metadata.yml`, with or without a `sql.yml` — the
 /// same rule as `wren`, which also ignores a directory that holds only a `sql.yml`.
+///
+/// The native engine reads cubes from `cubes/<name>/metadata.yml`; a non-empty root `cubes.yml`
+/// may mirror those files but cannot be the only native cube source.
 #[cfg(all(unix, not(target_arch = "wasm32")))]
 pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<ProjectSources>> {
     crate::digest::validate_source_directories(dir)?;
@@ -376,7 +381,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
             }
         }
     }
-    Ok(Some(ProjectSources {
+    let sources = ProjectSources {
         wren_project_yml,
         model_ymls,
         relationships_yml,
@@ -385,7 +390,9 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
         views,
         knowledge_sql_mds,
         dashboards_yml,
-    }))
+    };
+    validate_native_cube_source(&sources)?;
+    Ok(Some(sources))
 }
 
 /// Capture the project inputs once for the CLI's prepared document, catalog, and digest. This
@@ -658,7 +665,7 @@ fn captured_sources(text: &BTreeMap<String, String>) -> std::io::Result<Option<P
             }
         }
     }
-    Ok(Some(ProjectSources {
+    let sources = ProjectSources {
         wren_project_yml,
         model_ymls,
         relationships_yml: text.get("relationships.yml").cloned(),
@@ -667,7 +674,30 @@ fn captured_sources(text: &BTreeMap<String, String>) -> std::io::Result<Option<P
         views,
         knowledge_sql_mds,
         dashboards_yml: text.get("dashboards.yml").cloned(),
-    }))
+    };
+    validate_native_cube_source(&sources)?;
+    Ok(Some(sources))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn validate_native_cube_source(sources: &ProjectSources) -> std::io::Result<()> {
+    if !sources.cube_ymls.is_empty() {
+        return Ok(());
+    }
+    let Some(root) = &sources.cubes_yml else {
+        return Ok(());
+    };
+    let Ok(cubes) = parse_doc_or_default::<Vec<CubeFile>>(root) else {
+        // Preserve the existing assembly diagnostic for malformed root input.
+        return Ok(());
+    };
+    if cubes.is_empty() {
+        return Ok(());
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        "non-empty cubes.yml requires cubes/<name>/metadata.yml for native projects",
+    ))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -852,7 +882,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
 
     let dashboards_yml = read_if_exists(&dir.join("dashboards.yml"))?;
 
-    Ok(Some(ProjectSources {
+    let sources = ProjectSources {
         wren_project_yml,
         model_ymls,
         relationships_yml,
@@ -861,7 +891,9 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
         views,
         knowledge_sql_mds,
         dashboards_yml,
-    }))
+    };
+    validate_native_cube_source(&sources)?;
+    Ok(Some(sources))
 }
 
 /// Read the business-rule slice used by `wren context instructions`, without invoking `wren`.
@@ -1412,6 +1444,8 @@ pub struct ProjectSources {
     pub wren_project_yml: String,
     pub model_ymls: Vec<String>,
     pub relationships_yml: Option<String>,
+    /// Optional root cube list for pure/in-memory callers. A native directory project may use it
+    /// as a mirror only when it also has per-cube metadata files.
     pub cubes_yml: Option<String>,
     /// Per-cube `cubes/<name>/metadata.yml` contents (wren CLI layout). Used unless the root
     /// `cubes.yml` yields at least one cube, which then takes precedence (see `authored_cubes`).

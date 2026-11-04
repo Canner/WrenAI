@@ -176,7 +176,7 @@ fn per_cube_metadata_is_read_when_the_root_cubes_yml_has_no_entries() {
 }
 
 #[test]
-fn root_entries_win_over_per_cube_metadata_and_the_two_are_never_merged() {
+fn pure_project_sources_root_entries_win_over_per_cube_metadata_and_are_never_merged() {
     let sources = sources_with(
         None,
         &[
