@@ -515,6 +515,7 @@ DATES = {
     "on or before": "f.date <= CAST(p.captured_at AS DATE)",
     "reversed": "CAST(p.captured_at AS DATE) >= f.date",
     "between with a declared upper bound": "f.date BETWEEN CAST(p.captured_at AS DATE) - INTERVAL 7 DAY AND CAST(p.captured_at AS DATE)",
+    "earlier than the transaction": "f.date <= p.captured_at - INTERVAL 1 DAY",
 }
 
 
@@ -537,6 +538,8 @@ FX_BAD_DATES = {
     "disjoined with another predicate": "f.date <= CAST(p.captured_at AS DATE) OR p.id = -1",
     "negated comparison": "NOT (f.date <= CAST(p.captured_at AS DATE))",
     "upper bound extends past the transaction": "f.date <= p.captured_at + INTERVAL 1 DAY",
+    "negative interval subtraction extends past the transaction": "f.date <= p.captured_at - INTERVAL -1 DAY",
+    "negative interval addition is not credited": "f.date <= p.captured_at + INTERVAL -1 DAY",
 }
 
 
@@ -603,7 +606,7 @@ def test_a_hard_coded_rate_currency_does_not_satisfy_the_rule(checker):
     "currency",
     [
         "CONCAT(p.currency, '_old')",
-        "CAST(p.currency AS VARCHAR)",
+        "CAST(p.currency AS INTEGER)",
     ],
 )
 def test_a_computed_rate_currency_does_not_satisfy_the_rule(checker, currency):

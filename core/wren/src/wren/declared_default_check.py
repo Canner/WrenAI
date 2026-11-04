@@ -804,6 +804,38 @@ class _Statement:
                 if table == read and self._route_fits(route, path)
             }
 
+        def currency_column(node):
+            """The declared currency column, optionally under DuckDB's unbounded text cast."""
+            node = _unparen(node)
+            if self.direct(node) in currencies:
+                return node
+            if (
+                isinstance(node, exp.Cast)
+                and node.to.this is exp.DataType.Type.TEXT
+                and not node.to.expressions
+                and self.direct(node.this) in currencies
+            ):
+                return node.this
+            return None
+
+        def upper_bound_date_column(node):
+            """A declared date, or that date minus a known-positive interval."""
+            node = _uncast_temporal(node)
+            if self.direct(node) in dates:
+                return node
+            if not isinstance(node, exp.Sub) or not isinstance(
+                node.expression, exp.Interval
+            ):
+                return None
+            interval = _unparen(node.expression.this)
+            if not isinstance(interval, exp.Literal):
+                return None
+            try:
+                positive = float(interval.this) > 0
+            except ValueError:
+                return None
+            return node.this if positive and self.direct(node.this) in dates else None
+
         currency_joined, date_bounded = set(), set()
         currency_for_rate, date_for_rate = {}, {}
         for node in self._condition_nodes(exp.EQ):
@@ -811,15 +843,13 @@ class _Statement:
                 (node.this, node.expression),
                 (node.expression, node.this),
             ):
-                if (
-                    self.direct(side) == rate_currency
-                    and self.direct(other) in currencies
-                ):
+                amount_currency = currency_column(other)
+                if self.direct(side) == rate_currency and amount_currency is not None:
                     matched_rates = matching(side)
                     currency_joined |= matched_rates
                     for rate in matched_rates:
                         currency_for_rate.setdefault(rate, set()).update(
-                            matched_amount_reads(other)
+                            matched_amount_reads(amount_currency)
                         )
         bounds = (
             [(node.this, node.expression) for node in self._condition_nodes(exp.LTE)]
@@ -832,15 +862,13 @@ class _Statement:
         )
         for side, other in bounds:
             column = _uncast_temporal(side)
-            if (
-                self.direct(column) == rate_date
-                and self.direct(_uncast_temporal(other)) in dates
-            ):
+            amount_date = upper_bound_date_column(other)
+            if self.direct(column) == rate_date and amount_date is not None:
                 matched_rates = matching(column)
                 date_bounded |= matched_rates
                 for rate in matched_rates:
                     date_for_rate.setdefault(rate, set()).update(
-                        matched_amount_reads(other)
+                        matched_amount_reads(amount_date)
                     )
         # An equality to a bounded scalar MAX(date) carries that upper bound
         # to the compared rate instance. Both instances still need their own
