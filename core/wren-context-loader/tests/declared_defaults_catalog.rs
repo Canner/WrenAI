@@ -58,8 +58,27 @@ fn without_front_matter(dir: &Path) {
     for entry in fs::read_dir(&rules).unwrap() {
         let path = entry.unwrap().path();
         let text = fs::read_to_string(&path).unwrap();
-        let body = text.splitn(3, "---\n").nth(2).expect("a fenced block");
+        let body = front_matter_body(&text);
         fs::write(path, body).unwrap();
+    }
+}
+
+/// Returns the text after the leading fenced block without changing its line endings.
+fn front_matter_body(text: &str) -> &str {
+    let fence = if text.starts_with("---\r\n") {
+        "---\r\n"
+    } else {
+        "---\n"
+    };
+    text.splitn(3, fence).nth(2).expect("a fenced block")
+}
+
+fn rewrite_rule_line_endings(dir: &Path, line_ending: &str) {
+    let rules = dir.join("knowledge/rules");
+    for entry in fs::read_dir(rules).unwrap() {
+        let path = entry.unwrap().path();
+        let text = fs::read_to_string(&path).unwrap();
+        fs::write(path, text.replace("\r\n", "\n").replace('\n', line_ending)).unwrap();
     }
 }
 
@@ -86,17 +105,50 @@ fn declared_ids_follow_file_order_then_declaration_order() {
 
 #[test]
 fn the_front_matter_stays_verbatim_in_the_rule_content() {
-    let doc = catalog_json(&fixture("declared-wren"));
+    let project = fixture("declared-wren");
+    let doc = catalog_json(&project);
     let rules = doc["knowledge_rules"].as_array().unwrap();
     assert_eq!(rules.len(), 2);
     for rule in rules {
         let content = rule["content"].as_str().unwrap();
-        assert!(content.starts_with("---\ndefaults:\n"), "{content}");
+        let path = rule["path"].as_str().unwrap();
+        let source = fs::read_to_string(project.join(path)).unwrap();
+        assert_eq!(
+            content.as_bytes(),
+            source.trim().as_bytes(),
+            "{path} must keep its trimmed source bytes verbatim"
+        );
     }
     assert!(rules[1]["content"]
         .as_str()
         .unwrap()
         .contains("- id: exclude-test-accounts"));
+}
+
+#[test]
+fn prepared_document_strips_crlf_front_matter_without_changing_rule_body_bytes() {
+    let declared = tempfile::tempdir().unwrap();
+    copy_dir(&fixture("declared-wren"), declared.path());
+    rewrite_rule_line_endings(declared.path(), "\r\n");
+
+    let stripped = tempfile::tempdir().unwrap();
+    copy_dir(declared.path(), stripped.path());
+    without_front_matter(stripped.path());
+
+    assert_eq!(prepared(declared.path()), prepared(stripped.path()));
+
+    let out_declared = tempfile::tempdir().unwrap();
+    let out_stripped = tempfile::tempdir().unwrap();
+    assert!(run_loader(declared.path(), out_declared.path())
+        .status
+        .success());
+    assert!(run_loader(stripped.path(), out_stripped.path())
+        .status
+        .success());
+    assert_eq!(
+        fs::read(out_declared.path().join("context.json")).unwrap(),
+        fs::read(out_stripped.path().join("context.json")).unwrap()
+    );
 }
 
 #[test]
