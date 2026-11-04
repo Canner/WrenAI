@@ -165,8 +165,11 @@ returned rule IDs verbatim when requesting their contents.
 Governed SQL in both `serve agent` and controlled `serve mcp` runs in a fresh host-owned child interpreter with its own engine and database connection. The host bounds its lifetime by the task's remaining `execution.deadline_ms`; `AdHocSQL.execute` used outside a service task has a 90-second default. IPC timeout/abort, session close and service shutdown terminate and reap active query workers (TERM, then KILL if needed), and drop their late results. A new query does not reuse a timed-out connection or occupy an abandoned tool-pool slot. Connection setup and planning in that worker are inside the same bound; process startup adds overhead and connection-local state does not carry between queries. This is local process management, not an OS sandbox. Closing the connection on termination does **not** prove that every remote database immediately cancels its server-side statement: configure server-side statement/resource limits where needed. Ordinary `wren query` and legacy ungoverned `serve mcp` retain their existing execution path.
 
 Each wait for tool callbacks during IPC teardown is capped at one second. Queued callbacks
-are cancelled; a running, non-cancellable callback can outlive `close()` and still delay
-Python interpreter exit. This wait bound does not terminate the callback or provider work.
+are cancelled. The eight callback workers are daemon threads, so a running,
+non-cancellable callback may outlive `close()` without delaying Python interpreter
+exit. Closing or failing IPC terminates and reaps the runtime's owned process
+group, including helpers in that group, with TERM/KILL escalation. This does not
+terminate external callback/provider work or prove that provider billing has stopped.
 
 The task clock starts before its first session/context revalidation and authorization, and each authorization wait is capped by the remaining task time. Each IPC call shares one deadline across the write-lock wait, request write and reply wait. Control and tool-result writes have a bounded write budget too. Canceling an incomplete frame ends that stalled transport, since another JSON frame cannot safely follow it; canceling a healthy task keeps the shared runtime available. Runtime context fingerprints run in a separate fixed-purpose child, under the same task lifetime, so a stalled filesystem read can be terminated on close or shutdown. A fingerprint check outside an active task has a 15-second bound. These checks keep the same content-hash algorithm and revalidation points, with a process-start cost per check; initial project loading at service startup remains synchronous.
 
