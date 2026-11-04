@@ -112,3 +112,23 @@ fn a_directory_with_a_sql_yml_and_no_metadata_is_not_a_view_to_the_cli_either() 
 
     assert!(statements(tmp.path()).is_empty());
 }
+
+#[test]
+fn metadata_directories_are_not_silently_skipped() {
+    for relative in ["models/orders/metadata.yml", "views/broken/metadata.yml"] {
+        let tmp = tempfile::tempdir().unwrap();
+        project(tmp.path());
+        let metadata = tmp.path().join(relative);
+        if metadata.exists() {
+            fs::remove_file(&metadata).unwrap();
+        }
+        fs::create_dir_all(&metadata).unwrap();
+
+        let error = match read_project_dir(tmp.path()) {
+            Ok(_) => panic!("{relative} must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+        assert_eq!(error.to_string(), "metadata_directory_unsupported");
+    }
+}

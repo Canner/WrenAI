@@ -61,6 +61,9 @@ impl SourceDir {
         Ok(directory)
     }
 
+    /// Open a source directory when present. Ordinary files and special entries deliberately act
+    /// like an absent directory: the loader and digest share that compatibility contract, while
+    /// directory symlinks remain refused traversal edges.
     pub(crate) fn open_dir_if_exists(&self, name: &OsStr) -> io::Result<Option<Self>> {
         match self.entry_kind(name)? {
             EntryKind::Missing | EntryKind::Regular | EntryKind::Other => Ok(None),

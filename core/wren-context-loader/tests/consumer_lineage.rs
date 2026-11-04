@@ -588,6 +588,39 @@ fn qualified_cube_members_must_resolve_to_the_cube_source() {
 }
 
 #[test]
+fn unaliased_parenthesized_joins_retain_inner_cube_aliases() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    for (slug, sql) in [
+        (
+            "unaliased",
+            "SELECT om.total_value FROM (order_metrics om JOIN customers c ON TRUE)",
+        ),
+        (
+            "aliased",
+            "SELECT joined.total_value FROM (order_metrics om JOIN customers c ON TRUE) joined",
+        ),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+    let ctx = load(tmp.path());
+
+    assert!(reaches(
+        &ctx,
+        "metric:order_metrics.total_value",
+        "query:unaliased"
+    ));
+    assert!(
+        !reaches(&ctx, "metric:order_metrics.total_value", "query:aliased"),
+        "an alias on the parenthesized join hides its inner relation aliases"
+    );
+}
+
+#[test]
 fn qualified_relations_do_not_resolve_to_local_semantic_objects() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());

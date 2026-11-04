@@ -423,8 +423,18 @@ impl RelationCollector {
                 name: None,
                 alias: alias.as_ref().map(|alias| alias.name.clone()),
             }),
+            TableFactor::NestedJoin {
+                table_with_joins,
+                alias: None,
+            } => {
+                Self::add_source(&table_with_joins.relation, scope, sources);
+                for join in &table_with_joins.joins {
+                    Self::add_source(&join.relation, scope, sources);
+                }
+            }
             // Unknown table factors still block bare-column attribution. Their output may be a
-            // function, pivot, UNNEST, or another construct whose cube provenance is unproved.
+            // function, pivot, UNNEST, an aliased nested join, or another construct whose cube
+            // provenance is unproved.
             _ => sources.push(SelectSource {
                 relation: None,
                 name: None,

@@ -209,6 +209,17 @@ pub(crate) fn sql_yml_statement(sql_yml: &str) -> Result<Option<String>, serde_y
 /// A view directory is a view when it has a `metadata.yml`, with or without a `sql.yml` — the
 /// same rule as `wren`, which also ignores a directory that holds only a `sql.yml`.
 #[cfg(all(unix, not(target_arch = "wasm32")))]
+fn read_metadata_if_file(dir: &crate::source_fs::SourceDir) -> std::io::Result<Option<String>> {
+    if dir.entry_kind("metadata.yml".as_ref())? == crate::source_fs::EntryKind::Directory {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "metadata_directory_unsupported",
+        ));
+    }
+    dir.read_string_if_file("metadata.yml".as_ref())
+}
+
+#[cfg(all(unix, not(target_arch = "wasm32")))]
 pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<ProjectSources>> {
     crate::digest::validate_source_directories(dir)?;
     let root = crate::source_fs::SourceDir::open_root(dir)?;
@@ -222,7 +233,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
                 continue;
             }
             if let Some(child) = parent.open_nested_dir(&name)? {
-                if let Some(contents) = child.read_string_if_file("metadata.yml".as_ref())? {
+                if let Some(contents) = read_metadata_if_file(&child)? {
                     values.push(contents);
                 }
             }
@@ -247,7 +258,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
                 continue;
             }
             if let Some(view) = view_root.open_nested_dir(&name)? {
-                if let Some(meta) = view.read_string_if_file("metadata.yml".as_ref())? {
+                if let Some(meta) = read_metadata_if_file(&view)? {
                     views.push((
                         meta,
                         view.read_string_if_file("sql.yml".as_ref())?
