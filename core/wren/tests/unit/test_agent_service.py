@@ -4031,3 +4031,221 @@ def test_continuation_close_cancels_its_first_actual_fingerprint_worker(service)
         s.close(session_id)
         thread.join(3)
         stalled.unlink()
+
+
+class _FaultingAuditSink:
+    def __init__(self, failure, event=None, delegate=None):
+        self.failure, self.event, self.delegate = failure, event, delegate
+        self.writes = self.flushes = 0
+        self.events = []
+        self.closed = False
+        self.fail_current = False
+
+    def write(self, value):
+        self.writes += 1
+        entry = json.loads(value)
+        self.events.append(entry)
+        self.fail_current = self.event is None or entry.get("event") == self.event
+        if self.failure == "write" and self.fail_current:
+            raise OSError("audit failed /private/audit-token")
+        if self.delegate is not None:
+            self.delegate.write(value)
+
+    def flush(self):
+        self.flushes += 1
+        if self.failure == "flush" and self.fail_current:
+            raise OSError("audit failed /private/audit-token")
+        if self.delegate is not None:
+            self.delegate.flush()
+
+    def close(self):
+        self.closed = True
+        if self.delegate is not None:
+            self.delegate.close()
+
+
+@pytest.mark.parametrize("failure", ["write", "flush"])
+def test_audit_failure_stops_operations_until_a_fresh_service(
+    service, tmp_path, failure
+):
+    import io  # noqa: PLC0415
+
+    s = service(updates={"audit_path": str(tmp_path / "failed.jsonl")})
+    r = request(s)
+    s.audit_sink.close()
+    sink = _FaultingAuditSink(failure)
+    s.audit_sink = sink
+    result = asyncio.run(safe(s.execute, r, direct={"sql": r.sql}))
+    assert result == {"status": "unavailable", "reason": "service"}
+    assert "private" not in json.dumps(result) and "token" not in json.dumps(result)
+    assert sink.writes == 1
+    assert s.audit_failed
+    assert sum(e.get("event") == "audit_sink_failed" for e in s.audit) == 1
+    state = s.sessions[r.session_id]
+    assert state["active"] is None and "query_lifetime" not in state
+    assert state["closed"] and not state["cache"] and not state["pending"]
+    s.audit_sink = io.StringIO()
+    again = r.model_copy(update={"request_id": "after-repair"})
+    assert asyncio.run(safe(s.execute, again, direct={"sql": r.sql})) == result
+    assert asyncio.run(safe(s.open)) == result
+    assert s.close(r.session_id) == {"status": "closed"}
+    s.shutdown()
+    assert s.ipc.process.poll() is not None
+    assert not s.ipc.reader.is_alive()
+    fresh = service(updates={"audit_path": str(tmp_path / "restarted.jsonl")})
+    assert execute(fresh, request(fresh))["status"] == "completed"
+
+
+@pytest.mark.parametrize("failure", ["write", "flush"])
+def test_final_audit_failure_withholds_executed_result_and_existing_evidence(
+    service, tmp_path, monkeypatch, failure
+):
+    s = service(updates={"audit_path": str(tmp_path / "delivery.jsonl")})
+    first = request(s)
+    completed = execute(s, first)
+    state = s.sessions[first.session_id]
+    r = first.model_copy(
+        update={
+            "request_id": "late-audit-failure",
+            "expected_revision": completed["revision"],
+        }
+    )
+    executed = []
+    original = s.sql.execute
+
+    def query(prepared):
+        value = original(prepared)
+        executed.append(True)
+        return value
+
+    monkeypatch.setattr(s.sql, "execute", query)
+    s.audit_sink.close()
+    s.audit_sink = _FaultingAuditSink(failure, event="task_completed")
+    result = asyncio.run(safe(s.execute, r, direct={"sql": r.sql}))
+    assert executed, "this case must reach actual SQL before the audit fails"
+    assert result == {"status": "unavailable", "reason": "service"}
+    assert "result" not in result and "evidence_ref" not in result
+    assert not state["results"] and not state["evidence"] and not state["cache"]
+    ref = Ref(session_id=first.session_id, evidence_ref=completed["evidence_ref"])
+    assert asyncio.run(safe(s.evidence, ref)) == result
+
+
+def test_audit_failure_after_another_task_executed_still_blocks_its_delivery(
+    service, tmp_path, monkeypatch
+):
+    import threading  # noqa: PLC0415
+
+    s = service(updates={"audit_path": str(tmp_path / "concurrent.jsonl")})
+    r = request(s)
+    entered, release = threading.Event(), threading.Event()
+    original = s.sql.execute
+
+    def query(prepared):
+        value = original(prepared)
+        entered.set()
+        assert release.wait(5)
+        return value
+
+    monkeypatch.setattr(s.sql, "execute", query)
+    output = []
+    thread = threading.Thread(
+        target=lambda: output.append(
+            asyncio.run(safe(s.execute, r, direct={"sql": r.sql}))
+        )
+    )
+    thread.start()
+    try:
+        assert entered.wait(5)
+        s.audit_sink.close()
+        s.audit_sink = _FaultingAuditSink("write")
+        try:
+            s.record({"event": "parallel_failure"})
+        except RuntimeError:
+            pass
+        release.set()
+        thread.join(3)
+        assert not thread.is_alive()
+        assert output == [{"status": "unavailable", "reason": "service"}]
+        assert "result" not in output[0]
+        assert s.sessions[r.session_id]["active"] is None
+    finally:
+        release.set()
+        thread.join(5)
+
+
+def test_cancellation_cleanup_survives_a_failed_failure_audit(
+    service, tmp_path, monkeypatch
+):
+    from wren.governed_query import QueryCancelled  # noqa: PLC0415
+
+    s = service(updates={"audit_path": str(tmp_path / "cancel.jsonl")})
+    r = request(s)
+    monkeypatch.setattr(
+        s.sql,
+        "execute",
+        lambda *_: (_ for _ in ()).throw(QueryCancelled("owned cancellation")),
+    )
+    s.audit_sink.close()
+    s.audit_sink = _FaultingAuditSink("write", event="task_failed")
+    with pytest.raises(QueryCancelled):
+        execute(s, r)
+    assert s.audit_failed
+    state = s.sessions[r.session_id]
+    assert state["active"] is None and "query_lifetime" not in state
+    assert state["lock"].acquire(blocking=False)
+    state["lock"].release()
+    assert s.close(r.session_id) == {"status": "closed"}
+
+
+def test_startup_audit_failure_reaps_the_actual_runtime_and_stream(
+    service, tmp_path, monkeypatch
+):
+    import wren.agent_service as module  # noqa: PLC0415
+    from wren.agent_service import AuditUnavailable  # noqa: PLC0415
+
+    runtimes, sinks = [], []
+    original_ipc, original_fdopen = module.RuntimeIPC, module.os.fdopen
+
+    def start(*args, **kwargs):
+        runtime = original_ipc(*args, **kwargs)
+        runtimes.append(runtime)
+        return runtime
+
+    def stream(*args, **kwargs):
+        if len(args) < 2 or args[1] != "w":
+            return original_fdopen(*args, **kwargs)
+        sink = _FaultingAuditSink("write", delegate=original_fdopen(*args, **kwargs))
+        sinks.append(sink)
+        return sink
+
+    monkeypatch.setattr(module, "RuntimeIPC", start)
+    monkeypatch.setattr(module.os, "fdopen", stream)
+    with pytest.raises(AuditUnavailable):
+        service(
+            runtime_path=FAKE_RUNTIME,
+            updates={"audit_path": str(tmp_path / "startup.jsonl")},
+        )
+    assert runtimes and sinks
+    assert all(
+        runtime.process.poll() is not None and not runtime.reader.is_alive()
+        for runtime in runtimes
+    )
+    assert all(sink.closed for sink in sinks)
+
+
+def test_mcp_cleanup_remains_available_while_other_tool_responses_are_audit_gated(
+    service, tmp_path
+):
+    s = service(updates={"audit_path": str(tmp_path / "mcp-audit.jsonl")})
+    server = build_mcp(s)
+    r = request(s)
+    s.audit_sink.close()
+    s.audit_sink = _FaultingAuditSink("write")
+    refused = asyncio.run(safe(s.execute, r, direct={"sql": r.sql}))
+    assert refused == {"status": "unavailable", "reason": "service"}
+    capabilities = server._tool_manager.get_tool("capabilities")
+    assert asyncio.run(capabilities.fn()) == refused
+    close = server._tool_manager.get_tool("close_session")
+    assert asyncio.run(close.fn(session_id=r.session_id)) == {"status": "closed"}
+    s.shutdown()
+    assert s.audit_sink is None and s.ipc.process.poll() is not None

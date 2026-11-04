@@ -349,6 +349,15 @@ Session storage is in memory, with 30-minute idle and 8-hour maximum lifetime, o
 
 An optional operator-only `audit_path` records bounded decision and query diagnostics, one JSON line per event, written and flushed as each event happens, so a killed process still leaves its trail. The first event is `context_loaded` (`digest`, `loader_identity`, `models`, `pages`, `budget_bytes`, `first_page_bytes`). It must name a new file and may contain private query conditions; never expose it as a resource or place it in shared public artifacts. It is disabled by default.
 
+If a configured audit write or flush fails, the service stays unhealthy until restarted.
+It stops controlled operations and result delivery, including existing evidence reads and
+results from requests already in flight, with `{"status":"unavailable","reason":"service"}`.
+SQL may already have executed; withholding its result does not undo that execution. Repair
+the audit destination and restart with a usable new audit file. Replacing the stream on the
+same service instance does not clear the failure. Session cancellation and shutdown remain
+available. The operator's in-memory audit records one `audit_sink_failed` event with its
+write/flush stage; the underlying exception text is never sent to the planner.
+
 ## Support boundary
 
 A `SUM` or `COUNT` expression alone does not establish additivity across

@@ -580,6 +580,13 @@ class SQL(Strict):
     sql: str = Field(min_length=1, max_length=8192)
 
 
+class AuditUnavailable(RuntimeError):
+    """The configured operator audit lost an event; restart is required."""
+
+    def __init__(self):
+        super().__init__("audit_unavailable")
+
+
 class Service:
     def __init__(
         self,
@@ -601,6 +608,8 @@ class Service:
         self.sessions = {}
         self.audit = []
         self.audit_sink = None
+        self.audit_failed = False
+        self.audit_lock = threading.RLock()
         self.capabilities = {c["id"]: c for c in profile["capabilities"]}
         self.caller = config["caller"]
         self.pid = config["project_id"]
@@ -610,21 +619,50 @@ class Service:
             r.id: r for r in self.sql.checker.rules if isinstance(r, SaleStatuses)
         }
 
+    def ensure_audit(self):
+        if self.audit_failed:
+            raise AuditUnavailable()
+
     def record(self, entry: dict):
         """Keep an audit entry in memory and, when the operator set audit_path,
         append it as one JSON line at once so a killed process still leaves a trail."""
-        entry = {"t": round(time.time(), 3), **entry}
-        self.audit.append(entry)
-        if len(self.audit) > 4096:
-            del self.audit[:1024]
-        if self.audit_sink is not None:
-            try:
-                self.audit_sink.write(json.dumps(entry, default=str) + "\n")
-                self.audit_sink.flush()
-            except Exception:
-                pass
+        failed = False
+        with self.audit_lock:
+            entry = {"t": round(time.time(), 3), **entry}
+            self.audit.append(entry)
+            if len(self.audit) > 4096:
+                del self.audit[:1024]
+            self.ensure_audit()
+            if self.audit_sink is not None:
+                stage = "write"
+                try:
+                    self.audit_sink.write(json.dumps(entry, default=str) + "\n")
+                    stage = "flush"
+                    self.audit_sink.flush()
+                except Exception:
+                    self.audit_failed = True
+                    # Operator memory only; never recursively write to the broken sink
+                    # or retain its exception text in a caller-visible error.
+                    self.audit.append(
+                        {
+                            "t": round(time.time(), 3),
+                            "event": "audit_sink_failed",
+                            "stage": stage,
+                        }
+                    )
+                    if len(self.audit) > 4096:
+                        del self.audit[:1024]
+                    failed = True
+        if failed:
+            # Release the audit lock before the session lock: callbacks may be
+            # recording while a delivery already holds the session lock.
+            with self.lock:
+                for ident in list(self.sessions):
+                    self.close(ident)
+            raise AuditUnavailable()
 
     def allowed(self, session, action, kind, name, role="planner", columns=None):
+        self.ensure_audit()
         self.project.current()
         if session and (session["closed"] or session["caller"] != self.caller):
             return False
@@ -876,6 +914,7 @@ class Service:
             raise
 
     def session(self, ident):
+        self.ensure_audit()
         s = self.sessions.get(ident)
         if not s or s["closed"] or s["caller"] != self.caller:
             raise ValueError("session_expired")
@@ -967,6 +1006,7 @@ class Service:
     def execute(self, request: Ask | SQL, *, direct=None, continuation=None):
         # Register before the first session/current or authorization check: those
         # operations are host work too, and close must be able to terminate them.
+        self.ensure_audit()
         lifetime = QueryLifetime(self.execution.deadline_ms / 1000)
         with self.lock:
             s = self.sessions.get(request.session_id)
@@ -980,7 +1020,11 @@ class Service:
         try:
             with lifetime.bind():
                 self.session(request.session_id)
-                return self._execute(s, request, direct, continuation, lifetime, owner)
+                response = self._execute(
+                    s, request, direct, continuation, lifetime, owner
+                )
+                self.ensure_audit()
+                return response
         finally:
             lifetime.cancel()
             s.pop("query_lifetime", None)
@@ -1351,6 +1395,10 @@ class Service:
             try:
                 with lifetime.bind():
                     return callback(name, args)
+            except AuditUnavailable as exc:
+                end(exc)
+                lifetime.cancel()
+                raise
             except PermissionError as exc:
                 # An authorization failure is final: a rewrite cannot make it allowed.
                 policy_denied = True
@@ -1541,19 +1589,29 @@ class Service:
                 )
                 return response
         except Exception as exc:
-            if not (isinstance(exc, ValueError) and str(exc) == "invalid_evidence"):
-                self.record(
-                    {
-                        "event": "task_failed",
-                        "request_id": request.request_id,
-                        "reason": "denied" if policy_denied else str(exc)[:80],
-                        "detail": getattr(exc, "detail", None),
-                        "turns": usage.get("turns"),
-                        "tool_calls": usage.get("tool_calls"),
-                        "sql_attempts": budget.attempts,
-                        "as_of": as_of,
-                    }
-                )
+            if not isinstance(exc, AuditUnavailable) and not (
+                isinstance(exc, ValueError) and str(exc) == "invalid_evidence"
+            ):
+                try:
+                    self.record(
+                        {
+                            "event": "task_failed",
+                            "request_id": request.request_id,
+                            "reason": "denied" if policy_denied else str(exc)[:80],
+                            "detail": getattr(exc, "detail", None),
+                            "turns": usage.get("turns"),
+                            "tool_calls": usage.get("tool_calls"),
+                            "sql_attempts": budget.attempts,
+                            "as_of": as_of,
+                        }
+                    )
+                except AuditUnavailable:
+                    # A terminal operation already delivers no result. Preserve
+                    # cancellation/denial while the audit fault remains latched.
+                    if not isinstance(
+                        exc, (QueryCancelled, DatabaseTimeoutError, PermissionError)
+                    ):
+                        raise
             if policy_denied:
                 raise PermissionError("denied") from None
             raise
@@ -1587,6 +1645,7 @@ class Service:
     def continue_task(self, r: Continue):
         # Only read session-owned state here; execute registers the cancellable
         # lifetime before session/current performs any filesystem work.
+        self.ensure_audit()
         with self.lock:
             s = self.sessions.get(r.session_id)
             if not s or s["closed"] or s["caller"] != self.caller:
@@ -1646,27 +1705,42 @@ def unavailable_reason(exc: BaseException) -> str:
     return "service"
 
 
-async def safe(fn, *args, **kwargs):
+async def safe(fn, *args, _service=None, _cleanup=False, **kwargs):
+    service = _service or getattr(fn, "__self__", None)
     try:
-        return await asyncio.to_thread(fn, *args, **kwargs)
+        if isinstance(service, Service) and not _cleanup:
+            service.ensure_audit()
+        response = await asyncio.to_thread(fn, *args, **kwargs)
     except asyncio.CancelledError:
-        service = getattr(fn, "__self__", None)
         if isinstance(service, Service) and args and hasattr(args[0], "session_id"):
             await asyncio.to_thread(service.close, args[0].session_id)
         raise
     except PermissionError:
-        return {"status": "denied"}
+        response = {"status": "denied"}
     except Conflict as exc:
-        return {"status": "conflict", "reason": exc.reason, "revision": exc.revision}
+        response = {
+            "status": "conflict",
+            "reason": exc.reason,
+            "revision": exc.revision,
+        }
     except ContextChanged:
-        return {"status": "context_changed"}
+        response = {"status": "context_changed"}
     except ValueError as exc:
         code = str(exc)
         if code in {"session_expired", "context_changed"}:
-            return {"status": code}
-        return {"status": "unavailable", "reason": unavailable_reason(exc)}
+            response = {"status": code}
+        else:
+            response = {"status": "unavailable", "reason": unavailable_reason(exc)}
     except Exception as exc:
-        return {"status": "unavailable", "reason": unavailable_reason(exc)}
+        response = {"status": "unavailable", "reason": unavailable_reason(exc)}
+    # One response boundary covers successful results and failures from requests
+    # already in flight when another request loses an audit event.
+    if isinstance(service, Service) and not _cleanup:
+        try:
+            service.ensure_audit()
+        except AuditUnavailable:
+            return {"status": "unavailable", "reason": "service"}
+    return response
 
 
 def build_mcp(service: Service):
@@ -1688,7 +1762,7 @@ def build_mcp(service: Service):
             service.require(None, "invoke_tool", "tool", "capabilities")
             return service.capabilities_public()
 
-        return await safe(read)
+        return await safe(read, _service=service)
 
     @expose()
     async def open_session() -> dict:
@@ -1700,10 +1774,15 @@ def build_mcp(service: Service):
         """Close this caller's session and cancel any pending work."""
 
         def close():
-            service.require(None, "invoke_tool", "tool", "close_session")
+            try:
+                service.require(None, "invoke_tool", "tool", "close_session")
+            except AuditUnavailable:
+                # Service.close still checks the bound caller's ownership. Audit
+                # failure cannot prevent cancellation of that caller's work.
+                pass
             return service.close(session_id)
 
-        return await safe(close)
+        return await safe(close, _service=service, _cleanup=True)
 
     @expose()
     async def get_evidence(request: Ref) -> dict:
@@ -1719,7 +1798,7 @@ def build_mcp(service: Service):
             service.require(s, "invoke_tool", "tool", "read_metadata")
             return {"documents": service.metadata(s, request.documents, "planner")}
 
-        return await safe(read)
+        return await safe(read, _service=service)
 
     if service.mode == "agent":
 
@@ -1892,7 +1971,10 @@ def create_service(
         )
     except BaseException:
         if hasattr(engine, "close"):
-            engine.close()
+            try:
+                engine.close()
+            except Exception:
+                pass
         raise
 
 
@@ -2058,12 +2140,25 @@ def _assemble_service(
                 pass
             raise
         service.audit_sink = os.fdopen(fd, "w")
-    service.record(reader.loaded_event())
-    for view in snapshot.unverified_views:
-        service.record({"event": "view_columns_unverified", "view": view})
-    if not snapshot.declarations:
-        # Nothing is enforced for this project: say so where the operator will read it.
-        service.record({"event": "declared_defaults_missing_in_project"})
+    try:
+        service.record(reader.loaded_event())
+        for view in snapshot.unverified_views:
+            service.record({"event": "view_columns_unverified", "view": view})
+        if not snapshot.declarations:
+            # Nothing is enforced for this project: say so where the operator will read it.
+            service.record({"event": "declared_defaults_missing_in_project"})
+    except BaseException:
+        try:
+            ipc.close()
+        except Exception:
+            pass
+        if service.audit_sink is not None:
+            try:
+                service.audit_sink.close()
+            except Exception:
+                pass
+            service.audit_sink = None
+        raise
 
     stopped = False
 
@@ -2081,8 +2176,12 @@ def _assemble_service(
             finally:
                 try:
                     if service.audit_sink is not None:
-                        service.audit_sink.close()
+                        sink = service.audit_sink
                         service.audit_sink = None
+                        try:
+                            sink.close()
+                        except Exception:
+                            service.audit_failed = True
                 finally:
                     if hasattr(engine, "close"):
                         engine.close()
