@@ -6,6 +6,7 @@ permissions:
 on:
   pull_request:
     paths:
+      - '.github/workflows/wren-ci.yml'
       - 'core/wren/**'
       - 'core/wren-core/**'
       - 'core/wren-core-py/**'

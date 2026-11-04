@@ -67,6 +67,11 @@ MCP tools: `capabilities`, `open_session`, `ask_data`, `continue_task`, `get_evi
 
 ## Independent example planner
 
+Every context index page fits `context_budget_bytes`, including its header, rule
+summary and continuation hint. Long descriptions and rule tags are clipped. An
+overlong item name receives a short selectable `@context-N` ID and a name preview;
+`read_context` returns the complete name, and the original name remains a valid ID.
+
 `planner-client/` is a standalone pi agent loop using an MCP client. It has no import of the service implementation or private profile. Install its locked dependencies with `npm ci`; supply `OPENAI_API_KEY` to the planner process and keep the private credential restricted to the server child. Luna's Chat Completions tool requests explicitly use `reasoning_effort: none`.
 
 Create a client JSON file with:
@@ -76,6 +81,10 @@ Create a client JSON file with:
 - `skill`: absolute path to the exported planner skill;
 - `serviceCredentialEnv`: `["NVIDIA_INFERENCE_API_KEY"]`;
 - optional `model` and `baseUrl` for the external planner.
+
+The client's MCP timeout is 200 seconds, above the example service's 120-second
+execution deadline plus 40-second host reply window. Increase `serviceReplyTimeoutMs`
+in `client.mjs` when increasing `execution.deadline_ms` or `WREN_IPC_CALL_TIMEOUT_S`.
 
 Create a JSON array of conversational questions, then run:
 
@@ -103,6 +112,10 @@ execution: {deadline_ms: 120000}
 Other optional keys: `default_preset`, `policy_presets` (the file `setup.py` writes declares four, see below), `audit_path`, `idle_seconds`. `execution` is described under [Execution limits](#execution-limits). The connection is, in order, `--profile` (a Wren connection profile), then `connection` in `service.yml`, then the connection profile the Wren project is pinned to; with none of them startup fails (`explicit_connection_required`). `metadata_selection` narrows public document access; it cannot expand `policy.cedar`. The example selections are `[]`, `[structure]`, `[structure, rules]` and `[rules]`. The external planner's documents have the fixed ids `structure` (kind `schema.structure`: models, columns, relationships) and `rules` (kind `knowledge.rules`: the rule files; `knowledge/sql` is never carried), generated from the project. Private metadata access, task capability and result disclosure are separate decisions. There is no per-rule-use action, and `policy.cedar` no longer lists models or columns: which columns are off limits is the project's `denied_columns`.
 
 ### Migrating a version 1 service.yml
+
+An `audit_path` must be outside `models/`, `cubes/`, `views/`, `knowledge/` and the
+root source files covered by the project digest. Startup rejects an overlapping
+resolved path before opening the database or creating the audit file.
 
 A service configuration that still carries `dataset`, `adhoc`, `metadata`, `rules` or `query_scope` (also inside a preset) is refused at startup with `legacy_service_config` and a message naming each key; nothing is ignored silently. One without `config_version: 2`, or with a key outside the version 2 set, is refused with `invalid_service_config`.
 
@@ -407,6 +420,11 @@ than silently truncate. These are bounded analytical queries, not unrestricted
 SQL access. Arbitrary prose rules are model interpreted and are not proof of
 correctness; the defaults the fixture declares are enforced on every statement
 (see [Declared default rules](#declared-default-rules)) and prose around them is not.
+
+Decimal results retain their exact value across the runtime's JSON wire: integral
+values within JavaScript's safe integer range are JSON integers; larger integers
+and fractional decimals are decimal strings. Ordinary floating-point results keep
+their existing JSON number representation.
 
 The private worker may repair a rejected result shape using fixed feedback, but
 no rejected SQL is executed. Use wide numeric columns for multiple metrics and

@@ -9,6 +9,9 @@ const [configPath, questionsPath, outputPath] = process.argv.slice(2);
 if (!configPath || !questionsPath || !outputPath) throw Error('Usage: client.mjs CLIENT_JSON QUESTIONS_JSON OUTPUT_JSON');
 const config = JSON.parse(await readFile(configPath));
 const questions = JSON.parse(await readFile(questionsPath));
+// Above the example's 120 s execution + 40 s host IPC reply window.
+// Increase this if execution.deadline_ms or WREN_IPC_CALL_TIMEOUT_S increases.
+const serviceReplyTimeoutMs = 200000;
 const trace = { turns: [], calls: [], errors: [], completed: false };
 const client = new Client({ name: 'wren-external-pi-planner', version: '1.0.0' });
 // Only the explicitly named private credential reaches the service child.
@@ -22,7 +25,7 @@ try {
   const tools = advertised.map(t => ({ name: t.name, label: t.name, description: t.description ?? '', parameters: t.inputSchema,
     execute: async (_id, args) => {
       if (++toolCalls > 80) throw Error('tool_budget');
-      const result = await client.callTool({ name: t.name, arguments: args }, undefined, { timeout: 120000 });
+      const result = await client.callTool({ name: t.name, arguments: args }, undefined, { timeout: serviceReplyTimeoutMs });
       const text = result.content.filter(c => c.type === 'text').map(c => c.text).join('\n');
       trace.calls.push({ turn: trace.turns.length, name: t.name, args, result: text });
       return { content: [{ type: 'text', text }], details: {} };

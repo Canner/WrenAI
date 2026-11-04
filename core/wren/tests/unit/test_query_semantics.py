@@ -33,7 +33,14 @@ def test_resolves_cube_members_and_aliases_without_trusting_output_names():
         "dimensions": [{"owner": "sales", "name": "region"}],
         "temporal_dimensions": [{"owner": "sales", "name": "day"}],
     }
-    assert prove("SELECT SUM(revenue), region FROM sales GROUP BY region")
+    grouped = "SELECT SUM(revenue), region FROM sales GROUP BY region"
+    assert prove(grouped) == {
+        "version": "1",
+        "sql": grouped,
+        "metrics": [{"owner": "sales", "name": "revenue"}],
+        "dimensions": [{"owner": "sales", "name": "region"}],
+        "temporal_dimensions": [],
+    }
 
 
 @pytest.mark.parametrize(
