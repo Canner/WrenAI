@@ -1,0 +1,10 @@
+name: products
+table_reference:
+  schema: main
+  table: products
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+  - name: name
+    type: VARCHAR

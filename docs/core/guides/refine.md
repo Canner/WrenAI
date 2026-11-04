@@ -60,6 +60,159 @@ or have your agent propose changes when it spots a recurring confusion. (Older p
 top-level `instructions.md` is still read, but it's deprecated — move it into
 `knowledge/rules/`; see [Migration](/oss/reference/migration).)
 
+#### Declaring default rules a host can enforce
+
+A rule that must hold on every query can also be *declared*. Open the rules file with
+a `---` fenced YAML block holding a `defaults:` list; the block stays in the rule text
+your agent reads, next to the prose it summarises. A host that serves the project through
+`wren governed-stdio` then refuses a query that breaks a declared rule before it runs and
+names the rule's `id`, so the agent can repair the query and try again.
+
+`wren governed-stdio` accepts unqualified model names and CTEs over them. It refuses schema-
+or catalog-qualified table sources before execution because those can resolve to physical
+data instead of a bound model.
+
+```markdown
+---
+defaults:
+  - id: exclude-test-accounts
+    kind: exclude_rows
+    column: customers.is_test
+    exclude: true
+    covers: {reaching: customers, via: many_to_one}
+    when: aggregated
+    unless:
+      - addresses_column
+      - filtered_by: orders.legacy_ord_id IS NOT NULL
+  - id: usd-at-transaction-date
+    kind: require_rate_join
+    when: aggregated
+    amounts:
+      - {columns: [payments.amount], currency: payments.currency, dates: [payments.captured_at]}
+    rate: {model: fx_rates, currency: fx_rates.currency, date: fx_rates.date, match: on_or_before}
+    unless:
+      - groups_by_currency
+      - filters_currency_literal
+---
+# Reporting conventions
+
+Exclude internal test accounts from every business metric. Report money in USD at the
+rate on the transaction date.
+```
+
+A rules file that opens with a `---` line must close the fence with another `---` line:
+an unclosed leading `---` is a declaration error, and `governed-stdio` refuses to start.
+Rule ids are unique across the project; files are read in sorted order under
+`knowledge/rules/` and the legacy `instructions.md` is read last, which fixes the order of
+the ids a host sees.
+
+Three kinds exist. Declarations are never inferred from the prose, and an invalid one makes
+`wren context validate` fail and `governed-stdio` refuse to start, so a typo cannot
+silently turn enforcement off.
+
+- **`exclude_rows`**: statements that read a covered model must exclude the rows where
+  `column = exclude`. The covered models are the `reaching` model plus every model that
+  reaches it through a chain of `MANY_TO_ONE` relationships in the MDL (`except_models`
+  removes a model and what is reachable only through it). The check is satisfied by a
+  `WHERE`, `HAVING` or `QUALIFY` filter, or the ON condition of an INNER or comma join,
+  that reaches the covered read and excludes the flag in one of these forms, through
+  CTEs, derived tables and subqueries: `NOT c`, `c = FALSE`,
+  `c IS FALSE`, `c IS NOT TRUE`, `c IS DISTINCT FROM TRUE`, `c <> TRUE`,
+  `COALESCE(c, FALSE) = FALSE`, `c = FALSE OR c IS NULL`, and
+  `NOT EXISTS` / `NOT IN` over a subquery that selects `c = TRUE`. `exclude` must be a
+  boolean. In the `OR` form the null check may be on the flag itself or a declared
+  single-column primary key of the flag's model,
+  so a `LEFT JOIN` that keeps rows without a match can write
+  `k.id IS NULL OR k.c = FALSE`; a null check on a nullable non-key column, another
+  model's column, or any other extra disjunct does not qualify. An outer-join ON
+  predicate cannot exclude the preserved side's rows: put that exclusion in `WHERE`
+  or in an INNER or comma join's ON. A filter inside a subquery or CTE satisfies only
+  the covered reads it reaches. Outer-joining that filtered source does not satisfy
+  a separate covered read on the preserved side; that read needs its own filter.
+  Nested inner-join groups remain a limitation: an inner ON filter inside an
+  outer-joined group can be accepted even though it does not remove preserved-side
+  rows. Put the required exclusion in the outer `WHERE` for that shape.
+- **`require_rate_join`**: statements that aggregate a listed amount column must read the
+  rate model joined on that amount group's declared currency column and bounded
+  `rate.date <= <expression over a declared transaction-date column>` (an inner
+  `MAX(date)`, `ORDER BY date DESC LIMIT 1`, `LATERAL`, `ASOF JOIN` and
+  `rate.date BETWEEN ... AND <upper bound>` all qualify; only the upper bound is checked,
+  and a cast of the rate date to a date or timestamp type, such as `rate.date::date` or
+  `CAST(rate.date AS DATE)`, is looked through).
+  The currency and date predicates must bound the same rate instance. When an aggregate
+  uses a rate value, that supplying instance needs both predicates; an unrelated join
+  cannot supply them. Same-day equality and an unbounded latest rate do not qualify.
+  Each amount group with an aggregated column needs its own proof, using that group's
+  currency and transaction dates. Nonaggregated groups add no obligation. The currency
+  grouping and literal-filter exemptions also apply to the corresponding amount group.
+- **`sale_statuses`**: statements that read the status column's model must keep exactly the
+  declared set of status values (`values`) out of the column's whole value set (`domain`,
+  or else the `enum_values` the column lists). The check computes which values the
+  statement's filters still return (`=`, `<>`, `IN`, `NOT IN`, `IS [NOT] NULL`, with
+  `AND` / `OR` / `NOT` and `LOWER`, `UPPER` or `TRIM` around the column)
+  rather than looking for a filter, so `NOT IN ('cancelled')` keeps every other value in
+  the domain. Bare-column comparisons ignore case. Explicit `LOWER`/`UPPER` operations
+  are evaluated for ASCII values and compared with literals as written:
+  `UPPER(status) IN ('paid', 'shipped')` does not retain declared lowercase values.
+  Non-ASCII case mappings have no verdict because they depend on the database and locale.
+  `overridable_by_caller: true` lets a host that supports it take a confirmed
+  set from the user instead. Each read of the model is judged on its own: a nullable-side
+  ON predicate of an outer join restricts that read (`customers c LEFT JOIN orders o ON
+  c.id = o.customer_id AND o.status IN ('paid', 'shipped')` with `SUM(o.amount)` is
+  satisfied), while a preserved-side, FULL, SEMI/ANTI or unnamed join-group ON predicate
+  never counts. A confirmed set cannot clear a statement that keeps NULL statuses
+  (`... OR status IS NULL` is always a superset); the statement has to be rewritten.
+
+A `semantics:` list in the same front-matter (`{id, models, note}`) names meanings no check
+reads, such as a fiscal calendar; a host reports the id as unverified whenever a query touches
+one of its models.
+
+Optional fields: `when: aggregated` limits a rule to statements that use an aggregate
+function or `GROUP BY`, so exploration queries are not refused. `unless` lists SQL facts
+that exempt a statement; the question is never consulted. `exclude_rows` accepts
+`addresses_column` (the statement selects the flag positively in a filter, groups by it
+or uses it inside an aggregate) and `filtered_by: <model.column predicate>` (the
+statement carries that predicate); `require_rate_join` accepts `groups_by_currency` and
+`filters_currency_literal`. Ids match `^[a-z0-9][a-z0-9_-]{0,63}$`, are unique across
+the project, and at most 8 rules may be declared.
+
+The checks follow the model and amount reads that a predicate must restrict: an unrelated
+filter cannot establish a row exclusion or a currency-filter exemption. In `wren serve agent`
+and governed MCP, an applicable, non-exempt `require_rate_join` rule with `match: single`
+also requires a supported SQL structure proving at most one rate match per amount row,
+such as an ASOF join or a correctly partitioned and limited `ROW_NUMBER()` source.
+`governed-stdio` applies the basic currency/date rule without this additional single-match
+evaluation. These are structural checks; they do not inspect the actual rate-table contents
+or guarantee that every transaction has a matching rate. They also do not verify that the
+rate is multiplied into the amount or choose which declared date column is the right one.
+An exclusion flag written outside the supported forms above is treated as missing.
+
+A statement that cannot be parsed against the model schema, or whose
+declared rules cannot be checked, gets no verdict. `wren serve agent`, governed MCP
+(`wren serve mcp --service-config`) and `wren governed-stdio` all refuse it as
+`declared_default_undetermined` before execution. A valid predicate outside the checker's
+supported forms, such as `status LIKE 'paid%'` for a `sale_statuses` declaration, must
+be rewritten into a supported form before it can run. A checker failure also refuses
+the query; it cannot silently turn enforcement off.
+These paths enforce declarations within those limits;
+`wren query` does not. A project without declarations behaves exactly as before.
+
+#### Declaring a view's columns
+
+A view's `metadata.yml` may list its output columns so an agent sees them without parsing the
+view's SQL: `columns: [{name, type, description}]`, where `name` matches `^[a-z0-9_]+$`, `type`
+is not empty and `description` (optional) is at most 400 characters. The list is yours to
+keep in step with the view's `statement`. A host that can parse the statement refuses to
+start when the declared names differ from the statement's output (a statement whose output
+names are not stable, such as an unaliased `id::BIGINT` anywhere in the statement, or `COLUMNS(...)`, is not checked), and a
+malformed or duplicate entry is reported as `view_columns_invalid`. Views without `columns` behave as before.
+
+A view may also name declared rule ids in `guarantees`. These are trusted claims by the
+project author: the host does not prove that the view's SQL body satisfies the named rules.
+Keep the claims in step with any change to the view. An evidence result of
+`satisfied_by_definition` means the host relied on that declaration for the covered view
+reads; it does not mean the host verified the body against the rule.
+
 ### 2. Let `usage` compound from every confirmed answer
 
 The day-to-day `usage` guide stores confirmed answers automatically:

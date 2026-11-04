@@ -1,0 +1,7 @@
+name: customers
+table_reference: { catalog: demo, schema: main, table: customers }
+primary_key: id
+columns:
+  - { name: id, type: INTEGER }
+  - { name: region, type: VARCHAR }
+  - { name: email, type: VARCHAR }

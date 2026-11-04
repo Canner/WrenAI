@@ -1,0 +1,6 @@
+name: orders
+table_reference: { catalog: demo, schema: main, table: orders }
+primary_key: id
+columns:
+  - { name: id, type: INTEGER }
+  - { name: amount, type: "DECIMAL(12,2)" }

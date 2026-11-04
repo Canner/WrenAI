@@ -1,0 +1,25 @@
+relationships:
+  - name: orders_customers
+    models: [orders, customers]
+    join_type: MANY_TO_ONE
+    condition: "orders.customer_id = customers.id"
+  - name: order_items_orders
+    models: [order_items, orders]
+    join_type: MANY_TO_ONE
+    condition: "order_items.order_id = orders.id"
+  - name: order_items_products
+    models: [order_items, products]
+    join_type: MANY_TO_ONE
+    condition: "order_items.product_id = products.id"
+  - name: payments_orders
+    models: [payments, orders]
+    join_type: MANY_TO_ONE
+    condition: "payments.order_id = orders.id"
+  - name: returns_order_items
+    models: [returns, order_items]
+    join_type: MANY_TO_ONE
+    condition: "returns.order_item_id = order_items.id"
+  - name: orders_legacy_orders
+    models: [orders, legacy_orders]
+    join_type: ONE_TO_ONE
+    condition: "orders.legacy_ord_id = legacy_orders.id"

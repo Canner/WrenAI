@@ -1,0 +1,37 @@
+name: legacy_orders
+properties:
+  description: "Orders from the legacy platform (2019-01 to 2023-08, USD only). Orders in the 2023 migration window may ALSO exist as copies in the new orders table (see migrated_at)."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: legacy_orders
+primary_key: ord_id
+columns:
+  - name: ord_id
+    type: INTEGER
+    properties:
+      description: "Unique legacy order id."
+  - name: cust_ref
+    type: VARCHAR
+    properties:
+      description: "Legacy customer key (FK to legacy_customers.cust_ref), e.g. 'C-04217'."
+  - name: ord_dt
+    type: VARCHAR
+    properties:
+      description: "Order timestamp as a NAIVE LOCAL-TIME string ('YYYY-MM-DD HH:MM:SS') in America/Los_Angeles — convert to UTC before comparing with new-platform timestamps."
+  - name: amt_c
+    type: INTEGER
+    properties:
+      description: "Order amount in integer US CENTS (divide by 100.0 for dollars). USD only."
+  - name: stat
+    type: INTEGER
+    properties:
+      description: "Numeric status code; decode via legacy_status_codes."
+  - name: ship_dt
+    type: VARCHAR
+    properties:
+      description: "Ship timestamp string; the sentinel '1970-01-01 00:00:00' means never shipped (the legacy system did not use NULL)."
+  - name: migrated_at
+    type: TIMESTAMP
+    properties:
+      description: "Non-NULL when this order was copied into the new platform's orders table during the 2023 migration (the copy carries legacy_ord_id = this ord_id)."

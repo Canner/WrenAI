@@ -286,3 +286,45 @@ def test_unknown_subcommand_is_flagged(tmp_path, monkeypatch):
     assert "unknown subcommand 'typo' for 'wren memory'" in joined, problems
     # leaf + positional should NOT appear
     assert "'usage'" not in joined, problems
+
+
+def test_the_planner_skill_states_the_evidence_and_clarification_contracts():
+    """The skill has to say what the service's disclosure modes and clarification expect, and
+    must not hand the planner a way around a service limit."""
+    from wren.skills_delivery import get_skill  # noqa: PLC0415
+
+    text = get_skill("wren-planner")
+    for needle in (
+        "comma-separated list of status values",
+        "Ask the user first",
+        "not verified human input",
+        "second unusable answer ends the task as `unavailable` with reason `worker`",
+        "`checks_summary`",
+        "`has_unverified_semantics`",
+        "`observed`",
+        "`satisfied_by_caller_scope`",
+        "never ask the service for one that is absent",
+        "is never shown",
+        "not verified",
+        "advice to the private analyst, not a control",
+    ):
+        assert needle in text, needle
+    for forbidden in ("ignore the service", "bypass the", "override the service limit"):
+        assert forbidden not in text.lower()
+    # Bind the disclosure rule to the preset description and the presentation
+    # workflow, rather than accepting a detached phrase anywhere in the skill.
+    discovery = text.split("## Discover before planning\n", 1)[1].split("\n## ", 1)[0]
+    preset_contract = next(
+        paragraph
+        for paragraph in discovery.split("\n\n")
+        if "capabilities.policy_preset.name" in paragraph
+    )
+    assert (
+        "Read only the fields that are present and never ask the service for one that is absent"
+        in preset_contract
+    )
+    presentation = text.split("## Check and present\n", 1)[1].split("\n## ", 1)[0]
+    assert (
+        "Read the evidence fields that are present, and say no more than they do:"
+        in presentation
+    )

@@ -1,0 +1,19 @@
+version: wren-agent-capabilities/1
+entry: analyze_data
+context_budget_bytes: 4096
+capabilities:
+- id: orders
+  description: Count the rows of a project model, for example the number of orders. This
+    deployment offers counts only; do not select this capability for rankings, sums,
+    averages, breakdowns or target comparisons.
+  rules: false
+  sql: true
+  inputs:
+  - question
+  - optional reply_to result reference
+  outputs:
+  - row count
+  - session result and evidence references
+  limits:
+  - the worker is briefed to count the rows of one model; the host does not enforce this scope
+  - the worker is briefed not to return raw rows or SQL; what reaches the planner is governed by the policy's receive_answer rules, not by this profile

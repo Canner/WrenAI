@@ -58,6 +58,7 @@ def test_skills_get_unknown_raises():
 # ── Ticket 1b: all bundled skills + --full + --script ───────────────────────
 
 ALL_SKILLS = {
+    "wren-planner",
     "onboarding",
     "usage",
     "generate-mdl",

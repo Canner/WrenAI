@@ -1,0 +1,20 @@
+name: orders
+table_reference:
+  schema: main
+  table: orders
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+  - name: customer_id
+    type: INTEGER
+  - name: status
+    type: VARCHAR
+  - name: currency
+    type: VARCHAR
+  - name: order_total
+    type: DECIMAL
+  - name: placed_at
+    type: TIMESTAMP
+  - name: legacy_ord_id
+    type: INTEGER
