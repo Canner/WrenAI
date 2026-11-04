@@ -176,11 +176,18 @@ statement carries that predicate); `require_rate_join` accepts `groups_by_curren
 `filters_currency_literal`. Ids match `^[a-z0-9][a-z0-9_-]{0,63}$`, are unique across
 the project, and at most 8 rules may be declared.
 
-What the check does not verify: that the rate is actually multiplied into the amount,
-that the rate join yields one row per transaction, or which of several declared date
-columns is the right one; that a filter in an unrelated branch of the statement applies
-to the aggregated rows; and any flag written in a form outside the list above (it is
-treated as missing). A statement that cannot be parsed against the model schema, or whose
+The checks follow the model and amount reads that a predicate must restrict: an unrelated
+filter cannot establish a row exclusion or a currency-filter exemption. In `wren serve agent`
+and governed MCP, an applicable, non-exempt `require_rate_join` rule with `match: single`
+also requires a supported SQL structure proving at most one rate match per amount row,
+such as an ASOF join or a correctly partitioned and limited `ROW_NUMBER()` source.
+`governed-stdio` applies the basic currency/date rule without this additional single-match
+evaluation. These are structural checks; they do not inspect the actual rate-table contents
+or guarantee that every transaction has a matching rate. They also do not verify that the
+rate is multiplied into the amount or choose which declared date column is the right one.
+An exclusion flag written outside the supported forms above is treated as missing.
+
+A statement that cannot be parsed against the model schema, or whose
 declared rules cannot be checked, gets no verdict. `wren serve agent`, governed MCP
 (`wren serve mcp --service-config`) and `wren governed-stdio` all refuse it as
 `declared_default_undetermined` before execution. A valid predicate outside the checker's
