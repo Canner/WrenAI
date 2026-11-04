@@ -1005,12 +1005,23 @@ class _Statement:
         if self.ast.find(exp.SetOperation) is not None:
 
             def consumer(path):
+                def branch_parent(select):
+                    parent = select.parent
+                    while (
+                        isinstance(parent, (exp.Subquery, exp.Paren))
+                        and parent.this is select
+                    ):
+                        select, parent = parent, parent.parent
+                    return parent
+
                 return next(
                     (
                         id(scope.expression)
                         for scope, _, _ in path
                         if isinstance(scope.expression, exp.Select)
-                        and isinstance(scope.expression.parent, exp.SetOperation)
+                        and isinstance(
+                            branch_parent(scope.expression), exp.SetOperation
+                        )
                     ),
                     None,
                 )
