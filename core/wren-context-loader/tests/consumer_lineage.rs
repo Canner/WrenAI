@@ -446,6 +446,14 @@ fn correlated_outer_cube_members_are_linked_but_inner_columns_do_not_borrow_them
             "union-branch-correlation",
             "SELECT 1 FROM order_metrics om WHERE EXISTS (SELECT 1 FROM orders o WHERE om.total_value > 0 UNION ALL SELECT 1 FROM orders om WHERE om.id > 0)",
         ),
+        (
+            "deep-outer-correlation",
+            "SELECT 1 FROM order_metrics om WHERE EXISTS (SELECT 1 FROM orders o WHERE EXISTS (SELECT om.total_value))",
+        ),
+        (
+            "middle-shadowed",
+            "SELECT 1 FROM order_metrics om WHERE EXISTS (SELECT 1 FROM orders om WHERE EXISTS (SELECT om.total_value))",
+        ),
     ] {
         write(
             tmp.path(),
@@ -483,6 +491,22 @@ fn correlated_outer_cube_members_are_linked_but_inner_columns_do_not_borrow_them
             "query:union-branch-correlation"
         ),
         "an alias in another UNION branch must not mask a correlated outer reference"
+    );
+    assert!(
+        reaches(
+            &ctx,
+            "metric:order_metrics.total_value",
+            "query:deep-outer-correlation"
+        ),
+        "an unshadowed outer alias remains visible across nested queries"
+    );
+    assert!(
+        !reaches(
+            &ctx,
+            "metric:order_metrics.total_value",
+            "query:middle-shadowed"
+        ),
+        "a middle SELECT source shadows the outer cube alias for deeper queries"
     );
 }
 

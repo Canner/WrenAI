@@ -463,6 +463,7 @@ struct ScopedColumnCollector {
 struct CorrelatedColumnCollector<'a> {
     outer_sources: &'a [SelectSource],
     columns: Vec<ColumnReference>,
+    nested_query_depth: usize,
 }
 
 impl<'a> CorrelatedColumnCollector<'a> {
@@ -470,6 +471,7 @@ impl<'a> CorrelatedColumnCollector<'a> {
         Self {
             outer_sources,
             columns: Vec::new(),
+            nested_query_depth: 0,
         }
     }
 }
@@ -478,14 +480,22 @@ impl Visitor for CorrelatedColumnCollector<'_> {
     type Break = ();
 
     fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
-        collect_correlated_query_columns(query, self.outer_sources, &mut self.columns);
+        if self.nested_query_depth == 0 {
+            collect_correlated_query_columns(query, self.outer_sources, &mut self.columns);
+        }
+        self.nested_query_depth += 1;
+        ControlFlow::Continue(())
+    }
+
+    fn post_visit_query(&mut self, _query: &Query) -> ControlFlow<()> {
+        self.nested_query_depth -= 1;
         ControlFlow::Continue(())
     }
 }
 
 /// Examine each immediate SELECT branch of a nested query with that branch's own source scope.
-/// The outer visitor will invoke this once for every nested `Query`, so nested queries are skipped
-/// here and handled later rather than being assigned the parent branch's aliases.
+/// Branch-local qualifiers remove matching enclosing sources before expressions and child queries
+/// are examined, preserving shadowing across multiple nesting levels without joining UNION scopes.
 fn collect_correlated_query_columns(
     query: &Query,
     outer_sources: &[SelectSource],
@@ -502,9 +512,17 @@ fn collect_correlated_set_expr_columns(
     match expression {
         SetExpr::Select(select) => {
             let local_qualifiers = select_source_qualifiers(select);
+            let eligible_outer_sources: Vec<_> = outer_sources
+                .iter()
+                .filter(|source| {
+                    !local_qualifiers
+                        .iter()
+                        .any(|qualifier| select_source_matches_qualifier(source, qualifier))
+                })
+                .cloned()
+                .collect();
             let mut collector = CorrelatedBranchColumnCollector {
-                outer_sources,
-                local_qualifiers,
+                eligible_outer_sources,
                 columns,
                 nested_query_depth: 0,
             };
@@ -521,8 +539,7 @@ fn collect_correlated_set_expr_columns(
 }
 
 struct CorrelatedBranchColumnCollector<'a> {
-    outer_sources: &'a [SelectSource],
-    local_qualifiers: Vec<Ident>,
+    eligible_outer_sources: Vec<SelectSource>,
     columns: &'a mut Vec<ColumnReference>,
     nested_query_depth: usize,
 }
@@ -530,7 +547,10 @@ struct CorrelatedBranchColumnCollector<'a> {
 impl Visitor for CorrelatedBranchColumnCollector<'_> {
     type Break = ();
 
-    fn pre_visit_query(&mut self, _query: &Query) -> ControlFlow<()> {
+    fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
+        if self.nested_query_depth == 0 {
+            collect_correlated_query_columns(query, &self.eligible_outer_sources, self.columns);
+        }
         self.nested_query_depth += 1;
         ControlFlow::Continue(())
     }
@@ -556,15 +576,10 @@ impl Visitor for CorrelatedBranchColumnCollector<'_> {
             return ControlFlow::Continue(());
         }
         let qualifier = &qualifier[0];
-        let bound_in_local_scope = self
-            .local_qualifiers
+        if self
+            .eligible_outer_sources
             .iter()
-            .any(|candidate| identifiers_match(candidate, qualifier));
-        if !bound_in_local_scope
-            && self
-                .outer_sources
-                .iter()
-                .any(|source| select_source_matches_qualifier(source, qualifier))
+            .any(|source| select_source_matches_qualifier(source, qualifier))
         {
             self.columns.push(ColumnReference {
                 qualifier: Some(qualifier.clone()),
