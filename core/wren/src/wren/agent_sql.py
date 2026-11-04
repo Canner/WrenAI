@@ -1178,10 +1178,10 @@ class AdHocSQL:
         ):
             raise QueryShapeError("unbacked_result")
 
-        # A null-normalized aggregate multiplied by zero cannot contribute a
-        # source-derived analytic value to a worker result. Keep this deliberately
-        # narrow: SQL NULL and non-finite arithmetic mean that not every zero
-        # multiplication is a constant-output proof.
+        # A null-normalized aggregate multiplied by zero cannot on its own back a
+        # source-derived worker result. Keep this deliberately narrow: SQL NULL
+        # and non-finite arithmetic mean that not every zero multiplication is a
+        # constant-output proof.
         def zero(node):
             return (
                 isinstance(node, exp.Literal)
@@ -1197,10 +1197,26 @@ class AdHocSQL:
                 and zero(node.expressions[0])
             )
 
-        if any(
-            (zero(mul.this) and normalized_aggregate(mul.expression))
-            or (zero(mul.expression) and normalized_aggregate(mul.this))
+        neutralized = [
+            mul
             for mul in value.find_all(exp.Mul)
+            if (
+                (zero(mul.this) and normalized_aggregate(mul.expression))
+                or (zero(mul.expression) and normalized_aggregate(mul.this))
+            )
+        ]
+
+        def inside_neutralized(node):
+            parent = node
+            while parent is not None:
+                if any(parent is subtree for subtree in neutralized):
+                    return True
+                parent = parent.parent
+            return False
+
+        if neutralized and not any(
+            not inside_neutralized(source)
+            for source in [*value.find_all(exp.Column), *value.find_all(exp.AggFunc)]
         ):
             raise QueryShapeError("unbacked_result")
         # Text-producing transforms can synthesize instruction/SQL strings from

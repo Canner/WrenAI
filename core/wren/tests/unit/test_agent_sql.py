@@ -797,6 +797,10 @@ def test_a_null_neutralized_aggregate_cannot_back_a_worker_result():
         "WHERE NOT is_test AND status IN ('paid', 'shipped') GROUP BY 1",
         "SELECT SUM(amount) * 2 FROM orders "
         "WHERE NOT is_test AND status IN ('paid', 'shipped')",
+        "SELECT SUM(amount) + COALESCE(SUM(amount), 0) * 0 FROM orders "
+        "WHERE NOT is_test AND status IN ('paid', 'shipped')",
+        "SELECT COUNT(*) + COALESCE(SUM(amount), 0) * 0 FROM orders "
+        "WHERE NOT is_test AND status IN ('paid', 'shipped')",
     ):
         AdHocSQL._projection(sqlglot.parse_one(supported, dialect="duckdb").selects[0])
 
