@@ -9,8 +9,8 @@ use std::path::Path;
 use std::process::Command;
 
 use wren_context_loader::{
-    capability_catalog, catalog_document, declared_default_ids, prepared_document, project_digest,
-    read_knowledge_rules, read_project_dir, KnowledgeRuleFile, MdlContext,
+    capability_catalog, capture_project, catalog_document, declared_default_ids, prepared_document,
+    project_digest, read_knowledge_rules, read_project_dir, KnowledgeRuleFile, MdlContext,
 };
 
 fn fixture(name: &str) -> std::path::PathBuf {
@@ -262,6 +262,45 @@ fn malformed_front_matter_voids_the_set_and_never_panics() {
     ]);
     assert!(ids.is_empty());
     assert_eq!(warnings.len(), 3, "{warnings:?}");
+}
+
+#[test]
+fn declaration_shaped_sequence_front_matter_voids_defaults_but_prose_lists_do_not() {
+    let valid = "---\ndefaults:\n  - {id: valid, kind: exclude_rows}\n---\n";
+    let declaration_sequence = "---\n- {id: misplaced, kind: exclude_rows}\n---\n";
+    let malformed_declaration_sequence = "---\n- {id: Invalid, kind: unknown}\n---\n";
+    let id_only_sequence = "---\n- {id: a-note}\n---\n";
+    let kind_only_sequence = "---\n- {kind: a-note}\n---\n";
+    let prose_sequence = "---\n- title: Team conventions\n- Keep identifiers stable\n---\n";
+
+    for declaration_sequence in [declaration_sequence, malformed_declaration_sequence] {
+        let (ids, warnings) = declared_default_ids(&[
+            rule_file("knowledge/rules/a.md", valid),
+            rule_file("knowledge/rules/b.md", declaration_sequence),
+        ]);
+        assert!(ids.is_empty(), "{ids:?}");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("sequence"), "{warnings:?}");
+    }
+
+    for prose_sequence in [id_only_sequence, kind_only_sequence, prose_sequence] {
+        let (ids, warnings) =
+            declared_default_ids(&[rule_file("knowledge/rules/prose.md", prose_sequence)]);
+        assert!(ids.is_empty(), "{ids:?}");
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    let project = tempfile::tempdir().unwrap();
+    copy_dir(&fixture("declared-wren"), project.path());
+    fs::write(
+        project.path().join("knowledge/rules/conventions.md"),
+        declaration_sequence,
+    )
+    .unwrap();
+    let legacy_rules = read_knowledge_rules(project.path()).unwrap();
+    let snapshot_rules = capture_project(project.path()).unwrap().rules;
+    assert!(legacy_rules.declared_defaults.is_empty());
+    assert_eq!(snapshot_rules, legacy_rules);
 }
 
 #[test]

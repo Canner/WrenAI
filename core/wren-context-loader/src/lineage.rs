@@ -209,7 +209,15 @@ pub fn extend_with_consumers(
             return;
         }
     };
+    let mut dashboard_names = HashSet::new();
     for dashboard in &parsed.dashboards {
+        if !dashboard_names.insert(dashboard.name.as_str()) {
+            diagnostics.push(format!(
+                "dashboard '{}' skipped: duplicate name",
+                dashboard.name
+            ));
+            continue;
+        }
         let did = dashboard_id(&dashboard.name);
         push_node(&mut graph.nodes, did.clone(), LineageKind::Dashboard);
         for (index, panel) in dashboard.panels.iter().enumerate() {

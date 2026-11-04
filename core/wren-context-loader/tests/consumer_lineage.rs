@@ -355,6 +355,47 @@ fn dashboard_declared_cube_panel_links_cube_and_measures() {
 }
 
 #[test]
+fn duplicate_dashboard_names_are_skipped_with_a_diagnostic() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "dashboards.yml",
+        r#"dashboards:
+  - name: exec-weekly
+    panels:
+      - { cube: order_metrics, measures: [total_value] }
+  - name: exec-weekly
+    panels:
+      - { sql: "SELECT * FROM customers" }
+"#,
+    );
+    let ctx = load(tmp.path());
+
+    assert_eq!(
+        ctx.host_analysis().unwrap().consumers.unwrap().dashboards,
+        1,
+        "only the unambiguous dashboard must contribute a consumer node"
+    );
+    assert!(impact(&ctx, "metric:order_metrics.total_value")
+        .downstream
+        .contains(&"dashboard:exec-weekly".to_string()));
+    assert!(
+        !impact(&ctx, "model:customers")
+            .downstream
+            .contains(&"dashboard:exec-weekly".to_string()),
+        "the duplicate dashboard's panels must not merge into the first dashboard"
+    );
+    assert!(
+        ctx.lineage_diagnostics().iter().any(
+            |diagnostic| diagnostic.contains("exec-weekly") && diagnostic.contains("duplicate")
+        ),
+        "the ambiguous identity must be visible to the host: {:?}",
+        ctx.lineage_diagnostics()
+    );
+}
+
+#[test]
 fn dashboard_naming_a_missing_cube_is_a_dangling_edge_not_a_silent_skip() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());
