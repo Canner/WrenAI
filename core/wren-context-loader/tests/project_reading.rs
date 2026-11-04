@@ -191,6 +191,63 @@ fn root_cube_mirror_requires_usable_matching_directory_semantics() {
 }
 
 #[test]
+fn native_readers_reject_flat_v1_sources_but_keep_directory_layouts() {
+    let project_versions = [
+        (
+            "explicit v1",
+            "schema_version: 1\nname: legacy\ncatalog: wren\nschema: public\ndata_source: duckdb\n",
+        ),
+        (
+            "default v1",
+            "name: legacy\ncatalog: wren\nschema: public\ndata_source: duckdb\n",
+        ),
+    ];
+    let flat_sources = [
+        ("models/orders.yml", "name: orders\ncolumns: []\n"),
+        ("cubes/order_metrics.yml", "name: order_metrics\n"),
+        ("views.yml", "views: []\n"),
+    ];
+    for (version_name, wren_project) in project_versions {
+        for (path, contents) in flat_sources {
+            let tmp = tempfile::tempdir().unwrap();
+            write(tmp.path(), "wren_project.yml", wren_project);
+            write(tmp.path(), path, contents);
+            for result in [
+                read_project_dir(tmp.path()).map(|_| ()),
+                capture_project(tmp.path()).map(|_| ()),
+            ] {
+                let error = result.expect_err(&format!("{version_name} {path}"));
+                assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+                assert!(
+                    error.to_string().contains("directory layout"),
+                    "{version_name} {path}: {error}"
+                );
+            }
+        }
+    }
+
+    for wren_project in [
+        "schema_version: 1\nname: directory\ncatalog: wren\nschema: public\ndata_source: duckdb\n",
+        "name: directory\ncatalog: wren\nschema: public\ndata_source: duckdb\n",
+        "schema_version: '٢'\nname: directory\ncatalog: wren\nschema: public\ndata_source: duckdb\n",
+    ] {
+        let tmp = tempfile::tempdir().unwrap();
+        project(tmp.path());
+        write(tmp.path(), "wren_project.yml", wren_project);
+        assert_eq!(read_project_dir(tmp.path()).unwrap().unwrap().model_ymls.len(), 1);
+        assert_eq!(
+            capture_project(tmp.path())
+                .unwrap()
+                .sources
+                .unwrap()
+                .model_ymls
+                .len(),
+            1
+        );
+    }
+}
+
+#[test]
 fn sql_yml_wins_over_an_inline_statement() {
     let tmp = tempfile::tempdir().unwrap();
     project(tmp.path());

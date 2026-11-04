@@ -129,15 +129,15 @@ where
 /// [`ProjectSources`]/[`assemble`] contract. Missing schema versions default to 1; otherwise the
 /// conversion follows the CLI's `int(...)` behavior before checking the supported 1..=5 range.
 #[cfg(not(target_arch = "wasm32"))]
-fn validate_native_schema_version(yml: &str) -> std::io::Result<()> {
+fn validate_native_schema_version(yml: &str) -> std::io::Result<bool> {
     let Ok(serde_yaml::Value::Mapping(project)) = serde_yaml::from_str::<serde_yaml::Value>(yml)
     else {
         // Keep malformed and non-mapping documents on the existing assembly/unparseable-context
         // path. This guard is only the native layout-version check.
-        return Ok(());
+        return Ok(false);
     };
     let Some(raw) = project.get("schema_version") else {
-        return Ok(());
+        return Ok(true);
     };
     let version = match raw {
         serde_yaml::Value::Bool(value) => Ok(i64::from(*value)),
@@ -170,7 +170,31 @@ fn validate_native_schema_version(yml: &str) -> std::io::Result<()> {
             ),
         ));
     }
-    Ok(())
+    Ok(version == 1)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn reject_native_flat_v1_sources(
+    legacy_or_default_v1: bool,
+    flat_source_paths: &[String],
+) -> std::io::Result<()> {
+    if !legacy_or_default_v1 || flat_source_paths.is_empty() {
+        return Ok(());
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        format!(
+            "legacy flat schema_version 1 sources ({}) are unsupported by the native loader; migrate to the directory layout (models/<name>/metadata.yml, cubes/<name>/metadata.yml, views/<name>/metadata.yml)",
+            flat_source_paths.join(", ")
+        ),
+    ))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn is_flat_v1_source_path(path: &str) -> bool {
+    path == "views.yml"
+        || direct_file_in(path, "models").is_some_and(|name| name.ends_with(".yml"))
+        || direct_file_in(path, "cubes").is_some_and(|name| name.ends_with(".yml"))
 }
 
 /// Parse the string forms accepted by Python's `int(value)`: optional ASCII sign, Unicode decimal
@@ -439,6 +463,8 @@ fn apply_ref_sql_file(metadata: String, ref_sql_file: Option<String>) -> std::io
 ///
 /// The native engine reads cubes from `cubes/<name>/metadata.yml`; a non-empty root `cubes.yml`
 /// may mirror those files but cannot be the only native cube source.
+/// Schema versions 1 through 5 are accepted for this directory layout, but the legacy v1 flat
+/// `models/*.yml`, `cubes/*.yml`, and `views.yml` layout must be migrated before native loading.
 #[cfg(all(unix, not(target_arch = "wasm32")))]
 pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<ProjectSources>> {
     crate::digest::validate_source_directories(dir)?;
@@ -446,7 +472,8 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     let Some(wren_project_yml) = root.read_string_if_file("wren_project.yml".as_ref())? else {
         return Ok(None);
     };
-    validate_native_schema_version(&wren_project_yml)?;
+    let legacy_or_default_v1 = validate_native_schema_version(&wren_project_yml)?;
+    reject_native_flat_v1_sources(legacy_or_default_v1, &native_flat_v1_source_paths(&root)?)?;
     let read_metadata = |parent: &crate::source_fs::SourceDir| -> std::io::Result<Vec<String>> {
         let mut values = Vec::new();
         for name in parent.names()? {
@@ -548,6 +575,31 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     Ok(Some(sources))
 }
 
+#[cfg(all(unix, not(target_arch = "wasm32")))]
+fn native_flat_v1_source_paths(root: &crate::source_fs::SourceDir) -> std::io::Result<Vec<String>> {
+    let mut paths = Vec::new();
+    for parent in ["models", "cubes"] {
+        let Some(dir) = root.open_dir_if_exists(parent.as_ref())? else {
+            continue;
+        };
+        for name in dir.names()? {
+            if crate::digest::is_hidden(&name) {
+                continue;
+            }
+            let name_text = crate::digest::source_name(&name)?;
+            let path = format!("{parent}/{name_text}");
+            if is_flat_v1_source_path(&path) && dir.open_regular_file(&name)?.is_some() {
+                paths.push(path);
+            }
+        }
+    }
+    if root.open_regular_file("views.yml".as_ref())?.is_some() {
+        paths.push("views.yml".to_string());
+    }
+    paths.sort();
+    Ok(paths)
+}
+
 /// Capture the project inputs once for the CLI's prepared document, catalog, and digest. This
 /// makes those outputs mutually coherent; it does not claim an atomic filesystem snapshot.
 #[cfg(all(unix, not(target_arch = "wasm32")))]
@@ -560,6 +612,7 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
         ("cubes.yml".to_string(), false),
         ("dashboards.yml".to_string(), false),
         ("instructions.md".to_string(), false),
+        ("views.yml".to_string(), false),
         ("models/".to_string(), true),
         ("cubes/".to_string(), true),
         ("views/".to_string(), true),
@@ -573,12 +626,16 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
             if let Some(child) = root.open_dir_if_exists(name.as_ref())? {
                 capture.capture_dir(&child, name)?;
             }
+        } else if name == "views.yml" {
+            if root.open_regular_file(name.as_ref())?.is_some() {
+                capture.flat_v1_source_paths.push(name.to_string());
+            }
         } else if let Some(file) = root.open_regular_file(name.as_ref())? {
             capture.capture_file(name, file)?;
         }
     }
     let digest = capture.digest();
-    let sources = captured_sources(&capture.text)?;
+    let sources = captured_sources(&capture.text, &capture.flat_v1_source_paths)?;
     let rules = captured_rules(&capture.text);
     Ok(ProjectSnapshot {
         sources,
@@ -612,7 +669,10 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
     for (relative, path) in files {
         capture.capture_file(&relative, fs::File::open(path)?)?;
     }
-    let sources = captured_sources(&capture.text)?;
+    if dir.join("views.yml").is_file() {
+        capture.flat_v1_source_paths.push("views.yml".to_string());
+    }
+    let sources = captured_sources(&capture.text, &capture.flat_v1_source_paths)?;
     let rules = captured_rules(&capture.text);
     let digest = capture.digest();
     Ok(ProjectSnapshot {
@@ -627,6 +687,7 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
 struct SourceCapture {
     hasher: Sha256,
     text: BTreeMap<String, String>,
+    flat_v1_source_paths: Vec<String>,
 }
 
 #[cfg(all(unix, not(target_arch = "wasm32")))]
@@ -679,6 +740,9 @@ impl SourceCapture {
 #[cfg(not(target_arch = "wasm32"))]
 impl SourceCapture {
     fn capture_file(&mut self, relative: &str, mut file: std::fs::File) -> std::io::Result<()> {
+        if is_flat_v1_source_path(relative) {
+            self.flat_v1_source_paths.push(relative.to_string());
+        }
         let expected = file.metadata()?.len();
         self.hasher.update(relative.as_bytes());
         self.hasher.update([0]);
@@ -784,11 +848,15 @@ fn reject_directory_file_slot(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn captured_sources(text: &BTreeMap<String, String>) -> std::io::Result<Option<ProjectSources>> {
+fn captured_sources(
+    text: &BTreeMap<String, String>,
+    flat_v1_source_paths: &[String],
+) -> std::io::Result<Option<ProjectSources>> {
     let Some(wren_project_yml) = text.get("wren_project.yml").cloned() else {
         return Ok(None);
     };
-    validate_native_schema_version(&wren_project_yml)?;
+    let legacy_or_default_v1 = validate_native_schema_version(&wren_project_yml)?;
+    reject_native_flat_v1_sources(legacy_or_default_v1, flat_v1_source_paths)?;
     let mut model_ymls = Vec::new();
     let mut cube_ymls = Vec::new();
     let mut views = Vec::new();
@@ -958,6 +1026,30 @@ fn validate_nonunix_file_slots(dir: &std::path::Path) -> std::io::Result<()> {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(unix)))]
+fn native_flat_v1_source_paths(dir: &std::path::Path) -> std::io::Result<Vec<String>> {
+    let mut paths = Vec::new();
+    for parent in ["models", "cubes"] {
+        let root = dir.join(parent);
+        if !root.is_dir() {
+            continue;
+        }
+        for path in list_dir(&root)? {
+            if path.is_file() && path.extension().is_some_and(|extension| extension == "yml") {
+                let Some(name) = path.file_name().and_then(std::ffi::OsStr::to_str) else {
+                    continue;
+                };
+                paths.push(format!("{parent}/{name}"));
+            }
+        }
+    }
+    if dir.join("views.yml").is_file() {
+        paths.push("views.yml".to_string());
+    }
+    paths.sort();
+    Ok(paths)
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(unix)))]
 fn read_metadata_if_file(path: &std::path::Path) -> std::io::Result<Option<String>> {
     if path.is_dir() {
         return Err(std::io::Error::new(
@@ -1000,7 +1092,8 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     }
     crate::digest::validate_source_directories(dir)?;
     let wren_project_yml = fs::read_to_string(&wren_project_path)?;
-    validate_native_schema_version(&wren_project_yml)?;
+    let legacy_or_default_v1 = validate_native_schema_version(&wren_project_yml)?;
+    reject_native_flat_v1_sources(legacy_or_default_v1, &native_flat_v1_source_paths(dir)?)?;
 
     let mut model_ymls = Vec::new();
     let models_dir = dir.join("models");
