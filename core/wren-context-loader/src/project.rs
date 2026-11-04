@@ -48,7 +48,7 @@ struct ModelFile {
     table_reference: Option<serde_yaml::Value>,
     #[serde(default)]
     base_object: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "refSql")]
     ref_sql: Option<String>,
     #[serde(default)]
     primary_key: Option<serde_yaml::Value>,
@@ -246,6 +246,8 @@ fn apply_ref_sql_file(metadata: String, ref_sql_file: Option<String>) -> std::io
     let Ok(serde_yaml::Value::Mapping(mut document)) = serde_yaml::from_str(&metadata) else {
         return Ok(metadata);
     };
+    document.remove(serde_yaml::Value::String("ref_sql".into()));
+    document.remove(serde_yaml::Value::String("refSql".into()));
     document.insert(
         serde_yaml::Value::String("ref_sql".into()),
         serde_yaml::Value::String(ref_sql.into()),
@@ -1457,6 +1459,48 @@ mod tests {
             loaded.manifest.models[1].ref_sql(),
             Some("SELECT * FROM inline_no_file")
         );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn model_ref_sql_camel_case_is_retained_or_overridden_by_a_file() {
+        let project = tempfile::tempdir().unwrap();
+        fs::write(
+            project.path().join("wren_project.yml"),
+            "schema_version: 5\n",
+        )
+        .unwrap();
+
+        for (name, file) in [
+            ("absent", None),
+            ("empty", Some(" \n")),
+            ("file", Some("SELECT * FROM file_orders\n")),
+        ] {
+            let model = project.path().join("models").join(name);
+            fs::create_dir_all(&model).unwrap();
+            fs::write(
+                model.join("metadata.yml"),
+                format!("name: {name}\nrefSql: SELECT * FROM inline_{name}\ncolumns: []\n"),
+            )
+            .unwrap();
+            if let Some(file) = file {
+                fs::write(model.join("ref_sql.sql"), file).unwrap();
+            }
+        }
+
+        let sources = super::read_project_dir(project.path()).unwrap().unwrap();
+        let loaded = super::assemble(&sources).unwrap();
+        let ref_sql = |name: &str| {
+            loaded
+                .manifest
+                .models
+                .iter()
+                .find(|model| model.name == name)
+                .and_then(|model| model.ref_sql())
+        };
+        assert_eq!(ref_sql("absent"), Some("SELECT * FROM inline_absent"));
+        assert_eq!(ref_sql("empty"), Some("SELECT * FROM inline_empty"));
+        assert_eq!(ref_sql("file"), Some("SELECT * FROM file_orders"));
     }
 
     #[test]
