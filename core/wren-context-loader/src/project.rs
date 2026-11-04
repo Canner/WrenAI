@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Read;
 use thiserror::Error;
+#[cfg(not(target_arch = "wasm32"))]
+use unicode_properties::{GeneralCategory, UnicodeGeneralCategory};
 use wren_core_base::mdl::manifest::Manifest;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -151,7 +153,7 @@ fn validate_native_schema_version(yml: &str) -> std::io::Result<()> {
                     })
             })
             .ok_or(()),
-        serde_yaml::Value::String(value) => value.trim().parse::<i64>().map_err(|_| ()),
+        serde_yaml::Value::String(value) => parse_cli_integer(value),
         _ => Err(()),
     }
     .map_err(|()| {
@@ -169,6 +171,63 @@ fn validate_native_schema_version(yml: &str) -> std::io::Result<()> {
         ));
     }
     Ok(())
+}
+
+/// Parse the string forms accepted by Python's `int(value)`: optional ASCII sign, Unicode decimal
+/// digits, and underscores only between digits. This deliberately excludes other Unicode numeric
+/// characters (such as superscripts and Roman numerals), matching Python's integer conversion.
+#[cfg(not(target_arch = "wasm32"))]
+fn parse_cli_integer(value: &str) -> Result<i64, ()> {
+    let value = value.trim();
+    let (negative, value) = match value.strip_prefix('-') {
+        Some(value) => (true, value),
+        None => (false, value.strip_prefix('+').unwrap_or(value)),
+    };
+    let mut total = 0i64;
+    let mut previous_was_digit = false;
+    let mut saw_digit = false;
+    for character in value.chars() {
+        if character == '_' {
+            if !previous_was_digit {
+                return Err(());
+            }
+            previous_was_digit = false;
+            continue;
+        }
+        let digit = unicode_decimal_digit(character).ok_or(())?;
+        total = total
+            .checked_mul(10)
+            .and_then(|total| total.checked_add(i64::from(digit)))
+            .ok_or(())?;
+        previous_was_digit = true;
+        saw_digit = true;
+    }
+    if !saw_digit || !previous_was_digit {
+        return Err(());
+    }
+    if negative {
+        total.checked_neg().ok_or(())
+    } else {
+        Ok(total)
+    }
+}
+
+/// All Unicode `Nd` digit sets encode zero through nine contiguously. Consecutive mathematical
+/// digit styles may form a longer run, so the offset is reduced modulo ten.
+#[cfg(not(target_arch = "wasm32"))]
+fn unicode_decimal_digit(character: char) -> Option<u8> {
+    if character.general_category() != GeneralCategory::DecimalNumber {
+        return None;
+    }
+    let mut start = character as u32;
+    while let Some(previous) = start
+        .checked_sub(1)
+        .and_then(char::from_u32)
+        .filter(|previous| previous.general_category() == GeneralCategory::DecimalNumber)
+    {
+        start = previous as u32;
+    }
+    Some(((character as u32 - start) % 10) as u8)
 }
 
 /// `relationships.yml` has two authored shapes: the original bare list, and the
@@ -1849,6 +1908,11 @@ mod tests {
             "schema_version: true\n",
             "schema_version: 2.5\n",
             "schema_version: '2'\n",
+            "schema_version: '0_2'\n",
+            "schema_version: '+٢'\n",
+            "schema_version: '２'\n",
+            "schema_version: '٢'\n",
+            "schema_version: '𝟚'\n",
         ] {
             assert!(validate_native_schema_version(yml).is_ok(), "{yml:?}");
         }
@@ -1859,9 +1923,16 @@ mod tests {
             "schema_version: null\n",
             "schema_version: '2.0'\n",
             "schema_version: [2]\n",
+            "schema_version: '1__2'\n",
+            "schema_version: '_2'\n",
+            "schema_version: '2_'\n",
+            "schema_version: '²'\n",
+            "schema_version: 'Ⅱ'\n",
         ] {
             assert!(validate_native_schema_version(yml).is_err(), "{yml:?}");
         }
+        let error = validate_native_schema_version("schema_version: '99'\n").unwrap_err();
+        assert!(error.to_string().contains("unsupported schema_version 99"));
 
         let sources = ProjectSources {
             wren_project_yml: "schema_version: 99\n".to_string(),

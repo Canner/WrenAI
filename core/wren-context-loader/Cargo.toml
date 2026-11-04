@@ -23,6 +23,7 @@ sha2 = "0.10"
 sqlparser = { version = "0.58", features = ["visitor"] }
 thiserror = "2"
 tempfile = "3"
+unicode-properties = { version = "0.1.4", default-features = false, features = ["general-category"] }
 
 [target.'cfg(unix)'.dependencies]
 # The locked graph already carries rustix 1.1.4 through tempfile. Native source traversal uses its
