@@ -206,13 +206,18 @@ def test_a_tool_result_cannot_outlive_its_owner_deadline(ipc, monkeypatch):
     import concurrent.futures  # noqa: PLC0415
     import os  # noqa: PLC0415
 
+    from wren import agent_ipc  # noqa: PLC0415
+
     runtime = ipc()
     owner, wire = "expiring-owner", "expiring-wire"
+    now = time.monotonic()
+    clock = [now]
+    monkeypatch.setattr(agent_ipc.time, "monotonic", lambda: clock[0])
     with runtime.state_lock:
         runtime.pending[owner] = concurrent.futures.Future()
         runtime.wire_ids[owner] = wire
         runtime._wire_owners[wire] = owner
-        runtime._wire_deadlines[wire] = time.monotonic() + 0.05
+        runtime._wire_deadlines[wire] = now + 0.05
 
     original_write = os.write
     target_fd = runtime.process.stdin.fileno()
@@ -223,9 +228,11 @@ def test_a_tool_result_cannot_outlive_its_owner_deadline(ipc, monkeypatch):
         if fd == target_fd:
             writes += 1
             if writes == 1:
-                return original_write(fd, data[:1])
-            if writes == 2:
-                time.sleep(0.15)
+                written = original_write(fd, data[:1])
+                # Advance only after a byte made the frame non-recoverable. This avoids a
+                # scheduler-dependent expiry before `_send` has performed the first write.
+                clock[0] = now + 0.06
+                return written
         return original_write(fd, data)
 
     monkeypatch.setattr(os, "write", slow_first_payload_write)
@@ -239,6 +246,8 @@ def test_a_tool_result_cannot_outlive_its_owner_deadline(ipc, monkeypatch):
                     "value": "x" * 524288,
                 }
             )
+        assert writes == 1, "the deadline must expire after a partial frame"
+        runtime.reader.join(2)
         assert runtime.closed
     finally:
         runtime.close()
