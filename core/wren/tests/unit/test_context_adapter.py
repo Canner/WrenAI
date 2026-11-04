@@ -1199,6 +1199,17 @@ def test_stale_model_sql_with_the_same_columns_refuses_to_start(real_project):
         load_snapshot(real_project)
 
 
+def test_stale_model_sql_literal_whitespace_refuses_to_start(real_project):
+    source = real_project / "models/orders/ref_sql.sql"
+    original = source.read_text().strip()
+    source.write_text(original + " WHERE 'a  b' = 'a  b'\n")
+    rebuild_target(real_project)
+    assert load_snapshot(real_project).manifest["models"]
+    source.write_text(original + " WHERE 'a b' = 'a  b'\n")
+    with pytest.raises(ContextInconsistent, match="models"):
+        load_snapshot(real_project)
+
+
 def test_stale_view_sql_with_the_same_columns_refuses_to_start(real_project):
     source = real_project / "views/usd_line_value/sql.yml"
     statement = yaml.safe_load(source.read_text())["statement"]

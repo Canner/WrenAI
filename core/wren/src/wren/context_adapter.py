@@ -449,10 +449,10 @@ def _check_consistent(catalog: dict, manifest: dict) -> None:
 
 
 def _expression(value) -> str | None:
-    """A source expression without harmless surrounding whitespace differences."""
+    """A source expression with only non-semantic outer whitespace removed."""
     if not isinstance(value, str):
         return None
-    return re.sub(r"\s+", " ", value).strip()
+    return value.strip()
 
 
 def _models_semantics(manifest: dict) -> dict:
@@ -513,7 +513,7 @@ def _root_cube_mirror(root: Path) -> list | None:
         import yaml  # noqa: PLC0415
 
         value = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError, yaml.YAMLError):
         # A parseable loader has already validated this file. Preserve its controlled error if a
         # project changes under us; the enclosing digest check reports that race.
         return None
