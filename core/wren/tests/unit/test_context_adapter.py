@@ -11,6 +11,7 @@ import pytest
 import yaml
 
 from wren import context_adapter as adapter
+from wren.context import build_json
 from wren.context_adapter import (
     ContextChanged,
     ContextInconsistent,
@@ -1182,10 +1183,93 @@ def edit_view_columns(root: Path, columns):
 
 
 def set_view_statement(root: Path, statement: str):
-    manifest = root / "target/mdl.json"
-    built = json.loads(manifest.read_text())
-    built["views"][0]["statement"] = statement
-    manifest.write_text(json.dumps(built))
+    source = root / "views/usd_line_value/sql.yml"
+    source.write_text(yaml.safe_dump({"statement": statement}, sort_keys=False))
+    rebuild_target(root)
+
+
+def rebuild_target(root: Path):
+    (root / "target/mdl.json").write_text(json.dumps(build_json(root)))
+
+
+def test_stale_model_sql_with_the_same_columns_refuses_to_start(real_project):
+    source = real_project / "models/orders/ref_sql.sql"
+    source.write_text(source.read_text().strip() + " WHERE id > 0\n")
+    with pytest.raises(ContextInconsistent, match="models"):
+        load_snapshot(real_project)
+
+
+def test_stale_view_sql_with_the_same_columns_refuses_to_start(real_project):
+    source = real_project / "views/usd_line_value/sql.yml"
+    statement = yaml.safe_load(source.read_text())["statement"]
+    source.write_text(
+        yaml.safe_dump(
+            {"statement": statement + " AND invoice_id > 0"}, sort_keys=False
+        )
+    )
+    with pytest.raises(ContextInconsistent, match="views"):
+        load_snapshot(real_project)
+
+
+def test_stale_table_reference_with_the_same_columns_refuses_to_start(real_project):
+    source = real_project / "models/orders/metadata.yml"
+    metadata = yaml.safe_load(source.read_text())
+    (real_project / "models/orders/ref_sql.sql").unlink()
+    metadata["table_reference"] = {"table": "orders_one"}
+    source.write_text(yaml.safe_dump(metadata, sort_keys=False))
+    rebuild_target(real_project)
+    assert load_snapshot(real_project).manifest["models"]
+    metadata["table_reference"] = {"table": "orders_two"}
+    source.write_text(yaml.safe_dump(metadata, sort_keys=False))
+    with pytest.raises(ContextInconsistent, match="models"):
+        load_snapshot(real_project)
+
+
+def test_stale_calculated_column_expression_refuses_to_start(real_project):
+    source = real_project / "models/orders/metadata.yml"
+    metadata = yaml.safe_load(source.read_text())
+    calculated = {
+        "name": "double_amount",
+        "type": "DOUBLE",
+        "is_calculated": True,
+        "expression": "amount * 2",
+    }
+    metadata["columns"].append(calculated)
+    source.write_text(yaml.safe_dump(metadata, sort_keys=False))
+    rebuild_target(real_project)
+    assert load_snapshot(real_project).manifest["models"]
+    calculated["expression"] = "amount * 3"
+    source.write_text(yaml.safe_dump(metadata, sort_keys=False))
+    with pytest.raises(ContextInconsistent, match="models"):
+        load_snapshot(real_project)
+
+
+def test_root_cube_mirror_expression_must_match_the_cli_source(real_project):
+    cube = {
+        "name": "order_totals",
+        "base_object": "orders",
+        "measures": [
+            {"name": "total", "type": "DOUBLE", "expression": "SUM(order_total * 2)"}
+        ],
+    }
+    directory = real_project / "cubes/order_totals"
+    directory.mkdir(parents=True)
+    (directory / "metadata.yml").write_text(yaml.safe_dump(cube, sort_keys=False))
+    (real_project / "cubes.yml").write_text(yaml.safe_dump([cube], sort_keys=False))
+    rebuild_target(real_project)
+    assert load_snapshot(real_project).manifest["cubes"]
+    cube["measures"][0]["expression"] = "SUM(order_total)"
+    (real_project / "cubes.yml").write_text(yaml.safe_dump([cube], sort_keys=False))
+    with pytest.raises(ContextInconsistent, match="cubes.yml"):
+        load_snapshot(real_project)
+
+
+def test_description_only_source_change_does_not_require_a_rebuild(real_project):
+    source = real_project / "models/orders/metadata.yml"
+    metadata = yaml.safe_load(source.read_text())
+    metadata.setdefault("properties", {})["description"] = "Updated prose only."
+    source.write_text(yaml.safe_dump(metadata, sort_keys=False))
+    assert load_snapshot(real_project).manifest["models"]
 
 
 def test_the_real_loader_carries_and_verifies_the_fixtures_view_columns(real_project):
