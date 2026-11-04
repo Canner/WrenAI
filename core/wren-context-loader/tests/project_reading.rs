@@ -97,6 +97,12 @@ fn a_sql_yml_directory_is_not_silently_treated_as_an_absent_statement() {
     };
     assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
     assert_eq!(error.to_string(), "sql_yml_directory_unsupported");
+    let error = match capture_project(tmp.path()) {
+        Ok(_) => panic!("captured reader rejects view sql.yml dir"),
+        Err(error) => error,
+    };
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(error.to_string(), "sql_yml_directory_unsupported");
 }
 
 #[test]
@@ -133,6 +139,28 @@ fn a_directory_with_a_sql_yml_and_no_metadata_is_not_a_view_to_the_cli_either() 
     write(tmp.path(), "views/stray/sql.yml", "statement: SELECT 1\n");
 
     assert!(statements(tmp.path()).is_empty());
+
+    fs::remove_file(tmp.path().join("views/stray/sql.yml")).unwrap();
+    fs::create_dir(tmp.path().join("views/stray/sql.yml")).unwrap();
+    assert!(
+        capture_project(tmp.path())
+            .unwrap()
+            .sources
+            .unwrap()
+            .views
+            .is_empty(),
+        "a sql-only directory remains absent to the captured reader"
+    );
+}
+
+#[test]
+fn a_ref_sql_directory_without_model_metadata_is_not_a_model() {
+    let tmp = tempfile::tempdir().unwrap();
+    project(tmp.path());
+    fs::create_dir_all(tmp.path().join("models/stray/ref_sql.sql")).unwrap();
+
+    let snapshot = capture_project(tmp.path()).unwrap();
+    assert_eq!(snapshot.sources.unwrap().model_ymls.len(), 1);
 }
 
 #[test]
@@ -193,16 +221,24 @@ fn captured_snapshot_matches_the_existing_readers_without_retaining_unrelated_so
 fn captured_snapshot_does_not_reread_a_source_after_edit_and_restore() {
     let tmp = tempfile::tempdir().unwrap();
     project(tmp.path());
+    write(tmp.path(), "knowledge/rules/a.md", "# Original rule\n");
     let model = tmp.path().join("models/orders/metadata.yml");
+    let rule = tmp.path().join("knowledge/rules/a.md");
     let original = fs::read_to_string(&model).unwrap();
+    let original_rule = fs::read_to_string(&rule).unwrap();
     let snapshot = capture_project(tmp.path()).unwrap();
 
     fs::write(&model, "name: changed\ncolumns: []\n").unwrap();
+    fs::write(&rule, "# Changed rule\n").unwrap();
+    let catalog = capability_catalog(snapshot.sources.as_ref().unwrap());
+    assert_eq!(catalog.models[0].name, "orders");
+    assert_eq!(snapshot.rules.content, "# Original rule");
     fs::write(&model, &original).unwrap();
+    fs::write(&rule, &original_rule).unwrap();
 
     assert_eq!(snapshot.digest, project_digest(tmp.path()).unwrap());
     assert_eq!(
-        snapshot.sources.unwrap().model_ymls,
+        snapshot.sources.as_ref().unwrap().model_ymls,
         read_project_dir(tmp.path()).unwrap().unwrap().model_ymls,
         "the captured semantic bytes survive an edit-and-restore interval without rereading"
     );

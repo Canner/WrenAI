@@ -55,7 +55,7 @@ The context loader refuses symlinks for source-directory roots (`models`, `cubes
 
 Saved-query consumer lineage is a structural extraction using sqlparser's `GenericDialect`. CTE shadowing currently uses case folding; it does not guarantee execution-equivalent provenance for every data source. Runtime SQL authorization and execution continue through the query gate and engine independently of this consumer-lineage extraction.
 
-Impact analysis preserves the complete transitive downstream list for every lineage seed. A densely connected project can therefore require quadratic time and output space; the loader does not truncate, cap, or otherwise omit consumers from that result.
+Impact analysis preserves the complete transitive downstream list for every lineage seed. Its per-seed traversal is O(V*(V+E)), while complete downstream output is O(V²): a dense graph can therefore require cubic CPU time and quadratic output space. The loader does not truncate, cap, or otherwise omit consumers from that result.
 
 ## Deliver the planner skill
 

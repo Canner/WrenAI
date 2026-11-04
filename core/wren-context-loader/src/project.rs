@@ -497,7 +497,7 @@ impl SourceCapture {
         for (path, name, kind) in entries {
             match kind {
                 crate::source_fs::EntryKind::Directory => {
-                    reject_directory_file_slot(path.trim_end_matches('/'))?;
+                    reject_directory_file_slot(path.trim_end_matches('/'), &self.text)?;
                     self.capture_dir(&dir.open_dir(&name)?, path.trim_end_matches('/'))?;
                 }
                 crate::source_fs::EntryKind::Regular | crate::source_fs::EntryKind::Symlink => {
@@ -595,16 +595,23 @@ fn direct_source_file<'a>(path: &'a str, parent: &str, file: &str) -> Option<&'a
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn reject_directory_file_slot(path: &str) -> std::io::Result<()> {
+fn reject_directory_file_slot(
+    path: &str,
+    captured_text: &BTreeMap<String, String>,
+) -> std::io::Result<()> {
     let error = if direct_source_file(path, "models", "metadata.yml").is_some()
         || direct_source_file(path, "cubes", "metadata.yml").is_some()
         || direct_source_file(path, "views", "metadata.yml").is_some()
     {
         Some("metadata_directory_unsupported")
-    } else if direct_source_file(path, "models", "ref_sql.sql").is_some() {
-        Some("ref_sql_directory_unsupported")
-    } else if direct_source_file(path, "views", "sql.yml").is_some() {
-        Some("sql_yml_directory_unsupported")
+    } else if let Some(model) = direct_source_file(path, "models", "ref_sql.sql") {
+        captured_text
+            .contains_key(&format!("models/{model}/metadata.yml"))
+            .then_some("ref_sql_directory_unsupported")
+    } else if let Some(view) = direct_source_file(path, "views", "sql.yml") {
+        captured_text
+            .contains_key(&format!("views/{view}/metadata.yml"))
+            .then_some("sql_yml_directory_unsupported")
     } else {
         None
     };
@@ -724,13 +731,13 @@ fn validate_nonunix_file_slots(dir: &std::path::Path) -> std::io::Result<()> {
                     "metadata_directory_unsupported",
                 ));
             }
-            if parent == "models" && child.join("ref_sql.sql").is_dir() {
+            if parent == "models" && metadata.is_file() && child.join("ref_sql.sql").is_dir() {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
                     "ref_sql_directory_unsupported",
                 ));
             }
-            if parent == "views" && child.join("sql.yml").is_dir() {
+            if parent == "views" && metadata.is_file() && child.join("sql.yml").is_dir() {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
                     "sql_yml_directory_unsupported",
