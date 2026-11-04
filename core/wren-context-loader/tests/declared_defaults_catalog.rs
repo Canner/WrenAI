@@ -356,6 +356,48 @@ fn declaration_shaped_sequence_front_matter_voids_defaults_but_prose_lists_do_no
 }
 
 #[test]
+fn declaration_shaped_unknown_mapping_voids_defaults_but_metadata_does_not() {
+    let valid = "---\ndefaults:\n  - {id: valid, kind: exclude_rows}\n---\n";
+    let misspelt = "---\ndefauts:\n  - {id: misplaced, kind: exclude_rows}\n---\n";
+
+    let (ids, warnings) = declared_default_ids(&[
+        rule_file("knowledge/rules/a.md", valid),
+        rule_file("knowledge/rules/b.md", misspelt),
+    ]);
+    assert!(ids.is_empty(), "{ids:?}");
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("mapping"), "{warnings:?}");
+
+    for (metadata, expected_ids) in [
+        ("---\ndefauts:\n  - {id: a-note}\n---\n", Vec::new()),
+        ("---\ndefauts:\n  - {kind: a-note}\n---\n", Vec::new()),
+        (
+            "---\ndefaults:\n  - {id: valid, kind: exclude_rows}\nmetadata:\n  - {id: prose, kind: note}\n---\n",
+            vec!["valid"],
+        ),
+    ] {
+        let (ids, warnings) = declared_default_ids(&[rule_file("knowledge/rules/a.md", metadata)]);
+        assert_eq!(ids, expected_ids, "{metadata}: {ids:?}");
+        assert!(warnings.is_empty(), "{metadata}: {warnings:?}");
+    }
+
+    let project = tempfile::tempdir().unwrap();
+    copy_dir(&fixture("declared-wren"), project.path());
+    fs::write(
+        project.path().join("knowledge/rules/conventions.md"),
+        misspelt,
+    )
+    .unwrap();
+    assert!(catalog_json(project.path())
+        .get("declared_defaults")
+        .is_none());
+    let legacy_rules = read_knowledge_rules(project.path()).unwrap();
+    let snapshot_rules = capture_project(project.path()).unwrap().rules;
+    assert!(legacy_rules.declared_defaults.is_empty());
+    assert_eq!(snapshot_rules, legacy_rules);
+}
+
+#[test]
 fn a_sale_statuses_declaration_keeps_its_id_and_does_not_void_the_set() {
     let text = "---\ndefaults:\n  - {id: z, kind: require_rate_join}\n  - id: paid-and-shipped\n    kind: sale_statuses\n    column: orders.status\n    values: [paid, shipped]\n    domain: [paid, shipped, cancelled, pending]\n    overridable_by_caller: true\n    when: aggregated\n---\n";
     let (ids, warnings) = declared_default_ids(&[rule_file("knowledge/rules/a.md", text)]);

@@ -1401,9 +1401,10 @@ const DECLARED_DEFAULT_KINDS: [&str; 3] = ["exclude_rows", "require_rate_join", 
 /// `^[a-z0-9][a-z0-9_-]{0,63}$`.
 ///
 /// The outcome is all-or-nothing, like the CLI's: when anything is malformed (a bad id, an unknown
-/// kind, a repeated id, `defaults` not a list, a declaration-shaped sequence root, invalid YAML,
-/// an unclosed fence) the id list is empty and the warnings say why, because the CLI voids the
-/// whole set and refuses to start, so a partial list could never match what it reports.
+/// kind, a repeated id, `defaults` not a list, a declaration-shaped sequence root or unknown
+/// mapping value, invalid YAML, an unclosed fence) the id list is empty and the warnings say why,
+/// because the CLI voids the whole set and refuses to start, so a partial list could never match
+/// what it reports.
 pub fn declared_default_ids(files: &[KnowledgeRuleFile]) -> (Vec<String>, Vec<String>) {
     let mut ids: Vec<String> = Vec::new();
     let mut warnings = Vec::new();
@@ -1427,13 +1428,17 @@ pub fn declared_default_ids(files: &[KnowledgeRuleFile]) -> (Vec<String>, Vec<St
             }
         };
         let Some(entries) = data.get("defaults") else {
-            if data.as_sequence().is_some_and(|items| {
-                items
-                    .iter()
-                    .any(|item| item.get("id").is_some() && item.get("kind").is_some())
-            }) {
+            if declaration_shaped_sequence(&data) {
                 warnings.push(format!(
                     "{}: declaration-shaped front-matter sequence; declared defaults void",
+                    file.path
+                ));
+            } else if data
+                .as_mapping()
+                .is_some_and(|mapping| mapping.values().any(declaration_shaped_sequence))
+            {
+                warnings.push(format!(
+                    "{}: declaration-shaped front-matter mapping; declared defaults void",
                     file.path
                 ));
             }
@@ -1474,6 +1479,14 @@ pub fn declared_default_ids(files: &[KnowledgeRuleFile]) -> (Vec<String>, Vec<St
     } else {
         (Vec::new(), warnings)
     }
+}
+
+fn declaration_shaped_sequence(value: &serde_yaml::Value) -> bool {
+    value.as_sequence().is_some_and(|items| {
+        items
+            .iter()
+            .any(|item| item.get("id").is_some() && item.get("kind").is_some())
+    })
 }
 
 const SEMANTICS_KEY: &str = "semantics";
