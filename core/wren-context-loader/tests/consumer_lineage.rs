@@ -586,6 +586,29 @@ fn unparseable_consumer_sql_falls_back_to_whole_word_scan_and_is_recorded() {
 }
 
 #[test]
+fn unparseable_consumer_sql_ignores_names_only_in_comments_or_literals() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    write(
+        tmp.path(),
+        "knowledge/sql/comment-only.md",
+        "---\nsql: |\n  SELCT 'orders' /* orders */ -- orders\n---\n",
+    );
+    let ctx = load(tmp.path());
+
+    assert!(
+        !impact(&ctx, "model:orders")
+            .downstream
+            .contains(&"query:comment-only".to_string()),
+        "comments and literals are not relation references"
+    );
+    assert!(ctx
+        .lineage_diagnostics()
+        .iter()
+        .any(|d| d.contains("query:comment-only") && d.contains("whole-word")));
+}
+
+#[test]
 fn knowledge_file_without_sql_is_skipped_with_a_diagnostic() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());

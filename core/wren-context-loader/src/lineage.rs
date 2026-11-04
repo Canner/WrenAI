@@ -743,18 +743,21 @@ fn member_is_referenced(
     })
 }
 
-/// Naive whole-word containment check: does `statement` reference `name` as a standalone token?
-/// Avoids the false positive where `orders` matches inside `raw_orders` by requiring
-/// non-identifier boundaries on both sides. The fallback matcher when SQL does not parse.
+/// Lexical whole-word containment check: does executable SQL in `statement` reference `name` as
+/// a standalone token? Comments and single-quoted literals are ignored, so a malformed statement
+/// cannot invent a lineage edge merely by mentioning a model there. It still avoids the false
+/// positive where `orders` matches inside `raw_orders` by requiring non-identifier boundaries on
+/// both sides. This is the fallback matcher when SQL does not parse.
 fn statement_references(statement: &str, name: &str) -> bool {
-    let bytes = statement.as_bytes();
+    let executable = fallback_executable_text(statement);
+    let bytes = executable.as_bytes();
     let name_bytes = name.as_bytes();
     if name_bytes.is_empty() {
         return false;
     }
     let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
     let mut start = 0;
-    while let Some(pos) = statement[start..].find(name) {
+    while let Some(pos) = executable[start..].find(name) {
         let abs = start + pos;
         let before_ok = abs == 0 || !is_ident(bytes[abs - 1]);
         let after_idx = abs + name_bytes.len();
@@ -765,6 +768,64 @@ fn statement_references(statement: &str, name: &str) -> bool {
         start = abs + name_bytes.len();
     }
     false
+}
+
+/// Remove lexical regions which cannot name a SQL relation without requiring a successful SQL
+/// parse. The fallback deliberately remains small: it knows SQL line/block comments and ordinary
+/// single-quoted string literals (including doubled-quote and backslash escapes), while retaining
+/// quoted identifiers and all executable tokens for the existing whole-word matcher.
+fn fallback_executable_text(statement: &str) -> String {
+    let bytes = statement.as_bytes();
+    let mut executable = String::with_capacity(statement.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index..] {
+            [b'-', b'-', ..] => {
+                executable.push(' ');
+                index += 2;
+                while index < bytes.len() && !matches!(bytes[index], b'\n' | b'\r') {
+                    index += 1;
+                }
+            }
+            [b'/', b'*', ..] => {
+                executable.push(' ');
+                index += 2;
+                while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/')
+                {
+                    index += 1;
+                }
+                index = (index + 2).min(bytes.len());
+            }
+            [b'\'', ..] => {
+                executable.push(' ');
+                index += 1;
+                while index < bytes.len() {
+                    if bytes[index] == b'\'' {
+                        index += 1;
+                        if index < bytes.len() && bytes[index] == b'\'' {
+                            index += 1;
+                            continue;
+                        }
+                        break;
+                    }
+                    if bytes[index] == b'\\' && index + 1 < bytes.len() {
+                        index += 2;
+                    } else {
+                        index += 1;
+                    }
+                }
+            }
+            _ => {
+                let character = statement[index..]
+                    .chars()
+                    .next()
+                    .expect("index is within UTF-8 input");
+                executable.push(character);
+                index += character.len_utf8();
+            }
+        }
+    }
+    executable
 }
 
 #[cfg(test)]
@@ -790,6 +851,15 @@ mod tests {
             Some("Orders".to_string())
         );
         assert_eq!(resolve_relation_name(&quoted, &candidates), None);
+    }
+
+    #[test]
+    fn fallback_reference_scan_ignores_comments_and_string_literals() {
+        assert!(statement_references("SELCT orders", "orders"));
+        assert!(!statement_references(
+            "SELCT 'orders' /* orders */ -- orders\n",
+            "orders"
+        ));
     }
 
     #[test]
