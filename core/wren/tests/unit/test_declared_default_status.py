@@ -170,12 +170,20 @@ def test_no_status_predicate_at_all_is_missing():
     assert outcome("SELECT status, COUNT(*) FROM orders GROUP BY status") == "missing"
 
 
-def test_status_scope_still_uses_qualify_after_a_window_computation():
+def test_status_scope_uses_qualify_after_a_row_number_window():
     sql = (
         "SELECT status, ROW_NUMBER() OVER () AS row_number FROM orders "
         "QUALIFY status IN ('paid', 'shipped')"
     )
     assert outcome(sql) == "satisfied"
+
+
+def test_status_scope_does_not_credit_qualify_after_a_window_aggregate():
+    sql = (
+        "SELECT SUM(order_total) OVER () AS total FROM orders "
+        "QUALIFY status IN ('paid', 'shipped')"
+    )
+    assert outcome(sql) == "missing"
 
 
 @pytest.mark.parametrize(

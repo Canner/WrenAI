@@ -217,18 +217,34 @@ class _Statement:
         neither, its predicate cannot prove that an aggregate/window result omitted a row.  A
         nested select's computation is independent: its own scope is judged separately.
         """
+        if not self._qualify_restricts_value_rows(qualify):
+            return False
         scope = self._scope_for(qualify)
-        if scope is None or not isinstance(scope.expression, exp.Select):
-            return False
+        assert scope is not None
         select = scope.expression
-        if select.args.get("group") is not None:
-            return False
         roots = [*select.selects, qualify.this]
         return not any(
             computation.find_ancestor(exp.Select) is select
             for root in roots
             for kind in (exp.AggFunc, exp.Window)
             for computation in root.find_all(kind)
+        )
+
+    def _qualify_restricts_value_rows(self, qualify: exp.Qualify) -> bool:
+        """Whether QUALIFY can constrain values consumed by this select.
+
+        A window rank can select output rows, but QUALIFY runs after an aggregate
+        or window aggregate has already consumed its input rows.  It therefore
+        cannot establish a status scope or a rate-date bound for that value.
+        """
+        scope = self._scope_for(qualify)
+        if scope is None or not isinstance(scope.expression, exp.Select):
+            return False
+        select = scope.expression
+        return select.args.get("group") is None and not any(
+            aggregate.find_ancestor(exp.Select) is select
+            for root in [*select.selects, qualify.this]
+            for aggregate in root.find_all(exp.AggFunc)
         )
 
     @staticmethod
@@ -786,6 +802,9 @@ class _Statement:
                 visit(child)
 
         for root in self.roots:
+            qualify = root.find_ancestor(exp.Qualify)
+            if qualify is not None and not self._qualify_restricts_value_rows(qualify):
+                continue
             visit(root)
         return found
 
@@ -948,8 +967,6 @@ class _Statement:
             amount_reads[index][0] for index in covered_amount_reads
         }
         amount_tables = {table for table, _path in amount_reads}
-        if len(amount_tables) > 1 and amount_tables - covered_amount_tables:
-            return True
         # When an aggregate actually consumes a rate value, every supplying
         # instance must carry both conditions; an unrelated complete join cannot
         # donate its proof to that value. No rate-valued expression is required.
@@ -980,6 +997,10 @@ class _Statement:
                     supplied |= matching(
                         column, expressions=True, expression_columns=value_columns
                     )
+        # A bare amount can only use the complete attachment for its own read.
+        # A converted value may instead carry that attachment through a CTE.
+        if amount_tables - covered_amount_tables and not supplied:
+            return True
         return not complete or not supplied <= complete
 
     def _amount_reads(self, amounts, expression=None):

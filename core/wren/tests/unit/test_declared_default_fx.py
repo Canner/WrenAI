@@ -376,6 +376,22 @@ def test_a_rate_predicate_after_a_left_join_excludes_an_unmatched_base_row_in_du
         assert db.execute(sql).fetchone() == (None,)
 
 
+def test_a_later_inner_join_on_the_rate_side_drops_unmatched_base_rows(strict):
+    sql = (
+        "SELECT SUM(CASE WHEN p.currency = 'USD' THEN p.amount "
+        "ELSE p.amount * f.rate_to_usd END) FROM payments p "
+        f"ASOF LEFT JOIN fx_rates f ON {ON} "
+        "JOIN customers c ON c.id = f.currency"
+    )
+    assert violations(strict, sql) == [f"{RATE}:base_currency_dropped"]
+
+
+def test_an_amount_cannot_borrow_a_complete_rate_join_for_another_alias():
+    sql = """SELECT SUM(p.amount) FROM payments p CROSS JOIN payments q
+        JOIN fx_rates f ON f.currency = q.currency AND f.date <= q.captured_at"""
+    assert make_checker().check(parse_one(sql, dialect="duckdb")) == [RATE]
+
+
 def test_a_consuming_outer_where_on_a_ranked_rate_drops_base_rows(strict):
     import duckdb  # noqa: PLC0415
 

@@ -362,6 +362,11 @@ class _Status:
         row with a NULL status can still pass every filter."""
         retained: dict[int, tuple[frozenset[str], bool]] = {}
         for conjunct in self.st.conjuncts:
+            qualify = conjunct.find_ancestor(exp.Qualify)
+            if qualify is not None and not self.st._qualify_restricts_value_rows(
+                qualify
+            ):
+                continue
             reads = self._reads_of(conjunct)
             if not reads:
                 continue

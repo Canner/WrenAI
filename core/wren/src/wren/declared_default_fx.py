@@ -526,10 +526,21 @@ class _Rate:
         source = scope.sources.get(attachment.alias_or_name)
         if source is None:
             return False
+        joins = select.args.get("joins") or []
+        if kind == "join":
+            assert join is not None
+            later_joins = joins[joins.index(join) + 1 :]
+        else:
+            later_joins = joins
         return not any(
             self._rejects_null_rate(clause.this, scope, source)
             for key in ("where", "having")
             if (clause := select.args.get(key)) is not None
+        ) and not any(
+            join.side not in _PRESERVING_SIDES
+            and (on := join.args.get("on")) is not None
+            and self._rejects_null_rate(on, scope, source)
+            for join in later_joins
         )
 
     def _kept_by_outer(self, select: exp.Select) -> bool:
