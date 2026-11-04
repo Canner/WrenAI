@@ -107,6 +107,31 @@ fn the_target_directory_data_files_and_dotfiles_do_not_change_it() {
 }
 
 #[test]
+fn regular_source_directory_entries_are_absent_to_loader_and_digest() {
+    for source_dir in ["models", "views"] {
+        let project = copy_of("denied-wren");
+        let source = project.path().join(source_dir);
+        fs::remove_dir_all(&source).unwrap();
+        fs::write(&source, "ordinary source file").unwrap();
+
+        let before = digest(project.path());
+        fs::write(&source, "changed ordinary source file").unwrap();
+        assert_eq!(
+            before,
+            digest(project.path()),
+            "{source_dir} is not a source root"
+        );
+
+        let sources = read_project_dir(project.path()).unwrap().unwrap();
+        match source_dir {
+            "models" => assert!(sources.model_ymls.is_empty()),
+            "views" => assert!(sources.views.is_empty()),
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
 fn the_legacy_instructions_file_is_part_of_the_digest() {
     let project = copy_of("denied-wren");
     let base = digest(project.path());

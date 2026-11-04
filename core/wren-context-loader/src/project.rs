@@ -200,14 +200,6 @@ pub(crate) fn sql_yml_statement(sql_yml: &str) -> Result<Option<String>, serde_y
 
 // --- native host convenience ---------------------------------------------------------------------
 
-/// Read a wren project directory into [`ProjectSources`] (native host only; the pure `assemble`
-/// path is what a WASM host feeds directly). Returns `None` if the directory has no
-/// `wren_project.yml` — i.e. it is not a wren project — so the caller can build an unparseable
-/// context. Model, cube, and view sub-directories are read in sorted order for deterministic
-/// output. Entries that cannot be read are an error; dot-named entries are not inputs.
-///
-/// A view directory is a view when it has a `metadata.yml`, with or without a `sql.yml` — the
-/// same rule as `wren`, which also ignores a directory that holds only a `sql.yml`.
 #[cfg(all(unix, not(target_arch = "wasm32")))]
 fn read_metadata_if_file(dir: &crate::source_fs::SourceDir) -> std::io::Result<Option<String>> {
     if dir.entry_kind("metadata.yml".as_ref())? == crate::source_fs::EntryKind::Directory {
@@ -219,6 +211,14 @@ fn read_metadata_if_file(dir: &crate::source_fs::SourceDir) -> std::io::Result<O
     dir.read_string_if_file("metadata.yml".as_ref())
 }
 
+/// Read a wren project directory into [`ProjectSources`] (native host only; the pure `assemble`
+/// path is what a WASM host feeds directly). Returns `None` if the directory has no
+/// `wren_project.yml` — i.e. it is not a wren project — so the caller can build an unparseable
+/// context. Model, cube, and view sub-directories are read in sorted order for deterministic
+/// output. Entries that cannot be read are an error; dot-named entries are not inputs.
+///
+/// A view directory is a view when it has a `metadata.yml`, with or without a `sql.yml` — the
+/// same rule as `wren`, which also ignores a directory that holds only a `sql.yml`.
 #[cfg(all(unix, not(target_arch = "wasm32")))]
 pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<ProjectSources>> {
     crate::digest::validate_source_directories(dir)?;
@@ -305,6 +305,20 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(unix)))]
+fn read_metadata_if_file(path: &std::path::Path) -> std::io::Result<Option<String>> {
+    if path.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "metadata_directory_unsupported",
+        ));
+    }
+    if path.is_file() {
+        return std::fs::read_to_string(path).map(Some);
+    }
+    Ok(None)
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(unix)))]
 pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<ProjectSources>> {
     use std::fs;
 
@@ -320,8 +334,8 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     if models_dir.is_dir() {
         for model_dir in list_dir(&models_dir)?.into_iter().filter(|p| p.is_dir()) {
             let meta = model_dir.join("metadata.yml");
-            if meta.is_file() {
-                model_ymls.push(fs::read_to_string(meta)?);
+            if let Some(contents) = read_metadata_if_file(&meta)? {
+                model_ymls.push(contents);
             }
         }
     }
@@ -334,8 +348,8 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     if cubes_dir.is_dir() {
         for cube_dir in list_dir(&cubes_dir)?.into_iter().filter(|p| p.is_dir()) {
             let meta = cube_dir.join("metadata.yml");
-            if meta.is_file() {
-                cube_ymls.push(fs::read_to_string(meta)?);
+            if let Some(contents) = read_metadata_if_file(&meta)? {
+                cube_ymls.push(contents);
             }
         }
     }
@@ -345,9 +359,9 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     if views_dir.is_dir() {
         for view_dir in list_dir(&views_dir)?.into_iter().filter(|p| p.is_dir()) {
             let meta = view_dir.join("metadata.yml");
-            if meta.is_file() {
+            if let Some(contents) = read_metadata_if_file(&meta)? {
                 let sql = read_if_exists(&view_dir.join("sql.yml"))?.unwrap_or_default();
-                views.push((fs::read_to_string(meta)?, sql));
+                views.push((contents, sql));
             }
         }
     }

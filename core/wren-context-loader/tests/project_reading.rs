@@ -115,7 +115,11 @@ fn a_directory_with_a_sql_yml_and_no_metadata_is_not_a_view_to_the_cli_either() 
 
 #[test]
 fn metadata_directories_are_not_silently_skipped() {
-    for relative in ["models/orders/metadata.yml", "views/broken/metadata.yml"] {
+    for relative in [
+        "models/orders/metadata.yml",
+        "cubes/orders/metadata.yml",
+        "views/broken/metadata.yml",
+    ] {
         let tmp = tempfile::tempdir().unwrap();
         project(tmp.path());
         let metadata = tmp.path().join(relative);
