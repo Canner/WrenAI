@@ -463,6 +463,7 @@ class CTERewriter:
             dialect=self.dialect,
             allow_partial_qualification=True,
         )
+        self._validate_model_columns(qualified, scope_aliases)
 
         # Ensure every referenced model appears in the result, even if no
         # specific columns are referenced (e.g. SELECT COUNT(*) FROM model).
@@ -529,6 +530,7 @@ class CTERewriter:
             dialect=self.dialect,
             allow_partial_qualification=True,
         )
+        self._validate_model_columns(qualified, scope_aliases)
 
         used: dict[str, dict[str, None]] = {
             m: {} for aliases in scope_aliases.values() for m in aliases.values()
@@ -541,6 +543,46 @@ class CTERewriter:
             user_table_refs,
             {},
         )
+
+    @staticmethod
+    def _validate_model_columns(
+        ast: exp.Expression, scope_aliases: dict[int, dict[str, str]]
+    ) -> None:
+        """Reject unresolved columns only where MDL knows every source schema."""
+        for scope in traverse_scope(ast):
+            if not isinstance(scope.expression, exp.Select) or not scope.references:
+                continue
+            # scope.columns includes external references inherited from children.
+            # A raw-table subquery must not be validated as part of its MDL parent.
+            columns = [
+                column
+                for column in scope.unqualified_columns
+                if column.find_ancestor(exp.Select) is scope.expression
+            ]
+            if not columns:
+                continue
+
+            current = scope
+            while True:
+                aliases = scope_aliases[id(current.expression)]
+                # references includes SEMI/ANTI JOIN sources, which are omitted
+                # from selected_sources. Unused visible CTEs are excluded.
+                if any(
+                    alias.lower() not in aliases
+                    or not isinstance(current.sources.get(alias), exp.Table)
+                    for alias, _ in current.references
+                ):
+                    break
+                if not current.can_be_correlated or current.parent is None:
+                    raise WrenError(
+                        ErrorCode.INVALID_SQL,
+                        f"Column '{columns[0].name}' could not be resolved "
+                        "in MDL model sources.",
+                        phase=ErrorPhase.SQL_PLANNING,
+                    )
+                # An unresolved correlated reference could belong to an outer
+                # raw table, CTE, derived table or table-valued function.
+                current = current.parent
 
     def _build_scope_alias_maps(
         self, ast: exp.Expression, user_cte_names: set[str]
@@ -810,11 +852,8 @@ class CTERewriter:
                 #   * no model table resolved at all → it belongs to an external
                 #     table or a pure-TVF projection, which ``rewrite()`` handles
                 #     via its passthrough/fallback branch.
-                # Known limitation: an unqualified model-column ref in a query
-                # that also defines CTEs is not force-quoted and bypasses the
-                # case-sensitive "column does not exist" check — it falls back to
-                # the old behavior (may collapse to ``SELECT 1``). Qualify the
-                # column (``model.col``) to get strict checking.
+                # Unresolved unqualified refs are checked after qualification
+                # when every source in their scope is an MDL model.
                 continue
             else:
                 candidates = self._all_model_cols
