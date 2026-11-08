@@ -15,7 +15,7 @@ from wren.engine import WrenEngine
 from wren.mdl import get_session_context
 from wren.mdl.cte_rewriter import CTERewriter, get_sqlglot_dialect
 from wren.model.data_source import DataSource
-from wren.model.error import ErrorCode, WrenError
+from wren.model.error import ErrorCode, ErrorPhase, WrenError
 
 pytestmark = pytest.mark.unit
 
@@ -258,6 +258,150 @@ class TestMultiModel:
         customer_body = _cte_body_sql(result, "customer")
         assert customer_body is not None
         assert "c_name" in customer_body.lower()
+
+
+class TestUnresolvedModelColumns:
+    @pytest.fixture
+    def manifest(self):
+        manifest = deepcopy(_MULTI_MODEL_MANIFEST)
+        manifest["models"][0]["columns"].append(
+            {"name": "secret", "type": "integer", "isHidden": True}
+        )
+        for model in manifest["models"]:
+            model["tableReference"]["table"] = f"raw_{model['name']}"
+        return manifest
+
+    @pytest.mark.parametrize("column", ["definitely_missing_amount", "secret"])
+    @pytest.mark.parametrize("qualifier", ["", "orders."])
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "SELECT {column} FROM orders",
+            "SELECT SUM({column}) FROM orders",
+            "SELECT o_orderkey FROM orders WHERE {column} = 1",
+            "SELECT o_orderkey FROM orders ORDER BY {column}",
+        ],
+    )
+    def test_missing_or_hidden_column_fails_during_planning(
+        self, manifest, column, qualifier, query
+    ):
+        engine = WrenEngine(_b64(manifest), DataSource.duckdb, {})
+        with pytest.raises(WrenError) as exc:
+            engine.dry_plan(query.format(column=f"{qualifier}{column}"))
+        assert exc.value.error_code == ErrorCode.INVALID_SQL
+        assert exc.value.phase == ErrorPhase.SQL_PLANNING
+        assert column in exc.value.message
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "WITH unused AS (SELECT 1 AS x) SELECT missing FROM orders",
+            "WITH c AS (SELECT missing FROM orders) SELECT * FROM c",
+            "SELECT * FROM (SELECT missing FROM orders) AS d",
+            "SELECT o_orderkey FROM orders WHERE EXISTS (SELECT missing FROM customer)",
+            "SELECT o_orderkey FROM orders UNION ALL SELECT missing FROM orders",
+            "SELECT missing FROM orders JOIN customer ON o_custkey = c_custkey",
+        ],
+    )
+    def test_model_only_selects_are_checked_independently(self, manifest, sql):
+        with pytest.raises(WrenError) as exc:
+            _make_rewriter(manifest).rewrite(sql)
+        assert exc.value.error_code == ErrorCode.INVALID_SQL
+        assert exc.value.phase == ErrorPhase.SQL_PLANNING
+        assert "missing" in exc.value.message
+
+    def test_case_sensitive_collection_checks_model_scope(self):
+        rw = _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.postgres)
+        with pytest.raises(WrenError) as exc:
+            rw.rewrite("WITH unused AS (SELECT 1 AS x) SELECT missing FROM clash")
+        assert exc.value.error_code == ErrorCode.INVALID_SQL
+        assert exc.value.phase == ErrorPhase.SQL_PLANNING
+
+    @pytest.mark.parametrize(
+        ("sql", "expected"),
+        [
+            (
+                "SELECT o_orderkey AS order_id FROM orders ORDER BY order_id",
+                [(1,), (2,)],
+            ),
+            (
+                "SELECT o_orderstatus AS status, COUNT(*) AS n FROM orders "
+                "GROUP BY status HAVING n > 0 ORDER BY status",
+                [("F", 1), ("O", 1)],
+            ),
+            (
+                "SELECT o_orderkey, ROW_NUMBER() OVER (ORDER BY o_orderkey) AS rn "
+                "FROM orders QUALIFY rn = 1",
+                [(1, 1)],
+            ),
+            (
+                "SELECT o_orderkey FROM orders WHERE EXISTS "
+                "(SELECT 1 FROM customer WHERE c_custkey = o_custkey) "
+                "ORDER BY o_orderkey",
+                [(1,), (2,)],
+            ),
+            (
+                "WITH c AS (SELECT 3 AS value) SELECT value FROM orders CROSS JOIN c",
+                [(3,), (3,)],
+            ),
+            (
+                "SELECT value FROM orders CROSS JOIN (SELECT 3 AS value) AS d",
+                [(3,), (3,)],
+            ),
+            (
+                "SELECT value FROM orders CROSS JOIN raw_external ORDER BY value",
+                [(10,), (10,), (20,), (20,)],
+            ),
+            (
+                "SELECT value FROM orders CROSS JOIN UNNEST([1, 2]) AS u(value) "
+                "ORDER BY value",
+                [(1,), (1,), (2,), (2,)],
+            ),
+            (
+                "SELECT o_orderkey FROM orders WHERE EXISTS "
+                "(SELECT 1 FROM raw_external WHERE value = 10) ORDER BY o_orderkey",
+                [(1,), (2,)],
+            ),
+            (
+                "SELECT value FROM raw_external WHERE EXISTS "
+                "(SELECT 1 FROM orders WHERE value = o_custkey) ORDER BY value",
+                [(10,), (20,)],
+            ),
+            (
+                "SELECT (SELECT o_orderkey) FROM orders ORDER BY o_orderkey",
+                [(1,), (2,)],
+            ),
+            (
+                "SELECT o_orderkey FROM orders SEMI JOIN raw_external "
+                "ON o_custkey = value ORDER BY o_orderkey",
+                [(1,), (2,)],
+            ),
+        ],
+    )
+    def test_aliases_and_mixed_sources_still_execute(self, manifest, sql, expected):
+        rewritten = _make_rewriter(manifest).rewrite(sql)
+        with duckdb.connect() as connection:
+            connection.execute(
+                "CREATE TABLE raw_orders (o_orderkey INTEGER, o_custkey INTEGER, "
+                "o_orderstatus VARCHAR, secret INTEGER); "
+                "INSERT INTO raw_orders VALUES (1, 10, 'O', 7), (2, 20, 'F', 8); "
+                "CREATE TABLE raw_customer (c_custkey INTEGER, c_name VARCHAR); "
+                "INSERT INTO raw_customer VALUES (10, 'Alice'), (20, 'Bob'); "
+                "CREATE TABLE raw_external (value INTEGER); "
+                "INSERT INTO raw_external VALUES (10), (20)"
+            )
+            assert connection.execute(rewritten).fetchall() == expected
+
+    @pytest.mark.parametrize(
+        ("column", "suffix"), [("ROWNUM", ""), ("LEVEL", " CONNECT BY LEVEL <= 3")]
+    )
+    def test_oracle_pseudocolumns_are_preserved(self, column, suffix):
+        rewritten = _make_rewriter(_SINGLE_MODEL_MANIFEST, DataSource.oracle).rewrite(
+            f"SELECT {column}, o_orderkey FROM orders{suffix}"
+        )
+        ast = sqlglot.parse_one(rewritten, dialect="oracle")
+        assert ast.selects[0].name == column
+        assert _has_cte(rewritten, "orders", dialect="oracle")
 
 
 class TestScopedAliases:
