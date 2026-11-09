@@ -201,7 +201,12 @@ def fingerprint_sources(root, paths, expected_sources=None):
     digest.update(b"project\0" + project_digest(root).encode() + b"\0")
     for item in paths:
         path = Path(item)
-        data = path.read_bytes()
+        try:
+            data = path.read_bytes()
+        except FileNotFoundError:
+            if expected_sources is not None and path in expected_sources:
+                raise SourceBytesChanged("startup source removed") from None
+            raise
         if expected_sources is not None and path in expected_sources:
             if data != expected_sources[path]:
                 raise SourceBytesChanged("startup source changed")

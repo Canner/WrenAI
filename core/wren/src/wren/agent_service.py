@@ -2119,6 +2119,9 @@ def _assemble_service(
     project.paths += sorted(
         p for p in bundle.rglob("*") if p.is_file() and p not in project.paths
     )
+    # A captured input deleted since it was consumed is still fingerprinted: its read fails as a
+    # change instead of the file silently dropping out of the version.
+    project.paths += sorted(p for p in parsed_sources if p not in project.paths)
     project.version = project.fingerprint()
     policy_path = contained(config_path.parent, config["policy"])
     project.paths.append(policy_path)
