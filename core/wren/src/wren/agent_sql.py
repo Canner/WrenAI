@@ -419,11 +419,14 @@ class AdHocSQL:
         return None
 
     def _duplicate_aggregation(self, scopes):
-        """An aggregate over a view's value in a select that also reads a model whose whole
-        primary key is not equated, in a top-level ``AND`` of a join condition or ``WHERE``,
-        to a column of another source: each view row can repeat once per matching model row
-        (a cross join, ``ON TRUE``, a non-key or ``OR``-ed key match), and the aggregate counts
-        it every time. A ``SEMI``/``ANTI`` join target never repeats a row."""
+        """An aggregate over a view's value in a select that also reads a model not bounded to
+        one row per view row: each view row can repeat once per matching model row (a cross
+        join, ``ON TRUE``, a non-key or ``OR``-ed key match), and the aggregate counts it every
+        time. A model is bounded when its whole primary key is equated, in top-level ``AND``s
+        of the join conditions and ``WHERE``, to columns of sources already bounded, starting
+        from the view and the other derived sources; so two models keyed only to each other
+        still multiply the view. Key names compare case-insensitively, as qualification
+        folds them. A ``SEMI``/``ANTI`` join target never repeats a row."""
         for scope in scopes:
             select = scope.expression
             if not isinstance(select, exp.Select):
@@ -455,26 +458,45 @@ class AdHocSQL:
             conditions = [j.args.get("on") for j in joins] + [
                 w.this for w in [select.args.get("where")] if w is not None
             ]
-            equated = {}
+            edges = []
             for condition in conditions:
                 for term in self._conjuncts(condition) if condition is not None else ():
                     while isinstance(term, exp.Paren):
                         term = term.this
                     if not isinstance(term, exp.EQ):
                         continue
-                    sides = (term.this, term.expression)
-                    if not all(isinstance(side, exp.Column) for side in sides) or (
-                        sides[0].table == sides[1].table
-                    ):
+                    a, b = term.this, term.expression
+                    if not (
+                        isinstance(a, exp.Column) and isinstance(b, exp.Column)
+                    ) or (a.table == b.table):
                         continue
-                    for side in sides:
-                        equated.setdefault(side.table, set()).add(side.name)
-            if any(
-                not (keys := self.primary_keys.get(source.name))
-                or not keys <= equated.get(alias, set())
+                    edges += [
+                        (a.table, a.name.lower(), b.table),
+                        (b.table, b.name.lower(), a.table),
+                    ]
+            keys_of = {
+                model.lower(): frozenset(k.lower() for k in keys)
+                for model, keys in self.primary_keys.items()
+            }
+            models = {
+                alias: keys_of.get(source.name.lower(), frozenset())
                 for alias, source in scope.sources.items()
                 if isinstance(source, exp.Table) and alias not in never_repeat
-            ):
+            }
+            bounded = set(scope.sources) - set(models)
+            grew = True
+            while grew:
+                grew = False
+                for alias, keys in models.items():
+                    if alias in bounded or not keys:
+                        continue
+                    reached = {
+                        c for a, c, other in edges if a == alias and other in bounded
+                    }
+                    if keys <= reached:
+                        bounded.add(alias)
+                        grew = True
+            if any(alias not in bounded for alias in models):
                 return True
         return False
 
@@ -934,12 +956,20 @@ class AdHocSQL:
                 ),
                 frozenset(),
             )
+        named = {
+            definition.this.name.lower(): definition
+            for definition in select.args.get("windows") or []
+            if isinstance(definition.this, exp.Identifier)
+        }
         for window in select.find_all(exp.Window):
-            if window.find_ancestor(exp.Select) is not select:
+            if (
+                window.find_ancestor(exp.Select) is not select
+                or window.arg_key == "windows"
+            ):
                 continue
             partition = {
                 part.name.lower()
-                for part in window.args.get("partition_by") or []
+                for part in self._effective_partition(window, named)
                 if isinstance(part, exp.Column) and part.table == column.table
             }
             if column.name.lower() not in partition and not (
@@ -947,6 +977,19 @@ class AdHocSQL:
             ):
                 return False
         return True
+
+    @staticmethod
+    def _effective_partition(window, named):
+        """``window``'s ``PARTITION BY``, or the one it inherits through ``OVER w`` /
+        ``OVER (w ...)`` from the select's ``WINDOW`` definitions (a chain of at most 8)."""
+        for _ in range(8):
+            if window.args.get("partition_by"):
+                return window.args["partition_by"]
+            base = window.args.get("alias")
+            if not isinstance(base, exp.Identifier) or base.name.lower() not in named:
+                return []
+            window = named[base.name.lower()]
+        return []
 
     @staticmethod
     def _conditions(select):
