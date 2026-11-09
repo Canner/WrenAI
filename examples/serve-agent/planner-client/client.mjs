@@ -54,10 +54,13 @@ async function writeTrace() {
 }
 const client = new Client({ name: 'wren-external-pi-planner', version: '1.0.0' });
 // Only the explicitly named private credential reaches the service child. The context loader
-// override is not a credential: the service resolves the loader from it first.
+// override is not a credential: the service resolves the loader from it first. A relative path
+// is resolved here, so a service command that changes directory still finds the same binary
+// (POSIX paths: the service is POSIX-only).
+const loaderBin = process.env.WREN_CONTEXT_LOADER_BIN;
 const env = {
   PATH: process.env.PATH,
-  ...(process.env.WREN_CONTEXT_LOADER_BIN ? { WREN_CONTEXT_LOADER_BIN: process.env.WREN_CONTEXT_LOADER_BIN } : {}),
+  ...(loaderBin ? { WREN_CONTEXT_LOADER_BIN: loaderBin.startsWith('/') ? loaderBin : `${process.cwd()}/${loaderBin}` } : {}),
   ...(config.env ?? {}),
 };
 for (const name of config.serviceCredentialEnv ?? []) if (process.env[name]) env[name] = process.env[name];
@@ -104,8 +107,10 @@ try {
     await writeTrace();
   } catch (error) {
     // The trace is where a planner failure is reported. If it cannot be written, the write
-    // failure still ends the run, carrying the (redacted) errors the trace would have held.
-    if (error !== null && typeof error === 'object' && trace.errors.length) error.unwrittenErrors = trace.errors;
+    // failure still ends the run and names the errors the trace would have held. Only their
+    // names: a message can carry text from the service, which must not reach process output.
+    if (error !== null && typeof error === 'object' && trace.errors.length)
+      error.unwrittenErrorNames = trace.errors.map(e => (typeof e === 'object' ? e.name : 'Error'));
     throw error;
   }
 }
