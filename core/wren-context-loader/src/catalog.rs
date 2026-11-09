@@ -691,11 +691,18 @@ pub fn capability_catalog(sources: &ProjectSources) -> CapabilityCatalog {
         match serde_yaml::from_str::<ViewMetaFile>(meta_yml) {
             Ok(v) => {
                 let inline = v.statement.as_deref().is_some_and(|s| !s.is_empty());
-                if matches!(sql_yml_statement(sql_yml), Ok(None)) && !inline {
-                    diagnostics.push(CatalogDiagnostic::Message(format!(
-                        "views/{}: no statement (define it in metadata.yml or sql.yml)",
+                match sql_yml_statement(sql_yml) {
+                    Ok(None) if !inline => {
+                        diagnostics.push(CatalogDiagnostic::Message(format!(
+                            "views/{}: no statement (define it in metadata.yml or sql.yml)",
+                            v.name
+                        )));
+                    }
+                    Err(_) => diagnostics.push(CatalogDiagnostic::Message(format!(
+                        "views/{}/sql.yml: not valid YAML or not a statement mapping",
                         v.name
-                    )));
+                    ))),
+                    _ => {}
                 }
                 let columns = match view_columns(v.columns.as_ref()) {
                     Ok(columns) => columns,
