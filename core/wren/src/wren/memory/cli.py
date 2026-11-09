@@ -193,12 +193,22 @@ def index(
         bool,
         typer.Option("--no-queries", help="Skip auto-loading project queries.yml."),
     ] = False,
+    full: Annotated[
+        bool,
+        typer.Option(
+            "--full",
+            help="Drop the schema index and re-embed every item, instead of "
+            "embedding only what changed.",
+        ),
+    ] = False,
 ) -> None:
     """Index the project for recall.
 
     With the ``memory`` extra: builds the LanceDB semantic index (schema + seed
-    + knowledge/sql pairs). Without it: the grep backend reads knowledge/sql/*.md
-    directly, so there is nothing to build.
+    + knowledge/sql pairs). Re-running it embeds only the schema items that are
+    new or changed since the last run; ``--full`` re-embeds everything. Without
+    the extra: the grep backend reads knowledge/sql/*.md directly, so there is
+    nothing to build.
     """
     from wren.memory.index_backend import resolve_backend  # noqa: PLC0415
 
@@ -251,12 +261,17 @@ def index(
     # Backend errors are RuntimeErrors, so they pass this branch untouched and
     # reach _MemoryGroup -- none of them is a manifest problem.
     try:
-        result = mem_store.index_schema(manifest, seed_queries=not no_seed)
+        result = mem_store.index_schema(manifest, seed_queries=not no_seed, full=full)
     except ValueError as e:
         typer.echo(f"Malformed manifest: {e}", err=True)
         raise typer.Exit(1) from e
     typer.echo(
         f"Indexed {result['schema_items']} schema items"
+        + (
+            f" ({result['embedded']} embedded, {result['reused']} unchanged)"
+            if result.get("reused")
+            else ""
+        )
         + (f", {result['seed_queries']} seed queries" if result["seed_queries"] else "")
         + "."
     )

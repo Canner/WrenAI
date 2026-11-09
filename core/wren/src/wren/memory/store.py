@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import threading
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -26,6 +28,27 @@ _WREN_MEMORY_DIR = Path.home() / ".wren" / "memory"
 
 _SCHEMA_TABLE = "schema_items"
 _QUERY_TABLE = "query_history"
+
+# Names the embedding model behind the vectors in schema_items. The table
+# itself does not record it, and a same-dimension model swap would otherwise
+# keep serving the old model's vectors.
+_SCHEMA_META_FILE = "schema_items.meta.json"
+
+# Columns that decide whether a stored schema row still matches an extracted
+# item. The first three identify the item; ``text`` is what gets embedded.
+_SCHEMA_ITEM_SIGNATURE = (
+    "item_type",
+    "model_name",
+    "item_name",
+    "text",
+    "data_type",
+    "expression",
+    "is_calculated",
+)
+
+# Item keys per DELETE ... WHERE, so a large change does not build one
+# enormous filter expression.
+_DELETE_BATCH = 200
 
 # Extra token appended (space-separated, after the `source:` token) to a
 # query_history row's tags when it is written by sync_markdown_queries's own
@@ -207,28 +230,135 @@ class MemoryStore:
 
     # ── Schema indexing ───────────────────────────────────────────────────
 
+    @property
+    def _schema_meta_path(self) -> Path:
+        return self._path / _SCHEMA_META_FILE
+
+    def _write_schema_meta(self) -> None:
+        """Record which embedding model produced the stored schema vectors."""
+        self._schema_meta_path.write_text(
+            json.dumps({"embedding_model": self._model_name}), encoding="utf-8"
+        )
+
+    def _clear_schema_meta(self) -> None:
+        self._schema_meta_path.unlink(missing_ok=True)
+
+    def _can_sync_schema_incrementally(self) -> bool:
+        """Whether the stored schema vectors can be reused as they are.
+
+        The table does not record which model embedded it, so a sidecar file
+        does. A table without that file (built before this existed) or built
+        by a different model is rebuilt in full once; the rebuild writes the
+        file, and later runs are incremental.
+        """
+        try:
+            meta = json.loads(self._schema_meta_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        if not isinstance(meta, dict) or meta.get("embedding_model") != (
+            self._model_name
+        ):
+            return False
+        names = set(self._db.open_table(_SCHEMA_TABLE).schema.names)
+        return names.issuperset(
+            {*_SCHEMA_ITEM_SIGNATURE, "vector", "mdl_hash", "indexed_at"}
+        )
+
+    def _sync_schema_items(self, items: list[dict]) -> tuple[int, int]:
+        """Bring the stored schema table in line with *items* in place.
+
+        Only items whose indexed content is new or changed are embedded; rows
+        for items that no longer exist are deleted. The table is never dropped,
+        so concurrent ``fetch`` / ``recall`` keep reading it throughout.
+
+        Items are compared against the table's own contents, so a run that was
+        interrupted part-way is repaired by the next one.
+
+        Returns ``(embedded, reused)``.
+        """
+        table = self._db.open_table(_SCHEMA_TABLE)
+        stored = table.to_arrow().select(list(_SCHEMA_ITEM_SIGNATURE)).to_pylist()
+
+        def signature(row: dict) -> tuple:
+            return tuple(row[col] for col in _SCHEMA_ITEM_SIGNATURE)
+
+        old_sigs = Counter(signature(row) for row in stored)
+        new_sigs = Counter(signature(item) for item in items)
+        # Counter subtraction keeps only the surplus on each side, which also
+        # covers an item that appears a different number of times.
+        changed = (old_sigs - new_sigs) + (new_sigs - old_sigs)
+        dirty_keys = {sig[:3] for sig in changed}
+
+        to_add = [item for item in items if signature(item)[:3] in dirty_keys]
+        if to_add:
+            texts = [item["text"] for item in to_add]
+            vectors = self._embed_fn.compute_source_embeddings(texts)
+            self._validate_and_set_dim(len(vectors[0]))
+            for item, vec in zip(to_add, vectors):
+                item["vector"] = vec
+
+        if dirty_keys:
+            keys = sorted(dirty_keys)
+            for start in range(0, len(keys), _DELETE_BATCH):
+                clauses = (
+                    "(item_type = '{}' AND model_name = '{}' AND item_name = '{}')".format(
+                        *(_esc(part) for part in key)
+                    )
+                    for key in keys[start : start + _DELETE_BATCH]
+                )
+                table.delete(" OR ".join(clauses))
+        if to_add:
+            table.add(to_add)
+
+        # Every row has to carry the current manifest hash, or
+        # schema_is_current() would report the unchanged rows as stale.
+        current_hash = items[0]["mdl_hash"]
+        table.update(
+            where=f"mdl_hash != '{_esc(current_hash)}'",
+            values={"mdl_hash": current_hash},
+        )
+        return len(to_add), len(items) - len(to_add)
+
     def index_schema(
         self,
         manifest: dict,
         *,
         replace: bool = True,
         seed_queries: bool = True,
+        full: bool = False,
     ) -> dict:
         """Extract schema items from *manifest*, embed, and store.
+
+        With ``replace=True`` (the default) the stored schema ends up matching
+        *manifest*. When a table built by the same embedding model already
+        exists, only new or changed items are embedded and rows for removed
+        items are deleted; pass ``full=True`` to drop and re-embed everything.
 
         If *seed_queries* is True, also generates canonical NL-SQL pairs
         and inserts them into query_history (tagged 'source:seed').
         Old seed entries are replaced; user-confirmed entries are preserved.
 
-        Returns {"schema_items": int, "seed_queries": int}.
+        Returns {"schema_items": int, "seed_queries": int, "embedded": int,
+        "reused": int}, where ``embedded`` / ``reused`` count the schema items
+        that were embedded on this run and those kept from the previous one.
         """
         items = extract_schema_items(manifest)
         table_exists = _SCHEMA_TABLE in _table_names(self._db)
+        embedded = reused = 0
 
         if not items:
             if replace and table_exists:
                 self._db.drop_table(_SCHEMA_TABLE)
+                self._clear_schema_meta()
             schema_count = 0
+        elif (
+            replace
+            and table_exists
+            and not full
+            and self._can_sync_schema_incrementally()
+        ):
+            embedded, reused = self._sync_schema_items(items)
+            schema_count = len(items)
         else:
             texts = [item["text"] for item in items]
             vectors = self._embed_fn.compute_source_embeddings(texts)
@@ -240,11 +370,13 @@ class MemoryStore:
             if replace:
                 if table_exists:
                     self._db.drop_table(_SCHEMA_TABLE)
+                    self._clear_schema_meta()
                 self._db.create_table(
                     _SCHEMA_TABLE,
                     items,
                     schema=self._schema_table_schema(),
                 )
+                self._write_schema_meta()
             else:
                 if table_exists:
                     tbl = self._db.open_table(_SCHEMA_TABLE)
@@ -255,13 +387,19 @@ class MemoryStore:
                         items,
                         schema=self._schema_table_schema(),
                     )
-            schema_count = len(items)
+                    self._write_schema_meta()
+            schema_count = embedded = len(items)
 
         seed_count = 0
         if seed_queries:
             seed_count = self._upsert_seed_queries(manifest)
 
-        return {"schema_items": schema_count, "seed_queries": seed_count}
+        return {
+            "schema_items": schema_count,
+            "seed_queries": seed_count,
+            "embedded": embedded,
+            "reused": reused,
+        }
 
     def _upsert_seed_queries(self, manifest: dict) -> int:
         """Replace seed queries after their embeddings are ready."""
@@ -743,3 +881,4 @@ class MemoryStore:
         for name in (_SCHEMA_TABLE, _QUERY_TABLE):
             if name in _table_names(self._db):
                 self._db.drop_table(name)
+        self._clear_schema_meta()

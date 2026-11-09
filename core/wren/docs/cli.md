@@ -106,11 +106,12 @@ The default threshold (30,000 chars) can be overridden with `--threshold`.
 
 ### `wren memory index`
 
-Parse the MDL manifest and index all schema items (models, columns, relationships, views) into LanceDB with local embeddings.
+Parse the MDL manifest and index all schema items (models, columns, relationships, views) into LanceDB with local embeddings. Re-running only embeds items that are new or changed and deletes the ones that no longer exist; the first run after an upgrade or an embedding-model change re-embeds everything once, and `--full` forces that.
 
 ```bash
 wren memory index                          # uses ~/.wren/mdl.json
 wren memory index --mdl /path/to/mdl.json  # explicit MDL file
+wren memory index --full                   # drop and re-embed every schema item
 ```
 
 ### `wren memory watch`

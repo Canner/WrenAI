@@ -214,9 +214,16 @@ NL→SQL pairs from `knowledge/sql/*.md` (re-running converges on the markdown).
 `memory` extra. Without it, the grep backend reads `knowledge/sql/` directly, so there is
 nothing to build and this command is a no-op.
 
+Re-running it is incremental: only schema items that are new or whose indexed text changed
+are embedded, and rows for items that no longer exist are deleted. The schema table is
+updated in place rather than dropped and rebuilt, so `fetch` and `recall` keep working
+while it runs. The first run after upgrading, or after changing `WREN_EMBEDDING_MODEL`,
+re-embeds everything once. Pass `--full` to force that.
+
 ```bash
 wren memory index                          # uses ~/.wren/mdl.json
 wren memory index --mdl /path/to/mdl.json  # explicit MDL file
+wren memory index --full                   # drop and re-embed every schema item
 ```
 
 ### `wren memory watch`

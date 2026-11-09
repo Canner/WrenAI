@@ -34,13 +34,17 @@ class WrenMemory:
         *,
         replace: bool = True,
         seed_queries: bool = True,
+        full: bool = False,
     ) -> dict:
         """Index MDL schema into LanceDB.
 
-        Returns {"schema_items": int, "seed_queries": int}.
+        Only new or changed schema items are embedded unless *full* is set.
+
+        Returns {"schema_items": int, "seed_queries": int, "embedded": int,
+        "reused": int}.
         """
         return self._store.index_schema(
-            manifest, replace=replace, seed_queries=seed_queries
+            manifest, replace=replace, seed_queries=seed_queries, full=full
         )
 
     @staticmethod

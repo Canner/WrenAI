@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import copy
+import hashlib
+
 import pytest
 
 from wren.memory.schema_indexer import (
@@ -773,6 +776,252 @@ class TestMemoryStore:
         assert result["schema_items"] == 11
         info = memory_store.status()
         assert info["tables"]["schema_items"] == 11
+
+
+# ── Incremental schema indexing ────────────────────────────────────────────
+
+
+class _RecordingEmbedFn:
+    """Deterministic embedder that remembers every text it was asked to embed."""
+
+    def __init__(self, dim: int = 8):
+        self.dim = dim
+        self.embedded: list[str] = []
+
+    def compute_source_embeddings(self, texts):
+        self.embedded.extend(texts)
+        return [
+            [float(b) / 255 for b in hashlib.sha256(t.encode()).digest()[: self.dim]]
+            for t in texts
+        ]
+
+    def compute_query_embeddings(self, query):
+        return self.compute_source_embeddings([query])
+
+
+def _recording_store(tmp_path, model_name=None):
+    pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+    from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+    store = MemoryStore(path=tmp_path, model_name=model_name)
+    embed = _RecordingEmbedFn()
+    store._embed_fn_cached = embed
+    store._dim_cached = embed.dim
+    return store, embed
+
+
+def _stored_rows(store):
+    rows = store._db.open_table("schema_items").to_arrow().to_pylist()
+    return {(r["item_type"], r["model_name"], r["item_name"]): r for r in rows}
+
+
+@pytest.mark.unit
+class TestIncrementalSchemaIndex:
+    def test_first_run_embeds_everything(self, tmp_path):
+        store, embed = _recording_store(tmp_path)
+        result = store.index_schema(_MANIFEST, seed_queries=False)
+        assert result["schema_items"] == 11
+        assert (result["embedded"], result["reused"]) == (11, 0)
+        assert len(embed.embedded) == 11
+
+    def test_unchanged_manifest_embeds_nothing(self, tmp_path):
+        store, embed = _recording_store(tmp_path)
+        store.index_schema(_MANIFEST, seed_queries=False)
+        embed.embedded.clear()
+
+        result = store.index_schema(_MANIFEST, seed_queries=False)
+
+        assert embed.embedded == []
+        assert (result["embedded"], result["reused"]) == (0, 11)
+        assert store.status()["tables"]["schema_items"] == 11
+        assert store.schema_is_current(_MANIFEST) is True
+
+    def test_changed_item_is_the_only_one_embedded(self, tmp_path):
+        store, embed = _recording_store(tmp_path)
+        store.index_schema(_MANIFEST, seed_queries=False)
+        before = _stored_rows(store)
+        embed.embedded.clear()
+
+        manifest = copy.deepcopy(_MANIFEST)
+        manifest["models"][1]["columns"][1]["properties"] = {
+            "description": "Customer display name"
+        }
+        result = store.index_schema(manifest, seed_queries=False)
+
+        assert embed.embedded == [
+            "Column 'c_name' (varchar) in model 'customer': Customer display name."
+        ]
+        assert (result["embedded"], result["reused"]) == (1, 10)
+        after = _stored_rows(store)
+        assert len(after) == 11
+        key = ("column", "customer", "c_name")
+        assert after[key]["text"].endswith("Customer display name.")
+        # Untouched rows keep their vectors and their original index time.
+        other = ("column", "orders", "o_custkey")
+        assert after[other]["vector"] == before[other]["vector"]
+        assert after[other]["indexed_at"] == before[other]["indexed_at"]
+        # ...but carry the new manifest hash, so the index still counts as current.
+        assert {r["mdl_hash"] for r in after.values()} == {manifest_hash(manifest)}
+        assert store.schema_is_current(manifest) is True
+
+    def test_removed_model_is_dropped(self, tmp_path):
+        store, embed = _recording_store(tmp_path)
+        store.index_schema(_MANIFEST, seed_queries=False)
+        embed.embedded.clear()
+
+        manifest = copy.deepcopy(_MANIFEST)
+        del manifest["models"][1]  # customer + its two columns
+        result = store.index_schema(manifest, seed_queries=False)
+
+        assert embed.embedded == []
+        assert (result["embedded"], result["reused"]) == (0, 8)
+        names = {key[1] for key in _stored_rows(store) if key[0] == "model"}
+        assert names == {"orders"}
+        assert len(_stored_rows(store)) == 8
+        assert store.schema_is_current(manifest) is True
+
+    def test_new_item_is_added(self, tmp_path):
+        store, embed = _recording_store(tmp_path)
+        store.index_schema(_MANIFEST, seed_queries=False)
+        embed.embedded.clear()
+
+        manifest = copy.deepcopy(_MANIFEST)
+        manifest["models"][1]["columns"].append(
+            {"name": "c_region", "type": "varchar", "isCalculated": False}
+        )
+        store.index_schema(manifest, seed_queries=False)
+
+        # The customer model's own text lists its columns, so it changes too.
+        assert sorted(embed.embedded) == sorted(
+            [
+                "Column 'c_region' (varchar) in model 'customer'.",
+                "Model 'customer' [mart layer]: Customer master data. "
+                "Columns: c_custkey (varchar), c_name (varchar), c_region (varchar). "
+                "Primary key: c_custkey.",
+            ]
+        )
+        assert ("column", "customer", "c_region") in _stored_rows(store)
+        assert len(_stored_rows(store)) == 12
+
+    def test_names_with_quotes_are_replaced_cleanly(self, tmp_path):
+        store, embed = _recording_store(tmp_path)
+        manifest = {
+            "models": [
+                {
+                    "name": "o'brien",
+                    "columns": [{"name": "it's", "type": "int"}],
+                }
+            ]
+        }
+        store.index_schema(manifest, seed_queries=False)
+        manifest["models"][0]["columns"][0]["type"] = "bigint"
+        store.index_schema(manifest, seed_queries=False)
+
+        rows = _stored_rows(store)
+        assert len(rows) == 2
+        assert rows[("column", "o'brien", "it's")]["data_type"] == "bigint"
+
+    def test_table_is_never_dropped(self, tmp_path, monkeypatch):
+        store, _ = _recording_store(tmp_path)
+        store.index_schema(_MANIFEST, seed_queries=False)
+
+        def _no_drop(*_a, **_kw):
+            raise AssertionError("incremental run must not drop the table")
+
+        monkeypatch.setattr(store._db, "drop_table", _no_drop)
+        manifest = copy.deepcopy(_MANIFEST)
+        del manifest["views"]
+        store.index_schema(manifest, seed_queries=False)
+
+        assert ("view", "", "top_customers") not in _stored_rows(store)
+
+    def test_full_flag_re_embeds_everything(self, tmp_path):
+        store, embed = _recording_store(tmp_path)
+        store.index_schema(_MANIFEST, seed_queries=False)
+        embed.embedded.clear()
+
+        result = store.index_schema(_MANIFEST, seed_queries=False, full=True)
+
+        assert len(embed.embedded) == 11
+        assert (result["embedded"], result["reused"]) == (11, 0)
+        assert len(_stored_rows(store)) == 11
+
+    def test_index_without_metadata_is_rebuilt_once(self, tmp_path):
+        # A store written before the embedding model was recorded cannot be
+        # trusted to hold this model's vectors.
+        store, embed = _recording_store(tmp_path)
+        store.index_schema(_MANIFEST, seed_queries=False)
+        store._schema_meta_path.unlink()
+        embed.embedded.clear()
+
+        store.index_schema(_MANIFEST, seed_queries=False)
+        assert len(embed.embedded) == 11
+
+        embed.embedded.clear()
+        store.index_schema(_MANIFEST, seed_queries=False)
+        assert embed.embedded == []
+
+    def test_different_embedding_model_forces_rebuild(self, tmp_path):
+        store, _ = _recording_store(tmp_path, model_name="model-a")
+        store.index_schema(_MANIFEST, seed_queries=False)
+
+        other, embed = _recording_store(tmp_path, model_name="model-b")
+        result = other.index_schema(_MANIFEST, seed_queries=False)
+
+        assert len(embed.embedded) == 11
+        assert (result["embedded"], result["reused"]) == (11, 0)
+
+    def test_rows_deleted_behind_our_back_are_restored(self, tmp_path):
+        store, embed = _recording_store(tmp_path)
+        store.index_schema(_MANIFEST, seed_queries=False)
+        store._db.open_table("schema_items").delete("item_type = 'column'")
+        embed.embedded.clear()
+
+        store.index_schema(_MANIFEST, seed_queries=False)
+
+        assert len(_stored_rows(store)) == 11
+        assert len(embed.embedded) == 7  # the 7 columns, nothing else
+
+    def test_embedding_failure_leaves_existing_rows_intact(self, tmp_path):
+        store, _ = _recording_store(tmp_path)
+        store.index_schema(_MANIFEST, seed_queries=False)
+        before = _stored_rows(store)
+
+        store._embed_fn_cached = _FailingEmbedFn()
+        manifest = copy.deepcopy(_MANIFEST)
+        manifest["models"][1]["columns"][0]["type"] = "bigint"
+        with pytest.raises(RuntimeError, match="encode boom"):
+            store.index_schema(manifest, seed_queries=False)
+
+        assert _stored_rows(store).keys() == before.keys()
+        assert (
+            _stored_rows(store)[("column", "customer", "c_custkey")]["data_type"]
+            == "varchar"
+        )
+
+    def test_reset_forgets_the_embedding_model(self, tmp_path):
+        store, embed = _recording_store(tmp_path)
+        store.index_schema(_MANIFEST, seed_queries=False)
+        assert store._schema_meta_path.exists()
+
+        store.reset()
+        assert not store._schema_meta_path.exists()
+
+        embed.embedded.clear()
+        store.index_schema(_MANIFEST, seed_queries=False)
+        assert len(embed.embedded) == 11
+
+    def test_emptied_manifest_clears_the_table(self, tmp_path):
+        store, embed = _recording_store(tmp_path)
+        store.index_schema(_MANIFEST, seed_queries=False)
+
+        result = store.index_schema({"models": []}, seed_queries=False)
+        assert result["schema_items"] == 0
+        assert "schema_items" not in store.status()["tables"]
+
+        embed.embedded.clear()
+        store.index_schema(_MANIFEST, seed_queries=False)
+        assert len(embed.embedded) == 11
 
 
 # ── Lazy MemoryStore model load tests ──────────────────────────────────────
