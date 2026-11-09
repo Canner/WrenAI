@@ -634,7 +634,13 @@ fn using_columns_of(table: &TableWithJoins, columns: &mut Vec<ColumnReference>) 
         | JoinOperator::Right(JoinConstraint::Using(names))
         | JoinOperator::RightOuter(JoinConstraint::Using(names))
         | JoinOperator::FullOuter(JoinConstraint::Using(names))
-        | JoinOperator::StraightJoin(JoinConstraint::Using(names))) = &join.join_operator
+        | JoinOperator::StraightJoin(JoinConstraint::Using(names))
+        | JoinOperator::Semi(JoinConstraint::Using(names))
+        | JoinOperator::LeftSemi(JoinConstraint::Using(names))
+        | JoinOperator::RightSemi(JoinConstraint::Using(names))
+        | JoinOperator::Anti(JoinConstraint::Using(names))
+        | JoinOperator::LeftAnti(JoinConstraint::Using(names))
+        | JoinOperator::RightAnti(JoinConstraint::Using(names))) = &join.join_operator
         else {
             continue;
         };

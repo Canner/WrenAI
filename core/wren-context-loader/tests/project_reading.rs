@@ -605,6 +605,28 @@ fn the_manifest_layout_follows_the_schema_version_like_the_cli() {
         "wren_project.yml",
         "schema_version: '\u{0664}'\nname: reading\ncatalog: wren\nschema: public\ndata_source: duckdb\n",
     );
-    let sources = read_project_dir(tmp.path()).unwrap().unwrap();
+    let mut sources = read_project_dir(tmp.path()).unwrap().unwrap();
     assert_eq!(assemble(&sources).unwrap().manifest.layout_version, 3);
+
+    // An in-memory caller's non-integer version is an error, as the CLI's int() is.
+    sources.wren_project_yml =
+        "schema_version: abc\nname: reading\ncatalog: wren\nschema: public\ndata_source: duckdb\n"
+            .to_string();
+    assert!(assemble(&sources).is_err());
+
+    // 2^63 does not fit an i64: the native gate refuses it rather than saturating.
+    let tmp = tempfile::tempdir().unwrap();
+    project(tmp.path());
+    write(
+        tmp.path(),
+        "wren_project.yml",
+        "schema_version: 9223372036854775808.0\nname: reading\ncatalog: wren\nschema: public\ndata_source: duckdb\n",
+    );
+    let refused = read_project_dir(tmp.path())
+        .err()
+        .expect("an out-of-range version is refused");
+    assert!(
+        refused.to_string().contains("expected an integer"),
+        "{refused}"
+    );
 }

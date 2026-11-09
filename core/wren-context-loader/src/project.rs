@@ -2112,7 +2112,7 @@ pub fn assemble(sources: &ProjectSources) -> Result<LoadedProject, LoadError> {
     manifest_json.insert("views".into(), serde_json::Value::Array(views));
     manifest_json.insert(
         "layoutVersion".into(),
-        serde_json::Value::from(layout_version(&sources.wren_project_yml)),
+        serde_json::Value::from(layout_version(&sources.wren_project_yml)?),
     );
 
     // `catalog`/`schema` are required by the Manifest schema; default them so a minimal project
@@ -2149,7 +2149,8 @@ fn schema_version_number(raw: &serde_yaml::Value) -> Result<i64, ()> {
                     .as_f64()
                     .filter(|value| value.is_finite())
                     .and_then(|value| {
-                        (value >= i64::MIN as f64 && value <= i64::MAX as f64)
+                        // `i64::MAX as f64` rounds up to 2^63, which no i64 holds: exclusive.
+                        (value >= i64::MIN as f64 && value < i64::MAX as f64)
                             .then_some(value as i64)
                     })
             })
@@ -2160,21 +2161,22 @@ fn schema_version_number(raw: &serde_yaml::Value) -> Result<i64, ()> {
 }
 
 /// The engine layout for the project's `schema_version` (missing means 1, like the CLI). A value
-/// the map does not cover falls back to 1, as the CLI's `.get(version, 1)` does.
-fn layout_version(wren_project_yml: &str) -> u32 {
+/// the map does not cover falls back to 1, as the CLI's `.get(version, 1)` does; a value that is
+/// not an integer at all is an error, as the CLI's `int(...)` is.
+fn layout_version(wren_project_yml: &str) -> Result<u32, LoadError> {
     let Ok(serde_yaml::Value::Mapping(project)) =
         serde_yaml::from_str::<serde_yaml::Value>(wren_project_yml)
     else {
-        return 1;
+        return Ok(1);
     };
     let version = project
         .get("schema_version")
         .map_or(Ok(1), schema_version_number)
-        .ok();
-    LAYOUT_VERSION_MAP
+        .map_err(|()| msg("invalid schema_version in wren_project.yml: expected an integer"))?;
+    Ok(LAYOUT_VERSION_MAP
         .iter()
-        .find(|(schema, _)| Some(*schema) == version)
-        .map_or(1, |(_, layout)| *layout)
+        .find(|(schema, _)| *schema == version)
+        .map_or(1, |(_, layout)| *layout))
 }
 
 fn yaml_to_json(v: serde_yaml::Value) -> Result<serde_json::Value, LoadError> {

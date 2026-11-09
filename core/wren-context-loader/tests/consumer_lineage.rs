@@ -1252,6 +1252,14 @@ fn join_using_columns_reach_the_cube_member_like_the_on_form() {
             "SELECT 1 FROM orders o JOIN order_metrics m ON TRUE",
         ),
         (
+            "using-semi",
+            "SELECT 1 FROM orders o LEFT SEMI JOIN order_metrics m USING (placed_at)",
+        ),
+        (
+            "using-anti",
+            "SELECT 1 FROM orders o LEFT ANTI JOIN order_metrics m USING (placed_at)",
+        ),
+        (
             "using-nested-join",
             "SELECT 1 FROM (orders o JOIN order_metrics m USING (placed_at))",
         ),
@@ -1278,6 +1286,12 @@ fn join_using_columns_reach_the_cube_member_like_the_on_form() {
         "USING reads the column from the preceding cube source too"
     );
     assert!(!reaches(&ctx, seed, "query:no-using"));
+    for query in ["query:using-semi", "query:using-anti"] {
+        assert!(
+            reaches(&ctx, seed, query),
+            "a semi or anti join's USING reads the cube's dimension: {query}"
+        );
+    }
     for query in ["query:using-nested-join", "query:using-nested-in-exists"] {
         assert!(
             reaches(&ctx, seed, query),
