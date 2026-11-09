@@ -223,6 +223,26 @@ def test_a_fence_with_declaration_keys_still_fails_loudly(project, text, message
     assert parse(project) == ([], [("knowledge/rules/broken.md", message)])
 
 
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("---\n  defaults: [unclosed\n---\n", "front-matter is not valid YAML"),
+        ("---\n  denied_columns: [unclosed\n---\n", "front-matter is not valid YAML"),
+        ("---\n# Rules\n  defaults:\n", "front-matter is not closed by a '---' line"),
+        ("---\n# Rules\n\tsemantics:\n", "front-matter is not closed by a '---' line"),
+    ],
+    ids=[
+        "closed, indented defaults, invalid yaml",
+        "closed, indented denied_columns, invalid yaml",
+        "unclosed, indented defaults",
+        "unclosed, tab-indented semantics",
+    ],
+)
+def test_an_indented_declaration_key_still_fails_loudly(project, text, message):
+    (project / "knowledge" / "rules" / "broken.md").write_text(text)
+    assert parse(project) == ([], [("knowledge/rules/broken.md", message)])
+
+
 def test_validate_project_accepts_a_prose_rule_opening_with_a_rule_line(project):
     (project / "knowledge" / "rules" / "prose.md").write_text(
         "---\n# Rules\n\nAlways filter test accounts.\n"
