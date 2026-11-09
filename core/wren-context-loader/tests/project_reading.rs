@@ -193,6 +193,24 @@ fn root_cube_mirror_requires_usable_matching_directory_semantics() {
     capture_project(drafted.path())
         .expect("a comment-only draft cube must not void a correct mirror");
 
+    let scalar = tempfile::tempdir().unwrap();
+    project(scalar.path());
+    write(scalar.path(), "cubes.yml", ROOT_CUBE);
+    write(
+        scalar.path(),
+        "cubes/order_metrics/metadata.yml",
+        CUBE_METADATA,
+    );
+    write(scalar.path(), "cubes/broken/metadata.yml", "just prose\n");
+    assert!(
+        read_project_dir(scalar.path()).is_err(),
+        "a scalar cube metadata file is corrupt, not a draft"
+    );
+    assert!(
+        capture_project(scalar.path()).is_err(),
+        "a scalar cube metadata file is corrupt, not a draft"
+    );
+
     let duplicate = tempfile::tempdir().unwrap();
     project(duplicate.path());
     write(duplicate.path(), "cubes.yml", ROOT_CUBE);
@@ -578,4 +596,15 @@ fn the_manifest_layout_follows_the_schema_version_like_the_cli() {
             "schema_version {schema}"
         );
     }
+    // Arabic-Indic four: the native gate reads it as 4 (Python's int() does too), and the
+    // layout must follow the same conversion.
+    let tmp = tempfile::tempdir().unwrap();
+    project(tmp.path());
+    write(
+        tmp.path(),
+        "wren_project.yml",
+        "schema_version: '\u{0664}'\nname: reading\ncatalog: wren\nschema: public\ndata_source: duckdb\n",
+    );
+    let sources = read_project_dir(tmp.path()).unwrap().unwrap();
+    assert_eq!(assemble(&sources).unwrap().manifest.layout_version, 3);
 }

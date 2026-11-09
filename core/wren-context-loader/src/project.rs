@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Read;
 use thiserror::Error;
-#[cfg(not(target_arch = "wasm32"))]
 use unicode_properties::{GeneralCategory, UnicodeGeneralCategory};
 use wren_core_base::mdl::manifest::Manifest;
 
@@ -139,24 +138,7 @@ fn validate_native_schema_version(yml: &str) -> std::io::Result<bool> {
     let Some(raw) = project.get("schema_version") else {
         return Ok(true);
     };
-    let version = match raw {
-        serde_yaml::Value::Bool(value) => Ok(i64::from(*value)),
-        serde_yaml::Value::Number(value) => value
-            .as_i64()
-            .or_else(|| {
-                value
-                    .as_f64()
-                    .filter(|value| value.is_finite())
-                    .and_then(|value| {
-                        (value >= i64::MIN as f64 && value <= i64::MAX as f64)
-                            .then_some(value as i64)
-                    })
-            })
-            .ok_or(()),
-        serde_yaml::Value::String(value) => parse_cli_integer(value),
-        _ => Err(()),
-    }
-    .map_err(|()| {
+    let version = schema_version_number(raw).map_err(|()| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "invalid schema_version in wren_project.yml: expected an integer",
@@ -200,7 +182,6 @@ fn is_flat_v1_source_path(path: &str) -> bool {
 /// Parse the string forms accepted by Python's `int(value)`: optional ASCII sign, Unicode decimal
 /// digits, and underscores only between digits. This deliberately excludes other Unicode numeric
 /// characters (such as superscripts and Roman numerals), matching Python's integer conversion.
-#[cfg(not(target_arch = "wasm32"))]
 fn parse_cli_integer(value: &str) -> Result<i64, ()> {
     let value = value.trim();
     let (negative, value) = match value.strip_prefix('-') {
@@ -238,7 +219,6 @@ fn parse_cli_integer(value: &str) -> Result<i64, ()> {
 
 /// All Unicode `Nd` digit sets encode zero through nine contiguously. Consecutive mathematical
 /// digit styles may form a longer run, so the offset is reduced modulo ten.
-#[cfg(not(target_arch = "wasm32"))]
 fn unicode_decimal_digit(character: char) -> Option<u8> {
     if character.general_category() != GeneralCategory::DecimalNumber {
         return None;
@@ -1001,12 +981,20 @@ fn validate_native_cube_source(sources: &ProjectSources) -> std::io::Result<()> 
     if root_cubes.is_empty() {
         return Ok(());
     }
+    // An empty or comment-only draft (`null`) carries no cube; any other non-mapping document is
+    // corrupt metadata and voids the mirror check.
     let directory_cubes = sources
         .cube_ymls
         .iter()
-        .filter_map(|yml| parse_mapping_doc::<CubeFile>(yml).transpose())
-        .collect::<Result<Vec<_>, _>>();
-    let Ok(directory_cubes) = directory_cubes else {
+        .filter(|yml| {
+            !matches!(
+                serde_yaml::from_str::<serde_yaml::Value>(yml),
+                Ok(serde_yaml::Value::Null)
+            )
+        })
+        .map(|yml| parse_mapping_doc::<CubeFile>(yml))
+        .collect::<Result<Option<Vec<_>>, _>>();
+    let Ok(Some(directory_cubes)) = directory_cubes else {
         return Err(native_cube_mirror_error());
     };
 
@@ -2148,25 +2136,41 @@ pub fn assemble(sources: &ProjectSources) -> Result<LoadedProject, LoadError> {
 /// wren CLI (`wren/context.py`). Keep the two in step.
 const LAYOUT_VERSION_MAP: [(i64, u32); 5] = [(1, 1), (2, 1), (3, 2), (4, 3), (5, 3)];
 
+/// The project's `schema_version` converted the way the CLI's `int(...)` does: booleans, integers,
+/// finite floats (truncated) and the strings `int` accepts, Unicode decimal digits included. The
+/// native readers' gate and the manifest layout both use it, so they cannot disagree.
+fn schema_version_number(raw: &serde_yaml::Value) -> Result<i64, ()> {
+    match raw {
+        serde_yaml::Value::Bool(value) => Ok(i64::from(*value)),
+        serde_yaml::Value::Number(value) => value
+            .as_i64()
+            .or_else(|| {
+                value
+                    .as_f64()
+                    .filter(|value| value.is_finite())
+                    .and_then(|value| {
+                        (value >= i64::MIN as f64 && value <= i64::MAX as f64)
+                            .then_some(value as i64)
+                    })
+            })
+            .ok_or(()),
+        serde_yaml::Value::String(value) => parse_cli_integer(value),
+        _ => Err(()),
+    }
+}
+
 /// The engine layout for the project's `schema_version` (missing means 1, like the CLI). A value
-/// the map does not cover falls back to 1, as the CLI's `.get(version, 1)` does. Integers, floats,
-/// booleans and plain numeric strings are converted; the native readers' gate has already refused
-/// anything the CLI cannot read, and this pure path does not carry its Unicode-digit parsing.
+/// the map does not cover falls back to 1, as the CLI's `.get(version, 1)` does.
 fn layout_version(wren_project_yml: &str) -> u32 {
     let Ok(serde_yaml::Value::Mapping(project)) =
         serde_yaml::from_str::<serde_yaml::Value>(wren_project_yml)
     else {
         return 1;
     };
-    let version = match project.get("schema_version") {
-        None => Some(1),
-        Some(serde_yaml::Value::Bool(value)) => Some(i64::from(*value)),
-        Some(serde_yaml::Value::Number(value)) => value
-            .as_i64()
-            .or_else(|| value.as_f64().filter(|v| v.is_finite()).map(|v| v as i64)),
-        Some(serde_yaml::Value::String(value)) => value.trim().parse().ok(),
-        Some(_) => None,
-    };
+    let version = project
+        .get("schema_version")
+        .map_or(Ok(1), schema_version_number)
+        .ok();
     LAYOUT_VERSION_MAP
         .iter()
         .find(|(schema, _)| Some(*schema) == version)
