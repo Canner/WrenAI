@@ -505,11 +505,19 @@ fn collect_correlated_query_columns(
     outer_sources: &[SelectSource],
     columns: &mut Vec<ColumnReference>,
 ) {
-    collect_correlated_set_expr_columns(&query.body, outer_sources, columns);
+    collect_correlated_set_expr_columns(
+        &query.body,
+        query.order_by.as_ref(),
+        outer_sources,
+        columns,
+    );
 }
 
+/// `order_by` is the query-level ORDER BY that resolves in this branch's source scope; it is only
+/// passed for a single SELECT body, as set operations order by their output columns.
 fn collect_correlated_set_expr_columns(
     expression: &SetExpr,
+    order_by: Option<&OrderBy>,
     outer_sources: &[SelectSource],
     columns: &mut Vec<ColumnReference>,
 ) {
@@ -531,10 +539,13 @@ fn collect_correlated_set_expr_columns(
                 nested_query_depth: 0,
             };
             let _ = select.visit(&mut collector);
+            if let Some(order_by) = order_by {
+                let _ = order_by.visit(&mut collector);
+            }
         }
         SetExpr::SetOperation { left, right, .. } => {
-            collect_correlated_set_expr_columns(left, outer_sources, columns);
-            collect_correlated_set_expr_columns(right, outer_sources, columns);
+            collect_correlated_set_expr_columns(left, None, outer_sources, columns);
+            collect_correlated_set_expr_columns(right, None, outer_sources, columns);
         }
         // A nested `Query` gets its own callback in the outer visitor. The remaining set
         // expressions do not expose a direct SELECT scope.

@@ -1231,6 +1231,35 @@ fn projection_wildcards_link_only_their_cube_members() {
 }
 
 #[test]
+fn a_nested_select_order_by_correlates_to_the_outer_cube_member() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    for (slug, sql) in [
+        (
+            "order-by-correlated",
+            "SELECT 1 FROM order_metrics m WHERE EXISTS (SELECT 1 FROM orders o ORDER BY m.total_value LIMIT 1)",
+        ),
+        (
+            "order-by-shadowed",
+            "SELECT 1 FROM order_metrics m WHERE EXISTS (SELECT 1 FROM orders m ORDER BY m.total_value LIMIT 1)",
+        ),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+    let ctx = load(tmp.path());
+    let seed = "metric:order_metrics.total_value";
+    assert!(reaches(&ctx, seed, "query:order-by-correlated"));
+    assert!(
+        !reaches(&ctx, seed, "query:order-by-shadowed"),
+        "an inner source alias shadows the outer cube alias in ORDER BY too"
+    );
+}
+
+#[test]
 fn qualified_cube_members_must_resolve_to_the_cube_source() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());
