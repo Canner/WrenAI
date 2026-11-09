@@ -1507,6 +1507,14 @@ def test_models_keyed_only_to_each_other_still_multiply_the_view():
         duplicated("JOIN dimensions d ON v.id = d.id JOIN extras e ON d.id = e.id")
         is False
     )
+    # A semi-join target or a derived source is no evidence for another model's key.
+    assert duplicated("CROSS JOIN extras a SEMI JOIN extras b ON a.id = b.id") is True
+    assert (
+        duplicated(
+            "CROSS JOIN (SELECT id FROM extras) x JOIN dimensions d ON x.id = d.id"
+        )
+        is True
+    )
 
 
 @pytest.mark.parametrize(

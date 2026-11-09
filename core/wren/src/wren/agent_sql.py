@@ -424,9 +424,11 @@ class AdHocSQL:
         join, ``ON TRUE``, a non-key or ``OR``-ed key match), and the aggregate counts it every
         time. A model is bounded when its whole primary key is equated, in top-level ``AND``s
         of the join conditions and ``WHERE``, to columns of sources already bounded, starting
-        from the view and the other derived sources; so two models keyed only to each other
-        still multiply the view. Key names compare case-insensitively, as qualification
-        folds them. A ``SEMI``/``ANTI`` join target never repeats a row."""
+        from the views; so two models keyed only to each other still multiply the view. A
+        ``SEMI``/``ANTI`` join target never repeats a row, but it proves nothing about another
+        source's cardinality, and neither does a CTE or derived table (its rows are not known
+        to be unique on anything); those sources themselves are not checked here. Key names
+        compare case-insensitively, as qualification folds them."""
         for scope in scopes:
             select = scope.expression
             if not isinstance(select, exp.Select):
@@ -483,7 +485,7 @@ class AdHocSQL:
                 for alias, source in scope.sources.items()
                 if isinstance(source, exp.Table) and alias not in never_repeat
             }
-            bounded = set(scope.sources) - set(models)
+            bounded = set(views)
             grew = True
             while grew:
                 grew = False
