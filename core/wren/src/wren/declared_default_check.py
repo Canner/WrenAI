@@ -7,7 +7,8 @@ atoms, and whether it aggregates. It never reads the question, rule prose,
 aliases, comments or column names as strings.
 
 A statement that cannot be parsed against the manifest earns **no verdict**
-(``None``): the engine runs it and reports its own error class.
+(``None``). The governed callers refuse such a statement before it reaches the
+engine, with the ``declared_default_undetermined`` class.
 """
 
 from __future__ import annotations
@@ -531,6 +532,8 @@ class _Statement:
 
     def _selects_flag(self, subquery: exp.Expression, rule: ExcludeRows) -> bool:
         for where in subquery.find_all(exp.Where):
+            if not _filters_rows_of(where, subquery):
+                continue
             if any(self.polarity(c, rule) == "incl" for c in _conjuncts(where.this)):
                 return True
         return False
@@ -789,23 +792,15 @@ class _Statement:
     # -- require_rate_join ----------------------------------------------
 
     def _condition_nodes(self, kind: type[exp.Expression]) -> list[exp.Expression]:
+        # Only a top-level conjunct holds for every row. A comparison below OR, NOT,
+        # CASE, IF or COALESCE does not, so it cannot establish the currency/date
+        # bound of a rate join. Subquery predicates are roots of their own.
         found: list[exp.Expression] = []
-
-        def visit(node: exp.Expression) -> None:
-            # A comparison below OR or NOT is not a condition guaranteed for every row.  In
-            # particular, it cannot establish the currency/date bound of a rate join.
-            if isinstance(_unparen(node), (exp.Or, exp.Not)):
-                return
-            if isinstance(node, kind):
-                found.append(node)
-            for child in node.iter_expressions():
-                visit(child)
-
         for root in self.roots:
             qualify = root.find_ancestor(exp.Qualify)
             if qualify is not None and not self._qualify_restricts_value_rows(qualify):
                 continue
-            visit(root)
+            found += [node for node in _conjuncts(root) if isinstance(node, kind)]
         return found
 
     def fires_rate(self, rule: RequireRateJoin) -> bool:
@@ -1157,6 +1152,41 @@ class _Statement:
                 ):
                     return False
         return found
+
+
+# (parent type, argument key) steps through which a SELECT's rows become the rows of
+# an enclosing query: set-operation branches, CTEs, derived tables and joined sources.
+_ROW_SOURCE_STEPS = (
+    (exp.Subquery, {"this"}),
+    (exp.Paren, {"this"}),
+    (exp.SetOperation, {"this", "expression", "with", "with_"}),
+    (exp.CTE, {"this"}),
+    (exp.With, {"expressions"}),
+    (exp.From, {"this"}),
+    (exp.Join, {"this"}),
+    (exp.Select, {"from", "from_", "joins", "with", "with_"}),
+    (exp.In, {"query"}),
+    (exp.Exists, {"this"}),
+)
+
+
+def _filters_rows_of(where: exp.Where, subquery: exp.Expression) -> bool:
+    """Whether ``where`` restricts the rows ``subquery`` returns.
+
+    A WHERE inside a predicate of the subquery, such as a nested ``NOT EXISTS`` or
+    ``IN``, or inside a projection or join condition, tests something else: its
+    inclusion is not the subquery's own selection of flagged rows.
+    """
+    child = where.parent
+    while child is not None and child is not subquery:
+        parent = child.parent
+        if parent is None or not any(
+            isinstance(parent, kind) and child.arg_key in keys
+            for kind, keys in _ROW_SOURCE_STEPS
+        ):
+            return False
+        child = parent
+    return child is subquery
 
 
 def _is_string(node: exp.Expression) -> bool:

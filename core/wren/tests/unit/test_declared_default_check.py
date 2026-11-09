@@ -226,6 +226,41 @@ def test_a_flag_in_a_projection_alone_does_not_satisfy_the_rule(checker):
     assert check(checker, sql) == [EXCLUDE]
 
 
+NESTED_INCLUSIONS = {
+    "inside a nested not exists": "NOT IN (SELECT c.id FROM customers c WHERE NOT c.is_test "
+    "AND NOT EXISTS (SELECT 1 FROM products WHERE c.is_test = TRUE))",
+    "inside a nested exists": "NOT IN (SELECT c.id FROM customers c "
+    "WHERE EXISTS (SELECT 1 FROM products WHERE c.is_test = TRUE))",
+    "inside a projection subquery": "NOT IN (SELECT (SELECT c.id FROM customers c "
+    "WHERE c.is_test = TRUE LIMIT 1))",
+}
+
+
+@pytest.mark.parametrize("anti", NESTED_INCLUSIONS.values(), ids=NESTED_INCLUSIONS.keys())
+def test_an_inclusion_nested_in_a_predicate_is_not_the_anti_join_selection(
+    checker, anti
+):
+    sql = f"SELECT COUNT(*) FROM orders o WHERE o.customer_id {anti}"
+    assert check(checker, sql) == [EXCLUDE]
+
+
+ROW_SOURCE_INCLUSIONS = {
+    "the subquery's own filter": "NOT IN (SELECT id FROM customers WHERE is_test = TRUE)",
+    "a derived table": "NOT IN (SELECT d.id FROM "
+    "(SELECT id FROM customers WHERE is_test = TRUE) d)",
+    "a cte inside the subquery": "NOT IN (WITH t AS "
+    "(SELECT id FROM customers WHERE is_test = TRUE) SELECT id FROM t)",
+}
+
+
+@pytest.mark.parametrize(
+    "anti", ROW_SOURCE_INCLUSIONS.values(), ids=ROW_SOURCE_INCLUSIONS.keys()
+)
+def test_an_inclusion_on_the_anti_join_row_source_still_counts(checker, anti):
+    sql = f"SELECT COUNT(*) FROM orders o WHERE o.customer_id {anti}"
+    assert check(checker, sql) == []
+
+
 # -- lineage: origins through CTE, derived and correlated scopes ------------
 
 
@@ -558,6 +593,7 @@ DATES = {
     "reversed": "CAST(p.captured_at AS DATE) >= f.date",
     "between with a declared upper bound": "f.date BETWEEN CAST(p.captured_at AS DATE) - INTERVAL 7 DAY AND CAST(p.captured_at AS DATE)",
     "earlier than the transaction": "f.date <= p.captured_at - INTERVAL 1 DAY",
+    "parenthesised conjunct": "(f.date <= CAST(p.captured_at AS DATE) AND p.id > 0)",
 }
 
 
@@ -582,6 +618,9 @@ FX_BAD_DATES = {
     "upper bound extends past the transaction": "f.date <= p.captured_at + INTERVAL 1 DAY",
     "negative interval subtraction extends past the transaction": "f.date <= p.captured_at - INTERVAL -1 DAY",
     "negative interval addition is not credited": "f.date <= p.captured_at + INTERVAL -1 DAY",
+    "comparison inside a case branch": "CASE WHEN f.date <= CAST(p.captured_at AS DATE) THEN TRUE ELSE TRUE END",
+    "comparison inside coalesce": "COALESCE(f.date <= CAST(p.captured_at AS DATE), TRUE)",
+    "comparison inside if": "IF(f.date <= CAST(p.captured_at AS DATE), TRUE, TRUE)",
 }
 
 
