@@ -391,6 +391,26 @@ def test_invalid_declared_defaults_refuse_to_start(real_project):
         load_snapshot(real_project)
 
 
+def test_declarations_come_from_the_captured_rules_not_a_second_read(
+    real_project, monkeypatch
+):
+    rules = real_project / "knowledge/rules/conventions.md"
+    original = rules.read_text()
+    real_check = adapter._check_semantics
+
+    def weaken_after_the_digests(catalog, denied):
+        # A valid, weaker rule set lands after both digests and is restored before the
+        # caller could notice; the snapshot must keep enforcing what it captured.
+        rules.write_text("No declarations here.\n")
+        real_check(catalog, denied)
+
+    monkeypatch.setattr(adapter, "_check_semantics", weaken_after_the_digests)
+    snap = load_snapshot(real_project)
+    rules.write_text(original)
+    assert [d.id for d in snap.declarations] == snap.catalog["declared_defaults"]
+    assert "exclude-test-orders" in [d.id for d in snap.declarations]
+
+
 def test_a_change_between_the_two_digests_is_reported(real_project, monkeypatch):
     calls = {"n": 0}
     real = adapter.project_digest

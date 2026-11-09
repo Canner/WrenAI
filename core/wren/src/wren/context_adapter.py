@@ -30,11 +30,10 @@ from sqlglot import exp, parse_one
 from wren.agent_sql import model_schema, read_view_bodies, view_output_columns
 from wren.context import build_json
 from wren.declared_defaults import (
-    DeclarationError,
     ExcludeRows,
     RequireRateJoin,
     SaleStatuses,
-    read_declared_defaults,
+    load_declarations_from_rules,
     split_front_matter,
 )
 from wren.project_fingerprint import project_digest
@@ -183,6 +182,7 @@ class Snapshot:
     declarations: tuple
     manifest: dict = field(default_factory=dict)
     unverified_views: tuple = ()
+    manifest_bytes: bytes = b""
 
 
 def load_snapshot(project_root: Path, loader: Path | None = None) -> Snapshot:
@@ -247,19 +247,25 @@ def load_snapshot(project_root: Path, loader: Path | None = None) -> Snapshot:
     if digest != after:
         raise ContextLoaderIncompatible("the loader digest does not match the project")
     denied = _denied(catalog)
-    manifest = _read_manifest(root)
+    manifest_bytes, manifest = _read_manifest(root)
     _check_consistent(catalog, manifest)
     _check_execution_semantics(root, manifest, after)
     unverified_views = _check_view_columns(catalog, manifest)
     _check_denied_exist(denied, catalog)
     _check_semantics(catalog, denied)
-    try:
-        declarations = tuple(
-            read_declared_defaults(root, manifest, _catalog_enums(catalog))
-        )
-    except DeclarationError as exc:
-        problems = "; ".join(f"{path}: {message}" for path, message in exc.errors)
-        raise DeclaredDefaultsInvalid(problems[:400]) from None
+    # The rule text the loader captured under ``digest`` is what the reader serves; the
+    # declarations come from that same text, never from a second read of the files.
+    declarations, errors = load_declarations_from_rules(
+        (
+            (rule["path"], rule["content"])
+            for rule in catalog.get("knowledge_rules") or []
+        ),
+        manifest,
+        _catalog_enums(catalog),
+    )
+    if errors:
+        problems = "; ".join(f"{path}: {message}" for path, message in errors)
+        raise DeclaredDefaultsInvalid(problems[:400])
     return Snapshot(
         root=root,
         prepared=prepared,
@@ -267,9 +273,10 @@ def load_snapshot(project_root: Path, loader: Path | None = None) -> Snapshot:
         digest=digest,
         loader_identity=loader_identity(loader),
         denied=denied,
-        declarations=declarations,
+        declarations=tuple(declarations),
         manifest=manifest,
         unverified_views=unverified_views,
+        manifest_bytes=manifest_bytes,
     )
 
 
@@ -373,17 +380,19 @@ def _denied(catalog: dict) -> frozenset:
     return frozenset(pairs)
 
 
-def _read_manifest(root: Path) -> dict:
+def _read_manifest(root: Path) -> tuple[bytes, dict]:
+    """``target/mdl.json`` as read, and parsed: the bytes bind the engine to this read."""
     path = root / "target" / "mdl.json"
     try:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
+        raw = path.read_bytes()
+        manifest = json.loads(raw.decode("utf-8"))
     except (OSError, ValueError):
         raise ContextNotBuilt(
             "target/mdl.json is missing; run `wren context build`"
         ) from None
     if not isinstance(manifest, dict):
         raise ContextNotBuilt("target/mdl.json is not an object")
-    return manifest
+    return raw, manifest
 
 
 def _check_consistent(catalog: dict, manifest: dict) -> None:
