@@ -1050,3 +1050,15 @@ def test_a_filter_in_the_nullable_side_of_an_outer_join_restricts_nothing(
     )
     (where,) = list(tree.find_all(sqlglot.exp.Where))
     assert _filters_rows_of(where, tree) is restricts
+
+
+@pytest.mark.parametrize("side", ["LEFT", "FULL"])
+def test_a_flag_filtered_on_the_nullable_side_does_not_exclude_test_rows(checker, side):
+    # The joined set keeps every customer (non-test ones padded with NULLs), so NOT IN
+    # over it excludes nothing it claims to.
+    sql = (
+        "SELECT COUNT(*) FROM orders o WHERE o.customer_id NOT IN ("
+        f"SELECT t.id FROM customers c {side} JOIN "
+        "(SELECT id FROM customers WHERE is_test) t ON c.id = t.id)"
+    )
+    assert EXCLUDE in check(checker, sql)

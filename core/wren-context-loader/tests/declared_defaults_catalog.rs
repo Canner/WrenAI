@@ -206,6 +206,25 @@ fn the_binary_writes_declared_ids_into_the_catalog() {
 }
 
 #[test]
+fn the_binary_refuses_an_oversized_output_before_writing_either_file() {
+    let project = tempfile::tempdir().unwrap();
+    copy_dir(&fixture("declared-wren"), project.path());
+    // Rule text is carried whole into the catalog, so one large rule file is enough.
+    fs::write(
+        project.path().join("knowledge/rules/large.md"),
+        "A long business rule. ".repeat(17 * 1024 * 1024 / 22 + 1),
+    )
+    .unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let run = run_loader(project.path(), out.path());
+    assert_eq!(run.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&run.stderr)
+        .contains("wren-context-loader: prepared context exceeds 16 MiB"));
+    assert!(!out.path().join("context.json").exists());
+    assert!(!out.path().join("catalog.json").exists());
+}
+
+#[test]
 fn an_unclosed_fence_voids_every_id_and_warns_on_stderr() {
     let project = tempfile::tempdir().unwrap();
     copy_dir(&fixture("declared-wren"), project.path());
