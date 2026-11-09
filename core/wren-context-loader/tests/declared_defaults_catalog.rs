@@ -313,7 +313,8 @@ fn malformed_front_matter_voids_the_set_and_never_panics() {
         rule_file("knowledge/rules/e.md", "---"),
     ]);
     assert!(ids.is_empty());
-    assert_eq!(warnings.len(), 3, "{warnings:?}");
+    // a.md and b.md declare `defaults`; c.md, d.md and e.md carry no declaration signal.
+    assert_eq!(warnings.len(), 2, "{warnings:?}");
 }
 
 #[test]
@@ -419,4 +420,50 @@ fn a_misspelt_sale_statuses_kind_still_voids_the_set() {
     let (ids, warnings) = declared_default_ids(&[rule_file("knowledge/rules/a.md", text)]);
     assert!(ids.is_empty(), "{ids:?}");
     assert!(warnings[0].contains("unknown kind"), "{warnings:?}");
+}
+
+#[test]
+fn a_leading_fence_without_a_declaration_signal_is_prose() {
+    let valid = "---\ndefaults:\n  - {id: valid, kind: exclude_rows}\n---\n";
+    for prose in [
+        // A markdown horizontal rule followed by prose: an unclosed fence with no signal.
+        "---\nSome prose after a horizontal rule.\n\nMore prose: with a colon.\n",
+        // A closed block that is not valid YAML and carries no signal.
+        "---\nNote: this: is not yaml\n---\nBody\n",
+        // A closed block with ordinary metadata only.
+        "---\ntitle: Conventions\n---\nBody\n",
+    ] {
+        let (ids, warnings) = declared_default_ids(&[
+            rule_file("knowledge/rules/a.md", valid),
+            rule_file("knowledge/rules/b.md", prose),
+        ]);
+        assert_eq!(ids, ["valid"], "{prose}");
+        assert!(warnings.is_empty(), "{prose}: {warnings:?}");
+    }
+}
+
+#[test]
+fn an_unclosed_fence_with_a_declaration_signal_still_voids_the_set() {
+    let valid = "---\ndefaults:\n  - {id: valid, kind: exclude_rows}\n---\n";
+    for unclosed in [
+        "---\ndefaults:\n  - id: x\n    kind: exclude_rows\n",
+        "---\n\"semantics\": []\n",
+        "---\n- id: x\n  kind: exclude_rows\n",
+        "---\n- {id: x, kind: exclude_rows}\n",
+    ] {
+        let (ids, warnings) = declared_default_ids(&[
+            rule_file("knowledge/rules/a.md", valid),
+            rule_file("knowledge/rules/b.md", unclosed),
+        ]);
+        assert!(ids.is_empty(), "{unclosed}: {ids:?}");
+        assert_eq!(warnings.len(), 1, "{unclosed}: {warnings:?}");
+        assert!(warnings[0].contains("not closed"), "{warnings:?}");
+    }
+    // A closed block with a signal and invalid YAML is still void.
+    let (ids, warnings) = declared_default_ids(&[
+        rule_file("knowledge/rules/a.md", valid),
+        rule_file("knowledge/rules/b.md", "---\ndefaults: [unterminated\n---\n"),
+    ]);
+    assert!(ids.is_empty());
+    assert!(warnings[0].contains("not valid YAML"), "{warnings:?}");
 }

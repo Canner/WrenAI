@@ -1400,23 +1400,33 @@ const DECLARED_DEFAULT_KINDS: [&str; 3] = ["exclude_rows", "require_rate_join", 
 /// fence as the first line, a closing fence, `defaults[].id` matching
 /// `^[a-z0-9][a-z0-9_-]{0,63}$`.
 ///
-/// The outcome is all-or-nothing, like the CLI's: when anything is malformed (a bad id, an unknown
-/// kind, a repeated id, `defaults` not a list, a declaration-shaped sequence root or unknown
-/// mapping value, invalid YAML, an unclosed fence) the id list is empty and the warnings say why,
-/// because the CLI voids the whole set and refuses to start, so a partial list could never match
-/// what it reports.
+/// A leading block is read as declarations only when it carries a declaration signal (see
+/// [`declares`]); without one it is ordinary text, such as a markdown horizontal rule followed by
+/// prose, and the file declares nothing and warns about nothing.
+///
+/// The outcome is all-or-nothing, like the CLI's: when a declaring block is malformed (a bad id,
+/// an unknown kind, a repeated id, `defaults` not a list, a declaration-shaped sequence root or
+/// unknown mapping value, invalid YAML, an unclosed fence) the id list is empty and the warnings
+/// say why, because the CLI voids the whole set and refuses to start, so a partial list could
+/// never match what it reports.
 pub fn declared_default_ids(files: &[KnowledgeRuleFile]) -> (Vec<String>, Vec<String>) {
     let mut ids: Vec<String> = Vec::new();
     let mut warnings = Vec::new();
     for file in files {
-        let front = match front_matter(&file.content) {
-            Ok(Some(front)) => front,
-            Ok(None) => continue,
-            Err(message) => {
-                warnings.push(format!("{}: {message}; declared defaults void", file.path));
-                continue;
-            }
+        let Some((block, closed)) = leading_block(&file.content) else {
+            continue;
         };
+        if !declares(&block, closed) {
+            continue;
+        }
+        if !closed {
+            warnings.push(format!(
+                "{}: {UNCLOSED_FRONT_MATTER}; declared defaults void",
+                file.path
+            ));
+            continue;
+        }
+        let front = block.join("\n");
         let data: serde_yaml::Value = match serde_yaml::from_str(&front) {
             Ok(data) => data,
             Err(_) => {
@@ -1479,6 +1489,75 @@ pub fn declared_default_ids(files: &[KnowledgeRuleFile]) -> (Vec<String>, Vec<St
     } else {
         (Vec::new(), warnings)
     }
+}
+
+const DECLARATION_KEYS: [&str; 3] = ["defaults", "denied_columns", "semantics"];
+
+/// Whether a leading `---` block carries a declaration signal, mirroring `wren.declared_defaults`:
+/// a line opening with a declaration key (`defaults`, `denied_columns`, `semantics`, optionally
+/// quoted); an `id:` line together with a `kind:` line (bare or as list items); for an unclosed
+/// block, one line naming both `id:` and `kind:`; for a closed block that parses, a mapping with a
+/// declaration key or a declaration-shaped list.
+fn declares(block: &[&str], closed: bool) -> bool {
+    if block.iter().any(|line| starts_with_declaration_key(line)) {
+        return true;
+    }
+    if block.iter().any(|line| starts_with_item_key(line, "id"))
+        && block.iter().any(|line| starts_with_item_key(line, "kind"))
+    {
+        return true;
+    }
+    if !closed {
+        return block
+            .iter()
+            .any(|line| names_word_key(line, "id") && names_word_key(line, "kind"));
+    }
+    let Ok(data) = serde_yaml::from_str::<serde_yaml::Value>(&block.join("\n")) else {
+        return false;
+    };
+    match &data {
+        serde_yaml::Value::Sequence(_) => declaration_shaped_sequence(&data),
+        serde_yaml::Value::Mapping(mapping) => {
+            mapping.keys().any(|key| {
+                key.as_str()
+                    .is_some_and(|key| DECLARATION_KEYS.contains(&key))
+            }) || mapping.values().any(declaration_shaped_sequence)
+        }
+        _ => false,
+    }
+}
+
+/// `^["']?(defaults|denied_columns|semantics)["']?\s*:`
+fn starts_with_declaration_key(line: &str) -> bool {
+    let rest = line.strip_prefix(['"', '\'']).unwrap_or(line);
+    DECLARATION_KEYS.iter().any(|key| {
+        rest.strip_prefix(key).is_some_and(|rest| {
+            rest.strip_prefix(['"', '\''])
+                .unwrap_or(rest)
+                .trim_start()
+                .starts_with(':')
+        })
+    })
+}
+
+/// `^\s*(-\s+)?<key>\s*:`
+fn starts_with_item_key(line: &str, key: &str) -> bool {
+    let line = line.trim_start();
+    let line = match line.strip_prefix('-') {
+        Some(rest) if rest.starts_with(char::is_whitespace) => rest.trim_start(),
+        _ => line,
+    };
+    line.strip_prefix(key)
+        .is_some_and(|rest| rest.trim_start().starts_with(':'))
+}
+
+/// `\b<key>\s*:` anywhere in the line.
+fn names_word_key(line: &str, key: &str) -> bool {
+    line.match_indices(key).any(|(at, found)| {
+        let before = line[..at].chars().next_back();
+        !before.is_some_and(|c| c.is_alphanumeric() || c == '_')
+            && line[at + found.len()..].trim_start().starts_with(':')
+    })
 }
 
 fn declaration_shaped_sequence(value: &serde_yaml::Value) -> bool {
@@ -1758,22 +1837,34 @@ fn is_near_miss_key(key: &str) -> bool {
     matches!(rest, "column" | "columns")
 }
 
+const UNCLOSED_FRONT_MATTER: &str = "front-matter is not closed by a '---' line";
+
 /// Split a leading `---` fenced block off `text`: `Ok(None)` when the text does not open with
 /// one, an error when the fence never closes.
 fn front_matter(text: &str) -> Result<Option<String>, &'static str> {
+    match leading_block(text) {
+        None => Ok(None),
+        Some((block, true)) => Ok(Some(block.join("\n"))),
+        Some((_, false)) => Err(UNCLOSED_FRONT_MATTER),
+    }
+}
+
+/// The lines after a leading `---` fence up to the closing one, and whether it closed; `None`
+/// when the text does not open with a fence. An unclosed block holds every remaining line.
+fn leading_block(text: &str) -> Option<(Vec<&str>, bool)> {
     let text = text.trim_start_matches('\u{feff}').trim_start();
     let mut lines = text.lines();
     if lines.next().map(str::trim_end) != Some(FRONT_MATTER_FENCE) {
-        return Ok(None);
+        return None;
     }
     let mut block = Vec::new();
     for line in lines {
         if line.trim_end() == FRONT_MATTER_FENCE {
-            return Ok(Some(block.join("\n")));
+            return Some((block, true));
         }
         block.push(line);
     }
-    Err("front-matter is not closed by a '---' line")
+    Some((block, false))
 }
 
 /// `^[a-z0-9][a-z0-9_-]{0,63}$`
