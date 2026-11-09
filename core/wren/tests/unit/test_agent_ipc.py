@@ -1055,6 +1055,55 @@ print('closed')
     assert result.stdout.strip() == "closed"
 
 
+def _proc_state(pid: int) -> str:
+    return Path(f"/proc/{pid}/stat").read_text().rpartition(")")[2].split()[0]
+
+
+def _running(pid: int) -> bool:
+    """Whether ``pid`` is a live process; an unreaped zombie counts as terminated.
+
+    Without an init that reaps orphans (some containers), a killed child stays a
+    zombie, and ``os.kill(pid, 0)`` still succeeds on it.
+    """
+    if sys.platform.startswith("linux"):
+        try:
+            state = _proc_state(pid)
+        except (OSError, IndexError):
+            return False
+        return state not in ("Z", "X")
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def test_a_zombie_child_counts_as_terminated():
+    if not sys.platform.startswith("linux"):
+        pytest.skip("zombie state is read from /proc")
+    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if _proc_state(child.pid) == "Z":
+            break
+        time.sleep(0.01)
+    try:
+        os.kill(child.pid, 0)
+        assert not _running(child.pid)
+    finally:
+        child.wait()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups require POSIX")
+def test_a_running_child_is_running():
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        assert _running(child.pid)
+    finally:
+        child.kill()
+        child.wait()
+
+
 @pytest.mark.skipif(os.name != "posix", reason="process groups require POSIX")
 def test_close_terminates_runtime_process_group(tmp_path):
     runtime_path = tmp_path / "process-group.js"
@@ -1081,9 +1130,7 @@ readline.createInterface({input: process.stdin}).on('line', line => {
         runtime.close()
         deadline = time.monotonic() + 2
         while time.monotonic() < deadline:
-            try:
-                os.kill(child, 0)
-            except ProcessLookupError:
+            if not _running(child):
                 break
             time.sleep(0.01)
         else:
