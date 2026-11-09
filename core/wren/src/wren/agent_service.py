@@ -56,15 +56,18 @@ from wren.governed_query import (
 )
 from wren.model.error import DatabaseTimeoutError
 from wren.project_fingerprint import is_project_source_path
+from wren.service_presets import (
+    CONFIG_VERSION,
+    read_policy_presets,
+    reject_legacy,
+)
 
 
 def uid():
     return str(uuid.uuid4())
 
 
-PRESET_KEYS = frozenset({"metadata_selection", "policy"})
 LOCAL_TOKEN_ENV = "WREN_AGENT_LOCAL_TOKEN"
-CONFIG_VERSION = 2
 ALLOWED_CONFIG_KEYS = frozenset(
     {
         "config_version",
@@ -82,16 +85,6 @@ ALLOWED_CONFIG_KEYS = frozenset(
     }
 )
 REQUIRED_CONFIG_KEYS = ("caller", "project_id", "policy", "private_model")
-LEGACY_CONFIG_KEYS = {
-    "dataset": "removed: the data now comes from the Wren project",
-    "adhoc": "removed: models and columns now come from the Wren project; deny a column "
-    "with a project-level denied_columns entry in knowledge/rules front-matter",
-    "metadata": "removed: the structure and rules documents are generated from the Wren project",
-    "rules": "removed: business rules are project knowledge (knowledge/rules/*.md), "
-    "not service configuration",
-    "query_scope": "removed: there is no date-range hard limit in this version; project-level "
-    "denied_columns and declared default rules replace it",
-}
 EXECUTION_INT_FIELDS = {
     "deadline_ms": ("deadlineMs", 5000, 600000),
     "max_tokens": ("maxTokens", 256, 65536),
@@ -431,31 +424,6 @@ STATUS_SCOPE_HINT = " If the user's question itself names which order statuses t
 UNAVAILABLE_HINT = "Check the bound schema and DuckDB SQL syntax. Return at most 100 rows and 20 columns. Do not infer data from an error."
 
 
-def reject_legacy(config: dict) -> None:
-    """Refuse a configuration that still carries the pre-context-layer keys.
-
-    Nothing is ignored silently: each key is named with what replaced it, because a dropped
-    ``query_scope`` or ``adhoc`` list changes what the service allows.
-    """
-    found = [(k, why) for k, why in LEGACY_CONFIG_KEYS.items() if k in config]
-    presets = config.get("policy_presets")
-    if isinstance(presets, dict):
-        for name, overrides in presets.items():
-            if isinstance(overrides, dict) and "query_scope" in overrides:
-                found.append(
-                    (
-                        f"policy_presets.{name}.query_scope",
-                        LEGACY_CONFIG_KEYS["query_scope"],
-                    )
-                )
-    if found:
-        listed = "; ".join(f"{key} ({why})" for key, why in found)
-        raise ValueError(
-            f"legacy_service_config: {listed}. Remove them and set config_version: {CONFIG_VERSION}; "
-            "see examples/serve-agent/README.md"
-        )
-
-
 def check_service_config(config) -> None:
     if not isinstance(config, dict):
         raise ValueError("invalid_service_config: the file must hold a mapping")
@@ -480,28 +448,6 @@ def check_service_config(config) -> None:
         raise ValueError("invalid_service_config: idle_seconds must be a finite number")
     if idle < 0:
         raise ValueError("invalid_service_config: idle_seconds must not be negative")
-
-
-def read_policy_presets(config: dict) -> tuple[str | None, dict[str, dict]]:
-    """Validate operator-named presets; each may override only PRESET_KEYS."""
-    reject_legacy(config)
-    presets = config.get("policy_presets")
-    if presets is None:
-        presets = {}
-    default = config.get("default_preset")
-    if not isinstance(presets, dict) or (
-        default is not None and (not isinstance(default, str) or default not in presets)
-    ):
-        raise ValueError("invalid_policy_preset")
-    for name, overrides in presets.items():
-        if (
-            not isinstance(name, str)
-            or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", name)
-            or not isinstance(overrides, dict)
-            or not set(overrides) <= PRESET_KEYS
-        ):
-            raise ValueError("invalid_policy_preset")
-    return default, presets
 
 
 def apply_policy_preset(config: dict, requested: str | None) -> dict:

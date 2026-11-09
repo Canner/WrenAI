@@ -1091,6 +1091,37 @@ def test_legacy_service_config_names_every_key_and_a_preset_query_scope(service)
         service(updates={"policy_presets": {"q1": {"query_scope": {}}}})
 
 
+def test_the_agent_presets_command_needs_no_mcp_transport(tmp_path):
+    import subprocess  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+
+    config = tmp_path / "service.yml"
+    config.write_text(
+        yaml.safe_dump({"default_preset": "q1", "policy_presets": {"q1": {}}})
+    )
+    code = (
+        "import sys\n"
+        "class NoMCP:\n"
+        "    def find_spec(self, name, path=None, target=None):\n"
+        "        if name == 'mcp' or name.startswith('mcp.'):\n"
+        "            raise ImportError('mcp is not installed')\n"
+        "sys.meta_path.insert(0, NoMCP())\n"
+        "from typer.testing import CliRunner\n"
+        "from wren.serve_cli import serve_app\n"
+        "out = CliRunner().invoke(serve_app, ['agent-presets', '--service-config', sys.argv[1]])\n"
+        "print(out.output, end='')\n"
+        "sys.exit(out.exit_code)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code, str(config)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout) == {"default": "q1", "presets": ["q1"]}
+
+
 def test_the_agent_presets_command_refuses_a_legacy_file_too(tmp_path):
     from typer.testing import CliRunner  # noqa: PLC0415
 
