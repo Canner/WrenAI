@@ -1231,6 +1231,48 @@ fn projection_wildcards_link_only_their_cube_members() {
 }
 
 #[test]
+fn join_using_columns_reach_the_cube_member_like_the_on_form() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    for (slug, sql) in [
+        (
+            "on-form",
+            "SELECT 1 FROM orders o JOIN order_metrics m ON o.placed_at = m.placed_at",
+        ),
+        (
+            "using-form",
+            "SELECT 1 FROM orders o JOIN order_metrics m USING (placed_at)",
+        ),
+        (
+            "using-first-source",
+            "SELECT 1 FROM order_metrics m LEFT JOIN orders o USING (placed_at)",
+        ),
+        (
+            "no-using",
+            "SELECT 1 FROM orders o JOIN order_metrics m ON TRUE",
+        ),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+    let ctx = load(tmp.path());
+    let seed = "dim:order_metrics.placed_at";
+    assert!(reaches(&ctx, seed, "query:on-form"));
+    assert!(
+        reaches(&ctx, seed, "query:using-form"),
+        "USING (placed_at) reads the joined cube's dimension"
+    );
+    assert!(
+        reaches(&ctx, seed, "query:using-first-source"),
+        "USING reads the column from the preceding cube source too"
+    );
+    assert!(!reaches(&ctx, seed, "query:no-using"));
+}
+
+#[test]
 fn a_nested_select_order_by_correlates_to_the_outer_cube_member() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());

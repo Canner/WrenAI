@@ -23,8 +23,8 @@ use std::ops::ControlFlow;
 
 use serde::Deserialize;
 use sqlparser::ast::{
-    Expr, Ident, ObjectName, ObjectNamePart, OrderBy, Query, Select, SelectItem,
-    SelectItemQualifiedWildcardKind, SetExpr, TableFactor, Visit, Visitor,
+    Expr, Ident, JoinConstraint, JoinOperator, ObjectName, ObjectNamePart, OrderBy, Query, Select,
+    SelectItem, SelectItemQualifiedWildcardKind, SetExpr, TableFactor, Visit, Visitor,
 };
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
@@ -350,6 +350,7 @@ impl RelationCollector {
         let mut correlated_columns = CorrelatedColumnCollector::new(&sources);
         let _ = select.visit(&mut correlated_columns);
         columns.columns.extend(correlated_columns.columns);
+        columns.columns.extend(using_join_columns(select));
         if let Some(order_by) = order_by {
             let mut order_columns = ScopedColumnCollector::default();
             let _ = order_by.visit(&mut order_columns);
@@ -603,6 +604,42 @@ impl Visitor for CorrelatedBranchColumnCollector<'_> {
         }
         ControlFlow::Continue(())
     }
+}
+
+/// The columns named by `JOIN ... USING (col)`, which the expression visitor never sees because
+/// `USING` holds bare names. Each is read from the joined relation and from every source earlier
+/// in the same join chain, so it is recorded once per such qualifier; a qualifier whose source
+/// does not own the column resolves to no member and adds nothing.
+fn using_join_columns(select: &Select) -> Vec<ColumnReference> {
+    let mut columns = Vec::new();
+    for table in &select.from {
+        let mut qualifiers = Vec::new();
+        collect_table_factor_qualifiers(&table.relation, &mut qualifiers);
+        for join in &table.joins {
+            collect_table_factor_qualifiers(&join.relation, &mut qualifiers);
+            let (JoinOperator::Join(JoinConstraint::Using(names))
+            | JoinOperator::Inner(JoinConstraint::Using(names))
+            | JoinOperator::Left(JoinConstraint::Using(names))
+            | JoinOperator::LeftOuter(JoinConstraint::Using(names))
+            | JoinOperator::Right(JoinConstraint::Using(names))
+            | JoinOperator::RightOuter(JoinConstraint::Using(names))
+            | JoinOperator::FullOuter(JoinConstraint::Using(names))
+            | JoinOperator::StraightJoin(JoinConstraint::Using(names))) = &join.join_operator
+            else {
+                continue;
+            };
+            for name in names {
+                let Some(ObjectNamePart::Identifier(column)) = name.0.last() else {
+                    continue;
+                };
+                columns.extend(qualifiers.iter().map(|qualifier| ColumnReference {
+                    qualifier: Some(qualifier.clone()),
+                    name: column.clone(),
+                }));
+            }
+        }
+    }
+    columns
 }
 
 fn select_source_matches_qualifier(source: &SelectSource, qualifier: &Ident) -> bool {
