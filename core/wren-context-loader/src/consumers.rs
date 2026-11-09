@@ -24,7 +24,8 @@ use std::ops::ControlFlow;
 use serde::Deserialize;
 use sqlparser::ast::{
     Expr, Ident, JoinConstraint, JoinOperator, ObjectName, ObjectNamePart, OrderBy, Query, Select,
-    SelectItem, SelectItemQualifiedWildcardKind, SetExpr, TableFactor, Visit, Visitor,
+    SelectItem, SelectItemQualifiedWildcardKind, SetExpr, TableFactor, TableWithJoins, Visit,
+    Visitor,
 };
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
@@ -609,37 +610,54 @@ impl Visitor for CorrelatedBranchColumnCollector<'_> {
 /// The columns named by `JOIN ... USING (col)`, which the expression visitor never sees because
 /// `USING` holds bare names. Each is read from the joined relation and from every source earlier
 /// in the same join chain, so it is recorded once per such qualifier; a qualifier whose source
-/// does not own the column resolves to no member and adds nothing.
+/// does not own the column resolves to no member and adds nothing. An unaliased parenthesized
+/// join (`FROM (a JOIN b USING (c))`) is walked the same way.
 fn using_join_columns(select: &Select) -> Vec<ColumnReference> {
     let mut columns = Vec::new();
     for table in &select.from {
-        let mut qualifiers = Vec::new();
-        collect_table_factor_qualifiers(&table.relation, &mut qualifiers);
-        for join in &table.joins {
-            collect_table_factor_qualifiers(&join.relation, &mut qualifiers);
-            let (JoinOperator::Join(JoinConstraint::Using(names))
-            | JoinOperator::Inner(JoinConstraint::Using(names))
-            | JoinOperator::Left(JoinConstraint::Using(names))
-            | JoinOperator::LeftOuter(JoinConstraint::Using(names))
-            | JoinOperator::Right(JoinConstraint::Using(names))
-            | JoinOperator::RightOuter(JoinConstraint::Using(names))
-            | JoinOperator::FullOuter(JoinConstraint::Using(names))
-            | JoinOperator::StraightJoin(JoinConstraint::Using(names))) = &join.join_operator
-            else {
-                continue;
-            };
-            for name in names {
-                let Some(ObjectNamePart::Identifier(column)) = name.0.last() else {
-                    continue;
-                };
-                columns.extend(qualifiers.iter().map(|qualifier| ColumnReference {
-                    qualifier: Some(qualifier.clone()),
-                    name: column.clone(),
-                }));
-            }
-        }
+        using_columns_of(table, &mut columns);
     }
     columns
+}
+
+fn using_columns_of(table: &TableWithJoins, columns: &mut Vec<ColumnReference>) {
+    let mut qualifiers = Vec::new();
+    nested_using_columns(&table.relation, columns);
+    collect_table_factor_qualifiers(&table.relation, &mut qualifiers);
+    for join in &table.joins {
+        nested_using_columns(&join.relation, columns);
+        collect_table_factor_qualifiers(&join.relation, &mut qualifiers);
+        let (JoinOperator::Join(JoinConstraint::Using(names))
+        | JoinOperator::Inner(JoinConstraint::Using(names))
+        | JoinOperator::Left(JoinConstraint::Using(names))
+        | JoinOperator::LeftOuter(JoinConstraint::Using(names))
+        | JoinOperator::Right(JoinConstraint::Using(names))
+        | JoinOperator::RightOuter(JoinConstraint::Using(names))
+        | JoinOperator::FullOuter(JoinConstraint::Using(names))
+        | JoinOperator::StraightJoin(JoinConstraint::Using(names))) = &join.join_operator
+        else {
+            continue;
+        };
+        for name in names {
+            let Some(ObjectNamePart::Identifier(column)) = name.0.last() else {
+                continue;
+            };
+            columns.extend(qualifiers.iter().map(|qualifier| ColumnReference {
+                qualifier: Some(qualifier.clone()),
+                name: column.clone(),
+            }));
+        }
+    }
+}
+
+fn nested_using_columns(factor: &TableFactor, columns: &mut Vec<ColumnReference>) {
+    if let TableFactor::NestedJoin {
+        table_with_joins,
+        alias: None,
+    } = factor
+    {
+        using_columns_of(table_with_joins, columns);
+    }
 }
 
 fn select_source_matches_qualifier(source: &SelectSource, qualifier: &Ident) -> bool {

@@ -1251,6 +1251,14 @@ fn join_using_columns_reach_the_cube_member_like_the_on_form() {
             "no-using",
             "SELECT 1 FROM orders o JOIN order_metrics m ON TRUE",
         ),
+        (
+            "using-nested-join",
+            "SELECT 1 FROM (orders o JOIN order_metrics m USING (placed_at))",
+        ),
+        (
+            "using-nested-in-exists",
+            "SELECT 1 FROM customers c WHERE EXISTS (SELECT 1 FROM (orders o JOIN order_metrics m USING (placed_at)))",
+        ),
     ] {
         write(
             tmp.path(),
@@ -1270,6 +1278,12 @@ fn join_using_columns_reach_the_cube_member_like_the_on_form() {
         "USING reads the column from the preceding cube source too"
     );
     assert!(!reaches(&ctx, seed, "query:no-using"));
+    for query in ["query:using-nested-join", "query:using-nested-in-exists"] {
+        assert!(
+            reaches(&ctx, seed, query),
+            "an unaliased parenthesized join's USING reads the cube's dimension: {query}"
+        );
+    }
 }
 
 #[test]
