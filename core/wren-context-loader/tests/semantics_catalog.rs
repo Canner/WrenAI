@@ -175,6 +175,43 @@ fn unreadable_front_matter_without_a_semantics_line_declares_nothing_here() {
 }
 
 #[test]
+fn yaml_merge_keys_apply_to_semantics_like_the_clis_safe_load() {
+    let merged = "---
+base: &base
+  semantics:
+    - {id: merged-meaning, models: [orders], note: Inherited through a merge key.}
+<<: *base
+---
+";
+    let doc = catalog_json(project_with_rules(&[("a.md", merged)]).path());
+    assert_eq!(doc["semantics"][0]["id"], "merged-meaning");
+    assert!(doc.get("semantics_invalid").is_none());
+
+    let overridden = "---
+base: &base
+  semantics:
+    - {id: from-merge, models: [orders], note: Merged.}
+<<: *base
+semantics:
+  - {id: explicit, models: [orders], note: Explicit keys win.}
+---
+";
+    let doc = catalog_json(project_with_rules(&[("a.md", overridden)]).path());
+    assert_eq!(doc["semantics"].as_array().unwrap().len(), 1);
+    assert_eq!(doc["semantics"][0]["id"], "explicit");
+
+    let broken = "---
+semantics:
+  - {id: ok-one, models: [orders], note: Fine.}
+<<: 5
+---
+";
+    let doc = catalog_json(project_with_rules(&[("a.md", broken)]).path());
+    assert!(doc.get("semantics").is_none());
+    assert_eq!(doc["semantics_invalid"], true);
+}
+
+#[test]
 fn the_binary_writes_semantics_into_the_catalog() {
     let project = project_with_rules(&[("a.md", VALID)]);
     let out = tempfile::tempdir().unwrap();

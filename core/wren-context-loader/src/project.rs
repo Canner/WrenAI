@@ -1428,7 +1428,7 @@ pub fn declared_default_ids(files: &[KnowledgeRuleFile]) -> (Vec<String>, Vec<St
             continue;
         }
         let front = block.join("\n");
-        let data: serde_yaml::Value = match serde_yaml::from_str(&front) {
+        let data = match parse_front_matter_yaml(&front) {
             Ok(data) => data,
             Err(_) => {
                 warnings.push(format!(
@@ -1625,7 +1625,7 @@ pub(crate) fn semantic_declarations(
                 continue;
             }
         };
-        let Ok(data) = serde_yaml::from_str::<serde_yaml::Value>(&front) else {
+        let Ok(data) = parse_front_matter_yaml(&front) else {
             if opens_semantics_declaration(&file.content) {
                 problems.push((file.path.clone(), UNREADABLE_SEMANTICS.to_string()));
             }
@@ -1867,6 +1867,15 @@ fn is_near_miss_key(key: &str) -> bool {
 }
 
 const UNCLOSED_FRONT_MATTER: &str = "front-matter is not closed by a '---' line";
+
+/// Parse front-matter the way the CLI's `yaml.safe_load` does: `<<` merge keys are applied, with
+/// the mapping's own keys winning over merged ones. `serde_yaml` leaves `<<` as a literal key
+/// until asked, so without this a declaration inherited through an anchor would read as absent.
+fn parse_front_matter_yaml(front: &str) -> Result<serde_yaml::Value, serde_yaml::Error> {
+    let mut value: serde_yaml::Value = serde_yaml::from_str(front)?;
+    value.apply_merge()?;
+    Ok(value)
+}
 
 /// Split a leading `---` fenced block off `text`: `Ok(None)` when the text does not open with
 /// one, an error when the fence never closes.

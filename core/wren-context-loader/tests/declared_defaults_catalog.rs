@@ -483,3 +483,19 @@ fn an_unclosed_fence_with_a_declaration_signal_still_voids_the_set() {
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     assert!(warnings[0].contains("not valid YAML"), "{warnings:?}");
 }
+
+#[test]
+fn yaml_merge_keys_apply_like_the_clis_safe_load() {
+    let merged = "---\nbase: &base\n  defaults:\n    - {id: merged-one, kind: exclude_rows}\n<<: *base\n---\n";
+    let (ids, warnings) = declared_default_ids(&[rule_file("knowledge/rules/a.md", merged)]);
+    assert_eq!(ids, ["merged-one"], "{warnings:?}");
+
+    let overridden = "---\nbase: &base\n  defaults:\n    - {id: from-merge, kind: exclude_rows}\n<<: *base\ndefaults:\n  - {id: explicit, kind: exclude_rows}\n---\n";
+    let (ids, warnings) = declared_default_ids(&[rule_file("knowledge/rules/a.md", overridden)]);
+    assert_eq!(ids, ["explicit"], "{warnings:?}");
+
+    let broken = "---\ndefaults:\n  - {id: ok-one, kind: exclude_rows}\n<<: 5\n---\n";
+    let (ids, warnings) = declared_default_ids(&[rule_file("knowledge/rules/a.md", broken)]);
+    assert!(ids.is_empty(), "{ids:?}");
+    assert!(warnings[0].contains("not valid YAML"), "{warnings:?}");
+}
