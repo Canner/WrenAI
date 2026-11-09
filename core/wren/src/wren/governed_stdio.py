@@ -106,6 +106,14 @@ _DATASOURCE_CODES = frozenset(
 )
 
 
+class LegacyUnsupported(ValueError):
+    """The project needs a rule this transport cannot enforce; the message is caller-safe.
+
+    It names only a declaration key and the command to use instead, never the project, a
+    rule file or a column, so the CLI may print it as is.
+    """
+
+
 class _RequestError(ValueError):
     """The frame itself violates the contract; the engine was never consulted."""
 
@@ -264,17 +272,17 @@ def _require_legacy_policy_support(project: Path) -> None:
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeError):
-            raise ValueError(message) from None
+            raise LegacyUnsupported(message) from None
         try:
             front, _ = split_front_matter(text)
         except ValueError:
             # Leave unrelated malformed default rules to their existing diagnostic.
             if _mentions_denied_key(text):
-                raise ValueError(message) from None
+                raise LegacyUnsupported(message) from None
             continue
         candidate = text if front is None else front
         if _mentions_denied_key(candidate):
-            raise ValueError(message)
+            raise LegacyUnsupported(message)
         if front is not None:
             try:
                 data = yaml.safe_load(front)
@@ -282,7 +290,7 @@ def _require_legacy_policy_support(project: Path) -> None:
                 continue
             # YAML escapes and aliases must not hide a declaration from the guard.
             if _mentions_denied_key(yaml.safe_dump(data, allow_unicode=True)):
-                raise ValueError(message)
+                raise LegacyUnsupported(message)
 
 
 def _require_legacy_rate_support(declarations: list[Declaration]) -> None:
@@ -295,7 +303,7 @@ def _require_legacy_rate_support(declarations: list[Declaration]) -> None:
             ("match: single", declaration.match),
         ):
             if value is not None:
-                raise ValueError(
+                raise LegacyUnsupported(
                     f"Legacy governed-stdio cannot enforce '{key}' on a "
                     "require_rate_join rule. "
                     "Use 'wren serve mcp --service-config <config>' instead."

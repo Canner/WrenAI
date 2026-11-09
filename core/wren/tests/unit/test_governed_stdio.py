@@ -821,6 +821,20 @@ def test_the_cli_reports_invalid_declarations_without_their_content(declaring):
     assert "secret-rule" not in result.output and "nonsense" not in result.output
 
 
+def test_the_cli_names_the_unsupported_key_and_the_command_to_use(declaring):
+    rule = declaring.project / RATE_RULE
+    text = rule.read_text()
+    rule.write_text(text.replace(RATE_MATCH, RATE_MATCH + "    base_currency: USD\n"))
+    result = CliRunner().invoke(
+        app, ["governed-stdio", "--project", str(declaring.project)]
+    )
+    assert result.exit_code == 1
+    assert "'base_currency'" in result.output
+    assert "wren serve mcp --service-config" in result.output
+    assert "usd-at-transaction-date" not in result.output
+    assert str(declaring.project) not in result.output
+
+
 def test_the_checker_is_what_stops_a_missing_default(declaring, monkeypatch):
     monkeypatch.setattr(transport.DefaultsChecker, "check", lambda self, ast: [])
     assert "result" in query_frame(declaring, EXCLUDE_MISSING)
