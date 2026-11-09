@@ -111,7 +111,7 @@ fn project_digest_unix(root: &crate::source_fs::SourceDir) -> io::Result<String>
             if let Some(child) = root.open_dir_if_exists(name.as_ref())? {
                 hash_directory(&child, name, &mut hasher)?;
             }
-        } else if let Some(file) = root.open_regular_file(name.as_ref())? {
+        } else if let Some(file) = root.open_root_file(name.as_ref())? {
             hash_file(&mut hasher, name, file)?;
         }
     }

@@ -473,7 +473,7 @@ fn apply_ref_sql_file(metadata: String, ref_sql_file: Option<String>) -> std::io
 #[cfg(all(unix, not(target_arch = "wasm32")))]
 pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<ProjectSources>> {
     let root = crate::source_fs::SourceDir::open_root(dir)?;
-    let Some(wren_project_yml) = root.read_string_if_file("wren_project.yml".as_ref())? else {
+    let Some(wren_project_yml) = root.read_root_string("wren_project.yml".as_ref())? else {
         return Ok(None);
     };
     crate::digest::validate_source_directories(dir)?;
@@ -516,9 +516,9 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
         Some(dir) => read_metadata(&dir)?,
         None => Vec::new(),
     };
-    let relationships_yml = root.read_string_if_file("relationships.yml".as_ref())?;
-    let cubes_yml = root.read_string_if_file("cubes.yml".as_ref())?;
-    let dashboards_yml = root.read_string_if_file("dashboards.yml".as_ref())?;
+    let relationships_yml = root.read_root_string("relationships.yml".as_ref())?;
+    let cubes_yml = root.read_root_string("cubes.yml".as_ref())?;
+    let dashboards_yml = root.read_root_string("dashboards.yml".as_ref())?;
     let mut views = Vec::new();
     if let Some(view_root) = root.open_dir_if_exists("views".as_ref())? {
         for name in view_root.names()? {
@@ -667,7 +667,7 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
         } else if name == "views.yml" {
             // Root views.yml is only a legacy-v1 source. Defer looking at it until the project
             // configuration is captured, so newer projects preserve the longstanding ignore rule.
-        } else if let Some(file) = root.open_regular_file(name.as_ref())? {
+        } else if let Some(file) = root.open_root_file(name.as_ref())? {
             capture.capture_file(name, file)?;
         }
     }
@@ -1303,7 +1303,7 @@ pub fn read_knowledge_rules(dir: &std::path::Path) -> std::io::Result<KnowledgeR
             }
         }
     }
-    let legacy = root.read_string_if_file("instructions.md".as_ref())?;
+    let legacy = root.read_root_string("instructions.md".as_ref())?;
     let used_legacy = legacy.is_some();
     if let Some(contents) = legacy.filter(|contents| !contents.trim().is_empty()) {
         files.push(KnowledgeRuleFile {

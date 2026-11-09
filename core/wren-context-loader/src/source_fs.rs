@@ -168,6 +168,27 @@ impl SourceDir {
         Ok(file.metadata()?.is_file().then_some(file))
     }
 
+    /// Open a root project file (`wren_project.yml`, `instructions.md`, ...). A missing entry or a
+    /// non-regular entry is absent; a symlink whose target does not resolve to a regular file is
+    /// refused, so a dangling link cannot make an authored file silently vanish.
+    pub(crate) fn open_root_file(&self, name: &OsStr) -> io::Result<Option<File>> {
+        let file = self.open_regular_file(name)?;
+        if file.is_none() && self.entry_kind(name)? == EntryKind::Symlink {
+            return Err(directory_symlink_error(&self.display.join(name)));
+        }
+        Ok(file)
+    }
+
+    /// [`Self::open_root_file`], read as UTF-8 text.
+    pub(crate) fn read_root_string(&self, name: &OsStr) -> io::Result<Option<String>> {
+        let Some(mut file) = self.open_root_file(name)? else {
+            return Ok(None);
+        };
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)?;
+        String::from_utf8(bytes).map(Some).map_err(io::Error::other)
+    }
+
     pub(crate) fn final_is_regular_file(&self, name: &OsStr) -> io::Result<bool> {
         let fd = match openat(
             &self.fd,

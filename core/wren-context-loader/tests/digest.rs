@@ -363,3 +363,69 @@ fn file_symlinks_still_contribute_target_bytes_and_are_read() {
         .model_ymls
         .contains(&expected));
 }
+
+#[test]
+#[cfg(unix)]
+fn dangling_root_file_symlinks_are_rejected_by_digest_capture_and_readers() {
+    use std::os::unix::fs::symlink;
+    use wren_context_loader::capture_project;
+    for name in [
+        "instructions.md",
+        "relationships.yml",
+        "cubes.yml",
+        "dashboards.yml",
+        "wren_project.yml",
+    ] {
+        let project = copy_of("rules-wren");
+        let link = project.path().join(name);
+        if link.exists() {
+            fs::remove_file(&link).unwrap();
+        }
+        symlink(project.path().join("missing-target"), &link).unwrap();
+        let rejected = |what: &str, result: std::io::Result<()>| {
+            let error = result.expect_err(&format!("{name}: {what}"));
+            assert!(
+                error.to_string().contains("directory_symlink_unsupported"),
+                "{name}: {error}"
+            );
+        };
+        rejected("project_digest", project_digest(project.path()).map(|_| ()));
+        rejected(
+            "capture_project",
+            capture_project(project.path()).map(|_| ()),
+        );
+        // Each reader refuses the root files it reads.
+        if name == "instructions.md" {
+            rejected(
+                "read_knowledge_rules",
+                read_knowledge_rules(project.path()).map(|_| ()),
+            );
+        } else {
+            rejected(
+                "read_project_dir",
+                read_project_dir(project.path()).map(|_| ()),
+            );
+        }
+        let output = tempfile::tempdir().unwrap();
+        bounded_loader_rejection(project.path(), output.path());
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn root_file_symlinks_to_files_are_read_and_missing_root_files_are_absent() {
+    use std::os::unix::fs::symlink;
+    let project = copy_of("rules-wren");
+    let outside = tempfile::tempdir().unwrap();
+    let target = outside.path().join("instructions.md");
+    fs::write(&target, "linked legacy rule").unwrap();
+    symlink(&target, project.path().join("instructions.md")).unwrap();
+    let rules = read_knowledge_rules(project.path()).unwrap();
+    assert!(rules.used_legacy);
+    assert!(rules.content.contains("linked legacy rule"));
+    let linked = digest(project.path());
+    fs::remove_file(project.path().join("instructions.md")).unwrap();
+    assert_ne!(linked, digest(project.path()));
+    assert!(!read_knowledge_rules(project.path()).unwrap().used_legacy);
+    assert!(read_project_dir(project.path()).unwrap().is_some());
+}
