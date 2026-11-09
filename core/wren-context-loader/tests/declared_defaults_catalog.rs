@@ -462,7 +462,10 @@ fn an_unclosed_fence_with_a_declaration_signal_still_voids_the_set() {
     // A closed block with a signal and invalid YAML is still void.
     let (ids, warnings) = declared_default_ids(&[
         rule_file("knowledge/rules/a.md", valid),
-        rule_file("knowledge/rules/b.md", "---\ndefaults: [unterminated\n---\n"),
+        rule_file(
+            "knowledge/rules/b.md",
+            "---\ndefaults: [unterminated\n---\n",
+        ),
     ]);
     assert!(ids.is_empty());
     assert!(warnings[0].contains("not valid YAML"), "{warnings:?}");
