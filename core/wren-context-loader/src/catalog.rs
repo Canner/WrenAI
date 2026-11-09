@@ -121,12 +121,23 @@ struct ViewMetaFile {
     guarantees: Option<Vec<serde_yaml::Value>>,
     /// Declared output columns, `[{name, type, description?}]`. Kept raw so one malformed entry
     /// is a diagnostic for the host to refuse, not a view that silently drops out of the catalog.
-    #[serde(default)]
+    /// An explicit `columns: null` is kept as a value (and refused as not a list), while an
+    /// omitted key stays absent.
+    #[serde(default, deserialize_with = "present_value")]
     columns: Option<serde_yaml::Value>,
     #[serde(default)]
     statement: Option<String>,
     #[serde(default)]
     properties: Properties,
+}
+
+/// Deserialize any present value, null included, as `Some`; `#[serde(default)]` alone folds an
+/// explicit null into `None`.
+fn present_value<'de, D>(deserializer: D) -> Result<Option<serde_yaml::Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    serde_yaml::Value::deserialize(deserializer).map(Some)
 }
 
 // --- catalog (emitted) shapes ------------------------------------------------------------------

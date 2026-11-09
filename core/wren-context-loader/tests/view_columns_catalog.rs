@@ -112,6 +112,8 @@ fn the_loader_still_assembles_a_project_whose_views_declare_columns() {
 fn every_malformed_declaration_is_a_diagnostic_and_the_catalog_is_marked_invalid() {
     let cases = [
         ("columns: order_id", "columns must be a list"),
+        ("columns: null", "columns must be a list"),
+        ("columns:", "columns must be a list"),
         (
             "columns: [order_id]",
             "columns[0]: must be a mapping with name and type",
