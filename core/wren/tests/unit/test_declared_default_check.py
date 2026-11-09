@@ -1036,6 +1036,16 @@ def test_subquery_filter_credit_follows_its_actual_join_clause(
         ("SELECT c.id FROM customers c FULL JOIN ({inner}) t ON c.id = t.id", False),
         ("SELECT t.id FROM ({inner}) t RIGHT JOIN customers c ON c.id = t.id", False),
         ("SELECT t.id FROM ({inner}) t LEFT JOIN customers c ON c.id = t.id", True),
+        (
+            "SELECT c.id FROM customers c JOIN ({inner}) t ON c.id = t.id "
+            "RIGHT JOIN customers d ON d.id = c.id",
+            False,
+        ),
+        (
+            "SELECT c.id FROM customers c JOIN ({inner}) t ON c.id = t.id "
+            "LEFT JOIN customers d ON d.id = c.id",
+            True,
+        ),
     ],
 )
 def test_a_filter_in_the_nullable_side_of_an_outer_join_restricts_nothing(

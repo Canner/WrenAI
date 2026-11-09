@@ -1194,10 +1194,19 @@ def _filters_rows_of(where: exp.Where, subquery: exp.Expression) -> bool:
 
 
 def _nullable_side(parent: exp.Expression, child: exp.Expression) -> bool:
-    """Whether ``child`` is the source an outer join may pad with NULLs: the joined source of
-    a ``LEFT``/``FULL`` join, or the ``FROM`` of a select with a ``RIGHT``/``FULL`` join."""
+    """Whether ``child`` is a source an outer join may pad with NULLs: the joined source of
+    a ``LEFT``/``FULL`` join, a joined source followed by a ``RIGHT``/``FULL`` join (which
+    pads everything joined before it), or the ``FROM`` of a select with a ``RIGHT``/``FULL``
+    join."""
     if isinstance(parent, exp.Join) and child.arg_key == "this":
-        return parent.args.get("side") in ("LEFT", "FULL")
+        if parent.args.get("side") in ("LEFT", "FULL"):
+            return True
+        select = parent.parent
+        joins = select.args.get("joins") or [] if isinstance(select, exp.Select) else []
+        later = joins[
+            next((i for i, j in enumerate(joins) if j is parent), len(joins)) + 1 :
+        ]
+        return any(join.args.get("side") in ("RIGHT", "FULL") for join in later)
     if isinstance(parent, exp.Select) and child.arg_key in ("from", "from_"):
         return any(
             join.args.get("side") in ("RIGHT", "FULL")
