@@ -447,6 +447,8 @@ fn an_unclosed_fence_with_a_declaration_signal_still_voids_the_set() {
     let valid = "---\ndefaults:\n  - {id: valid, kind: exclude_rows}\n---\n";
     for unclosed in [
         "---\ndefaults:\n  - id: x\n    kind: exclude_rows\n",
+        "---\n  defaults:\n  - {id: x}\n",
+        "---\n\t\"semantics\": []\n",
         "---\n\"semantics\": []\n",
         "---\n- id: x\n  kind: exclude_rows\n",
         "---\n- {id: x, kind: exclude_rows}\n",
@@ -468,5 +470,16 @@ fn an_unclosed_fence_with_a_declaration_signal_still_voids_the_set() {
         ),
     ]);
     assert!(ids.is_empty());
+    assert!(warnings[0].contains("not valid YAML"), "{warnings:?}");
+    // So is one whose only signal is an indented key.
+    let (ids, warnings) = declared_default_ids(&[
+        rule_file("knowledge/rules/a.md", valid),
+        rule_file(
+            "knowledge/rules/b.md",
+            "---\ntitle: x\n  denied_columns: [customers.email\n---\n",
+        ),
+    ]);
+    assert!(ids.is_empty(), "{ids:?}");
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
     assert!(warnings[0].contains("not valid YAML"), "{warnings:?}");
 }

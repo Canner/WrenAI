@@ -1498,7 +1498,7 @@ const DECLARATION_KEYS: [&str; 3] = ["defaults", "denied_columns", "semantics"];
 /// a line opening with a declaration key (`defaults`, `denied_columns`, `semantics`, optionally
 /// quoted); an `id:` line together with a `kind:` line (bare or as list items); for an unclosed
 /// block, one line naming both `id:` and `kind:`; for a closed block that parses, a mapping with a
-/// declaration key or a declaration-shaped list.
+/// declaration key or a declaration-shaped list. A key line may be indented.
 fn declares(block: &[&str], closed: bool) -> bool {
     if block.iter().any(|line| starts_with_declaration_key(line)) {
         return true;
@@ -1528,8 +1528,9 @@ fn declares(block: &[&str], closed: bool) -> bool {
     }
 }
 
-/// `^["']?(defaults|denied_columns|semantics)["']?\s*:`
+/// `^\s*["']?(defaults|denied_columns|semantics)["']?\s*:`
 fn starts_with_declaration_key(line: &str) -> bool {
+    let line = line.trim_start();
     let rest = line.strip_prefix(['"', '\'']).unwrap_or(line);
     DECLARATION_KEYS.iter().any(|key| {
         rest.strip_prefix(key).is_some_and(|rest| {
