@@ -56,10 +56,10 @@ fn frontmatter_block(contents: &str) -> Option<&str> {
     let rest = rest
         .strip_prefix('\n')
         .or_else(|| rest.strip_prefix("\r\n"))?;
-    rest.lines()
+    rest.split_inclusive('\n')
         .scan(0usize, |offset, line| {
             let start = *offset;
-            *offset += line.len() + 1;
+            *offset += line.len();
             Some((start, line))
         })
         .find(|(_, line)| line.trim_end() == "---")
@@ -735,6 +735,18 @@ mod tests {
         // whole file is tried as bare YAML — where `---` is just a document-start marker.
         let md = "---\nsql: SELECT 1\n";
         assert_eq!(knowledge_sql(md).unwrap(), "SELECT 1");
+    }
+
+    #[test]
+    fn knowledge_sql_counts_crlf_bytes_and_keeps_the_last_identifier() {
+        let md = "---\r\nnl: monthly revenue\r\nsource: user\r\nsql: SELECT id FROM orders\r\n---\r\nNotes\r\n";
+        assert_eq!(knowledge_sql(md).unwrap(), "SELECT id FROM orders");
+    }
+
+    #[test]
+    fn knowledge_sql_with_crlf_and_a_multibyte_identifier_does_not_panic() {
+        let md = "---\r\na: 1\r\nb: 2\r\nnl: x\r\nsql: SELECT * FROM 顧客\r\n---\r\n";
+        assert_eq!(knowledge_sql(md).unwrap(), "SELECT * FROM 顧客");
     }
 
     #[test]
