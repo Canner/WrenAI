@@ -43,6 +43,10 @@ def _source_name_bytes(name):
         raise OSError("non_utf8_source_name") from None
 
 
+class SourceChangedDuringRead(OSError):
+    """A covered file's length moved while it was being hashed: the project is changing."""
+
+
 def _hash_source(stream, name, digest):
     """Frame and hash one open source file in bounded chunks.
 
@@ -55,11 +59,11 @@ def _hash_source(stream, name, digest):
     while remaining:
         chunk = stream.read(min(_READ_CHUNK_BYTES, remaining))
         if not chunk:
-            raise OSError("source_changed_during_read", name.decode())
+            raise SourceChangedDuringRead("source_changed_during_read", name.decode())
         digest.update(chunk)
         remaining -= len(chunk)
     if stream.read(1):
-        raise OSError("source_changed_during_read", name.decode())
+        raise SourceChangedDuringRead("source_changed_during_read", name.decode())
 
 
 def project_digest(root: Path) -> str:
@@ -215,11 +219,20 @@ def write_frame(value, error):
     sys.stdout.buffer.flush()
 
 
+def worker_frame(root, paths):
+    """The worker's ``(value, error)`` answer; a mid-read change is reported as such."""
+    try:
+        return fingerprint_sources(root, paths), None
+    except SourceChangedDuringRead:
+        return None, ("changed",)
+    except Exception:
+        return None, ("filesystem",)
+
+
 if __name__ == "__main__":
     try:
         root, paths = pickle.loads(sys.stdin.buffer.read())
-        result = fingerprint_sources(root, paths)
     except Exception:
         write_frame(None, ("filesystem",))
     else:
-        write_frame(result, None)
+        write_frame(*worker_frame(root, paths))

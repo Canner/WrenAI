@@ -330,6 +330,22 @@ def test_fingerprint_read_has_a_cancellable_process_and_no_late_hash(tmp_path):
         thread.join(5)
 
 
+def test_a_worker_reporting_a_mid_read_change_reads_as_context_changed():
+    import sys  # noqa: PLC0415
+
+    frame = (
+        "import sys; sys.stdin.buffer.read();"
+        "from wren.project_fingerprint import write_frame;"
+        "write_frame(None, ('changed',))"
+    )
+    lifetime = QueryLifetime(5)
+    try:
+        with pytest.raises(ValueError, match="context_changed"):
+            lifetime._run([sys.executable, "-c", frame], ("root", []))
+    finally:
+        lifetime.cancel()
+
+
 def test_parent_rejects_an_oversized_frame_before_deserialization(tmp_path):
     import subprocess  # noqa: PLC0415
     import sys  # noqa: PLC0415

@@ -27,6 +27,7 @@ from pathlib import Path
 import yaml
 from sqlglot import exp, parse_one
 
+from wren import project_fingerprint
 from wren.agent_sql import model_schema, read_view_bodies, view_output_columns
 from wren.context import build_json
 from wren.declared_defaults import (
@@ -36,7 +37,6 @@ from wren.declared_defaults import (
     load_declarations_from_rules,
     split_front_matter,
 )
-from wren.project_fingerprint import project_digest
 
 LOADER_ENV = "WREN_CONTEXT_LOADER_BIN"
 LOADER_NAME = "wren-context-loader"
@@ -106,6 +106,14 @@ class ViewColumnsInvalid(ContextError):
 
 class ContextChanged(ContextError):
     code = "context_changed"
+
+
+def project_digest(root: Path) -> str:
+    """The loader's content digest of ``root``; a file rewritten mid-read is a change."""
+    try:
+        return project_fingerprint.project_digest(root)
+    except project_fingerprint.SourceChangedDuringRead:
+        raise ContextChanged("the project changed while it was being read") from None
 
 
 # --- locating and running the loader ---------------------------------------------------------
