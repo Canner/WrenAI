@@ -225,10 +225,11 @@ def write_frame(value, error):
 
 
 def worker_frame(root, paths):
-    """The worker's ``(value, error)`` answer; a mid-read change is reported as such."""
+    """The worker's ``(value, error)`` answer. A mid-read change, or a registered file that
+    no longer exists, is reported as a change: the version it was compared to had it."""
     try:
         return fingerprint_sources(root, paths), None
-    except SourceChangedDuringRead:
+    except (SourceChangedDuringRead, FileNotFoundError):
         return None, ("changed",)
     except Exception:
         return None, ("filesystem",)
