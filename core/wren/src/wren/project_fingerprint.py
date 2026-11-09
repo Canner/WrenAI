@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 MAX_FRAME_BYTES = 131072
+_READ_CHUNK_BYTES = 1 << 20
 
 _DIGEST_ROOT_FILES = (
     "wren_project.yml",
@@ -40,6 +41,25 @@ def _source_name_bytes(name):
         return name.encode("utf-8")
     except UnicodeEncodeError:
         raise OSError("non_utf8_source_name") from None
+
+
+def _hash_source(stream, name, digest):
+    """Frame and hash one open source file in bounded chunks.
+
+    The length prefix comes from ``fstat`` before the bytes are read, so a file
+    whose length changes during the read is refused rather than mis-framed.
+    """
+    size = os.fstat(stream.fileno()).st_size
+    digest.update(name + b"\0" + str(size).encode() + b"\0")
+    remaining = size
+    while remaining:
+        chunk = stream.read(min(_READ_CHUNK_BYTES, remaining))
+        if not chunk:
+            raise OSError("source_changed_during_read", name.decode())
+        digest.update(chunk)
+        remaining -= len(chunk)
+    if stream.read(1):
+        raise OSError("source_changed_during_read", name.decode())
 
 
 def project_digest(root: Path) -> str:
@@ -129,13 +149,9 @@ def _hash_entries(parent_fd, prefix, entries, digest):
                 if not stat.S_ISREG(os.fstat(fd).st_mode):
                     raise OSError("directory_symlink_unsupported", relative)
                 with os.fdopen(fd, "rb", closefd=False) as stream:
-                    data = stream.read()
+                    _hash_source(stream, _source_name_bytes(relative), digest)
             finally:
                 os.close(fd)
-            digest.update(
-                _source_name_bytes(relative) + b"\0" + str(len(data)).encode() + b"\0"
-            )
-            digest.update(data)
 
 
 def _path_digest(root):
@@ -152,9 +168,8 @@ def _path_digest(root):
             _collect(base, name, files)
     digest = hashlib.sha256()
     for relative in sorted(files, key=_source_name_bytes):
-        data = files[relative].read_bytes()
-        digest.update(relative.encode() + b"\0" + str(len(data)).encode() + b"\0")
-        digest.update(data)
+        with files[relative].open("rb") as stream:
+            _hash_source(stream, relative.encode(), digest)
     return digest.hexdigest()
 
 
