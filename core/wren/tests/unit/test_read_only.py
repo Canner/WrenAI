@@ -143,6 +143,59 @@ def test_governed_query_runs_an_allowed_read_only_query():
     connector.query.assert_called_once_with("SELECT id FROM orders", 5)
 
 
+def _customers_engine():
+    manifest = base64.b64encode(
+        json.dumps({"models": [{"name": "customers"}], "views": []}).encode()
+    ).decode()
+    engine = WrenEngine(manifest, "duckdb", {})
+    engine.dry_plan = Mock(side_effect=AssertionError("must not plan"))
+    engine._get_connector = Mock(side_effect=AssertionError("must not connect"))
+    return engine
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "WITH secrets AS (SELECT 1 AS a) SELECT a FROM main.secrets",
+        "SELECT id FROM other_schema.customers",
+        "SELECT * FROM otherdb.public.customers",
+    ],
+)
+def test_governed_query_refuses_qualified_sources_before_planning(sql):
+    engine = _customers_engine()
+    with pytest.raises(WrenError) as caught:
+        engine.query(sql, read_only=True)
+    assert caught.value.error_code is ErrorCode.MODEL_NOT_FOUND
+    assert caught.value.phase is ErrorPhase.SQL_POLICY_CHECK
+    engine.dry_plan.assert_not_called()
+    engine._get_connector.assert_not_called()
+
+
+def test_governed_query_refuses_recursion_before_planning():
+    engine = _customers_engine()
+    with pytest.raises(WrenError) as caught:
+        engine.query(
+            "WITH RECURSIVE r AS (SELECT id FROM customers UNION ALL "
+            "SELECT id FROM r) SELECT id FROM r",
+            read_only=True,
+        )
+    assert caught.value.error_code is ErrorCode.INVALID_SQL
+    assert caught.value.phase is ErrorPhase.SQL_POLICY_CHECK
+    engine.dry_plan.assert_not_called()
+
+
+def test_governed_query_admits_an_unqualified_model():
+    engine = _customers_engine()
+    connector = Mock()
+    connector.query.return_value = pa.table({"id": [1]})
+    engine.dry_plan = Mock(return_value="SELECT id FROM customers")
+    engine._get_connector = Mock(return_value=connector)
+    assert engine.query("SELECT id FROM customers", read_only=True).to_pylist() == [
+        {"id": 1}
+    ]
+    engine.dry_plan.assert_called_once_with("SELECT id FROM customers", None)
+
+
 @pytest.mark.parametrize(
     "sql",
     [

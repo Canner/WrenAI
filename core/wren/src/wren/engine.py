@@ -127,12 +127,28 @@ class WrenEngine:
         """Transpile and execute SQL, return results as an Arrow table."""
         if read_only:
             validate_read_only_query(sql, get_sqlglot_dialect(self.data_source))
+            statement = parse_one(sql, dialect=get_sqlglot_dialect(self.data_source))
+            if any(w.args.get("recursive") for w in statement.find_all(exp.With)):
+                raise WrenError(
+                    ErrorCode.INVALID_SQL,
+                    "Recursive queries are not supported by the read-only "
+                    "analytical query policy.",
+                    phase=ErrorPhase.SQL_POLICY_CHECK,
+                )
+            # A qualified name never resolves to a model or a CTE: the planner
+            # passes it through to the connector as a physical table.
+            if any(t.db or t.catalog for t in statement.find_all(exp.Table)):
+                raise WrenError(
+                    ErrorCode.MODEL_NOT_FOUND,
+                    "Query only unqualified bound models.",
+                    phase=ErrorPhase.SQL_POLICY_CHECK,
+                )
             manifest = json.loads(base64.b64decode(self.manifest_str))
             names = {
                 m["name"] for key in ("models", "views") for m in manifest.get(key, [])
             }
             validate_sql_policy(
-                parse_one(sql, dialect=get_sqlglot_dialect(self.data_source)),
+                statement,
                 names,
                 replace(
                     self._config, strict_mode=True, allowed_source_functions=frozenset()
