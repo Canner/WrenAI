@@ -195,10 +195,15 @@ class SourceBytesChanged(ValueError):
     """A startup input differs from the bytes its consumer parsed."""
 
 
-def fingerprint_sources(root, paths, expected_sources=None):
+def fingerprint_sources(root, paths, expected_sources=None, expected_digest=None):
     root = Path(root)
     digest = hashlib.sha256()
-    digest.update(b"project\0" + project_digest(root).encode() + b"\0")
+    current = project_digest(root)
+    if expected_digest is not None and current != expected_digest:
+        # The version must describe the snapshot the service serves, not a later state that
+        # happens to be on disk while the version is taken.
+        raise SourceBytesChanged("project digest differs from the snapshot")
+    digest.update(b"project\0" + current.encode() + b"\0")
     for item in paths:
         path = Path(item)
         try:

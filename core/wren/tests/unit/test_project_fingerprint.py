@@ -154,6 +154,28 @@ def test_startup_fingerprint_reports_a_mid_read_change_as_context_changed(
 
     root = tmp_path / "project"
     shutil.copytree(FIXTURE, root)
+    snapshot = SimpleNamespace(digest=fingerprint.project_digest(root))
+    project = SimpleNamespace(
+        root=root, paths=[], startup_sources={}, snapshot=snapshot
+    )
     _length_moves(monkeypatch)
     with pytest.raises(ContextChanged):
-        Project.fingerprint(SimpleNamespace(root=root, paths=[], startup_sources={}))
+        Project.fingerprint(project)
+
+
+def test_the_version_is_refused_when_the_project_is_not_the_snapshot(tmp_path):
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    from wren.agent_project import Project  # noqa: PLC0415
+    from wren.context_adapter import ContextChanged  # noqa: PLC0415
+
+    root = tmp_path / "project"
+    shutil.copytree(FIXTURE, root)
+    served = SimpleNamespace(digest=fingerprint.project_digest(root))
+    project = SimpleNamespace(root=root, paths=[], startup_sources={}, snapshot=served)
+    assert len(Project.fingerprint(project)) == 64
+    # A replacement on disk while the version is taken (even one reverted before the next
+    # digest check) must not become the version of the snapshot being served.
+    (root / "wren_project.yml").write_text("name: replaced\n")
+    with pytest.raises(ContextChanged):
+        Project.fingerprint(project)

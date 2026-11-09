@@ -81,9 +81,12 @@ class Project:
 
     def fingerprint(self):
         try:
-            if self.startup_sources:
-                return fingerprint_sources(self.root, self.paths, self.startup_sources)
-            return fingerprint_sources(self.root, self.paths)
+            return fingerprint_sources(
+                self.root,
+                self.paths,
+                self.startup_sources or None,
+                self.snapshot.digest,
+            )
         except SourceBytesChanged:
             raise ContextChanged("a parsed startup source changed") from None
         except SourceChangedDuringRead:
