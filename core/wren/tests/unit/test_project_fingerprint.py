@@ -163,6 +163,17 @@ def test_startup_fingerprint_reports_a_mid_read_change_as_context_changed(
         Project.fingerprint(project)
 
 
+def test_a_registered_file_is_part_of_the_version(tmp_path):
+    root = tmp_path / "project"
+    shutil.copytree(FIXTURE, root)
+    manifest = root / "target" / "mdl.json"
+    manifest.parent.mkdir(exist_ok=True)
+    manifest.write_text('{"models": []}')
+    before = fingerprint.fingerprint_sources(root, [manifest])
+    manifest.write_text('{"models": [1]}')
+    assert fingerprint.fingerprint_sources(root, [manifest]) != before
+
+
 def test_the_version_is_refused_when_the_project_is_not_the_snapshot(tmp_path):
     from types import SimpleNamespace  # noqa: PLC0415
 
