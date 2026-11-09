@@ -509,7 +509,10 @@ class AdHocSQL:
         join emits a row of the sources before it only when the ``ON`` holds, so its equalities
         bound any side. A ``LEFT`` or ``FULL`` join also keeps the earlier rows that match
         nothing, so its ``ON`` bounds only the joined source: each earlier row still repeats once
-        per matching joined row, at most once when that row's key is equated."""
+        per matching joined row, at most once when that row's key is equated. An ``ANTI`` join
+        keeps exactly the rows for which its ``ON`` fails, so it bounds nothing."""
+        if join.args.get("kind") == "ANTI":
+            return ()
         if join.args.get("side") in ("LEFT", "FULL"):
             return (join.this.alias_or_name,)
         return None
