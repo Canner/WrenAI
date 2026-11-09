@@ -50,9 +50,7 @@ MAX_STATUS_VALUES = 64
 _FENCE = "---"
 # Top-level front-matter keys that make a leading ``---`` block a declaration block.
 _SIGNAL_KEYS = frozenset({"defaults", "denied_columns", "semantics"})
-_SIGNAL_KEY = re.compile(
-    r"""^\s*["']?(?:defaults|denied_columns|semantics)["']?\s*:"""
-)
+_SIGNAL_KEY = re.compile(r"""^\s*["']?(?:defaults|denied_columns|semantics)["']?\s*:""")
 _SIGNAL_ID = re.compile(r"^\s*(?:-\s+)?id\s*:")
 _SIGNAL_KIND = re.compile(r"^\s*(?:-\s+)?kind\s*:")
 # A flow-style item such as ``- {id: x, kind: exclude_rows}`` on one line.

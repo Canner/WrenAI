@@ -236,7 +236,9 @@ NESTED_INCLUSIONS = {
 }
 
 
-@pytest.mark.parametrize("anti", NESTED_INCLUSIONS.values(), ids=NESTED_INCLUSIONS.keys())
+@pytest.mark.parametrize(
+    "anti", NESTED_INCLUSIONS.values(), ids=NESTED_INCLUSIONS.keys()
+)
 def test_an_inclusion_nested_in_a_predicate_is_not_the_anti_join_selection(
     checker, anti
 ):
