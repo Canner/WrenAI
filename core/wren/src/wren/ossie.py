@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -314,11 +315,11 @@ def _parse_source(source: Any) -> tuple[dict | None, str | None]:
 
 
 def _pick_expression(expr_field: Any, dialect_preference: str) -> str:
-    """Extract a SQL expression from Ossie's expression block.
+    """Extract SQL text from the preferred or first usable Ossie entry.
 
     Order: preferred dialect → ANSI_SQL fallback → first available.
     Ossie also permits a bare string for the expression (shorthand) — we honor
-    that too.
+    that too. Dialect labels select text; the engine parses it as Wren SQL.
     """
     if isinstance(expr_field, str):
         return expr_field
@@ -351,18 +352,45 @@ def _pick_expression(expr_field: Any, dialect_preference: str) -> str:
     return ""
 
 
-def _is_calculated_expression(expr: str, field_name: str) -> bool:
-    """True when the expression is anything other than the column's own name.
+@cache
+def _engine_dialect() -> type:
+    """Use generic SQL with the identifier quotes wren-core accepts."""
+    from sqlglot import tokens  # noqa: PLC0415
+    from sqlglot.dialects.dialect import Dialect  # noqa: PLC0415
 
-    Bare aliases (``Amount`` for field ``amount``, or ``src_col`` for field
-    ``renamed``) are 'calculated' from wren's perspective — the source column
-    name differs from the field name, so the engine must carry an expression
-    instead of resolving by identity. Only an exact-match identity is treated
-    as non-calculated.
-    """
-    if not expr:
+    class _WrenEngineExpression(Dialect):
+        class Tokenizer(tokens.Tokenizer):
+            IDENTIFIERS = ['"', "`"]
+
+    return _WrenEngineExpression
+
+
+def _is_bare_identifier(expr: str) -> bool:
+    """True for exactly one unqualified, possibly quoted source column."""
+    import sqlglot  # noqa: PLC0415
+    from sqlglot import exp  # noqa: PLC0415
+
+    try:
+        expressions = sqlglot.parse(expr, read=_engine_dialect())
+    except sqlglot.errors.SqlglotError:
         return False
-    return expr.strip() != field_name
+    return (
+        len(expressions) == 1
+        and isinstance(expressions[0], exp.Column)
+        and isinstance(expressions[0].this, exp.Identifier)
+        and len(expressions[0].parts) == 1
+    )
+
+
+def _is_calculated_expression(expr: str, field_name: str) -> bool:
+    """Distinguish a physical rename using the grammar the engine reads.
+
+    A single unqualified column uses MDL's non-calculated expression form.
+    Qualified references, computations and unparseable input stay calculated.
+    """
+    if not expr or expr.strip() == field_name:
+        return False
+    return not _is_bare_identifier(expr)
 
 
 def _infer_type(field_obj: dict, override: str | None) -> str:
@@ -411,10 +439,20 @@ def _convert_field(
     type_override: str | None,
     primary_key_names: set[str],
     not_null: bool = False,
+    is_calculated: bool | None = None,
 ) -> dict:
+    """Convert a field while retaining physical renames and WREN column flags.
+
+    Explicit booleans override inference; dataset conversion validates that
+    the requested meaning is supported by the expression.
+    """
     name = field_obj["name"]
     expr = _pick_expression(field_obj.get("expression"), dialect)
-    is_calc = _is_calculated_expression(expr, name)
+    is_calc = (
+        is_calculated
+        if isinstance(is_calculated, bool)
+        else _is_calculated_expression(expr, name)
+    )
     col_type = _infer_type(field_obj, type_override)
 
     column: dict = {
@@ -424,7 +462,7 @@ def _convert_field(
         "not_null": not_null,
         "properties": {},
     }
-    if is_calc:
+    if is_calc or (expr and expr.strip() != name):
         column["expression"] = expr
     if name in primary_key_names:
         column["is_primary_key"] = True
@@ -469,7 +507,7 @@ def _format_fields_snippet(
     )
 
 
-def _expression_column_refs(expression: str, dialect: str) -> set[str] | None:
+def _expression_column_refs(expression: str) -> set[str] | None:
     """Bare column names a field expression reads, or None when unparseable.
 
     Qualified references (``orders.amount``) and columns inside a nested query
@@ -478,11 +516,9 @@ def _expression_column_refs(expression: str, dialect: str) -> set[str] | None:
     """
     import sqlglot  # noqa: PLC0415
     from sqlglot import exp  # noqa: PLC0415
-    from sqlglot.dialects.dialect import Dialect  # noqa: PLC0415
 
-    read = dialect.lower() if Dialect.get(dialect.lower()) else None
     try:
-        tree = sqlglot.parse_one(expression, read=read)
+        tree = sqlglot.parse_one(expression, read=_engine_dialect())
     except sqlglot.errors.SqlglotError:
         return None
     return {
@@ -546,6 +582,7 @@ def _convert_dataset(
 
     # Convert fields
     columns: list[dict] = []
+    unmarked_bare_refs: dict[str, str] = {}
     untyped: list[str] = []
     sm_column_types = wren_cfg.column_types.get(name) or {}
     for f in ds.get("fields") or []:
@@ -567,8 +604,37 @@ def _convert_dataset(
             type_override=type_override,
             primary_key_names=set(pk_names),
             not_null=field_wren.get("not_null") is True,
+            is_calculated=field_wren.get("is_calculated"),
         )
         columns.append(col)
+        expression = col.get("expression", "")
+        flag = field_wren.get("is_calculated")
+        is_bare = _is_bare_identifier(expression)
+        refs = _expression_column_refs(expression) if is_bare else set()
+        if flag is False and expression and not is_bare:
+            errors.append(
+                ValidationError(
+                    "error",
+                    f"dataset '{name}'",
+                    f"field '{fname}' sets WREN is_calculated: false, but its "
+                    f"expression {expression!r} is not a single unqualified "
+                    "column — a non-calculated expression must name one source "
+                    "column. Remove the flag or the expression.",
+                )
+            )
+        elif flag is True and (not expression.strip() or (is_bare and refs == {fname})):
+            errors.append(
+                ValidationError(
+                    "error",
+                    f"dataset '{name}'",
+                    f"field '{fname}' sets WREN is_calculated: true, but has no "
+                    "expression or refers to itself. A calculated field must "
+                    "have an expression that reads another field or computes "
+                    "a value. Remove the flag or supply a calculated expression.",
+                )
+            )
+        elif not isinstance(flag, bool) and is_bare and refs:
+            unmarked_bare_refs[fname] = next(iter(refs))
         if type_override is None and f.get("datatype") not in (
             _OSSIE_DATATYPE_TO_WREN_TYPE
         ):
@@ -587,6 +653,24 @@ def _convert_dataset(
         )
 
     declared = {c["name"] for c in columns}
+    ambiguous = {
+        field: ref
+        for field, ref in unmarked_bare_refs.items()
+        if ref in declared and ref != field
+    }
+    if ambiguous:
+        detail = "; ".join(f"'{field}' → '{ref}'" for field, ref in ambiguous.items())
+        errors.append(
+            ValidationError(
+                "warning",
+                f"dataset '{name}'",
+                "unmarked bare field expression(s) name another declared field: "
+                f"{detail} — these import as physical source columns. If an "
+                "expression should read a semantic field, set field-level WREN "
+                "is_calculated: true; set false to confirm a physical rename, "
+                "or re-export from the original Wren project.",
+            )
+        )
 
     # `wren context validate` rejects a primary_key that names a column the
     # model doesn't have, so report it here rather than after the migration.
@@ -610,7 +694,7 @@ def _convert_dataset(
     for col in columns:
         if not col["is_calculated"]:
             continue
-        refs = _expression_column_refs(col["expression"], wren_cfg.dialect)
+        refs = _expression_column_refs(col["expression"])
         for ref in sorted((refs or set()) - declared):
             undeclared_refs.setdefault(ref, []).append(col["name"])
     if undeclared_refs:
@@ -1075,9 +1159,14 @@ def _source_from_model(model: dict) -> str | None:
 def _export_field(
     column: dict, *, dialect: str, pk_names: set[str], with_datatype: bool
 ) -> dict:
+    """Export a column's expression and metadata without losing rename semantics.
+
+    Merge nullability and the calculated-bare-alias flag into one WREN
+    extension so both survive reimport.
+    """
     name = column["name"]
     expression = column.get("expression")
-    if column.get("is_calculated") and isinstance(expression, str) and expression:
+    if isinstance(expression, str) and expression.strip():
         expr = expression
     else:
         expr = name
@@ -1094,8 +1183,20 @@ def _export_field(
     if isinstance(props, dict) and isinstance(props.get("description"), str):
         if props["description"]:
             field_obj["description"] = props["description"]
+    wren_data: dict = {}
     if column.get("not_null") and name not in pk_names:
-        field_obj["custom_extensions"] = [_wren_extension({"not_null": True})]
+        wren_data["not_null"] = True
+    # The expression is Wren SQL, not transpiled into the labelled dialect.
+    # Only calculated bare aliases need a marker under the engine's grammar.
+    if (
+        column.get("is_calculated")
+        and isinstance(expression, str)
+        and expression.strip()
+        and not _is_calculated_expression(expr, name)
+    ):
+        wren_data["is_calculated"] = True
+    if wren_data:
+        field_obj["custom_extensions"] = [_wren_extension(wren_data)]
     return field_obj
 
 
