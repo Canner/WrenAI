@@ -51,7 +51,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             core/wren-context-loader/target/
-          key: context-loader-${{ hashFiles('core/wren-context-loader/Cargo.toml') }}
+          key: context-loader-${{ hashFiles('core/wren-context-loader/Cargo.toml', 'core/wren-context-loader/Cargo.lock') }}
 
       - name: cargo fmt
         run: cargo fmt --all -- --check
