@@ -426,6 +426,7 @@ fn read_model_metadata_if_file(
     )?))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn apply_ref_sql_file(metadata: String, ref_sql_file: Option<String>) -> std::io::Result<String> {
     let Some(ref_sql) = ref_sql_file else {
         return Ok(metadata);
@@ -1730,11 +1731,11 @@ const DENIED_COLUMNS_KEY: &str = "denied_columns";
 /// plainly meant to declare something and a denylist that was only partly read must not be used.
 /// The same holds for a file with no front-matter at all that mentions the key. A front-matter
 /// key that only nearly spells `denied_columns` (other case, `-` for `_`, singular) is reported as
-/// an invalid entry rather than ignored, at the top level or nested at any depth. So is a file whose text mentions `denied_columns` but
-/// whose front-matter has no top-level key of exactly that name (a merge key, a nested mapping, a
-/// top-level sequence, a comment, a typo): the declaration, if any, was not read. A scalar value
-/// is read as a one-entry list; a value that is not a name, or a bare key, is reported entry by
-/// entry.
+/// an invalid entry rather than ignored, at the top level or nested at any depth. So is a file
+/// whose text mentions `denied_columns` but whose front-matter has no top-level key of exactly
+/// that name (a merge key, a nested mapping, a top-level sequence, a comment, a typo): the
+/// declaration, if any, was not read. A scalar value is read as a one-entry list; a value that is
+/// not a name, or a bare key, is reported entry by entry.
 pub(crate) fn denied_column_declarations(files: &[KnowledgeRuleFile]) -> Vec<DeniedDeclaration> {
     let mut out = Vec::new();
     for file in files {
