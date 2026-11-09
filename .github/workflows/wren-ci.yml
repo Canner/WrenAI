@@ -6,10 +6,13 @@ permissions:
 on:
   pull_request:
     paths:
+      - '.github/workflows/wren-ci.yml'
       - 'core/wren/**'
       - 'core/wren-core/**'
       - 'core/wren-core-py/**'
       - 'core/wren-core-base/**'
+      - 'core/wren-context-loader/**'
+      - 'examples/serve-agent/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.number }}
@@ -28,8 +31,22 @@ jobs:
         uses: astral-sh/setup-uv@v4
       - name: Lint
         run: |
-          uvx ruff format --check src/
-          uvx ruff check src/
+          # tests/unit is linted file by file: only the serve-agent suites are held to
+          # ruff format, the rest of the tree predates that gate.
+          targets=(
+            src/
+            tests/unit/test_agent_*.py
+            tests/unit/test_context_adapter.py
+            tests/unit/test_declared_default*.py
+            tests/unit/test_governed_stdio.py
+            tests/unit/test_query_gate_termination.py
+            tests/unit/test_query_semantics.py
+            tests/policy-runtime/test_policy_denial.py
+            tests/unit/test_read_only.py
+            ../../examples/serve-agent
+          )
+          uvx ruff format --check --config pyproject.toml "${targets[@]}"
+          uvx ruff check --config pyproject.toml "${targets[@]}"
 
   test-unit:
     name: unit tests
@@ -346,3 +363,81 @@ jobs:
           uv pip install --reinstall --no-index --find-links ../wren-core-py/target/wheels/ wren-core-py
       - name: Run mcp tests
         run: uv run --no-sync pytest tests/unit/test_mcp_server.py -v
+
+  test-agent:
+    env:
+      WREN_REQUIRE_CONTEXT_LOADER: "1"
+      WREN_CONTEXT_LOADER_BIN: ${{ github.workspace }}/core/wren-context-loader/target/debug/wren-context-loader
+    name: agent service tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: core/wren
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ./core/wren-core-py/target/
+          key: ${{ runner.os }}-cargo-wren-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build wren-core-py wheel
+        working-directory: core/wren-core-py
+        run: |
+          uv sync --locked --no-install-project
+          uv run --no-sync maturin build
+      - name: Install dependencies
+        run: |
+          uv sync --locked --extra mcp
+          uv pip install --reinstall --no-index --find-links ../wren-core-py/target/wheels/ wren-core-py
+      - name: Cache context loader build
+        uses: actions/cache@v4
+        with:
+          path: core/wren-context-loader/target/
+          key: context-loader-agent-${{ runner.os }}-${{ hashFiles('core/wren-context-loader/Cargo.lock') }}
+      - name: Build context loader
+        working-directory: .
+        run: cargo build --locked --manifest-path core/wren-context-loader/Cargo.toml
+      # The Warble compiler is the published CLI. The private runtime (@warble/pi) is not
+      # published, so this job runs the scripted runtime in tests/unit/fixtures: the tests
+      # that need a real Cedar engine skip here and are a local gate
+      # (examples/serve-agent/README.md, "Re-run the checks").
+      - name: Install the Warble CLI
+        working-directory: .
+        run: |
+          npm install --prefix "$RUNNER_TEMP/warble-cli" --no-audit --no-fund @warble/cli@0.19.0
+          echo "WARBLE_BIN=$RUNNER_TEMP/warble-cli/node_modules/.bin/warble" >> "$GITHUB_ENV"
+          echo "WARBLE_SERVICE=$GITHUB_WORKSPACE/core/wren/tests/unit/fixtures/fake_runtime.js" >> "$GITHUB_ENV"
+      # A separately authored test peer uses only the published Cedar evaluator.
+      # It proves host denial before execution without distributing a model runtime.
+      - name: Install real Cedar test evaluator
+        run: npm ci --ignore-scripts --no-audit --no-fund --prefix tests/policy-runtime
+      - name: Run host policy boundary tests
+        run: uv run --no-sync pytest tests/policy-runtime/test_policy_denial.py -v
+      - name: Run agent service tests
+        run: |
+          uv run --no-sync pytest \
+            tests/unit/test_agent_service.py \
+            tests/unit/test_agent_sql.py \
+            tests/unit/test_agent_query_lifetime.py \
+            tests/unit/test_context_adapter.py \
+            tests/unit/test_declared_default_fx.py \
+            tests/unit/test_declared_default_status.py \
+            tests/unit/test_query_gate_termination.py \
+            -v

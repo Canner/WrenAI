@@ -1,0 +1,12 @@
+name: fx_rates
+table_reference:
+  schema: main
+  table: fx_rates
+primary_key: date
+columns:
+  - name: date
+    type: DATE
+  - name: currency
+    type: VARCHAR
+  - name: rate_to_usd
+    type: DECIMAL

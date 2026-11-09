@@ -1,0 +1,7 @@
+profile: analysis
+context:
+  project: binding.yml
+components:
+- use: analyze_data
+- use: data_worker
+  entrypoint: false

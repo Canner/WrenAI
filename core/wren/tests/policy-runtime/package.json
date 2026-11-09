@@ -1,0 +1,9 @@
+{
+  "name": "wren-agent-policy-tests",
+  "private": true,
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@cedar-policy/cedar-wasm": "4.14.0"
+  }
+}

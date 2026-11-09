@@ -1,0 +1,15 @@
+# Declared analytical cube over the orders mart. Added in Phase 2 so the semantic layer carries
+# real, named metrics. Aggregation syntax alone does not establish business-dimensional
+# additivity: `metric_additive` must leave SUM and COUNT unknown, and consumers must reject that
+# unknown instead of treating it as an additive pass.
+- name: revenue
+  base_object: orders
+  measures:
+    # Unknown: SUM syntax alone cannot prove this measure is additive across every business dimension.
+    - { name: total_revenue, expression: "SUM(amount)", type: DOUBLE }
+    # Non-additive: the average of parts is not the average of the whole → decomposition misleads.
+    - { name: avg_order_value, expression: "AVG(amount)", type: DOUBLE }
+  dimensions:
+    - { name: status, expression: "status", type: TEXT }
+  time_dimensions:
+    - { name: order_date, expression: "order_date", type: DATE }

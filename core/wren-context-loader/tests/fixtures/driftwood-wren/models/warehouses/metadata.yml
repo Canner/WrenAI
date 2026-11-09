@@ -1,0 +1,25 @@
+name: warehouses
+properties:
+  description: "Fulfillment warehouses."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: warehouses
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+    properties:
+      description: "Unique warehouse id."
+  - name: name
+    type: VARCHAR
+    properties:
+      description: "Warehouse name."
+  - name: country
+    type: VARCHAR
+    properties:
+      description: "Warehouse country (US or DE)."
+  - name: tz
+    type: VARCHAR
+    properties:
+      description: "IANA timezone of the warehouse."

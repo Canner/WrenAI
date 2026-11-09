@@ -1,0 +1,16 @@
+name: customers
+table_reference:
+  schema: main
+  table: customers
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+  - name: email
+    type: VARCHAR
+  - name: country
+    type: VARCHAR
+  - name: created_at
+    type: TIMESTAMP
+  - name: is_test
+    type: BOOLEAN

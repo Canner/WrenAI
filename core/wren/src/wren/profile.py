@@ -115,7 +115,7 @@ def _expand_string(value: str, env: dict[str, str]) -> str:
         # Template raised on a malformed $-sequence; surface the same
         # KeyError-style message so callers get one exception type.
         raise MissingSecretError(
-            f"Malformed reference in profile value {value!r}: {exc}"
+            f"Malformed reference in a profile value: {exc}"
         ) from exc
 
 

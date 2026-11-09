@@ -113,6 +113,10 @@ ignore = [
   "E501", # line-too-long, enforced by ruff format
 ]
 
+[tool.ruff.lint.isort]
+# Resolve wren as first-party from any working directory (the src/ layout is only found from core/wren).
+known-first-party = ["wren"]
+
 [dependency-groups]
 dev = [
     "pytest>=8",

@@ -1007,6 +1007,7 @@ def validate_project(project_path: Path) -> list[ValidationError]:
     6. Views have a statement
     7. primary_key column exists in the model's columns
     8. table_reference (if used) has at least a table field
+    9. Declared default rules (front-matter in knowledge/rules/*.md) are valid
     """
     errors: list[ValidationError] = []
     sv = 1  # default; may be overridden below
@@ -1653,6 +1654,16 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                                 f"references unknown dimension '{level}'",
                             )
                         )
+
+    from wren.declared_defaults import load_declarations  # noqa: PLC0415
+
+    _, declaration_errors = load_declarations(
+        project_path, {"models": models, "relationships": relationships}
+    )
+    errors.extend(
+        ValidationError("error", path, f"declared default rule: {message}")
+        for path, message in declaration_errors
+    )
 
     return errors
 

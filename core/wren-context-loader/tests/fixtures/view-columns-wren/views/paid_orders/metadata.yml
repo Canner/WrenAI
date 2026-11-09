@@ -1,0 +1,10 @@
+name: paid_orders
+properties:
+  description: Orders that were paid.
+columns:
+  - name: order_id
+    type: INTEGER
+    description: The order's id.
+  - name: amount
+    type: "DECIMAL(12,2)"
+    unit: dollars

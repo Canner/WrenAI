@@ -1,0 +1,29 @@
+name: refunds
+properties:
+  description: "Money refunds (new platform). One row per refund, gross amount, positive sign. Each refund is ALSO mirrored as a negative payments row."
+table_reference:
+  catalog: driftwood
+  schema: main
+  table: refunds
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+    properties:
+      description: "Unique refund id."
+  - name: order_id
+    type: INTEGER
+    properties:
+      description: "FK to orders.id."
+  - name: amount
+    type: "DECIMAL(12,2)"
+    properties:
+      description: "Refunded amount, GROSS and positive, in the order's currency."
+  - name: reason
+    type: VARCHAR
+    properties:
+      description: "Free-text refund reason."
+  - name: refunded_at
+    type: TIMESTAMP
+    properties:
+      description: "Refund time (UTC)."
