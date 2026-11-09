@@ -538,19 +538,33 @@ class _Statement:
                 return True
         return False
 
-    def _addresses(self, rule: ExcludeRows, reaching: list[exp.Expression]) -> bool:
+    def _addresses(
+        self, rule: ExcludeRows, reaching: list[exp.Expression], path
+    ) -> bool:
         flag = self.checker.flag_of(rule)
         if any(self.polarity(c, rule) == "incl" for c in reaching):
             return True
-        grouped = [
-            column for group in self.groups for column in group.find_all(exp.Column)
+        return any(
+            flag in self.origin(column).taint
+            for container in self._computed_along(path)
+            for column in container.find_all(exp.Column)
+        )
+
+    def _computed_along(self, path) -> list[exp.Expression]:
+        """The GROUP BYs and aggregates of the selects a read's rows pass through.
+
+        Grouping or aggregating the flag addresses it only for the rows that select
+        computes over: the read's own select and those consuming it as a CTE, derived
+        table or set-operation branch. A predicate or scalar subquery computes over its
+        own rows, so its GROUP BY says nothing about the enclosing read.
+        """
+        owners = {id(scope.expression) for scope, _alias, _source in path}
+        return [
+            node
+            for node in [*self.groups, *self.aggregates]
+            if (scope := self._scope_for(node)) is not None
+            and id(scope.expression) in owners
         ]
-        aggregated = [
-            column
-            for aggregate in self.aggregates
-            for column in aggregate.find_all(exp.Column)
-        ]
-        return any(flag in self.origin(column).taint for column in grouped + aggregated)
 
     def _column_routes(
         self,
@@ -776,11 +790,11 @@ class _Statement:
             )
 
         applicable = [term for term in reaching if credits(term)]
-        if rule.addresses_column and self._addresses(rule, applicable):
+        if rule.addresses_column and self._addresses(rule, applicable, path):
             # Aggregate/group exceptions must address this consuming read too.
             if any(self.polarity(c, rule) == "incl" for c in applicable) or any(
                 credits(c) and flag in self.origin(c).taint
-                for container in [*self.groups, *self.aggregates]
+                for container in self._computed_along(path)
                 for c in container.find_all(exp.Column)
             ):
                 return True
