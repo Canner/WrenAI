@@ -1175,7 +1175,9 @@ def _filters_rows_of(where: exp.Where, subquery: exp.Expression) -> bool:
 
     A WHERE inside a predicate of the subquery, such as a nested ``NOT EXISTS`` or
     ``IN``, or inside a projection or join condition, tests something else: its
-    inclusion is not the subquery's own selection of flagged rows.
+    inclusion is not the subquery's own selection of flagged rows. Neither does a WHERE
+    in the nullable side of an outer join: the preserved side keeps every row it filtered
+    out, as a row of NULLs.
     """
     child = where.parent
     while child is not None and child is not subquery:
@@ -1185,8 +1187,23 @@ def _filters_rows_of(where: exp.Where, subquery: exp.Expression) -> bool:
             for kind, keys in _ROW_SOURCE_STEPS
         ):
             return False
+        if _nullable_side(parent, child):
+            return False
         child = parent
     return child is subquery
+
+
+def _nullable_side(parent: exp.Expression, child: exp.Expression) -> bool:
+    """Whether ``child`` is the source an outer join may pad with NULLs: the joined source of
+    a ``LEFT``/``FULL`` join, or the ``FROM`` of a select with a ``RIGHT``/``FULL`` join."""
+    if isinstance(parent, exp.Join) and child.arg_key == "this":
+        return parent.args.get("side") in ("LEFT", "FULL")
+    if isinstance(parent, exp.Select) and child.arg_key in ("from", "from_"):
+        return any(
+            join.args.get("side") in ("RIGHT", "FULL")
+            for join in parent.args.get("joins") or []
+        )
+    return False
 
 
 def _is_string(node: exp.Expression) -> bool:
