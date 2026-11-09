@@ -1983,10 +1983,7 @@ def create_service(
             (config_path, config_bytes),
             (capabilities_path, capabilities_bytes),
         ):
-            # One path read twice (the bundle copy and a direct read, or two roles naming the
-            # same file) must have given the same bytes, or the inputs changed in between.
-            if consumed.setdefault(path, data) != data:
-                raise ContextChanged("a startup input changed while it was being read")
+            _record_startup_source(consumed, path, data)
         return _assemble_service(
             root,
             bundle,
@@ -2096,6 +2093,14 @@ def worker_tools() -> list[dict]:
     return [{**t, "zone": "private", "readOnly": True} for t in tools]
 
 
+def _record_startup_source(sources: dict, path: Path, data: bytes) -> None:
+    """Record the bytes a startup consumer parsed from ``path``. One path read twice (a bundle
+    copy and a direct read, or two roles naming the same file) must have given the same bytes,
+    or the input changed in between."""
+    if sources.setdefault(path, data) != data:
+        raise ContextChanged("a startup input changed while it was being read")
+
+
 def _assemble_service(
     root,
     bundle,
@@ -2128,13 +2133,13 @@ def _assemble_service(
     policy_path = contained(config_path.parent, config["policy"])
     project.paths.append(policy_path)
     policy_bytes = policy_path.read_bytes()
-    project.startup_sources[policy_path] = policy_bytes
+    _record_startup_source(project.startup_sources, policy_path, policy_bytes)
     policies = [policy_bytes.decode("utf-8")]
     if config.get("preset_policy"):
         preset_path = contained(config_path.parent, config["preset_policy"])
         project.paths.append(preset_path)
         preset_bytes = preset_path.read_bytes()
-        project.startup_sources[preset_path] = preset_bytes
+        _record_startup_source(project.startup_sources, preset_path, preset_bytes)
         policies.append(preset_bytes.decode("utf-8"))
     project.version = project.fingerprint()
     if project_digest(root) != snapshot.digest:

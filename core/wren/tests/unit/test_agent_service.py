@@ -583,6 +583,28 @@ def test_one_path_read_with_two_different_contents_refuses_the_service(
         service()
 
 
+def test_a_policy_naming_an_already_read_file_must_read_the_same_bytes(
+    service, monkeypatch
+):
+    import wren.agent_service as agent_service  # noqa: PLC0415
+
+    contained = agent_service.contained
+    manifest = service.root / "target/mdl.json"
+
+    def policy_is_the_manifest_rewritten_in_between(root, relative):
+        resolved = contained(root, relative)
+        if resolved.suffix == ".cedar":
+            manifest.write_text(manifest.read_text() + " ")
+            return manifest.resolve()
+        return resolved
+
+    monkeypatch.setattr(
+        agent_service, "contained", policy_is_the_manifest_rewritten_in_between
+    )
+    with pytest.raises(ValueError, match="context_changed"):
+        service()
+
+
 def test_a_bundle_file_deleted_after_the_compile_refuses_the_service(
     service, monkeypatch, tmp_path
 ):
