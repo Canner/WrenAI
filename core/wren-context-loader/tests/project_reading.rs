@@ -629,4 +629,29 @@ fn the_manifest_layout_follows_the_schema_version_like_the_cli() {
         refused.to_string().contains("expected an integer"),
         "{refused}"
     );
+
+    // The lower bound is inclusive: -2^63 converts (and is then out of the supported range),
+    // a representable float below it does not convert at all.
+    for (version, expected) in [
+        (
+            "-9223372036854775808.0",
+            "unsupported schema_version -9223372036854775808",
+        ),
+        ("-1.0e19", "expected an integer"),
+    ] {
+        let tmp = tempfile::tempdir().unwrap();
+        project(tmp.path());
+        write(
+            tmp.path(),
+            "wren_project.yml",
+            &format!("schema_version: {version}\nname: reading\ncatalog: wren\nschema: public\ndata_source: duckdb\n"),
+        );
+        let refused = read_project_dir(tmp.path())
+            .err()
+            .expect("an out-of-range version is refused");
+        assert!(
+            refused.to_string().contains(expected),
+            "{version}: {refused}"
+        );
+    }
 }
