@@ -2121,6 +2121,10 @@ pub fn assemble(sources: &ProjectSources) -> Result<LoadedProject, LoadError> {
     );
     manifest_json.insert("cubes".into(), serde_json::Value::Array(cubes));
     manifest_json.insert("views".into(), serde_json::Value::Array(views));
+    manifest_json.insert(
+        "layoutVersion".into(),
+        serde_json::Value::from(layout_version(&sources.wren_project_yml)),
+    );
 
     // `catalog`/`schema` are required by the Manifest schema; default them so a minimal project
     // (test fixtures) still assembles rather than failing on a missing namespace field.
@@ -2137,6 +2141,35 @@ pub fn assemble(sources: &ProjectSources) -> Result<LoadedProject, LoadError> {
         .validate_layout_version()
         .map_err(|e| msg(e.to_string()))?;
     Ok(LoadedProject { manifest })
+}
+
+/// Engine `layoutVersion` per project `schema_version`; mirrors `_LAYOUT_VERSION_MAP` in the
+/// wren CLI (`wren/context.py`). Keep the two in step.
+const LAYOUT_VERSION_MAP: [(i64, u32); 5] = [(1, 1), (2, 1), (3, 2), (4, 3), (5, 3)];
+
+/// The engine layout for the project's `schema_version` (missing means 1, like the CLI). A value
+/// the map does not cover falls back to 1, as the CLI's `.get(version, 1)` does. Integers, floats,
+/// booleans and plain numeric strings are converted; the native readers' gate has already refused
+/// anything the CLI cannot read, and this pure path does not carry its Unicode-digit parsing.
+fn layout_version(wren_project_yml: &str) -> u32 {
+    let Ok(serde_yaml::Value::Mapping(project)) =
+        serde_yaml::from_str::<serde_yaml::Value>(wren_project_yml)
+    else {
+        return 1;
+    };
+    let version = match project.get("schema_version") {
+        None => Some(1),
+        Some(serde_yaml::Value::Bool(value)) => Some(i64::from(*value)),
+        Some(serde_yaml::Value::Number(value)) => value
+            .as_i64()
+            .or_else(|| value.as_f64().filter(|v| v.is_finite()).map(|v| v as i64)),
+        Some(serde_yaml::Value::String(value)) => value.trim().parse().ok(),
+        Some(_) => None,
+    };
+    LAYOUT_VERSION_MAP
+        .iter()
+        .find(|(schema, _)| Some(*schema) == version)
+        .map_or(1, |(_, layout)| *layout)
 }
 
 fn yaml_to_json(v: serde_yaml::Value) -> Result<serde_json::Value, LoadError> {

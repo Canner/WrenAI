@@ -560,3 +560,22 @@ fn captured_snapshot_does_not_reread_a_source_after_edit_and_restore() {
         "the captured semantic bytes survive an edit-and-restore interval without rereading"
     );
 }
+
+#[test]
+fn the_manifest_layout_follows_the_schema_version_like_the_cli() {
+    for (schema, layout) in [(1, 1), (2, 1), (3, 2), (4, 3), (5, 3)] {
+        let tmp = tempfile::tempdir().unwrap();
+        project(tmp.path());
+        write(
+            tmp.path(),
+            "wren_project.yml",
+            &format!("schema_version: {schema}\nname: reading\ncatalog: wren\nschema: public\ndata_source: duckdb\n"),
+        );
+        let sources = read_project_dir(tmp.path()).unwrap().unwrap();
+        let loaded = assemble(&sources).expect("project assembles");
+        assert_eq!(
+            loaded.manifest.layout_version, layout,
+            "schema_version {schema}"
+        );
+    }
+}
