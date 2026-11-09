@@ -1524,6 +1524,14 @@ def test_models_keyed_only_to_each_other_still_multiply_the_view():
         duplicated("JOIN dimensions d ON v.id = d.id JOIN extras e ON d.id = e.id")
         is False
     )
+    # A LEFT join's ON keeps every preserved row: it cannot bound the preserved side.
+    assert (
+        duplicated(
+            "CROSS JOIN extras a LEFT JOIN extras b ON v.id = a.id AND b.id = v.id"
+        )
+        is True
+    )
+    assert duplicated("LEFT JOIN extras a ON v.id = a.id") is False
     # A semi-join target or a derived source is no evidence for another model's key.
     assert duplicated("CROSS JOIN extras a SEMI JOIN extras b ON a.id = b.id") is True
     assert (

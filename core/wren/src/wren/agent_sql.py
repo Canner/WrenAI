@@ -457,11 +457,13 @@ class AdHocSQL:
                 for j in joins
                 if j.args.get("kind") in ("SEMI", "ANTI")
             }
-            conditions = [j.args.get("on") for j in joins] + [
-                w.this for w in [select.args.get("where")] if w is not None
-            ]
+            conditions = [(j.args.get("on"), self._bounds_through(j)) for j in joins]
+            if select.args.get("where") is not None:
+                conditions.append((select.args["where"].this, None))
             edges = []
-            for condition in conditions:
+            for condition, through in conditions:
+                if through == ():
+                    continue
                 for term in self._conjuncts(condition) if condition is not None else ():
                     while isinstance(term, exp.Paren):
                         term = term.this
@@ -473,8 +475,9 @@ class AdHocSQL:
                     ) or (a.table == b.table):
                         continue
                     edges += [
-                        (a.table, a.name.lower(), b.table),
-                        (b.table, b.name.lower(), a.table),
+                        (mine.table, mine.name.lower(), other.table)
+                        for mine, other in ((a, b), (b, a))
+                        if through is None or mine.table in through
                     ]
             keys_of = {
                 model.lower(): frozenset(k.lower() for k in keys)
@@ -501,6 +504,16 @@ class AdHocSQL:
             if any(alias not in bounded for alias in models):
                 return True
         return False
+
+    @staticmethod
+    def _bounds_through(join):
+        """The sources ``join``'s ``ON`` can bound: ``None`` for any (an inner join), only the
+        joined source for a ``LEFT`` join (its ``ON`` keeps every row of the preserved side), and
+        none, ``()``, for a ``RIGHT`` or ``FULL`` join."""
+        side = join.args.get("side")
+        if not side:
+            return None
+        return (join.this.alias_or_name,) if side == "LEFT" else ()
 
     @staticmethod
     def _reject_unsupported_forms(tree):
