@@ -57,6 +57,24 @@ pub(crate) fn source_name(name: &std::ffi::OsStr) -> io::Result<&str> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "non_utf8_source_name"))
 }
 
+/// Whether a root project file (`wren_project.yml`, `instructions.md`, ...) is present. A missing
+/// entry is absent; a symlink that does not resolve to a regular file is refused with the same
+/// `directory_symlink_unsupported` label as the Unix reader, so a dangling link cannot make an
+/// authored file silently vanish.
+#[cfg(not(unix))]
+pub(crate) fn root_file_present(path: &Path) -> io::Result<bool> {
+    if path.is_file() {
+        return Ok(true);
+    }
+    if path.is_symlink() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("directory_symlink_unsupported: {}", path.display()),
+        ));
+    }
+    Ok(false)
+}
+
 /// The digest of the project in `dir`, as lowercase hex.
 pub fn project_digest(dir: &Path) -> io::Result<String> {
     #[cfg(unix)]
@@ -67,7 +85,7 @@ pub fn project_digest(dir: &Path) -> io::Result<String> {
     {
         for name in ROOT_FILES {
             let path = dir.join(name);
-            if path.is_file() {
+            if root_file_present(&path)? {
                 files.push((name.to_string(), path));
             }
         }

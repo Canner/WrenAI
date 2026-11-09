@@ -411,6 +411,74 @@ fn dangling_root_file_symlinks_are_rejected_by_digest_capture_and_readers() {
     }
 }
 
+/// The Windows twin of the Unix test above. Creating a symlink there needs a privilege that CI
+/// runners and developer machines may lack (OS error 1314), in which case the test skips.
+#[test]
+#[cfg(windows)]
+fn dangling_root_file_symlinks_are_rejected_on_windows() {
+    use std::os::windows::fs::symlink_file;
+    use wren_context_loader::capture_project;
+    for name in [
+        "instructions.md",
+        "relationships.yml",
+        "cubes.yml",
+        "dashboards.yml",
+        "wren_project.yml",
+        "views.yml",
+    ] {
+        let project = copy_of("rules-wren");
+        if name == "views.yml" {
+            fs::write(
+                project.path().join("wren_project.yml"),
+                "schema_version: 1
+name: legacy
+catalog: wren
+schema: public
+data_source: duckdb
+",
+            )
+            .unwrap();
+        }
+        let link = project.path().join(name);
+        if link.exists() {
+            fs::remove_file(&link).unwrap();
+        }
+        match symlink_file(project.path().join("missing-target"), &link) {
+            Ok(()) => {}
+            Err(error) if error.raw_os_error() == Some(1314) => {
+                eprintln!("skipping: creating symlinks needs a privilege this account lacks");
+                return;
+            }
+            Err(error) => panic!("{name}: {error}"),
+        }
+        let rejected = |what: &str, result: std::io::Result<()>| {
+            let error = result.expect_err(&format!("{name}: {what}"));
+            assert!(
+                error.to_string().contains("directory_symlink_unsupported"),
+                "{name}: {what}: {error}"
+            );
+        };
+        if name != "views.yml" {
+            rejected("project_digest", project_digest(project.path()).map(|_| ()));
+        }
+        rejected(
+            "capture_project",
+            capture_project(project.path()).map(|_| ()),
+        );
+        if name == "instructions.md" {
+            rejected(
+                "read_knowledge_rules",
+                read_knowledge_rules(project.path()).map(|_| ()),
+            );
+        } else {
+            rejected(
+                "read_project_dir",
+                read_project_dir(project.path()).map(|_| ()),
+            );
+        }
+    }
+}
+
 #[test]
 #[cfg(unix)]
 fn a_dangling_legacy_views_yml_is_rejected_only_for_schema_v1() {

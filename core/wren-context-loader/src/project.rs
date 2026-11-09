@@ -705,7 +705,7 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
         "instructions.md",
     ] {
         let path = dir.join(name);
-        if path.is_file() {
+        if crate::digest::root_file_present(&path)? {
             files.push((name.to_string(), path));
         }
     }
@@ -721,7 +721,7 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
         .map(|project| validate_native_schema_version(project))
         .transpose()?
         .unwrap_or(false);
-    if legacy_or_default_v1 && dir.join("views.yml").is_file() {
+    if legacy_or_default_v1 && crate::digest::root_file_present(&dir.join("views.yml"))? {
         capture.flat_v1_source_paths.push("views.yml".to_string());
     }
     let sources = captured_sources(&capture.text, &capture.flat_v1_source_paths)?;
@@ -1141,7 +1141,7 @@ fn native_flat_v1_sources_without_counterparts(
             .into_iter()
             .filter(|path| path.is_dir())
             .any(|path| path.join("metadata.yml").is_file());
-    if dir.join("views.yml").is_file() && !has_view_counterpart {
+    if crate::digest::root_file_present(&dir.join("views.yml"))? && !has_view_counterpart {
         paths.push("views.yml".to_string());
     }
     paths.sort();
@@ -1186,7 +1186,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     use std::fs;
 
     let wren_project_path = dir.join("wren_project.yml");
-    if !wren_project_path.is_file() {
+    if !crate::digest::root_file_present(&wren_project_path)? {
         return Ok(None);
     }
     crate::digest::validate_source_directories(dir)?;
@@ -1206,8 +1206,8 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
         }
     }
 
-    let relationships_yml = read_if_exists(&dir.join("relationships.yml"))?;
-    let cubes_yml = read_if_exists(&dir.join("cubes.yml"))?;
+    let relationships_yml = read_root_if_exists(&dir.join("relationships.yml"))?;
+    let cubes_yml = read_root_if_exists(&dir.join("cubes.yml"))?;
 
     let mut cube_ymls = Vec::new();
     let cubes_dir = dir.join("cubes");
@@ -1254,7 +1254,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
         }
     }
 
-    let dashboards_yml = read_if_exists(&dir.join("dashboards.yml"))?;
+    let dashboards_yml = read_root_if_exists(&dir.join("dashboards.yml"))?;
 
     let sources = ProjectSources {
         wren_project_yml,
@@ -1359,7 +1359,7 @@ pub fn read_knowledge_rules(dir: &std::path::Path) -> std::io::Result<KnowledgeR
     }
 
     let legacy_path = dir.join("instructions.md");
-    let used_legacy = legacy_path.is_file();
+    let used_legacy = crate::digest::root_file_present(&legacy_path)?;
     if used_legacy {
         let contents = fs::read_to_string(legacy_path)?;
         if !contents.trim().is_empty() {
@@ -1976,6 +1976,17 @@ fn sorted_paths(
 #[cfg(all(not(target_arch = "wasm32"), not(unix)))]
 fn read_if_exists(path: &std::path::Path) -> std::io::Result<Option<String>> {
     if path.is_file() {
+        Ok(Some(std::fs::read_to_string(path)?))
+    } else {
+        Ok(None)
+    }
+}
+
+/// [`read_if_exists`] for a root project file, refusing a dangling symlink instead of treating it
+/// as absent (see `digest::root_file_present`).
+#[cfg(all(not(target_arch = "wasm32"), not(unix)))]
+fn read_root_if_exists(path: &std::path::Path) -> std::io::Result<Option<String>> {
+    if crate::digest::root_file_present(path)? {
         Ok(Some(std::fs::read_to_string(path)?))
     } else {
         Ok(None)
