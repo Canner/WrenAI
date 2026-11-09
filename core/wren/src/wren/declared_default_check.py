@@ -1117,6 +1117,10 @@ class _Statement:
         the per-currency results again. Only the plain GROUP BY items count: a
         currency inside ROLLUP, CUBE or GROUPING SETS gets super-aggregate rows that
         mix currencies, and ``WITH ROLLUP`` / ``WITH CUBE`` roll up the plain items.
+        Only an item that is the currency column itself counts: an expression over
+        it, such as ``LENGTH(currency)``, can merge currencies into one group. This
+        is conservative, so ``LOWER(currency)`` and ``UPPER(currency)`` do not count
+        either.
         """
         found = False
         for aggregate in self.aggregates:
@@ -1148,8 +1152,8 @@ class _Statement:
                     self.direct(column) in currencies
                     and self._currency_reaches(column, table, path, terms)
                     for group in groups
-                    for item in group.expressions
-                    for column in item.find_all(exp.Column)
+                    for column in map(_unparen, group.expressions)
+                    if isinstance(column, exp.Column)
                 ):
                     return False
         return found

@@ -727,6 +727,9 @@ def test_a_conversion_hidden_in_a_cte_without_a_date_bound_fires(checker):
         "GROUP BY p.currency, ROLLUP(o.status)",
         "SELECT p.currency, o.status, SUM(p.amount) FROM {c} WHERE NOT c.is_test "
         "GROUP BY p.currency, GROUPING SETS ((o.status), ())",
+        "SELECT p.currency, SUM(p.amount) FROM {c} WHERE NOT c.is_test GROUP BY 1",
+        "SELECT p.currency, SUM(p.amount) FROM {c} WHERE NOT c.is_test "
+        "GROUP BY (p.currency)",
     ],
     ids=[
         "groups by currency",
@@ -735,6 +738,8 @@ def test_a_conversion_hidden_in_a_cte_without_a_date_bound_fires(checker):
         "outer regrouped by currency",
         "currency beside a rollup",
         "currency beside grouping sets",
+        "groups by ordinal",
+        "parenthesised currency",
     ],
 )
 def test_per_currency_and_single_currency_queries_are_exempt(checker, sql):
@@ -758,6 +763,14 @@ def test_per_currency_and_single_currency_queries_are_exempt(checker, sql):
         "WHERE NOT c.is_test GROUP BY p.currency) SELECT SUM(a) FROM t",
         "SELECT p.currency, o.status, SUM(p.amount) FROM {c} WHERE NOT c.is_test "
         "GROUP BY o.status, ROLLUP(p.currency)",
+        "SELECT LENGTH(p.currency), SUM(p.amount) FROM {c} WHERE NOT c.is_test "
+        "GROUP BY LENGTH(p.currency)",
+        "SELECT SUM(p.amount) FROM {c} WHERE NOT c.is_test "
+        "GROUP BY SUBSTR(p.currency, 1, 1)",
+        "SELECT SUM(p.amount) FROM {c} WHERE NOT c.is_test "
+        "GROUP BY CASE WHEN p.currency = 'USD' THEN 1 ELSE 0 END",
+        "SELECT LOWER(p.currency), SUM(p.amount) FROM {c} WHERE NOT c.is_test "
+        "GROUP BY LOWER(p.currency)",
     ],
     ids=[
         "rollup",
@@ -767,6 +780,10 @@ def test_per_currency_and_single_currency_queries_are_exempt(checker, sql):
         "outer re-aggregation",
         "outer re-aggregation of a cte",
         "currency inside a rollup beside a plain item",
+        "expression over currency",
+        "substring of currency",
+        "case over currency",
+        "lowered currency (conservative)",
     ],
 )
 def test_mixed_currency_aggregates_are_not_exempt(checker, sql):
