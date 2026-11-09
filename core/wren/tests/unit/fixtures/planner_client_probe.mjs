@@ -45,8 +45,9 @@ class Agent {
   }
 }
 const context = vm.createContext({
-  process: { argv: ['node', clientPath, 'client.json', 'questions.json', outputPath], env: {} },
+  process: { argv: ['node', clientPath, 'client.json', 'questions.json', outputPath], env: config._probeEnv ?? {} },
 });
+let transportEnv = null;
 const modules = {
   'node:fs': { constants },
   'node:crypto': { randomUUID },
@@ -73,10 +74,10 @@ const modules = {
   '@earendil-works/pi-agent-core': { Agent },
   '@earendil-works/pi-ai/api/openai-completions': { streamSimple: () => { throw Error('provider must not run'); } },
   '@modelcontextprotocol/sdk/client/index.js': { Client },
-  '@modelcontextprotocol/sdk/client/stdio.js': { StdioClientTransport: class {} },
+  '@modelcontextprotocol/sdk/client/stdio.js': { StdioClientTransport: class { constructor(options) { transportEnv = options.env; } } },
 };
 const module = new vm.SourceTextModule(await readFile(clientPath, 'utf8'), { context });
-let error = null;
+let error = null, unwrittenErrors = null;
 try {
   await module.link(specifier => {
     const exports = modules[specifier];
@@ -88,8 +89,13 @@ try {
   await module.evaluate();
 } catch (failure) {
   error = failure.message;
+  unwrittenErrors = failure.unwrittenErrors ?? null;
 }
-const result = { timeouts, clients, error };
+const result = {
+  timeouts, clients, error,
+  ...(unwrittenErrors ? { unwrittenErrors } : {}),
+  ...(config._probeEnv ? { transportEnv } : {}),
+};
 try {
   if (config._probeSymlink) {
     result.targetContent = await readFile(targetPath, 'utf8');
