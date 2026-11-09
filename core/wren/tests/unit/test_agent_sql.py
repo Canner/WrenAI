@@ -1478,6 +1478,23 @@ def test_a_composite_key_requires_every_joined_key_for_view_aggregation():
     assert duplicated("v.id=d.id OR v.tenant_id=d.tenant_id") is True
 
 
+def test_a_semi_joined_view_is_no_evidence_for_another_models_key():
+    schema = {"invoice": {"id": "INT", "value": "INT"}, "extras": {"id": "INT"}}
+    query = AdHocSQL.__new__(AdHocSQL)
+    query.primary_keys = {"extras": frozenset(("id",))}
+    tree = sqlglot.parse_one(
+        "SELECT SUM(v.value) FROM (SELECT id, value FROM invoice) v "
+        "CROSS JOIN extras a SEMI JOIN (SELECT id FROM invoice) w ON a.id = w.id",
+        dialect="duckdb",
+    )
+    for name, subquery in zip(
+        ("invoice_value", "invoice_ids"), tree.find_all(exp.Subquery)
+    ):
+        subquery.meta[VIEW_MARK] = name
+    qualified = qualify(tree, dialect="duckdb", schema=schema, identify=True)
+    assert query._duplicate_aggregation(list(traverse_scope(qualified))) is True
+
+
 def test_models_keyed_only_to_each_other_still_multiply_the_view():
     schema = {
         "invoice": {"id": "INT", "value": "INT"},

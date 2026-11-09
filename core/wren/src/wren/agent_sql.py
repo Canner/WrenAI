@@ -485,7 +485,7 @@ class AdHocSQL:
                 for alias, source in scope.sources.items()
                 if isinstance(source, exp.Table) and alias not in never_repeat
             }
-            bounded = set(views)
+            bounded = set(views) - never_repeat
             grew = True
             while grew:
                 grew = False
