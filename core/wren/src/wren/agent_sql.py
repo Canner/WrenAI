@@ -462,8 +462,6 @@ class AdHocSQL:
                 conditions.append((select.args["where"].this, None))
             edges = []
             for condition, through in conditions:
-                if through == ():
-                    continue
                 for term in self._conjuncts(condition) if condition is not None else ():
                     while isinstance(term, exp.Paren):
                         term = term.this
@@ -507,13 +505,14 @@ class AdHocSQL:
 
     @staticmethod
     def _bounds_through(join):
-        """The sources ``join``'s ``ON`` can bound: ``None`` for any (an inner join), only the
-        joined source for a ``LEFT`` join (its ``ON`` keeps every row of the preserved side), and
-        none, ``()``, for a ``RIGHT`` or ``FULL`` join."""
-        side = join.args.get("side")
-        if not side:
-            return None
-        return (join.this.alias_or_name,) if side == "LEFT" else ()
+        """The sources ``join``'s ``ON`` can bound, ``None`` meaning any. An inner or ``RIGHT``
+        join emits a row of the sources before it only when the ``ON`` holds, so its equalities
+        bound any side. A ``LEFT`` or ``FULL`` join also keeps the earlier rows that match
+        nothing, so its ``ON`` bounds only the joined source: each earlier row still repeats once
+        per matching joined row, at most once when that row's key is equated."""
+        if join.args.get("side") in ("LEFT", "FULL"):
+            return (join.this.alias_or_name,)
+        return None
 
     @staticmethod
     def _reject_unsupported_forms(tree):
