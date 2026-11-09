@@ -1276,6 +1276,14 @@ fn join_using_columns_reach_the_cube_member_like_the_on_form() {
             "SELECT 1 FROM orders o RIGHT ANTI JOIN order_metrics m USING (placed_at)",
         ),
         (
+            "using-right-semi-left-cube",
+            "SELECT 1 FROM order_metrics m RIGHT SEMI JOIN orders o USING (placed_at)",
+        ),
+        (
+            "using-right-anti-left-cube",
+            "SELECT 1 FROM order_metrics m RIGHT ANTI JOIN orders o USING (placed_at)",
+        ),
+        (
             "using-nested-join",
             "SELECT 1 FROM (orders o JOIN order_metrics m USING (placed_at))",
         ),
@@ -1309,6 +1317,8 @@ fn join_using_columns_reach_the_cube_member_like_the_on_form() {
         "query:using-bare-anti",
         "query:using-right-semi",
         "query:using-right-anti",
+        "query:using-right-semi-left-cube",
+        "query:using-right-anti-left-cube",
     ] {
         assert!(
             reaches(&ctx, seed, query),
