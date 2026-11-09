@@ -129,3 +129,31 @@ def test_every_read_is_bounded_by_the_chunk_size(tmp_path, monkeypatch, compute)
     compute(root)
     assert len(sizes) >= 4
     assert all(0 < size <= fingerprint._READ_CHUNK_BYTES for size in sizes)
+
+
+def test_a_removed_registered_target_file_is_a_change(tmp_path):
+    root = tmp_path / "project"
+    shutil.copytree(FIXTURE, root)
+    manifest = root / "target" / "mdl.json"
+    manifest.parent.mkdir(exist_ok=True)
+    manifest.write_text("{}")
+    value, error = fingerprint.worker_frame(str(root), [str(manifest)])
+    assert error is None and len(value) == 64
+    manifest.unlink()
+    assert (root / "wren_project.yml").exists()
+    assert fingerprint.worker_frame(str(root), [str(manifest)]) == (None, ("changed",))
+
+
+def test_startup_fingerprint_reports_a_mid_read_change_as_context_changed(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    from wren.agent_project import Project  # noqa: PLC0415
+    from wren.context_adapter import ContextChanged  # noqa: PLC0415
+
+    root = tmp_path / "project"
+    shutil.copytree(FIXTURE, root)
+    _length_moves(monkeypatch)
+    with pytest.raises(ContextChanged):
+        Project.fingerprint(SimpleNamespace(root=root, paths=[], startup_sources={}))
