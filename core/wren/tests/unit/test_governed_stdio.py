@@ -480,6 +480,31 @@ def test_definition_comes_from_executed_sql(bound_transport):
     }
 
 
+@pytest.mark.parametrize(
+    ("sql", "filters"),
+    [
+        (
+            "WITH unused AS (SELECT n FROM orders WHERE n > 0) SELECT n FROM orders",
+            [],
+        ),
+        (
+            "WITH a AS (SELECT n FROM orders WHERE n > 0), "
+            "b AS (SELECT n FROM a WHERE n < 9), "
+            "unused AS (SELECT n FROM orders WHERE n = 5) "
+            "SELECT n FROM b WHERE n <> 3",
+            ["n <> 3", "n > 0", "n < 9"],
+        ),
+    ],
+)
+def test_definition_filters_only_what_feeds_the_result(bound_transport, sql, filters):
+    frames = bound_transport.run(
+        (
+            json.dumps({"id": 1, "operation": "query", "sql": sql, "limit": 5}) + "\n"
+        ).encode()
+    )
+    assert sorted(frames[-1]["result"]["definition"]["filters"]) == sorted(filters)
+
+
 JAFFLE_SHAPED = {
     "models": [{"name": "orders"}, {"name": "customers"}],
     "views": [{"name": "example_view"}],
