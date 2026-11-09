@@ -1376,6 +1376,19 @@ def test_an_unquoted_lowercase_view_body_model_matches_mixed_case_schema():
     assert broken == set()
 
 
+def test_case_distinct_view_names_are_never_read_as_each_other():
+    views = [
+        {"name": "Clean", "statement": "SELECT id FROM orders WHERE NOT is_test"},
+        {"name": "clean", "statement": "SELECT id FROM orders"},
+    ]
+    usable, broken = read_view_bodies(
+        {"orders": {"id": "integer", "is_test": "boolean"}},
+        {"views": [{"name": v["name"]} for v in views]},
+        {"views": views},
+    )
+    assert usable == {} and broken == {"clean"}
+
+
 def test_a_cte_defined_later_or_elsewhere_is_still_external(adhoc):
     unresolved = {
         "views/ghost_cte/metadata.yml": "name: ghost_cte\n",
@@ -1460,6 +1473,9 @@ def test_a_composite_key_requires_every_joined_key_for_view_aggregation():
 
     assert duplicated("v.id=d.id") is True
     assert duplicated("v.id=d.id AND v.tenant_id=d.tenant_id") is False
+    assert duplicated("TRUE") is True
+    assert duplicated("v.id > d.id") is True
+    assert duplicated("v.id=d.id OR v.tenant_id=d.tenant_id") is True
 
 
 @pytest.mark.parametrize(
@@ -2428,6 +2444,51 @@ def test_qualify_on_a_date_column_is_a_window(adhoc):
     assert DATE_WINDOW_UNVERIFIED not in unverified
 
 
+def test_qualify_after_a_window_aggregate_bounds_nothing(adhoc):
+    found, unverified = windows_of(
+        adhoc(),
+        f"SELECT SUM(amount) OVER () AS total FROM orders WHERE {SCOPED} "
+        "QUALIFY order_date >= DATE '2026-06-01'",
+    )
+    assert found == []
+    assert DATE_WINDOW_UNVERIFIED in unverified
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT COUNT(*) OVER () AS n FROM orders QUALIFY order_date >= DATE '2026-06-01'",
+        "SELECT n FROM (SELECT order_date, COUNT(*) OVER () AS n FROM orders) AS t "
+        "WHERE order_date >= DATE '2026-06-01'",
+        "WITH t AS (SELECT order_date, COUNT(*) OVER () AS n FROM orders) "
+        "SELECT n FROM t WHERE order_date >= DATE '2026-06-01'",
+    ],
+)
+def test_a_date_filter_applied_after_a_window_is_not_a_window(sql):
+    assert date_window_proof(sql) == ([], False)
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT ROW_NUMBER() OVER (PARTITION BY id ORDER BY id) AS rn FROM orders "
+        "QUALIFY rn = 1 AND order_date >= DATE '2026-06-01'",
+        "SELECT n FROM (SELECT order_date, COUNT(*) OVER (PARTITION BY order_date) AS n "
+        "FROM orders) AS t WHERE order_date >= DATE '2026-06-01'",
+    ],
+)
+def test_a_window_inside_one_date_or_one_row_keeps_the_later_filter(sql):
+    windows, pinned = date_window_proof(sql)
+    assert len(windows) == 1 and pinned
+
+
+def test_a_date_filter_before_the_window_still_bounds_it():
+    windows, pinned = date_window_proof(
+        "SELECT COUNT(*) OVER () AS n FROM orders WHERE order_date >= DATE '2026-06-01'"
+    )
+    assert len(windows) == 1 and pinned
+
+
 # -- coverage is per consuming edge ---------------------------------------------------------------
 
 BASE_CTE = (
@@ -2742,6 +2803,7 @@ def date_window_proof(sql):
     )
     gate = AdHocSQL.__new__(AdHocSQL)
     gate.date_columns = frozenset({("orders", "order_date")})
+    gate.primary_keys = {"orders": frozenset({"id"}), "customers": frozenset({"id"})}
     return gate._date_windows(list(traverse_scope(tree)))
 
 

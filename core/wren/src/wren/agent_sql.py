@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections import Counter
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import NamedTuple
@@ -193,10 +194,19 @@ def read_view_bodies(schema: dict, catalog: dict, manifest: dict | None):
         if isinstance(v, dict) and isinstance(v.get("name"), str)
     }
     usable, broken = {}, set()
+    # The engine resolves names case-sensitively, so ``Clean`` and ``clean`` are two
+    # views; read by folded name they would expand to each other. Neither is read.
+    folded = Counter(
+        v["name"].lower()
+        for v in ((manifest or {}).get("views") or [])
+        if isinstance(v, dict) and isinstance(v.get("name"), str)
+    ) | Counter(view["name"].lower() for view in catalog.get("views") or [])
     for view in catalog.get("views") or []:
         name = view["name"].lower()
         statement = statements.get(name)
         try:
+            if folded[name] > 1:
+                raise ValueError("case-distinct views share a folded name")
             if not isinstance(statement, str):
                 raise ValueError("no statement")
             body = sqlglot.parse_one(statement, read="duckdb")
@@ -409,9 +419,11 @@ class AdHocSQL:
         return None
 
     def _duplicate_aggregation(self, scopes):
-        """An aggregate over a view's value in a select that joins the view to a model on a
-        column that is not the model's key: each view row can repeat once per matching model
-        row, and the aggregate counts it every time."""
+        """An aggregate over a view's value in a select that also reads a model whose whole
+        primary key is not equated, in a top-level ``AND`` of a join condition or ``WHERE``,
+        to a column of another source: each view row can repeat once per matching model row
+        (a cross join, ``ON TRUE``, a non-key or ``OR``-ed key match), and the aggregate counts
+        it every time. A ``SEMI``/``ANTI`` join target never repeats a row."""
         for scope in scopes:
             select = scope.expression
             if not isinstance(select, exp.Select):
@@ -434,24 +446,34 @@ class AdHocSQL:
             }
             if not aggregated:
                 continue
-            conditions = [j.args.get("on") for j in select.args.get("joins") or []] + [
+            joins = select.args.get("joins") or []
+            never_repeat = {
+                j.this.alias_or_name
+                for j in joins
+                if j.args.get("kind") in ("SEMI", "ANTI")
+            }
+            conditions = [j.args.get("on") for j in joins] + [
                 w.this for w in [select.args.get("where")] if w is not None
             ]
-            matched_keys = {}
+            equated = {}
             for condition in conditions:
-                for node in condition.find_all(exp.EQ) if condition is not None else ():
-                    sides = (node.this, node.expression)
-                    if not all(isinstance(side, exp.Column) for side in sides):
+                for term in self._conjuncts(condition) if condition is not None else ():
+                    while isinstance(term, exp.Paren):
+                        term = term.this
+                    if not isinstance(term, exp.EQ):
                         continue
-                    for mine, other in (sides, sides[::-1]):
-                        source = scope.sources.get(other.table)
-                        if mine.table in aggregated and isinstance(source, exp.Table):
-                            matched_keys.setdefault(id(source), (source.name, set()))[
-                                1
-                            ].add(other.name)
+                    sides = (term.this, term.expression)
+                    if not all(isinstance(side, exp.Column) for side in sides) or (
+                        sides[0].table == sides[1].table
+                    ):
+                        continue
+                    for side in sides:
+                        equated.setdefault(side.table, set()).add(side.name)
             if any(
-                not (keys := self.primary_keys.get(model)) or not keys <= matched
-                for model, matched in matched_keys.values()
+                not (keys := self.primary_keys.get(source.name))
+                or not keys <= equated.get(alias, set())
+                for alias, source in scope.sources.items()
+                if isinstance(source, exp.Table) and alias not in never_repeat
             ):
                 return True
         return False
@@ -694,7 +716,12 @@ class AdHocSQL:
         Returns ``(windows, pinned)``. A window is listed per select and column from the
         comparisons of that column with a date or timestamp literal (``>=``, ``>``, ``<``,
         ``<=``, ``=``, ``BETWEEN``) in its ``WHERE``, ``HAVING``, ``QUALIFY`` and join
-        conditions. A date column that is also filtered any other way anywhere in the
+        conditions. A ``QUALIFY`` filters after the select's window functions read their rows:
+        a date term there bounds nothing, and leaves the column unpinned, unless every window
+        is partitioned by that column or its table's primary key (each window then reads only
+        rows of one date); the same holds for a filter on a date passed out of a derived
+        table, CTE or view that computes a window. A date column that is also filtered any
+        other way anywhere in the
         statement (``DATE_TRUNC``, ``EXTRACT``, arithmetic, a non-literal operand, an ``OR``,
         a ``CASE``/``FILTER`` condition, a derived value) is not listed and ``pinned`` is
         false: the host cannot say which dates the statement keeps. So is a select that
@@ -717,9 +744,21 @@ class AdHocSQL:
                 continue
             selects.append(scope)
             bounds = {}
+            qualify = select.args.get("qualify")
             for condition, join in self._conditions(select):
                 joined = join is not None
                 for term in self._conjuncts(condition):
+                    if (
+                        qualify is not None
+                        and condition is qualify.this
+                        and not all(
+                            self._windows_keep_rows_of(scope, column)
+                            for column in term.find_all(exp.Column)
+                        )
+                    ):
+                        if not self._is_null_check(term):
+                            unpinned |= self._date_refs(scope, term)
+                        continue
                     taken = self._bounds_of(scope, term)
                     if taken is not None and self._unfiltered_by(join, term):
                         continue
@@ -876,6 +915,39 @@ class AdHocSQL:
         model, _, column = qualified.partition(".")
         return model.lower(), column.lower()
 
+    def _windows_keep_rows_of(self, scope, column):
+        """Whether every window function ``scope``'s select itself computes reads only rows that
+        share ``column``'s value: each is partitioned by ``column`` or by every primary key
+        column of ``column``'s table. A filter on ``column`` applied after such windows drops
+        whole partitions, so it bounds what they read; after any other window it does not."""
+        select = scope.expression
+        if not isinstance(select, exp.Select):
+            return True
+        source = scope.sources.get(column.table)
+        keys = frozenset()
+        if isinstance(source, exp.Table):
+            keys = next(
+                (
+                    frozenset(k.lower() for k in pk)
+                    for model, pk in self.primary_keys.items()
+                    if model.lower() == source.name.lower()
+                ),
+                frozenset(),
+            )
+        for window in select.find_all(exp.Window):
+            if window.find_ancestor(exp.Select) is not select:
+                continue
+            partition = {
+                part.name.lower()
+                for part in window.args.get("partition_by") or []
+                if isinstance(part, exp.Column) and part.table == column.table
+            }
+            if column.name.lower() not in partition and not (
+                keys and keys <= partition
+            ):
+                return False
+        return True
+
     @staticmethod
     def _conditions(select):
         """``(condition, join)`` for every filter position of a select: the join whose ``ON``
@@ -963,7 +1035,9 @@ class AdHocSQL:
                 ),
                 None,
             )
-            if not isinstance(inner, exp.Column):
+            if not isinstance(inner, exp.Column) or not self._windows_keep_rows_of(
+                source, inner
+            ):
                 return None
             scope, node, depth = source, inner, depth + 1
         return None
