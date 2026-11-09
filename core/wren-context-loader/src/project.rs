@@ -1400,9 +1400,10 @@ const DECLARED_DEFAULT_KINDS: [&str; 3] = ["exclude_rows", "require_rate_join", 
 /// fence as the first line, a closing fence, `defaults[].id` matching
 /// `^[a-z0-9][a-z0-9_-]{0,63}$`.
 ///
-/// A leading block is read as declarations only when it carries a declaration signal (see
-/// [`declares`]); without one it is ordinary text, such as a markdown horizontal rule followed by
-/// prose, and the file declares nothing and warns about nothing.
+/// A leading block is read as declarations only when it carries a declaration signal (a
+/// `defaults`, `denied_columns` or `semantics` key, or `id:` with `kind:`); without one it is
+/// ordinary text, such as a markdown horizontal rule followed by prose, and the file declares
+/// nothing and warns about nothing.
 ///
 /// The outcome is all-or-nothing, like the CLI's: when a declaring block is malformed (a bad id,
 /// an unknown kind, a repeated id, `defaults` not a list, a declaration-shaped sequence root or
