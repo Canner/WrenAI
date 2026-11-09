@@ -999,6 +999,60 @@ class TestIncrementalSchemaIndex:
             == "varchar"
         )
 
+    def test_readers_always_find_the_table_and_the_unchanged_rows(self, tmp_path):
+        import threading  # noqa: PLC0415
+
+        import lancedb  # noqa: PLC0415
+
+        store, _ = _recording_store(tmp_path)
+        manifest = {
+            "models": [
+                {
+                    "name": f"m{m}",
+                    "columns": [{"name": f"c{c}", "type": "int"} for c in range(10)],
+                }
+                for m in range(30)
+            ]
+        }
+        store.index_schema(manifest, seed_queries=False)
+        total = 30 * 11
+
+        changed = copy.deepcopy(manifest)
+        for model in changed["models"][:10]:
+            model["columns"][0]["type"] = "bigint"
+        # Rows of the 10 changed models are rewritten (each model's text lists
+        # its columns, so the model row and the edited column both change).
+        rewritten = 10 * 2
+        errors: list[BaseException] = []
+        counts: list[int] = []
+        stop = threading.Event()
+
+        def read():
+            # A separate connection, as a concurrent `wren memory fetch` has.
+            db = lancedb.connect(str(tmp_path))
+            while not stop.is_set():
+                try:
+                    counts.append(db.open_table("schema_items").count_rows())
+                except BaseException as exc:  # noqa: BLE001
+                    errors.append(exc)
+
+        reader = threading.Thread(target=read)
+        reader.start()
+        try:
+            # Alternate so the writer keeps rewriting the same 20 rows.
+            for i in range(6):
+                store.index_schema(
+                    changed if i % 2 == 0 else manifest, seed_queries=False
+                )
+        finally:
+            stop.set()
+            reader.join()
+
+        assert errors == []
+        assert counts, "the reader never ran"
+        # The rows that were not rewritten are visible in every read.
+        assert min(counts) >= total - rewritten
+
     def test_reset_forgets_the_embedding_model(self, tmp_path):
         store, embed = _recording_store(tmp_path)
         store.index_schema(_MANIFEST, seed_queries=False)
