@@ -774,6 +774,43 @@ def test_typo_declaration_envelope_refuses_startup_before_engine_or_frames(
     writer.assert_not_called()
 
 
+RATE_RULE = "knowledge/rules/canonical-metrics.md"
+RATE_MATCH = "match: on_or_before}\n"
+
+
+@pytest.mark.parametrize(
+    ("extra", "key"),
+    [
+        ("    base_currency: USD\n", "base_currency"),
+        ("    match: single\n", "match: single"),
+    ],
+)
+def test_legacy_refuses_rate_rules_it_cannot_evaluate_before_the_engine(
+    declaring, monkeypatch, extra, key
+):
+    rule = declaring.project / RATE_RULE
+    text = rule.read_text()
+    assert text.count(RATE_MATCH) == 1
+    rule.write_text(text.replace(RATE_MATCH, RATE_MATCH + extra))
+    writer = MagicMock(wraps=transport._write)
+    monkeypatch.setattr(transport, "_write", writer)
+    with pytest.raises(ValueError) as raised:
+        declaring.run(b'{"id":1,"operation":"inspect"}\n')
+    assert f"'{key}'" in str(raised.value)
+    assert "wren serve mcp --service-config" in str(raised.value)
+    assert "usd-at-transaction-date" not in str(raised.value)
+    declaring.factory.assert_not_called()
+    writer.assert_not_called()
+
+
+def test_legacy_starts_on_rate_rules_without_the_extended_keys(declaring):
+    text = (declaring.project / RATE_RULE).read_text()
+    assert "base_currency" not in text and "match: single" not in text
+    frames = declaring.run(b"")
+    assert frames[0]["protocol"] == "wren-governed/3"
+    declaring.factory.assert_called_once()
+
+
 def test_the_cli_reports_invalid_declarations_without_their_content(declaring):
     write_invalid_declaration(declaring)
     result = CliRunner().invoke(

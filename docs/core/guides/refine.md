@@ -190,8 +190,8 @@ filter cannot establish a row exclusion or a currency-filter exemption. In `wren
 and governed MCP, an applicable, non-exempt `require_rate_join` rule with `match: single`
 also requires a supported SQL structure proving at most one rate match per amount row,
 such as an ASOF join or a correctly partitioned and limited `ROW_NUMBER()` source.
-`governed-stdio` applies the basic currency/date rule without this additional single-match
-evaluation. These are structural checks; they do not inspect the actual rate-table contents
+`governed-stdio` refuses to start on a `require_rate_join` rule that declares
+`base_currency` or `match: single`; such rules need the governed MCP or agent service. These are structural checks; they do not inspect the actual rate-table contents
 or guarantee that every transaction has a matching rate. They also do not verify that the
 rate is multiplied into the amount or choose which declared date column is the right one.
 An exclusion flag written outside the supported forms above is treated as missing.

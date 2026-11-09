@@ -17,6 +17,8 @@ from wren.context import build_json
 from wren.context_adapter import _mentions_denied_key
 from wren.declared_default_check import DefaultsChecker
 from wren.declared_defaults import (
+    Declaration,
+    RequireRateJoin,
     _rules_files,
     read_declared_defaults,
     split_front_matter,
@@ -283,6 +285,23 @@ def _require_legacy_policy_support(project: Path) -> None:
                 raise ValueError(message)
 
 
+def _require_legacy_rate_support(declarations: list[Declaration]) -> None:
+    """Refuse rate rules whose extra keys only the governed service evaluates."""
+    for declaration in declarations:
+        if not isinstance(declaration, RequireRateJoin):
+            continue
+        for key, value in (
+            ("base_currency", declaration.base_currency),
+            ("match: single", declaration.match),
+        ):
+            if value is not None:
+                raise ValueError(
+                    f"Legacy governed-stdio cannot enforce '{key}' on a "
+                    "require_rate_join rule. "
+                    "Use 'wren serve mcp --service-config <config>' instead."
+                )
+
+
 def serve(project: Path) -> None:
     """Capture one project's manifest, policy and credentials before accepting work."""
     project = project.resolve(strict=True)
@@ -296,6 +315,7 @@ def serve(project: Path) -> None:
     manifest = build_json(project)
     dialect = get_sqlglot_dialect(DataSource(datasource))
     declarations = read_declared_defaults(project, manifest)
+    _require_legacy_rate_support(declarations)
     checker = DefaultsChecker(declarations, manifest, dialect) if declarations else None
     encoded = base64.b64encode(json.dumps(manifest).encode()).decode()
     home = Path(os.environ.get("WREN_HOME", Path.home() / ".wren")).expanduser()
