@@ -413,6 +413,64 @@ fn dangling_root_file_symlinks_are_rejected_by_digest_capture_and_readers() {
 
 #[test]
 #[cfg(unix)]
+fn a_dangling_legacy_views_yml_is_rejected_only_for_schema_v1() {
+    use std::os::unix::fs::symlink;
+    use wren_context_loader::capture_project;
+    for (schema, rejected) in [(1, true), (5, false)] {
+        let project = tempfile::tempdir().unwrap();
+        fs::write(
+            project.path().join("wren_project.yml"),
+            format!(
+                "schema_version: {schema}
+name: legacy
+catalog: wren
+schema: public
+data_source: duckdb
+"
+            ),
+        )
+        .unwrap();
+        fs::create_dir_all(project.path().join("models/orders")).unwrap();
+        fs::write(
+            project.path().join("models/orders/metadata.yml"),
+            "name: orders
+table_reference: { catalog: demo, schema: main, table: orders }
+primary_key: id
+columns:
+  - { name: id, type: INTEGER }
+",
+        )
+        .unwrap();
+        symlink(
+            project.path().join("missing-target"),
+            project.path().join("views.yml"),
+        )
+        .unwrap();
+        for (what, result) in [
+            (
+                "read_project_dir",
+                read_project_dir(project.path()).map(|_| ()),
+            ),
+            (
+                "capture_project",
+                capture_project(project.path()).map(|_| ()),
+            ),
+        ] {
+            if rejected {
+                let error = result.expect_err(what);
+                assert!(
+                    error.to_string().contains("directory_symlink_unsupported"),
+                    "schema {schema} {what}: {error}"
+                );
+            } else {
+                result.unwrap_or_else(|error| panic!("schema {schema} {what}: {error}"));
+            }
+        }
+    }
+}
+
+#[test]
+#[cfg(unix)]
 fn root_file_symlinks_to_files_are_read_and_missing_root_files_are_absent() {
     use std::os::unix::fs::symlink;
     let project = copy_of("rules-wren");

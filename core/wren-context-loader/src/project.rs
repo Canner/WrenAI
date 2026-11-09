@@ -631,7 +631,7 @@ fn native_flat_v1_sources_without_counterparts(
         })
         .transpose()?
         .unwrap_or(false);
-    if root.open_regular_file("views.yml".as_ref())?.is_some() && !has_view_counterpart {
+    if root.open_root_file("views.yml".as_ref())?.is_some() && !has_view_counterpart {
         paths.push("views.yml".to_string());
     }
     paths.sort();
@@ -677,7 +677,7 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
         .map(|project| validate_native_schema_version(project))
         .transpose()?
         .unwrap_or(false);
-    if legacy_or_default_v1 && root.open_regular_file("views.yml".as_ref())?.is_some() {
+    if legacy_or_default_v1 && root.open_root_file("views.yml".as_ref())?.is_some() {
         capture.flat_v1_source_paths.push("views.yml".to_string());
     }
     let digest = capture.digest();
