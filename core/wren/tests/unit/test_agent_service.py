@@ -523,6 +523,46 @@ def test_an_edit_during_startup_refuses_the_service(service, monkeypatch):
         service()
 
 
+def test_a_manifest_replaced_after_the_engine_read_it_refuses_the_service(
+    service, monkeypatch
+):
+    import wren.agent_service as agent_service  # noqa: PLC0415
+
+    open_engine = agent_service.open_engine
+
+    def replace_manifest_then_return(*args, **kwargs):
+        engine = open_engine(*args, **kwargs)
+        manifest = service.root / "target/mdl.json"
+        manifest.write_text(manifest.read_text().replace("Customers and", "Buyers and"))
+        return engine
+
+    monkeypatch.setattr(agent_service, "open_engine", replace_manifest_then_return)
+    with pytest.raises(ValueError, match="context_changed"):
+        service()
+
+
+def test_a_bundle_file_replaced_after_the_compile_refuses_the_service(
+    service, monkeypatch, tmp_path
+):
+    import shutil  # noqa: PLC0415
+
+    import wren.agent_service as agent_service  # noqa: PLC0415
+
+    bundle = tmp_path / "bundle"
+    shutil.copytree(EXAMPLES / "profiles/analysis", bundle)
+    open_engine = agent_service.open_engine
+
+    def replace_component_then_return(*args, **kwargs):
+        engine = open_engine(*args, **kwargs)
+        respond = bundle / "components/data_worker/respond.md"
+        respond.write_text(respond.read_text() + "\nReplaced after the compile.\n")
+        return engine
+
+    monkeypatch.setattr(agent_service, "open_engine", replace_component_then_return)
+    with pytest.raises(ValueError, match="context_changed"):
+        service(profile=str(bundle))
+
+
 def test_context_loaded_reports_budget_paging_and_identity(service, tmp_path):
     sink = tmp_path / "audit.jsonl"
     s = service(updates={"audit_path": str(sink)})

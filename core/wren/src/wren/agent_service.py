@@ -1894,31 +1894,40 @@ def build_mcp(service: Service):
     return mcp
 
 
-def stage_bundle(bundle: Path, staged: Path, prepared: dict) -> None:
+def stage_bundle(bundle: Path, staged: Path, prepared: dict) -> dict[Path, bytes]:
     """Copy the profile bundle and bind its prepared context to this project's loader output.
 
     A bundle whose binding is ``kind: prepared`` names a document that the project, not the
     bundle author, determines; the staged copy carries the loader's prepared context there so
     ``warble compile`` sees the bound project. The bundle on disk is never modified.
+
+    Returns the bytes copied for every bundle file, keyed by its path in ``bundle``: what the
+    compiler consumed, so the service's fingerprint can be bound to it.
     """
     shutil.copytree(bundle, staged)
+    copied = {
+        bundle / path.relative_to(staged): path.read_bytes()
+        for path in sorted(staged.rglob("*"))
+        if path.is_file()
+    }
     profile_path = staged / "profile.yml"
     profile = (
         yaml.safe_load(profile_path.read_text()) if profile_path.is_file() else None
     )
     reference = ((profile or {}).get("context") or {}).get("project")
     if not isinstance(reference, str):
-        return
+        return copied
     binding_path = contained(staged, reference)
     binding = yaml.safe_load(binding_path.read_text()) or {}
     if binding.get("kind") != "prepared":
-        return
+        return copied
     document = (
         binding_path.parent / binding.get("project", ".") / binding["document"]
     ).resolve()
     if not document.is_relative_to(staged):
         raise ValueError("invalid_project_file")
     document.write_text(json.dumps(prepared))
+    return copied
 
 
 def open_engine(root: Path, config: dict, connection_profile: str | None):
@@ -1996,7 +2005,7 @@ def create_service(
     reader = ContextReader(snapshot, snapshot.denied, profile["context_budget_bytes"])
     with tempfile.TemporaryDirectory(prefix="wren-profile-") as temp:
         staged = Path(temp).resolve() / "bundle"
-        stage_bundle(bundle, staged, snapshot.prepared)
+        compiled = stage_bundle(bundle, staged, snapshot.prepared)
         ir_path = staged.parent / "ir.json"
         subprocess.run(
             [warble, "compile", str(staged), "--out", str(ir_path)],
@@ -2019,6 +2028,17 @@ def create_service(
             raise ContextChanged(
                 "the engine manifest differs from the validated context"
             )
+        # Bind the fingerprint to the bytes each consumer parsed: the validated manifest,
+        # the bundle the compiler saw, the config and capabilities read above. A later
+        # replacement of any of them then reads as a change, never as the baseline.
+        consumed = {
+            **compiled,
+            root / "target/mdl.json": snapshot.manifest_bytes,
+            config_path: config_bytes,
+        }
+        if compiled.get(capabilities_path, capabilities_bytes) != capabilities_bytes:
+            raise ContextChanged("the profile bundle changed while it was being read")
+        consumed[capabilities_path] = capabilities_bytes
         return _assemble_service(
             root,
             bundle,
@@ -2034,7 +2054,7 @@ def create_service(
             snapshot,
             reader,
             execution,
-            {config_path: config_bytes, capabilities_path: capabilities_bytes},
+            consumed,
         )
     except BaseException:
         if hasattr(engine, "close"):
