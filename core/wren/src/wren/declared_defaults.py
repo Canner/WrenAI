@@ -48,6 +48,11 @@ MAX_DECLARATIONS = 8
 KINDS = ("exclude_rows", "require_rate_join", "sale_statuses")
 MAX_STATUS_VALUES = 64
 _FENCE = "---"
+# Top-level front-matter keys that make a leading ``---`` block a declaration block.
+_SIGNAL_KEYS = frozenset({"defaults", "denied_columns", "semantics"})
+_SIGNAL_KEY = re.compile(r"""^["']?(?:defaults|denied_columns|semantics)["']?\s*:""")
+_SIGNAL_ID = re.compile(r"^\s*(?:-\s+)?id\s*:")
+_SIGNAL_KIND = re.compile(r"^\s*(?:-\s+)?kind\s*:")
 
 
 def _declaration_shaped(value):
@@ -143,6 +148,35 @@ Declaration = ExcludeRows | RequireRateJoin | SaleStatuses
 def fold(value: str) -> str:
     """The comparison form of a status value."""
     return value.casefold()
+
+
+def _declares(block: list[str], closed: bool) -> bool:
+    """Whether a leading ``---`` block carries a declaration signal.
+
+    Without one the block is ordinary text, such as a markdown horizontal rule
+    followed by prose, and the file declares nothing: no declaration and no error.
+    """
+    if any(_SIGNAL_KEY.match(line) for line in block):
+        return True
+    if any(_SIGNAL_ID.match(line) for line in block) and any(
+        _SIGNAL_KIND.match(line) for line in block
+    ):
+        return True
+    if not closed:
+        return False
+    # Quoted or escaped key spellings must not hide a declaration.
+    try:
+        data = yaml.safe_load("\n".join(block))
+    except yaml.YAMLError:
+        return False
+    if isinstance(data, list):
+        return any(_declaration_shaped(item) for item in data)
+    if not isinstance(data, dict):
+        return False
+    return any(key in _SIGNAL_KEYS for key in data) or any(
+        isinstance(value, list) and any(_declaration_shaped(item) for item in value)
+        for value in data.values()
+    )
 
 
 def split_front_matter(text: str) -> tuple[str | None, str]:
@@ -591,9 +625,11 @@ class _Parser:
         try:
             front, _ = split_front_matter(text)
         except ValueError as error:
-            self.error(label, str(error))
+            unclosed = text.lstrip("\ufeff").lstrip().splitlines()[1:]
+            if _declares(unclosed, closed=False):
+                self.error(label, str(error))
             return
-        if front is None:
+        if front is None or not _declares(front.splitlines(), closed=True):
             return
         try:
             loader = yaml.SafeLoader(front)

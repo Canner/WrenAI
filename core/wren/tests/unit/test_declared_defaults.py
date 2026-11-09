@@ -175,6 +175,45 @@ def test_an_unclosed_fence_is_an_error_not_a_silent_skip(project):
     ]
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "---\n# Rules\n\nAlways filter test accounts.\n",
+        "---\ntitle: Rules\n---\n# Prose\n",
+        "---\nNote: filter test accounts: always.\n---\nMore prose.\n",
+    ],
+    ids=["horizontal rule, no closing fence", "yaml without keys", "prose with colon"],
+)
+def test_a_fence_without_declaration_keys_is_prose(project, text):
+    (project / "knowledge" / "rules" / "prose.md").write_text(text)
+    assert parse(project) == ([], [])
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("---\n# Rules\ndefaults:\n", "front-matter is not closed by a '---' line"),
+        ("---\ndefaults:\n  lang: en\n---\n", "'defaults' must be a list"),
+        (
+            "---\nrules:\n  - id: x\n    kind: exclude_rows\n---\n",
+            "declarations must be under the 'defaults' key",
+        ),
+        ('---\n"defaults": {lang: en}\n---\n', "'defaults' must be a list"),
+    ],
+    ids=["unclosed with defaults", "defaults mapping", "id and kind", "quoted key"],
+)
+def test_a_fence_with_declaration_keys_still_fails_loudly(project, text, message):
+    (project / "knowledge" / "rules" / "broken.md").write_text(text)
+    assert parse(project) == ([], [("knowledge/rules/broken.md", message)])
+
+
+def test_validate_project_accepts_a_prose_rule_opening_with_a_rule_line(project):
+    (project / "knowledge" / "rules" / "prose.md").write_text(
+        "---\n# Rules\n\nAlways filter test accounts.\n"
+    )
+    assert validate_project(project) == []
+
+
 def mutate(front: str, old: str, new: str) -> str:
     assert old in front
     return front.replace(old, new)

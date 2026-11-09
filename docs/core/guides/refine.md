@@ -100,8 +100,11 @@ Exclude internal test accounts from every business metric. Report money in USD a
 rate on the transaction date.
 ```
 
-A rules file that opens with a `---` line must close the fence with another `---` line:
-an unclosed leading `---` is a declaration error, and `governed-stdio` refuses to start.
+A leading `---` block is a declaration block only when it carries a top-level
+`defaults:`, `denied_columns:` or `semantics:` key, or a list item with both `id:` and
+`kind:`; a fence without those keys is ordinary text, such as a markdown horizontal rule
+before prose, and declares nothing. A declaration block must close the fence with another
+`---` line: an unclosed one is a declaration error, and `governed-stdio` refuses to start.
 Rule ids are unique across the project; files are read in sorted order under
 `knowledge/rules/` and the legacy `instructions.md` is read last, which fixes the order of
 the ids a host sees.
