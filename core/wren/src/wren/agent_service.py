@@ -1977,14 +1977,16 @@ def create_service(
         # Bind the fingerprint to the bytes each consumer parsed: the validated manifest,
         # the bundle the compiler saw, the config and capabilities read above. A later
         # replacement of any of them then reads as a change, never as the baseline.
-        consumed = {
-            **compiled,
-            root / "target/mdl.json": snapshot.manifest_bytes,
-            config_path: config_bytes,
-        }
-        if compiled.get(capabilities_path, capabilities_bytes) != capabilities_bytes:
-            raise ContextChanged("the profile bundle changed while it was being read")
-        consumed[capabilities_path] = capabilities_bytes
+        consumed = dict(compiled)
+        for path, data in (
+            (root / "target/mdl.json", snapshot.manifest_bytes),
+            (config_path, config_bytes),
+            (capabilities_path, capabilities_bytes),
+        ):
+            # One path read twice (the bundle copy and a direct read, or two roles naming the
+            # same file) must have given the same bytes, or the inputs changed in between.
+            if consumed.setdefault(path, data) != data:
+                raise ContextChanged("a startup input changed while it was being read")
         return _assemble_service(
             root,
             bundle,

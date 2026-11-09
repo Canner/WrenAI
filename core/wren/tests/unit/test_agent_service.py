@@ -563,6 +563,26 @@ def test_a_bundle_file_replaced_after_the_compile_refuses_the_service(
         service(profile=str(bundle))
 
 
+def test_one_path_read_with_two_different_contents_refuses_the_service(
+    service, monkeypatch
+):
+    import wren.agent_service as agent_service  # noqa: PLC0415
+
+    stage_bundle = agent_service.stage_bundle
+
+    def staged_with_a_second_manifest_read(bundle, staged, prepared):
+        copied = stage_bundle(bundle, staged, prepared)
+        # As if the manifest were also read as another startup input, with other bytes.
+        copied[service.root / "target/mdl.json"] = b"{}"
+        return copied
+
+    monkeypatch.setattr(
+        agent_service, "stage_bundle", staged_with_a_second_manifest_read
+    )
+    with pytest.raises(ValueError, match="context_changed"):
+        service()
+
+
 def test_a_bundle_file_deleted_after_the_compile_refuses_the_service(
     service, monkeypatch, tmp_path
 ):
