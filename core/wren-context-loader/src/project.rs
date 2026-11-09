@@ -1622,7 +1622,7 @@ const DENIED_COLUMNS_KEY: &str = "denied_columns";
 /// plainly meant to declare something and a denylist that was only partly read must not be used.
 /// The same holds for a file with no front-matter at all that mentions the key. A front-matter
 /// key that only nearly spells `denied_columns` (other case, `-` for `_`, singular) is reported as
-/// an invalid entry rather than ignored. So is a file whose text mentions `denied_columns` but
+/// an invalid entry rather than ignored, at the top level or nested at any depth. So is a file whose text mentions `denied_columns` but
 /// whose front-matter has no top-level key of exactly that name (a merge key, a nested mapping, a
 /// top-level sequence, a comment, a typo): the declaration, if any, was not read. A scalar value
 /// is read as a one-entry list; a value that is not a name, or a bare key, is reported entry by
@@ -1664,15 +1664,13 @@ pub(crate) fn denied_column_declarations(files: &[KnowledgeRuleFile]) -> Vec<Den
                 continue;
             }
         };
-        if let Some(mapping) = data.as_mapping() {
-            for key in mapping.keys().filter_map(serde_yaml::Value::as_str) {
-                if is_near_miss_key(key) {
-                    out.push(DeniedDeclaration::Entry {
-                        path: file.path.clone(),
-                        entry: format!("near-miss key: {key}"),
-                    });
-                }
-            }
+        let mut near_misses = Vec::new();
+        collect_near_miss_keys(&data, &mut near_misses);
+        for key in near_misses {
+            out.push(DeniedDeclaration::Entry {
+                path: file.path.clone(),
+                entry: format!("near-miss key: {key}"),
+            });
         }
         let Some(value) = data.get(DENIED_COLUMNS_KEY) else {
             if mentions_key_as_a_word(&file.content) {
@@ -1723,6 +1721,28 @@ fn mentions_denied_key_or_near_miss(text: &str) -> bool {
         || text
             .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-'))
             .any(is_near_miss_key)
+}
+
+/// Every mapping key at any depth of `value` (through nested mappings and sequences) that only
+/// nearly spells `denied_columns`, in document order.
+fn collect_near_miss_keys<'a>(value: &'a serde_yaml::Value, out: &mut Vec<&'a str>) {
+    match value {
+        serde_yaml::Value::Mapping(mapping) => {
+            for (key, child) in mapping {
+                if let Some(key) = key.as_str().filter(|key| is_near_miss_key(key)) {
+                    out.push(key);
+                }
+                collect_near_miss_keys(child, out);
+            }
+        }
+        serde_yaml::Value::Sequence(items) => {
+            for item in items {
+                collect_near_miss_keys(item, out);
+            }
+        }
+        serde_yaml::Value::Tagged(tagged) => collect_near_miss_keys(&tagged.value, out),
+        _ => {}
+    }
 }
 
 /// A key that case-insensitively matches `denied[_-]?columns?` without being `denied_columns`.

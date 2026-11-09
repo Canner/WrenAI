@@ -380,3 +380,42 @@ fn the_binary_exits_zero_and_writes_the_invalid_flag() {
     assert_eq!(written["denied_columns_invalid"], true);
     assert_eq!(written["diagnostics"][0]["entry"], "customers.nope");
 }
+
+#[test]
+fn a_nested_near_miss_key_is_an_invalid_declaration_not_a_silent_no_op() {
+    for (key, text) in [
+        (
+            "Denied-Columns",
+            "---\npolicy:\n  Denied-Columns: [customers.email]\n---\nbody\n",
+        ),
+        (
+            "Denied_Column",
+            "---\npolicy:\n  - Denied_Column: customers.email\n---\nbody\n",
+        ),
+        (
+            "deniedcolumns",
+            "---\na:\n  b:\n    deniedcolumns: [customers.email]\n---\nbody\n",
+        ),
+        (
+            "DENIED-COLUMN",
+            "---\n- DENIED-COLUMN: [customers.email]\n---\nbody\n",
+        ),
+    ] {
+        let project = project_with_rule(text);
+        let doc = catalog_json(project.path());
+        assert_eq!(doc["denied_columns_invalid"], true, "{key}");
+        assert!(doc.get("denied_columns").is_none(), "{key}");
+        assert_eq!(
+            doc["diagnostics"][0]["entry"],
+            format!("near-miss key: {key}"),
+            "{key}"
+        );
+    }
+    // Nested keys that are not near misses stay metadata.
+    let project = project_with_rule(
+        "---\npolicy:\n  owner: data-team\n  denied_columns_note: x\n  items:\n    - denied: x\n---\nbody\n",
+    );
+    assert!(catalog_json(project.path())
+        .get("denied_columns_invalid")
+        .is_none());
+}
