@@ -1003,9 +1003,9 @@ fn validate_native_cube_source(sources: &ProjectSources) -> std::io::Result<()> 
     let directory_cubes = sources
         .cube_ymls
         .iter()
-        .map(|yml| parse_mapping_doc::<CubeFile>(yml))
-        .collect::<Result<Option<Vec<_>>, _>>();
-    let Some(directory_cubes) = directory_cubes.ok().flatten() else {
+        .filter_map(|yml| parse_mapping_doc::<CubeFile>(yml).transpose())
+        .collect::<Result<Vec<_>, _>>();
+    let Ok(directory_cubes) = directory_cubes else {
         return Err(native_cube_mirror_error());
     };
 

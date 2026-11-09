@@ -179,6 +179,20 @@ fn root_cube_mirror_requires_usable_matching_directory_semantics() {
         }
     }
 
+    let drafted = tempfile::tempdir().unwrap();
+    project(drafted.path());
+    write(drafted.path(), "cubes.yml", ROOT_CUBE);
+    write(
+        drafted.path(),
+        "cubes/order_metrics/metadata.yml",
+        CUBE_METADATA,
+    );
+    write(drafted.path(), "cubes/draft/metadata.yml", "# draft\n");
+    read_project_dir(drafted.path())
+        .expect("a comment-only draft cube must not void a correct mirror");
+    capture_project(drafted.path())
+        .expect("a comment-only draft cube must not void a correct mirror");
+
     let duplicate = tempfile::tempdir().unwrap();
     project(duplicate.path());
     write(duplicate.path(), "cubes.yml", ROOT_CUBE);
