@@ -974,6 +974,15 @@ def test_a_predicate_subquery_aggregate_cannot_address_the_enclosing_read(checke
     assert check(checker, sql) == [EXCLUDE]
 
 
+def test_a_joined_producers_group_cannot_address_a_sibling_read(checker):
+    # The derived table groups by the flag, but the count still covers every order.
+    sql = (
+        "SELECT COUNT(*) FROM (SELECT id FROM customers GROUP BY id, is_test) s "
+        "JOIN orders o ON o.customer_id = s.id"
+    )
+    assert check(checker, sql) == [EXCLUDE]
+
+
 def test_a_group_in_the_reads_own_select_still_addresses_the_flag(checker):
     derived = (
         "SELECT t, n FROM (SELECT c.is_test AS t, COUNT(*) AS n "
@@ -983,8 +992,14 @@ def test_a_group_in_the_reads_own_select_still_addresses_the_flag(checker):
         "SELECT COUNT(*) FROM orders o WHERE o.customer_id IN ("
         "SELECT c.id FROM customers c GROUP BY c.id, c.is_test HAVING NOT c.is_test)"
     )
+    regrouped_producer = (
+        "SELECT s.is_test, COUNT(*) FROM (SELECT id, is_test FROM customers "
+        "GROUP BY id, is_test) s JOIN orders o ON o.customer_id = s.id "
+        "GROUP BY s.is_test"
+    )
     assert check(checker, derived) == []
     assert check(checker, excluded_in_subquery) == []
+    assert check(checker, regrouped_producer) == []
 
 
 @pytest.fixture
