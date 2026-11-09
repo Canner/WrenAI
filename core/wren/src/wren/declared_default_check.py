@@ -1090,9 +1090,11 @@ class _Statement:
                 ):
                     if self.direct(side) in currencies and _is_string(other):
                         literals.append((conjunct, side))
-            elif isinstance(conjunct, exp.In) and conjunct.args.get("expressions"):
-                if self.direct(conjunct.this) in currencies and all(
-                    _is_string(value) for value in conjunct.expressions
+            # Only one pinned currency makes the amounts comparable: a multi-value
+            # IN mixes currencies exactly as the equivalent OR does.
+            elif isinstance(conjunct, exp.In) and len(conjunct.expressions) == 1:
+                if self.direct(conjunct.this) in currencies and _is_string(
+                    conjunct.expressions[0]
                 ):
                     literals.append((conjunct, conjunct.this))
         reads = self._amount_reads(amounts)
@@ -1109,24 +1111,45 @@ class _Statement:
         return bool(reads)
 
     def _groups_by_currency(self, currencies: set[Pair], amounts: set[Pair]) -> bool:
-        reads = self._amount_reads(amounts)
-        for table, path in reads:
-            owners = {id(scope.expression) for scope, _, _ in path}
-            terms = [
-                term
-                for scope in self.scopes
-                if id(scope.expression) in owners
-                for term in self._top_conjuncts(scope)
-            ]
-            if not any(
-                id(self._scope_for(group).expression) in owners
-                and self.direct(column) in currencies
-                and self._currency_reaches(column, table, path, terms)
+        """Every aggregate over an amount is grouped by its currency in its own scope.
+
+        A grouping in an inner scope does not carry to an outer aggregate that sums
+        the per-currency results again, and a ROLLUP, CUBE or GROUPING SETS adds
+        super-aggregate rows that mix currencies.
+        """
+        found = False
+        for aggregate in self.aggregates:
+            reads = self._amount_reads(amounts, aggregate)
+            if not reads:
+                continue
+            found = True
+            owner = self._scope_for(aggregate)
+            groups = [
+                group
                 for group in self.groups
-                for column in group.find_all(exp.Column)
-            ):
-                return False
-        return bool(reads)
+                if owner is not None
+                and self._scope_for(group) is owner
+                and not any(
+                    group.args.get(key) for key in ("rollup", "cube", "grouping_sets")
+                )
+            ]
+            for table, path in reads:
+                owners = {id(scope.expression) for scope, _, _ in path}
+                terms = [
+                    term
+                    for scope in self.scopes
+                    if id(scope.expression) in owners
+                    for term in self._top_conjuncts(scope)
+                ]
+                if not any(
+                    self.direct(column) in currencies
+                    and self._currency_reaches(column, table, path, terms)
+                    for group in groups
+                    for item in group.expressions
+                    for column in item.find_all(exp.Column)
+                ):
+                    return False
+        return found
 
 
 def _is_string(node: exp.Expression) -> bool:

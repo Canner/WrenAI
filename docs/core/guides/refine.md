@@ -173,7 +173,13 @@ that exempt a statement; the question is never consulted. `exclude_rows` accepts
 `addresses_column` (the statement selects the flag positively in a filter, groups by it
 or uses it inside an aggregate) and `filtered_by: <model.column predicate>` (the
 statement carries that predicate); `require_rate_join` accepts `groups_by_currency` and
-`filters_currency_literal`. Ids match `^[a-z0-9][a-z0-9_-]{0,63}$`, are unique across
+`filters_currency_literal`. `groups_by_currency` exempts an aggregate only when its own
+`SELECT` lists the amount group's currency column in a plain `GROUP BY`: `ROLLUP`, `CUBE`
+and `GROUPING SETS` add super-aggregate rows that mix currencies, and an outer aggregate
+that sums the per-currency results of a derived table or CTE again is not exempt.
+`filters_currency_literal` requires the filter to pin exactly one currency literal, with
+`=` or a one-element `IN`; `IN ('USD', 'EUR')` mixes currencies like the equivalent `OR`
+and is not an exemption. Ids match `^[a-z0-9][a-z0-9_-]{0,63}$`, are unique across
 the project, and at most 8 rules may be declared.
 
 The checks follow the model and amount reads that a predicate must restrict: an unrelated

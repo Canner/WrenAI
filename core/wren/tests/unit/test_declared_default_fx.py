@@ -476,6 +476,37 @@ def test_the_rules_own_unless_flags_still_excuse_the_statement():
     assert RATE not in " ".join(result.violations)
 
 
+@pytest.mark.parametrize(
+    "sql",
+    [
+        f"SELECT p.currency, SUM(p.amount) FROM {CHARGES} WHERE NOT c.is_test "
+        "GROUP BY ROLLUP(p.currency)",
+        f"SELECT p.currency, SUM(p.amount) FROM {CHARGES} WHERE NOT c.is_test "
+        "GROUP BY GROUPING SETS ((p.currency), ())",
+        f"SELECT SUM(p.amount) FROM {CHARGES} WHERE NOT c.is_test "
+        "AND p.currency IN ('USD', 'EUR')",
+        f"SELECT SUM(a) FROM (SELECT p.currency, SUM(p.amount) a FROM {CHARGES} "
+        "WHERE NOT c.is_test GROUP BY p.currency) t",
+    ],
+    ids=["rollup", "grouping sets", "multi-literal list", "outer re-aggregation"],
+)
+def test_the_unless_flags_do_not_excuse_mixed_currency_aggregates(sql):
+    manifest, rules = declared()
+    checker = DefaultsChecker(
+        [
+            replace(r, base_currency="USD", match="single")
+            if isinstance(r, RequireRateJoin)
+            else r
+            for r in rules
+        ],
+        manifest,
+        "duckdb",
+    )
+    result = verdict(checker, sql)
+    assert result.checks[RATE]["result"] != "satisfied"
+    assert any(RATE in violation for violation in result.violations)
+
+
 # -- the existing decisions, unchanged ----------------------------------------
 
 CORPUS = [
@@ -971,9 +1002,7 @@ def test_literal_currency_cannot_borrow_a_sibling_union_consumer():
     sql = "WITH shared AS (SELECT amount,currency FROM payments) SELECT SUM(amount) FROM shared WHERE currency='USD' UNION ALL SELECT SUM(amount) FROM shared"
     assert checker.check(parse_one(sql, dialect="duckdb")) == [RATE]
     assert (
-        checker.check(
-            parse_one(sql + " WHERE currency IN ('USD','EUR')", dialect="duckdb")
-        )
+        checker.check(parse_one(sql + " WHERE currency IN ('USD')", dialect="duckdb"))
         == []
     )
 

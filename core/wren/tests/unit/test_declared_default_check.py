@@ -720,12 +720,48 @@ def test_a_conversion_hidden_in_a_cte_without_a_date_bound_fires(checker):
     [
         "SELECT p.currency, SUM(p.amount) FROM {c} WHERE NOT c.is_test GROUP BY p.currency",
         "SELECT SUM(p.amount) FROM {c} WHERE NOT c.is_test AND p.currency = 'USD'",
-        "SELECT SUM(p.amount) FROM {c} WHERE NOT c.is_test AND p.currency IN ('EUR', 'GBP')",
+        "SELECT SUM(p.amount) FROM {c} WHERE NOT c.is_test AND p.currency IN ('EUR')",
+        "SELECT t.currency, SUM(t.a) FROM (SELECT p.currency, SUM(p.amount) a FROM {c} "
+        "WHERE NOT c.is_test GROUP BY p.currency) t GROUP BY t.currency",
     ],
-    ids=["groups by currency", "currency literal", "currency literal list"],
+    ids=[
+        "groups by currency",
+        "currency literal",
+        "one-literal list",
+        "outer regrouped by currency",
+    ],
 )
 def test_per_currency_and_single_currency_queries_are_exempt(checker, sql):
     assert check(checker, sql.format(c=CHARGES)) == []
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT p.currency, SUM(p.amount) FROM {c} WHERE NOT c.is_test "
+        "GROUP BY ROLLUP(p.currency)",
+        "SELECT p.currency, SUM(p.amount) FROM {c} WHERE NOT c.is_test "
+        "GROUP BY CUBE(p.currency)",
+        "SELECT p.currency, SUM(p.amount) FROM {c} WHERE NOT c.is_test "
+        "GROUP BY GROUPING SETS ((p.currency), ())",
+        "SELECT SUM(p.amount) FROM {c} WHERE NOT c.is_test "
+        "AND p.currency IN ('USD', 'EUR')",
+        "SELECT SUM(a) FROM (SELECT p.currency, SUM(p.amount) a FROM {c} "
+        "WHERE NOT c.is_test GROUP BY p.currency) t",
+        "WITH t AS (SELECT p.currency, SUM(p.amount) a FROM {c} "
+        "WHERE NOT c.is_test GROUP BY p.currency) SELECT SUM(a) FROM t",
+    ],
+    ids=[
+        "rollup",
+        "cube",
+        "grouping sets",
+        "multi-literal list",
+        "outer re-aggregation",
+        "outer re-aggregation of a cte",
+    ],
+)
+def test_mixed_currency_aggregates_are_not_exempt(checker, sql):
+    assert check(checker, sql.format(c=CHARGES)) == [RATE]
 
 
 def test_a_non_literal_currency_filter_is_not_an_exemption(checker):
