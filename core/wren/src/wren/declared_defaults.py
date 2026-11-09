@@ -53,6 +53,8 @@ _SIGNAL_KEYS = frozenset({"defaults", "denied_columns", "semantics"})
 _SIGNAL_KEY = re.compile(r"""^["']?(?:defaults|denied_columns|semantics)["']?\s*:""")
 _SIGNAL_ID = re.compile(r"^\s*(?:-\s+)?id\s*:")
 _SIGNAL_KIND = re.compile(r"^\s*(?:-\s+)?kind\s*:")
+# A flow-style item such as ``- {id: x, kind: exclude_rows}`` on one line.
+_SIGNAL_FLOW = re.compile(r"(?=.*\bid\s*:)(?=.*\bkind\s*:)")
 
 
 def _declaration_shaped(value):
@@ -163,7 +165,7 @@ def _declares(block: list[str], closed: bool) -> bool:
     ):
         return True
     if not closed:
-        return False
+        return any(_SIGNAL_FLOW.match(line) for line in block)
     # Quoted or escaped key spellings must not hide a declaration.
     try:
         data = yaml.safe_load("\n".join(block))

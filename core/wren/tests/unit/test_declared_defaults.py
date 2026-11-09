@@ -181,8 +181,14 @@ def test_an_unclosed_fence_is_an_error_not_a_silent_skip(project):
         "---\n# Rules\n\nAlways filter test accounts.\n",
         "---\ntitle: Rules\n---\n# Prose\n",
         "---\nNote: filter test accounts: always.\n---\nMore prose.\n",
+        "---\nthe id: 5 kind: of thing\n---\nMore prose.\n",
     ],
-    ids=["horizontal rule, no closing fence", "yaml without keys", "prose with colon"],
+    ids=[
+        "horizontal rule, no closing fence",
+        "yaml without keys",
+        "prose with colon",
+        "prose naming id and kind",
+    ],
 )
 def test_a_fence_without_declaration_keys_is_prose(project, text):
     (project / "knowledge" / "rules" / "prose.md").write_text(text)
@@ -199,8 +205,18 @@ def test_a_fence_without_declaration_keys_is_prose(project, text):
             "declarations must be under the 'defaults' key",
         ),
         ('---\n"defaults": {lang: en}\n---\n', "'defaults' must be a list"),
+        (
+            "---\n- {id: x, kind: exclude_rows}\n",
+            "front-matter is not closed by a '---' line",
+        ),
     ],
-    ids=["unclosed with defaults", "defaults mapping", "id and kind", "quoted key"],
+    ids=[
+        "unclosed with defaults",
+        "defaults mapping",
+        "id and kind",
+        "quoted key",
+        "unclosed flow-style declaration",
+    ],
 )
 def test_a_fence_with_declaration_keys_still_fails_loudly(project, text, message):
     (project / "knowledge" / "rules" / "broken.md").write_text(text)
