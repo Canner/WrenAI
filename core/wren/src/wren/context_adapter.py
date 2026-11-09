@@ -1317,7 +1317,9 @@ class ContextReader:
         that declares columns. No SQL, no rules."""
         out = ["# Structure", ""]
         for prefix, description, tag in self._lines:
-            out.append(f"- {prefix}{description}{tag}")
+            # Rule files are the ``knowledge.rules`` document's to disclose, paths included.
+            if not prefix.startswith("rule "):
+                out.append(f"- {prefix}{description}{tag}")
         for name, model in self._models.items():
             out += [
                 "",

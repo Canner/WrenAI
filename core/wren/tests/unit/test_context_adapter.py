@@ -787,6 +787,14 @@ def denying_reader(budget=4096):
     )
 
 
+def test_the_structure_document_carries_no_rule_file():
+    r = denying_reader()
+    assert "knowledge/rules/pii.md" in json.dumps(r.list(1))
+    structure = r.structure_document()
+    assert "pii.md" not in structure and "Business rule file" not in structure
+    assert "- model customers: " in structure
+
+
 def test_a_denied_column_is_absent_from_every_projection():
     r = denying_reader()
     everything = json.dumps(
