@@ -723,12 +723,18 @@ def test_a_conversion_hidden_in_a_cte_without_a_date_bound_fires(checker):
         "SELECT SUM(p.amount) FROM {c} WHERE NOT c.is_test AND p.currency IN ('EUR')",
         "SELECT t.currency, SUM(t.a) FROM (SELECT p.currency, SUM(p.amount) a FROM {c} "
         "WHERE NOT c.is_test GROUP BY p.currency) t GROUP BY t.currency",
+        "SELECT p.currency, o.status, SUM(p.amount) FROM {c} WHERE NOT c.is_test "
+        "GROUP BY p.currency, ROLLUP(o.status)",
+        "SELECT p.currency, o.status, SUM(p.amount) FROM {c} WHERE NOT c.is_test "
+        "GROUP BY p.currency, GROUPING SETS ((o.status), ())",
     ],
     ids=[
         "groups by currency",
         "currency literal",
         "one-literal list",
         "outer regrouped by currency",
+        "currency beside a rollup",
+        "currency beside grouping sets",
     ],
 )
 def test_per_currency_and_single_currency_queries_are_exempt(checker, sql):
@@ -750,6 +756,8 @@ def test_per_currency_and_single_currency_queries_are_exempt(checker, sql):
         "WHERE NOT c.is_test GROUP BY p.currency) t",
         "WITH t AS (SELECT p.currency, SUM(p.amount) a FROM {c} "
         "WHERE NOT c.is_test GROUP BY p.currency) SELECT SUM(a) FROM t",
+        "SELECT p.currency, o.status, SUM(p.amount) FROM {c} WHERE NOT c.is_test "
+        "GROUP BY o.status, ROLLUP(p.currency)",
     ],
     ids=[
         "rollup",
@@ -758,10 +766,21 @@ def test_per_currency_and_single_currency_queries_are_exempt(checker, sql):
         "multi-literal list",
         "outer re-aggregation",
         "outer re-aggregation of a cte",
+        "currency inside a rollup beside a plain item",
     ],
 )
 def test_mixed_currency_aggregates_are_not_exempt(checker, sql):
     assert check(checker, sql.format(c=CHARGES)) == [RATE]
+
+
+def test_with_rollup_rolls_up_the_plain_currency_item():
+    mysql = make_checker("mysql")
+    sql = (
+        f"SELECT p.currency, SUM(p.amount) FROM {CHARGES} WHERE NOT c.is_test "
+        "GROUP BY p.currency WITH ROLLUP"
+    )
+    assert check(mysql, sql, "mysql") == [RATE]
+    assert check(mysql, sql.removesuffix(" WITH ROLLUP"), "mysql") == []
 
 
 def test_a_non_literal_currency_filter_is_not_an_exemption(checker):

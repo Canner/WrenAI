@@ -1114,8 +1114,9 @@ class _Statement:
         """Every aggregate over an amount is grouped by its currency in its own scope.
 
         A grouping in an inner scope does not carry to an outer aggregate that sums
-        the per-currency results again, and a ROLLUP, CUBE or GROUPING SETS adds
-        super-aggregate rows that mix currencies.
+        the per-currency results again. Only the plain GROUP BY items count: a
+        currency inside ROLLUP, CUBE or GROUPING SETS gets super-aggregate rows that
+        mix currencies, and ``WITH ROLLUP`` / ``WITH CUBE`` roll up the plain items.
         """
         found = False
         for aggregate in self.aggregates:
@@ -1130,7 +1131,9 @@ class _Statement:
                 if owner is not None
                 and self._scope_for(group) is owner
                 and not any(
-                    group.args.get(key) for key in ("rollup", "cube", "grouping_sets")
+                    not member.expressions
+                    for key in ("rollup", "cube")
+                    for member in group.args.get(key) or []
                 )
             ]
             for table, path in reads:
