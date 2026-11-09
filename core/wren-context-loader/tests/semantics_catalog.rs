@@ -146,8 +146,29 @@ fn a_value_that_is_not_a_list_is_invalid() {
 }
 
 #[test]
-fn unreadable_front_matter_declares_nothing_here() {
-    let project = project_with_rules(&[("a.md", "---\nsemantics: [unterminated\n---\n")]);
+fn unreadable_front_matter_that_starts_a_semantics_declaration_is_invalid() {
+    for text in [
+        "---\nsemantics: [unterminated\n---\n",
+        "---\nsemantics:\n  - id: fiscal-calendar-bounds\n",
+    ] {
+        let project = project_with_rules(&[("a.md", text)]);
+        let doc = catalog_json(project.path());
+        assert!(doc.get("semantics").is_none(), "{text}");
+        assert_eq!(doc["semantics_invalid"], true, "{text}");
+        let diagnostics: Vec<_> = doc["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|d| d["kind"] == "semantics_invalid")
+            .collect();
+        assert_eq!(diagnostics.len(), 1, "{text}");
+        assert!(!diagnostics[0].to_string().contains("fiscal-calendar"));
+    }
+}
+
+#[test]
+fn unreadable_front_matter_without_a_semantics_line_declares_nothing_here() {
+    let project = project_with_rules(&[("a.md", "---\nowner: [unterminated\n---\n")]);
     let doc = catalog_json(project.path());
     assert!(doc.get("semantics").is_none());
     assert!(doc.get("semantics_invalid").is_none());

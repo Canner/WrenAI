@@ -1530,15 +1530,20 @@ fn declares(block: &[&str], closed: bool) -> bool {
 
 /// `^\s*["']?(defaults|denied_columns|semantics)["']?\s*:`
 fn starts_with_declaration_key(line: &str) -> bool {
+    DECLARATION_KEYS
+        .iter()
+        .any(|key| starts_with_named_key(line, key))
+}
+
+/// `^\s*["']?<key>["']?\s*:`
+fn starts_with_named_key(line: &str, key: &str) -> bool {
     let line = line.trim_start();
     let rest = line.strip_prefix(['"', '\'']).unwrap_or(line);
-    DECLARATION_KEYS.iter().any(|key| {
-        rest.strip_prefix(key).is_some_and(|rest| {
-            rest.strip_prefix(['"', '\''])
-                .unwrap_or(rest)
-                .trim_start()
-                .starts_with(':')
-        })
+    rest.strip_prefix(key).is_some_and(|rest| {
+        rest.strip_prefix(['"', '\''])
+            .unwrap_or(rest)
+            .trim_start()
+            .starts_with(':')
     })
 }
 
@@ -1575,6 +1580,18 @@ const SEMANTICS_LIMIT: usize = 32;
 const SEMANTIC_NOTE_LIMIT: usize = 400;
 const SEMANTIC_MODELS_LIMIT: usize = 8;
 
+const UNREADABLE_SEMANTICS: &str = "front-matter is unreadable";
+
+/// Whether the leading front-matter block has a line that starts a `semantics` declaration, so a
+/// file whose block cannot be parsed is reported instead of silently declaring nothing.
+fn opens_semantics_declaration(text: &str) -> bool {
+    leading_block(text).is_some_and(|(block, _)| {
+        block
+            .iter()
+            .any(|line| starts_with_named_key(line, SEMANTICS_KEY))
+    })
+}
+
 /// One entry of a rule file's `semantics:` list: a business meaning no host check covers, bound to
 /// the models (or views) whose queries it concerns. Carried to the catalog as written.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1590,18 +1607,28 @@ pub(crate) struct SemanticEntry {
 /// mapping with exactly `id`, `models` and `note`, a malformed or repeated id, an empty or
 /// oversized `models` / `note`, more than the entry cap) is reported as `(path, description)` and
 /// the caller drops every entry, because a host that enforces a part of a list cannot tell the
-/// caller which meanings it left unchecked. A file whose front-matter cannot be read declares
-/// nothing here; the declared-default reading already voids that case.
+/// caller which meanings it left unchecked. A file whose front-matter cannot be read is a problem
+/// when a line of it starts a `semantics` declaration, and declares nothing otherwise.
 pub(crate) fn semantic_declarations(
     files: &[KnowledgeRuleFile],
 ) -> (Vec<SemanticEntry>, Vec<(String, String)>) {
     let mut entries: Vec<SemanticEntry> = Vec::new();
     let mut problems: Vec<(String, String)> = Vec::new();
     for file in files {
-        let Ok(Some(front)) = front_matter(&file.content) else {
-            continue;
+        let front = match front_matter(&file.content) {
+            Ok(Some(front)) => front,
+            Ok(None) => continue,
+            Err(_) => {
+                if opens_semantics_declaration(&file.content) {
+                    problems.push((file.path.clone(), UNREADABLE_SEMANTICS.to_string()));
+                }
+                continue;
+            }
         };
         let Ok(data) = serde_yaml::from_str::<serde_yaml::Value>(&front) else {
+            if opens_semantics_declaration(&file.content) {
+                problems.push((file.path.clone(), UNREADABLE_SEMANTICS.to_string()));
+            }
             continue;
         };
         let Some(value) = data.get(SEMANTICS_KEY) else {
