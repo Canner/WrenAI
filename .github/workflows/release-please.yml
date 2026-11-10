@@ -35,7 +35,7 @@ jobs:
       wren-semantic-core--tag_name: ${{ steps.release.outputs['core/wren-core--tag_name'] }}
       wren-semantic-core--version: ${{ steps.release.outputs['core/wren-core--version'] }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
           config-file: release-please-config.json
