@@ -12,6 +12,7 @@ rust:
           - "core/wren-core/**"
           - "core/wren-core-base/**"
           - "core/wren-core-wasm/**"
+          - "core/wren-context-loader/**"
 
 python:
   - changed-files:

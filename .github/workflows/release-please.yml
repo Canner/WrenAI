@@ -34,6 +34,9 @@ jobs:
       wren-semantic-core--release_created: ${{ steps.release.outputs['core/wren-core--release_created'] }}
       wren-semantic-core--tag_name: ${{ steps.release.outputs['core/wren-core--tag_name'] }}
       wren-semantic-core--version: ${{ steps.release.outputs['core/wren-core--version'] }}
+      wren-context-loader--release_created: ${{ steps.release.outputs['core/wren-context-loader--release_created'] }}
+      wren-context-loader--tag_name: ${{ steps.release.outputs['core/wren-context-loader--tag_name'] }}
+      wren-context-loader--version: ${{ steps.release.outputs['core/wren-context-loader--version'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -149,6 +152,20 @@ jobs:
     with:
       version: ${{ needs.release-please.outputs['wren-semantic-core--version'] }}
       tag_name: ${{ needs.release-please.outputs['wren-semantic-core--tag_name'] }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # The context loader releases on its own cadence. It depends on
+  # wren-core-base by path with a version requirement, so the version it names
+  # must already be on crates.io when this runs.
+  publish-wren-context-loader:
+    needs: release-please
+    if: needs.release-please.outputs['wren-context-loader--release_created'] == 'true'
+    uses: ./.github/workflows/publish-wren-context-loader.yml
+    with:
+      version: ${{ needs.release-please.outputs['wren-context-loader--version'] }}
+      tag_name: ${{ needs.release-please.outputs['wren-context-loader--tag_name'] }}
     permissions:
       contents: read
       id-token: write
