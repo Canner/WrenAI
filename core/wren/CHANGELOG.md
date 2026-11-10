@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.18.0](https://github.com/Canner/WrenAI/compare/wren-v0.17.1...wren-v0.18.0) (2026-11-10)
+
+
+### Features
+
+* **wren:** serve a project-bound agent and governed MCP through a shared context layer ([#2848](https://github.com/Canner/WrenAI/issues/2848)) ([c4d6ac3](https://github.com/Canner/WrenAI/commit/c4d6ac35f73759cb2de53c4ae0557788c300f708))
+
+
+### Bug Fixes
+
+* **wren:** address deferred review findings from the serve-agent context layer ([#2852](https://github.com/Canner/WrenAI/issues/2852)) ([b7f972f](https://github.com/Canner/WrenAI/commit/b7f972f92982b73a679407366ad842d29b105e54))
+* **wren:** keep result columns that share a name in JSON output ([#2822](https://github.com/Canner/WrenAI/issues/2822)) ([2f70e4a](https://github.com/Canner/WrenAI/commit/2f70e4a0045f63e1d55690b0b6d8a39428476c1b))
+* **wren:** preserve physical-column renames across Ossie export/import ([#2837](https://github.com/Canner/WrenAI/issues/2837)) ([07e31d6](https://github.com/Canner/WrenAI/commit/07e31d6a80125332bfdb59b5a889de217f577b23))
+* **wren:** respect CTE visibility when expanding semantic models ([#2833](https://github.com/Canner/WrenAI/issues/2833)) ([8edc086](https://github.com/Canner/WrenAI/commit/8edc086b1f8f9f2974b9faf8ab7c639c85851b46))
+* **wren:** scope flag grouping to the select that groups it ([#2853](https://github.com/Canner/WrenAI/issues/2853)) ([affcac7](https://github.com/Canner/WrenAI/commit/affcac77efb96cf096a5a5e0df4c87ebc2357218))
+
 ## [0.17.1](https://github.com/Canner/WrenAI/compare/wren-v0.17.0...wren-v0.17.1) (2026-10-30)
 
 
