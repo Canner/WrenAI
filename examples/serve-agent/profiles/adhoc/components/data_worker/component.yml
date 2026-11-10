@@ -1,0 +1,30 @@
+id: data_worker
+verb: data_worker
+type: analytical
+realization_kind: skill
+binding_mode: runtime_selected
+params: []
+llm_steps:
+- name: respond
+  tier: cheap
+  prompt_ref: respond.md
+trigger:
+  kind: one_shot
+guardrails:
+- name: read_only_execution
+  locked: true
+required_capabilities:
+- llm:cheap
+- sql_execution:read_only
+- context_read
+borrowed_actions:
+- run_sql
+- list_context
+- select_context
+- read_context
+- describe_data
+- clarify
+effect:
+  render_blocks: []
+  outcome:
+    kind: none

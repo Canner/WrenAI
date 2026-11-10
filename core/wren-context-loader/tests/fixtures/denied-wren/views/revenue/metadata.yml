@@ -1,0 +1,6 @@
+name: revenue
+guarantees:
+  - exclude-test-accounts
+  - usd-at-transaction-date
+properties:
+  description: Revenue per order.

@@ -7,7 +7,7 @@ import decimal
 import numpy as np
 import pytest
 
-from wren._json_values import normalize_value
+from wren._json_values import normalize_value, unique_column_names
 
 pytestmark = pytest.mark.unit
 
@@ -34,3 +34,16 @@ def test_numpy_scalars_become_python_values():
         "n": 7,
         "x": None,
     }
+
+
+@pytest.mark.parametrize(
+    ("names", "expected"),
+    [
+        (["id", "name"], ["id", "name"]),
+        (["id", "id", "id"], ["id", "id_1", "id_2"]),
+        (["id", "id", "id_1"], ["id", "id_2", "id_1"]),
+        (["ID", "id"], ["ID", "id"]),
+    ],
+)
+def test_unique_column_names_never_reuse_a_name(names, expected):
+    assert unique_column_names(names) == expected

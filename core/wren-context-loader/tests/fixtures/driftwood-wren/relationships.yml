@@ -1,0 +1,82 @@
+# Driftwood relationships. Note: fx_rates joins on (date, currency) with a business-day
+# fill convention — not expressible as an FK equality here; see knowledge/rules/.
+relationships:
+  - name: orders_customers
+    models: [orders, customers]
+    join_type: MANY_TO_ONE
+    condition: "orders.customer_id = customers.id"
+
+  - name: order_items_orders
+    models: [order_items, orders]
+    join_type: MANY_TO_ONE
+    condition: "order_items.order_id = orders.id"
+
+  - name: order_items_products
+    models: [order_items, products]
+    join_type: MANY_TO_ONE
+    condition: "order_items.product_id = products.id"
+
+  - name: payments_orders
+    models: [payments, orders]
+    join_type: MANY_TO_ONE
+    condition: "payments.order_id = orders.id"
+
+  - name: refunds_orders
+    models: [refunds, orders]
+    join_type: MANY_TO_ONE
+    condition: "refunds.order_id = orders.id"
+
+  - name: subscriptions_customers
+    models: [subscriptions, customers]
+    join_type: MANY_TO_ONE
+    condition: "subscriptions.customer_id = customers.id"
+
+  - name: subscription_snapshots_subscriptions
+    models: [subscription_snapshots, subscriptions]
+    join_type: MANY_TO_ONE
+    condition: "subscription_snapshots.subscription_id = subscriptions.id"
+
+  - name: web_events_customers
+    models: [web_events, customers]
+    join_type: MANY_TO_ONE
+    condition: "web_events.customer_id = customers.id"
+
+  - name: inventory_levels_warehouses
+    models: [inventory_levels, warehouses]
+    join_type: MANY_TO_ONE
+    condition: "inventory_levels.warehouse_id = warehouses.id"
+
+  - name: inventory_levels_products
+    models: [inventory_levels, products]
+    join_type: MANY_TO_ONE
+    condition: "inventory_levels.product_id = products.id"
+
+  - name: legacy_orders_legacy_customers
+    models: [legacy_orders, legacy_customers]
+    join_type: MANY_TO_ONE
+    condition: "legacy_orders.cust_ref = legacy_customers.cust_ref"
+
+  - name: legacy_orders_status_codes
+    models: [legacy_orders, legacy_status_codes]
+    join_type: MANY_TO_ONE
+    condition: "legacy_orders.stat = legacy_status_codes.code"
+
+  - name: orders_legacy_orders
+    models: [orders, legacy_orders]
+    join_type: ONE_TO_ONE
+    condition: "orders.legacy_ord_id = legacy_orders.ord_id"
+
+  - name: customer_xref_customers
+    models: [customer_xref, customers]
+    join_type: MANY_TO_ONE
+    condition: "customer_xref.customer_id = customers.id"
+
+  - name: customer_xref_legacy_customers
+    models: [customer_xref, legacy_customers]
+    join_type: MANY_TO_ONE
+    condition: "customer_xref.cust_ref = legacy_customers.cust_ref"
+
+  - name: returns_order_items
+    models: [returns, order_items]
+    join_type: MANY_TO_ONE
+    condition: "returns.order_item_id = order_items.id"

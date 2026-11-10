@@ -294,3 +294,45 @@ def test_resolve_engine_profile_walks_up_from_nonstandard_mdl_layout(
         "Walk-up didn't find wren_project.yml; resolver still relies on the "
         "parent.parent shortcut."
     )
+
+
+def test_misplaced_root_read_only_flag_is_rejected_before_engine_creation(monkeypatch):
+    from unittest.mock import MagicMock  # noqa: PLC0415
+
+    engine = MagicMock()
+    engine.__enter__.return_value = engine
+    build = MagicMock(return_value=engine)
+    monkeypatch.setattr(cli_mod, "_build_engine", build)
+    monkeypatch.setattr(cli_mod, "_print_result", lambda *_: None)
+    monkeypatch.setattr(cli_mod, "_maybe_print_store_tip", lambda *_: None)
+    result = CliRunner().invoke(
+        cli_mod.app, ["--read-only", "query", "--sql", "DELETE FROM orders"]
+    )
+    assert result.exit_code == 2 and "--read-only" in result.output
+    build.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "arguments,governed",
+    [
+        (["--read-only", "--sql", "SELECT id FROM orders"], True),
+        (["query", "--read-only", "--sql", "SELECT id FROM orders"], True),
+        (["query", "--sql", "SELECT id FROM orders"], False),
+    ],
+)
+def test_read_only_flag_keeps_supported_positions_and_ordinary_query(
+    monkeypatch, arguments, governed
+):
+    from unittest.mock import MagicMock  # noqa: PLC0415
+
+    engine = MagicMock()
+    engine.__enter__.return_value = engine
+    monkeypatch.setattr(cli_mod, "_build_engine", lambda *_: engine)
+    monkeypatch.setattr(cli_mod, "_print_result", lambda *_: None)
+    monkeypatch.setattr(cli_mod, "_maybe_print_store_tip", lambda *_: None)
+    result = CliRunner().invoke(cli_mod.app, arguments)
+    assert result.exit_code == 0
+    assert engine.query.call_args.kwargs == {
+        "limit": None,
+        **({"read_only": True} if governed else {}),
+    }

@@ -1,0 +1,16 @@
+name: order_items
+table_reference:
+  schema: main
+  table: order_items
+primary_key: id
+columns:
+  - name: id
+    type: INTEGER
+  - name: order_id
+    type: INTEGER
+  - name: product_id
+    type: INTEGER
+  - name: quantity
+    type: INTEGER
+  - name: unit_price
+    type: DECIMAL

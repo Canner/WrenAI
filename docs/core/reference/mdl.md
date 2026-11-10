@@ -263,6 +263,12 @@ The statement can live inline or in a sibling `sql.yml` file. The `sql.yml` take
 
 Views inherit no column declarations — schema is inferred from the statement at query time. Views can reference other views; the engine expands them recursively before resolving models.
 
+The governed SQL path used by `wren serve agent` has a narrower view gate: a
+view body may read bound models, but a view that reads another view is refused
+with `unsupported_source` before execution. This restriction also applies when
+that view appears inside a larger query; it does not change ordinary engine
+view expansion.
+
 ## Cubes (`cubes/<name>/metadata.yml`)
 
 A cube is a pre-aggregated semantic object: a base model or view, plus declared measures, dimensions, time dimensions, and hierarchies.

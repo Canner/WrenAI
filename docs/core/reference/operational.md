@@ -127,7 +127,7 @@ For an application repo that uses Wren AI through SDK or CLI, also consider:
 | `<project>/.env` | Owner read/write recommended. |
 | `~/.wren/.env` | Owner read/write recommended. |
 
-Secrets in `profiles.yml` are kept as `${VAR}` placeholders — the file never contains plaintext credentials. `wren profile debug` masks any fields named `password`, `credentials`, `secret`, or `token`.
+Secrets in `profiles.yml` are saved unencrypted. A `${VAR}` placeholder stays in the file, because it is expanded when the profile is used rather than when it is saved, but a literal value, such as a password typed at the `wren profile add --interactive` prompt, is saved in plain text, and a credentials file given at that prompt is saved base64-encoded, which is not encryption. `wren profile debug` masks any fields named `password`, `credentials`, `secret`, or `token`.
 
 ## See also
 

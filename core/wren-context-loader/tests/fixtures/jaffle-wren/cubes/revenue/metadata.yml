@@ -1,0 +1,9 @@
+name: revenue
+base_object: orders
+measures:
+  - { name: total_revenue, expression: "SUM(amount)", type: DOUBLE }
+  - { name: avg_order_value, expression: "AVG(amount)", type: DOUBLE }
+dimensions:
+  - { name: status, expression: "status", type: TEXT }
+time_dimensions:
+  - { name: order_date, expression: "order_date", type: DATE }

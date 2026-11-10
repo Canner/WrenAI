@@ -337,3 +337,53 @@ def test_debug_survives_non_string_keys(tmp_path, monkeypatch):
     assert cfg["settings"]["deep"][None] == "none-key"
     # Non-string siblings must not stop the walk from reaching real secrets.
     assert cfg["settings"]["deep"]["password"] == "***"
+
+
+def test_malformed_profile_reference_never_displays_the_literal_secret():
+    secret = "synthetic-password-value"
+    with pytest.raises(MissingSecretError) as caught:
+        expand_profile_secrets({"password": secret + "$!"})
+    assert "Malformed reference" in str(caught.value)
+    assert secret not in str(caught.value)
+
+
+def test_serve_agent_does_not_print_a_malformed_literal_profile_secret(
+    tmp_path, monkeypatch
+):
+    pytest.importorskip("mcp")
+    from typer.testing import CliRunner  # noqa: PLC0415
+
+    import wren.agent_service as service_module  # noqa: PLC0415
+    from wren.cli import app  # noqa: PLC0415
+
+    secret = "synthetic-cli-password"
+
+    def launch(*_args, **_kwargs):
+        expand_profile_secrets({"password": secret + "$!"})
+
+    monkeypatch.setattr(service_module, "launch", launch)
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    config = tmp_path / "service.yml"
+    config.write_text("")
+    runtime = tmp_path / "runtime.js"
+    runtime.write_text("")
+    result = CliRunner().invoke(
+        app,
+        [
+            "serve",
+            "agent",
+            "--project",
+            str(tmp_path),
+            "--agent-profile",
+            str(bundle),
+            "--service-config",
+            str(config),
+            "--runtime",
+            str(runtime),
+            "--profile",
+            "fixture",
+        ],
+    )
+    assert result.exit_code == 1 and "Malformed reference" in result.output
+    assert secret not in result.output

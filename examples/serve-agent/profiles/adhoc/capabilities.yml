@@ -1,0 +1,20 @@
+version: wren-agent-capabilities/1
+entry: analyze_data
+context_budget_bytes: 4096
+capabilities:
+- id: analytics
+  description: 'Ad-hoc read-only analysis of orders and customers: revenue, average
+    order value, trends, rankings, regional comparisons, joins, and follow-up questions.
+    The private analyst resolves schema and business definitions.'
+  rules: true
+  sql: true
+  inputs:
+  - question
+  - optional reply_to result reference
+  outputs:
+  - authorized table with host-labelled columns
+  - session result and evidence references
+  limits:
+  - read-only SQL over authorized semantic models and columns
+  - at most 100 result rows and 20 columns
+  - UTC; no SQL or hidden metadata disclosure
