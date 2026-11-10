@@ -28,6 +28,26 @@ use wren_context_loader::{
     ProjectSnapshot, ProjectSources,
 };
 
+/// Largest document the host accepts from the loader. Keep equal to `MAX_LOADER_OUTPUT_BYTES` in
+/// the Python adapter (`context_adapter.py`), which refuses a larger file with a generic
+/// "too large" error; checking here fails earlier with a message that names the cause. Impact
+/// preparation is quadratic in the number of lineage nodes, so a large project can reach it.
+const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
+const OVERSIZE_MESSAGE: &str = "wren-context-loader: prepared context exceeds 16 MiB";
+
+/// Refuse documents above `limit` bytes. The message names no project content.
+fn check_output_sizes(
+    document: &str,
+    catalog: Option<&str>,
+    limit: usize,
+) -> Result<(), &'static str> {
+    if document.len() > limit || catalog.is_some_and(|catalog| catalog.len() > limit) {
+        Err(OVERSIZE_MESSAGE)
+    } else {
+        Ok(())
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (project_dir, out_path, catalog_path) = match parse_args(&args) {
@@ -89,6 +109,13 @@ fn main() -> ExitCode {
             eprintln!("failed to digest {}: {error}", project_dir.display());
             return ExitCode::from(1);
         }
+    }
+
+    if let Err(message) =
+        check_output_sizes(&document, catalog_document.as_deref(), MAX_OUTPUT_BYTES)
+    {
+        eprintln!("{message}");
+        return ExitCode::from(1);
     }
 
     if let Some(catalog_path) = catalog_path {
@@ -578,7 +605,22 @@ fn load(project_dir: &Path, sources: Option<&ProjectSources>) -> MdlContext {
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_writable_output, write_output};
+    use super::{check_output_sizes, validate_writable_output, write_output, OVERSIZE_MESSAGE};
+
+    #[test]
+    fn documents_above_the_limit_are_refused_without_naming_content() {
+        assert_eq!(check_output_sizes("12345", None, 5), Ok(()));
+        assert_eq!(check_output_sizes("12345", Some("12345"), 5), Ok(()));
+        assert_eq!(check_output_sizes("123456", None, 5), Err(OVERSIZE_MESSAGE));
+        assert_eq!(
+            check_output_sizes("1", Some("123456"), 5),
+            Err(OVERSIZE_MESSAGE)
+        );
+        assert_eq!(
+            OVERSIZE_MESSAGE,
+            "wren-context-loader: prepared context exceeds 16 MiB"
+        );
+    }
 
     #[cfg(unix)]
     #[test]

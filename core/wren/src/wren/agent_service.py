@@ -56,15 +56,18 @@ from wren.governed_query import (
 )
 from wren.model.error import DatabaseTimeoutError
 from wren.project_fingerprint import is_project_source_path
+from wren.service_presets import (
+    CONFIG_VERSION,
+    read_policy_presets,
+    reject_legacy,
+)
 
 
 def uid():
     return str(uuid.uuid4())
 
 
-PRESET_KEYS = frozenset({"metadata_selection", "policy"})
 LOCAL_TOKEN_ENV = "WREN_AGENT_LOCAL_TOKEN"
-CONFIG_VERSION = 2
 ALLOWED_CONFIG_KEYS = frozenset(
     {
         "config_version",
@@ -82,16 +85,6 @@ ALLOWED_CONFIG_KEYS = frozenset(
     }
 )
 REQUIRED_CONFIG_KEYS = ("caller", "project_id", "policy", "private_model")
-LEGACY_CONFIG_KEYS = {
-    "dataset": "removed: the data now comes from the Wren project",
-    "adhoc": "removed: models and columns now come from the Wren project; deny a column "
-    "with a project-level denied_columns entry in knowledge/rules front-matter",
-    "metadata": "removed: the structure and rules documents are generated from the Wren project",
-    "rules": "removed: business rules are project knowledge (knowledge/rules/*.md), "
-    "not service configuration",
-    "query_scope": "removed: there is no date-range hard limit in this version; project-level "
-    "denied_columns and declared default rules replace it",
-}
 EXECUTION_INT_FIELDS = {
     "deadline_ms": ("deadlineMs", 5000, 600000),
     "max_tokens": ("maxTokens", 256, 65536),
@@ -431,31 +424,6 @@ STATUS_SCOPE_HINT = " If the user's question itself names which order statuses t
 UNAVAILABLE_HINT = "Check the bound schema and DuckDB SQL syntax. Return at most 100 rows and 20 columns. Do not infer data from an error."
 
 
-def reject_legacy(config: dict) -> None:
-    """Refuse a configuration that still carries the pre-context-layer keys.
-
-    Nothing is ignored silently: each key is named with what replaced it, because a dropped
-    ``query_scope`` or ``adhoc`` list changes what the service allows.
-    """
-    found = [(k, why) for k, why in LEGACY_CONFIG_KEYS.items() if k in config]
-    presets = config.get("policy_presets")
-    if isinstance(presets, dict):
-        for name, overrides in presets.items():
-            if isinstance(overrides, dict) and "query_scope" in overrides:
-                found.append(
-                    (
-                        f"policy_presets.{name}.query_scope",
-                        LEGACY_CONFIG_KEYS["query_scope"],
-                    )
-                )
-    if found:
-        listed = "; ".join(f"{key} ({why})" for key, why in found)
-        raise ValueError(
-            f"legacy_service_config: {listed}. Remove them and set config_version: {CONFIG_VERSION}; "
-            "see examples/serve-agent/README.md"
-        )
-
-
 def check_service_config(config) -> None:
     if not isinstance(config, dict):
         raise ValueError("invalid_service_config: the file must hold a mapping")
@@ -480,28 +448,6 @@ def check_service_config(config) -> None:
         raise ValueError("invalid_service_config: idle_seconds must be a finite number")
     if idle < 0:
         raise ValueError("invalid_service_config: idle_seconds must not be negative")
-
-
-def read_policy_presets(config: dict) -> tuple[str | None, dict[str, dict]]:
-    """Validate operator-named presets; each may override only PRESET_KEYS."""
-    reject_legacy(config)
-    presets = config.get("policy_presets")
-    if presets is None:
-        presets = {}
-    default = config.get("default_preset")
-    if not isinstance(presets, dict) or (
-        default is not None and (not isinstance(default, str) or default not in presets)
-    ):
-        raise ValueError("invalid_policy_preset")
-    for name, overrides in presets.items():
-        if (
-            not isinstance(name, str)
-            or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", name)
-            or not isinstance(overrides, dict)
-            or not set(overrides) <= PRESET_KEYS
-        ):
-            raise ValueError("invalid_policy_preset")
-    return default, presets
 
 
 def apply_policy_preset(config: dict, requested: str | None) -> dict:
@@ -1894,31 +1840,40 @@ def build_mcp(service: Service):
     return mcp
 
 
-def stage_bundle(bundle: Path, staged: Path, prepared: dict) -> None:
+def stage_bundle(bundle: Path, staged: Path, prepared: dict) -> dict[Path, bytes]:
     """Copy the profile bundle and bind its prepared context to this project's loader output.
 
     A bundle whose binding is ``kind: prepared`` names a document that the project, not the
     bundle author, determines; the staged copy carries the loader's prepared context there so
     ``warble compile`` sees the bound project. The bundle on disk is never modified.
+
+    Returns the bytes copied for every bundle file, keyed by its path in ``bundle``: what the
+    compiler consumed, so the service's fingerprint can be bound to it.
     """
     shutil.copytree(bundle, staged)
+    copied = {
+        bundle / path.relative_to(staged): path.read_bytes()
+        for path in sorted(staged.rglob("*"))
+        if path.is_file()
+    }
     profile_path = staged / "profile.yml"
     profile = (
         yaml.safe_load(profile_path.read_text()) if profile_path.is_file() else None
     )
     reference = ((profile or {}).get("context") or {}).get("project")
     if not isinstance(reference, str):
-        return
+        return copied
     binding_path = contained(staged, reference)
     binding = yaml.safe_load(binding_path.read_text()) or {}
     if binding.get("kind") != "prepared":
-        return
+        return copied
     document = (
         binding_path.parent / binding.get("project", ".") / binding["document"]
     ).resolve()
     if not document.is_relative_to(staged):
         raise ValueError("invalid_project_file")
     document.write_text(json.dumps(prepared))
+    return copied
 
 
 def open_engine(root: Path, config: dict, connection_profile: str | None):
@@ -1996,7 +1951,7 @@ def create_service(
     reader = ContextReader(snapshot, snapshot.denied, profile["context_budget_bytes"])
     with tempfile.TemporaryDirectory(prefix="wren-profile-") as temp:
         staged = Path(temp).resolve() / "bundle"
-        stage_bundle(bundle, staged, snapshot.prepared)
+        compiled = stage_bundle(bundle, staged, snapshot.prepared)
         ir_path = staged.parent / "ir.json"
         subprocess.run(
             [warble, "compile", str(staged), "--out", str(ir_path)],
@@ -2019,6 +1974,16 @@ def create_service(
             raise ContextChanged(
                 "the engine manifest differs from the validated context"
             )
+        # Bind the fingerprint to the bytes each consumer parsed: the validated manifest,
+        # the bundle the compiler saw, the config and capabilities read above. A later
+        # replacement of any of them then reads as a change, never as the baseline.
+        consumed = dict(compiled)
+        for path, data in (
+            (root / "target/mdl.json", snapshot.manifest_bytes),
+            (config_path, config_bytes),
+            (capabilities_path, capabilities_bytes),
+        ):
+            _record_startup_source(consumed, path, data)
         return _assemble_service(
             root,
             bundle,
@@ -2034,7 +1999,7 @@ def create_service(
             snapshot,
             reader,
             execution,
-            {config_path: config_bytes, capabilities_path: capabilities_bytes},
+            consumed,
         )
     except BaseException:
         if hasattr(engine, "close"):
@@ -2128,6 +2093,14 @@ def worker_tools() -> list[dict]:
     return [{**t, "zone": "private", "readOnly": True} for t in tools]
 
 
+def _record_startup_source(sources: dict, path: Path, data: bytes) -> None:
+    """Record the bytes a startup consumer parsed from ``path``. One path read twice (a bundle
+    copy and a direct read, or two roles naming the same file) must have given the same bytes,
+    or the input changed in between."""
+    if sources.setdefault(path, data) != data:
+        raise ContextChanged("a startup input changed while it was being read")
+
+
 def _assemble_service(
     root,
     bundle,
@@ -2153,17 +2126,20 @@ def _assemble_service(
     project.paths += sorted(
         p for p in bundle.rglob("*") if p.is_file() and p not in project.paths
     )
+    # A captured input deleted since it was consumed is still fingerprinted: its read fails as a
+    # change instead of the file silently dropping out of the version.
+    project.paths += sorted(p for p in parsed_sources if p not in project.paths)
     project.version = project.fingerprint()
     policy_path = contained(config_path.parent, config["policy"])
     project.paths.append(policy_path)
     policy_bytes = policy_path.read_bytes()
-    project.startup_sources[policy_path] = policy_bytes
+    _record_startup_source(project.startup_sources, policy_path, policy_bytes)
     policies = [policy_bytes.decode("utf-8")]
     if config.get("preset_policy"):
         preset_path = contained(config_path.parent, config["preset_policy"])
         project.paths.append(preset_path)
         preset_bytes = preset_path.read_bytes()
-        project.startup_sources[preset_path] = preset_bytes
+        _record_startup_source(project.startup_sources, preset_path, preset_bytes)
         policies.append(preset_bytes.decode("utf-8"))
     project.version = project.fingerprint()
     if project_digest(root) != snapshot.digest:

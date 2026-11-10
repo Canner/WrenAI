@@ -22,6 +22,16 @@ Execute SQL and return results.
 wren query --sql 'SELECT order_id, total FROM "orders" ORDER BY total DESC LIMIT 5'
 ```
 
+`--read-only` (on `wren query` and the default command) admits only one analytical query:
+a single statement built from known read-only functions. Writes, DDL, several statements,
+commands, locks, `SELECT INTO`, reader functions and unknown functions are refused before
+the query reaches the database. It is an opt-in check for hosts that run SQL on someone
+else's behalf, not a replacement for database permissions.
+
+```bash
+wren query --read-only --sql 'SELECT COUNT(*) FROM "orders"'
+```
+
 ## `wren dry-plan`
 
 Translate MDL SQL to the native dialect SQL for your data source. No database connection required.

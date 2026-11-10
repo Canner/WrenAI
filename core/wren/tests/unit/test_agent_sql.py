@@ -1376,6 +1376,19 @@ def test_an_unquoted_lowercase_view_body_model_matches_mixed_case_schema():
     assert broken == set()
 
 
+def test_case_distinct_view_names_are_never_read_as_each_other():
+    views = [
+        {"name": "Clean", "statement": "SELECT id FROM orders WHERE NOT is_test"},
+        {"name": "clean", "statement": "SELECT id FROM orders"},
+    ]
+    usable, broken = read_view_bodies(
+        {"orders": {"id": "integer", "is_test": "boolean"}},
+        {"views": [{"name": v["name"]} for v in views]},
+        {"views": views},
+    )
+    assert usable == {} and broken == {"clean"}
+
+
 def test_a_cte_defined_later_or_elsewhere_is_still_external(adhoc):
     unresolved = {
         "views/ghost_cte/metadata.yml": "name: ghost_cte\n",
@@ -1460,6 +1473,84 @@ def test_a_composite_key_requires_every_joined_key_for_view_aggregation():
 
     assert duplicated("v.id=d.id") is True
     assert duplicated("v.id=d.id AND v.tenant_id=d.tenant_id") is False
+    assert duplicated("TRUE") is True
+    assert duplicated("v.id > d.id") is True
+    assert duplicated("v.id=d.id OR v.tenant_id=d.tenant_id") is True
+
+
+def test_a_semi_joined_view_is_no_evidence_for_another_models_key():
+    schema = {"invoice": {"id": "INT", "value": "INT"}, "extras": {"id": "INT"}}
+    query = AdHocSQL.__new__(AdHocSQL)
+    query.primary_keys = {"extras": frozenset(("id",))}
+    tree = sqlglot.parse_one(
+        "SELECT SUM(v.value) FROM (SELECT id, value FROM invoice) v "
+        "CROSS JOIN extras a SEMI JOIN (SELECT id FROM invoice) w ON a.id = w.id",
+        dialect="duckdb",
+    )
+    for name, subquery in zip(
+        ("invoice_value", "invoice_ids"), tree.find_all(exp.Subquery)
+    ):
+        subquery.meta[VIEW_MARK] = name
+    qualified = qualify(tree, dialect="duckdb", schema=schema, identify=True)
+    assert query._duplicate_aggregation(list(traverse_scope(qualified))) is True
+
+
+def test_models_keyed_only_to_each_other_still_multiply_the_view():
+    schema = {
+        "invoice": {"id": "INT", "value": "INT"},
+        "dimensions": {"id": "INT"},
+        "extras": {"id": "INT"},
+    }
+    query = AdHocSQL.__new__(AdHocSQL)
+    query.primary_keys = {
+        "dimensions": frozenset(("ID",)),
+        "extras": frozenset(("id",)),
+    }
+
+    def duplicated(joins):
+        tree = sqlglot.parse_one(
+            f"SELECT SUM(v.value) FROM (SELECT id, value FROM invoice) v {joins}",
+            dialect="duckdb",
+        )
+        tree.find(exp.Subquery).meta[VIEW_MARK] = "invoice_value"
+        qualified = qualify(tree, dialect="duckdb", schema=schema, identify=True)
+        return query._duplicate_aggregation(list(traverse_scope(qualified)))
+
+    # d and e equate their keys to each other only: every view row repeats per pair.
+    assert duplicated("CROSS JOIN dimensions d JOIN extras e ON d.id = e.id") is True
+    assert duplicated("CROSS JOIN extras a JOIN extras b ON a.id = b.id") is True
+    # A key chain from the view bounds both, whatever the declared key's case.
+    assert (
+        duplicated("JOIN dimensions d ON v.id = d.id JOIN extras e ON d.id = e.id")
+        is False
+    )
+    # A LEFT join's ON keeps every preserved row: it cannot bound the preserved side.
+    assert (
+        duplicated(
+            "CROSS JOIN extras a LEFT JOIN extras b ON v.id = a.id AND b.id = v.id"
+        )
+        is True
+    )
+    assert duplicated("LEFT JOIN extras a ON v.id = a.id") is False
+    # A RIGHT join emits a view row only when its ON holds: a keyed match bounds it.
+    assert duplicated("RIGHT JOIN extras a ON v.id = a.id") is False
+    assert duplicated("FULL JOIN extras a ON v.id = a.id") is False
+    assert duplicated("CROSS JOIN extras a RIGHT JOIN extras b ON a.id = b.id") is True
+    # An ANTI join keeps the rows its ON rejects: its equalities prove nothing.
+    assert (
+        duplicated(
+            "CROSS JOIN extras a ANTI JOIN extras b ON v.id = a.id AND b.id = a.id"
+        )
+        is True
+    )
+    # A semi-join target or a derived source is no evidence for another model's key.
+    assert duplicated("CROSS JOIN extras a SEMI JOIN extras b ON a.id = b.id") is True
+    assert (
+        duplicated(
+            "CROSS JOIN (SELECT id FROM extras) x JOIN dimensions d ON x.id = d.id"
+        )
+        is True
+    )
 
 
 @pytest.mark.parametrize(
@@ -2428,6 +2519,58 @@ def test_qualify_on_a_date_column_is_a_window(adhoc):
     assert DATE_WINDOW_UNVERIFIED not in unverified
 
 
+def test_qualify_after_a_window_aggregate_bounds_nothing(adhoc):
+    found, unverified = windows_of(
+        adhoc(),
+        f"SELECT SUM(amount) OVER () AS total FROM orders WHERE {SCOPED} "
+        "QUALIFY order_date >= DATE '2026-06-01'",
+    )
+    assert found == []
+    assert DATE_WINDOW_UNVERIFIED in unverified
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT COUNT(*) OVER () AS n FROM orders QUALIFY order_date >= DATE '2026-06-01'",
+        "SELECT n FROM (SELECT order_date, COUNT(*) OVER () AS n FROM orders) AS t "
+        "WHERE order_date >= DATE '2026-06-01'",
+        "WITH t AS (SELECT order_date, COUNT(*) OVER () AS n FROM orders) "
+        "SELECT n FROM t WHERE order_date >= DATE '2026-06-01'",
+        "SELECT COUNT(*) OVER w AS n FROM orders WINDOW w AS (ORDER BY id) "
+        "QUALIFY order_date >= DATE '2026-06-01'",
+    ],
+)
+def test_a_date_filter_applied_after_a_window_is_not_a_window(sql):
+    assert date_window_proof(sql) == ([], False)
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT ROW_NUMBER() OVER (PARTITION BY id ORDER BY id) AS rn FROM orders "
+        "QUALIFY rn = 1 AND order_date >= DATE '2026-06-01'",
+        "SELECT n FROM (SELECT order_date, COUNT(*) OVER (PARTITION BY order_date) AS n "
+        "FROM orders) AS t WHERE order_date >= DATE '2026-06-01'",
+        "SELECT COUNT(*) OVER w AS n FROM orders WINDOW w AS (PARTITION BY order_date) "
+        "QUALIFY order_date >= DATE '2026-06-01'",
+        "SELECT COUNT(*) OVER (v ORDER BY id) AS n FROM orders "
+        "WINDOW w AS (PARTITION BY order_date), v AS (w) "
+        "QUALIFY order_date >= DATE '2026-06-01'",
+    ],
+)
+def test_a_window_inside_one_date_or_one_row_keeps_the_later_filter(sql):
+    windows, pinned = date_window_proof(sql)
+    assert len(windows) == 1 and pinned
+
+
+def test_a_date_filter_before_the_window_still_bounds_it():
+    windows, pinned = date_window_proof(
+        "SELECT COUNT(*) OVER () AS n FROM orders WHERE order_date >= DATE '2026-06-01'"
+    )
+    assert len(windows) == 1 and pinned
+
+
 # -- coverage is per consuming edge ---------------------------------------------------------------
 
 BASE_CTE = (
@@ -2742,6 +2885,7 @@ def date_window_proof(sql):
     )
     gate = AdHocSQL.__new__(AdHocSQL)
     gate.date_columns = frozenset({("orders", "order_date")})
+    gate.primary_keys = {"orders": frozenset({"id"}), "customers": frozenset({"id"})}
     return gate._date_windows(list(traverse_scope(tree)))
 
 

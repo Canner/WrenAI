@@ -43,6 +43,10 @@ def _source_name_bytes(name):
         raise OSError("non_utf8_source_name") from None
 
 
+class SourceChangedDuringRead(OSError):
+    """A covered file's length moved while it was being hashed: the project is changing."""
+
+
 def _hash_source(stream, name, digest):
     """Frame and hash one open source file in bounded chunks.
 
@@ -55,11 +59,11 @@ def _hash_source(stream, name, digest):
     while remaining:
         chunk = stream.read(min(_READ_CHUNK_BYTES, remaining))
         if not chunk:
-            raise OSError("source_changed_during_read", name.decode())
+            raise SourceChangedDuringRead("source_changed_during_read", name.decode())
         digest.update(chunk)
         remaining -= len(chunk)
     if stream.read(1):
-        raise OSError("source_changed_during_read", name.decode())
+        raise SourceChangedDuringRead("source_changed_during_read", name.decode())
 
 
 def project_digest(root: Path) -> str:
@@ -191,13 +195,23 @@ class SourceBytesChanged(ValueError):
     """A startup input differs from the bytes its consumer parsed."""
 
 
-def fingerprint_sources(root, paths, expected_sources=None):
+def fingerprint_sources(root, paths, expected_sources=None, expected_digest=None):
     root = Path(root)
     digest = hashlib.sha256()
-    digest.update(b"project\0" + project_digest(root).encode() + b"\0")
+    current = project_digest(root)
+    if expected_digest is not None and current != expected_digest:
+        # The version must describe the snapshot the service serves, not a later state that
+        # happens to be on disk while the version is taken.
+        raise SourceBytesChanged("project digest differs from the snapshot")
+    digest.update(b"project\0" + current.encode() + b"\0")
     for item in paths:
         path = Path(item)
-        data = path.read_bytes()
+        try:
+            data = path.read_bytes()
+        except FileNotFoundError:
+            if expected_sources is not None and path in expected_sources:
+                raise SourceBytesChanged("startup source removed") from None
+            raise
         if expected_sources is not None and path in expected_sources:
             if data != expected_sources[path]:
                 raise SourceBytesChanged("startup source changed")
@@ -215,11 +229,21 @@ def write_frame(value, error):
     sys.stdout.buffer.flush()
 
 
+def worker_frame(root, paths):
+    """The worker's ``(value, error)`` answer. A mid-read change, or a registered file that
+    no longer exists, is reported as a change: the version it was compared to had it."""
+    try:
+        return fingerprint_sources(root, paths), None
+    except (SourceChangedDuringRead, FileNotFoundError):
+        return None, ("changed",)
+    except Exception:
+        return None, ("filesystem",)
+
+
 if __name__ == "__main__":
     try:
         root, paths = pickle.loads(sys.stdin.buffer.read())
-        result = fingerprint_sources(root, paths)
     except Exception:
         write_frame(None, ("filesystem",))
     else:
-        write_frame(result, None)
+        write_frame(*worker_frame(root, paths))

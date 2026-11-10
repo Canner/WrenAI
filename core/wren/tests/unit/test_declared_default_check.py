@@ -1026,3 +1026,49 @@ def test_subquery_filter_credit_follows_its_actual_join_clause(
         )
     assert join_rows.execute(execution_sql).fetchone() == (count,)
     assert check(checker, sql) == ([] if shape in {"inner", "where"} else [EXCLUDE])
+
+
+@pytest.mark.parametrize(
+    ("sql", "restricts"),
+    [
+        ("SELECT c.id FROM customers c JOIN ({inner}) t ON c.id = t.id", True),
+        ("SELECT c.id FROM customers c LEFT JOIN ({inner}) t ON c.id = t.id", False),
+        ("SELECT c.id FROM customers c FULL JOIN ({inner}) t ON c.id = t.id", False),
+        ("SELECT t.id FROM ({inner}) t RIGHT JOIN customers c ON c.id = t.id", False),
+        ("SELECT t.id FROM ({inner}) t LEFT JOIN customers c ON c.id = t.id", True),
+        (
+            "SELECT c.id FROM customers c JOIN ({inner}) t ON c.id = t.id "
+            "RIGHT JOIN customers d ON d.id = c.id",
+            False,
+        ),
+        (
+            "SELECT c.id FROM customers c JOIN ({inner}) t ON c.id = t.id "
+            "LEFT JOIN customers d ON d.id = c.id",
+            True,
+        ),
+    ],
+)
+def test_a_filter_in_the_nullable_side_of_an_outer_join_restricts_nothing(
+    sql, restricts
+):
+    import sqlglot  # noqa: PLC0415
+
+    from wren.declared_default_check import _filters_rows_of  # noqa: PLC0415
+
+    tree = sqlglot.parse_one(
+        sql.format(inner="SELECT id FROM customers WHERE is_test"), read="duckdb"
+    )
+    (where,) = list(tree.find_all(sqlglot.exp.Where))
+    assert _filters_rows_of(where, tree) is restricts
+
+
+@pytest.mark.parametrize("side", ["LEFT", "FULL"])
+def test_a_flag_filtered_on_the_nullable_side_does_not_exclude_test_rows(checker, side):
+    # The joined set keeps every customer (non-test ones padded with NULLs), so NOT IN
+    # over it excludes nothing it claims to.
+    sql = (
+        "SELECT COUNT(*) FROM orders o WHERE o.customer_id NOT IN ("
+        f"SELECT t.id FROM customers c {side} JOIN "
+        "(SELECT id FROM customers WHERE is_test) t ON c.id = t.id)"
+    )
+    assert EXCLUDE in check(checker, sql)

@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Read;
 use thiserror::Error;
-#[cfg(not(target_arch = "wasm32"))]
 use unicode_properties::{GeneralCategory, UnicodeGeneralCategory};
 use wren_core_base::mdl::manifest::Manifest;
 
@@ -139,24 +138,7 @@ fn validate_native_schema_version(yml: &str) -> std::io::Result<bool> {
     let Some(raw) = project.get("schema_version") else {
         return Ok(true);
     };
-    let version = match raw {
-        serde_yaml::Value::Bool(value) => Ok(i64::from(*value)),
-        serde_yaml::Value::Number(value) => value
-            .as_i64()
-            .or_else(|| {
-                value
-                    .as_f64()
-                    .filter(|value| value.is_finite())
-                    .and_then(|value| {
-                        (value >= i64::MIN as f64 && value <= i64::MAX as f64)
-                            .then_some(value as i64)
-                    })
-            })
-            .ok_or(()),
-        serde_yaml::Value::String(value) => parse_cli_integer(value),
-        _ => Err(()),
-    }
-    .map_err(|()| {
+    let version = schema_version_number(raw).map_err(|()| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "invalid schema_version in wren_project.yml: expected an integer",
@@ -200,7 +182,6 @@ fn is_flat_v1_source_path(path: &str) -> bool {
 /// Parse the string forms accepted by Python's `int(value)`: optional ASCII sign, Unicode decimal
 /// digits, and underscores only between digits. This deliberately excludes other Unicode numeric
 /// characters (such as superscripts and Roman numerals), matching Python's integer conversion.
-#[cfg(not(target_arch = "wasm32"))]
 fn parse_cli_integer(value: &str) -> Result<i64, ()> {
     let value = value.trim();
     let (negative, value) = match value.strip_prefix('-') {
@@ -238,7 +219,6 @@ fn parse_cli_integer(value: &str) -> Result<i64, ()> {
 
 /// All Unicode `Nd` digit sets encode zero through nine contiguously. Consecutive mathematical
 /// digit styles may form a longer run, so the offset is reduced modulo ten.
-#[cfg(not(target_arch = "wasm32"))]
 fn unicode_decimal_digit(character: char) -> Option<u8> {
     if character.general_category() != GeneralCategory::DecimalNumber {
         return None;
@@ -426,6 +406,7 @@ fn read_model_metadata_if_file(
     )?))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn apply_ref_sql_file(metadata: String, ref_sql_file: Option<String>) -> std::io::Result<String> {
     let Some(ref_sql) = ref_sql_file else {
         return Ok(metadata);
@@ -631,7 +612,7 @@ fn native_flat_v1_sources_without_counterparts(
         })
         .transpose()?
         .unwrap_or(false);
-    if root.open_regular_file("views.yml".as_ref())?.is_some() && !has_view_counterpart {
+    if root.open_root_file("views.yml".as_ref())?.is_some() && !has_view_counterpart {
         paths.push("views.yml".to_string());
     }
     paths.sort();
@@ -677,7 +658,7 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
         .map(|project| validate_native_schema_version(project))
         .transpose()?
         .unwrap_or(false);
-    if legacy_or_default_v1 && root.open_regular_file("views.yml".as_ref())?.is_some() {
+    if legacy_or_default_v1 && root.open_root_file("views.yml".as_ref())?.is_some() {
         capture.flat_v1_source_paths.push("views.yml".to_string());
     }
     let digest = capture.digest();
@@ -705,7 +686,7 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
         "instructions.md",
     ] {
         let path = dir.join(name);
-        if path.is_file() {
+        if crate::digest::root_file_present(&path)? {
             files.push((name.to_string(), path));
         }
     }
@@ -721,7 +702,7 @@ pub fn capture_project(dir: &std::path::Path) -> std::io::Result<ProjectSnapshot
         .map(|project| validate_native_schema_version(project))
         .transpose()?
         .unwrap_or(false);
-    if legacy_or_default_v1 && dir.join("views.yml").is_file() {
+    if legacy_or_default_v1 && crate::digest::root_file_present(&dir.join("views.yml"))? {
         capture.flat_v1_source_paths.push("views.yml".to_string());
     }
     let sources = captured_sources(&capture.text, &capture.flat_v1_source_paths)?;
@@ -1000,12 +981,20 @@ fn validate_native_cube_source(sources: &ProjectSources) -> std::io::Result<()> 
     if root_cubes.is_empty() {
         return Ok(());
     }
+    // An empty or comment-only draft (`null`) carries no cube; any other non-mapping document is
+    // corrupt metadata and voids the mirror check.
     let directory_cubes = sources
         .cube_ymls
         .iter()
+        .filter(|yml| {
+            !matches!(
+                serde_yaml::from_str::<serde_yaml::Value>(yml),
+                Ok(serde_yaml::Value::Null)
+            )
+        })
         .map(|yml| parse_mapping_doc::<CubeFile>(yml))
         .collect::<Result<Option<Vec<_>>, _>>();
-    let Some(directory_cubes) = directory_cubes.ok().flatten() else {
+    let Ok(Some(directory_cubes)) = directory_cubes else {
         return Err(native_cube_mirror_error());
     };
 
@@ -1141,7 +1130,7 @@ fn native_flat_v1_sources_without_counterparts(
             .into_iter()
             .filter(|path| path.is_dir())
             .any(|path| path.join("metadata.yml").is_file());
-    if dir.join("views.yml").is_file() && !has_view_counterpart {
+    if crate::digest::root_file_present(&dir.join("views.yml"))? && !has_view_counterpart {
         paths.push("views.yml".to_string());
     }
     paths.sort();
@@ -1186,7 +1175,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
     use std::fs;
 
     let wren_project_path = dir.join("wren_project.yml");
-    if !wren_project_path.is_file() {
+    if !crate::digest::root_file_present(&wren_project_path)? {
         return Ok(None);
     }
     crate::digest::validate_source_directories(dir)?;
@@ -1206,8 +1195,8 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
         }
     }
 
-    let relationships_yml = read_if_exists(&dir.join("relationships.yml"))?;
-    let cubes_yml = read_if_exists(&dir.join("cubes.yml"))?;
+    let relationships_yml = read_root_if_exists(&dir.join("relationships.yml"))?;
+    let cubes_yml = read_root_if_exists(&dir.join("cubes.yml"))?;
 
     let mut cube_ymls = Vec::new();
     let cubes_dir = dir.join("cubes");
@@ -1254,7 +1243,7 @@ pub fn read_project_dir(dir: &std::path::Path) -> std::io::Result<Option<Project
         }
     }
 
-    let dashboards_yml = read_if_exists(&dir.join("dashboards.yml"))?;
+    let dashboards_yml = read_root_if_exists(&dir.join("dashboards.yml"))?;
 
     let sources = ProjectSources {
         wren_project_yml,
@@ -1359,7 +1348,7 @@ pub fn read_knowledge_rules(dir: &std::path::Path) -> std::io::Result<KnowledgeR
     }
 
     let legacy_path = dir.join("instructions.md");
-    let used_legacy = legacy_path.is_file();
+    let used_legacy = crate::digest::root_file_present(&legacy_path)?;
     if used_legacy {
         let contents = fs::read_to_string(legacy_path)?;
         if !contents.trim().is_empty() {
@@ -1428,7 +1417,7 @@ pub fn declared_default_ids(files: &[KnowledgeRuleFile]) -> (Vec<String>, Vec<St
             continue;
         }
         let front = block.join("\n");
-        let data: serde_yaml::Value = match serde_yaml::from_str(&front) {
+        let data = match parse_front_matter_yaml(&front) {
             Ok(data) => data,
             Err(_) => {
                 warnings.push(format!(
@@ -1530,15 +1519,20 @@ fn declares(block: &[&str], closed: bool) -> bool {
 
 /// `^\s*["']?(defaults|denied_columns|semantics)["']?\s*:`
 fn starts_with_declaration_key(line: &str) -> bool {
+    DECLARATION_KEYS
+        .iter()
+        .any(|key| starts_with_named_key(line, key))
+}
+
+/// `^\s*["']?<key>["']?\s*:`
+fn starts_with_named_key(line: &str, key: &str) -> bool {
     let line = line.trim_start();
     let rest = line.strip_prefix(['"', '\'']).unwrap_or(line);
-    DECLARATION_KEYS.iter().any(|key| {
-        rest.strip_prefix(key).is_some_and(|rest| {
-            rest.strip_prefix(['"', '\''])
-                .unwrap_or(rest)
-                .trim_start()
-                .starts_with(':')
-        })
+    rest.strip_prefix(key).is_some_and(|rest| {
+        rest.strip_prefix(['"', '\''])
+            .unwrap_or(rest)
+            .trim_start()
+            .starts_with(':')
     })
 }
 
@@ -1575,6 +1569,18 @@ const SEMANTICS_LIMIT: usize = 32;
 const SEMANTIC_NOTE_LIMIT: usize = 400;
 const SEMANTIC_MODELS_LIMIT: usize = 8;
 
+const UNREADABLE_SEMANTICS: &str = "front-matter is unreadable";
+
+/// Whether the leading front-matter block has a line that starts a `semantics` declaration, so a
+/// file whose block cannot be parsed is reported instead of silently declaring nothing.
+fn opens_semantics_declaration(text: &str) -> bool {
+    leading_block(text).is_some_and(|(block, _)| {
+        block
+            .iter()
+            .any(|line| starts_with_named_key(line, SEMANTICS_KEY))
+    })
+}
+
 /// One entry of a rule file's `semantics:` list: a business meaning no host check covers, bound to
 /// the models (or views) whose queries it concerns. Carried to the catalog as written.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1590,18 +1596,28 @@ pub(crate) struct SemanticEntry {
 /// mapping with exactly `id`, `models` and `note`, a malformed or repeated id, an empty or
 /// oversized `models` / `note`, more than the entry cap) is reported as `(path, description)` and
 /// the caller drops every entry, because a host that enforces a part of a list cannot tell the
-/// caller which meanings it left unchecked. A file whose front-matter cannot be read declares
-/// nothing here; the declared-default reading already voids that case.
+/// caller which meanings it left unchecked. A file whose front-matter cannot be read is a problem
+/// when a line of it starts a `semantics` declaration, and declares nothing otherwise.
 pub(crate) fn semantic_declarations(
     files: &[KnowledgeRuleFile],
 ) -> (Vec<SemanticEntry>, Vec<(String, String)>) {
     let mut entries: Vec<SemanticEntry> = Vec::new();
     let mut problems: Vec<(String, String)> = Vec::new();
     for file in files {
-        let Ok(Some(front)) = front_matter(&file.content) else {
-            continue;
+        let front = match front_matter(&file.content) {
+            Ok(Some(front)) => front,
+            Ok(None) => continue,
+            Err(_) => {
+                if opens_semantics_declaration(&file.content) {
+                    problems.push((file.path.clone(), UNREADABLE_SEMANTICS.to_string()));
+                }
+                continue;
+            }
         };
-        let Ok(data) = serde_yaml::from_str::<serde_yaml::Value>(&front) else {
+        let Ok(data) = parse_front_matter_yaml(&front) else {
+            if opens_semantics_declaration(&file.content) {
+                problems.push((file.path.clone(), UNREADABLE_SEMANTICS.to_string()));
+            }
             continue;
         };
         let Some(value) = data.get(SEMANTICS_KEY) else {
@@ -1703,11 +1719,11 @@ const DENIED_COLUMNS_KEY: &str = "denied_columns";
 /// plainly meant to declare something and a denylist that was only partly read must not be used.
 /// The same holds for a file with no front-matter at all that mentions the key. A front-matter
 /// key that only nearly spells `denied_columns` (other case, `-` for `_`, singular) is reported as
-/// an invalid entry rather than ignored, at the top level or nested at any depth. So is a file whose text mentions `denied_columns` but
-/// whose front-matter has no top-level key of exactly that name (a merge key, a nested mapping, a
-/// top-level sequence, a comment, a typo): the declaration, if any, was not read. A scalar value
-/// is read as a one-entry list; a value that is not a name, or a bare key, is reported entry by
-/// entry.
+/// an invalid entry rather than ignored, at the top level or nested at any depth. So is a file
+/// whose text mentions `denied_columns` but whose front-matter has no top-level key of exactly
+/// that name (a merge key, a nested mapping, a top-level sequence, a comment, a typo): the
+/// declaration, if any, was not read. A scalar value is read as a one-entry list; a value that is
+/// not a name, or a bare key, is reported entry by entry.
 pub(crate) fn denied_column_declarations(files: &[KnowledgeRuleFile]) -> Vec<DeniedDeclaration> {
     let mut out = Vec::new();
     for file in files {
@@ -1841,6 +1857,15 @@ fn is_near_miss_key(key: &str) -> bool {
 
 const UNCLOSED_FRONT_MATTER: &str = "front-matter is not closed by a '---' line";
 
+/// Parse front-matter the way the CLI's `yaml.safe_load` does: `<<` merge keys are applied, with
+/// the mapping's own keys winning over merged ones. `serde_yaml` leaves `<<` as a literal key
+/// until asked, so without this a declaration inherited through an anchor would read as absent.
+fn parse_front_matter_yaml(front: &str) -> Result<serde_yaml::Value, serde_yaml::Error> {
+    let mut value: serde_yaml::Value = serde_yaml::from_str(front)?;
+    value.apply_merge()?;
+    Ok(value)
+}
+
 /// Split a leading `---` fenced block off `text`: `Ok(None)` when the text does not open with
 /// one, an error when the fence never closes.
 fn front_matter(text: &str) -> Result<Option<String>, &'static str> {
@@ -1940,6 +1965,17 @@ fn sorted_paths(
 #[cfg(all(not(target_arch = "wasm32"), not(unix)))]
 fn read_if_exists(path: &std::path::Path) -> std::io::Result<Option<String>> {
     if path.is_file() {
+        Ok(Some(std::fs::read_to_string(path)?))
+    } else {
+        Ok(None)
+    }
+}
+
+/// [`read_if_exists`] for a root project file, refusing a dangling symlink instead of treating it
+/// as absent (see `digest::root_file_present`).
+#[cfg(all(not(target_arch = "wasm32"), not(unix)))]
+fn read_root_if_exists(path: &std::path::Path) -> std::io::Result<Option<String>> {
+    if crate::digest::root_file_present(path)? {
         Ok(Some(std::fs::read_to_string(path)?))
     } else {
         Ok(None)
@@ -2074,6 +2110,10 @@ pub fn assemble(sources: &ProjectSources) -> Result<LoadedProject, LoadError> {
     );
     manifest_json.insert("cubes".into(), serde_json::Value::Array(cubes));
     manifest_json.insert("views".into(), serde_json::Value::Array(views));
+    manifest_json.insert(
+        "layoutVersion".into(),
+        serde_json::Value::from(layout_version(&sources.wren_project_yml)?),
+    );
 
     // `catalog`/`schema` are required by the Manifest schema; default them so a minimal project
     // (test fixtures) still assembles rather than failing on a missing namespace field.
@@ -2090,6 +2130,53 @@ pub fn assemble(sources: &ProjectSources) -> Result<LoadedProject, LoadError> {
         .validate_layout_version()
         .map_err(|e| msg(e.to_string()))?;
     Ok(LoadedProject { manifest })
+}
+
+/// Engine `layoutVersion` per project `schema_version`; mirrors `_LAYOUT_VERSION_MAP` in the
+/// wren CLI (`wren/context.py`). Keep the two in step.
+const LAYOUT_VERSION_MAP: [(i64, u32); 5] = [(1, 1), (2, 1), (3, 2), (4, 3), (5, 3)];
+
+/// The project's `schema_version` converted the way the CLI's `int(...)` does: booleans, integers,
+/// finite floats (truncated) and the strings `int` accepts, Unicode decimal digits included. The
+/// native readers' gate and the manifest layout both use it, so they cannot disagree.
+fn schema_version_number(raw: &serde_yaml::Value) -> Result<i64, ()> {
+    match raw {
+        serde_yaml::Value::Bool(value) => Ok(i64::from(*value)),
+        serde_yaml::Value::Number(value) => value
+            .as_i64()
+            .or_else(|| {
+                value
+                    .as_f64()
+                    .filter(|value| value.is_finite())
+                    .and_then(|value| {
+                        // `i64::MAX as f64` rounds up to 2^63, which no i64 holds: exclusive.
+                        (value >= i64::MIN as f64 && value < i64::MAX as f64)
+                            .then_some(value as i64)
+                    })
+            })
+            .ok_or(()),
+        serde_yaml::Value::String(value) => parse_cli_integer(value),
+        _ => Err(()),
+    }
+}
+
+/// The engine layout for the project's `schema_version` (missing means 1, like the CLI). A value
+/// the map does not cover falls back to 1, as the CLI's `.get(version, 1)` does; a value that is
+/// not an integer at all is an error, as the CLI's `int(...)` is.
+fn layout_version(wren_project_yml: &str) -> Result<u32, LoadError> {
+    let Ok(serde_yaml::Value::Mapping(project)) =
+        serde_yaml::from_str::<serde_yaml::Value>(wren_project_yml)
+    else {
+        return Ok(1);
+    };
+    let version = project
+        .get("schema_version")
+        .map_or(Ok(1), schema_version_number)
+        .map_err(|()| msg("invalid schema_version in wren_project.yml: expected an integer"))?;
+    Ok(LAYOUT_VERSION_MAP
+        .iter()
+        .find(|(schema, _)| *schema == version)
+        .map_or(1, |(_, layout)| *layout))
 }
 
 fn yaml_to_json(v: serde_yaml::Value) -> Result<serde_json::Value, LoadError> {

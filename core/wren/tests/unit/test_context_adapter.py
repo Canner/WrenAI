@@ -391,6 +391,46 @@ def test_invalid_declared_defaults_refuse_to_start(real_project):
         load_snapshot(real_project)
 
 
+def test_declarations_come_from_the_captured_rules_not_a_second_read(
+    real_project, monkeypatch
+):
+    rules = real_project / "knowledge/rules/conventions.md"
+    original = rules.read_text()
+    real_check = adapter._check_semantics
+
+    def weaken_after_the_digests(catalog, denied):
+        # A valid, weaker rule set lands after both digests and is restored before the
+        # caller could notice; the snapshot must keep enforcing what it captured.
+        rules.write_text("No declarations here.\n")
+        real_check(catalog, denied)
+
+    monkeypatch.setattr(adapter, "_check_semantics", weaken_after_the_digests)
+    snap = load_snapshot(real_project)
+    rules.write_text(original)
+    assert [d.id for d in snap.declarations] == snap.catalog["declared_defaults"]
+    assert "exclude-test-orders" in [d.id for d in snap.declarations]
+
+
+def test_a_source_rewritten_mid_read_is_a_context_change(tmp_path, monkeypatch):
+    import os  # noqa: PLC0415
+
+    from wren import project_fingerprint  # noqa: PLC0415
+
+    root = project_dir(tmp_path)
+    loader = fake_loader(tmp_path, GOOD_PREPARED, good_catalog(root))
+    real = project_fingerprint.os.fstat
+
+    def growing(fd):
+        result = real(fd)
+        if stat.S_ISREG(result.st_mode) and result.st_size:
+            return os.stat_result((*result[:6], result.st_size + 1, *result[7:]))
+        return result
+
+    monkeypatch.setattr(project_fingerprint.os, "fstat", growing)
+    with pytest.raises(ContextChanged):
+        load_snapshot(root, loader)
+
+
 def test_a_change_between_the_two_digests_is_reported(real_project, monkeypatch):
     calls = {"n": 0}
     real = adapter.project_digest
@@ -745,6 +785,14 @@ def denying_reader(budget=4096):
         budget=budget,
         denied=[("customers", "email")],
     )
+
+
+def test_the_structure_document_carries_no_rule_file():
+    r = denying_reader()
+    assert "knowledge/rules/pii.md" in json.dumps(r.list(1))
+    structure = r.structure_document()
+    assert "pii.md" not in structure and "Business rule file" not in structure
+    assert "- model customers: " in structure
 
 
 def test_a_denied_column_is_absent_from_every_projection():

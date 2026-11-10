@@ -65,11 +65,13 @@ top-level `instructions.md` is still read, but it's deprecated — move it into
 A rule that must hold on every query can also be *declared*. Open the rules file with
 a `---` fenced YAML block holding a `defaults:` list; the block stays in the rule text
 your agent reads, next to the prose it summarises. A host that serves the project through
-`wren governed-stdio` then refuses a query that breaks a declared rule before it runs and
-names the rule's `id`, so the agent can repair the query and try again.
+`wren serve agent` or governed MCP (`wren serve mcp --service-config`) then refuses a
+query that breaks a declared rule before it runs and names the rule's `id`, so the agent
+can repair the query and try again. The hidden, legacy `wren governed-stdio` transport
+enforces the same rules with the limits noted below.
 
-`wren governed-stdio` accepts unqualified model names and CTEs over them. It refuses schema-
-or catalog-qualified table sources before execution because those can resolve to physical
+These hosts accept unqualified model names and CTEs over them. They refuse schema- or
+catalog-qualified table sources before execution because those can resolve to physical
 data instead of a bound model.
 
 ```markdown

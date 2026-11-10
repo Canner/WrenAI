@@ -53,8 +53,16 @@ async function writeTrace() {
   }
 }
 const client = new Client({ name: 'wren-external-pi-planner', version: '1.0.0' });
-// Only the explicitly named private credential reaches the service child.
-const env = { PATH: process.env.PATH, ...(config.env ?? {}) };
+// Only the explicitly named private credential reaches the service child. The context loader
+// override is not a credential: the service resolves the loader from it first. A relative path
+// is resolved here, so a service command that changes directory still finds the same binary
+// (POSIX paths: the service is POSIX-only).
+const loaderBin = process.env.WREN_CONTEXT_LOADER_BIN;
+const env = {
+  PATH: process.env.PATH,
+  ...(loaderBin ? { WREN_CONTEXT_LOADER_BIN: loaderBin.startsWith('/') ? loaderBin : `${process.cwd()}/${loaderBin}` } : {}),
+  ...(config.env ?? {}),
+};
 for (const name of config.serviceCredentialEnv ?? []) if (process.env[name]) env[name] = process.env[name];
 const transport = new StdioClientTransport({ command: config.command, args: config.args, env, stderr: 'pipe' });
 let totalRequests = 0, turnRequests = 0, toolCalls = 0;
@@ -90,10 +98,22 @@ try {
   }
   trace.completed = true;
 } catch (error) {
-  trace.errors.push(error instanceof Error ? { name: error.name, message: error.message.replaceAll(process.env.OPENAI_API_KEY ?? 'NO_KEY', '[REDACTED]').slice(0, 300) } : 'Error');
+  trace.errors.push(typeof error?.message === 'string' ? { name: String(error.name), message: redacted(error.message) } : 'Error');
   process.exitCode = 1;
 } finally {
   trace.requests = totalRequests;
   await client.close();
-  await writeTrace();
+  try {
+    await writeTrace();
+  } catch (error) {
+    // The trace is where a planner failure is reported. If it cannot be written, the write
+    // failure still ends the run and names the errors the trace would have held. Only their
+    // names: a message can carry text from the service, which must not reach process output.
+    if (error !== null && typeof error === 'object' && trace.errors.length)
+      error.unwrittenErrorNames = trace.errors.map(e => (typeof e === 'object' ? e.name : 'Error'));
+    throw error;
+  }
+}
+function redacted(message) {
+  return message.replaceAll(process.env.OPENAI_API_KEY ?? 'NO_KEY', '[REDACTED]').slice(0, 300);
 }

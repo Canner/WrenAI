@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import vm from 'node:vm';
+import { inspect } from 'node:util';
 
 const [clientPath, settings] = process.argv.slice(2);
 const config = { command: 'fixture', args: [], skill: 'skill.md', ...JSON.parse(settings) };
@@ -40,13 +41,18 @@ class Agent {
   constructor(options) { this.options = options; this.state = { messages: [] }; }
   async prompt() {
     await this.options.initialState.tools[0].execute('one', {});
-    if (config._probeFailure) throw Error('scripted planner failure');
+    if (config._probeFailure) throw Error(config._probeFailureMessage ?? 'scripted planner failure');
     this.state.messages.push({ role: 'assistant', stopReason: 'stop', content: [] });
   }
 }
 const context = vm.createContext({
-  process: { argv: ['node', clientPath, 'client.json', 'questions.json', outputPath], env: {} },
+  process: {
+    argv: ['node', clientPath, 'client.json', 'questions.json', outputPath],
+    env: config._probeEnv ?? {},
+    cwd: () => '/probe/cwd',
+  },
 });
+let transportEnv = null;
 const modules = {
   'node:fs': { constants },
   'node:crypto': { randomUUID },
@@ -73,10 +79,10 @@ const modules = {
   '@earendil-works/pi-agent-core': { Agent },
   '@earendil-works/pi-ai/api/openai-completions': { streamSimple: () => { throw Error('provider must not run'); } },
   '@modelcontextprotocol/sdk/client/index.js': { Client },
-  '@modelcontextprotocol/sdk/client/stdio.js': { StdioClientTransport: class {} },
+  '@modelcontextprotocol/sdk/client/stdio.js': { StdioClientTransport: class { constructor(options) { transportEnv = options.env; } } },
 };
 const module = new vm.SourceTextModule(await readFile(clientPath, 'utf8'), { context });
-let error = null;
+let error = null, unwrittenErrorNames = null, printedLeaks = null;
 try {
   await module.link(specifier => {
     const exports = modules[specifier];
@@ -88,8 +94,16 @@ try {
   await module.evaluate();
 } catch (failure) {
   error = failure.message;
+  unwrittenErrorNames = failure.unwrittenErrorNames ?? null;
+  // What Node prints for an uncaught failure: the stack plus its own properties.
+  if (config._probeFailureMessage) printedLeaks = inspect(failure).includes(config._probeFailureMessage);
 }
-const result = { timeouts, clients, error };
+const result = {
+  timeouts, clients, error,
+  ...(unwrittenErrorNames ? { unwrittenErrorNames } : {}),
+  ...(printedLeaks === null ? {} : { printedLeaks }),
+  ...(config._probeEnv ? { transportEnv } : {}),
+};
 try {
   if (config._probeSymlink) {
     result.targetContent = await readFile(targetPath, 'utf8');

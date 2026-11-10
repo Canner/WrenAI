@@ -112,6 +112,8 @@ fn the_loader_still_assembles_a_project_whose_views_declare_columns() {
 fn every_malformed_declaration_is_a_diagnostic_and_the_catalog_is_marked_invalid() {
     let cases = [
         ("columns: order_id", "columns must be a list"),
+        ("columns: null", "columns must be a list"),
+        ("columns:", "columns must be a list"),
         (
             "columns: [order_id]",
             "columns[0]: must be a mapping with name and type",
@@ -168,6 +170,34 @@ fn every_malformed_declaration_is_a_diagnostic_and_the_catalog_is_marked_invalid
             assert!(v.get("columns").is_none(), "all or nothing: {body}");
         }
     }
+}
+
+#[test]
+fn an_unreadable_sql_yml_is_a_diagnostic_even_with_an_inline_statement() {
+    let project = project_with_view_metadata(
+        "name: paid_orders\nstatement: SELECT id AS order_id, amount FROM orders\n",
+    );
+    fs::write(
+        project.path().join("views/paid_orders/sql.yml"),
+        "statement: [unclosed\n",
+    )
+    .unwrap();
+    let doc = catalog_json(project.path());
+    let diagnostics = doc["diagnostics"].as_array().expect("a diagnostic");
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    let message = diagnostics[0].as_str().unwrap();
+    assert!(
+        message.starts_with("views/paid_orders/sql.yml"),
+        "{message}"
+    );
+    assert!(!message.contains("unclosed"), "{message}");
+
+    fs::write(
+        project.path().join("views/paid_orders/sql.yml"),
+        "statement: SELECT 1\n",
+    )
+    .unwrap();
+    assert!(catalog_json(project.path()).get("diagnostics").is_none());
 }
 
 #[test]

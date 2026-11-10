@@ -170,7 +170,9 @@ impl SourceDir {
 
     /// Open a root project file (`wren_project.yml`, `instructions.md`, ...). A missing entry or a
     /// non-regular entry is absent; a symlink whose target does not resolve to a regular file is
-    /// refused, so a dangling link cannot make an authored file silently vanish.
+    /// refused, so a dangling link cannot make an authored file silently vanish. The
+    /// `directory_symlink_unsupported` label is reused for any root-file symlink that does not
+    /// resolve, whether it dangles or points at a directory.
     pub(crate) fn open_root_file(&self, name: &OsStr) -> io::Result<Option<File>> {
         let file = self.open_regular_file(name)?;
         if file.is_none() && self.entry_kind(name)? == EntryKind::Symlink {

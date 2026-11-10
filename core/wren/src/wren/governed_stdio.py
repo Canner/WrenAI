@@ -10,6 +10,7 @@ from pathlib import Path
 import pyarrow as pa
 import yaml
 from sqlglot import exp, parse_one
+from sqlglot.optimizer.scope import traverse_scope
 
 from wren.agent_project import require_profile_pin
 from wren.config import load_config
@@ -29,7 +30,11 @@ from wren.model.data_source import DataSource
 from wren.model.error import ErrorCode, ErrorPhase, WrenError
 from wren.profile import expand_profile_secrets, resolve_profile_for_project
 from wren.query_semantics import cubes_read_as_tables, query_semantics
-from wren.read_only import NoSourceTablesError, require_source_tables
+from wren.read_only import (
+    NoSourceTablesError,
+    consumed_scopes,
+    require_source_tables,
+)
 
 MAX_REQUEST = 65_536
 MAX_RESULT = 1_048_576
@@ -104,6 +109,14 @@ _DATASOURCE_CODES = frozenset(
         ErrorCode.ATTACH_DUCKDB_ERROR,
     }
 )
+
+
+class LegacyUnsupported(ValueError):
+    """The project needs a rule this transport cannot enforce; the message is caller-safe.
+
+    It names only a declaration key and the command to use instead, never the project, a
+    rule file or a column, so the CLI may print it as is.
+    """
 
 
 class _RequestError(ValueError):
@@ -254,6 +267,20 @@ def classify_error(error: BaseException) -> str:
     return "internal"
 
 
+def _result_filters(ast: exp.Expression, dialect: str) -> list[str]:
+    """The ``WHERE`` conditions of the selects that feed the result; a CTE the statement
+    defines but never reads filters nothing it returns."""
+    feeding = {
+        id(scope.expression)
+        for scope in consumed_scopes(list(traverse_scope(ast)), dialect)
+    }
+    return [
+        clause.this.sql()
+        for clause in ast.find_all(exp.Where)
+        if id(clause.parent) in feeding
+    ]
+
+
 def _require_legacy_policy_support(project: Path) -> None:
     """Refuse declarations this legacy transport cannot enforce, without a loader."""
     message = (
@@ -264,17 +291,17 @@ def _require_legacy_policy_support(project: Path) -> None:
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeError):
-            raise ValueError(message) from None
+            raise LegacyUnsupported(message) from None
         try:
             front, _ = split_front_matter(text)
         except ValueError:
             # Leave unrelated malformed default rules to their existing diagnostic.
             if _mentions_denied_key(text):
-                raise ValueError(message) from None
+                raise LegacyUnsupported(message) from None
             continue
         candidate = text if front is None else front
         if _mentions_denied_key(candidate):
-            raise ValueError(message)
+            raise LegacyUnsupported(message)
         if front is not None:
             try:
                 data = yaml.safe_load(front)
@@ -282,7 +309,7 @@ def _require_legacy_policy_support(project: Path) -> None:
                 continue
             # YAML escapes and aliases must not hide a declaration from the guard.
             if _mentions_denied_key(yaml.safe_dump(data, allow_unicode=True)):
-                raise ValueError(message)
+                raise LegacyUnsupported(message)
 
 
 def _require_legacy_rate_support(declarations: list[Declaration]) -> None:
@@ -295,7 +322,7 @@ def _require_legacy_rate_support(declarations: list[Declaration]) -> None:
             ("match: single", declaration.match),
         ):
             if value is not None:
-                raise ValueError(
+                raise LegacyUnsupported(
                     f"Legacy governed-stdio cannot enforce '{key}' on a "
                     "require_rate_join rule. "
                     "Use 'wren serve mcp --service-config <config>' instead."
@@ -382,9 +409,7 @@ def serve(project: Path) -> None:
                     definition = {
                         "sql": request["sql"],
                         "source_tables": source_tables,
-                        "filters": [
-                            clause.this.sql() for clause in ast.find_all(exp.Where)
-                        ],
+                        "filters": _result_filters(ast, dialect),
                     }
                     semantics = query_semantics(ast, request["sql"], manifest)
                     value = _query_result(result, definition, semantics, request["id"])

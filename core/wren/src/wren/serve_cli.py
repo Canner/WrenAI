@@ -394,7 +394,7 @@ def serve_agent_presets(
     """Print the named policy presets of a service configuration as JSON."""
     import yaml  # noqa: PLC0415
 
-    from wren.agent_service import read_policy_presets  # noqa: PLC0415
+    from wren.service_presets import read_policy_presets  # noqa: PLC0415
 
     try:
         config = yaml.safe_load(

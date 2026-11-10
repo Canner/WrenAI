@@ -459,10 +459,13 @@ def governed_stdio(
 ):
     """Serve typed, read-only operations for a host-selected project."""
     from wren.declared_defaults import DeclarationError  # noqa: PLC0415
-    from wren.governed_stdio import serve  # noqa: PLC0415
+    from wren.governed_stdio import LegacyUnsupported, serve  # noqa: PLC0415
 
     try:
         serve(project)
+    except LegacyUnsupported as refusal:
+        typer.echo(f"Governed Wren access is unavailable: {refusal}", err=True)
+        raise typer.Exit(1)
     except DeclarationError:
         typer.echo(
             "Governed Wren access is unavailable: the bound project's declared "

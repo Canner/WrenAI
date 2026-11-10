@@ -179,6 +179,38 @@ fn root_cube_mirror_requires_usable_matching_directory_semantics() {
         }
     }
 
+    let drafted = tempfile::tempdir().unwrap();
+    project(drafted.path());
+    write(drafted.path(), "cubes.yml", ROOT_CUBE);
+    write(
+        drafted.path(),
+        "cubes/order_metrics/metadata.yml",
+        CUBE_METADATA,
+    );
+    write(drafted.path(), "cubes/draft/metadata.yml", "# draft\n");
+    read_project_dir(drafted.path())
+        .expect("a comment-only draft cube must not void a correct mirror");
+    capture_project(drafted.path())
+        .expect("a comment-only draft cube must not void a correct mirror");
+
+    let scalar = tempfile::tempdir().unwrap();
+    project(scalar.path());
+    write(scalar.path(), "cubes.yml", ROOT_CUBE);
+    write(
+        scalar.path(),
+        "cubes/order_metrics/metadata.yml",
+        CUBE_METADATA,
+    );
+    write(scalar.path(), "cubes/broken/metadata.yml", "just prose\n");
+    assert!(
+        read_project_dir(scalar.path()).is_err(),
+        "a scalar cube metadata file is corrupt, not a draft"
+    );
+    assert!(
+        capture_project(scalar.path()).is_err(),
+        "a scalar cube metadata file is corrupt, not a draft"
+    );
+
     let duplicate = tempfile::tempdir().unwrap();
     project(duplicate.path());
     write(duplicate.path(), "cubes.yml", ROOT_CUBE);
@@ -545,4 +577,81 @@ fn captured_snapshot_does_not_reread_a_source_after_edit_and_restore() {
         read_project_dir(tmp.path()).unwrap().unwrap().model_ymls,
         "the captured semantic bytes survive an edit-and-restore interval without rereading"
     );
+}
+
+#[test]
+fn the_manifest_layout_follows_the_schema_version_like_the_cli() {
+    for (schema, layout) in [(1, 1), (2, 1), (3, 2), (4, 3), (5, 3)] {
+        let tmp = tempfile::tempdir().unwrap();
+        project(tmp.path());
+        write(
+            tmp.path(),
+            "wren_project.yml",
+            &format!("schema_version: {schema}\nname: reading\ncatalog: wren\nschema: public\ndata_source: duckdb\n"),
+        );
+        let sources = read_project_dir(tmp.path()).unwrap().unwrap();
+        let loaded = assemble(&sources).expect("project assembles");
+        assert_eq!(
+            loaded.manifest.layout_version, layout,
+            "schema_version {schema}"
+        );
+    }
+    // Arabic-Indic four: the native gate reads it as 4 (Python's int() does too), and the
+    // layout must follow the same conversion.
+    let tmp = tempfile::tempdir().unwrap();
+    project(tmp.path());
+    write(
+        tmp.path(),
+        "wren_project.yml",
+        "schema_version: '\u{0664}'\nname: reading\ncatalog: wren\nschema: public\ndata_source: duckdb\n",
+    );
+    let mut sources = read_project_dir(tmp.path()).unwrap().unwrap();
+    assert_eq!(assemble(&sources).unwrap().manifest.layout_version, 3);
+
+    // An in-memory caller's non-integer version is an error, as the CLI's int() is.
+    sources.wren_project_yml =
+        "schema_version: abc\nname: reading\ncatalog: wren\nschema: public\ndata_source: duckdb\n"
+            .to_string();
+    assert!(assemble(&sources).is_err());
+
+    // 2^63 does not fit an i64: the native gate refuses it rather than saturating.
+    let tmp = tempfile::tempdir().unwrap();
+    project(tmp.path());
+    write(
+        tmp.path(),
+        "wren_project.yml",
+        "schema_version: 9223372036854775808.0\nname: reading\ncatalog: wren\nschema: public\ndata_source: duckdb\n",
+    );
+    let refused = read_project_dir(tmp.path())
+        .err()
+        .expect("an out-of-range version is refused");
+    assert!(
+        refused.to_string().contains("expected an integer"),
+        "{refused}"
+    );
+
+    // The lower bound is inclusive: -2^63 converts (and is then out of the supported range),
+    // a representable float below it does not convert at all.
+    for (version, expected) in [
+        (
+            "-9223372036854775808.0",
+            "unsupported schema_version -9223372036854775808",
+        ),
+        ("-1.0e19", "expected an integer"),
+    ] {
+        let tmp = tempfile::tempdir().unwrap();
+        project(tmp.path());
+        write(
+            tmp.path(),
+            "wren_project.yml",
+            &format!("schema_version: {version}\nname: reading\ncatalog: wren\nschema: public\ndata_source: duckdb\n"),
+        );
+        let refused = read_project_dir(tmp.path())
+            .err()
+            .expect("an out-of-range version is refused");
+        assert!(
+            refused.to_string().contains(expected),
+            "{version}: {refused}"
+        );
+    }
 }
