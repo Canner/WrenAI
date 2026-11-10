@@ -18,6 +18,8 @@ npm install --prefix "$RUNTIME" --no-audit --no-fund @warble/cli@0.21.1 @warble/
 WARBLE="$RUNTIME/node_modules/.bin/warble"
 ```
 
+`@warble/cli` installs a prebuilt compiler binary for glibc Linux (x86_64, aarch64) and macOS. On a platform without one, such as musl-based Alpine, install `@warble/pi@0.21.1` from npm as above, build the compiler with `cargo install warble-cli --version 0.21.1 --locked`, and point `WARBLE` at the resulting `warble` binary instead.
+
 Build the context loader once, or point `WREN_CONTEXT_LOADER_BIN` at a built binary. The service looks there first, then at `core/wren-context-loader/target/{release,debug}` of the repository the `wren` package sits in, and otherwise refuses to start (`context_loader_unavailable`); it never falls back to a hand-written metadata copy.
 
 ```sh
