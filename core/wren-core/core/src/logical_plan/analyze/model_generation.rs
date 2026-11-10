@@ -18,7 +18,7 @@ use crate::mdl::{AnalyzedWrenMDL, SessionStateRef};
 use crate::DataFusionError;
 use datafusion::common::alias::AliasGenerator;
 use datafusion::common::config::ConfigOptions;
-use datafusion::common::tree_node::{Transformed, TransformedResult};
+use datafusion::common::tree_node::{Transformed, TransformedResult, TreeNode};
 use datafusion::common::TableReference;
 use datafusion::common::{plan_err, Result};
 use datafusion::logical_expr::{col, ident, Extension, UserDefinedLogicalNodeCore};
@@ -90,8 +90,30 @@ impl ModelGenerationRule {
                             .required_exprs
                             .iter()
                             .map(|expr| -> Result<Expr> {
+                                // Bare references in an MDL expression are local to
+                                // the defining model, even when a related model
+                                // exposes the same column name.
+                                let qualified = expr
+                                    .clone()
+                                    .transform_down(|expr| {
+                                        if let Expr::Column(mut column) = expr {
+                                            if column.relation.is_none() {
+                                                column.relation =
+                                                    Some(TableReference::bare(
+                                                        model_plan.model.name(),
+                                                    ));
+                                                return Ok(Transformed::yes(
+                                                    Expr::Column(column),
+                                                ));
+                                            }
+                                            Ok(Transformed::no(Expr::Column(column)))
+                                        } else {
+                                            Ok(Transformed::no(expr))
+                                        }
+                                    })
+                                    .data()?;
                                 let rebased = rebase_relation_column(
-                                    expr,
+                                    &qualified,
                                     &alias,
                                     &relation_columns,
                                 )?;
