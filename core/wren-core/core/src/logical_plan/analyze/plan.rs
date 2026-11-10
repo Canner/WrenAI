@@ -560,9 +560,11 @@ impl ModelPlanNodeBuilder {
             return plan_err!("Model not found for {}", model_ref);
         };
 
-        let primary_key_column = model.primary_key().and_then(|pk| model.get_column(pk));
-
-        if let Some(primary_key_column) = primary_key_column {
+        for primary_key_column in model
+            .primary_keys()
+            .into_iter()
+            .filter_map(|pk| model.get_column(pk))
+        {
             let expr = create_wren_expr_for_model(
                 &primary_key_column.name,
                 Arc::clone(&model),
