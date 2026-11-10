@@ -1,3 +1,4 @@
+use crate::logical_plan::analyze::relation_chain::rebase_relation_column;
 use crate::{AccessControlProvider, WrenAccessControlProvider};
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -73,22 +74,34 @@ impl ModelGenerationRule {
                 if let Some(model_plan) =
                     extension.node.as_any().downcast_ref::<ModelPlanNode>()
                 {
-                    let (source_plan, alias) = model_plan.relation_chain.clone().plan(
-                        ModelGenerationRule::new_with_access_control(
-                            Arc::clone(&self.analyzed_wren_mdl),
-                            Arc::clone(&self.session_state),
-                            Arc::clone(&self.properties),
-                            Arc::clone(&self.access_control),
-                        ),
-                        &alias_generator,
-                    )?;
+                    let (source_plan, alias, relation_columns) =
+                        model_plan.relation_chain.clone().plan(
+                            ModelGenerationRule::new_with_access_control(
+                                Arc::clone(&self.analyzed_wren_mdl),
+                                Arc::clone(&self.session_state),
+                                Arc::clone(&self.properties),
+                                Arc::clone(&self.access_control),
+                            ),
+                            &alias_generator,
+                        )?;
 
                     let projections = if let Some(alias) = alias {
                         model_plan
                             .required_exprs
                             .iter()
-                            .map(|expr| rebase_column(expr, &alias).unwrap())
-                            .collect()
+                            .map(|expr| -> Result<Expr> {
+                                let rebased = rebase_relation_column(
+                                    expr,
+                                    &alias,
+                                    &relation_columns,
+                                )?;
+                                Ok(if let Expr::Column(column) = expr {
+                                    rebased.alias(column.name.clone())
+                                } else {
+                                    rebased
+                                })
+                            })
+                            .collect::<Result<Vec<_>>>()?
                     } else {
                         model_plan.required_exprs.clone()
                     };
@@ -208,7 +221,7 @@ impl ModelGenerationRule {
                     .as_any()
                     .downcast_ref::<CalculationPlanNode>(
                 ) {
-                    let (source_plan, plan_alias) =
+                    let (source_plan, plan_alias, relation_columns) =
                         calculation_plan.relation_chain.clone().plan(
                             ModelGenerationRule::new_with_access_control(
                                 Arc::clone(&self.analyzed_wren_mdl),
@@ -227,7 +240,11 @@ impl ModelGenerationRule {
 
                     if let Expr::Alias(alias) = calculation_plan.measures[0].clone() {
                         let measure: Expr = *alias.expr.clone();
-                        let rebased_measure = rebase_column(&measure, &plan_alias)?;
+                        let rebased_measure = rebase_relation_column(
+                            &measure,
+                            &plan_alias,
+                            &relation_columns,
+                        )?;
                         let name = alias.name.clone();
                         let ident =
                             ident(rebased_measure.to_string()).alias(name.clone());
@@ -236,9 +253,25 @@ impl ModelGenerationRule {
                         let rebased_dimensions = calculation_plan
                             .dimensions
                             .iter()
-                            .map(|dimension| rebase_column(dimension, &plan_alias))
+                            .map(|dimension| {
+                                rebase_relation_column(
+                                    dimension,
+                                    &plan_alias,
+                                    &relation_columns,
+                                )
+                            })
                             .collect::<Result<Vec<_>>>()?;
-                        let mut project = rebased_dimensions.clone();
+                        let mut project: Vec<Expr> = rebased_dimensions
+                            .iter()
+                            .zip(&calculation_plan.dimensions)
+                            .map(|(rebased, original)| {
+                                if let Expr::Column(column) = original {
+                                    rebased.clone().alias(column.name.clone())
+                                } else {
+                                    rebased.clone()
+                                }
+                            })
+                            .collect();
                         project.push(ident);
                         let result = match source_plan {
                             Some(plan) => LogicalPlanBuilder::from(plan)
