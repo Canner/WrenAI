@@ -1,0 +1,115 @@
+{
+  "catalog": "wren",
+  "cubes": [],
+  "dataSource": null,
+  "layoutVersion": 1,
+  "models": [
+    {
+      "baseObject": null,
+      "cached": false,
+      "columns": [
+        {
+          "columnLevelAccessControl": null,
+          "expression": "row_id",
+          "isCalculated": false,
+          "isHidden": false,
+          "name": "id",
+          "notNull": true,
+          "relationship": null,
+          "type": "VARCHAR"
+        },
+        {
+          "columnLevelAccessControl": null,
+          "expression": "project_ref",
+          "isCalculated": false,
+          "isHidden": false,
+          "name": "project_id",
+          "notNull": true,
+          "relationship": null,
+          "type": "VARCHAR"
+        },
+        {
+          "columnLevelAccessControl": null,
+          "expression": "",
+          "isCalculated": false,
+          "isHidden": false,
+          "name": "project",
+          "notNull": false,
+          "relationship": "finding_project",
+          "type": "TenderProject"
+        },
+        {
+          "columnLevelAccessControl": null,
+          "expression": "project.name",
+          "isCalculated": true,
+          "isHidden": false,
+          "name": "project_name",
+          "notNull": false,
+          "relationship": null,
+          "type": "VARCHAR"
+        }
+      ],
+      "dialect": null,
+      "name": "TenderFinding",
+      "primaryKey": "id",
+      "refSql": null,
+      "refreshTime": null,
+      "rowLevelAccessControls": [],
+      "tableReference": {
+        "catalog": "scope_a",
+        "schema": "main",
+        "table": "src_review_row"
+      }
+    },
+    {
+      "baseObject": null,
+      "cached": false,
+      "columns": [
+        {
+          "columnLevelAccessControl": null,
+          "expression": "key_id",
+          "isCalculated": false,
+          "isHidden": false,
+          "name": "id",
+          "notNull": true,
+          "relationship": null,
+          "type": "VARCHAR"
+        },
+        {
+          "columnLevelAccessControl": null,
+          "expression": "caption",
+          "isCalculated": false,
+          "isHidden": false,
+          "name": "name",
+          "notNull": true,
+          "relationship": null,
+          "type": "VARCHAR"
+        }
+      ],
+      "dialect": null,
+      "name": "TenderProject",
+      "primaryKey": "id",
+      "refSql": null,
+      "refreshTime": null,
+      "rowLevelAccessControls": [],
+      "tableReference": {
+        "catalog": "scope_a",
+        "schema": "main",
+        "table": "src_project"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "condition": "TenderFinding.project_id = TenderProject.id",
+      "joinType": "MANY_TO_ONE",
+      "models": [
+        "TenderFinding",
+        "TenderProject"
+      ],
+      "name": "finding_project"
+    }
+  ],
+  "schema": "public",
+  "views": []
+}
