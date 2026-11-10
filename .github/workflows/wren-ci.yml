@@ -414,14 +414,15 @@ jobs:
       - name: Build context loader
         working-directory: .
         run: cargo build --locked --manifest-path core/wren-context-loader/Cargo.toml
-      # The Warble compiler is the published CLI. The private runtime (@warble/pi) is not
-      # published, so this job runs the scripted runtime in tests/unit/fixtures: the tests
-      # that need a real Cedar engine skip here and are a local gate
+      # The Warble compiler is the published @warble/cli; its runtime is published as
+      # @warble/pi at the same version. This job keeps the scripted runtime in
+      # tests/unit/fixtures as WARBLE_SERVICE, so the tests that need a real Cedar engine
+      # skip here and are a local gate against the installed @warble/pi
       # (examples/serve-agent/README.md, "Re-run the checks").
       - name: Install the Warble CLI
         working-directory: .
         run: |
-          npm install --prefix "$RUNNER_TEMP/warble-cli" --no-audit --no-fund @warble/cli@0.19.0
+          npm install --prefix "$RUNNER_TEMP/warble-cli" --no-audit --no-fund @warble/cli@0.21.1
           echo "WARBLE_BIN=$RUNNER_TEMP/warble-cli/node_modules/.bin/warble" >> "$GITHUB_ENV"
           echo "WARBLE_SERVICE=$GITHUB_WORKSPACE/core/wren/tests/unit/fixtures/fake_runtime.js" >> "$GITHUB_ENV"
       # A separately authored test peer uses only the published Cedar evaluator.

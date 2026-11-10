@@ -1,20 +1,24 @@
 # Profile-bound Wren agent over local MCP
 
-This example serves one Warble profile against one synthetic Wren project. The private pi runtime executes the profile's components; an independent planner connects over MCP. The service does not need the planner's model key.
+This example serves one Warble profile against one synthetic Wren project. The pi runtime (`@warble/pi`) executes the profile's components in the private worker role; an independent planner connects over MCP. The service does not need the planner's model key.
 
 The service captures the project's context snapshot and resolved connection at startup. Everything the agent knows about the data comes from the Wren project itself, read through the Rust `wren-context-loader`; `service.yml` carries the model, policy and execution limits, plus an optional explicit connection.
 
-Requirements: Python 3.11+, Node 22.19+, a compatible Warble 0.19.0 compiler, the matching `@warble/pi` package containing `dist/service.js` (`warble-private-service/1`), and the context loader binary (below). This service uses POSIX process groups; Windows is not supported. The compiler/runtime pair must include this service contract; matching version numbers alone are not sufficient.
+Requirements: Python 3.11+, Node 22.19+, the Warble 0.21.1 compiler (`@warble/cli@0.21.1`), the matching runtime (`@warble/pi@0.21.1`, whose `dist/service.js` speaks `warble-private-service/1`), and the context loader binary (below). This service uses POSIX process groups; Windows is not supported. The compiler/runtime pair must include this service contract; matching version numbers alone are not sufficient.
 
 ## Install and prepare
 
-Use a source checkout containing this example and the serve-agent implementation. Install a wheel built from that source with its MCP extra and a compatible Warble runtime tarball into isolated directories; the commands below require those build artifacts to exist. The example files and context-loader binary come from the source checkout, not the Wren wheel. This service is not advertised as an already released package. Obtain a compatible runtime artifact from its maintainer; public registry availability is not assumed by this setup.
+Use a source checkout containing this example and the serve-agent implementation. Install a wheel built from that source with its MCP extra, and install the Warble compiler and runtime from npm, into isolated directories; the commands below require the wheel to exist. The example files and context-loader binary come from the source checkout, not the Wren wheel. `@warble/cli` and `@warble/pi` are public npm packages released together; install both at the same version into one directory (`RUNTIME` below) so the compiler and runtime stay paired, and point `WARBLE` at the compiler that install provides.
 
 ```sh
 uv venv --python 3.11 .venv
 uv pip install --python .venv/bin/python './wrenai-<version>-py3-none-any.whl[mcp]'
-npm install ./warble-pi-0.19.0.tgz
+RUNTIME="$PWD/warble"
+npm install --prefix "$RUNTIME" --no-audit --no-fund @warble/cli@0.21.1 @warble/pi@0.21.1
+WARBLE="$RUNTIME/node_modules/.bin/warble"
 ```
+
+`@warble/cli` installs a prebuilt compiler binary for glibc Linux (x86_64, aarch64) and macOS. On a platform without one, such as musl-based Alpine, install `@warble/pi@0.21.1` from npm as above, build the compiler with `cargo install warble-cli --version 0.21.1 --locked`, and point `WARBLE` at the resulting `warble` binary instead.
 
 Build the context loader once, or point `WREN_CONTEXT_LOADER_BIN` at a built binary. The service looks there first, then at `core/wren-context-loader/target/{release,debug}` of the repository the `wren` package sits in, and otherwise refuses to start (`context_loader_unavailable`); it never falls back to a hand-written metadata copy.
 
@@ -428,7 +432,7 @@ If startup fails, check the profile, compiled IR compatibility, project manifest
 
 The checks come in two layers. Both run from the Wren Python package directory
 with the MCP extra installed, and both need the context loader built (see above)
-and the Warble compiler (`WARBLE_BIN`, the published `@warble/cli`).
+and the Warble compiler (`WARBLE_BIN`, the `@warble/cli` installed above as `WARBLE`).
 
 **CI** (the `agent service tests` job) uses the scripted runtime in
 `tests/unit/fixtures/fake_runtime.js` as `WARBLE_SERVICE`. It evaluates no Cedar
@@ -451,9 +455,9 @@ npm ci --ignore-scripts --no-audit --no-fund --prefix tests/policy-runtime
 uv run --extra mcp pytest tests/policy-runtime/test_policy_denial.py -v
 ```
 
-**Local gate** (not in CI: the private runtime is not published) runs the same
-files and the rest of the agent group against a built runtime, so Cedar is
-evaluated for real. The runtime refuses an empty model key, so export any
+**Local gate** (not in CI, which runs the scripted runtime) runs the same files
+and the rest of the agent group against the installed `@warble/pi` runtime, so
+Cedar is evaluated for real. The runtime refuses an empty model key, so export any
 non-empty `NVIDIA_INFERENCE_API_KEY` (the unit tests make no model call):
 
 ```sh
