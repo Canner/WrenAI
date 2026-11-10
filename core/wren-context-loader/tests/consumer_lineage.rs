@@ -1231,6 +1231,152 @@ fn projection_wildcards_link_only_their_cube_members() {
 }
 
 #[test]
+fn join_using_columns_reach_the_cube_member_like_the_on_form() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    for (slug, sql) in [
+        (
+            "on-form",
+            "SELECT 1 FROM orders o JOIN order_metrics m ON o.placed_at = m.placed_at",
+        ),
+        (
+            "using-form",
+            "SELECT 1 FROM orders o JOIN order_metrics m USING (placed_at)",
+        ),
+        (
+            "using-first-source",
+            "SELECT 1 FROM order_metrics m LEFT JOIN orders o USING (placed_at)",
+        ),
+        (
+            "no-using",
+            "SELECT 1 FROM orders o JOIN order_metrics m ON TRUE",
+        ),
+        (
+            "using-semi",
+            "SELECT 1 FROM orders o LEFT SEMI JOIN order_metrics m USING (placed_at)",
+        ),
+        (
+            "using-anti",
+            "SELECT 1 FROM orders o LEFT ANTI JOIN order_metrics m USING (placed_at)",
+        ),
+        (
+            "using-bare-semi",
+            "SELECT 1 FROM orders o SEMI JOIN order_metrics m USING (placed_at)",
+        ),
+        (
+            "using-bare-anti",
+            "SELECT 1 FROM orders o ANTI JOIN order_metrics m USING (placed_at)",
+        ),
+        (
+            "using-right-semi",
+            "SELECT 1 FROM orders o RIGHT SEMI JOIN order_metrics m USING (placed_at)",
+        ),
+        (
+            "using-right-anti",
+            "SELECT 1 FROM orders o RIGHT ANTI JOIN order_metrics m USING (placed_at)",
+        ),
+        (
+            "using-right-semi-left-cube",
+            "SELECT 1 FROM order_metrics m RIGHT SEMI JOIN orders o USING (placed_at)",
+        ),
+        (
+            "using-right-anti-left-cube",
+            "SELECT 1 FROM order_metrics m RIGHT ANTI JOIN orders o USING (placed_at)",
+        ),
+        (
+            "right-semi-on-true",
+            "SELECT 1 FROM order_metrics m RIGHT SEMI JOIN orders o ON TRUE",
+        ),
+        (
+            "right-anti-on-true",
+            "SELECT 1 FROM order_metrics m RIGHT ANTI JOIN orders o ON TRUE",
+        ),
+        (
+            "using-nested-join",
+            "SELECT 1 FROM (orders o JOIN order_metrics m USING (placed_at))",
+        ),
+        (
+            "using-nested-in-exists",
+            "SELECT 1 FROM customers c WHERE EXISTS (SELECT 1 FROM (orders o JOIN order_metrics m USING (placed_at)))",
+        ),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+    let ctx = load(tmp.path());
+    let seed = "dim:order_metrics.placed_at";
+    assert!(reaches(&ctx, seed, "query:on-form"));
+    assert!(
+        reaches(&ctx, seed, "query:using-form"),
+        "USING (placed_at) reads the joined cube's dimension"
+    );
+    assert!(
+        reaches(&ctx, seed, "query:using-first-source"),
+        "USING reads the column from the preceding cube source too"
+    );
+    assert!(!reaches(&ctx, seed, "query:no-using"));
+    for query in ["query:right-semi-on-true", "query:right-anti-on-true"] {
+        assert!(
+            !reaches(&ctx, seed, query),
+            "no USING, no dimension read: {query}"
+        );
+    }
+    for query in [
+        "query:using-semi",
+        "query:using-anti",
+        "query:using-bare-semi",
+        "query:using-bare-anti",
+        "query:using-right-semi",
+        "query:using-right-anti",
+        "query:using-right-semi-left-cube",
+        "query:using-right-anti-left-cube",
+    ] {
+        assert!(
+            reaches(&ctx, seed, query),
+            "a semi or anti join's USING reads the cube's dimension: {query}"
+        );
+    }
+    for query in ["query:using-nested-join", "query:using-nested-in-exists"] {
+        assert!(
+            reaches(&ctx, seed, query),
+            "an unaliased parenthesized join's USING reads the cube's dimension: {query}"
+        );
+    }
+}
+
+#[test]
+fn a_nested_select_order_by_correlates_to_the_outer_cube_member() {
+    let tmp = tempfile::tempdir().unwrap();
+    base_project(tmp.path());
+    for (slug, sql) in [
+        (
+            "order-by-correlated",
+            "SELECT 1 FROM order_metrics m WHERE EXISTS (SELECT 1 FROM orders o ORDER BY m.total_value LIMIT 1)",
+        ),
+        (
+            "order-by-shadowed",
+            "SELECT 1 FROM order_metrics m WHERE EXISTS (SELECT 1 FROM orders m ORDER BY m.total_value LIMIT 1)",
+        ),
+    ] {
+        write(
+            tmp.path(),
+            &format!("knowledge/sql/{slug}.md"),
+            &format!("---\nsql: {sql}\n---\n"),
+        );
+    }
+    let ctx = load(tmp.path());
+    let seed = "metric:order_metrics.total_value";
+    assert!(reaches(&ctx, seed, "query:order-by-correlated"));
+    assert!(
+        !reaches(&ctx, seed, "query:order-by-shadowed"),
+        "an inner source alias shadows the outer cube alias in ORDER BY too"
+    );
+}
+
+#[test]
 fn qualified_cube_members_must_resolve_to_the_cube_source() {
     let tmp = tempfile::tempdir().unwrap();
     base_project(tmp.path());

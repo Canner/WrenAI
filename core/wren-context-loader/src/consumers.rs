@@ -23,8 +23,9 @@ use std::ops::ControlFlow;
 
 use serde::Deserialize;
 use sqlparser::ast::{
-    Expr, Ident, ObjectName, ObjectNamePart, OrderBy, Query, Select, SelectItem,
-    SelectItemQualifiedWildcardKind, SetExpr, TableFactor, Visit, Visitor,
+    Expr, Ident, JoinConstraint, JoinOperator, ObjectName, ObjectNamePart, OrderBy, Query, Select,
+    SelectItem, SelectItemQualifiedWildcardKind, SetExpr, TableFactor, TableWithJoins, Visit,
+    Visitor,
 };
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
@@ -350,6 +351,7 @@ impl RelationCollector {
         let mut correlated_columns = CorrelatedColumnCollector::new(&sources);
         let _ = select.visit(&mut correlated_columns);
         columns.columns.extend(correlated_columns.columns);
+        columns.columns.extend(using_join_columns(select));
         if let Some(order_by) = order_by {
             let mut order_columns = ScopedColumnCollector::default();
             let _ = order_by.visit(&mut order_columns);
@@ -505,11 +507,19 @@ fn collect_correlated_query_columns(
     outer_sources: &[SelectSource],
     columns: &mut Vec<ColumnReference>,
 ) {
-    collect_correlated_set_expr_columns(&query.body, outer_sources, columns);
+    collect_correlated_set_expr_columns(
+        &query.body,
+        query.order_by.as_ref(),
+        outer_sources,
+        columns,
+    );
 }
 
+/// `order_by` is the query-level ORDER BY that resolves in this branch's source scope; it is only
+/// passed for a single SELECT body, as set operations order by their output columns.
 fn collect_correlated_set_expr_columns(
     expression: &SetExpr,
+    order_by: Option<&OrderBy>,
     outer_sources: &[SelectSource],
     columns: &mut Vec<ColumnReference>,
 ) {
@@ -531,10 +541,13 @@ fn collect_correlated_set_expr_columns(
                 nested_query_depth: 0,
             };
             let _ = select.visit(&mut collector);
+            if let Some(order_by) = order_by {
+                let _ = order_by.visit(&mut collector);
+            }
         }
         SetExpr::SetOperation { left, right, .. } => {
-            collect_correlated_set_expr_columns(left, outer_sources, columns);
-            collect_correlated_set_expr_columns(right, outer_sources, columns);
+            collect_correlated_set_expr_columns(left, None, outer_sources, columns);
+            collect_correlated_set_expr_columns(right, None, outer_sources, columns);
         }
         // A nested `Query` gets its own callback in the outer visitor. The remaining set
         // expressions do not expose a direct SELECT scope.
@@ -591,6 +604,65 @@ impl Visitor for CorrelatedBranchColumnCollector<'_> {
             });
         }
         ControlFlow::Continue(())
+    }
+}
+
+/// The columns named by `JOIN ... USING (col)`, which the expression visitor never sees because
+/// `USING` holds bare names. Each is read from the joined relation and from every source earlier
+/// in the same join chain, so it is recorded once per such qualifier; a qualifier whose source
+/// does not own the column resolves to no member and adds nothing. An unaliased parenthesized
+/// join (`FROM (a JOIN b USING (c))`) is walked the same way.
+fn using_join_columns(select: &Select) -> Vec<ColumnReference> {
+    let mut columns = Vec::new();
+    for table in &select.from {
+        using_columns_of(table, &mut columns);
+    }
+    columns
+}
+
+fn using_columns_of(table: &TableWithJoins, columns: &mut Vec<ColumnReference>) {
+    let mut qualifiers = Vec::new();
+    nested_using_columns(&table.relation, columns);
+    collect_table_factor_qualifiers(&table.relation, &mut qualifiers);
+    for join in &table.joins {
+        nested_using_columns(&join.relation, columns);
+        collect_table_factor_qualifiers(&join.relation, &mut qualifiers);
+        let (JoinOperator::Join(JoinConstraint::Using(names))
+        | JoinOperator::Inner(JoinConstraint::Using(names))
+        | JoinOperator::Left(JoinConstraint::Using(names))
+        | JoinOperator::LeftOuter(JoinConstraint::Using(names))
+        | JoinOperator::Right(JoinConstraint::Using(names))
+        | JoinOperator::RightOuter(JoinConstraint::Using(names))
+        | JoinOperator::FullOuter(JoinConstraint::Using(names))
+        | JoinOperator::StraightJoin(JoinConstraint::Using(names))
+        | JoinOperator::Semi(JoinConstraint::Using(names))
+        | JoinOperator::LeftSemi(JoinConstraint::Using(names))
+        | JoinOperator::RightSemi(JoinConstraint::Using(names))
+        | JoinOperator::Anti(JoinConstraint::Using(names))
+        | JoinOperator::LeftAnti(JoinConstraint::Using(names))
+        | JoinOperator::RightAnti(JoinConstraint::Using(names))) = &join.join_operator
+        else {
+            continue;
+        };
+        for name in names {
+            let Some(ObjectNamePart::Identifier(column)) = name.0.last() else {
+                continue;
+            };
+            columns.extend(qualifiers.iter().map(|qualifier| ColumnReference {
+                qualifier: Some(qualifier.clone()),
+                name: column.clone(),
+            }));
+        }
+    }
+}
+
+fn nested_using_columns(factor: &TableFactor, columns: &mut Vec<ColumnReference>) {
+    if let TableFactor::NestedJoin {
+        table_with_joins,
+        alias: None,
+    } = factor
+    {
+        using_columns_of(table_with_joins, columns);
     }
 }
 

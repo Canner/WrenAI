@@ -126,6 +126,44 @@ def test_trace_write_failure_keeps_previous_file_and_cleans_up_temporary_files()
     assert actual["temporaryEntries"] == []
 
 
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        ({}, "/opt/loader"),
+        ({"WREN_CONTEXT_LOADER_BIN": "/explicit"}, "/explicit"),
+    ],
+)
+def test_the_loader_override_reaches_the_service_and_config_env_wins(
+    configured, expected
+):
+    actual = probe(
+        {
+            "serviceReplyTimeoutMs": 200000,
+            "env": configured,
+            "_probeEnv": {"WREN_CONTEXT_LOADER_BIN": "/opt/loader", "SECRET": "x"},
+        }
+    )
+    assert actual["transportEnv"]["WREN_CONTEXT_LOADER_BIN"] == expected
+    assert "SECRET" not in actual["transportEnv"]
+
+
+def test_a_failed_trace_write_still_carries_the_planner_failure():
+    actual = probe(
+        {
+            "serviceReplyTimeoutMs": 200000,
+            "_probeExisting": True,
+            "_probeFailure": True,
+            "_probeFailureMessage": "upstream said service-secret-value",
+            "_probeWriteFailure": True,
+        }
+    )
+    assert actual["error"] == "scripted trace write failure"
+    assert actual["traceRaw"] == "previous trace"
+    assert actual["unwrittenErrorNames"] == ["Error"]
+    # A planner message can carry service text: none of it reaches what Node prints.
+    assert actual["printedLeaks"] is False
+
+
 def test_trace_directory_output_is_refused_without_leaving_temporary_files():
     actual = probe({"serviceReplyTimeoutMs": 200000, "_probeDirectory": True})
     assert actual["error"] is not None and actual["traceIsDirectory"]
@@ -139,3 +177,13 @@ def test_trace_fifo_output_is_refused_without_blocking(tmp_path):
     actual = probe({"serviceReplyTimeoutMs": 200000, "_probeOutputPath": str(output)})
     assert actual["error"] is not None and output.is_fifo()
     assert list(tmp_path.iterdir()) == [output]
+
+
+def test_a_relative_loader_override_is_resolved_before_the_service_starts():
+    actual = probe(
+        {
+            "serviceReplyTimeoutMs": 200000,
+            "_probeEnv": {"WREN_CONTEXT_LOADER_BIN": "bin/loader"},
+        }
+    )
+    assert actual["transportEnv"]["WREN_CONTEXT_LOADER_BIN"] == "/probe/cwd/bin/loader"

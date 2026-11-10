@@ -171,6 +171,8 @@ class QueryLifetime:
                     )
                 if error[0] == "result":
                     raise ValueError(error[1])
+                if error[0] == "changed":
+                    raise ValueError("context_changed")
                 if error[0] == "filesystem":
                     raise RuntimeError("filesystem_unavailable")
                 raise RuntimeError("query_execution_failed")

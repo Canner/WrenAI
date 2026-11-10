@@ -951,6 +951,57 @@ def test_an_unused_flag_group_cannot_excuse_live_account_reads(checker):
     assert check(checker, sql) == [EXCLUDE]
 
 
+def test_a_predicate_subquery_group_cannot_address_the_enclosing_read(checker):
+    # The inner select groups by the flag, but the outer count keeps only test orders.
+    probe = (
+        "SELECT COUNT(*) FROM orders o WHERE o.customer_id NOT IN ("
+        "SELECT c.id FROM customers c WHERE c.id NOT IN ("
+        "SELECT id FROM customers WHERE is_test = TRUE) GROUP BY c.id, c.is_test)"
+    )
+    assert check(checker, probe) == [EXCLUDE]
+    semi_join = (
+        "SELECT COUNT(*) FROM orders o WHERE o.customer_id IN ("
+        "SELECT c.id FROM customers c GROUP BY c.id, c.is_test)"
+    )
+    assert check(checker, semi_join) == [EXCLUDE]
+
+
+def test_a_predicate_subquery_aggregate_cannot_address_the_enclosing_read(checker):
+    sql = (
+        f"{COUNT} WHERE c.id IN (SELECT x.id FROM customers x "
+        "GROUP BY x.id HAVING COUNT(x.is_test) >= 0)"
+    )
+    assert check(checker, sql) == [EXCLUDE]
+
+
+def test_a_joined_producers_group_cannot_address_a_sibling_read(checker):
+    # The derived table groups by the flag, but the count still covers every order.
+    sql = (
+        "SELECT COUNT(*) FROM (SELECT id FROM customers GROUP BY id, is_test) s "
+        "JOIN orders o ON o.customer_id = s.id"
+    )
+    assert check(checker, sql) == [EXCLUDE]
+
+
+def test_a_group_in_the_reads_own_select_still_addresses_the_flag(checker):
+    derived = (
+        "SELECT t, n FROM (SELECT c.is_test AS t, COUNT(*) AS n "
+        f"FROM {JOIN} GROUP BY c.is_test) s"
+    )
+    excluded_in_subquery = (
+        "SELECT COUNT(*) FROM orders o WHERE o.customer_id IN ("
+        "SELECT c.id FROM customers c GROUP BY c.id, c.is_test HAVING NOT c.is_test)"
+    )
+    regrouped_producer = (
+        "SELECT s.is_test, COUNT(*) FROM (SELECT id, is_test FROM customers "
+        "GROUP BY id, is_test) s JOIN orders o ON o.customer_id = s.id "
+        "GROUP BY s.is_test"
+    )
+    assert check(checker, derived) == []
+    assert check(checker, excluded_in_subquery) == []
+    assert check(checker, regrouped_producer) == []
+
+
 @pytest.fixture
 def join_rows():
     import duckdb  # noqa: PLC0415
@@ -1026,3 +1077,49 @@ def test_subquery_filter_credit_follows_its_actual_join_clause(
         )
     assert join_rows.execute(execution_sql).fetchone() == (count,)
     assert check(checker, sql) == ([] if shape in {"inner", "where"} else [EXCLUDE])
+
+
+@pytest.mark.parametrize(
+    ("sql", "restricts"),
+    [
+        ("SELECT c.id FROM customers c JOIN ({inner}) t ON c.id = t.id", True),
+        ("SELECT c.id FROM customers c LEFT JOIN ({inner}) t ON c.id = t.id", False),
+        ("SELECT c.id FROM customers c FULL JOIN ({inner}) t ON c.id = t.id", False),
+        ("SELECT t.id FROM ({inner}) t RIGHT JOIN customers c ON c.id = t.id", False),
+        ("SELECT t.id FROM ({inner}) t LEFT JOIN customers c ON c.id = t.id", True),
+        (
+            "SELECT c.id FROM customers c JOIN ({inner}) t ON c.id = t.id "
+            "RIGHT JOIN customers d ON d.id = c.id",
+            False,
+        ),
+        (
+            "SELECT c.id FROM customers c JOIN ({inner}) t ON c.id = t.id "
+            "LEFT JOIN customers d ON d.id = c.id",
+            True,
+        ),
+    ],
+)
+def test_a_filter_in_the_nullable_side_of_an_outer_join_restricts_nothing(
+    sql, restricts
+):
+    import sqlglot  # noqa: PLC0415
+
+    from wren.declared_default_check import _filters_rows_of  # noqa: PLC0415
+
+    tree = sqlglot.parse_one(
+        sql.format(inner="SELECT id FROM customers WHERE is_test"), read="duckdb"
+    )
+    (where,) = list(tree.find_all(sqlglot.exp.Where))
+    assert _filters_rows_of(where, tree) is restricts
+
+
+@pytest.mark.parametrize("side", ["LEFT", "FULL"])
+def test_a_flag_filtered_on_the_nullable_side_does_not_exclude_test_rows(checker, side):
+    # The joined set keeps every customer (non-test ones padded with NULLs), so NOT IN
+    # over it excludes nothing it claims to.
+    sql = (
+        "SELECT COUNT(*) FROM orders o WHERE o.customer_id NOT IN ("
+        f"SELECT t.id FROM customers c {side} JOIN "
+        "(SELECT id FROM customers WHERE is_test) t ON c.id = t.id)"
+    )
+    assert EXCLUDE in check(checker, sql)

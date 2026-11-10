@@ -480,6 +480,31 @@ def test_definition_comes_from_executed_sql(bound_transport):
     }
 
 
+@pytest.mark.parametrize(
+    ("sql", "filters"),
+    [
+        (
+            "WITH unused AS (SELECT n FROM orders WHERE n > 0) SELECT n FROM orders",
+            [],
+        ),
+        (
+            "WITH a AS (SELECT n FROM orders WHERE n > 0), "
+            "b AS (SELECT n FROM a WHERE n < 9), "
+            "unused AS (SELECT n FROM orders WHERE n = 5) "
+            "SELECT n FROM b WHERE n <> 3",
+            ["n <> 3", "n > 0", "n < 9"],
+        ),
+    ],
+)
+def test_definition_filters_only_what_feeds_the_result(bound_transport, sql, filters):
+    frames = bound_transport.run(
+        (
+            json.dumps({"id": 1, "operation": "query", "sql": sql, "limit": 5}) + "\n"
+        ).encode()
+    )
+    assert sorted(frames[-1]["result"]["definition"]["filters"]) == sorted(filters)
+
+
 JAFFLE_SHAPED = {
     "models": [{"name": "orders"}, {"name": "customers"}],
     "views": [{"name": "example_view"}],
@@ -819,6 +844,20 @@ def test_the_cli_reports_invalid_declarations_without_their_content(declaring):
     assert result.exit_code == 1
     assert "declared default rules are invalid" in result.output
     assert "secret-rule" not in result.output and "nonsense" not in result.output
+
+
+def test_the_cli_names_the_unsupported_key_and_the_command_to_use(declaring):
+    rule = declaring.project / RATE_RULE
+    text = rule.read_text()
+    rule.write_text(text.replace(RATE_MATCH, RATE_MATCH + "    base_currency: USD\n"))
+    result = CliRunner().invoke(
+        app, ["governed-stdio", "--project", str(declaring.project)]
+    )
+    assert result.exit_code == 1
+    assert "'base_currency'" in result.output
+    assert "wren serve mcp --service-config" in result.output
+    assert "usd-at-transaction-date" not in result.output
+    assert str(declaring.project) not in result.output
 
 
 def test_the_checker_is_what_stops_a_missing_default(declaring, monkeypatch):

@@ -7,7 +7,11 @@ from pathlib import Path
 import yaml
 
 from wren.context_adapter import ContextChanged, ContextReader, Snapshot
-from wren.project_fingerprint import SourceBytesChanged, fingerprint_sources
+from wren.project_fingerprint import (
+    SourceBytesChanged,
+    SourceChangedDuringRead,
+    fingerprint_sources,
+)
 
 
 def discover(explicit: Path | None) -> Path:
@@ -77,11 +81,18 @@ class Project:
 
     def fingerprint(self):
         try:
-            if self.startup_sources:
-                return fingerprint_sources(self.root, self.paths, self.startup_sources)
-            return fingerprint_sources(self.root, self.paths)
+            return fingerprint_sources(
+                self.root,
+                self.paths,
+                self.startup_sources or None,
+                self.snapshot.digest,
+            )
         except SourceBytesChanged:
             raise ContextChanged("a parsed startup source changed") from None
+        except SourceChangedDuringRead:
+            raise ContextChanged(
+                "the project changed while it was being read"
+            ) from None
 
     def current(self):
         from wren.governed_query import fingerprint  # noqa: PLC0415

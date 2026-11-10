@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections import Counter
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import NamedTuple
@@ -193,10 +194,19 @@ def read_view_bodies(schema: dict, catalog: dict, manifest: dict | None):
         if isinstance(v, dict) and isinstance(v.get("name"), str)
     }
     usable, broken = {}, set()
+    # The engine resolves names case-sensitively, so ``Clean`` and ``clean`` are two
+    # views; read by folded name they would expand to each other. Neither is read.
+    folded = Counter(
+        v["name"].lower()
+        for v in ((manifest or {}).get("views") or [])
+        if isinstance(v, dict) and isinstance(v.get("name"), str)
+    ) | Counter(view["name"].lower() for view in catalog.get("views") or [])
     for view in catalog.get("views") or []:
         name = view["name"].lower()
         statement = statements.get(name)
         try:
+            if folded[name] > 1:
+                raise ValueError("case-distinct views share a folded name")
             if not isinstance(statement, str):
                 raise ValueError("no statement")
             body = sqlglot.parse_one(statement, read="duckdb")
@@ -409,9 +419,16 @@ class AdHocSQL:
         return None
 
     def _duplicate_aggregation(self, scopes):
-        """An aggregate over a view's value in a select that joins the view to a model on a
-        column that is not the model's key: each view row can repeat once per matching model
-        row, and the aggregate counts it every time."""
+        """An aggregate over a view's value in a select that also reads a model not bounded to
+        one row per view row: each view row can repeat once per matching model row (a cross
+        join, ``ON TRUE``, a non-key or ``OR``-ed key match), and the aggregate counts it every
+        time. A model is bounded when its whole primary key is equated, in top-level ``AND``s
+        of the join conditions and ``WHERE``, to columns of sources already bounded, starting
+        from the views; so two models keyed only to each other still multiply the view. A
+        ``SEMI``/``ANTI`` join target never repeats a row, but it proves nothing about another
+        source's cardinality, and neither does a CTE or derived table (its rows are not known
+        to be unique on anything); those sources themselves are not checked here. Key names
+        compare case-insensitively, as qualification folds them."""
         for scope in scopes:
             select = scope.expression
             if not isinstance(select, exp.Select):
@@ -434,27 +451,71 @@ class AdHocSQL:
             }
             if not aggregated:
                 continue
-            conditions = [j.args.get("on") for j in select.args.get("joins") or []] + [
-                w.this for w in [select.args.get("where")] if w is not None
-            ]
-            matched_keys = {}
-            for condition in conditions:
-                for node in condition.find_all(exp.EQ) if condition is not None else ():
-                    sides = (node.this, node.expression)
-                    if not all(isinstance(side, exp.Column) for side in sides):
+            joins = select.args.get("joins") or []
+            never_repeat = {
+                j.this.alias_or_name
+                for j in joins
+                if j.args.get("kind") in ("SEMI", "ANTI")
+            }
+            conditions = [(j.args.get("on"), self._bounds_through(j)) for j in joins]
+            if select.args.get("where") is not None:
+                conditions.append((select.args["where"].this, None))
+            edges = []
+            for condition, through in conditions:
+                for term in self._conjuncts(condition) if condition is not None else ():
+                    while isinstance(term, exp.Paren):
+                        term = term.this
+                    if not isinstance(term, exp.EQ):
                         continue
-                    for mine, other in (sides, sides[::-1]):
-                        source = scope.sources.get(other.table)
-                        if mine.table in aggregated and isinstance(source, exp.Table):
-                            matched_keys.setdefault(id(source), (source.name, set()))[
-                                1
-                            ].add(other.name)
-            if any(
-                not (keys := self.primary_keys.get(model)) or not keys <= matched
-                for model, matched in matched_keys.values()
-            ):
+                    a, b = term.this, term.expression
+                    if not (
+                        isinstance(a, exp.Column) and isinstance(b, exp.Column)
+                    ) or (a.table == b.table):
+                        continue
+                    edges += [
+                        (mine.table, mine.name.lower(), other.table)
+                        for mine, other in ((a, b), (b, a))
+                        if through is None or mine.table in through
+                    ]
+            keys_of = {
+                model.lower(): frozenset(k.lower() for k in keys)
+                for model, keys in self.primary_keys.items()
+            }
+            models = {
+                alias: keys_of.get(source.name.lower(), frozenset())
+                for alias, source in scope.sources.items()
+                if isinstance(source, exp.Table) and alias not in never_repeat
+            }
+            bounded = set(views) - never_repeat
+            grew = True
+            while grew:
+                grew = False
+                for alias, keys in models.items():
+                    if alias in bounded or not keys:
+                        continue
+                    reached = {
+                        c for a, c, other in edges if a == alias and other in bounded
+                    }
+                    if keys <= reached:
+                        bounded.add(alias)
+                        grew = True
+            if any(alias not in bounded for alias in models):
                 return True
         return False
+
+    @staticmethod
+    def _bounds_through(join):
+        """The sources ``join``'s ``ON`` can bound, ``None`` meaning any. An inner or ``RIGHT``
+        join emits a row of the sources before it only when the ``ON`` holds, so its equalities
+        bound any side. A ``LEFT`` or ``FULL`` join also keeps the earlier rows that match
+        nothing, so its ``ON`` bounds only the joined source: each earlier row still repeats once
+        per matching joined row, at most once when that row's key is equated. An ``ANTI`` join
+        keeps exactly the rows for which its ``ON`` fails, so it bounds nothing."""
+        if join.args.get("kind") == "ANTI":
+            return ()
+        if join.args.get("side") in ("LEFT", "FULL"):
+            return (join.this.alias_or_name,)
+        return None
 
     @staticmethod
     def _reject_unsupported_forms(tree):
@@ -694,7 +755,12 @@ class AdHocSQL:
         Returns ``(windows, pinned)``. A window is listed per select and column from the
         comparisons of that column with a date or timestamp literal (``>=``, ``>``, ``<``,
         ``<=``, ``=``, ``BETWEEN``) in its ``WHERE``, ``HAVING``, ``QUALIFY`` and join
-        conditions. A date column that is also filtered any other way anywhere in the
+        conditions. A ``QUALIFY`` filters after the select's window functions read their rows:
+        a date term there bounds nothing, and leaves the column unpinned, unless every window
+        is partitioned by that column or its table's primary key (each window then reads only
+        rows of one date); the same holds for a filter on a date passed out of a derived
+        table, CTE or view that computes a window. A date column that is also filtered any
+        other way anywhere in the
         statement (``DATE_TRUNC``, ``EXTRACT``, arithmetic, a non-literal operand, an ``OR``,
         a ``CASE``/``FILTER`` condition, a derived value) is not listed and ``pinned`` is
         false: the host cannot say which dates the statement keeps. So is a select that
@@ -717,9 +783,21 @@ class AdHocSQL:
                 continue
             selects.append(scope)
             bounds = {}
+            qualify = select.args.get("qualify")
             for condition, join in self._conditions(select):
                 joined = join is not None
                 for term in self._conjuncts(condition):
+                    if (
+                        qualify is not None
+                        and condition is qualify.this
+                        and not all(
+                            self._windows_keep_rows_of(scope, column)
+                            for column in term.find_all(exp.Column)
+                        )
+                    ):
+                        if not self._is_null_check(term):
+                            unpinned |= self._date_refs(scope, term)
+                        continue
                     taken = self._bounds_of(scope, term)
                     if taken is not None and self._unfiltered_by(join, term):
                         continue
@@ -876,6 +954,60 @@ class AdHocSQL:
         model, _, column = qualified.partition(".")
         return model.lower(), column.lower()
 
+    def _windows_keep_rows_of(self, scope, column):
+        """Whether every window function ``scope``'s select itself computes reads only rows that
+        share ``column``'s value: each is partitioned by ``column`` or by every primary key
+        column of ``column``'s table. A filter on ``column`` applied after such windows drops
+        whole partitions, so it bounds what they read; after any other window it does not."""
+        select = scope.expression
+        if not isinstance(select, exp.Select):
+            return True
+        source = scope.sources.get(column.table)
+        keys = frozenset()
+        if isinstance(source, exp.Table):
+            keys = next(
+                (
+                    frozenset(k.lower() for k in pk)
+                    for model, pk in self.primary_keys.items()
+                    if model.lower() == source.name.lower()
+                ),
+                frozenset(),
+            )
+        named = {
+            definition.this.name.lower(): definition
+            for definition in select.args.get("windows") or []
+            if isinstance(definition.this, exp.Identifier)
+        }
+        for window in select.find_all(exp.Window):
+            if (
+                window.find_ancestor(exp.Select) is not select
+                or window.arg_key == "windows"
+            ):
+                continue
+            partition = {
+                part.name.lower()
+                for part in self._effective_partition(window, named)
+                if isinstance(part, exp.Column) and part.table == column.table
+            }
+            if column.name.lower() not in partition and not (
+                keys and keys <= partition
+            ):
+                return False
+        return True
+
+    @staticmethod
+    def _effective_partition(window, named):
+        """``window``'s ``PARTITION BY``, or the one it inherits through ``OVER w`` /
+        ``OVER (w ...)`` from the select's ``WINDOW`` definitions (a chain of at most 8)."""
+        for _ in range(8):
+            if window.args.get("partition_by"):
+                return window.args["partition_by"]
+            base = window.args.get("alias")
+            if not isinstance(base, exp.Identifier) or base.name.lower() not in named:
+                return []
+            window = named[base.name.lower()]
+        return []
+
     @staticmethod
     def _conditions(select):
         """``(condition, join)`` for every filter position of a select: the join whose ``ON``
@@ -963,7 +1095,9 @@ class AdHocSQL:
                 ),
                 None,
             )
-            if not isinstance(inner, exp.Column):
+            if not isinstance(inner, exp.Column) or not self._windows_keep_rows_of(
+                source, inner
+            ):
                 return None
             scope, node, depth = source, inner, depth + 1
         return None

@@ -2835,9 +2835,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.38"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69f9466fb2c14ea04357e91413efb882e2a6d4a406e625449bc0a5d360d53a21"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "once_cell",
  "ring",
@@ -2871,9 +2871,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.13"
+version = "0.103.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
+checksum = "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -4087,7 +4087,7 @@ dependencies = [
 
 [[package]]
 name = "wren-core-base"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -4126,7 +4126,7 @@ dependencies = [
 
 [[package]]
 name = "wren-manifest-macro"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "quote",
  "syn 2.0.117",
@@ -4134,7 +4134,7 @@ dependencies = [
 
 [[package]]
 name = "wren-semantic-core"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "csv",

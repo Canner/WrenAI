@@ -22,6 +22,16 @@ Execute SQL and return results.
 wren query --sql 'SELECT order_id, total FROM "orders" ORDER BY total DESC LIMIT 5'
 ```
 
+`--read-only` (on `wren query` and the default command) admits only one analytical query:
+a single statement built from known read-only functions. Writes, DDL, several statements,
+commands, locks, `SELECT INTO`, reader functions and unknown functions are refused before
+the query reaches the database. It is an opt-in check for hosts that run SQL on someone
+else's behalf, not a replacement for database permissions.
+
+```bash
+wren query --read-only --sql 'SELECT COUNT(*) FROM "orders"'
+```
+
 ## `wren dry-plan`
 
 Translate MDL SQL to the native dialect SQL for your data source. No database connection required.
@@ -514,6 +524,66 @@ never cross the MCP boundary — only SQL text, query results, and metadata are
 exposed to the client.
 
 See the [MCP guide](../guides/mcp.md) for a walkthrough of wiring a client.
+
+### Governed mode: `wren serve mcp --service-config`
+
+```bash
+wren serve mcp --service-config service.yml --agent-profile profiles/analysis \
+  --runtime node_modules/@warble/pi/dist/service.js
+```
+
+With `--service-config`, `wren serve mcp` serves one bound project over stdio through the
+same governed context layer as `wren serve agent` instead of the open tool set above:
+the project's structure and rules come from the context loader, denied columns are
+withheld, declared default rules are checked before a query runs, and every query passes
+the read-only gate. `--agent-profile` names the capability profile and `--runtime` the
+installed Warble private service entry; both are required in this mode, which supports
+only stdio and refuses `--allow-write` and `--no-connect`. The service configuration (version 2:
+`config_version`, `caller`, `project_id`, `policy`, `private_model`, optional `execution`
+and `policy_presets`) is trusted local input.
+
+### `wren serve agent`
+
+```bash
+wren serve agent --agent-profile profiles/analysis --service-config service.yml \
+  --runtime node_modules/@warble/pi/dist/service.js [--policy-preset full]
+```
+
+Serve one project-bound Warble profile through a private runtime; an independent planner
+connects over MCP and never needs the private model's key. Requires the `mcp` extra, a
+compatible Warble compiler (`--warble`, default `warble` on `PATH`) and runtime, and the
+`wren-context-loader` binary (`WREN_CONTEXT_LOADER_BIN`, or a build under
+`core/wren-context-loader/target/`).
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--agent-profile` | required | Warble profile directory |
+| `--service-config` | required | Service configuration, version 2 |
+| `--runtime` | required | Installed Warble private service entry |
+| `--project` | discovered | Override project root |
+| `--profile` | project binding | Data connection profile |
+| `--warble` | `warble` | Warble compiler executable |
+| `--transport` | `stdio` | `stdio` or `http` (loopback only) |
+| `--host` | `127.0.0.1` | Loopback bind host, `--transport http` only |
+| `--port` | `0` | Bind port, `--transport http` only; `0` picks a free port |
+| `--policy-preset` | `default_preset` | Named preset from the configuration's `policy_presets` |
+
+The service reads the project once at startup and refuses to keep serving it after a
+source, the built manifest or the profile changes; restart it to pick up an edit.
+
+### `wren serve agent-presets`
+
+```bash
+wren serve agent-presets --service-config service.yml
+# {"default": "hidden", "presets": ["full", "hidden", "rules", "structure"]}
+```
+
+Print the configuration's default preset and the names of its policy presets as JSON,
+after validating them. It reads only the configuration and does not need the `mcp`
+extra.
+
+The configuration format, the presets and the evidence a task returns are described in
+`examples/serve-agent/README.md`.
 
 ---
 

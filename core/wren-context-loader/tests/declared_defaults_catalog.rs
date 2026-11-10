@@ -206,6 +206,25 @@ fn the_binary_writes_declared_ids_into_the_catalog() {
 }
 
 #[test]
+fn the_binary_refuses_an_oversized_output_before_writing_either_file() {
+    let project = tempfile::tempdir().unwrap();
+    copy_dir(&fixture("declared-wren"), project.path());
+    // Rule text is carried whole into the catalog, so one large rule file is enough.
+    fs::write(
+        project.path().join("knowledge/rules/large.md"),
+        "A long business rule. ".repeat(17 * 1024 * 1024 / 22 + 1),
+    )
+    .unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let run = run_loader(project.path(), out.path());
+    assert_eq!(run.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&run.stderr)
+        .contains("wren-context-loader: prepared context exceeds 16 MiB"));
+    assert!(!out.path().join("context.json").exists());
+    assert!(!out.path().join("catalog.json").exists());
+}
+
+#[test]
 fn an_unclosed_fence_voids_every_id_and_warns_on_stderr() {
     let project = tempfile::tempdir().unwrap();
     copy_dir(&fixture("declared-wren"), project.path());
@@ -481,5 +500,21 @@ fn an_unclosed_fence_with_a_declaration_signal_still_voids_the_set() {
     ]);
     assert!(ids.is_empty(), "{ids:?}");
     assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("not valid YAML"), "{warnings:?}");
+}
+
+#[test]
+fn yaml_merge_keys_apply_like_the_clis_safe_load() {
+    let merged = "---\nbase: &base\n  defaults:\n    - {id: merged-one, kind: exclude_rows}\n<<: *base\n---\n";
+    let (ids, warnings) = declared_default_ids(&[rule_file("knowledge/rules/a.md", merged)]);
+    assert_eq!(ids, ["merged-one"], "{warnings:?}");
+
+    let overridden = "---\nbase: &base\n  defaults:\n    - {id: from-merge, kind: exclude_rows}\n<<: *base\ndefaults:\n  - {id: explicit, kind: exclude_rows}\n---\n";
+    let (ids, warnings) = declared_default_ids(&[rule_file("knowledge/rules/a.md", overridden)]);
+    assert_eq!(ids, ["explicit"], "{warnings:?}");
+
+    let broken = "---\ndefaults:\n  - {id: ok-one, kind: exclude_rows}\n<<: 5\n---\n";
+    let (ids, warnings) = declared_default_ids(&[rule_file("knowledge/rules/a.md", broken)]);
+    assert!(ids.is_empty(), "{ids:?}");
     assert!(warnings[0].contains("not valid YAML"), "{warnings:?}");
 }

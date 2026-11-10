@@ -32,6 +32,7 @@ them to a parsed query.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -622,8 +623,11 @@ class _Parser:
         )
 
     def file(self, project_path: Path, file: Path) -> None:
-        label = file.relative_to(project_path).as_posix()
-        text = file.read_text(encoding="utf-8")
+        self.text(
+            file.relative_to(project_path).as_posix(), file.read_text(encoding="utf-8")
+        )
+
+    def text(self, label: str, text: str) -> None:
         try:
             front, _ = split_front_matter(text)
         except ValueError as error:
@@ -728,6 +732,27 @@ def load_declarations(
     parser = _Parser(manifest, enums)
     for file in _rules_files(project_path):
         parser.file(project_path, file)
+    return _finish(parser)
+
+
+def load_declarations_from_rules(
+    rules: Iterable[tuple[str, str]],
+    manifest: dict,
+    enums: dict[tuple[str, str], tuple[str, ...]] | None = None,
+) -> tuple[list[Declaration], list[tuple[str, str]]]:
+    """``load_declarations`` over already captured ``(path, content)`` rule files.
+
+    A host that serves rule text it captured once (the loader's ``knowledge_rules``) parses
+    the declarations from that same text, so what it enforces is what it shows, even when
+    the files change after the capture.
+    """
+    parser = _Parser(manifest, enums)
+    for label, text in rules:
+        parser.text(label, text)
+    return _finish(parser)
+
+
+def _finish(parser: _Parser) -> tuple[list[Declaration], list[tuple[str, str]]]:
     if len(parser.ids) > MAX_DECLARATIONS:
         parser.error(
             "knowledge/rules",
