@@ -301,6 +301,8 @@ class TestUnresolvedModelColumns:
             "SELECT o_orderkey FROM orders WHERE EXISTS (SELECT missing FROM customer)",
             "SELECT o_orderkey FROM orders UNION ALL SELECT missing FROM orders",
             "SELECT missing FROM orders JOIN customer ON o_custkey = c_custkey",
+            "SELECT (SELECT missing) FROM orders",
+            "SELECT (SELECT (SELECT missing)) FROM orders",
         ],
     )
     def test_model_only_selects_are_checked_independently(self, manifest, sql):
@@ -316,6 +318,56 @@ class TestUnresolvedModelColumns:
             rw.rewrite("WITH unused AS (SELECT 1 AS x) SELECT missing FROM clash")
         assert exc.value.error_code == ErrorCode.INVALID_SQL
         assert exc.value.phase == ErrorPhase.SQL_PLANNING
+
+    @pytest.mark.parametrize("data_source", [DataSource.postgres, DataSource.oracle])
+    def test_keyword_with_case_distinct_columns(self, data_source):
+        rw = _make_rewriter(_CASE_COLLISION_MANIFEST, data_source)
+        rewritten = rw.rewrite('SELECT USER, "Year", "year" FROM clash')
+        ast = sqlglot.parse_one(rewritten, dialect=data_source.name)
+        assert ast.selects[0].sql(dialect=data_source.name) == "USER"
+        body = sqlglot.parse_one(
+            _cte_body_sql(rewritten, "clash", data_source.name),
+            dialect=data_source.name,
+        )
+        assert [projection.alias_or_name for projection in body.selects] == [
+            "Year",
+            "year",
+        ]
+
+    @pytest.mark.parametrize("sql", ["SELECT missing", "SELECT (SELECT missing)"])
+    def test_scalar_without_model_source_remains_database_validated(self, sql):
+        assert _make_rewriter(_SINGLE_MODEL_MANIFEST).rewrite(sql) == sql
+
+    @pytest.mark.parametrize("data_source", [DataSource.duckdb, DataSource.oracle])
+    def test_error_preserves_original_column_name(self, manifest, data_source):
+        with pytest.raises(WrenError, match="Definitely_Missing") as exc:
+            _make_rewriter(manifest, data_source).rewrite(
+                "SELECT Definitely_Missing FROM orders"
+            )
+        assert exc.value.phase == ErrorPhase.SQL_PLANNING
+
+    @pytest.mark.parametrize(
+        ("data_source", "sql", "alias"),
+        [
+            (DataSource.duckdb, "SELECT o FROM orders o", "o"),
+            (DataSource.duckdb, "SELECT orders FROM orders", "orders"),
+            (DataSource.postgres, "SELECT o FROM orders o", "o"),
+            (
+                DataSource.bigquery,
+                "SELECT TO_JSON_STRING(t) FROM orders AS t",
+                "t",
+            ),
+        ],
+    )
+    def test_whole_model_row_reference_is_rejected(
+        self, manifest, data_source, sql, alias
+    ):
+        with pytest.raises(WrenError) as exc:
+            _make_rewriter(manifest, data_source).rewrite(sql)
+        assert exc.value.error_code == ErrorCode.INVALID_SQL
+        assert exc.value.phase == ErrorPhase.SQL_PLANNING
+        assert f"Whole-row reference '{alias}'" in exc.value.message
+        assert "explicit model columns" in exc.value.message
 
     @pytest.mark.parametrize(
         ("sql", "expected"),
@@ -372,6 +424,25 @@ class TestUnresolvedModelColumns:
                 [(1,), (2,)],
             ),
             (
+                "SELECT (SELECT value) FROM orders CROSS JOIN raw_external "
+                "ORDER BY value",
+                [(10,), (10,), (20,), (20,)],
+            ),
+            (
+                "WITH c AS (SELECT 3 AS value) "
+                "SELECT (SELECT value) FROM orders CROSS JOIN c",
+                [(3,), (3,)],
+            ),
+            (
+                "SELECT (SELECT value) FROM orders CROSS JOIN (SELECT 3 AS value) d",
+                [(3,), (3,)],
+            ),
+            (
+                "SELECT (SELECT value) FROM orders "
+                "CROSS JOIN UNNEST([1, 2]) AS u(value) ORDER BY value",
+                [(1,), (1,), (2,), (2,)],
+            ),
+            (
                 "SELECT o_orderkey FROM orders SEMI JOIN raw_external "
                 "ON o_custkey = value ORDER BY o_orderkey",
                 [(1,), (2,)],
@@ -393,7 +464,16 @@ class TestUnresolvedModelColumns:
             assert connection.execute(rewritten).fetchall() == expected
 
     @pytest.mark.parametrize(
-        ("column", "suffix"), [("ROWNUM", ""), ("LEVEL", " CONNECT BY LEVEL <= 3")]
+        ("column", "suffix"),
+        [
+            ("ROWNUM", ""),
+            ("LEVEL", " CONNECT BY LEVEL <= 3"),
+            ("CONNECT_BY_ISLEAF", " CONNECT BY LEVEL <= 3"),
+            (
+                "CONNECT_BY_ISCYCLE",
+                " CONNECT BY NOCYCLE PRIOR o_orderkey = o_custkey",
+            ),
+        ],
     )
     def test_oracle_pseudocolumns_are_preserved(self, column, suffix):
         rewritten = _make_rewriter(_SINGLE_MODEL_MANIFEST, DataSource.oracle).rewrite(
@@ -401,7 +481,89 @@ class TestUnresolvedModelColumns:
         )
         ast = sqlglot.parse_one(rewritten, dialect="oracle")
         assert ast.selects[0].name == column
+        assert not ast.selects[0].this.quoted
+        for reference in ast.find_all(sqlglot.exp.Column):
+            if reference.name.upper() in {column, "LEVEL"}:
+                assert not reference.this.quoted
         assert _has_cte(rewritten, "orders", dialect="oracle")
+
+
+@pytest.mark.parametrize(
+    ("data_source", "keyword"),
+    [
+        (DataSource.oracle, "USER"),
+        (DataSource.oracle, "UID"),
+        (DataSource.oracle, "DBTIMEZONE"),
+        (DataSource.oracle, "SESSIONTIMEZONE"),
+        (DataSource.oracle, "ROWNUM"),
+        (DataSource.postgres, "user"),
+        (DataSource.postgres, "current_role"),
+        (DataSource.trino, "current_schema"),
+    ],
+)
+class TestColumnKeywords:
+    def test_unquoted_keyword_is_preserved(self, data_source, keyword):
+        rewritten = _make_rewriter(_SINGLE_MODEL_MANIFEST, data_source).rewrite(
+            f"SELECT {keyword}, o_orderkey FROM orders"
+        )
+        ast = sqlglot.parse_one(rewritten, dialect=data_source.name)
+        assert ast.selects[0].sql(dialect=data_source.name) == keyword
+        assert "o_orderkey" in _cte_body_sql(rewritten, "orders", data_source.name)
+
+    @pytest.mark.parametrize("reference", ['"{keyword}"', "orders.{keyword}"])
+    def test_quoted_or_qualified_keyword_is_not_exempt(
+        self, data_source, keyword, reference
+    ):
+        with WrenEngine(_b64(_SINGLE_MODEL_MANIFEST), data_source, {}) as engine:
+            with pytest.raises(WrenError) as exc:
+                engine.dry_plan(
+                    f"SELECT {reference.format(keyword=keyword)} FROM orders"
+                )
+        assert exc.value.error_code == ErrorCode.INVALID_SQL
+        assert exc.value.phase == ErrorPhase.SQL_PLANNING
+
+    @pytest.mark.parametrize("hidden", [False, True])
+    def test_model_column_named_like_keyword_is_not_exempt(
+        self, data_source, keyword, hidden
+    ):
+        manifest = deepcopy(_SINGLE_MODEL_MANIFEST)
+        manifest["models"][0]["columns"].append(
+            {"name": keyword, "type": "integer", "isHidden": hidden}
+        )
+        rw = _make_rewriter(manifest, data_source)
+        sql = f"SELECT {keyword} FROM orders"
+        if hidden:
+            with pytest.raises(WrenError) as exc:
+                rw.rewrite(sql)
+            assert exc.value.error_code == ErrorCode.INVALID_SQL
+            assert exc.value.phase == ErrorPhase.SQL_PLANNING
+        else:
+            rewritten = rw.rewrite(sql)
+            body = sqlglot.parse_one(
+                _cte_body_sql(rewritten, "orders", data_source.name),
+                dialect=data_source.name,
+            )
+            assert [projection.alias_or_name for projection in body.selects] == [
+                keyword
+            ]
+
+    def test_output_alias_named_like_keyword(self, data_source, keyword):
+        rewritten = _make_rewriter(_SINGLE_MODEL_MANIFEST, data_source).rewrite(
+            f"SELECT o_orderkey AS {keyword} FROM orders ORDER BY {keyword}"
+        )
+        ast = sqlglot.parse_one(rewritten, dialect=data_source.name)
+        assert ast.args["order"].expressions[0].this.name == keyword
+        assert "o_orderkey" in _cte_body_sql(rewritten, "orders", data_source.name)
+
+    def test_outer_output_alias_does_not_hide_subquery_keyword(
+        self, data_source, keyword
+    ):
+        rewritten = _make_rewriter(_SINGLE_MODEL_MANIFEST, data_source).rewrite(
+            f"SELECT o_orderkey AS {keyword} FROM orders ORDER BY (SELECT {keyword})"
+        )
+        ast = sqlglot.parse_one(rewritten, dialect=data_source.name)
+        subquery = ast.args["order"].find(sqlglot.exp.Select)
+        assert subquery.selects[0].sql(dialect=data_source.name) == keyword
 
 
 class TestScopedAliases:
