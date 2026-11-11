@@ -1160,6 +1160,7 @@ class CTERewriter:
                 self.view_dict[view_name]["statement"], dialect=self.dialect
             )
             view_cte_names = self._collect_user_cte_names(view_ast)
+            self._separate_column_keywords(view_ast, view_cte_names)
             # Resolve the view body's column refs the same way as the user query,
             # so a case-distinct model referenced from a view statement gets the
             # same strict treatment (quoted = exact, unquoted = exact-then-CI,

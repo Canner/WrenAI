@@ -263,6 +263,7 @@ class TestMultiModel:
 class TestUnresolvedModelColumns:
     @pytest.fixture
     def manifest(self):
+        """Include a hidden column and distinct physical names for execution tests."""
         manifest = deepcopy(_MULTI_MODEL_MANIFEST)
         manifest["models"][0]["columns"].append(
             {"name": "secret", "type": "integer", "isHidden": True}
@@ -285,6 +286,7 @@ class TestUnresolvedModelColumns:
     def test_missing_or_hidden_column_fails_during_planning(
         self, manifest, column, qualifier, query
     ):
+        """Reject unavailable model columns through the public planning entry point."""
         engine = WrenEngine(_b64(manifest), DataSource.duckdb, {})
         with pytest.raises(WrenError) as exc:
             engine.dry_plan(query.format(column=f"{qualifier}{column}"))
@@ -306,6 +308,7 @@ class TestUnresolvedModelColumns:
         ],
     )
     def test_model_only_selects_are_checked_independently(self, manifest, sql):
+        """Validate model references inside each nested or set-operation scope."""
         with pytest.raises(WrenError) as exc:
             _make_rewriter(manifest).rewrite(sql)
         assert exc.value.error_code == ErrorCode.INVALID_SQL
@@ -313,6 +316,7 @@ class TestUnresolvedModelColumns:
         assert "missing" in exc.value.message
 
     def test_case_sensitive_collection_checks_model_scope(self):
+        """The case-sensitive collector applies the same unresolved-column check."""
         rw = _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.postgres)
         with pytest.raises(WrenError) as exc:
             rw.rewrite("WITH unused AS (SELECT 1 AS x) SELECT missing FROM clash")
@@ -321,6 +325,7 @@ class TestUnresolvedModelColumns:
 
     @pytest.mark.parametrize("data_source", [DataSource.postgres, DataSource.oracle])
     def test_keyword_with_case_distinct_columns(self, data_source):
+        """Built-in keywords do not interfere with case-distinct model columns."""
         rw = _make_rewriter(_CASE_COLLISION_MANIFEST, data_source)
         rewritten = rw.rewrite('SELECT USER, "Year", "year" FROM clash')
         ast = sqlglot.parse_one(rewritten, dialect=data_source.name)
@@ -336,10 +341,12 @@ class TestUnresolvedModelColumns:
 
     @pytest.mark.parametrize("sql", ["SELECT missing", "SELECT (SELECT missing)"])
     def test_scalar_without_model_source_remains_database_validated(self, sql):
+        """Without a model source, unresolved scalar names remain database concerns."""
         assert _make_rewriter(_SINGLE_MODEL_MANIFEST).rewrite(sql) == sql
 
     @pytest.mark.parametrize("data_source", [DataSource.duckdb, DataSource.oracle])
     def test_error_preserves_original_column_name(self, manifest, data_source):
+        """Diagnostics retain the spelling authored in the user's SQL."""
         with pytest.raises(WrenError, match="Definitely_Missing") as exc:
             _make_rewriter(manifest, data_source).rewrite(
                 "SELECT Definitely_Missing FROM orders"
@@ -362,6 +369,7 @@ class TestUnresolvedModelColumns:
     def test_whole_model_row_reference_is_rejected(
         self, manifest, data_source, sql, alias
     ):
+        """Unsupported whole-row references receive an actionable planning error."""
         with pytest.raises(WrenError) as exc:
             _make_rewriter(manifest, data_source).rewrite(sql)
         assert exc.value.error_code == ErrorCode.INVALID_SQL
@@ -450,6 +458,7 @@ class TestUnresolvedModelColumns:
         ],
     )
     def test_aliases_and_mixed_sources_still_execute(self, manifest, sql, expected):
+        """Execute valid alias and correlated bindings against physical DuckDB data."""
         rewritten = _make_rewriter(manifest).rewrite(sql)
         with duckdb.connect() as connection:
             connection.execute(
@@ -476,6 +485,7 @@ class TestUnresolvedModelColumns:
         ],
     )
     def test_oracle_pseudocolumns_are_preserved(self, column, suffix):
+        """Oracle pseudocolumns remain unquoted in projections and query clauses."""
         rewritten = _make_rewriter(_SINGLE_MODEL_MANIFEST, DataSource.oracle).rewrite(
             f"SELECT {column}, o_orderkey FROM orders{suffix}"
         )
@@ -503,6 +513,7 @@ class TestUnresolvedModelColumns:
 )
 class TestColumnKeywords:
     def test_unquoted_keyword_is_preserved(self, data_source, keyword):
+        """Dialect keywords survive planning without becoming quoted identifiers."""
         rewritten = _make_rewriter(_SINGLE_MODEL_MANIFEST, data_source).rewrite(
             f"SELECT {keyword}, o_orderkey FROM orders"
         )
@@ -514,6 +525,7 @@ class TestColumnKeywords:
     def test_quoted_or_qualified_keyword_is_not_exempt(
         self, data_source, keyword, reference
     ):
+        """Explicit column references never acquire the built-in keyword exemption."""
         with WrenEngine(_b64(_SINGLE_MODEL_MANIFEST), data_source, {}) as engine:
             with pytest.raises(WrenError) as exc:
                 engine.dry_plan(
@@ -526,6 +538,7 @@ class TestColumnKeywords:
     def test_model_column_named_like_keyword_is_not_exempt(
         self, data_source, keyword, hidden
     ):
+        """Declared columns keep their model binding and visibility restrictions."""
         manifest = deepcopy(_SINGLE_MODEL_MANIFEST)
         manifest["models"][0]["columns"].append(
             {"name": keyword, "type": "integer", "isHidden": hidden}
@@ -548,6 +561,7 @@ class TestColumnKeywords:
             ]
 
     def test_output_alias_named_like_keyword(self, data_source, keyword):
+        """A keyword-shaped output alias still refers to its SELECT projection."""
         rewritten = _make_rewriter(_SINGLE_MODEL_MANIFEST, data_source).rewrite(
             f"SELECT o_orderkey AS {keyword} FROM orders ORDER BY {keyword}"
         )
@@ -558,6 +572,7 @@ class TestColumnKeywords:
     def test_outer_output_alias_does_not_hide_subquery_keyword(
         self, data_source, keyword
     ):
+        """An outer output alias does not shadow a built-in inside a subquery."""
         rewritten = _make_rewriter(_SINGLE_MODEL_MANIFEST, data_source).rewrite(
             f"SELECT o_orderkey AS {keyword} FROM orders ORDER BY (SELECT {keyword})"
         )
@@ -1036,6 +1051,82 @@ class TestCorrelatedSubquery:
 
 
 class TestView:
+    @pytest.mark.parametrize(
+        ("data_source", "keyword", "suffix"),
+        [
+            (DataSource.postgres, "USER", ""),
+            (DataSource.postgres, "CURRENT_ROLE", ""),
+            (DataSource.trino, "CURRENT_SCHEMA", ""),
+            (DataSource.oracle, "USER", ""),
+            (DataSource.oracle, "UID", ""),
+            (DataSource.oracle, "DBTIMEZONE", ""),
+            (DataSource.oracle, "SESSIONTIMEZONE", ""),
+            (DataSource.oracle, "ROWNUM", ""),
+            (DataSource.oracle, "LEVEL", " CONNECT BY LEVEL <= 3"),
+            (DataSource.oracle, "CONNECT_BY_ISLEAF", " CONNECT BY LEVEL <= 3"),
+            (
+                DataSource.oracle,
+                "CONNECT_BY_ISCYCLE",
+                " CONNECT BY NOCYCLE PRIOR o_orderkey = o_custkey",
+            ),
+        ],
+    )
+    def test_view_keyword_collection(self, data_source, keyword, suffix):
+        """Isolate view collection from wren-core's earlier view registration.
+
+        The locked engine wheel rejects these native view expressions during
+        SessionContext construction. A models-only session exercises Python's
+        collection contract without asserting public dry_plan support.
+        """
+        statement = f'SELECT o_orderkey, {keyword} FROM "orders"{suffix}'
+        manifest = dict(
+            _SINGLE_MODEL_MANIFEST,
+            views=[{"name": "keyword_view", "statement": statement}],
+        )
+        session = get_session_context(
+            _b64(_SINGLE_MODEL_MANIFEST), None, None, data_source.name
+        )
+        rw = CTERewriter(_b64(manifest), session, data_source, fallback=False)
+        used_columns, table_refs, quoting = {}, {}, {}
+
+        rw._collect_view_model_usage(
+            {"keyword_view": ("keyword_view", False)}, used_columns, table_refs, quoting
+        )
+
+        expected = ["o_orderkey", "o_custkey"] if "PRIOR" in suffix else ["o_orderkey"]
+        if data_source == DataSource.oracle:
+            expected = [name.upper() for name in expected]
+        assert used_columns == {"orders": expected}
+        assert table_refs == {"orders": ("orders", True)}
+        # Collection's AST changes must not leak into the freshly parsed view body.
+        body = rw._build_view_ctes({"keyword_view": ("keyword_view", False)})[0].this
+        assert body == sqlglot.parse_one(statement, dialect=data_source.name)
+        assert rw.view_dict["keyword_view"]["statement"] == statement
+
+    @pytest.mark.parametrize("data_source", [DataSource.postgres, DataSource.oracle])
+    @pytest.mark.parametrize("reference", ['"USER"', "missing"])
+    def test_view_column_collection_still_rejects_unresolved_references(
+        self, data_source, reference
+    ):
+        """View keyword handling does not exempt quoted or unknown column names."""
+        manifest = dict(
+            _SINGLE_MODEL_MANIFEST,
+            views=[
+                {
+                    "name": "keyword_view",
+                    "statement": f"SELECT o_orderkey, {reference} FROM orders",
+                }
+            ],
+        )
+        session = get_session_context(
+            _b64(_SINGLE_MODEL_MANIFEST), None, None, data_source.name
+        )
+        rw = CTERewriter(_b64(manifest), session, data_source, fallback=False)
+        with pytest.raises(WrenError) as exc:
+            rw.rewrite("SELECT * FROM keyword_view")
+        assert exc.value.error_code == ErrorCode.INVALID_SQL
+        assert exc.value.phase == ErrorPhase.SQL_PLANNING
+
     def test_view_only_query(self):
         """A view-only query expands the view as a verbatim CTE, plus the
         model CTEs the view statement references."""

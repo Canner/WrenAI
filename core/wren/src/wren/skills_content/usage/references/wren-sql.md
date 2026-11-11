@@ -81,7 +81,7 @@ wren dry-plan --sql "SELECT o_custkey, SUM(o_totalprice) FROM orders GROUP BY 1"
 
 ### Step 3 — Compare dry-plan output with DB error
 
-- **Checked offline:** Unresolved unqualified columns are rejected when a SELECT's sources are all MDL models, including scalar subqueries that reference those models. Whole-row model references such as `SELECT o FROM orders o` are unsupported; select explicit model columns instead.
+- **Checked offline:** Unresolved unqualified columns are rejected when a SELECT's sources and the sources in every enclosing scope that can supply correlated columns are all MDL models. This includes scalar subqueries that reference those models. Whole-row model references such as `SELECT o FROM orders o` are unsupported; select explicit model columns instead.
 - **Needs `dry-run`:** Scopes containing raw tables, user CTEs, derived tables, or `UNNEST` retain partial qualification. Validate these references, correlated references to such outer sources, and underlying physical objects against the database.
 - **Needs execution:** A successful `dry-run` does not establish business correctness. Execute the query and inspect the results before storing it as verified SQL.
 
