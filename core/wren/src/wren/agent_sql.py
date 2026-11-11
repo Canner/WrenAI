@@ -419,16 +419,16 @@ class AdHocSQL:
         return None
 
     def _duplicate_aggregation(self, scopes):
-        """An aggregate over a view's value in a select that also reads a model not bounded to
-        one row per view row: each view row can repeat once per matching model row (a cross
+        """An aggregate over a view's value in a select that also reads a source not bounded to
+        one row per view row: each view row can repeat once per matching source row (a cross
         join, ``ON TRUE``, a non-key or ``OR``-ed key match), and the aggregate counts it every
         time. A model is bounded when its whole primary key is equated, in top-level ``AND``s
         of the join conditions and ``WHERE``, to columns of sources already bounded, starting
         from the views; so two models keyed only to each other still multiply the view. A
         ``SEMI``/``ANTI`` join target never repeats a row, but it proves nothing about another
-        source's cardinality, and neither does a CTE or derived table (its rows are not known
-        to be unique on anything); those sources themselves are not checked here. Key names
-        compare case-insensitively, as qualification folds them."""
+        source's cardinality. A CTE or derived table is bounded only when its projected
+        ``GROUP BY`` columns or all its ``DISTINCT`` outputs are equated to bounded sources.
+        Key names compare case-insensitively, as qualification folds them."""
         for scope in scopes:
             select = scope.expression
             if not isinstance(select, exp.Select):
@@ -481,27 +481,67 @@ class AdHocSQL:
                 model.lower(): frozenset(k.lower() for k in keys)
                 for model, keys in self.primary_keys.items()
             }
-            models = {
-                alias: keys_of.get(source.name.lower(), frozenset())
-                for alias, source in scope.sources.items()
-                if isinstance(source, exp.Table) and alias not in never_repeat
+            sources = {
+                alias: source
+                for alias, (_, source) in scope.selected_sources.items()
+                if alias not in never_repeat
             }
             bounded = set(views) - never_repeat
             grew = True
             while grew:
                 grew = False
-                for alias, keys in models.items():
-                    if alias in bounded or not keys:
+                for alias, source in sources.items():
+                    if alias in bounded:
                         continue
                     reached = {
                         c for a, c, other in edges if a == alias and other in bounded
                     }
-                    if keys <= reached:
+                    if isinstance(source, exp.Table):
+                        keys = keys_of.get(source.name.lower(), frozenset())
+                        unique = bool(keys) and keys <= reached
+                    else:
+                        unique = self._derived_unique_on(source, reached)
+                    if unique:
                         bounded.add(alias)
                         grew = True
-            if any(alias not in bounded for alias in models):
+            if any(alias not in bounded for alias in sources):
                 return True
         return False
+
+    @staticmethod
+    def _derived_unique_on(source, columns):
+        """Whether joined output ``columns`` include a proven key of a derived source.
+
+        Plain grouping columns must be projected unchanged (possibly under aliases).
+        Grouping sets can repeat a group, and ``DISTINCT ON`` can hide its key, so neither
+        proves output uniqueness here.
+        """
+        select = source.expression
+        if not isinstance(select, exp.Select):
+            return False
+        outputs = [p.alias_or_name.lower() for p in select.expressions]
+        if len(set(outputs)) != len(outputs):
+            return False
+        distinct = select.args.get("distinct")
+        if distinct is not None and distinct.args.get("on") is None:
+            if set(outputs) <= columns:
+                return True
+        group = select.args.get("group")
+        if (
+            group is None
+            or not group.expressions
+            or any(value for key, value in group.args.items() if key != "expressions")
+        ):
+            return False
+        projected = [
+            p.unalias()
+            for p in select.expressions
+            if p.alias_or_name.lower() in columns
+        ]
+        return all(
+            isinstance(key, exp.Column) and key in projected
+            for key in group.expressions
+        )
 
     @staticmethod
     def _bounds_through(join):
