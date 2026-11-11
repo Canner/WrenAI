@@ -70,6 +70,11 @@
         }
       ]
     },
+    "core/wren-context-loader": {
+      "component": "wren-context-loader",
+      "release-type": "rust",
+      "bump-minor-pre-major": true
+    },
     "core/wren-core": {
       "component": "wren-semantic-core",
       "release-type": "simple",

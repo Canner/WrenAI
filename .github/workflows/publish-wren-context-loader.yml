@@ -1,0 +1,66 @@
+name: Publish wren-context-loader to crates.io
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version number (e.g. 0.2.0)"
+        required: true
+        type: string
+      tag_name:
+        description: "Git tag to checkout (e.g. wren-context-loader-v0.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    name: Build + publish wren-context-loader to crates.io
+    runs-on: ubuntu-latest
+    # Required by the crates.io Trusted Publisher config (Environment name:
+    # crates-io), shared with the Rust core crates.
+    environment: crates-io
+    permissions:
+      contents: read
+      # Needed for the OIDC token exchange with crates.io (Trusted Publishing).
+      id-token: write
+    defaults:
+      run:
+        working-directory: core/wren-context-loader
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name }}
+          persist-credentials: false
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # The tag is what gets published; a tag whose manifest disagrees with the
+      # release version would upload under a version nobody asked for.
+      - name: Check the manifest version matches the release
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          manifest_version=$(cargo metadata --locked --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "wren-context-loader") | .version')
+          if [ "$manifest_version" != "$RELEASE_VERSION" ]; then
+            echo "::error::Cargo.toml is at $manifest_version, release is $RELEASE_VERSION"
+            exit 1
+          fi
+
+      # Mints a short-lived crates.io token via OIDC — no stored secret.
+      - name: Authenticate to crates.io (Trusted Publishing)
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+
+      # wren-core-base is a path dependency with a version requirement, so the
+      # packaged crate resolves it from crates.io: that version must already be
+      # published. `--locked` keeps the verification build on the committed
+      # lockfile.
+      - name: Publish wren-context-loader
+        run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
