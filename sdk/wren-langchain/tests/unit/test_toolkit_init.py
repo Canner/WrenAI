@@ -1,7 +1,8 @@
 """Tests for WrenToolkit construction (from_project)."""
 
+import os
+
 import pytest
-from wren.profile import _reset_env_loaded_for_tests
 
 from wren_langchain import WrenToolkit
 from wren_langchain._providers.memory import (
@@ -55,11 +56,10 @@ def test_memory_auto_detect_enabled_when_dir_exists(tmp_project, fake_active_pro
 
 
 def test_from_project_loads_dotenv_from_project_path(tmp_project, monkeypatch):
-    """from_project loads <path>/.env so ${VAR} secrets resolve regardless of CWD.
+    """from_project resolves ${VAR} from <path>/.env regardless of CWD.
 
-    Regression: previously the SDK relied on Core's CWD-relative .env discovery,
-    which fails when the user runs Python from anywhere other than the project
-    directory.
+    The value is used for profile expansion only and is not exported into
+    os.environ, so it cannot leak into another project's toolkit.
     """
     # Stage 1: a profile that references an env var the caller's shell does NOT have.
     sentinel_var = "WREN_LANGCHAIN_TEST_HOST_DOES_NOT_EXIST_IN_SHELL"
@@ -89,19 +89,13 @@ def test_from_project_loads_dotenv_from_project_path(tmp_project, monkeypatch):
     # Stage 2: place the var only inside the project's .env.
     (tmp_project / ".env").write_text(f"{sentinel_var}=resolved-from-project-env\n")
 
-    # Stage 3: run from a different CWD so Core's CWD-walk would NOT find the file.
+    # Stage 3: run from a different CWD so a CWD-relative lookup would miss it.
     monkeypatch.chdir(tmp_project.parent)
-    _reset_env_loaded_for_tests()
 
-    try:
-        toolkit = WrenToolkit.from_project(tmp_project)
-        assert (
-            toolkit._connection.connection_info()["host"] == "resolved-from-project-env"
-        )
-    finally:
-        # Reset the global loader flag again so this test cannot leak its
-        # half-loaded state into whatever runs next in the session.
-        _reset_env_loaded_for_tests()
+    toolkit = WrenToolkit.from_project(tmp_project)
+    assert toolkit._connection.connection_info()["host"] == "resolved-from-project-env"
+    exported = os.environ.get(sentinel_var)
+    assert exported is None
 
 
 def test_from_project_resolves_each_projects_own_dotenv(tmp_path, monkeypatch):

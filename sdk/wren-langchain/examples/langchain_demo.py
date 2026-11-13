@@ -82,7 +82,7 @@ def main() -> None:
 
     # 1) Build the toolkit. ``from_project`` validates prerequisites eagerly:
     #    wren_project.yml + target/mdl.json must exist, profile must resolve,
-    #    project-local .env is loaded automatically. Memory is auto-detected
+    #    ${VAR} secrets resolve from the project's .env. Memory is auto-detected
     #    from .wren/memory/.
     toolkit = WrenToolkit.from_project(project_path)
     tools = toolkit.get_tools()
