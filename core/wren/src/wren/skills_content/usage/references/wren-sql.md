@@ -62,7 +62,7 @@ The CTE named `"orders"` shadows the model name, so the rest of your SQL runs ag
 
 ## Diagnosing errors with dry-plan
 
-`dry-plan` shows the expanded SQL without executing it. This separates MDL-level issues from database-level issues.
+`dry-plan` shows the expanded SQL without connecting to the database. It checks references that can be resolved from the MDL, but a successful plan does not prove that every column or underlying database object is valid.
 
 ### Step 1 — Run dry-plan
 
@@ -74,12 +74,16 @@ wren dry-plan --sql "SELECT o_custkey, SUM(o_totalprice) FROM orders GROUP BY 1"
 
 | dry-plan result | Meaning | Fix |
 |-----------------|---------|-----|
-| **Succeeds** with valid SQL | MDL layer is fine; if execution fails, the database rejects the translated SQL | Read the DB error against the dry-plan output — the issue is in the generated SQL or DB state |
+| **Succeeds** | SQL expansion completed; references outside known MDL schemas may still be unresolved | Inspect the expanded SQL, then use `wren dry-run --sql "SELECT ..."` to validate it against the database |
 | **Fails** with "No model references found" | Your FROM clause doesn't match any MDL model name | Check model names: `wren memory fetch -q "<name>" --type model --threshold 0` |
 | **Fails** with column error | A column you referenced doesn't exist in the model | Check columns: `wren memory fetch -q "<col>" --model <name> --threshold 0` |
 | **Fails** with qualify error | sqlglot can't resolve an ambiguous or unknown column | Qualify the column explicitly: `model_name.column_name` |
 
 ### Step 3 — Compare dry-plan output with DB error
+
+- **Checked offline:** Unresolved unqualified columns are rejected when a SELECT's sources and the sources in every enclosing scope that can supply correlated columns are all MDL models. This includes scalar subqueries that reference those models. Whole-row model references such as `SELECT o FROM orders o` are unsupported; select explicit model columns instead.
+- **Needs `dry-run`:** Scopes containing raw tables, user CTEs, derived tables, or `UNNEST` retain partial qualification. Validate these references, correlated references to such outer sources, and underlying physical objects against the database.
+- **Needs execution:** A successful `dry-run` does not establish business correctness. Execute the query and inspect the results before storing it as verified SQL.
 
 When execution fails but dry-plan succeeds, compare them side by side:
 

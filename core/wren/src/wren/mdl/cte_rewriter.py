@@ -66,6 +66,16 @@ _CASE_SENSITIVE_COLUMN_DIALECTS: frozenset[str] = frozenset(
     {"postgres", "oracle", "snowflake", "clickhouse"}
 )
 
+# Zero-argument built-ins which sqlglot parses as ordinary columns.
+_COLUMN_KEYWORDS: dict[str, frozenset[str]] = {
+    "oracle": frozenset({"USER", "UID", "DBTIMEZONE", "SESSIONTIMEZONE"}),
+    "postgres": frozenset({"USER", "CURRENT_ROLE"}),
+    "trino": frozenset({"CURRENT_SCHEMA"}),
+}
+_ORACLE_HIERARCHICAL_COLUMNS = frozenset(
+    {"LEVEL", "CONNECT_BY_ISLEAF", "CONNECT_BY_ISCYCLE"}
+)
+
 
 class CTERewriter:
     """Rewrite user SQL by expanding MDL model references into CTEs.
@@ -99,6 +109,11 @@ class CTERewriter:
         self.data_source = data_source
         self.fallback = fallback
         self.dialect = get_sqlglot_dialect(data_source)
+        self._qualification_dialect = Dialect.get_or_raise(self.dialect)
+        if self.dialect == "oracle":
+            # Classify pseudocolumns before qualification, preserving quoted
+            # identifiers and model columns that happen to share their names.
+            self._qualification_dialect.PSEUDOCOLUMNS = set()
         # Upper-folding dialects (Oracle, Snowflake, …) uppercase every unquoted
         # identifier, which would change result-set column names (aggregate
         # aliases, cube columns, …). Render those with ``identify=True`` so the
@@ -129,7 +144,8 @@ class CTERewriter:
         # (``normalize=False``) so a quoted ``"year"`` matches the stored ``year``
         # and not ``Year``; column keys are kept in manifest case.
         self.schema = MappingSchema(
-            dialect=self.dialect, normalize=not self._case_sensitive_columns
+            dialect=self._qualification_dialect,
+            normalize=not self._case_sensitive_columns,
         )
         # normalized column name → original manifest column name, per model
         # (only used on the case-insensitive path).
@@ -253,6 +269,7 @@ class CTERewriter:
         ast = parse_one(sql, dialect=self.dialect)
 
         user_cte_names = self._collect_user_cte_names(ast)
+        self._separate_column_keywords(ast, user_cte_names)
 
         # Two situations need model-column references canonicalized to the
         # manifest case before collection:
@@ -345,6 +362,55 @@ class CTERewriter:
     # Column collection via qualify
     # ------------------------------------------------------------------
 
+    def _separate_column_keywords(
+        self, ast: exp.Expression, user_cte_names: set[str]
+    ) -> None:
+        """Keep dialect keywords out of column binding and forced quoting."""
+        keywords = _COLUMN_KEYWORDS.get(self.dialect, frozenset())
+        pseudocolumns = (
+            Dialect.get_or_raise("oracle").PSEUDOCOLUMNS | _ORACLE_HIERARCHICAL_COLUMNS
+            if self.dialect == "oracle"
+            else frozenset()
+        )
+        if not keywords and not pseudocolumns:
+            return
+        scope_aliases = self._build_scope_alias_maps(ast, user_cte_names)
+        alias_refs = self._collect_output_alias_refs(ast)
+        for scope in traverse_scope(ast):
+            if not isinstance(scope.expression, exp.Select):
+                continue
+            # Include hidden columns: their names must still fail validation,
+            # rather than silently acquiring a built-in's meaning.
+            model_columns: set[str] = set()
+            current = scope
+            while True:
+                for model in scope_aliases[id(current.expression)].values():
+                    model_columns.update(
+                        column["name"].upper()
+                        for column in self.model_dict[model].get("columns", [])
+                    )
+                if not current.can_be_correlated or current.parent is None:
+                    break
+                current = current.parent
+            for column in scope.columns:
+                if (
+                    column.find_ancestor(exp.Select) is not scope.expression
+                    or column.table
+                    or not isinstance(column.this, exp.Identifier)
+                    or column.this.quoted
+                    or id(column) in alias_refs
+                    or column.name.upper() in model_columns
+                ):
+                    continue
+                name = column.name.upper()
+                if name in keywords:
+                    column.replace(exp.Var(this=column.name))
+                elif name in pseudocolumns and (
+                    name not in _ORACLE_HIERARCHICAL_COLUMNS
+                    or scope.expression.args.get("connect")
+                ):
+                    column.replace(exp.Pseudocolumn(**column.args))
+
     def _collect_model_columns(
         self, ast: exp.Expression, user_cte_names: set[str]
     ) -> tuple[
@@ -392,6 +458,9 @@ class CTERewriter:
         # alias-to-model map pre-normalize keeps the right model bound.
         model_refs, user_table_refs = self._collect_model_refs(copy, user_cte_names)
         scope_aliases = self._build_scope_alias_maps(copy, user_cte_names)
+        # Identifier nodes survive normalization and sqlglot's conversion of
+        # whole-row references from Column to TableColumn.
+        original_names = {id(col.this): col.name for col in copy.find_all(exp.Column)}
 
         # Detect models referenced via SELECT * BEFORE qualify_columns
         # expands the star.  These will use SELECT * in transform_sql so
@@ -403,7 +472,7 @@ class CTERewriter:
             # by ``_normalize_model_column_case``; resolve them case-sensitively
             # against the ``normalize=False`` schema with no folding.
             return self._collect_columns_case_sensitive(
-                copy, scope_aliases, user_table_refs, star_models
+                copy, scope_aliases, user_table_refs, star_models, original_names
             )
 
         # Unquote model table refs on the collection-only copy so a quoted
@@ -460,9 +529,10 @@ class CTERewriter:
         qualified = qualify_columns(
             copy,
             schema=self.schema,
-            dialect=self.dialect,
+            dialect=self._qualification_dialect,
             allow_partial_qualification=True,
         )
+        self._validate_model_columns(qualified, scope_aliases, original_names)
 
         # Ensure every referenced model appears in the result, even if no
         # specific columns are referenced (e.g. SELECT COUNT(*) FROM model).
@@ -499,6 +569,7 @@ class CTERewriter:
         scope_aliases: dict[int, dict[str, str]],
         user_table_refs: dict[str, tuple[str, bool]],
         star_models: set[str],
+        original_names: dict[int, str],
     ) -> tuple[
         dict[str, list[str] | None],
         dict[str, tuple[str, bool]],
@@ -526,9 +597,10 @@ class CTERewriter:
         qualified = qualify_columns(
             copy,
             schema=self.schema,
-            dialect=self.dialect,
+            dialect=self._qualification_dialect,
             allow_partial_qualification=True,
         )
+        self._validate_model_columns(qualified, scope_aliases, original_names)
 
         used: dict[str, dict[str, None]] = {
             m: {} for aliases in scope_aliases.values() for m in aliases.values()
@@ -541,6 +613,66 @@ class CTERewriter:
             user_table_refs,
             {},
         )
+
+    @staticmethod
+    def _validate_model_columns(
+        ast: exp.Expression,
+        scope_aliases: dict[int, dict[str, str]],
+        original_names: dict[int, str],
+    ) -> None:
+        """Reject unresolved columns only where MDL knows every source schema."""
+        for scope in traverse_scope(ast):
+            if not isinstance(scope.expression, exp.Select):
+                continue
+            # scope.columns includes external references inherited from children.
+            # A raw-table subquery must not be validated as part of its MDL parent.
+            columns = [
+                column
+                for column in scope.unqualified_columns
+                if column.find_ancestor(exp.Select) is scope.expression
+            ]
+            columns.extend(scope.find_all(exp.TableColumn))
+            if not columns:
+                continue
+
+            current = scope
+            model_aliases: set[str] = set()
+            while True:
+                aliases = scope_aliases[id(current.expression)]
+                # references includes SEMI/ANTI JOIN sources, which are omitted
+                # from selected_sources. Unused visible CTEs are excluded.
+                if any(
+                    alias.lower() not in aliases
+                    or not isinstance(current.sources.get(alias), exp.Table)
+                    for alias, _ in current.references
+                ):
+                    break
+                model_aliases.update(alias.lower() for alias, _ in current.references)
+                if not current.can_be_correlated or current.parent is None:
+                    # A FROM-less scalar subquery can bind to an MDL parent,
+                    # but a standalone scalar query has no model to validate.
+                    if not model_aliases:
+                        break
+                    column = columns[0]
+                    name = original_names.get(id(column.this), column.name)
+                    if column.name.lower() in model_aliases:
+                        message = (
+                            f"Whole-row reference '{name}' to an MDL model is not "
+                            "supported; select explicit model columns instead."
+                        )
+                    else:
+                        message = (
+                            f"Column '{name}' could not be resolved "
+                            "in MDL model sources."
+                        )
+                    raise WrenError(
+                        ErrorCode.INVALID_SQL,
+                        message,
+                        phase=ErrorPhase.SQL_PLANNING,
+                    )
+                # An unresolved correlated reference could belong to an outer
+                # raw table, CTE, derived table or table-valued function.
+                current = current.parent
 
     def _build_scope_alias_maps(
         self, ast: exp.Expression, user_cte_names: set[str]
@@ -731,6 +863,7 @@ class CTERewriter:
                         isinstance(ident, exp.Identifier)
                         and not col.table
                         and ident.name.lower() in proj_aliases
+                        and col.find_ancestor(exp.Select) is select
                     ):
                         refs.add(id(col))
         return refs
@@ -789,7 +922,9 @@ class CTERewriter:
 
         for col in ast.find_all(exp.Column):
             ident = col.this
-            if not isinstance(ident, exp.Identifier):
+            if isinstance(col, exp.Pseudocolumn) or not isinstance(
+                ident, exp.Identifier
+            ):
                 continue
             if id(col) in alias_ref_cols:
                 # references a SELECT output alias, not a model column; skip
@@ -810,11 +945,8 @@ class CTERewriter:
                 #   * no model table resolved at all → it belongs to an external
                 #     table or a pure-TVF projection, which ``rewrite()`` handles
                 #     via its passthrough/fallback branch.
-                # Known limitation: an unqualified model-column ref in a query
-                # that also defines CTEs is not force-quoted and bypasses the
-                # case-sensitive "column does not exist" check — it falls back to
-                # the old behavior (may collapse to ``SELECT 1``). Qualify the
-                # column (``model.col``) to get strict checking.
+                # Unresolved unqualified refs are checked after qualification
+                # when every source in their scope is an MDL model.
                 continue
             else:
                 candidates = self._all_model_cols
@@ -1028,6 +1160,7 @@ class CTERewriter:
                 self.view_dict[view_name]["statement"], dialect=self.dialect
             )
             view_cte_names = self._collect_user_cte_names(view_ast)
+            self._separate_column_keywords(view_ast, view_cte_names)
             # Resolve the view body's column refs the same way as the user query,
             # so a case-distinct model referenced from a view statement gets the
             # same strict treatment (quoted = exact, unquoted = exact-then-CI,
