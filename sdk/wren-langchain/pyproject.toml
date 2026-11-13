@@ -29,7 +29,8 @@ classifiers = [
 ]
 dependencies = [
   # Core: provides WrenEngine, MemoryStore, profile resolution, MDL handling.
-  "wrenai>=0.13.1",
+  # 0.17.0 adds per-project .env resolution in expand_profile_secrets.
+  "wrenai>=0.17.0",
   # langchain >=1.0 ships the recommended `langchain.agents.create_agent`
   # entrypoint. Older `langgraph.prebuilt.create_react_agent` still works
   # but emits deprecation warnings and is scheduled for removal in
