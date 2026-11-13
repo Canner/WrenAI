@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.2](https://github.com/Canner/WrenAI/compare/wren-pydantic-v0.3.1...wren-pydantic-v0.3.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* **sdk:** include v5 business rules in agent prompts ([#2835](https://github.com/Canner/WrenAI/issues/2835)) ([5476670](https://github.com/Canner/WrenAI/commit/54766705472b5bcd3380d705bd88dff2659aefaf))
+* **sdk:** resolve each project's .env secrets per toolkit ([#2840](https://github.com/Canner/WrenAI/issues/2840)) ([75035ad](https://github.com/Canner/WrenAI/commit/75035ad1588e7d9170e7939c61dfbac4e069a9a9))
+* **sdk:** synchronize cold connector initialization ([#2820](https://github.com/Canner/WrenAI/issues/2820)) ([548eee3](https://github.com/Canner/WrenAI/commit/548eee3e864b11e7f11eee15ae82be178a295f22))
+
 ## [0.3.1](https://github.com/Canner/WrenAI/compare/wren-pydantic-v0.3.0...wren-pydantic-v0.3.1) (2026-10-20)
 
 
