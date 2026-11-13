@@ -1,0 +1,118 @@
+{{- $secretName := include "wren-ai.secretName" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wren-ai.fullname" . }}-ai-service
+  labels:
+    {{- include "wren-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ai-service
+spec:
+  replicas: {{ default 1 .Values.aiService.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "wren-ai.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ai-service
+  template:
+    metadata:
+      labels:
+        {{- include "wren-ai.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: ai-service
+    spec:
+      {{- with .Values.aiService.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.aiService.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.aiService.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: wren-ai-service
+          image: "{{ .Values.aiService.image.repository }}:{{ .Values.aiService.image.tag | default .Values.global.versions.aiService}}"
+          imagePullPolicy: {{ .Values.aiService.image.pullPolicy }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/data
+          env:
+            - name: WREN_AI_SERVICE_PORT
+              value: {{ .Values.config.ports.aiService | quote }}
+            {{- if .Values.secrets.createFromValues }}
+              {{- if .Values.secrets.values.OPENAI_API_KEY }}
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: OPENAI_API_KEY
+              {{- else if .Values.secrets.values.GEMINI_API_KEY }}
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: GEMINI_API_KEY
+              {{- end }}
+            {{- else }}
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: OPENAI_API_KEY
+                  optional: true
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: GEMINI_API_KEY
+                  optional: true
+            {{- end }}
+            - name: QDRANT_HOST
+              value: {{ default (printf "%s-qdrant" .Release.Name) .Values.config.documentStore.qdrantHost | quote }}
+            - name: LOGGING_LEVEL
+              value: {{ .Values.config.logging.level | quote }}
+            - name: WREN_UI_ENDPOINT
+              value: {{ .Values.config.endpoints.ui | quote }}
+            - name: PYTHONUNBUFFERED
+              value: {{ .Values.aiService.env.pythonUnbuffered | quote }}
+            {{- if .Values.pipeline.settings.langfuseEnable }}
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: LANGFUSE_PUBLIC_KEY
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: LANGFUSE_SECRET_KEY
+            - name: LANGFUSE_HOST
+              value: {{ .Values.pipeline.settings.langfuseHost | quote }}
+            {{- end }}
+            - name: CONFIG_PATH
+              value: {{ .Values.aiService.env.configPath | quote }}
+            {{- if .Values.config.telemetry.enabled }}
+            - name: POSTHOG_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: POSTHOG_API_KEY
+            - name: POSTHOG_HOST
+              value: {{ .Values.config.telemetry.posthogHost | quote }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.config.ports.aiService }}
+              protocol: TCP
+          {{- with .Values.aiService.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "wren-ai.fullname" . }}-ai-service-config
+            items:
+              - key: config.yaml
+                path: config.yaml
