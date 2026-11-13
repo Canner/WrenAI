@@ -35,9 +35,9 @@ build-dist:
 
 # -- Test -----------------------------------------------------------
 
-# Run SDK integration tests (requires dist/)
+# Run the complete SDK test suite: integration + size-gate tests (requires dist/)
 test:
-    node --test sdk/tests/index.test.mjs
+    npm test
 
 # TypeScript type check only
 typecheck:
