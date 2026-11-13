@@ -116,7 +116,7 @@ wren cube query --cube revenue --measures total --time-dimension "order_date:mon
 
 The translator produces `DATE_TRUNC` / `GROUP BY` / `WHERE` clauses for you and
 runs them through the same engine path as `wren --sql`. See the
-[Cube guide](../../docs/core/guides/modeling/cube.md) for full YAML structure
+[Cube guide](../../docs/core/guides/cubes.md) for full YAML structure
 and the [CLI reference](../../docs/core/reference/cli.md#wren-cube--pre-aggregation-queries) for all
 flags.
 
