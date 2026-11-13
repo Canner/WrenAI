@@ -1453,6 +1453,150 @@ def test_a_view_value_joined_to_a_many_side_model_is_marked_duplicated(adhoc):
     ]
 
 
+@pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
+@pytest.mark.parametrize(
+    ("source_sql", "join", "duplicated"),
+    [
+        ("SELECT tenant_id, id FROM dimensions", "CROSS JOIN x", True),
+        ("SELECT tenant_id, id FROM dimensions", "JOIN x ON TRUE", True),
+        ("SELECT tenant_id, id FROM dimensions", "JOIN x ON v.id=x.id", True),
+        ("SELECT id FROM dimensions GROUP BY id", "JOIN x ON v.id=x.id", False),
+        (
+            "SELECT tenant_id, id FROM dimensions GROUP BY tenant_id, id",
+            "JOIN x ON v.id=x.id",
+            True,
+        ),
+        (
+            "SELECT tenant_id, id FROM dimensions GROUP BY tenant_id, id",
+            "JOIN x ON v.id=x.id AND v.tenant_id=x.tenant_id",
+            False,
+        ),
+        ("SELECT id AS key FROM dimensions GROUP BY id", "JOIN x ON v.id=x.key", False),
+        (
+            "SELECT id AS first_id, id AS second_id FROM dimensions GROUP BY id",
+            "JOIN x ON v.id=x.second_id",
+            False,
+        ),
+        (
+            "SELECT id FROM dimensions GROUP BY tenant_id, id",
+            "JOIN x ON v.id=x.id",
+            True,
+        ),
+        (
+            "SELECT ABS(id) AS key FROM dimensions GROUP BY id",
+            "JOIN x ON v.id=x.key",
+            True,
+        ),
+        (
+            "SELECT id FROM dimensions GROUP BY GROUPING SETS ((id), (id))",
+            "JOIN x ON v.id=x.id",
+            True,
+        ),
+        ("SELECT DISTINCT id FROM dimensions", "JOIN x ON v.id=x.id", False),
+        (
+            "SELECT DISTINCT ABS(id) AS key FROM dimensions",
+            "JOIN x ON v.id=x.key",
+            False,
+        ),
+        (
+            "SELECT DISTINCT tenant_id, id FROM dimensions",
+            "JOIN x ON v.id=x.id",
+            True,
+        ),
+        (
+            "SELECT DISTINCT tenant_id, id FROM dimensions",
+            "JOIN x ON v.id=x.id AND v.tenant_id=x.tenant_id",
+            False,
+        ),
+        (
+            "SELECT DISTINCT tenant_id AS key, id AS key FROM dimensions",
+            "JOIN x ON v.id=x.key",
+            True,
+        ),
+        (
+            "SELECT tenant_id AS key, id AS key FROM dimensions GROUP BY tenant_id, id",
+            "JOIN x ON v.id=x.key",
+            True,
+        ),
+        (
+            "SELECT DISTINCT ON (tenant_id) id FROM dimensions",
+            "JOIN x ON v.id=x.id",
+            True,
+        ),
+        (
+            "SELECT id FROM dimensions UNION ALL SELECT id FROM dimensions",
+            "JOIN x ON v.id=x.id",
+            True,
+        ),
+        ("SELECT id FROM dimensions", "SEMI JOIN x ON v.id=x.id", False),
+        ("SELECT id FROM dimensions", "ANTI JOIN x ON v.id=x.id", False),
+        ("SELECT id FROM dimensions", "LEFT JOIN x ON v.id=x.id", True),
+        ("SELECT id FROM dimensions GROUP BY id", "LEFT JOIN x ON v.id=x.id", False),
+        ("SELECT id FROM dimensions GROUP BY id", "RIGHT JOIN x ON v.id=x.id", False),
+        ("SELECT id FROM dimensions GROUP BY id", "FULL JOIN x ON v.id=x.id", False),
+        (
+            "SELECT id FROM dimensions GROUP BY id",
+            "JOIN x ON v.id=x.id OR v.id=1",
+            True,
+        ),
+        # An unused CTE must not affect the selected sources' cardinality.
+        ("SELECT id FROM dimensions", "", False),
+    ],
+)
+def test_derived_sources_bound_view_aggregation(cte, source_sql, join, duplicated):
+    schema = {
+        "invoice": {"tenant_id": "INT", "id": "INT", "value": "INT"},
+        "dimensions": {"tenant_id": "INT", "id": "INT"},
+    }
+    query = AdHocSQL.__new__(AdHocSQL)
+    query.primary_keys = {"dimensions": frozenset(("tenant_id", "id"))}
+    sql = (
+        "SELECT SUM(v.value) FROM (SELECT tenant_id, id, value FROM invoice) v "
+        f"{join if cte else join.replace('JOIN x', f'JOIN ({source_sql}) x')}"
+    )
+    if cte:
+        sql = f"WITH x AS ({source_sql}) {sql}"
+    tree = sqlglot.parse_one(sql, dialect="duckdb")
+    tree.find(exp.Subquery).meta[VIEW_MARK] = "invoice_value"
+    qualified = qualify(tree, dialect="duckdb", schema=schema, identify=True)
+    assert query._duplicate_aggregation(list(traverse_scope(qualified))) is duplicated
+
+
+@pytest.mark.parametrize(
+    ("source_sql", "join", "total"),
+    [
+        ("SELECT id FROM customers", "CROSS JOIN x", 4650.0),
+        (
+            "SELECT DISTINCT customer_id AS key, id AS key FROM invoices",
+            "JOIN x ON v.customer_id=x.key",
+            2500.0,
+        ),
+        (
+            "SELECT customer_id AS key, id AS key FROM invoices GROUP BY customer_id, id",
+            "JOIN x ON v.customer_id=x.key",
+            2500.0,
+        ),
+    ],
+)
+@pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
+def test_derived_join_caveat_reaches_result_evidence(
+    adhoc, source_sql, join, total, cte
+):
+    s = adhoc()
+    sql = f"SELECT SUM(v.usd_value) FROM usd_line_value v {join if cte else join.replace('JOIN x', f'JOIN ({source_sql}) x')}"
+    if cte:
+        sql = f"WITH x AS ({source_sql}) {sql}"
+    answers, result = run(s, sql)
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": total}]
+    assert result["evidence"]["has_unverified_semantics"] is True
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"]["duplicate_aggregation"] is True
+    assert "duplicate_aggregation" in internal["unverified"]
+
+
 def test_a_composite_key_requires_every_joined_key_for_view_aggregation():
     schema = {
         "invoice": {"tenant_id": "INT", "id": "INT", "value": "INT"},
@@ -1548,6 +1692,28 @@ def test_models_keyed_only_to_each_other_still_multiply_the_view():
     assert (
         duplicated(
             "CROSS JOIN (SELECT id FROM extras) x JOIN dimensions d ON x.id = d.id"
+        )
+        is True
+    )
+    # A derived key can bound another source only after it is bounded from the view.
+    assert (
+        duplicated(
+            "JOIN (SELECT id FROM extras GROUP BY id) x ON v.id=x.id "
+            "JOIN dimensions d ON x.id=d.id"
+        )
+        is False
+    )
+    assert (
+        duplicated(
+            "CROSS JOIN (SELECT id FROM extras GROUP BY id) x "
+            "JOIN dimensions d ON x.id=d.id"
+        )
+        is True
+    )
+    assert (
+        duplicated(
+            "CROSS JOIN extras a LEFT JOIN (SELECT DISTINCT id FROM extras) x "
+            "ON v.id=a.id AND x.id=v.id"
         )
         is True
     )
