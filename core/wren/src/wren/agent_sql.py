@@ -37,6 +37,7 @@ from typing import NamedTuple
 import sqlglot
 from pydantic import BaseModel, ConfigDict, Field
 from sqlglot import exp
+from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.scope import Scope, ScopeType, traverse_scope
 
@@ -428,7 +429,10 @@ class AdHocSQL:
         ``SEMI``/``ANTI`` join target never repeats a row, but it proves nothing about another
         source's cardinality. A CTE or derived table is bounded only when its projected
         ``GROUP BY`` columns or all its ``DISTINCT`` outputs are equated to bounded sources.
+        Key comparisons need the same known type: coercion can merge distinct keys.
+        Text comparisons remain unproven because the schema omits collation.
         Key names compare case-insensitively, as qualification folds them."""
+        annotated = False
         for scope in scopes:
             select = scope.expression
             if not isinstance(select, exp.Select):
@@ -451,6 +455,11 @@ class AdHocSQL:
             }
             if not aggregated:
                 continue
+            if not annotated:
+                annotate_types(
+                    scopes[-1].expression, schema=self.schema, dialect="duckdb"
+                )
+                annotated = True
             joins = select.args.get("joins") or []
             never_repeat = {
                 j.this.alias_or_name
@@ -471,6 +480,13 @@ class AdHocSQL:
                     if not (
                         isinstance(a, exp.Column) and isinstance(b, exp.Column)
                     ) or (a.table == b.table):
+                        continue
+                    if (
+                        a.type is None
+                        or a.type.this == exp.DataType.Type.UNKNOWN
+                        or a.type.this in exp.DataType.TEXT_TYPES
+                        or a.type != b.type
+                    ):
                         continue
                     edges += [
                         (mine.table, mine.name.lower(), other.table)
