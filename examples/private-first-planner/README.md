@@ -1,146 +1,63 @@
-# Private-first planner: offline contract experiment (P0)
+# Private-first agent reference
 
-A bounded consumer host for a private conversation planner that can delegate a
-dashboard design task to a cloud specialist. **All three adapters are fakes.**
-There are no model calls, database connections, Wren binaries, credentials,
-network transports, or npm dependencies. This does not depend on a Wren release.
+A local, single-user application host that combines a private conversational
+planner, Wren data worker, and isolated dashboard design specialist. Behavior is
+expressed in application-owned Warble components. The host owns state, user
+approval, routing, budgets, and delivery; model output never grants authority.
 
-The separate [P1 evaluation harness](p1/README.md) adds opt-in Nemotron/Wren
-integration with its own dependency and configuration. The P0 commands below
-remain offline and dependency-free.
+Start with the [collaboration guide](collaboration/README.md). Data-worker owners
+can go directly to the [independent handoff](collaboration/DATA-WORKER.md).
 
-## Run
+## Quick contract check
 
-Requires Node.js 22 or newer. From this directory:
+From this example directory, with Node 22 or newer:
 
 ```sh
-node --test test/*.test.mjs
-node demo.mjs
+npm run test:worker -- /absolute/path/to/new-worker-contract-results
 ```
 
-`npm test` and `npm run demo` are equivalent; no `npm install` is needed. The demo
-prints seven JSON records and fails if an expected outcome differs: dashboard,
-private answer, human clarification, denied disclosure, budget exhaustion,
-cancellation, and timeout. Its human answer is explicitly scripted at the host
-ingress; it is not a model pretending to be a user. No UI server is started.
+No installation, network, database, credentials, or model calls are required for
+this gate. It exercises the actual WorkerSession and data classification with
+synthetic ports. It is not evidence of live model quality. Existing output
+directories are refused. Full offline, real-service scripted, browser and compiler
+gates have separate documented prerequisites.
 
-## Contracts and authority
+## Current implementation
 
-`contracts.mjs` exports four version-1 JSON Schema objects in `schemas`, runtime
-parsers, and immutable validated copies. Its small validator implements only
-the schema keywords used in that file; it is not a general JSON Schema engine.
-Changing the schemas requires corresponding parser and behavioral tests.
-
-| Contract | Owner and checks |
+| Area | Entry |
 | --- | --- |
-| `TaskPlan` | Host-owned identity/revision, private objective, metric/period/status scope, output and theme. Models only propose actions; they cannot replace this object. |
-| `Clarification` | Host-created question ID, source, task/plan revision, field and allowed answers. Only the host's `answer()` ingress can resume it. |
-| `ExportBundle` | Recipient, purpose, policy version, expiry, payload digest and approved dataset. The broker assembles a fixed brief, never forwards the objective or a transcript. |
-| `DashboardSpec` | Declarative layout/theme/chart references. Task, export and dataset versions must match; no executable code, arbitrary URLs, numeric claims or new metrics. |
+| Shared contracts and ownership | [Contract index](collaboration/CONTRACTS.md) |
+| Durable host, embedded pi UI, cancellation, export, repair | [Host guide](host/README.md) |
+| Warble behavior sources and compile drift check | [Components](behaviors/README.md) |
+| Independently evaluable planner / worker / cloud designer | [Evaluation guide](eval/README.md) |
+| Verified / unverified / rejected data | [Data validation](host/DATA-VALIDATION.md) |
+| Blocking failures versus visual warnings | [Dashboard admission](host/VALIDATION.md) |
+| Review order, gates and version changes | [Contributor guide](collaboration/README.md) |
 
-Unknown properties, unsupported versions, invalid values and oversized lists are
-rejected. Payload digests use canonical object-key ordering. A digest is an
-integrity check, **not an authorization signature**: the fixture broker also
-checks its private issued-receipt registry and exact preconfigured dataset grants.
+Free dashboard generation returns HTML/CSS/JavaScript, not a fixed renderer.
+The cloud receives only approved synthetic aggregates and the approved brief.
+Metadata, raw data, SQL, private conversation and DB credentials stay outside
+that request. Generated code runs only in the documented macOS isolation path;
+other platforms fail closed for browser execution. The private-only route in the
+current host delivers an inert table, not a Nemotron-generated frontend.
 
-The intentionally narrow fixture is monthly revenue for 2026 Q3 in USD, with
-`paid` or `all` order scope and three synthetic monthly rows. Chart types are bar
-and line, themes light/dark, layouts stack/grid. The code does not infer which
-arbitrary results are aggregated or safe to export. The fake broker grants only
-exact fixture datasets; a production broker and disclosure policy are later work.
+## Earlier experiments
 
-## Host control flow
+The [P0 fake controller](collaboration/P0.md), [P1 live Wren integration](p1/README.md),
+[P2 cloud adapter](p2/README.md), [P4 constrained-design comparison](p4/README.md),
+and [P5 free-design comparison](p5/README.md) remain available to reproduce their
+own protocols. They are not interchangeable scoring regimes. Live runners are
+explicit opt-in, can incur charges, and are never invoked by collaboration CI.
+Historical generated dashboards, provider requests and private audit logs are
+not part of this source package; preserve them separately with their original
+source/config hashes. Do not overwrite or replace failed samples.
 
-`TaskController` owns one task. The fake planner sees a private plan and whether
-a result is available. Its strict action union is:
+## Scope
 
-- `query_private`
-- `clarify` with a supported field
-- `delegate_cloud` with the fixed `dashboard_design` capability
-- `respond` for a private data answer
-
-The host binds that capability to `fake-designer`; an action cannot select a
-provider, model, URL, tool, or policy. The cloud adapter receives only an immutable
-`ExportBundle` and an abort signal. It can return a `DashboardSpec` or the narrowly
-defined `{kind: "needs_clarification", field: "theme"}` response.
-
-```text
-understanding → querying → understanding → export_ready
-  ↕ waiting_for_user                          ↓
-                                      cloud_running → validating → completed
-Any active state → failed / cancelled
-```
-
-The total call budget covers planner turns, session opening, queries,
-continuations and cloud attempts. The cloud limit is a subset of that total.
-Budgets and the task deadline persist across human clarification; there are no
-hidden retries. Local synchronous checks and cleanup are not model/tool calls.
-Default limits are 16 total calls, 2 cloud calls and 60 seconds per task.
-
-There is one private service session, with serialized operations and a separate
-service revision. A Wren-origin question saves its continuation privately; only
-the actual accepted host answer is passed to `continue()`. A cloud theme answer
-creates a new plan revision/export bundle and keeps the same data result.
-Result identity is checked before export and again after the cloud response;
-the broker reauthorizes both times. Cancel/timeout abort pending work and reject
-late responses. Terminal states are immutable, and repeated `run()` cannot
-re-deliver or start another cloud call.
-
-`snapshot()` is a **private host view**, including the private objective. It must
-not be forwarded to a cloud model or a public log. Public adapter errors are
-reduced to fixed error codes; event records carry only states/revisions/codes.
-The demo prints a reduced summary, not the private snapshot.
-
-## Files and adapter seam
-
-| File | Purpose |
-| --- | --- |
-| `contracts.mjs` | The four strict schemas, parsers, digest and dashboard binding checks |
-| `controller.mjs` | Host state machine, action registry, budgets, deadline and human ingress |
-| `fakes.mjs` | Synthetic planner/Wren/cloud, exact fixture grants and virtual clock |
-| `test/controller.test.mjs` | End-to-end payload, continuation, authority and race tests |
-| `demo.mjs` | Offline scripted walkthrough |
-
-The fake private data port has `open`, `ask`, `continue`, `isCurrent` and `close`.
-It is **not Wren's MCP wire schema**. A later adapter must map the real
-`open_session`, `ask_data`, `continue_task`, result/evidence and cleanup contracts,
-including actual authorization, invalidation, transport cancellation and session
-lifecycle. This experiment's `close()` and reauthorization hooks are synchronous
-local operations; substituting network calls requires revisiting those hooks.
-
-Adapters, configuration, clock and user ingress are trusted host code. This
-library does not authenticate a human or isolate malicious JavaScript adapters.
-The model-facing action schema has no `answer` action, so a model cannot resume a
-question through its decision channel. A real UI must authenticate and bind its
-answer ingress to the correct user/task. Cancelling prevents delivery and signals
-adapters; it cannot undo work or data already accepted by an external service.
-
-## Verification and limits
-
-Tests inspect the actual fake-cloud request, with private canaries in the
-objective, SQL, raw rows and metadata. They cover private-only and dashboard
-success; planner, data-agent and cloud clarification; stale answers/revisions;
-unsupported capabilities/model overrides; rejected data; tampered grants;
-budgets across turns; cancellation/deadline races; revocation/expiry/context
-change during cloud work; malformed designs and sanitized adapter failures.
-
-The example's dedicated CI runs tests and the demo on Node 22. These are
-protocol/control-flow checks, not evidence of Nemotron planning quality, visual
-design quality, actual Wren compatibility, or private-network deployment.
-
-There is no dashboard renderer, real policy engine, persistent task recovery,
-arbitrary replanning, or real model/SDK transport in P0. The completed dashboard
-output is a validated spec plus its bound fixture dataset. Those integrations
-belong in subsequent phases; do not attach a production cloud SDK to this fake
-grant authority.
-## Independent harness evaluation
-
-The private planner, data worker and cloud designer now have separate evaluation
-entry points. See [the evaluation guide](eval/README.md) for scripted suites,
-real Wren/DB integration, optional browser checks and live adapter ports. These
-contract runs do not claim new live model quality results.
-
-
-## Runnable application architecture
-
-The durable local host, embedded pi planner and terminal, Wren sessions, trusted export approval, bounded cloud repair, isolated viewer and independent tuning entry points are documented in [host/README.md](host/README.md). Existing P4/P5 and single-unit eval runners remain available for baseline comparisons.
+This is a reference example, not a multi-tenant service or general safe-code
+hosting platform. Default disclosure, data verification and dashboard content
+contracts target the synthetic revenue fixture. Real data requires reviewed
+project-specific verification/projection and authorization. An NVIDIA-hosted
+endpoint is not a verified private deployment. Stock pi coding-agent CLI, GPT,
+a dedicated design-service integration, and cross-process Wren session recovery
+are not implemented by this example.

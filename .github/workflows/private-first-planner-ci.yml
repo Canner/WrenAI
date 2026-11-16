@@ -1,4 +1,4 @@
-name: Private-first planner experiment
+name: Private-first collaboration baseline
 permissions:
   contents: read
 
@@ -6,12 +6,17 @@ on:
   pull_request:
     paths:
       - 'examples/private-first-planner/**'
+      - 'examples/serve-agent/setup.py'
+      - 'examples/serve-agent/policy.cedar'
+      - 'examples/serve-agent/adhoc-policy.cedar'
+      - 'core/wren-context-loader/**'
       - '.github/workflows/private-first-planner-ci.yml'
   workflow_dispatch:
 
 jobs:
   offline-contracts:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: examples/private-first-planner
@@ -20,44 +25,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Offline contract and race tests
-        run: node --test test/*.test.mjs
-      - name: Scripted walkthrough
-        run: node demo.mjs
-      - name: Install P1 MCP client
-        run: npm ci --ignore-scripts --no-audit --no-fund --prefix p1
-      - name: Offline P1 protocol and provider tests
-        run: node --test p1/test/*.test.mjs
-      - name: Offline cloud disclosure, launcher and renderer tests
-        run: node --test p2/test/*.test.mjs
-      - name: Offline paired benchmark tests
-        run: node --test p4/test/*.test.mjs
-      - name: Offline free frontend contracts
-        run: node --test p5/test/contracts.test.mjs
-      - name: Install pinned host and pi dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund --prefix host
-      - name: Durable host, pi loop and trusted UI contracts
-        run: node --test host/test/*.test.mjs
-      - name: Independent harness contracts and scoring
-        run: node --test eval/test/*.test.mjs
-      - name: Independent data verification regression
-        run: node eval/data-validation.mjs "$RUNNER_TEMP/data-verification-eval"
-      - name: Install pinned behavior compiler
-        run: npm install --global @warble/cli@0.21.1 --no-audit --no-fund
-      - name: Verify generated Warble behavior artifact
-        run: node behaviors/compile.mjs --check
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Fixture script syntax
-        run: python -m py_compile p1/prepare.py
-      - name: Install pinned Wren release
-        run: python -m pip install -r p1/requirements.txt
-      - name: Released SQL parser compatibility
-        run: python p1/test/release_compat.py
+      - name: Dependency-free worker handoff
+        run: node collaboration/check.mjs worker-contracts "$RUNNER_TEMP/worker-contracts"
+      - name: Install locked client, host and compiler
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund --prefix p1
+          npm ci --ignore-scripts --no-audit --no-fund --prefix host
+          npm ci --no-audit --no-fund --prefix collaboration/runtime
+      - name: Offline regressions and independent units
+        run: node collaboration/check.mjs offline "$RUNNER_TEMP/offline"
+      - name: Verify generated Warble behavior
+        env:
+          WARBLE_BIN: ./collaboration/runtime/node_modules/.bin/warble
+        run: node collaboration/check.mjs behaviors "$RUNNER_TEMP/behaviors"
+      - name: Produce tracked source handoff without run artifacts
+        run: node collaboration/package.mjs "$RUNNER_TEMP/source-package"
 
   isolated-browser:
     runs-on: macos-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: examples/private-first-planner
@@ -66,18 +52,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm ci --ignore-scripts --no-audit --no-fund --prefix p5
-      - run: npm ci --ignore-scripts --no-audit --no-fund --prefix host
-      - run: p5/node_modules/.bin/playwright install chromium
-      - name: Browser data binding, isolation and watchdog
-        run: node --test p5/test/browser.test.mjs
-      - name: Host repair and isolated viewer
-        run: node --test host/browser.test.mjs
-      - name: Independent cloud harness with real browser QA
-        run: node eval/run.mjs cloud-planner "$RUNNER_TEMP/cloud-unit-eval" --browser
+      - name: Install locked browser and host clients
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund --prefix p1
+          npm ci --ignore-scripts --no-audit --no-fund --prefix p5
+          npm ci --ignore-scripts --no-audit --no-fund --prefix host
+          p5/node_modules/.bin/playwright install chromium
+      - name: Actual isolated browser, host repair and cloud unit
+        run: node collaboration/check.mjs browser "$RUNNER_TEMP/browser"
 
   worker-service:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: examples/private-first-planner
@@ -92,25 +78,22 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build context loader
         run: cargo build --locked --release --manifest-path ../../core/wren-context-loader/Cargo.toml
-      - name: Install pinned service and runtime
+      - name: Install pinned service and locked runtime
         run: |
-          python -m pip install -r p1/requirements.txt
+          python -m pip install -r p1/requirements.txt -c collaboration/python-constraints.txt
           npm ci --ignore-scripts --no-audit --no-fund --prefix p1
           npm ci --ignore-scripts --no-audit --no-fund --prefix host
-          npm install --prefix "$RUNNER_TEMP/harness-runtime" --no-audit --no-fund @warble/pi@0.21.1 @warble/cli@0.21.1
-      - name: Write explicit local runtime bindings
+          npm ci --no-audit --no-fund --prefix collaboration/runtime
+      - name: Validate explicit local worker bindings
         run: |
-          python - <<'PY'
-          import json, os, shutil, sys
-          from pathlib import Path
-          runtime = Path(os.environ['RUNNER_TEMP']) / 'harness-runtime/node_modules'
-          config = {'python': sys.executable, 'wren': shutil.which('wren'),
-                    'warble': str(runtime / '.bin/warble'),
-                    'runtime': str(runtime / '@warble/pi/dist/service.js'),
-                    'context_loader': str(Path('../../core/wren-context-loader/target/release/wren-context-loader').resolve())}
-          (Path(os.environ['RUNNER_TEMP']) / 'worker-config.json').write_text(json.dumps(config))
-          PY
-      - name: Real Wren service and database with scripted loopback model
-        run: node eval/run.mjs data-worker "$RUNNER_TEMP/worker-unit-eval" "$RUNNER_TEMP/worker-config.json"
+          node collaboration/configure-worker.mjs "$RUNNER_TEMP/worker-config.json" \
+            "$(command -v python)" "$(command -v wren)" \
+            collaboration/runtime/node_modules/.bin/warble \
+            collaboration/runtime/node_modules/@warble/pi/dist/service.js \
+            ../../core/wren-context-loader/target/release/wren-context-loader
+      - name: Released Python and parser compatibility
+        run: node collaboration/check.mjs python "$RUNNER_TEMP/python" "$RUNNER_TEMP/worker-config.json"
+      - name: Independent real worker with scripted model
+        run: node collaboration/check.mjs worker-service "$RUNNER_TEMP/worker" "$RUNNER_TEMP/worker-config.json"
       - name: Whole host through real Wren with scripted models
-        run: node host/verify.mjs "$RUNNER_TEMP/host-e2e" "$RUNNER_TEMP/worker-config.json"
+        run: node collaboration/check.mjs host-service "$RUNNER_TEMP/host" "$RUNNER_TEMP/worker-config.json"

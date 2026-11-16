@@ -1,5 +1,5 @@
 {
-  "name": "private-first-planner-p0",
+  "name": "private-first-reference",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,6 +13,11 @@
     "test:host": "node --test host/test/*.test.mjs",
     "host": "node host/run.mjs",
     "host:ui": "node host/tui.mjs",
-    "host:verify": "node host/verify.mjs"
+    "host:verify": "node host/verify.mjs",
+    "test:offline": "node collaboration/check.mjs offline",
+    "test:worker": "node collaboration/check.mjs worker-contracts",
+    "test:worker-service": "node collaboration/check.mjs worker-service",
+    "test:browser": "node collaboration/check.mjs browser",
+    "package:collaboration": "node collaboration/package.mjs"
   }
 }

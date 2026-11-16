@@ -1,0 +1,9 @@
+{
+  "name": "private-first-tools",
+  "private": true,
+  "version": "0.0.0",
+  "dependencies": {
+    "@warble/pi": "0.21.1",
+    "@warble/cli": "0.21.1"
+  }
+}

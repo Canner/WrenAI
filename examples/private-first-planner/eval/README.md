@@ -159,8 +159,9 @@ retains per-sample state, pass/fail and resource totals. Worker audit and captur
 private model requests stay in the adjacent service directory, with private file
 permissions; they must not be uploaded as public or cloud-judge input.
 
-This does not implement a durable application host, pi conversation UI, a general
-real-data export policy, automatic promotion, or a comprehensive held-out dataset.
+The durable application host and pi terminal are documented in [host/README.md](../host/README.md).
+This evaluation runner does not implement a general real-data export policy,
+automatic promotion, or a comprehensive held-out dataset.
 Live model quality baselines and independently reviewed visual scores still need
 their own runs. Existing P4/P5 artifacts remain the comparison baseline.
 
