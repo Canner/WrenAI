@@ -1,0 +1,6 @@
+profile: private-first-behaviors
+components:
+  - use: resolve_intent
+  - use: design_dashboard
+  - use: design_free_dashboard
+  - use: repair_dashboard

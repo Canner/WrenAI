@@ -1,0 +1,4 @@
+# The released service uses Scope.union_scopes, removed in SQLGlot 30.
+# Match wren-v0.18.0's uv.lock until a compatible Wren release is available.
+wrenai[mcp]==0.18.0
+sqlglot==29.0.1

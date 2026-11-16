@@ -1,0 +1,8 @@
+{
+  "name": "private-first-nemotron-evaluation",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.19" },
+  "dependencies": { "@modelcontextprotocol/sdk": "1.32.1" },
+  "scripts": { "test": "node --test test/*.test.mjs" }
+}

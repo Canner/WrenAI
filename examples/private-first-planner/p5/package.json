@@ -1,0 +1,15 @@
+{
+  "dependencies": {
+    "axe-core": "4.11.0",
+    "playwright": "1.61.1"
+  },
+  "name": "private-first-free-design",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

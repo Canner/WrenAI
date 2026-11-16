@@ -1,0 +1,15 @@
+{
+  "compiler": "warble 0.21.1",
+  "ir_sha256": "a0707138fb65c2275372477618906fad3e01504641c5c228c457296ce17d8bf7",
+  "sources": {
+    "components/design_dashboard/component.yml": "5a7834a297fdb0ccd71d3f12430b467c8997d72116ede5cefc74ca2e442412f3",
+    "components/design_dashboard/respond.md": "ea9b7fef00f4e88a247b33c4276db1e9b47ece77f9b83aeac443a095f4c749d8",
+    "components/design_free_dashboard/component.yml": "495bbf97953382e03068d2adc9a726d13d23a2d6d689edbbff2b74302aab0df1",
+    "components/design_free_dashboard/respond.md": "3357f1313e2232fea2f4740a66c8a38d41a7b6d35df19a888754590e04f4561f",
+    "components/repair_dashboard/component.yml": "116cc50e631ce03695728347b39288543f113ec006f9aa67ed1b5bc70c6a3feb",
+    "components/repair_dashboard/respond.md": "be1a93b45346d9863d22c613e749a226fc56e29441fa823021e8c0222768b1d4",
+    "components/resolve_intent/component.yml": "7ffac3e8bb8d7ddc995e89b20da6f9385d30847f572679ee667e1aeac7a5d101",
+    "components/resolve_intent/respond.md": "718fd318f665c1dfd1e5ee0a1a220823ca62923699c249d97802af41d11a759e",
+    "profile.yml": "e101edf1a61161d5415894b214ef95e09b4ad5a9402d7b2f050f2e9e44b38f10"
+  }
+}

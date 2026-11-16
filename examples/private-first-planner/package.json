@@ -1,0 +1,18 @@
+{
+  "name": "private-first-planner-p0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "demo": "node demo.mjs",
+    "test:harnesses": "node --test eval/test/*.test.mjs",
+    "eval:harness": "node eval/run.mjs",
+    "test:host": "node --test host/test/*.test.mjs",
+    "host": "node host/run.mjs",
+    "host:ui": "node host/tui.mjs",
+    "host:verify": "node host/verify.mjs"
+  }
+}

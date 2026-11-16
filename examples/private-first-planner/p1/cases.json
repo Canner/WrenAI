@@ -1,0 +1,27 @@
+[
+  {
+    "id": "explicit_revenue",
+    "question": "請依專案既有營收定義，計算 2026-01-01（含）到 2026-01-19（不含）、UTC 的總營收，只需要一個總數。",
+    "human_answers": [],
+    "expect": { "groups": 1, "planner_clarification": false, "grains": ["scalar"], "scalar": 770 }
+  },
+  {
+    "id": "ambiguous_intent",
+    "question": "幫我看看最近表現好不好。",
+    "human_answers": ["我只想看營收，依專案既有定義，期間是 2026-01-01（含）到 2026-01-19（不含）、UTC；先給總額即可，不需要比較或其他指標。"],
+    "expect": { "groups": 1, "planner_clarification": true, "grains": ["scalar"], "scalar": 770 }
+  },
+  {
+    "id": "explicit_status_scope",
+    "question": "請計算 2026-01-01（含）到 2026-01-19（不含）、UTC 的全部訂單數，包含 paid、shipped、cancelled、pending 四種狀態，但排除測試訂單。",
+    "human_answers": ["paid, shipped, cancelled, pending"],
+    "expect": { "groups": 1, "planner_clarification": false, "wren_clarification": true, "grains": ["scalar"], "scalar": 13 }
+  },
+  {
+    "id": "mixed_grain_plan",
+    "question": "請依專案既有營收定義，給我 2026-01-01（含）到 2026-01-19（不含）、UTC 的總營收，以及同期間每週營收趨勢（週一開始）。請分開呈現總額和週趨勢。",
+    "human_answers": [],
+    "expect": { "groups": 2, "planner_clarification": false, "grains": ["scalar", "week"], "scalar": 770,
+      "weekly": [["2025-12-29", 50], ["2026-01-05", 220], ["2026-01-12", 500]] }
+  }
+]

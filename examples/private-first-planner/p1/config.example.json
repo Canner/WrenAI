@@ -1,0 +1,27 @@
+{
+  "model": {
+    "id": "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "baseUrl": "https://integrate.api.nvidia.com/v1",
+    "credentialEnv": "NVIDIA_INFERENCE_API_KEY",
+    "maxTokens": 1536,
+    "timeoutMs": 45000
+  },
+  "service": {
+    "command": "/absolute/path/to/.venv/bin/wren",
+    "args": [
+      "serve", "agent",
+      "--project", "/absolute/path/to/fixture/project",
+      "--service-config", "/absolute/path/to/fixture/project/service.yml",
+      "--agent-profile", "/absolute/path/to/WrenAI/examples/private-first-planner/p1/profile",
+      "--runtime", "/absolute/path/to/runtime/node_modules/@warble/pi/dist/service.js",
+      "--warble", "/absolute/path/to/warble",
+      "--policy-preset", "full"
+    ],
+    "env": {
+      "WREN_HOME": "/absolute/path/to/isolated-wren-home",
+      "WREN_CONTEXT_LOADER_BIN": "/absolute/path/to/wren-context-loader"
+    },
+    "credentialEnv": "NVIDIA_INFERENCE_API_KEY",
+    "timeoutMs": 180000
+  }
+}

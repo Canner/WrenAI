@@ -1,0 +1,14 @@
+{
+  "name": "private-first-host",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "1.0.4",
+    "@earendil-works/pi-ai": "1.0.4",
+    "@earendil-works/pi-tui": "1.0.4",
+    "yaml": "2.8.1"
+  }
+}

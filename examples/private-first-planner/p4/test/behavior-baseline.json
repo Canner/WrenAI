@@ -1,0 +1,8 @@
+{
+  "note": "Pre-extraction model-facing contract fingerprints; no prompts duplicated here.",
+  "planner_prompt": "718fd318f665c1dfd1e5ee0a1a220823ca62923699c249d97802af41d11a759e",
+  "planner_tools": "f3f0ccc84774a86907cc2d6d1a70432992374abe6cb1782926836f2dc36833f8",
+  "design_prompt": "ea9b7fef00f4e88a247b33c4276db1e9b47ece77f9b83aeac443a095f4c749d8",
+  "design_schema": "04165f05e69d7d8c153f8cf5c7af744a31a05ffb18e8a911349a79f80b2ee5d6",
+  "private_design_prompt": "c143f6d4abb1567eaa6651cf9e9777dd32b380472165b3d4a108317555125689"
+}
