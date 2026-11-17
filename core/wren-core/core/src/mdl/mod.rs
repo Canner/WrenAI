@@ -5482,6 +5482,67 @@ mod test {
         Ok(())
     }
 
+    /// Verify that a TO_MANY calculation on a model with a composite primary key
+    /// still groups by and joins back on EVERY primary key column when the
+    /// relationship condition only covers part of the key.
+    #[tokio::test]
+    async fn test_composite_key_calculation_partial_relationship_key() -> Result<()> {
+        let ctx = create_wren_ctx(None, None);
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("part")
+                    .table_reference("part")
+                    .column(ColumnBuilder::new("p_partkey", "int").build())
+                    .column(ColumnBuilder::new("p_suppkey", "int").build())
+                    .column(
+                        ColumnBuilder::new_relationship(
+                            "partsupp",
+                            "partsupp",
+                            "part_partsupp",
+                        )
+                        .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_calculated("total_availqty", "int")
+                            .expression("sum(partsupp.ps_availqty)")
+                            .build(),
+                    )
+                    .primary_keys(&["p_partkey", "p_suppkey"])
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("partsupp")
+                    .table_reference("partsupp")
+                    .column(ColumnBuilder::new("ps_partkey", "int").build())
+                    .column(ColumnBuilder::new("ps_suppkey", "int").build())
+                    .column(ColumnBuilder::new("ps_availqty", "int").build())
+                    .primary_keys(&["ps_partkey", "ps_suppkey"])
+                    .build(),
+            )
+            .relationship(
+                RelationshipBuilder::new("part_partsupp")
+                    .model("part")
+                    .model("partsupp")
+                    .join_type(JoinType::OneToMany)
+                    .condition("part.p_partkey = partsupp.ps_partkey")
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let sql = "SELECT total_availqty FROM part";
+        assert_snapshot!(
+            transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], Arc::new(HashMap::default()), sql).await?,
+            @r#"SELECT "part".total_availqty FROM (SELECT __relation__1.total_availqty FROM (SELECT total_availqty.p_partkey, total_availqty.p_suppkey, total_availqty.total_availqty FROM (SELECT __relation__1.p_partkey AS p_partkey, __relation__1.p_suppkey AS p_suppkey, sum(CAST(__relation__1.ps_availqty AS BIGINT)) AS total_availqty FROM (SELECT "part".p_partkey, "part".p_suppkey, partsupp.ps_availqty, partsupp.ps_partkey FROM (SELECT partsupp.ps_availqty, partsupp.ps_partkey FROM (SELECT partsupp.ps_availqty, partsupp.ps_partkey FROM (SELECT __source.ps_availqty AS ps_availqty, __source.ps_partkey AS ps_partkey FROM partsupp AS __source) AS partsupp) AS partsupp) AS partsupp RIGHT OUTER JOIN (SELECT __source.p_partkey AS p_partkey, __source.p_suppkey AS p_suppkey FROM "part" AS __source) AS "part" ON partsupp.ps_partkey = "part".p_partkey) AS __relation__1 GROUP BY __relation__1.p_partkey, __relation__1.p_suppkey) AS total_availqty RIGHT OUTER JOIN (SELECT __source.p_partkey AS p_partkey, __source.p_suppkey AS p_suppkey FROM "part" AS __source) AS "part" ON total_availqty.p_partkey = "part".p_partkey AND total_availqty.p_suppkey = "part".p_suppkey) AS __relation__1) AS "part""#
+        );
+        Ok(())
+    }
+
     /// Contract tests for `apply_wren_on_ctx`'s catalog isolation: each call
     /// builds its catalog on a private catalog-list snapshot, so the base
     /// context and any other concurrent call against the same base context
