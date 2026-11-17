@@ -79,13 +79,15 @@ def type_window_values(ast: exp.Expression, schema: Schema) -> None:
     untyped, as does every value when a referenced column's type string doesn't
     parse; an untyped value keeps ``toNullable``.
     """
-    values = [fn.this for fn in ast.find_all(exp.Lag, exp.Lead)]
-    if not values:
+    fns = list(ast.find_all(exp.Lag, exp.Lead))
+    if not fns:
         return
     # Paired by tag, not position: qualify_columns expands alias and positional
     # references (``QUALIFY v ...``, ``GROUP BY 1``), which copies LAG nodes.
-    for i, value in enumerate(values):
-        value.meta[_VALUE_TAG] = i
+    # The tag sits on the LAG itself because qualify_columns may replace its
+    # value (``JOIN ... USING (id)`` turns ``id`` into a COALESCE).
+    for i, fn in enumerate(fns):
+        fn.meta[_VALUE_TAG] = i
     try:
         typed = annotate_types(
             qualify_columns(
@@ -100,10 +102,10 @@ def type_window_values(ast: exp.Expression, schema: Schema) -> None:
     except SqlglotError:
         return
     finally:
-        for value in values:
-            del value.meta[_VALUE_TAG]
-    for fn in typed.find_all(exp.Lag, exp.Lead):
-        values[fn.this.meta[_VALUE_TAG]].type = fn.this.type
+        for fn in fns:
+            del fn.meta[_VALUE_TAG]
+    for typed_fn in typed.find_all(exp.Lag, exp.Lead):
+        fns[typed_fn.meta[_VALUE_TAG]].this.type = typed_fn.this.type
 
 
 def translate(ast: exp.Expression) -> exp.Expression:

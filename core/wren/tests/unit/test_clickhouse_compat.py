@@ -219,6 +219,9 @@ class TestWindowFunctions:
             # ``events.tags`` is an Array; these read a scalar ``tags``.
             "SELECT id, LAG(tags) OVER (ORDER BY id) AS v FROM posts",
             "SELECT id, LAG(tags) OVER (ORDER BY id) AS v FROM archive",
+            # USING makes qualify_columns replace ``id`` with a COALESCE.
+            "SELECT LAG(id) OVER (ORDER BY events.id) AS v"
+            " FROM events JOIN posts USING (id)",
             "SELECT p.id, LAG(p.tags) OVER (ORDER BY p.id) AS v"
             " FROM posts AS p JOIN events AS e ON p.id = e.id",
         ],
