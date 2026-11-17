@@ -6,11 +6,11 @@ import { tmpdir } from 'node:os';
 
 // Generated code never runs in Node. This child only drives a network-denied
 // Chromium; a parent watchdog can kill its entire process group if JS hangs.
-export async function runQA(input,out,{timeoutMs=30_000,signal}={}) {
+export async function runQA(input,out,{timeoutMs=30_000,signal,entrypoint=new URL('./qa.mjs',import.meta.url)}={}) {
   signal?.throwIfAborted();
   const started=performance.now();let timedOut=false;
   const exit=await new Promise(resolve=>{
-    const child=spawn(process.execPath,[fileURLToPath(new URL('./qa.mjs',import.meta.url)),input,out],{
+    const child=spawn(process.execPath,[fileURLToPath(entrypoint),input,out],{
       detached:true,stdio:'ignore',env:{PATH:process.env.PATH,HOME:process.env.HOME,TMPDIR:tmpdir()},
     });
     const stop=()=>{timedOut=true;try{process.kill(-child.pid,'SIGKILL');}catch{}};

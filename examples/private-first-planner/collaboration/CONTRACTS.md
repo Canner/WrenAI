@@ -59,3 +59,14 @@ The revenue fixture oracle is deliberately scoped. It does not prove arbitrary
 SQL business correctness. Likewise visible chart marks do not certify every bar,
 axis, occlusion, aesthetic choice or accessibility requirement. Extend these
 contracts with explicit cases before claiming another data domain is supported.
+
+## Opt-in interactive synthetic dashboard
+
+`interactive-aggregates/1` and `interactive-dashboard-delivery/1` live in
+[`interactive/data.mjs`](../interactive/data.mjs); executable observation and admission
+are in [`interactive/qa.mjs`](../interactive/qa.mjs). The existing `frontend-code/1`
+output and host export authorization are reused. The new Warble components are
+`design_interactive_dashboard` and `repair_interactive_dashboard`. Native controls
+and semantic hooks describe observable behavior, not a fixed layout or renderer.
+The worker contract is unchanged. See [the laboratory guide](../interactive/README.md)
+for scope, aggregation semantics, standalone tests and known observation limits.

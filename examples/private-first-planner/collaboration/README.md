@@ -77,7 +77,8 @@ node collaboration/check.mjs browser /absolute/path/to/new-browser-run
 | --- | --- | --- |
 | worker-contracts | Node only | Actual worker session boundary, classification, failure and continuation behavior |
 | offline | `host/adapters` and `host` npm dependencies | All offline regressions, independent scripted planner/cloud suites |
-| behaviors | Pinned compiler | Checked-in IR/manifest matches Warble component sources |
+| behaviors | Pinned compiler | Checked-in revenue and interactive IR/manifests match component sources |
+| interactive | macOS, `design` dependencies, Chromium | Four synthetic dashboard cases, desktop/mobile journeys, changed data, negative probes and repair; no live models |
 | python | Pinned Wren Python environment | Released parser compatibility and fixture syntax |
 | worker-service | Pinned Wren/runtime/loader + `host/adapters` dependencies | Six worker cases through real Wren, SQL gate and DB, using only loopback scripted model |
 | host-service | Worker prerequisites + `host` dependencies | Four requests × three routes through the actual host; browser QA is scripted in this gate |
@@ -114,3 +115,8 @@ IDs, exact tool versions, new test summaries, failed cases, and model usage (if
 authorized). Share synthetic summaries by default. Private audit, local paths,
 tokens and real results need their own sharing approval; never upload them as a
 public CI artifact.
+
+The opt-in [interactive dashboard laboratory](../interactive/README.md) has a separate
+aggregate/interaction contract and scripted gate. It does not replace the existing
+pi/Wren route or reclassify previous model results. Run `interactive` alongside
+`browser`, `offline` and `behaviors` when changing interactive design/QA.

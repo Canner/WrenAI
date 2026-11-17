@@ -1,7 +1,7 @@
 // Bounded rendered-presence observation, not certification of chart semantics.
 export const chartContract = 'revenue-chart-presence/2';
-export async function inspectChart(frame, payload) {
-  return frame.evaluate(({ rows, contract }) => {
+export async function inspectChart(frame, payload, { marker = 'revenue_weekly', contract = chartContract, recover = true } = {}) {
+  return frame.evaluate(({ rows, contract, marker, recover }) => {
     const visible = el => {
       if (!el) return false;
       const r = el.getBoundingClientRect();
@@ -53,7 +53,7 @@ export async function inspectChart(frame, payload) {
       if (marks.length >= rows.length && rows.length > 0) return 'css';
       return null;
     };
-    const marked = [...document.querySelectorAll('[data-chart="revenue_weekly"]')];
+    const marked = [...document.querySelectorAll('[data-chart]')].filter(el => el.getAttribute('data-chart') === marker);
     if (marked.length === 1) {
       const kind = renderer(marked[0]);
       if (kind) return { contract, present: true, renderer: kind, marker: 'matched' };
@@ -61,11 +61,11 @@ export async function inspectChart(frame, payload) {
     // Recover only an unambiguous accessible weekly-revenue chart containing
     // the row labels. Never treat an arbitrary decorative SVG or colored card
     // elsewhere on the page as the required chart.
-    const recovered = [...document.querySelectorAll('[role="img"][aria-label]')].filter(el =>
+    const recovered = [...document.querySelectorAll('[role="img"][aria-label]')].filter(el => recover &&
       /weekly.*revenue|revenue.*week/i.test(el.getAttribute('aria-label'))
       && rows.every((_, i) => el.querySelector(`[data-week="${i}"]`) && el.querySelector(`[data-value="revenue_weekly:${i}"]`)))
       .map(el => ({ el, kind: renderer(el) })).filter(x => x.kind);
     if (recovered.length === 1) return { contract, present: true, renderer: recovered[0].kind, marker: 'fallback' };
     return { contract, present: false, renderer: null, marker: 'missing' };
-  }, { rows: payload.datasets[1].rows, contract: chartContract });
+  }, { rows: payload.datasets[1].rows, contract, marker, recover });
 }

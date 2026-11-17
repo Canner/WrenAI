@@ -1,0 +1,4 @@
+profile: interactive-dashboard
+components:
+  - use: design_interactive_dashboard
+  - use: repair_interactive_dashboard

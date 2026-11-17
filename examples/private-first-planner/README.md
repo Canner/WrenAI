@@ -8,6 +8,10 @@ approval, routing, budgets, and delivery; model output never grants authority.
 Start with the [collaboration guide](collaboration/README.md). Data-worker owners
 can go directly to the [independent handoff](collaboration/DATA-WORKER.md).
 
+An opt-in [interactive dashboard laboratory](interactive/README.md) adds KPI cards,
+filters, dimension switching, drill-down/roll-up and reset over synthetic aggregates.
+It preserves free frontend generation and has an independent offline browser gate.
+
 ## Quick contract check
 
 From this example directory, with Node 22 or newer:

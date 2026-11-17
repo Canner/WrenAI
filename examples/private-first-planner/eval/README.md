@@ -171,3 +171,11 @@ Live model quality baselines and independently reviewed visual scores still need
 their own runs. Previously recorded artifacts remain outside this source package as comparison baselines.
 
 For worker evidence classification, historical regression and isolated live worker runs, see [data verification](../host/DATA-VALIDATION.md). The worker v2 contract carries an explicit requested period and returns verification independently of execution completion.
+
+## Interactive dashboard cases
+
+The [interactive laboratory](../interactive/README.md) is an independent synthetic
+design harness, outside the old revenue benchmark denominator. Run
+`node collaboration/check.mjs interactive NEW_OUTPUT` for browser journeys and
+failure/repair probes. Current runs use a fake designer and make no quality claim
+about live providers. Old results and four-case inputs remain untouched.

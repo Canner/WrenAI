@@ -61,6 +61,9 @@ jobs:
       - name: Actual isolated browser, host repair and cloud unit
         run: node collaboration/check.mjs browser "$RUNNER_TEMP/browser"
 
+      - name: Interactive aggregate dashboard journeys and failure probes
+        run: node collaboration/check.mjs interactive "$RUNNER_TEMP/interactive"
+
   worker-service:
     runs-on: ubuntu-latest
     timeout-minutes: 30

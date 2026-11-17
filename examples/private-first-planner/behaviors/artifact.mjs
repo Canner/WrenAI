@@ -23,8 +23,9 @@ export function sourceHashes(root) {
 
 // A deliberately narrow consumer of the public IR contract, not a general Warble dispatcher.
 // New instructions are allowed; unsupported execution semantics must fail, not disappear.
-export function admitBehaviors(ir) {
-  const bindings = [['resolve_intent', 'cheap'], ['design_free_dashboard', 'strong'], ['repair_dashboard', 'strong']];
+export const defaultBehaviorContract = Object.freeze({ profile: 'private-first-behaviors',
+  bindings: [['resolve_intent', 'cheap'], ['design_free_dashboard', 'strong'], ['repair_dashboard', 'strong']] });
+export function admitBehaviors(ir, { bindings, profile } = defaultBehaviorContract) {
   const expected = {
     components: bindings.map(([id, tier]) => {
       const prompt = ir?.components?.find(c => c.id === id)?.llm_calls?.[0]?.prompt;
@@ -38,18 +39,18 @@ export function admitBehaviors(ir) {
         realization_kind: 'skill', required_capabilities: [`llm:${tier}`], trigger: { kind: 'one_shot' }, type: 'analytical', verb: id,
       };
     }),
-    config: {}, context_binding: null, profile: 'private-first-behaviors', warble_ir_version: '0.9',
+    config: {}, context_binding: null, profile, warble_ir_version: '0.9',
   };
   check(isDeepStrictEqual(ir, expected));
   return immutable(Object.fromEntries(ir.components.map(c => [c.id, { tier: c.llm_calls[0].tier, prompt: c.llm_calls[0].prompt }])));
 }
 
-export function loadBehaviors(root) {
+export function loadBehaviors(root, contract = defaultBehaviorContract) {
   const bytes = readFileSync(join(root, 'compiled/ir.json'));
   const manifest = JSON.parse(readFileSync(join(root, 'compiled/manifest.json'), 'utf8'));
   if (manifest.compiler !== compilerVersion || manifest.ir_sha256 !== sha256(bytes)
       || !isDeepStrictEqual(manifest.sources, sourceHashes(join(root, 'profile')))) {
     throw Error('stale_behavior_artifact: regenerate with behaviors/compile.mjs');
   }
-  return immutable({ components: admitBehaviors(JSON.parse(bytes)), provenance: manifest });
+  return immutable({ components: admitBehaviors(JSON.parse(bytes), contract), provenance: manifest });
 }
