@@ -377,6 +377,126 @@ class TestUnresolvedModelColumns:
         assert f"Whole-row reference '{alias}'" in exc.value.message
         assert "explicit model columns" in exc.value.message
 
+    @pytest.mark.parametrize("data_source", [DataSource.duckdb, DataSource.spark])
+    @pytest.mark.parametrize("join", ["SEMI", "ANTI", "LEFT SEMI", "LEFT ANTI"])
+    @pytest.mark.parametrize("aliased", [False, True])
+    def test_model_semi_anti_join_suggests_qualification(
+        self, manifest, data_source, join, aliased
+    ):
+        """Name the available join column and execute the suggested DuckDB fix."""
+        sources = (
+            "orders o {join} JOIN customer c"
+            if aliased
+            else ("orders {join} JOIN customer")
+        )
+        sql = (
+            f"SELECT o_orderkey FROM {sources.format(join=join)} "
+            "ON o_custkey = c_custkey ORDER BY o_orderkey"
+        )
+        qualified = "c.c_custkey" if aliased else "customer.c_custkey"
+        with WrenEngine(_b64(manifest), data_source, {}) as engine:
+            with pytest.raises(WrenError) as exc:
+                engine.dry_plan(sql)
+            assert exc.value.error_code == ErrorCode.INVALID_SQL
+            assert exc.value.phase == ErrorPhase.SQL_PLANNING
+            assert "exists in an MDL model source" in exc.value.message
+            assert f"Qualify it as {qualified}." in exc.value.message
+            rewritten = engine.dry_plan(sql.replace("= c_custkey", f"= {qualified}"))
+
+        if data_source == DataSource.duckdb:
+            with duckdb.connect() as connection:
+                connection.execute(
+                    "CREATE TABLE raw_orders (o_orderkey INTEGER, o_custkey INTEGER); "
+                    "INSERT INTO raw_orders VALUES (1, 10), (2, 20), (3, 30); "
+                    "CREATE TABLE raw_customer (c_custkey INTEGER); "
+                    "INSERT INTO raw_customer VALUES (10), (20)"
+                )
+                expected = [(3,)] if "ANTI" in join else [(1,), (2,)]
+                assert connection.execute(rewritten).fetchall() == expected
+        else:
+            ast = sqlglot.parse_one(rewritten, dialect="spark")
+            assert any(
+                column.name == "c_custkey"
+                and column.table == qualified.split(".", 1)[0]
+                for column in ast.find_all(sqlglot.exp.Column)
+            )
+
+    def test_join_suggestion_preserves_quoted_alias(self, manifest):
+        """Keep SQL quoting on aliases and the user's column spelling in the error."""
+        sql = (
+            'SELECT o_orderkey FROM orders o SEMI JOIN customer "Customer Alias" '
+            "ON o.o_custkey = C_Custkey"
+        )
+        with WrenEngine(_b64(manifest), DataSource.postgres, {}) as engine:
+            with pytest.raises(WrenError) as exc:
+                engine.dry_plan(sql)
+            assert "Column 'C_Custkey' exists" in exc.value.message
+            assert 'Qualify it as "Customer Alias".c_custkey.' in exc.value.message
+            engine.dry_plan(sql.replace("C_Custkey", '"Customer Alias".c_custkey'))
+
+    @pytest.mark.parametrize("join", ["SEMI", "ANTI"])
+    def test_hidden_join_column_has_no_qualification_suggestion(self, manifest, join):
+        """Do not advertise hidden fields from SEMI/ANTI JOIN sources."""
+        manifest["models"][1]["columns"].append(
+            {"name": "c_secret", "type": "integer", "isHidden": True}
+        )
+        with WrenEngine(_b64(manifest), DataSource.duckdb, {}) as engine:
+            with pytest.raises(WrenError) as exc:
+                engine.dry_plan(
+                    f"SELECT o_orderkey FROM orders {join} JOIN customer "
+                    "ON o_custkey = c_secret"
+                )
+        assert exc.value.message == (
+            "Column 'c_secret' could not be resolved in MDL model sources."
+        )
+
+    @pytest.mark.parametrize("data_source", [DataSource.duckdb, DataSource.postgres])
+    def test_ambiguous_model_column_names_candidate_aliases(
+        self, manifest, data_source
+    ):
+        """Distinguish ambiguity from a missing column and use actual query aliases."""
+        sql = (
+            "SELECT o_orderkey FROM orders o "
+            "JOIN customer c ON o.o_custkey = c.c_custkey "
+            "JOIN orders o2 USING (o_custkey)"
+        )
+        with WrenEngine(_b64(manifest), data_source, {}) as engine:
+            with pytest.raises(WrenError) as exc:
+                engine.dry_plan(sql)
+            assert exc.value.error_code == ErrorCode.INVALID_SQL
+            assert exc.value.phase == ErrorPhase.SQL_PLANNING
+            assert "Column 'o_orderkey' is ambiguous" in exc.value.message
+            assert "o.o_orderkey" in exc.value.message
+            assert "o2.o_orderkey" in exc.value.message
+            assert "could not be resolved" not in exc.value.message
+            assert "SELECT o.o_orderkey" in engine.dry_plan(
+                sql.replace("SELECT o_orderkey", "SELECT o.o_orderkey")
+            )
+
+    def test_case_sensitive_ambiguity_preserves_identifier_quoting(self):
+        """Suggested references preserve the exact case of case-distinct columns."""
+        rw = _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.postgres)
+        with pytest.raises(WrenError) as exc:
+            rw.rewrite(
+                'WITH unused AS (SELECT 1 AS x) SELECT "Year" '
+                'FROM clash a JOIN clash b ON a."year" = b."year"'
+            )
+        assert "is ambiguous" in exc.value.message
+        assert 'a."Year"' in exc.value.message
+        assert 'b."Year"' in exc.value.message
+
+    @pytest.mark.parametrize("column", ["secret", "definitely_missing", "c_custkey"])
+    def test_missing_or_hidden_column_has_no_qualification_suggestion(
+        self, manifest, column
+    ):
+        """Hidden columns and columns outside this scope never become suggestions."""
+        with WrenEngine(_b64(manifest), DataSource.duckdb, {}) as engine:
+            with pytest.raises(WrenError) as exc:
+                engine.dry_plan(f"SELECT {column} FROM orders")
+        assert exc.value.message == (
+            f"Column '{column}' could not be resolved in MDL model sources."
+        )
+
     @pytest.mark.parametrize(
         ("sql", "expected"),
         [

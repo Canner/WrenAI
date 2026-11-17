@@ -76,7 +76,8 @@ wren dry-plan --sql "SELECT o_custkey, SUM(o_totalprice) FROM orders GROUP BY 1"
 |-----------------|---------|-----|
 | **Succeeds** | SQL expansion completed; references outside known MDL schemas may still be unresolved | Inspect the expanded SQL, then use `wren dry-run --sql "SELECT ..."` to validate it against the database |
 | **Fails** with "No model references found" | Your FROM clause doesn't match any MDL model name | Check model names: `wren memory fetch -q "<name>" --type model --threshold 0` |
-| **Fails** with column error | A column you referenced doesn't exist in the model | Check columns: `wren memory fetch -q "<col>" --model <name> --threshold 0` |
+| **Fails** with missing-column error | A column you referenced is absent from the visible model schema | Check columns: `wren memory fetch -q "<col>" --model <name> --threshold 0` |
+| **Fails** with "exists in an MDL model source" or "is ambiguous" | The column exists, but needs an explicit source qualifier (including SEMI/ANTI JOIN inputs) | Use the suggested `alias.column` reference; when a table has an alias, use that alias |
 | **Fails** with qualify error | sqlglot can't resolve an ambiguous or unknown column | Qualify the column explicitly: `model_name.column_name` |
 
 ### Step 3 — Compare dry-plan output with DB error
@@ -84,6 +85,8 @@ wren dry-plan --sql "SELECT o_custkey, SUM(o_totalprice) FROM orders GROUP BY 1"
 - **Checked offline:** Unresolved unqualified columns are rejected when a SELECT's sources and the sources in every enclosing scope that can supply correlated columns are all MDL models. This includes scalar subqueries that reference those models. Whole-row model references such as `SELECT o FROM orders o` are unsupported; select explicit model columns instead.
 - **Needs `dry-run`:** Scopes containing raw tables, user CTEs, derived tables, or `UNNEST` retain partial qualification. Validate these references, correlated references to such outer sources, and underlying physical objects against the database.
 - **Needs execution:** A successful `dry-run` does not establish business correctness. Execute the query and inspect the results before storing it as verified SQL.
+
+Oracle pseudocolumn recognition is not exhaustive; `ORA_ROWSCN` is not currently included.
 
 When execution fails but dry-plan succeeds, compare them side by side:
 

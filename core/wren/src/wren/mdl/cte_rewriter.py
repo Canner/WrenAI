@@ -614,8 +614,8 @@ class CTERewriter:
             {},
         )
 
-    @staticmethod
     def _validate_model_columns(
+        self,
         ast: exp.Expression,
         scope_aliases: dict[int, dict[str, str]],
         original_names: dict[int, str],
@@ -637,6 +637,9 @@ class CTERewriter:
 
             current = scope
             model_aliases: set[str] = set()
+            column = columns[0]
+            name = original_names.get(id(column.this), column.name)
+            candidates: list[str] = []
             while True:
                 aliases = scope_aliases[id(current.expression)]
                 # references includes SEMI/ANTI JOIN sources, which are omitted
@@ -648,17 +651,41 @@ class CTERewriter:
                 ):
                     break
                 model_aliases.update(alias.lower() for alias, _ in current.references)
+                # Use the nearest matching scope and the same visible schema
+                # as qualification. SEMI/ANTI inputs can leave existing columns
+                # unqualified; multiple matches instead indicate ambiguity.
+                if not candidates:
+                    for alias, _ in current.references:
+                        source = current.sources[alias]
+                        if column.name in self.schema.column_names(source):
+                            candidates.append(
+                                exp.Column(
+                                    this=column.this.copy(),
+                                    table=source.args["alias"].this.copy(),
+                                ).sql(dialect=self.dialect)
+                            )
                 if not current.can_be_correlated or current.parent is None:
                     # A FROM-less scalar subquery can bind to an MDL parent,
                     # but a standalone scalar query has no model to validate.
                     if not model_aliases:
                         break
-                    column = columns[0]
-                    name = original_names.get(id(column.this), column.name)
-                    if column.name.lower() in model_aliases:
+                    if isinstance(column, exp.TableColumn) or (
+                        column.name.lower() in model_aliases and not candidates
+                    ):
                         message = (
                             f"Whole-row reference '{name}' to an MDL model is not "
                             "supported; select explicit model columns instead."
+                        )
+                    elif len(candidates) > 1:
+                        message = (
+                            f"Column '{name}' is ambiguous across MDL model sources. "
+                            f"Qualify it as one of: {', '.join(candidates)}."
+                        )
+                    elif candidates:
+                        message = (
+                            f"Column '{name}' exists in an MDL model source but "
+                            "could not be resolved without a qualifier. "
+                            f"Qualify it as {candidates[0]}."
                         )
                     else:
                         message = (
