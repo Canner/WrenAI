@@ -5,14 +5,14 @@ Each run records a component-specific release fingerprint, execution binding,
 case/oracle fingerprints, attempts, outcome, scores, and resource measurements.
 An existing output directory is never overwritten.
 
-This first implementation ships **scripted contract suites**, not a new model
+The CLI ships **scripted contract suites**, not a new model
 quality benchmark. Synthetic token counts are explicitly associated with
 `mode: scripted`; cost remains unknown. The data-worker suite does execute the
 real Wren service, pi runtime, query gate, and isolated synthetic database.
 
 ## Run one unit
 
-From this example's directory, with Node 22 or newer and the existing `p1`
+From this example's directory, with Node 22 or newer and the existing `worker`
 dependencies installed:
 
 ```sh
@@ -28,13 +28,13 @@ not read real provider credentials, use an existing database, or require the
 conversation planner/cloud designer. Every worker case gets a fresh project,
 database, service, session, and HOME/WREN_HOME.
 
-The optional browser path uses the existing P5 isolated browser and its watchdog:
+The optional browser path uses the isolated design browser and its watchdog:
 
 ```sh
 node eval/run.mjs cloud-planner /absolute/path/to/new-cloud-browser-run --browser
 ```
 
-This requires the `p5` dependencies and Chromium already installed, and the
+This requires the `design` dependencies and Chromium already installed, and the
 current browser implementation requires macOS. Without `--browser`, generated
 code is admitted but not executed; `quality_measured` is false. A successful code
 contract is never presented as a passing browser/design quality score.
@@ -61,12 +61,13 @@ explicit prerequisite; the evaluator never builds or downloads missing tools.
 
 | Unit | Executed code | Isolation |
 | --- | --- | --- |
-| `private-planner` | `harnesses/planner.mjs`, existing Nemotron transport, compiled `resolve_intent`, P4 intent parser | Fixed capabilities and scripted user replies; no Wren/cloud tools |
-| `data-worker` | `harnesses/worker.mjs`, P1 MCP client, real `serve agent`, worker profile and private runtime | Fresh synthetic DB and loopback model; no conversation planner or cloud |
-| `cloud-planner` | P5 `generateCode`, fixture broker, code admission, optional P5 browser QA | Pre-authorized synthetic aggregate; no planner or DB query |
+| `private-planner` | `harnesses/planner.mjs`, existing Nemotron transport, compiled `resolve_intent`, intent parser | Fixed capabilities and scripted user replies; no Wren/cloud tools |
+| `data-worker` | `harnesses/worker.mjs`, worker MCP client, real `serve agent`, worker profile and private runtime | Fresh synthetic DB and loopback model; no conversation planner or cloud |
+| `cloud-planner` | `design/design.mjs:generateCode`, fixture broker, code admission, optional isolated browser QA | Pre-authorized synthetic aggregate; no planner or DB query |
 
-`PrivateSession` now uses the same planner and worker request/evidence helpers.
-The P5 end-to-end host and isolated cloud evaluator both use `generateCode`.
+The current application host and isolated cloud evaluator both use `generateCode`.
+Use `host/eval.mjs:piPlannerUnit` for the production embedded pi executor; the
+CLI planner suite uses the isolated transport with the same intent contract.
 There is no second copy of prompts under `eval/`; they remain in Warble components.
 
 The worker's private root-to-leaf delegation is part of the worker harness. Its
@@ -103,7 +104,7 @@ summary; do not reuse that directory or interpret it as complete.
    below. The CLI intentionally has no implicit live-mode switch or credential
    discovery. Fake results establish execution correctness, not prompt quality.
 5. Compare per-case quality, failures, time and cost under a preregistered protocol;
-   then rerun the P4/P5 integration protocol before adopting a release pin.
+   then rerun the four-case host integration protocol before adopting a release pin.
 
 `releaseFor(id)` hashes the selected compiled behavior and its host dependencies.
 A cloud prompt change does not change the private-planner or worker fingerprint.
@@ -163,6 +164,6 @@ The durable application host and pi terminal are documented in [host/README.md](
 This evaluation runner does not implement a general real-data export policy,
 automatic promotion, or a comprehensive held-out dataset.
 Live model quality baselines and independently reviewed visual scores still need
-their own runs. Existing P4/P5 artifacts remain the comparison baseline.
+their own runs. Previously recorded artifacts remain outside this source package as comparison baselines.
 
 For worker evidence classification, historical regression and isolated live worker runs, see [data verification](../host/DATA-VALIDATION.md). The worker v2 contract carries an explicit requested period and returns verification independently of execution completion.

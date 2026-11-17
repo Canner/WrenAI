@@ -73,5 +73,5 @@ oracle and requires `validation.status=verified` for a verified success. The hos
 repair loop is evaluated separately. Every model attempt, latency, evidence,
 release/binding identity and unknown cost is retained. A null temperature means the runtime omits that parameter and uses the provider default. Provider credentials come
 only from the configured environment variable. Existing output directories are
-never reused. These four samples are a targeted regression, not a new P4 cohort
+never reused. These four samples are a targeted regression, not a new host benchmark cohort
 or a claim that an intermittent provider/evidence issue cannot recur.

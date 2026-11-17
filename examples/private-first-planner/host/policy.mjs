@@ -1,5 +1,5 @@
 import { assessData, dataAssessment } from '../harnesses/data-validation.mjs';
-import { fixturePayload, projectFixture } from '../p2/broker.mjs';
+import { fixturePayload, projectFixture } from './fixture.mjs';
 import { immutable, requireThat } from '../contracts.mjs';
 
 // Domain adapters are explicit trusted deployment inputs. No default inference

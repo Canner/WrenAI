@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { digest, immutable, requireThat } from '../contracts.mjs';
-import { validateResultGrain } from '../p1/retrieval.mjs';
+import { validateResultGrain } from '../worker/retrieval.mjs';
 import { assessData } from './data-validation.mjs';
 
 export async function requestWorker({ call, operation = 'ask_data', request }) {

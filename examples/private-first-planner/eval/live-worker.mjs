@@ -2,14 +2,14 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { connectWren } from '../p1/mcp.mjs';
-import { retrievalQuestion } from '../p1/retrieval.mjs';
+import { connectWren } from '../worker/mcp.mjs';
+import { retrievalQuestion } from '../worker/retrieval.mjs';
 import { prepareServiceConfig } from '../host/runtime.mjs';
 import { checkWorkerEnvironment } from './worker-service.mjs';
 import { workerUnit } from './units.mjs';
 import { scoreWorker } from './scorers.mjs';
 import { runSuite } from './runner.mjs';
-import { verifyFiles } from '../p2/run.mjs';
+import { verifyFiles } from '../eval/files.mjs';
 import { requireThat } from '../contracts.mjs';
 
 // Deliberately excludes planner and cloud. Four independently opened sessions;

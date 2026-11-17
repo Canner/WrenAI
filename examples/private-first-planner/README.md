@@ -41,16 +41,23 @@ that request. Generated code runs only in the documented macOS isolation path;
 other platforms fail closed for browser execution. The private-only route in the
 current host delivers an inert table, not a Nemotron-generated frontend.
 
-## Earlier experiments
+## Source layout
 
-The [P0 fake controller](collaboration/P0.md), [P1 live Wren integration](p1/README.md),
-[P2 cloud adapter](p2/README.md), [P4 constrained-design comparison](p4/README.md),
-and [P5 free-design comparison](p5/README.md) remain available to reproduce their
-own protocols. They are not interchangeable scoring regimes. Live runners are
-explicit opt-in, can incur charges, and are never invoked by collaboration CI.
-Historical generated dashboards, provider requests and private audit logs are
-not part of this source package; preserve them separately with their original
-source/config hashes. Do not overwrite or replace failed samples.
+| Directory | Responsibility |
+| --- | --- |
+| `planner/` | Intent admission and the isolated planner transport |
+| `worker/` | Wren MCP client, query constraints, private profile and fixture setup |
+| `design/` | Claude transport, free frontend contracts and isolated browser QA |
+| `host/` | Application state, embedded pi, policy, routing, export and delivery |
+| `behaviors/` | Current Warble intent, free design and repair components |
+| `harnesses/` | Shared execution boundaries and release fingerprints |
+| `eval/` | Independent suites, shared four-case scenarios and scorers |
+| `collaboration/` | Handoff, pinned dependencies, gates and source packaging |
+
+`host/run.mjs` is the application entry; `host/live-benchmark.mjs` evaluates the
+same application across three routes. Live runs are explicit opt-in and can
+incur charges. CI uses scripted providers only. Generated artifacts, historical
+experiments and private audit logs are kept outside this source package.
 
 ## Scope
 

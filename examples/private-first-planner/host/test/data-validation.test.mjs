@@ -9,7 +9,7 @@ import { Store } from '../store.mjs';
 import { scriptedPorts } from '../scripted.mjs';
 import { artifactPorts } from '../artifacts.mjs';
 import { viewState, uiCommand } from '../tui.mjs';
-import { cases } from '../../p4/protocol.mjs';
+import { cases } from '../../eval/scenarios.mjs';
 import { evidenceCase, validationCases, validationUnit, scoreValidation, period } from '../../eval/data-validation.mjs';
 import { assessData, combineData } from '../../harnesses/data-validation.mjs';
 import { assessFixtureData, fixturePolicy } from '../policy.mjs';

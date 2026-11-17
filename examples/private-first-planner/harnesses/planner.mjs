@@ -1,4 +1,4 @@
-import { parsePlanDecision } from '../p1/planning.mjs';
+import { parsePlanDecision } from '../planner/plan.mjs';
 
 // Shared by the conversation host and the isolated planner evaluator. A model
 // proposes a decision; only the host parser can admit it as an executable plan.

@@ -1,5 +1,5 @@
 import { plannerUnit } from '../eval/units.mjs';
-import { plannerContract } from '../p4/intent-planning.mjs';
+import { plannerContract } from '../planner/intent.mjs';
 import { PiPlanner } from './pi.mjs';
 import { designWithRepair } from './cloud.mjs';
 

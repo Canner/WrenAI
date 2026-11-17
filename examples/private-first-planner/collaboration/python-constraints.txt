@@ -1,4 +1,4 @@
-# Python 3.11 service baseline; use with -r p1/requirements.txt.
+# Python 3.11 service baseline; use with -r worker/requirements.txt.
 # Version constraints, not wheel hashes or a cross-platform certification.
 annotated-doc==0.0.5
 annotated-types==0.8.0

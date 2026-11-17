@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { validateCode } from '../p5/contracts.mjs';
-import { isolatedBrowser, loadPreview } from '../p5/browser.mjs';
+import { validateCode } from '../design/contracts.mjs';
+import { isolatedBrowser, loadPreview } from '../design/browser.mjs';
 import { requireThat } from '../contracts.mjs';
 import { warningSummary } from './validation.mjs';
 

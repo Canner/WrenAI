@@ -29,7 +29,7 @@ jobs:
         run: node collaboration/check.mjs worker-contracts "$RUNNER_TEMP/worker-contracts"
       - name: Install locked client, host and compiler
         run: |
-          npm ci --ignore-scripts --no-audit --no-fund --prefix p1
+          npm ci --ignore-scripts --no-audit --no-fund --prefix worker
           npm ci --ignore-scripts --no-audit --no-fund --prefix host
           npm ci --no-audit --no-fund --prefix collaboration/runtime
       - name: Offline regressions and independent units
@@ -54,10 +54,10 @@ jobs:
           node-version: 22
       - name: Install locked browser and host clients
         run: |
-          npm ci --ignore-scripts --no-audit --no-fund --prefix p1
-          npm ci --ignore-scripts --no-audit --no-fund --prefix p5
+          npm ci --ignore-scripts --no-audit --no-fund --prefix worker
+          npm ci --ignore-scripts --no-audit --no-fund --prefix design
           npm ci --ignore-scripts --no-audit --no-fund --prefix host
-          p5/node_modules/.bin/playwright install chromium
+          design/node_modules/.bin/playwright install chromium
       - name: Actual isolated browser, host repair and cloud unit
         run: node collaboration/check.mjs browser "$RUNNER_TEMP/browser"
 
@@ -80,8 +80,8 @@ jobs:
         run: cargo build --locked --release --manifest-path ../../core/wren-context-loader/Cargo.toml
       - name: Install pinned service and locked runtime
         run: |
-          python -m pip install -r p1/requirements.txt -c collaboration/python-constraints.txt
-          npm ci --ignore-scripts --no-audit --no-fund --prefix p1
+          python -m pip install -r worker/requirements.txt -c collaboration/python-constraints.txt
+          npm ci --ignore-scripts --no-audit --no-fund --prefix worker
           npm ci --ignore-scripts --no-audit --no-fund --prefix host
           npm ci --no-audit --no-fund --prefix collaboration/runtime
       - name: Validate explicit local worker bindings

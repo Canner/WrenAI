@@ -4,7 +4,7 @@ import { WorkerSession } from '../harnesses/worker.mjs';
 import { assessFixtureData } from '../host/policy.mjs';
 import { runSuite } from './runner.mjs';
 import { scriptedBinding } from './scripted.mjs';
-import { snapshot } from '../p5/test/fixtures.mjs';
+import { snapshot } from '../design/test/fixtures.mjs';
 
 export const period = { lower: '2026-01-01', upper: '2026-01-19', timezone: 'UTC' };
 // Mutations are fault injection, not production prompts. No hidden expectation is

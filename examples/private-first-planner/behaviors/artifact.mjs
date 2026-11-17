@@ -24,7 +24,7 @@ export function sourceHashes(root) {
 // A deliberately narrow consumer of the public IR contract, not a general Warble dispatcher.
 // New instructions are allowed; unsupported execution semantics must fail, not disappear.
 export function admitBehaviors(ir) {
-  const bindings = [['resolve_intent', 'cheap'], ['design_dashboard', 'strong'], ['design_free_dashboard', 'strong'], ['repair_dashboard', 'strong']];
+  const bindings = [['resolve_intent', 'cheap'], ['design_free_dashboard', 'strong'], ['repair_dashboard', 'strong']];
   const expected = {
     components: bindings.map(([id, tier]) => {
       const prompt = ir?.components?.find(c => c.id === id)?.llm_calls?.[0]?.prompt;

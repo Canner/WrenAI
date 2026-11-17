@@ -9,7 +9,7 @@ supplementary. Output budgets, model bindings and disclosure boundaries are not
 changed by these instructions.
 
 The existing delivery policy is unchanged: small text and contrast uncertainty
-remain quality warnings. `p5/readability.mjs` adds advisory observations for the
+remain quality warnings. `design/readability.mjs` adds advisory observations for the
 seven semantic value/week labels: presence, computed font size (including SVG
 viewBox scale), horizontal text bounds, and a 14px target. This is separate from
 the existing 12px all-text warning and from strict contrast/readability results.

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { schedule, verifyCloudRequest } from '../live-benchmark.mjs';
-import { fixturePayload } from '../../p2/broker.mjs';
-import { briefs } from '../../p5/protocol.mjs';
+import { fixturePayload } from '../fixture.mjs';
+import { briefs } from '../../eval/scenarios.mjs';
 import { digest } from '../../contracts.mjs';
 
 test('live cohort preserves four cases twice in each route, without sharing private phases', () => {

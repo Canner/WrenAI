@@ -6,8 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs",
-    "demo": "node demo.mjs",
+    "test": "node --test planner/test/*.test.mjs worker/test/*.test.mjs behaviors/test/*.test.mjs host/test/*.test.mjs eval/test/*.test.mjs collaboration/test/*.test.mjs design/test/contracts.test.mjs design/test/claude.test.mjs",
     "test:harnesses": "node --test eval/test/*.test.mjs",
     "eval:harness": "node eval/run.mjs",
     "test:host": "node --test host/test/*.test.mjs",

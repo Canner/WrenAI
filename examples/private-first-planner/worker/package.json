@@ -1,0 +1,14 @@
+{
+  "name": "private-first-worker",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1"
+  },
+  "scripts": {
+    "test": "node ../collaboration/check.mjs worker-contracts"
+  }
+}

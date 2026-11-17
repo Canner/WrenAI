@@ -1,6 +1,6 @@
 // Delivery policy for the revenue fixture contract, not a generic visual judge.
 // Raw browser measurements and the historical strict score remain unchanged.
-import { chartContract } from '../p5/chart.mjs';
+import { chartContract } from '../design/chart.mjs';
 export const validationContract = 'revenue-dashboard-delivery/2';
 const viewports = [{ width: 1280, height: 900 }, { width: 390, height: 844 }];
 const dataChecks = ['values_pass', 'dates_pass', 'period_pass', 'chart_present', 'synthetic_label'];

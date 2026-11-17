@@ -1,6 +1,6 @@
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { randomUUID } from 'node:crypto';
-import { snapshot, code } from '../p5/test/fixtures.mjs';
+import { snapshot, code } from '../design/test/fixtures.mjs';
 import { immutable, requireThat } from '../contracts.mjs';
 import { PiPlanner, privateModel } from './pi.mjs';
 import { fixturePolicy } from './policy.mjs';

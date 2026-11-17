@@ -20,24 +20,24 @@ export async function stepsFor(gate, out, configPath) {
   if (!gates.includes(gate)) throw Error('unknown_gate');
   if (['worker-service', 'host-service', 'python'].includes(gate) && !configPath) throw Error('worker_config_required');
   if (!['worker-service', 'host-service', 'python'].includes(gate) && configPath) throw Error('unexpected_config');
-  const workerContracts = async () => [node('--test', ...await testFiles('collaboration/test')),
+  const workerContracts = async () => [node('--test', ...await testFiles('collaboration/test'), ...await testFiles('worker/test')),
     node('eval/data-validation.mjs', join(out, 'data-verification'))];
   if (gate === 'worker-contracts') return workerContracts();
   if (gate === 'offline') return [
-    node('--test', ...(await Promise.all(['test', 'p1/test', 'p2/test', 'p4/test', 'host/test', 'eval/test', 'collaboration/test'].map(testFiles))).flat(), 'p5/test/contracts.test.mjs'),
-    node('demo.mjs'), node('eval/data-validation.mjs', join(out, 'data-verification')),
+    node('--test', ...(await Promise.all(['planner/test', 'worker/test', 'behaviors/test', 'host/test', 'eval/test', 'collaboration/test'].map(testFiles))).flat(), 'design/test/contracts.test.mjs', 'design/test/claude.test.mjs'),
+    node('eval/data-validation.mjs', join(out, 'data-verification')),
     node('eval/run.mjs', 'private-planner', join(out, 'planner')),
     node('eval/run.mjs', 'cloud-planner', join(out, 'cloud')),
   ];
   if (gate === 'worker-service') return [node('eval/run.mjs', 'data-worker', join(out, 'worker'), resolve(configPath))];
   if (gate === 'host-service') return [node('host/verify.mjs', join(out, 'host'), resolve(configPath))];
-  if (gate === 'browser') return [node('--test', 'p5/test/browser.test.mjs', 'host/browser.test.mjs'),
+  if (gate === 'browser') return [node('--test', 'design/test/browser.test.mjs', 'host/browser.test.mjs'),
     node('eval/run.mjs', 'cloud-planner', join(out, 'cloud-browser'), '--browser')];
   if (gate === 'behaviors') return [node('behaviors/compile.mjs', '--check')];
   const config = JSON.parse(await readFile(configPath, 'utf8'));
   if (typeof config.python !== 'string' || !config.python.startsWith('/')) throw Error('absolute_python_required');
-  return [[config.python, ['p1/test/release_compat.py']], [config.python, ['-c',
-    "from pathlib import Path; [compile(Path(p).read_text(), p, 'exec') for p in ['p1/prepare.py','eval/prepare-worker.py']]" ]]];
+  return [[config.python, ['worker/test/release_compat.py']], [config.python, ['-c',
+    "from pathlib import Path; [compile(Path(p).read_text(), p, 'exec') for p in ['worker/prepare.py','eval/prepare-worker.py']]" ]]];
 }
 
 export async function main(argv = process.argv.slice(2)) {

@@ -26,15 +26,15 @@ Run from this example's root using Node 22:
 
 ```sh
 npm ci --prefix host --ignore-scripts
-npm ci --prefix p1 --ignore-scripts
-npm ci --prefix p5 --ignore-scripts
-p5/node_modules/.bin/playwright install chromium
+npm ci --prefix worker --ignore-scripts
+npm ci --prefix design --ignore-scripts
+design/node_modules/.bin/playwright install chromium
 node host/run.mjs scripted /absolute/path/to/new-local-run
 ```
 
 This mode uses a real pi loop and deterministic provider/worker replies. Cloud
 generation is scripted; real browser QA runs. Browser execution requires macOS
-with `sandbox-exec`, matching the existing free-design experiment. Other systems
+with `sandbox-exec`, for isolated free frontend execution. Other systems
 fail closed rather than run generated JavaScript without that isolation.
 
 The host prints a connection-file path, not its access token. In another terminal:
@@ -82,7 +82,7 @@ node host/run.mjs scripted-wren /absolute/path/to/new-run /absolute/path/to/work
 node host/verify.mjs /absolute/path/to/new-evidence /absolute/path/to/worker-config.json --browser
 ```
 
-The latter runs all four existing P4 requests across private-only, fixed-cloud,
+The latter runs all four shared evaluation requests across private-only, fixed-cloud,
 and adaptive routing (12 flows). It checks the independent numeric/period oracle,
 required clarification, exact route, grant-before-send, private canary exclusion,
 and optionally real browser QA. Scripted replies test architecture, **not model
@@ -167,7 +167,7 @@ model/browser/worker results cannot become accepted artifacts.
 | Unit | Behavior | Shared execution / isolated eval |
 | --- | --- | --- |
 | Private planner | `behaviors/profile/components/resolve_intent/` | `host/pi.mjs`, `host/eval.mjs:piPlannerUnit`, `eval/runner.mjs` |
-| Data worker | `p1/profile/` | `harnesses/worker.mjs`, `eval/units.mjs:workerUnit` |
+| Data worker | `worker/profile/` | `harnesses/worker.mjs`, `eval/units.mjs:workerUnit` |
 | Cloud planner/designer | `design_free_dashboard/`, `repair_dashboard/` | `host/cloud.mjs`, `host/eval.mjs:cloudRepairUnit`; single-attempt `cloudUnit` remains available |
 
 The host snapshots per-unit release hashes. The planner release now includes its
@@ -176,7 +176,7 @@ QA executor. Changing one component changes that unit's release, without silentl
 promoting another. Provider bindings, expectations and scorers remain separate.
 Use the existing runner's immutable case manifests and explicit live factory
 ports; do not give the model expected outputs or turn production approvals into
-model-visible tools. Keep new runs in new output directories and preserve P4/P5.
+model-visible tools. Keep new runs in new output directories and preserve previous runs.
 
 ```sh
 node --test host/test/*.test.mjs
@@ -187,8 +187,7 @@ node eval/run.mjs data-worker /absolute/path/to/new-worker-eval /absolute/path/t
 node eval/run.mjs cloud-planner /absolute/path/to/new-cloud-eval --browser
 ```
 
-The legacy planner CLI uses its existing adapter for baseline comparability. Use
-`piPlannerUnit` to evaluate the production pi adapter; its case/output/scoring
+Use `piPlannerUnit` to evaluate the production pi adapter; its case/output/scoring
 contract is the same. `cloudRepairUnit` accepts an already trusted broker and
 the same designer/QA/artifact ports as the host, with no Wren or private planner
 required. Stock pi coding-agent CLI, web UI, GPT transport and multi-tenant hosting

@@ -1,4 +1,4 @@
-import { generateCode } from '../p5/design.mjs';
+import { generateCode } from '../design/design.mjs';
 import { requireThat } from '../contracts.mjs';
 
 // Diagnostics are an enum, never browser text, private evidence or raw errors.

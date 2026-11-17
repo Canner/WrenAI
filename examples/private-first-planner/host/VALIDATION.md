@@ -107,6 +107,6 @@ an artifact. Results are retrospective QA, not a new live workflow success rate.
 The original generation latency and costs remain historical observations.
 
 Validation: `node --test host/test/validation.test.mjs host/browser.test.mjs`.
-Existing P5 browser tests retain their strict-quality assertions. The host tests
+The isolated browser tests retain their strict-quality assertions. The host tests
 cover warning-only delivery without repair, incorrect values repaired once,
 rejected candidate preview, changed-data errors, network isolation and binding.

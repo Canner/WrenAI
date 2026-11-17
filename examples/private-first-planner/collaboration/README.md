@@ -7,24 +7,23 @@ not promote a model or change the historic live results. Commands below run from
 
 ## Review in dependency order
 
-1. [Contracts](CONTRACTS.md), `harnesses/`, `p1/retrieval.mjs` and the worker handoff.
-2. `behaviors/profile/` and `p1/profile/`: application-owned Warble components.
+1. [Contracts](CONTRACTS.md), `harnesses/`, `worker/retrieval.mjs` and the worker handoff.
+2. `behaviors/profile/` and `worker/profile/`: application-owned Warble components.
 3. `host/store.mjs`, `controller.mjs`, `export.mjs`, `policy.mjs`, `runtime.mjs`:
    trusted state, authority and Wren integration. Read `host/README.md` for limits.
-4. `p5/` and `host/validation.mjs`: isolated frontend generation/admission;
+4. `design/` and `host/validation.mjs`: isolated frontend generation/admission;
    `host/pi.mjs`, `http.mjs`, `tui.mjs`: planner and authenticated local interface.
 5. `eval/`, `collaboration/`, tests, lockfiles and the dedicated CI workflow.
 
-The root `controller.mjs` is the retained P0 experiment. The current application
-controller is `host/controller.mjs`; do not accidentally tune the historical
-controller expecting a production-host change. Similarly, the legacy planner
-CLI and embedded pi executor are separate adapters of the same behavior contract.
+The application controller is `host/controller.mjs`. Current reusable modules
+are grouped by responsibility in `planner/`, `worker/` and `design/`.
+The branch ships one host architecture and its independent evaluation surfaces.
 
 ## Ownership and change discipline
 
 | Maintainer | Owns | Must coordinate changes to |
 | --- | --- | --- |
-| Worker | `p1/profile/`, Wren service behavior and data adapter integration | Task/result contracts, evidence semantics, supported grain, service version |
+| Worker | `worker/profile/`, Wren service behavior and data adapter integration | Task/result contracts, evidence semantics, supported grain, service version |
 | Planner | `resolve_intent`, `host/pi.mjs`, intent admission | Retrieval grouping, question contract, route proposal shape |
 | Design | `design_free_dashboard`, `repair_dashboard`, design adapter | Authorized payload, frontend code and QA contract |
 | Host | Task journal, trusted commands, routing, disclosure, budgets, artifact admission | All boundary changes; no model can approve one |
@@ -48,14 +47,14 @@ Dependency installation uses network access; the test gates below use no paid
 models. Never reuse production credentials or a production database for them.
 
 ```sh
-npm ci --prefix p1 --ignore-scripts --no-audit --no-fund
+npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 npm ci --prefix host --ignore-scripts --no-audit --no-fund
-npm ci --prefix p5 --ignore-scripts --no-audit --no-fund
+npm ci --prefix design --ignore-scripts --no-audit --no-fund
 ```
 
 For service and Python gates, use the [worker setup](DATA-WORKER.md). For browser
 gates, install the pinned Playwright Chromium with
-`p5/node_modules/.bin/playwright install chromium`. For behavior drift checks,
+`design/node_modules/.bin/playwright install chromium`. For behavior drift checks,
 run `npm ci --prefix collaboration/runtime --no-audit --no-fund` and set
 `WARBLE_BIN` to `./collaboration/runtime/node_modules/.bin/warble`, or use an
 existing matching compiler. The runtime lock preserves transitive dependencies.
@@ -77,12 +76,12 @@ node collaboration/check.mjs browser /absolute/path/to/new-browser-run
 | Gate | Requires | What it proves |
 | --- | --- | --- |
 | worker-contracts | Node only | Actual worker session boundary, classification, failure and continuation behavior |
-| offline | `p1` and `host` npm dependencies | All offline regressions, fake walkthrough, independent scripted planner/cloud suites |
+| offline | `worker` and `host` npm dependencies | All offline regressions, independent scripted planner/cloud suites |
 | behaviors | Pinned compiler | Checked-in IR/manifest matches Warble component sources |
 | python | Pinned Wren Python environment | Released parser compatibility and fixture syntax |
-| worker-service | Pinned Wren/runtime/loader + `p1` dependencies | Six worker cases through real Wren, SQL gate and DB, using only loopback scripted model |
+| worker-service | Pinned Wren/runtime/loader + `worker` dependencies | Six worker cases through real Wren, SQL gate and DB, using only loopback scripted model |
 | host-service | Worker prerequisites + `host` dependencies | Four requests × three routes through the actual host; browser QA is scripted in this gate |
-| browser | macOS, `p1`/`host`/`p5` dependencies, Chromium | Actual isolated rendering, rebinding, repair/viewer and cloud-unit QA |
+| browser | macOS, `worker`/`host`/`design` dependencies, Chromium | Actual isolated rendering, rebinding, repair/viewer and cloud-unit QA |
 
 Use `host/verify.mjs OUT CONFIG --browser` for an optional combined real-Wren and
 real-browser run on macOS. CI separates service and browser gates by platform.

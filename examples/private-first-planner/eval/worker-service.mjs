@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { connectWren } from '../p1/mcp.mjs';
+import { connectWren } from '../worker/mcp.mjs';
 import { workerUnit } from './units.mjs';
 import { requireThat } from '../contracts.mjs';
 import { sha256 } from '../behaviors/artifact.mjs';
@@ -95,7 +95,7 @@ export function workerServiceFactory(config, workRoot) {
           env: { PATH: process.env.PATH, HOME: directory } });
       const project = join(directory, 'fixture/project');
       port = await connectWren({ command: config.wren, args: ['serve', 'agent', '--project', project,
-        '--agent-profile', resolve(root, 'p1/profile'), '--service-config', join(project, 'service.yml'),
+        '--agent-profile', resolve(root, 'worker/profile'), '--service-config', join(project, 'service.yml'),
         '--runtime', config.runtime, '--warble', config.warble, '--policy-preset', 'full'],
         credentialEnv: 'HARNESS_EVAL_KEY', env: { HOME: directory, WREN_HOME: join(directory, 'wren-home'),
           WREN_CONTEXT_LOADER_BIN: config.context_loader, PATH: `${dirname(process.execPath)}:${process.env.PATH}` } },

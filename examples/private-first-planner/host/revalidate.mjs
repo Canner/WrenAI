@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { artifactPorts } from './artifacts.mjs';
 import { validationContract } from './validation.mjs';
-import { sourceHashes } from '../p4/run.mjs';
+import { sourceHashes } from '../eval/files.mjs';
 import { requireThat, digest } from '../contracts.mjs';
 
 // Retrospective browser replay only. No model, worker, export approval or live

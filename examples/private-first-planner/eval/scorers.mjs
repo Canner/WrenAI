@@ -1,5 +1,5 @@
 import { isDeepStrictEqual as equal } from 'node:util';
-import { scoreData } from '../p1/scoring.mjs';
+import { scoreData } from './scoring.mjs';
 
 export const scorerVersion = 'unit-contracts/2';
 const finish = checks => ({ passed: Object.values(checks).every(x => x === true), checks });

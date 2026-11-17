@@ -1,5 +1,5 @@
 import { immutable } from '../contracts.mjs';
-import { validateResultGrain } from '../p1/retrieval.mjs';
+import { validateResultGrain } from '../worker/retrieval.mjs';
 
 export const dataContract = 'data-verification/1';
 // This contract classifies service evidence, never SQL or model assurances.

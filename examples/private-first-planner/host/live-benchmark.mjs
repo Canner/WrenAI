@@ -2,12 +2,12 @@ import { mkdir, readFile, writeFile, open, rename, readdir } from 'node:fs/promi
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { cases, schedule as oldSchedule } from '../p4/protocol.mjs';
-import { briefs } from '../p5/protocol.mjs';
-import { fixturePayload, projectFixture } from '../p2/broker.mjs';
-import { verifyFiles } from '../p2/run.mjs';
-import { sourceHashes } from '../p4/run.mjs';
-import { scoreData } from '../p1/scoring.mjs';
+import { cases, schedule as scenarioSchedule } from '../eval/scenarios.mjs';
+import { briefs } from '../eval/scenarios.mjs';
+import { fixturePayload, projectFixture } from './fixture.mjs';
+import { verifyFiles } from '../eval/files.mjs';
+import { sourceHashes } from '../eval/files.mjs';
+import { scoreData } from '../eval/scoring.mjs';
 import { digest, immutable, requireThat } from '../contracts.mjs';
 import { fixturePolicy } from './policy.mjs';
 import { repairCodes } from './cloud.mjs';
@@ -21,8 +21,8 @@ export const protocol = immutable({ version: 1, repeats: 2, flows: 24, max_cloud
   design: { max_tokens: 4096, timeout_ms: 90_000, max_repairs: 1, max_cli_budget_usd_per_invocation: 0.50 },
   private_design: 'inert private result table, no designer model',
   private_stages_shared: false, sample_policy: 'Every scheduled flow once. Preserve all failures. No replacement samples.',
-  comparison: 'P4 fixed renderer, P5 free frontend without repair, new host independent E2E with bounded repair. Not a causal model or architecture ranking.' });
-export const schedule = () => oldSchedule().flatMap(block => block.order.map(mode => ({ case: block.case, repeat: block.repeat, route: modeMap[mode] })));
+  comparison: 'Independent host E2E across three routes with bounded repair. Historical comparisons are not a causal model or architecture ranking.' });
+export const schedule = () => scenarioSchedule().flatMap(block => block.order.map(mode => ({ case: block.case, repeat: block.repeat, route: modeMap[mode] })));
 const write = (path, value) => writeFile(path, JSON.stringify(value, null, 2), { flag: 'wx', mode: 0o600 });
 async function append(path, value) { const fd = await open(path, 'a', 0o600); try { await fd.writeFile(JSON.stringify(value) + '\n'); await fd.sync(); } finally { await fd.close(); } }
 export function verifyCloudRequest(body, task, caseId, attempt) {

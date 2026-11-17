@@ -12,8 +12,8 @@ import { scriptedPorts } from '../scripted.mjs';
 import { artifactPorts } from '../artifacts.mjs';
 import { ExportBroker } from '../export.mjs';
 import { fixturePolicy } from '../policy.mjs';
-import { snapshot } from '../../p5/test/fixtures.mjs';
-import { cases } from '../../p4/protocol.mjs';
+import { snapshot } from '../../design/test/fixtures.mjs';
+import { cases } from '../../eval/scenarios.mjs';
 import { digest } from '../../contracts.mjs';
 import { serveHost } from '../http.mjs';
 import { uiCommand, viewState } from '../tui.mjs';
@@ -33,7 +33,7 @@ async function submit(host, message = scope, route = 'adaptive', plan_only = fal
 async function answer(host, value) { host.command(uiCommand(host.snapshot(), value)); await host.idle(); return host.snapshot().task; }
 
 for (const item of cases) for (const route of ['private-only', 'fixed-cloud', 'adaptive']) {
-  test(`same P4 request through pi and host: ${item.id}/${route}`, async t => {
+  test(`shared request through pi and host: ${item.id}/${route}`, async t => {
     const sent = [], { host, ports } = await fixture(t, {}, { observe: value => sent.push(value) });
     let task = await submit(host, item.question, route);
     if (item.clarify) {

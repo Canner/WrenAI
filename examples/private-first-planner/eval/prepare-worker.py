@@ -15,7 +15,7 @@ url = urlparse(args.endpoint)
 assert url.scheme == "http" and url.hostname == "127.0.0.1" and url.port
 assert not url.username and not url.password and not url.query and not url.fragment
 destination = args.destination.resolve()
-prepare = Path(__file__).resolve().parents[1] / "p1/prepare.py"
+prepare = Path(__file__).resolve().parents[1] / "worker/prepare.py"
 runpy.run_path(str(prepare))["prepare"](destination)
 config_path = destination / "project/service.yml"
 config = yaml.safe_load(config_path.read_text())

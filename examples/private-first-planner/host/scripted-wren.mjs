@@ -33,7 +33,7 @@ export async function scriptedWren(config, directory) {
     const fingerprint = digest((await readFile(databasePath)).toString('base64'));
     const workers = new Set();
     const factory = wrenWorker({ command: config.wren, args: ['serve', 'agent', '--project', project,
-      '--agent-profile', resolve(root, 'p1/profile'), '--service-config', join(project, 'service.yml'),
+      '--agent-profile', resolve(root, 'worker/profile'), '--service-config', join(project, 'service.yml'),
       '--runtime', config.runtime, '--warble', config.warble, '--policy-preset', 'full'], credentialEnv: 'HARNESS_EVAL_KEY',
       env: { HOME: directory, WREN_HOME: join(directory, 'wren-home'), WREN_CONTEXT_LOADER_BIN: config.context_loader,
         PATH: `${dirname(process.execPath)}:${process.env.PATH}` } }, 'synthetic-loopback-only');

@@ -7,12 +7,12 @@ import { loadBehaviors, sourceHashes, sha256 } from '../behaviors/artifact.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const definitions = {
   'private-planner': { component: 'resolve_intent', input: 'planner-input/1', output: 'planner-decision/1',
-    files: ['host/pi.mjs', 'harnesses/planner.mjs', 'p1/model.mjs', 'p1/planning.mjs', 'p2/planning.mjs', 'p4/intent-planning.mjs'] },
+    files: ['host/pi.mjs', 'harnesses/planner.mjs', 'planner/model.mjs', 'planner/plan.mjs', 'planner/decision.mjs', 'planner/intent.mjs'] },
   'data-worker': { component: null, input: 'wren-data-task/2', output: 'wren-data-result/2',
-    files: ['harnesses/data-validation.mjs', 'harnesses/worker.mjs', 'p1/mcp.mjs', 'p1/retrieval.mjs'] },
+    files: ['harnesses/data-validation.mjs', 'harnesses/worker.mjs', 'worker/mcp.mjs', 'worker/retrieval.mjs'] },
   'cloud-planner': { component: 'design_free_dashboard', input: 'authorized-design/1', output: 'frontend-code/1',
-    files: ['host/cloud.mjs', 'host/export.mjs', 'host/policy.mjs', 'host/artifacts.mjs', 'host/validation.mjs', 'p5/qa.mjs', 'p5/readability.mjs', 'p5/chart.mjs', 'p5/qa-process.mjs', 'p5/browser.mjs',
-      'p5/design.mjs', 'p5/contracts.mjs', 'p5/adapters.mjs', 'p2/claude.mjs', 'p2/broker.mjs', 'p1/model.mjs', 'p1/planning.mjs', 'p1/retrieval.mjs'] },
+    files: ['host/cloud.mjs', 'host/export.mjs', 'host/policy.mjs', 'host/artifacts.mjs', 'host/validation.mjs', 'design/qa.mjs', 'design/readability.mjs', 'design/chart.mjs', 'design/qa-process.mjs', 'design/browser.mjs', 'design/browser-config.mjs',
+      'design/design.mjs', 'design/contracts.mjs', 'design/claude.mjs', 'host/fixture.mjs', 'worker/retrieval.mjs'] },
 };
 export const harnessIds = Object.freeze(Object.keys(definitions));
 
@@ -22,7 +22,7 @@ export function releaseFor(id, { sourceRoot = root } = {}) {
   // Editing a different component does not silently promote this release.
   const behavior = definition.component
     ? (id === 'cloud-planner' ? Object.fromEntries(['design_free_dashboard', 'repair_dashboard'].map(key => [key, loadBehaviors(resolve(sourceRoot, 'behaviors')).components[key]])) : loadBehaviors(resolve(sourceRoot, 'behaviors')).components[definition.component])
-    : sourceHashes(resolve(sourceRoot, 'p1/profile'));
+    : sourceHashes(resolve(sourceRoot, 'worker/profile'));
   const files = Object.fromEntries(['contracts.mjs', 'harnesses/releases.mjs', ...definition.files]
     .map(path => [path, sha256(readFileSync(resolve(sourceRoot, path)))]));
   const manifest = { version: 'harness-release/1', harness_id: id,

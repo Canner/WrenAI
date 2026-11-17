@@ -5,7 +5,7 @@ import { PiPlanner, privateModel } from '../pi.mjs';
 import { scriptedIntent, scriptedStream } from '../scripted.mjs';
 import { piPlannerUnit } from '../eval.mjs';
 import { scriptedBinding } from '../../eval/scripted.mjs';
-import { cases } from '../../p4/protocol.mjs';
+import { cases } from '../../eval/scenarios.mjs';
 import { createView } from '../tui.mjs';
 
 test('pi uses the real OpenAI-compatible transport and exactly one bounded decision tool', async () => {

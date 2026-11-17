@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { runQA } from '../p5/qa-process.mjs';
+import { runQA } from '../design/qa-process.mjs';
 
 export function browserInspector(root) {
   return async ({ spec, bundle }) => {

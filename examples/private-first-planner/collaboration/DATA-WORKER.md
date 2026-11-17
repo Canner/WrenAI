@@ -7,9 +7,9 @@ This document describes the adapter already used by the host, not a new API.
 
 ## Your boundary
 
-Owned behavior: private `p1/profile/` root/leaf components, context/tool use and
+Owned behavior: private `worker/profile/` root/leaf components, context/tool use and
 Wren-side query/evidence generation. Integration seam: `harnesses/worker.mjs`'s
-`WorkerSession` over the MCP port in `p1/mcp.mjs`. Coordinate edits to shared
+`WorkerSession` over the MCP port in `worker/mcp.mjs`. Coordinate edits to shared
 admission/validation with the host owner. The host owns conversation, export
 approval, routing, retries across groups, private previews and dashboard delivery.
 
@@ -92,9 +92,9 @@ cases. It does not start host UI, planner or designer.
 For the real Wren/DB test, install dependencies into new local tool directories:
 
 ```sh
-npm ci --prefix p1 --ignore-scripts --no-audit --no-fund
+npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 python3.11 -m venv /absolute/path/to/new-worker-venv
-/absolute/path/to/new-worker-venv/bin/python -m pip install -r p1/requirements.txt -c collaboration/python-constraints.txt
+/absolute/path/to/new-worker-venv/bin/python -m pip install -r worker/requirements.txt -c collaboration/python-constraints.txt
 npm ci --prefix collaboration/runtime --no-audit --no-fund
 ```
 
@@ -127,7 +127,7 @@ column, wrong grain and provider failure. A correctly rejected negative case is
 a passed contract test, not a successful query; inspect both state and score.
 
 The package layout must keep `examples/serve-agent/{setup.py,policy.cedar,adhoc-policy.cedar}`
-beside this example. They are included in the archive. Do not copy just `p1/`.
+beside this example. They are included in the archive. Do not copy just `worker/`.
 Generated private model requests and audit logs remain in the new service output;
 share only the intended synthetic summaries, not all raw logs automatically.
 

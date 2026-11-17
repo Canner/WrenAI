@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { renderPrivateResults } from '../p2/render.mjs';
-import { runQA } from '../p5/qa-process.mjs';
+import { renderPrivateResults } from './private-results.mjs';
+import { runQA } from '../design/qa-process.mjs';
 import { assessDashboard } from './validation.mjs';
 
 export function artifactPorts(root) {

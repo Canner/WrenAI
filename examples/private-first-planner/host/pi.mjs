@@ -1,6 +1,6 @@
 import { Agent } from '@earendil-works/pi-agent-core';
 import { streamSimple } from '@earendil-works/pi-ai/api/openai-completions';
-import { plannerContract } from '../p4/intent-planning.mjs';
+import { plannerContract } from '../planner/intent.mjs';
 import { immutable, requireThat } from '../contracts.mjs';
 
 // pi IS the private planner executor. No second planner agent, shell tools,

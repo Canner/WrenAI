@@ -5,21 +5,19 @@ The IDs below are local consumer/evaluation contracts, not new Wren MCP APIs.
 
 | Boundary | Version / identity | Authoritative implementation | Owner |
 | --- | --- | --- | --- |
-| Planner input / decision | `planner-input/1`, `planner-decision/1` | `harnesses/releases.mjs`, `host/pi.mjs`, `p4/intent-planning.mjs` | Planner + host admission |
-| Data task / result | `wren-data-task/2`, `wren-data-result/2` | `harnesses/worker.mjs`, `p1/retrieval.mjs` | Worker adapter + host |
+| Planner input / decision | `planner-input/1`, `planner-decision/1` | `harnesses/releases.mjs`, `host/pi.mjs`, `planner/intent.mjs` | Planner + host admission |
+| Data task / result | `wren-data-task/2`, `wren-data-result/2` | `harnesses/worker.mjs`, `worker/retrieval.mjs` | Worker adapter + host |
 | Data classification | `data-verification/1` | `harnesses/data-validation.mjs`, `host/policy.mjs` | Shared evidence rules + domain host policy |
 | Authorized design input | `authorized-design/1` | `host/export.mjs`, `host/policy.mjs`, `host/cloud.mjs` | Host |
-| Free frontend code | `frontend-code/1` | `p5/contracts.mjs:codeSchema/validateCode` | Design + host admission |
+| Free frontend code | `frontend-code/1` | `design/contracts.mjs:codeSchema/validateCode` | Design + host admission |
 | Dashboard delivery | `revenue-dashboard-delivery/2` | `host/validation.mjs` | Host |
-| Browser / chart observations | `revenue-browser-evidence/2`, `revenue-chart-presence/2` | `p5/qa.mjs`, `p5/chart.mjs` | QA |
+| Browser / chart observations | `revenue-browser-evidence/2`, `revenue-chart-presence/2` | `design/qa.mjs`, `design/chart.mjs` | QA |
 | Harness release | `harness-release/1` | `harnesses/releases.mjs:releaseFor` | Evaluation |
 | Trusted UI command / journal | Strict command shape; store format version 1 | `host/controller.mjs`, `host/store.mjs`, `host/http.mjs` | Host; local single-user only |
 
-Paths are relative to the example root. P0 `TaskPlan`, `Clarification`,
-`ExportBundle` and `DashboardSpec` in root `contracts.mjs` retain their original
-version-1 fake/declarative protocol. They do not describe the complete live-host
-API or the free frontend artifact. `contracts.mjs` also provides shared digest,
-immutability and assertion utilities used by newer layers.
+Paths are relative to the example root. `contracts.mjs` contains only shared
+canonical digest, immutability and assertion utilities. The current boundary
+validators listed above are the executable source of truth.
 
 ## Authority and lifecycle invariants
 

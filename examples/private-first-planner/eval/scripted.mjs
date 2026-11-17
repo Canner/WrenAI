@@ -1,8 +1,8 @@
-import { NemotronPlanner } from '../p1/model.mjs';
-import { plannerContract } from '../p4/intent-planning.mjs';
-import { FixtureBroker } from '../p2/broker.mjs';
+import { NemotronPlanner } from '../planner/model.mjs';
+import { plannerContract } from '../planner/intent.mjs';
+import { FixtureBroker } from '../host/fixture.mjs';
 import { plannerUnit, cloudUnit } from './units.mjs';
-import { code, snapshot } from '../p5/test/fixtures.mjs';
+import { code, snapshot } from '../design/test/fixtures.mjs';
 import { requireThat } from '../contracts.mjs';
 
 export const scriptedBinding = {

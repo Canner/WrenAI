@@ -1,7 +1,7 @@
 import { decidePlanner } from '../harnesses/planner.mjs';
 import { WorkerSession } from '../harnesses/worker.mjs';
-import { generateCode } from '../p5/design.mjs';
-import { parse } from '../p2/planning.mjs';
+import { generateCode } from '../design/design.mjs';
+import { parse } from '../planner/decision.mjs';
 import { requireThat } from '../contracts.mjs';
 
 export function plannerUnit({ model, input, binding, signal, observeAttempt, parseDecision = parse }) {

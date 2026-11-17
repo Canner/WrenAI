@@ -7,10 +7,10 @@ import { Store } from './store.mjs';
 import { Host } from './controller.mjs';
 import { scriptedPorts } from './scripted.mjs';
 import { artifactPorts } from './artifacts.mjs';
-import { cases } from '../p4/protocol.mjs';
+import { cases } from '../eval/scenarios.mjs';
 import { uiCommand, viewState } from './tui.mjs';
 import { previewCandidate } from './preview.mjs';
-import { bundle, code } from '../p5/test/fixtures.mjs';
+import { bundle, code } from '../design/test/fixtures.mjs';
 
 test('real QA rejects wrong values, bounded repair passes, and approved artifact opens in isolated viewer', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'host-browser-'));
