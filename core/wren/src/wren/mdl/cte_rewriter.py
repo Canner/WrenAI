@@ -321,6 +321,8 @@ class CTERewriter:
                 return self._render(parse_one(wren_sql, dialect="wren"), identify)
             raise ValueError(f"No model or view references found in SQL: {sql}")
 
+        if self.dialect == "clickhouse":
+            clickhouse_compat.type_window_values(ast, self.schema)
         model_ctes = self._build_model_ctes(used_columns, user_table_refs, col_quoting)
         view_ctes = self._build_view_ctes(view_refs)
         self._avoid_cte_collisions(ast, model_ctes, view_ctes, user_cte_names)
