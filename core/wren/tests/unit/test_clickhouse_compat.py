@@ -222,6 +222,9 @@ class TestWindowFunctions:
             # USING makes qualify_columns replace ``id`` with a COALESCE.
             "SELECT LAG(id) OVER (ORDER BY events.id) AS v"
             " FROM events JOIN posts USING (id)",
+            # ARRAY JOIN turns ``tags`` into one String element per row.
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events ARRAY JOIN tags",
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events LEFT ARRAY JOIN tags",
             "SELECT p.id, LAG(p.tags) OVER (ORDER BY p.id) AS v"
             " FROM posts AS p JOIN events AS e ON p.id = e.id",
         ],

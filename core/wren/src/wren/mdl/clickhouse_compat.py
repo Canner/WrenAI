@@ -75,9 +75,10 @@ def type_window_values(ast: exp.Expression, schema: Schema) -> None:
     Call it before model CTEs are injected: column types resolve through the
     model schema here, and are lost once a reference points at a generated CTE.
     ``translate`` reads the type to keep ``toNullable`` off a value ClickHouse
-    can't make nullable. A value that doesn't type (an unknown column) stays
-    untyped, as does every value when a referenced column's type string doesn't
-    parse; an untyped value keeps ``toNullable``.
+    can't make nullable. A value that doesn't type (an unknown column, a column
+    an unaliased ``ARRAY JOIN`` unwraps) stays untyped, as does every value when
+    a referenced column's type string doesn't parse; an untyped value keeps
+    ``toNullable``.
     """
     fns = list(ast.find_all(exp.Lag, exp.Lead))
     if not fns:
@@ -104,8 +105,24 @@ def type_window_values(ast: exp.Expression, schema: Schema) -> None:
     finally:
         for fn in fns:
             del fn.meta[_VALUE_TAG]
+    unwrapped = _array_joined_columns(ast)
     for typed_fn in typed.find_all(exp.Lag, exp.Lead):
-        fns[typed_fn.meta[_VALUE_TAG]].this.type = typed_fn.this.type
+        value = fns[typed_fn.meta[_VALUE_TAG]].this
+        # sqlglot types an ARRAY JOIN column as the array; it's one element here.
+        if any(column.name in unwrapped for column in value.find_all(exp.Column)):
+            continue
+        value.type = typed_fn.this.type
+
+
+def _array_joined_columns(ast: exp.Expression) -> frozenset[str]:
+    """Columns an ``ARRAY JOIN`` unwraps in place (``ARRAY JOIN tags``, no alias)."""
+    return frozenset(
+        target.name
+        for join in ast.find_all(exp.Join)
+        if join.args.get("kind") == "ARRAY"
+        for target in [join.this, *join.expressions]
+        if isinstance(target, exp.Column)
+    )
 
 
 def translate(ast: exp.Expression) -> exp.Expression:
