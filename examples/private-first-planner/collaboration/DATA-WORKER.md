@@ -7,11 +7,21 @@ This document describes the adapter already used by the host, not a new API.
 
 ## Your boundary
 
-Owned behavior: private `worker/profile/` root/leaf components, context/tool use and
-Wren-side query/evidence generation. Integration seam: `harnesses/worker.mjs`'s
-`WorkerSession` over the MCP port in `worker/mcp.mjs`. Coordinate edits to shared
-admission/validation with the host owner. The host owns conversation, export
-approval, routing, retries across groups, private previews and dashboard delivery.
+The worker team owns `worker/profile/` root/leaf components, context/tool use,
+Wren-side query/evidence generation and independent worker evaluation. Execute
+these behaviors directly through `wren serve agent`; no additional MCP server
+or transport implementation is required from the worker team.
+
+The host team owns `host/adapters/wren-client.mjs` (stdio MCP connection, tool
+admission, response decoding and service-process lifetime) and the shared
+`harnesses/worker.mjs:WorkerSession` (session/revision, clarification continuation,
+result/evidence bindings and closure). Both the application and independent eval
+reuse this adapter. Keeping it in the shared harness does not transfer ownership
+to the worker team. Shared contracts, grain/evidence admission and supported
+service versions require coordination with the host team.
+
+The host also owns conversation, export approval, routing, retries across groups,
+private previews and dashboard delivery.
 
 The host calls one normalized group at a time. An executable example:
 
@@ -89,10 +99,12 @@ including service revisions, continuation, known/unknown reply refs, binding
 mismatch, service failure and closed sessions, plus ten evidence-classification
 cases. It does not start host UI, planner or designer.
 
-For the real Wren/DB test, install dependencies into new local tool directories:
+For the real Wren/DB test, install the minimal host-owned client and pinned
+service dependencies. The `host/adapters` package installs only the MCP SDK
+dependency tree; it does not install the pi UI or start the application host:
 
 ```sh
-npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+npm ci --prefix host/adapters --ignore-scripts --no-audit --no-fund
 python3.11 -m venv /absolute/path/to/new-worker-venv
 /absolute/path/to/new-worker-venv/bin/python -m pip install -r worker/requirements.txt -c collaboration/python-constraints.txt
 npm ci --prefix collaboration/runtime --no-audit --no-fund

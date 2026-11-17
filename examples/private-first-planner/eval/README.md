@@ -12,8 +12,8 @@ real Wren service, pi runtime, query gate, and isolated synthetic database.
 
 ## Run one unit
 
-From this example's directory, with Node 22 or newer and the existing `worker`
-dependencies installed:
+From this example's directory, with Node 22 or newer and the host-owned `host/adapters`
+client dependencies installed:
 
 ```sh
 node eval/run.mjs private-planner /absolute/path/to/new-planner-run
@@ -62,13 +62,17 @@ explicit prerequisite; the evaluator never builds or downloads missing tools.
 | Unit | Executed code | Isolation |
 | --- | --- | --- |
 | `private-planner` | `harnesses/planner.mjs`, existing Nemotron transport, compiled `resolve_intent`, intent parser | Fixed capabilities and scripted user replies; no Wren/cloud tools |
-| `data-worker` | `harnesses/worker.mjs`, worker MCP client, real `serve agent`, worker profile and private runtime | Fresh synthetic DB and loopback model; no conversation planner or cloud |
+| `data-worker` | `harnesses/worker.mjs`, host-owned Wren client, real `serve agent`, worker profile and private runtime | Fresh synthetic DB and loopback model; no conversation planner or cloud |
 | `cloud-planner` | `design/design.mjs:generateCode`, fixture broker, code admission, optional isolated browser QA | Pre-authorized synthetic aggregate; no planner or DB query |
 
 The current application host and isolated cloud evaluator both use `generateCode`.
 Use `host/eval.mjs:piPlannerUnit` for the production embedded pi executor; the
 CLI planner suite uses the isolated transport with the same intent contract.
 There is no second copy of prompts under `eval/`; they remain in Warble components.
+
+The Wren client and `WorkerSession` belong to the host team and are reused here
+without starting the application UI. The worker team owns profile/query behavior
+and these isolated worker cases.
 
 The worker's private root-to-leaf delegation is part of the worker harness. Its
 scripted provider returns real tool calls and echoes host-issued evidence tokens;

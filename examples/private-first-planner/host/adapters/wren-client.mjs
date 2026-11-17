@@ -1,6 +1,7 @@
+// Host-owned stdio client for wren serve agent; this does not implement an MCP server.
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { requireThat } from '../contracts.mjs';
+import { requireThat } from '../../contracts.mjs';
 
 const required = ['capabilities', 'open_session', 'close_session', 'read_metadata', 'ask_data', 'continue_task', 'get_evidence'];
 export async function connectWren(config, { credential = process.env[config.credentialEnv] } = {}) {

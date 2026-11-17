@@ -23,10 +23,10 @@ The branch ships one host architecture and its independent evaluation surfaces.
 
 | Maintainer | Owns | Must coordinate changes to |
 | --- | --- | --- |
-| Worker | `worker/profile/`, Wren service behavior and data adapter integration | Task/result contracts, evidence semantics, supported grain, service version |
+| Worker | `worker/profile/`, Wren query/evidence behavior and independent evaluation | Task/result contracts, evidence semantics, supported grain, service version |
 | Planner | `resolve_intent`, `host/pi.mjs`, intent admission | Retrieval grouping, question contract, route proposal shape |
 | Design | `design_free_dashboard`, `repair_dashboard`, design adapter | Authorized payload, frontend code and QA contract |
-| Host | Task journal, trusted commands, routing, disclosure, budgets, artifact admission | All boundary changes; no model can approve one |
+| Host | Wren client/session adapter, task journal, trusted commands, routing, disclosure, budgets, artifact admission | All boundary changes; no model can approve one |
 | Evaluation | Cases, hidden oracles, scorers, browser observations, run manifests | Report comparability and any changed denominator |
 
 Prompts/profiles belong to this consumer. Warble compiler/runtime supply public
@@ -47,7 +47,7 @@ Dependency installation uses network access; the test gates below use no paid
 models. Never reuse production credentials or a production database for them.
 
 ```sh
-npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+npm ci --prefix host/adapters --ignore-scripts --no-audit --no-fund
 npm ci --prefix host --ignore-scripts --no-audit --no-fund
 npm ci --prefix design --ignore-scripts --no-audit --no-fund
 ```
@@ -76,12 +76,12 @@ node collaboration/check.mjs browser /absolute/path/to/new-browser-run
 | Gate | Requires | What it proves |
 | --- | --- | --- |
 | worker-contracts | Node only | Actual worker session boundary, classification, failure and continuation behavior |
-| offline | `worker` and `host` npm dependencies | All offline regressions, independent scripted planner/cloud suites |
+| offline | `host/adapters` and `host` npm dependencies | All offline regressions, independent scripted planner/cloud suites |
 | behaviors | Pinned compiler | Checked-in IR/manifest matches Warble component sources |
 | python | Pinned Wren Python environment | Released parser compatibility and fixture syntax |
-| worker-service | Pinned Wren/runtime/loader + `worker` dependencies | Six worker cases through real Wren, SQL gate and DB, using only loopback scripted model |
+| worker-service | Pinned Wren/runtime/loader + `host/adapters` dependencies | Six worker cases through real Wren, SQL gate and DB, using only loopback scripted model |
 | host-service | Worker prerequisites + `host` dependencies | Four requests × three routes through the actual host; browser QA is scripted in this gate |
-| browser | macOS, `worker`/`host`/`design` dependencies, Chromium | Actual isolated rendering, rebinding, repair/viewer and cloud-unit QA |
+| browser | macOS, `host/adapters`/`host`/`design` dependencies, Chromium | Actual isolated rendering, rebinding, repair/viewer and cloud-unit QA |
 
 Use `host/verify.mjs OUT CONFIG --browser` for an optional combined real-Wren and
 real-browser run on macOS. CI separates service and browser gates by platform.

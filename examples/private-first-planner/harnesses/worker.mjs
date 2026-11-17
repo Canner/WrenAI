@@ -16,6 +16,7 @@ export async function readWorkerEvidence({ call, sessionId, response, grain }) {
   return { evidence: evidence.evidence, grainMatches: validateResultGrain(response.result, grain) };
 }
 
+// Host-owned session adapter shared by application orchestration and independent eval.
 // A data-only host entry. No planner, designer, SQL shortcut or synthetic result
 // substitution. The caller supplies a trusted MCP port and a normalized task.
 export class WorkerSession {

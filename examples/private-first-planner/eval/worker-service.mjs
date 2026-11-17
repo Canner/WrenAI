@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { connectWren } from '../worker/mcp.mjs';
+import { connectWren } from '../host/adapters/wren-client.mjs';
 import { workerUnit } from './units.mjs';
 import { requireThat } from '../contracts.mjs';
 import { sha256 } from '../behaviors/artifact.mjs';

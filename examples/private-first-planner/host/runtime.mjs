@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir, realpath } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { parse as parseYaml } from 'yaml';
 import { join, dirname, resolve, relative, isAbsolute } from 'node:path';
-import { connectWren } from '../worker/mcp.mjs';
+import { connectWren } from './adapters/wren-client.mjs';
 import { WorkerSession } from '../harnesses/worker.mjs';
 import { ClaudeCode } from '../design/claude.mjs';
 import { codeSchema } from '../design/contracts.mjs';

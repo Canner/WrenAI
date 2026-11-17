@@ -9,7 +9,7 @@ const definitions = {
   'private-planner': { component: 'resolve_intent', input: 'planner-input/1', output: 'planner-decision/1',
     files: ['host/pi.mjs', 'harnesses/planner.mjs', 'planner/model.mjs', 'planner/plan.mjs', 'planner/decision.mjs', 'planner/intent.mjs'] },
   'data-worker': { component: null, input: 'wren-data-task/2', output: 'wren-data-result/2',
-    files: ['harnesses/data-validation.mjs', 'harnesses/worker.mjs', 'worker/mcp.mjs', 'worker/retrieval.mjs'] },
+    files: ['harnesses/data-validation.mjs', 'harnesses/worker.mjs', 'host/adapters/wren-client.mjs', 'worker/retrieval.mjs'] },
   'cloud-planner': { component: 'design_free_dashboard', input: 'authorized-design/1', output: 'frontend-code/1',
     files: ['host/cloud.mjs', 'host/export.mjs', 'host/policy.mjs', 'host/artifacts.mjs', 'host/validation.mjs', 'design/qa.mjs', 'design/readability.mjs', 'design/chart.mjs', 'design/qa-process.mjs', 'design/browser.mjs', 'design/browser-config.mjs',
       'design/design.mjs', 'design/contracts.mjs', 'design/claude.mjs', 'host/fixture.mjs', 'worker/retrieval.mjs'] },

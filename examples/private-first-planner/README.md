@@ -46,9 +46,9 @@ current host delivers an inert table, not a Nemotron-generated frontend.
 | Directory | Responsibility |
 | --- | --- |
 | `planner/` | Intent admission and the isolated planner transport |
-| `worker/` | Wren MCP client, query constraints, private profile and fixture setup |
+| `worker/` | Query constraints, private profile and fixture setup |
 | `design/` | Claude transport, free frontend contracts and isolated browser QA |
-| `host/` | Application state, embedded pi, policy, routing, export and delivery |
+| `host/` | Wren client, application state, embedded pi, policy, routing, export and delivery |
 | `behaviors/` | Current Warble intent, free design and repair components |
 | `harnesses/` | Shared execution boundaries and release fingerprints |
 | `eval/` | Independent suites, shared four-case scenarios and scorers |

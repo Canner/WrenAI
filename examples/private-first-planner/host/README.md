@@ -20,13 +20,26 @@ The dependency direction stays application → public Warble contracts. Nothing 
 this example requires a workflow engine, durable application state, or Wren
 knowledge in the Warble compiler.
 
+## Wren connection ownership
+
+`adapters/wren-client.mjs` is a stdio MCP **client** that launches the configured
+`wren serve agent` command. Wren supplies the server and private worker runtime.
+The host reuses one service connection and opens separate `WorkerSession`s for
+independent tasks. It owns process shutdown, tool admission and transport errors.
+`harnesses/worker.mjs` is the host-owned session adapter shared with independent
+evaluation; it maintains Wren revisions, clarification and result/evidence refs.
+
+The worker team tunes `worker/profile/` and query/evidence behavior. It does not
+implement another MCP server. For isolated worker tests, install only
+`host/adapters` plus the documented Wren runtime; the pi UI is not required.
+
 ## Install and start
 
 Run from this example's root using Node 22:
 
 ```sh
 npm ci --prefix host --ignore-scripts
-npm ci --prefix worker --ignore-scripts
+npm ci --prefix host/adapters --ignore-scripts
 npm ci --prefix design --ignore-scripts
 design/node_modules/.bin/playwright install chromium
 node host/run.mjs scripted /absolute/path/to/new-local-run

@@ -6,7 +6,8 @@ The IDs below are local consumer/evaluation contracts, not new Wren MCP APIs.
 | Boundary | Version / identity | Authoritative implementation | Owner |
 | --- | --- | --- | --- |
 | Planner input / decision | `planner-input/1`, `planner-decision/1` | `harnesses/releases.mjs`, `host/pi.mjs`, `planner/intent.mjs` | Planner + host admission |
-| Data task / result | `wren-data-task/2`, `wren-data-result/2` | `harnesses/worker.mjs`, `worker/retrieval.mjs` | Worker adapter + host |
+| Wren MCP transport | Released `serve agent` tool protocol | `host/adapters/wren-client.mjs` | Host client; Wren owns server |
+| Data task / result | `wren-data-task/2`, `wren-data-result/2` | `harnesses/worker.mjs`, `worker/retrieval.mjs` | Host session adapter + worker query contract |
 | Data classification | `data-verification/1` | `harnesses/data-validation.mjs`, `host/policy.mjs` | Shared evidence rules + domain host policy |
 | Authorized design input | `authorized-design/1` | `host/export.mjs`, `host/policy.mjs`, `host/cloud.mjs` | Host |
 | Free frontend code | `frontend-code/1` | `design/contracts.mjs:codeSchema/validateCode` | Design + host admission |

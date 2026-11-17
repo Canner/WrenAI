@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { connectWren } from '../worker/mcp.mjs';
+import { connectWren } from '../host/adapters/wren-client.mjs';
 import { retrievalQuestion } from '../worker/retrieval.mjs';
 import { prepareServiceConfig } from '../host/runtime.mjs';
 import { checkWorkerEnvironment } from './worker-service.mjs';

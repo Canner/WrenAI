@@ -1,5 +1,5 @@
 {
-  "name": "private-first-worker",
+  "name": "private-first-wren-client",
   "private": true,
   "type": "module",
   "engines": {
@@ -7,8 +7,5 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1"
-  },
-  "scripts": {
-    "test": "node ../collaboration/check.mjs worker-contracts"
   }
 }
