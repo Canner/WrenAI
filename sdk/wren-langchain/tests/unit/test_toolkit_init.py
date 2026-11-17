@@ -102,3 +102,40 @@ def test_from_project_loads_dotenv_from_project_path(tmp_project, monkeypatch):
         # Reset the global loader flag again so this test cannot leak its
         # half-loaded state into whatever runs next in the session.
         _reset_env_loaded_for_tests()
+
+
+def test_from_project_resolves_each_projects_own_dotenv(tmp_path, monkeypatch):
+    """Two toolkits in one process each resolve ${VAR} from their own .env.
+
+    Regression: from_project used to load <path>/.env into os.environ with
+    override=False, so the first project's value won and the second toolkit
+    connected with the first project's secret.
+    """
+    secret_var = "WREN_LANGCHAIN_TEST_PASSWORD_DOES_NOT_EXIST_IN_SHELL"
+    monkeypatch.delenv(secret_var, raising=False)
+    monkeypatch.setattr(
+        "wren_langchain._providers.connection.list_profiles",
+        lambda: {
+            "test": {
+                "datasource": "postgres",
+                "host": "localhost",
+                "password": f"${{{secret_var}}}",
+            }
+        },
+    )
+
+    projects = {}
+    for name in ("a", "b"):
+        project = tmp_path / name
+        (project / "target").mkdir(parents=True)
+        (project / "wren_project.yml").write_text("profile: test\n")
+        (project / "target" / "mdl.json").write_text('{"models": []}')
+        (project / ".env").write_text(f"{secret_var}=secret-{name}\n")
+        projects[name] = project
+    monkeypatch.chdir(tmp_path)
+
+    toolkit_a = WrenToolkit.from_project(projects["a"])
+    toolkit_b = WrenToolkit.from_project(projects["b"])
+
+    assert toolkit_a._connection.connection_info()["password"] == "secret-a"
+    assert toolkit_b._connection.connection_info()["password"] == "secret-b"
