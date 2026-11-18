@@ -94,6 +94,21 @@ fn entries_from_every_rule_file_are_gathered_in_file_order() {
 }
 
 #[test]
+fn cr_only_and_unicode_line_separators_still_declare_semantics() {
+    let expected = catalog_json(project_with_rules(&[("a.md", VALID)]).path())["semantics"].clone();
+    for boundary in ["\r", "\u{2028}"] {
+        let text = VALID.replace('\n', boundary);
+        let project = project_with_rules(&[("a.md", &text)]);
+        let doc = catalog_json(project.path());
+        assert_eq!(doc["semantics"], expected, "boundary {boundary:?}");
+        assert!(
+            doc.get("semantics_invalid").is_none(),
+            "boundary {boundary:?}"
+        );
+    }
+}
+
+#[test]
 fn a_project_without_semantics_omits_both_keys() {
     let doc = catalog_json(&fixture("declared-wren"));
     assert!(doc.get("semantics").is_none());
