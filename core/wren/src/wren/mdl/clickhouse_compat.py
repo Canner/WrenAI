@@ -105,24 +105,55 @@ def type_window_values(ast: exp.Expression, schema: Schema) -> None:
     finally:
         for fn in fns:
             del fn.meta[_VALUE_TAG]
-    unwrapped = _array_joined_columns(ast)
     for typed_fn in typed.find_all(exp.Lag, exp.Lead):
-        value = fns[typed_fn.meta[_VALUE_TAG]].this
+        fn = fns[typed_fn.meta[_VALUE_TAG]]
+        unwrapped = _array_joined_columns(fn)
         # sqlglot types an ARRAY JOIN column as the array; it's one element here.
-        if any(column.name in unwrapped for column in value.find_all(exp.Column)):
+        if any(column.name in unwrapped for column in fn.this.find_all(exp.Column)):
             continue
-        value.type = typed_fn.this.type
+        fn.this.type = typed_fn.this.type
 
 
-def _array_joined_columns(ast: exp.Expression) -> frozenset[str]:
-    """Columns an ``ARRAY JOIN`` unwraps in place (``ARRAY JOIN tags``, no alias)."""
-    return frozenset(
+def _array_joined_columns(fn: exp.Expression) -> frozenset[str]:
+    """Columns an ``ARRAY JOIN`` unwraps in place (``ARRAY JOIN tags``, no alias).
+
+    Taken over the whole query, not just *fn*'s SELECT: a derived table or CTE
+    passes the unwrapped column up, also under an alias (``SELECT tags AS t``),
+    so every alias computed from one counts too. Only a join inside an ``IN`` /
+    ``EXISTS`` filter feeds nothing outside it, so one is skipped unless *fn*
+    sits in it too.
+    """
+    enclosing = {id(node) for node in _ancestors(fn)}
+
+    def feeds(join: exp.Join) -> bool:
+        filter_ = join.find_ancestor(exp.In, exp.Exists)
+        return filter_ is None or id(filter_) in enclosing
+
+    root = fn.root()
+    names = {
         target.name
-        for join in ast.find_all(exp.Join)
-        if join.args.get("kind") == "ARRAY"
+        for join in root.find_all(exp.Join)
+        if join.args.get("kind") == "ARRAY" and feeds(join)
         for target in [join.this, *join.expressions]
         if isinstance(target, exp.Column)
-    )
+    }
+    aliases = list(root.find_all(exp.Alias))
+    while derived := {
+        alias.alias
+        for alias in aliases
+        if alias.alias not in names
+        and any(column.name in names for column in alias.this.find_all(exp.Column))
+    }:
+        names |= derived
+    return frozenset(names)
+
+
+def _ancestors(node: exp.Expression) -> list[exp.Expression]:
+    found = []
+    while node.parent is not None:
+        node = node.parent
+        found.append(node)
+    return found
 
 
 def translate(ast: exp.Expression) -> exp.Expression:

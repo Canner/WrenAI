@@ -225,12 +225,42 @@ class TestWindowFunctions:
             # ARRAY JOIN turns ``tags`` into one String element per row.
             "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events ARRAY JOIN tags",
             "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events LEFT ARRAY JOIN tags",
+            # A derived table or CTE passes the unwrapped column up to the LAG.
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v"
+            " FROM (SELECT id, tags FROM events ARRAY JOIN tags) AS s",
+            "WITH s AS (SELECT id, tags FROM events ARRAY JOIN tags)"
+            " SELECT LAG(tags) OVER (ORDER BY id) AS v FROM s",
+            # ... also under an alias, or an alias of an alias.
+            "SELECT LAG(t) OVER (ORDER BY id) AS v"
+            " FROM (SELECT id, tags AS t FROM events ARRAY JOIN tags) AS s",
+            "SELECT LAG(u) OVER (ORDER BY id) AS v FROM (SELECT id, t AS u FROM"
+            " (SELECT id, tags AS t FROM events ARRAY JOIN tags) AS a) AS b",
+            # The LAG itself sits in the filter subquery that ARRAY JOINs.
+            "SELECT id FROM events WHERE id IN (SELECT LAG(tags) OVER (ORDER BY id)"
+            " FROM events ARRAY JOIN tags)",
             "SELECT p.id, LAG(p.tags) OVER (ORDER BY p.id) AS v"
             " FROM posts AS p JOIN events AS e ON p.id = e.id",
         ],
     )
     def test_lag_over_a_nullable_scalar_keeps_to_nullable(self, sql):
         assert "lagInFrame(toNullable(" in _rewrite(sql, manifest=_COMPOSITE_MANIFEST)
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events"
+            " WHERE id IN (SELECT id FROM events ARRAY JOIN tags)",
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events"
+            " WHERE EXISTS (SELECT 1 FROM events AS e ARRAY JOIN tags WHERE e.id = 1)",
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events"
+            " WHERE id NOT IN (SELECT id FROM events ARRAY JOIN tags)",
+        ],
+    )
+    def test_array_join_in_a_filter_subquery_does_not_untype_the_outer_lag(self, sql):
+        # The subquery's ARRAY JOIN feeds nothing outside it: the outer ``tags``
+        # is still the Array, which ClickHouse can't wrap in toNullable.
+        out = _rewrite(sql, manifest=_COMPOSITE_MANIFEST)
+        assert f"lagInFrame(tags) OVER (ORDER BY id {_WHOLE}) AS v" in out
 
     @pytest.mark.parametrize(
         "sql",
