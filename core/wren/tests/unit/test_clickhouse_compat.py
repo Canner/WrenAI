@@ -62,6 +62,7 @@ _COMPOSITE_MANIFEST = {
                 {"name": "id", "type": "integer"},
                 {"name": "price", "type": "double"},
                 {"name": "tags", "type": "array<varchar>"},
+                {"name": "grid", "type": "Array(Array(String))"},
                 {"name": "attrs", "type": "map<varchar, integer>"},
                 {"name": "totals", "type": "AggregateFunction(sum, Int32)"},
                 {"name": "sums", "type": "SimpleAggregateFunction(sum, Int64)"},
@@ -235,6 +236,9 @@ class TestWindowFunctions:
             " FROM (SELECT id, tags AS t FROM events ARRAY JOIN tags) AS s",
             "SELECT LAG(u) OVER (ORDER BY id) AS v FROM (SELECT id, t AS u FROM"
             " (SELECT id, tags AS t FROM events ARRAY JOIN tags) AS a) AS b",
+            # ... and through a function of the element.
+            "SELECT LAG(u) OVER (ORDER BY id) AS v"
+            " FROM (SELECT id, upper(tags) AS u FROM events ARRAY JOIN tags) AS s",
             # The LAG itself sits in the filter subquery that ARRAY JOINs.
             "SELECT id FROM events WHERE id IN (SELECT LAG(tags) OVER (ORDER BY id)"
             " FROM events ARRAY JOIN tags)",
@@ -254,13 +258,65 @@ class TestWindowFunctions:
             " WHERE EXISTS (SELECT 1 FROM events AS e ARRAY JOIN tags WHERE e.id = 1)",
             "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events"
             " WHERE id NOT IN (SELECT id FROM events ARRAY JOIN tags)",
+            # The window is the left operand of the IN whose subquery ARRAY JOINs.
+            "SELECT LAG(tags) OVER (ORDER BY id) IN (SELECT id FROM events"
+            " ARRAY JOIN tags) AS v FROM events",
         ],
     )
     def test_array_join_in_a_filter_subquery_does_not_untype_the_outer_lag(self, sql):
         # The subquery's ARRAY JOIN feeds nothing outside it: the outer ``tags``
         # is still the Array, which ClickHouse can't wrap in toNullable.
         out = _rewrite(sql, manifest=_COMPOSITE_MANIFEST)
-        assert f"lagInFrame(tags) OVER (ORDER BY id {_WHOLE}) AS v" in out
+        assert f"lagInFrame(tags) OVER (ORDER BY id {_WHOLE})" in out
+
+    @pytest.mark.parametrize(
+        ("sql", "value"),
+        [
+            # An alias in a filter subquery is not the outer ``attrs`` Map.
+            (
+                "SELECT LAG(e.attrs) OVER (ORDER BY e.id) AS v FROM events AS e"
+                " ARRAY JOIN tags WHERE EXISTS (SELECT tags AS attrs FROM events)",
+                "e.attrs",
+            ),
+            # Another column of the ARRAY JOINed model is still its own type.
+            (
+                "SELECT LAG(attrs) OVER (ORDER BY id) AS v FROM events ARRAY JOIN tags",
+                "attrs",
+            ),
+            # An expression that builds an array from the element is an Array.
+            (
+                "SELECT LAG(t) OVER (ORDER BY id) AS v FROM"
+                " (SELECT id, [tags] AS t FROM events ARRAY JOIN tags) AS s",
+                "t",
+            ),
+            # A nested SELECT over the same table is not the one that ARRAY JOINs.
+            (
+                "SELECT id FROM events ARRAY JOIN tags WHERE id IN"
+                " (SELECT LAG(tags) OVER (ORDER BY id) FROM events)",
+                "tags",
+            ),
+            # Only ``e.tags`` is unwrapped, not ``e2.tags`` of the same model.
+            (
+                "SELECT LAG(e2.tags) OVER (ORDER BY e.id) AS v FROM events AS e"
+                " JOIN events AS e2 ON e.id = e2.id ARRAY JOIN e.tags",
+                "e2.tags",
+            ),
+            # The element of an Array(Array(...)) is itself an Array, also when a
+            # derived table passes it up under the name it had.
+            (
+                "SELECT LAG(grid) OVER (ORDER BY id) AS v FROM events ARRAY JOIN grid",
+                "grid",
+            ),
+            (
+                "SELECT LAG(grid) OVER (ORDER BY id) AS v"
+                " FROM (SELECT id, grid FROM events ARRAY JOIN grid) AS s",
+                "grid",
+            ),
+        ],
+    )
+    def test_array_join_only_retypes_the_column_it_unwraps(self, sql, value):
+        out = _rewrite(sql, manifest=_COMPOSITE_MANIFEST)
+        assert f"lagInFrame({value}) OVER (" in out
 
     @pytest.mark.parametrize(
         "sql",

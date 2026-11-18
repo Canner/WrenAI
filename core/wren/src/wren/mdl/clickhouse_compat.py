@@ -75,10 +75,9 @@ def type_window_values(ast: exp.Expression, schema: Schema) -> None:
     Call it before model CTEs are injected: column types resolve through the
     model schema here, and are lost once a reference points at a generated CTE.
     ``translate`` reads the type to keep ``toNullable`` off a value ClickHouse
-    can't make nullable. A value that doesn't type (an unknown column, a column
-    an unaliased ``ARRAY JOIN`` unwraps) stays untyped, as does every value when
-    a referenced column's type string doesn't parse; an untyped value keeps
-    ``toNullable``.
+    can't make nullable. A value that doesn't type (an unknown column) stays
+    untyped, as does every value when a referenced column's type string doesn't
+    parse; an untyped value keeps ``toNullable``.
     """
     fns = list(ast.find_all(exp.Lag, exp.Lead))
     if not fns:
@@ -90,70 +89,63 @@ def type_window_values(ast: exp.Expression, schema: Schema) -> None:
     for i, fn in enumerate(fns):
         fn.meta[_VALUE_TAG] = i
     try:
-        typed = annotate_types(
-            qualify_columns(
-                ast.copy(),
-                schema=schema,
-                dialect="clickhouse",
-                allow_partial_qualification=True,
-            ),
-            schema=schema,
-            dialect="clickhouse",
-        )
+        typed = _annotate(ast.copy(), schema)
     except SqlglotError:
         return
     finally:
         for fn in fns:
             del fn.meta[_VALUE_TAG]
     for typed_fn in typed.find_all(exp.Lag, exp.Lead):
-        fn = fns[typed_fn.meta[_VALUE_TAG]]
-        unwrapped = _array_joined_columns(fn)
-        # sqlglot types an ARRAY JOIN column as the array; it's one element here.
-        if any(column.name in unwrapped for column in fn.this.find_all(exp.Column)):
-            continue
-        fn.this.type = typed_fn.this.type
+        fns[typed_fn.meta[_VALUE_TAG]].this.type = typed_fn.this.type
 
 
-def _array_joined_columns(fn: exp.Expression) -> frozenset[str]:
-    """Columns an ``ARRAY JOIN`` unwraps in place (``ARRAY JOIN tags``, no alias).
+def _annotate(ast: exp.Expression, schema: Schema) -> exp.Expression:
+    """Qualify and type *ast*, reading an ``ARRAY JOIN`` column as one element.
 
-    Taken over the whole query, not just *fn*'s SELECT: a derived table or CTE
-    passes the unwrapped column up, also under an alias (``SELECT tags AS t``),
-    so every alias computed from one counts too. Only a join inside an ``IN`` /
-    ``EXISTS`` filter feeds nothing outside it, so one is skipped unless *fn*
-    sits in it too.
+    ``ARRAY JOIN tags`` replaces ``tags`` by one element per row in its SELECT,
+    but sqlglot keeps the column's array type there, and passes it up through
+    aliases, expressions and derived tables. So each such reference is cast to
+    the element type first; what is built on it (``tags AS t``, ``[tags]``,
+    ``upper(tags)``) then types correctly, and other SELECTs are untouched.
     """
-    enclosing = {id(node) for node in _ancestors(fn)}
-
-    def feeds(join: exp.Join) -> bool:
-        filter_ = join.find_ancestor(exp.In, exp.Exists)
-        return filter_ is None or id(filter_) in enclosing
-
-    root = fn.root()
-    names = {
-        target.name
-        for join in root.find_all(exp.Join)
-        if join.args.get("kind") == "ARRAY" and feeds(join)
-        for target in [join.this, *join.expressions]
+    qualified = qualify_columns(
+        ast, schema=schema, dialect="clickhouse", allow_partial_qualification=True
+    )
+    joins = [j for j in qualified.find_all(exp.Join) if j.args.get("kind") == "ARRAY"]
+    targets = [
+        (join, target)
+        for join in joins
+        for target in (join.this, *join.expressions)
         if isinstance(target, exp.Column)
-    }
-    aliases = list(root.find_all(exp.Alias))
-    while derived := {
-        alias.alias
-        for alias in aliases
-        if alias.alias not in names
-        and any(column.name in names for column in alias.this.find_all(exp.Column))
-    }:
-        names |= derived
-    return frozenset(names)
+    ]
+    if targets:
+        annotate_types(qualified, schema=schema, dialect="clickhouse")
+        elements = [_element_type(target.type) for _, target in targets]
+        for (join, target), element in zip(targets, elements, strict=True):
+            _cast_to_element(join, target, element)
+        for node in qualified.walk():
+            node.type = None
+    return annotate_types(qualified, schema=schema, dialect="clickhouse")
 
 
-def _ancestors(node: exp.Expression) -> list[exp.Expression]:
-    found = []
-    while node.parent is not None:
-        node = node.parent
-        found.append(node)
-    return found
+def _element_type(array: exp.DataType | None) -> exp.DataType:
+    """The element type of an ``Array``; unknown for anything else (a ``Map``)."""
+    if array is not None and array.this == exp.DataType.Type.ARRAY and array.expressions:
+        return array.expressions[0].copy()
+    return exp.DataType(this=exp.DataType.Type.UNKNOWN)
+
+
+def _cast_to_element(join: exp.Join, target: exp.Column, element: exp.DataType) -> None:
+    """Cast every reference to *target* in the SELECT of *join* to *element*."""
+    select = join.find_ancestor(exp.Select)
+    for column in list(select.find_all(exp.Column)):
+        if (
+            column.find_ancestor(exp.Select) is not select
+            or column.find_ancestor(exp.Join) is join
+            or (column.table, column.name) != (target.table, target.name)
+        ):
+            continue
+        column.replace(exp.Cast(this=column.copy(), to=element.copy()))
 
 
 def translate(ast: exp.Expression) -> exp.Expression:
