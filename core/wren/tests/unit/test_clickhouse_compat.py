@@ -236,9 +236,14 @@ class TestWindowFunctions:
             " FROM (SELECT id, tags AS t FROM events ARRAY JOIN tags) AS s",
             "SELECT LAG(u) OVER (ORDER BY id) AS v FROM (SELECT id, t AS u FROM"
             " (SELECT id, tags AS t FROM events ARRAY JOIN tags) AS a) AS b",
-            # ... and through a function of the element.
-            "SELECT LAG(u) OVER (ORDER BY id) AS v"
-            " FROM (SELECT id, upper(tags) AS u FROM events ARRAY JOIN tags) AS s",
+            # ... and through a function whose type follows the element's.
+            "SELECT LAG(u) OVER (ORDER BY id) AS v FROM"
+            " (SELECT id, coalesce(tags, tags) AS u FROM events ARRAY JOIN tags) AS s",
+            # An aliased ARRAY JOIN names the element by its alias.
+            "SELECT LAG(t) OVER (ORDER BY id) AS v FROM events ARRAY JOIN tags AS t",
+            # An ARRAY JOIN over a column an inner one already unwrapped: String.
+            "SELECT LAG(grid) OVER (ORDER BY id) AS v"
+            " FROM (SELECT id, grid FROM events ARRAY JOIN grid) AS s ARRAY JOIN grid",
             # The LAG itself sits in the filter subquery that ARRAY JOINs.
             "SELECT id FROM events WHERE id IN (SELECT LAG(tags) OVER (ORDER BY id)"
             " FROM events ARRAY JOIN tags)",
@@ -312,6 +317,15 @@ class TestWindowFunctions:
                 " FROM (SELECT id, grid FROM events ARRAY JOIN grid) AS s",
                 "grid",
             ),
+            # Under an alias, the alias is the element and the column stays an Array.
+            (
+                "SELECT LAG(cell) OVER (ORDER BY id) AS v FROM events ARRAY JOIN grid AS cell",
+                "cell",
+            ),
+            (
+                "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events ARRAY JOIN tags AS t",
+                "tags",
+            ),
         ],
     )
     def test_array_join_only_retypes_the_column_it_unwraps(self, sql, value):
@@ -334,6 +348,20 @@ class TestWindowFunctions:
         assert f"lagInFrame(toNullable(price)) OVER (ORDER BY id {_WHOLE}) AS p" in out
 
     @pytest.mark.parametrize(
+        "sql",
+        [
+            # Over a Map (its element is a Tuple), and over an untyped expression.
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events ARRAY JOIN attrs",
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v"
+            " FROM events ARRAY JOIN arrayEnumerate(tags) AS i",
+        ],
+    )
+    def test_an_array_join_it_cannot_follow_leaves_the_query_untyped(self, sql):
+        # Untyped keeps toNullable, as on main: a loud error, never a wrong NULL.
+        out = _rewrite(sql, manifest=_COMPOSITE_MANIFEST)
+        assert f"lagInFrame(toNullable(tags)) OVER (ORDER BY id {_WHOLE})" in out
+
+    @pytest.mark.parametrize(
         ("type_", "nullable"),
         [
             ("Array(String)", False),
@@ -347,7 +375,7 @@ class TestWindowFunctions:
             ("MultiLineString", False),
             ("Polygon", False),
             ("MultiPolygon", False),
-            ("Geometry", False),
+            ("Geometry", True),  # 24.3 and 25.3 accept it
             ("Float64", True),
             ("Tuple(a Int32)", True),
             ("JSON", True),

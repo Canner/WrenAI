@@ -41,9 +41,11 @@ from sqlglot.schema import Schema
 
 _DOW_UNITS = frozenset({"DOW", "DAYOFWEEK", "ISODOW"})
 
-# Types ClickHouse 26.10 rejects in ``toNullable`` (ILLEGAL_TYPE_OF_ARGUMENT).
-# It accepts Tuple (under the default ``enable_nullable_tuple_type = 1``), JSON,
-# Point, SimpleAggregateFunction and LowCardinality (as LowCardinality(Nullable)).
+# Types ``toNullable`` rejects (ILLEGAL_TYPE_OF_ARGUMENT) on every ClickHouse version
+# checked: 24.3 (WrenAI's connector tests), 25.3 and 26.10. Dropping ``toNullable``
+# for a type that some version accepts would return a default instead of NULL
+# there, so Geometry stays out (24.3 and 25.3 accept it), as do Tuple and Point
+# (26.10 accepts them). JSON, LowCardinality and SimpleAggregateFunction are accepted.
 _NOT_NULLABLE = frozenset(
     {
         exp.DataType.Type.ARRAY,
@@ -57,7 +59,6 @@ _NOT_NULLABLE = frozenset(
         exp.DataType.Type.MULTILINESTRING,
         exp.DataType.Type.POLYGON,
         exp.DataType.Type.MULTIPOLYGON,
-        exp.DataType.Type.GEOMETRY,
     }
 )
 
@@ -90,7 +91,7 @@ def type_window_values(ast: exp.Expression, schema: Schema) -> None:
         fn.meta[_VALUE_TAG] = i
     try:
         typed = _annotate(ast.copy(), schema)
-    except SqlglotError:
+    except (SqlglotError, _Unmodeled):
         return
     finally:
         for fn in fns:
@@ -99,53 +100,70 @@ def type_window_values(ast: exp.Expression, schema: Schema) -> None:
         fns[typed_fn.meta[_VALUE_TAG]].this.type = typed_fn.this.type
 
 
-def _annotate(ast: exp.Expression, schema: Schema) -> exp.Expression:
-    """Qualify and type *ast*, reading an ``ARRAY JOIN`` column as one element.
+class _Unmodeled(Exception):
+    """A ClickHouse construct whose types the LAG / LEAD typing doesn't follow."""
 
-    ``ARRAY JOIN tags`` replaces ``tags`` by one element per row in its SELECT,
-    but sqlglot keeps the column's array type there, and passes it up through
-    aliases, expressions and derived tables. So each such reference is cast to
-    the element type first; what is built on it (``tags AS t``, ``[tags]``,
-    ``upper(tags)``) then types correctly, and other SELECTs are untouched.
+
+def _annotate(ast: exp.Expression, schema: Schema) -> exp.Expression:
+    """Qualify and type *ast*, following ClickHouse's ``ARRAY JOIN``.
+
+    sqlglot doesn't model ``ARRAY JOIN``: in its SELECT, ``ARRAY JOIN tags`` makes
+    ``tags`` one element per row, and ``ARRAY JOIN grid AS cell`` makes ``cell``
+    one, but sqlglot keeps ``tags`` an array and doesn't type ``cell``. So each
+    such reference is cast to the element type before typing; aliases,
+    expressions and derived tables built on it then type correctly. SELECTs are
+    handled innermost first, since one may ARRAY JOIN a column an inner one
+    already unwrapped. An ``ARRAY JOIN`` this can't follow (over a Map, or over
+    something not typed as an Array) raises ``_Unmodeled``, so the whole query
+    stays untyped and keeps ``toNullable``.
     """
     qualified = qualify_columns(
         ast, schema=schema, dialect="clickhouse", allow_partial_qualification=True
     )
-    joins = [j for j in qualified.find_all(exp.Join) if j.args.get("kind") == "ARRAY"]
-    targets = [
-        (join, target)
-        for join in joins
-        for target in (join.this, *join.expressions)
-        if isinstance(target, exp.Column)
-    ]
-    if targets:
-        annotate_types(qualified, schema=schema, dialect="clickhouse")
-        elements = [_element_type(target.type) for _, target in targets]
-        for (join, target), element in zip(targets, elements, strict=True):
-            _cast_to_element(join, target, element)
-        for node in qualified.walk():
-            node.type = None
-    return annotate_types(qualified, schema=schema, dialect="clickhouse")
+    selects = [s for s in qualified.find_all(exp.Select) if _array_joins(s)]
+    for select in sorted(selects, key=_depth, reverse=True):
+        _retype(qualified, schema)
+        for join in _array_joins(select):
+            for item in (join.this, *join.expressions):
+                _unwrap(select, join, item)
+    return _retype(qualified, schema)
 
 
-def _element_type(array: exp.DataType | None) -> exp.DataType:
-    """The element type of an ``Array``; unknown for anything else (a ``Map``)."""
-    if array is not None and array.this == exp.DataType.Type.ARRAY and array.expressions:
-        return array.expressions[0].copy()
-    return exp.DataType(this=exp.DataType.Type.UNKNOWN)
+def _array_joins(select: exp.Select) -> list[exp.Join]:
+    return [j for j in select.args.get("joins") or [] if j.args.get("kind") == "ARRAY"]
 
 
-def _cast_to_element(join: exp.Join, target: exp.Column, element: exp.DataType) -> None:
-    """Cast every reference to *target* in the SELECT of *join* to *element*."""
-    select = join.find_ancestor(exp.Select)
+def _depth(node: exp.Expression) -> int:
+    depth = 0
+    while node.parent is not None:
+        node, depth = node.parent, depth + 1
+    return depth
+
+
+def _retype(ast: exp.Expression, schema: Schema) -> exp.Expression:
+    for node in ast.walk():
+        node.type = None
+    return annotate_types(ast, schema=schema, dialect="clickhouse")
+
+
+def _unwrap(select: exp.Select, join: exp.Join, item: exp.Expression) -> None:
+    """Cast what *item* of *join* names in *select* to the array's element type."""
+    if isinstance(item, exp.Alias):
+        array, name = item.this.type, ("", item.alias)
+    elif isinstance(item, exp.Column):
+        array, name = item.type, (item.table, item.name)
+    else:
+        raise _Unmodeled
+    if array is None or array.this != exp.DataType.Type.ARRAY or not array.expressions:
+        raise _Unmodeled
+    element = array.expressions[0]
     for column in list(select.find_all(exp.Column)):
         if (
-            column.find_ancestor(exp.Select) is not select
-            or column.find_ancestor(exp.Join) is join
-            or (column.table, column.name) != (target.table, target.name)
+            column.find_ancestor(exp.Select) is select
+            and column.find_ancestor(exp.Join) is not join
+            and (column.table, column.name) == name
         ):
-            continue
-        column.replace(exp.Cast(this=column.copy(), to=element.copy()))
+            column.replace(exp.Cast(this=column.copy(), to=element.copy()))
 
 
 def translate(ast: exp.Expression) -> exp.Expression:
