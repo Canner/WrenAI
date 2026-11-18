@@ -1880,7 +1880,7 @@ fn front_matter(text: &str) -> Result<Option<String>, &'static str> {
 /// when the text does not open with a fence. An unclosed block holds every remaining line.
 fn leading_block(text: &str) -> Option<(Vec<&str>, bool)> {
     let text = text.trim_start_matches('\u{feff}').trim_start();
-    let mut lines = text.lines();
+    let mut lines = split_lines(text);
     if lines.next().map(str::trim_end) != Some(FRONT_MATTER_FENCE) {
         return None;
     }
@@ -1892,6 +1892,41 @@ fn leading_block(text: &str) -> Option<(Vec<&str>, bool)> {
         block.push(line);
     }
     Some((block, false))
+}
+
+/// The lines of `text` as Python's `str.splitlines()` yields them, which is how the CLI splits a
+/// rule file: `\r\n`, a bare `\r` and the other Unicode line boundaries all end a line, where
+/// `str::lines()` only splits on `\n` and would read a CR-only file as a single line.
+fn split_lines(text: &str) -> impl Iterator<Item = &str> {
+    let mut rest = text;
+    std::iter::from_fn(move || {
+        if rest.is_empty() {
+            return None;
+        }
+        let Some((at, boundary)) = rest.char_indices().find(|&(_, c)| {
+            matches!(
+                c,
+                '\n' | '\r'
+                    | '\u{0b}'
+                    | '\u{0c}'
+                    | '\u{1c}'
+                    | '\u{1d}'
+                    | '\u{1e}'
+                    | '\u{85}'
+                    | '\u{2028}'
+                    | '\u{2029}'
+            )
+        }) else {
+            return Some(std::mem::take(&mut rest));
+        };
+        let line = &rest[..at];
+        let mut next = at + boundary.len_utf8();
+        if boundary == '\r' && rest[next..].starts_with('\n') {
+            next += 1;
+        }
+        rest = &rest[next..];
+        Some(line)
+    })
 }
 
 /// `^[a-z0-9][a-z0-9_-]{0,63}$`
