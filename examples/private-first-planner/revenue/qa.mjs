@@ -44,13 +44,17 @@ async function observe(f){return f.evaluate(()=>{
  drills:[...document.querySelectorAll('[data-drill]')].map(e=>({key:e.getAttribute('data-drill'),ok:visible(e)&&!e.disabled})),
  empty:!!one('[data-empty]'),error:!!one('[data-error]'),synthetic:/synthetic/i.test(document.body.innerText),
  warnings:[...(small?['small_text']:[]),...(document.documentElement.scrollWidth>innerWidth+1?['horizontal_overflow']:[])]};});}
+export function matchesBreadcrumb(value,state){
+ const dimension=state.dimension==='country'?/\bcountr(?:y|ies)\b/i:/\bchannels?\b/i;
+ return typeof value==='string'&&dimension.test(value)&&(state.parent===null||value.includes(state.parent));
+}
 export function compare(o,e,s,a){const fails=[];
  if(!Object.keys(e.k).every(k=>amount(o.k[k],e.k[k])))fails.push('kpi');
  if(o.rows.length!==e.groups.length||!e.groups.every((g,i)=>o.rows[i]?.label===g.label&&['gross','refunds','net','refund_ratio'].every(k=>amount(o.rows[i][k],g[k]))))fails.push('table');
  if(o.months.length!==e.months.length||o.trend.length!==e.months.length||!e.months.every(m=>o.months.filter(x=>x.key===m.month&&x.text===m.month).length===1&&o.trend.filter(x=>x.key===m.month&&amount(x.text,m.net)).length===1))fails.push('trend');
  if(o.labels.length!==e.groups.length||o.values.length!==e.groups.length||!e.groups.every(g=>o.labels.filter(x=>x.key===g.label&&x.text===g.label).length===1&&o.values.filter(x=>x.key===g.label&&amount(x.text,g.net)).length===1))fails.push('breakdown');
  if(!Object.keys(o.controls).every(k=>o.controls[k]===s[k]))fails.push('controls');
- if(!o.breadcrumb?.includes(s.dimension==='country'?'Country':'Channel')||(s.parent!==null&&!o.breadcrumb?.includes(s.parent)))fails.push('breadcrumb');
+ if(!matchesBreadcrumb(o.breadcrumb,s))fails.push('breadcrumb');
  if(![s.lower,s.upper,'UTC','inclusive','exclusive'].every(x=>o.period?.includes(x))||!o.synthetic)fails.push('scope');
  if(o.empty!==e.empty||o.error!==(a==='invalid-lower'))fails.push('empty_error');
  if(o.up!==(s.parent===null)||(s.parent===null?(o.drills.length!==e.groups.length||!e.groups.every(g=>o.drills.some(x=>x.key===g.label&&x.ok))):o.drills.length!==0))fails.push('drill_controls');

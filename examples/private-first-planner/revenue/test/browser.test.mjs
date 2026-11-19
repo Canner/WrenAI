@@ -52,3 +52,15 @@ test('insight oracle tests signed changes, missing prior data, and counterfactua
     assert.deepEqual((await inspectInsights(v.frame, changed, s)).failures, ['net_change']);
   } finally { await b.close(); }
 });
+import { matchesBreadcrumb } from '../qa.mjs';
+
+test('breadcrumb accepts ordinary singular/plural wording but still requires dimension and drill parent', () => {
+  const country = { dimension: 'country', parent: null };
+  for (const text of ['Country (root)', 'Breadcrumb: All Countries', 'By country']) assert.equal(matchesBreadcrumb(text, country), true);
+  assert.equal(matchesBreadcrumb('All Channels', country), false);
+  assert.equal(matchesBreadcrumb(null, country), false);
+  assert.equal(matchesBreadcrumb('Country: GB > channels', { ...country, parent: 'GB' }), true);
+  assert.equal(matchesBreadcrumb('All Countries', { ...country, parent: 'GB' }), false);
+  assert.equal(matchesBreadcrumb('Channels > Email', { dimension: 'channel', parent: 'Email' }), true);
+  assert.equal(matchesBreadcrumb('Country', { dimension: 'channel', parent: null }), false);
+});
