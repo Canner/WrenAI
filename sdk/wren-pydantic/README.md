@@ -29,6 +29,39 @@ Runnable demos:
   3-line quickstart. Smallest amount of code; recommended starting point.
 - [`examples/pydantic_ai_structured_demo.py`](./examples/pydantic_ai_structured_demo.py) —
   same shape with `output_type=` for structured / validated agent output.
+- [`examples/parallel_research_demo.py`](./examples/parallel_research_demo.py) —
+  combines governed Wren queries with public web search and page fetching.
+
+### Add public web context to data answers
+
+From a checkout of `sdk/wren-pydantic`, install the optional example dependencies
+in a fresh virtual environment:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e '.[research]'
+```
+
+After preparing a Wren project using the prerequisites below, run:
+
+```bash
+export OPENAI_API_KEY=...  # model credentials, not a Parallel key
+python examples/parallel_research_demo.py /path/to/analytics_db \
+  "Count our orders, then find public retail trends with source links."
+```
+
+The example adds [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp)
+through Streamable HTTP at `https://search.parallel.ai/mcp`. Web search uses Fast
+mode; search and page fetching are free for light use, with no Parallel account
+or API key. Anonymous rate limits apply. Use `--model` (or `WREN_RESEARCH_MODEL`)
+to select another Pydantic AI model and supply that provider's credentials.
+
+Wren tools answer internal data questions; `parallel_web_search` and
+`parallel_web_fetch` supply public context and source links. The example disables
+memory writes and instructs the agent to keep private data out of web requests.
+Those instructions are not an enforced data boundary: use the demo with data
+approved for your model provider and review web tool arguments for sensitive data.
 
 ## Prerequisites
 
