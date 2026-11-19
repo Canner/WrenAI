@@ -170,3 +170,12 @@ rates and ratio-of-sums before admission. Country/channel breakdowns do not impl
 hierarchies. Keep source SQL, model mappings and database details private. The
 current report runs from an offline snapshot; its injected transport interface
 reserves future host queries without putting credentials in generated frontend code.
+
+## Cube-insufficient report planning
+
+The [report fallback contract](../analysis/README.md) adds an independently evaluable
+`plan_semantic_query` Warble component. It selects an authorized semantic source and
+repeats the host-admitted aggregate request; it neither executes a connection nor
+creates a permanent cube. The host owns the existing Wren client, evidence checks
+and `aggregate-report/1` projection. Deployment members supply the authorized
+registry and domain verifier; no model-produced verification grant is accepted.

@@ -1,0 +1,102 @@
+{
+  "components": [
+    {
+      "borrowed_actions": [],
+      "context_binding": null,
+      "context_precondition": [],
+      "context_requirements": [],
+      "effect": {
+        "outcome": {
+          "kind": "none"
+        },
+        "render_blocks": []
+      },
+      "entrypoint": true,
+      "eval_ref": "select_report_source.eval",
+      "guardrails": [
+        {
+          "locked": true,
+          "name": "read_only_execution"
+        }
+      ],
+      "id": "select_report_source",
+      "llm_calls": [
+        {
+          "conditional": false,
+          "consumes": [],
+          "name": "respond",
+          "produces": null,
+          "prompt": "You are the private report planner. Interpret the user's question and return exactly\none select_report_source tool call. Use only the authorized catalog's semantic IDs,\nconfirmed measure definitions, supported grains and time coverage. A cube is reusable\nonly when it covers every requested measure, grouping, filter and period with the\nsame definitions. Reuse does not require a new cube for every question.\nIf a cube is insufficient, choose semantic_query: the private data worker will plan\nagainst authorized semantic sources. Do not write SQL or invent a cube, hierarchy,\nmeasure, relationship or unavailable capability. Do not shrink the user's request\njust to fit an existing cube. Use clarify for materially ambiguous intent or missing\nbusiness definitions, and unsupported for known unavailable data. Ask one concrete\nquestion; use existing conversation answers and declared defaults before asking.\nA ready decision contains a normalized aggregate request and an optional cube_id.\nNon-ready decisions have a question/reason and null request/cube_id. A ready decision\nhas null question/reason. This tool records a proposal; only the host can authorize\nqueries, accept results, create report capabilities or disclose anything to cloud.",
+          "tier": "cheap",
+          "when": null
+        }
+      ],
+      "params": [],
+      "precondition_result": {
+        "checks": [],
+        "status": "pass"
+      },
+      "prompt_fragment": "## respond\n\nYou are the private report planner. Interpret the user's question and return exactly\none select_report_source tool call. Use only the authorized catalog's semantic IDs,\nconfirmed measure definitions, supported grains and time coverage. A cube is reusable\nonly when it covers every requested measure, grouping, filter and period with the\nsame definitions. Reuse does not require a new cube for every question.\nIf a cube is insufficient, choose semantic_query: the private data worker will plan\nagainst authorized semantic sources. Do not write SQL or invent a cube, hierarchy,\nmeasure, relationship or unavailable capability. Do not shrink the user's request\njust to fit an existing cube. Use clarify for materially ambiguous intent or missing\nbusiness definitions, and unsupported for known unavailable data. Ask one concrete\nquestion; use existing conversation answers and declared defaults before asking.\nA ready decision contains a normalized aggregate request and an optional cube_id.\nNon-ready decisions have a question/reason and null request/cube_id. A ready decision\nhas null question/reason. This tool records a proposal; only the host can authorize\nqueries, accept results, create report capabilities or disclose anything to cloud.",
+      "realization_kind": "skill",
+      "required_capabilities": [
+        "llm:cheap"
+      ],
+      "trigger": {
+        "kind": "one_shot"
+      },
+      "type": "analytical",
+      "verb": "select_report_source"
+    },
+    {
+      "borrowed_actions": [],
+      "context_binding": null,
+      "context_precondition": [],
+      "context_requirements": [],
+      "effect": {
+        "outcome": {
+          "kind": "none"
+        },
+        "render_blocks": []
+      },
+      "entrypoint": true,
+      "eval_ref": "plan_semantic_query.eval",
+      "guardrails": [
+        {
+          "locked": true,
+          "name": "read_only_execution"
+        }
+      ],
+      "id": "plan_semantic_query",
+      "llm_calls": [
+        {
+          "conditional": false,
+          "consumes": [],
+          "name": "respond",
+          "produces": null,
+          "prompt": "You are the private data worker's semantic-query planning component. Receive the\nhost-admitted aggregate request, authorized semantic source catalog and private\nmetadata. Return exactly one plan_semantic_query tool call. Select one semantic\nsource that can satisfy the complete request, using its confirmed measures,\ndimensions, relationships, default rules and time grain. A source may be a semantic\nmodel or an already confirmed join/view; do not invent a new join or measure.\nA ready query repeats the admitted request exactly and names the semantic source.\nDo not replace the period, drop filters, add raw columns or fetch extra dimensions.\nUse clarify for unresolved business semantics, unsupported for unavailable data.\nNon-ready decisions have a question/reason and null query/source_id. A ready decision\nhas null question/reason. Do not produce raw SQL, create persistent cubes, access\nconnections, grant export or call cloud models. The host sends the validated semantic\nplan to its existing Wren client and checks execution evidence. Metadata and any\nexecution SQL remain private; report capabilities are projected by the host.",
+          "tier": "cheap",
+          "when": null
+        }
+      ],
+      "params": [],
+      "precondition_result": {
+        "checks": [],
+        "status": "pass"
+      },
+      "prompt_fragment": "## respond\n\nYou are the private data worker's semantic-query planning component. Receive the\nhost-admitted aggregate request, authorized semantic source catalog and private\nmetadata. Return exactly one plan_semantic_query tool call. Select one semantic\nsource that can satisfy the complete request, using its confirmed measures,\ndimensions, relationships, default rules and time grain. A source may be a semantic\nmodel or an already confirmed join/view; do not invent a new join or measure.\nA ready query repeats the admitted request exactly and names the semantic source.\nDo not replace the period, drop filters, add raw columns or fetch extra dimensions.\nUse clarify for unresolved business semantics, unsupported for unavailable data.\nNon-ready decisions have a question/reason and null query/source_id. A ready decision\nhas null question/reason. Do not produce raw SQL, create persistent cubes, access\nconnections, grant export or call cloud models. The host sends the validated semantic\nplan to its existing Wren client and checks execution evidence. Metadata and any\nexecution SQL remain private; report capabilities are projected by the host.",
+      "realization_kind": "skill",
+      "required_capabilities": [
+        "llm:cheap"
+      ],
+      "trigger": {
+        "kind": "one_shot"
+      },
+      "type": "analytical",
+      "verb": "plan_semantic_query"
+    }
+  ],
+  "config": {},
+  "context_binding": null,
+  "profile": "report-planning",
+  "warble_ir_version": "0.9"
+}

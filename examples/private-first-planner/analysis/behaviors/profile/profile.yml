@@ -1,0 +1,4 @@
+profile: report-planning
+components:
+  - use: select_report_source
+  - use: plan_semantic_query

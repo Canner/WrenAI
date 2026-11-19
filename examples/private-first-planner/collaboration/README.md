@@ -130,3 +130,8 @@ privately reconciled revenue snapshot into a capability contract and standalone
 HTML query runtime. Its host transport seam is tested with scripted responses;
 real host query execution remains a separate integration. It preserves free
 frontend generation and chart-driven interactions.
+
+The [cube selection and semantic fallback entry](../analysis/README.md) keeps
+private planner and data-worker planning separately evaluable, executes through
+the host Wren adapter, and issues a generic aggregate report contract after trusted
+verification. Existing dashboard/replay entry points remain separate and compatible.
