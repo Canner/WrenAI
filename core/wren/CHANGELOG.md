@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.18.1](https://github.com/Canner/WrenAI/compare/wren-v0.18.0...wren-v0.18.1) (2026-11-19)
+
+
+### Dependencies
+
+* patch high and moderate security advisories in lockfiles ([#2857](https://github.com/Canner/WrenAI/issues/2857)) ([c9dfe00](https://github.com/Canner/WrenAI/commit/c9dfe005541e1cef8245af75797b8135c85a07dd))
+
+
+### Documentation
+
+* fix broken links in the core docs index and wren READMEs ([#2866](https://github.com/Canner/WrenAI/issues/2866)) ([a1aca3d](https://github.com/Canner/WrenAI/commit/a1aca3d474a4fbdc9b7d2a1dca0a7988213c56ee))
+
 ## [0.18.0](https://github.com/Canner/WrenAI/compare/wren-v0.17.1...wren-v0.18.0) (2026-11-10)
 
 
