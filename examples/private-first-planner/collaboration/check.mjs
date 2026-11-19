@@ -33,7 +33,7 @@ export async function stepsFor(gate, out, configPath) {
   if (gate === 'worker-service') return [node('eval/run.mjs', 'data-worker', join(out, 'worker'), resolve(configPath))];
   if (gate === 'host-service') return [node('host/verify.mjs', join(out, 'host'), resolve(configPath))];
   if (gate === 'interactive') return [node('--test', 'interactive/test/browser.test.mjs'), node('interactive/run.mjs', join(out, 'suite'))];
-  if (gate === 'browser') return [node('--test', 'design/test/browser.test.mjs', 'host/browser.test.mjs', 'revenue/test/browser.test.mjs', 'revenue/report/browser.test.mjs'),
+  if (gate === 'browser') return [node('--test', 'design/test/browser.test.mjs', 'host/browser.test.mjs', 'revenue/test/browser.test.mjs', 'revenue/report/browser.test.mjs', 'analysis/browser/browser.test.mjs'),
     node('eval/run.mjs', 'cloud-planner', join(out, 'cloud-browser'), '--browser')];
   if (gate === 'behaviors') return [node('behaviors/compile.mjs', '--check'),node('interactive/behaviors/compile.mjs', '--check'),node('revenue/behaviors/compile.mjs', '--check'),node('analysis/behaviors/compile.mjs', '--check')];
   const config = JSON.parse(await readFile(configPath, 'utf8'));

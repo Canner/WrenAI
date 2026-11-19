@@ -135,3 +135,5 @@ The [cube selection and semantic fallback entry](../analysis/README.md) keeps
 private planner and data-worker planning separately evaluable, executes through
 the host Wren adapter, and issues a generic aggregate report contract after trusted
 verification. Existing dashboard/replay entry points remain separate and compatible.
+
+The [aggregate report browser binding](../analysis/README.md#interactive-offline-binding) exports verified cube or semantic-query reports to the same free-layout dashboard sandbox. It is covered by the offline and browser gates.

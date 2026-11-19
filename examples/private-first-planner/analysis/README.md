@@ -113,8 +113,9 @@ This general contract is distinct from the existing fixed revenue snapshot
 `revenue-report/1`. Do not put product/profit results into that old runtime or invent
 a cube ID to make it accept a fallback. A frontend must explicitly consume the new
 contract or a deployment must provide a verified projection to the old revenue
-shape. This work produces capabilities/data; it does not invoke a designer, generate
-a new dashboard, provide a general in-browser query engine, or change old HTML.
+shape. The planning entry produces capabilities/data; it does not invoke a designer or
+change old HTML. The optional browser binding below supplies bounded offline
+aggregation to free frontend code.
 A completed private report does not grant cloud disclosure. Feed only an authorized
 projection through the existing ExportBroker and its explicit grant/freshness checks
 before any future cloud use.
@@ -138,3 +139,44 @@ They verify sequencing/contracts, not real Nemotron accuracy or new real-databas
 fallback acceptance. Reuse, channel/product fallback, ambiguity, missing measures,
 invalid plans/results, authorization, revisions, continuation and cancellation are
 covered. Preserve old model runs and report artifacts as separate baselines.
+
+## Interactive offline binding
+
+`analysis/browser/export.mjs` exports an admitted report with a freely authored
+HTML/CSS/JavaScript spec and its matching data bundle. Layout and chart rendering
+remain frontend code; the trusted runtime supplies aggregation, not a renderer.
+
+```js
+import {aggregateReportDocument} from './browser/export.mjs';
+const html = aggregateReportDocument(spec, bundle, state.report);
+// In the sandboxed frontend:
+const answer = await window.reportData.query({
+  lower: '2026-04-01', upper: '2026-07-01', dimension: 'country',
+  filters: {}, path: [],
+});
+// answer.result: totals, groups, trend, empty, unavailable
+```
+
+`window.reportData.capabilities` and `.catalog` declare the available metrics,
+units and dimension values. Filters select arrays of declared values; chart clicks
+append `{dimension, value}` to `path` and select a declared breakdown dimension.
+Roll-up removes a path item, and reset restores the frontend's declared initial
+state. Cross-dimension breakdown is not an invented hierarchy. KPI cards, filters,
+period controls, chart labels and visible drill state must all use the same query.
+Only snapshot-covered, grain-aligned periods are accepted. Ratio-of-sums requires
+its components; unknown/non-additive multirow values return null, not zero.
+
+The `aggregate-query/1` response includes request and data-version identities.
+Free frontend code must suppress stale responses if it adds asynchronous effects.
+The runtime is an offline snapshot adapter: no network, WASM, credentials or live
+refresh. Future host queries require a separate authorized rebind/transport.
+Structural export validation checks identity and capabilities; it does not confer
+semantic verification, authorization or cloud disclosure. Only export reports
+already admitted by the host and match `bundle.payload` to the report payload.
+Decimal aggregation uses compensated floating sums, not arbitrary precision.
+
+The offline gate tests capability/identity rejection and aggregation semantics;
+the browser gate exercises actual file HTML, sandbox execution and disabled
+network. Existing fixed revenue exports and their baselines remain unchanged.
+Planner/worker clarification may include an explanatory text `reason`, but must
+still contain no executable request or source selection.
