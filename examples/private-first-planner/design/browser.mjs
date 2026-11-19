@@ -44,8 +44,8 @@ export function previewDocument(spec,payload,viewport={height:900}) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0}iframe{width:100%;height:${viewport.height}px;border:0;display:block}</style></head><body><iframe title="Generated dashboard" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="${attr(document)}"></iframe></body></html>`;
 }
 
-export async function loadPreview(browser,spec,payload,viewport) {
-  const context=await browser.newContext({viewport,serviceWorkers:'block',acceptDownloads:false,offline:true});
+export async function loadPreview(browser,spec,payload,viewport,{hasTouch=false}={}) {
+  const context=await browser.newContext({viewport,hasTouch,serviceWorkers:'block',acceptDownloads:false,offline:true});
   const network=[],errors=[],consoleErrors=[];
   await context.route('**/*',route=>{network.push({kind:'request',url:route.request().url()});return route.abort();});
   await context.routeWebSocket('**/*',socket=>{network.push({kind:'websocket',url:socket.url()});socket.close();});

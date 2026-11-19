@@ -4,6 +4,7 @@ import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
 import {inspectInsights} from './insights.mjs';
 import {resetHorizontalScroll,probeDrillReachability} from './reachability.mjs';
+import {inspectChartNavigation,activateChartGroup,matchesChartNavigation,commitMonthInput} from './chart-interaction.mjs';
 import {isolatedBrowser,loadPreview,capturePreview} from '../design/browser.mjs';
 import {inspectChart} from '../design/chart.mjs';
 import {validateCode} from '../design/contracts.mjs';
@@ -25,6 +26,7 @@ export function journey(p){let s=defaults(p);const steps=[{action:'initial',stat
  const country=[...new Set(p.rows.map(r=>r[1]))].sort().at(-1),channels=[...new Set(p.rows.filter(r=>r[1]===country).map(r=>r[2]))].sort(),channel=channels[Math.floor(channels.length/2)];
  const first=s.dimension==='country'?country:channel,second=s.dimension==='country'?'channel':'country';
  add('country',country,{country,parent:null});add('drill',first,{parent:first});add('roll-up',null,{parent:null});
+ for(const action of ['drill-mark','drill-enter','drill-space']){add(action,first,{parent:first});add('roll-up',null,{parent:null});}
  add('channel',channel,{channel,parent:null});add('dimension',second,{dimension:second,parent:null});add('drill',second==='country'?country:channel,{parent:second==='country'?country:channel});add('roll-up',null,{parent:null});
  add('lower',advance(p.coverage.upper_exclusive,-1),{lower:advance(p.coverage.upper_exclusive,-1),parent:null});add('upper',p.coverage.upper_exclusive,{upper:p.coverage.upper_exclusive,parent:null});add('reset',null,defaults(p));
  add('lower',p.coverage.lower,{lower:p.coverage.lower,parent:null});const early=advance(p.coverage.lower,6)<p.coverage.upper_exclusive?advance(p.coverage.lower,6):p.coverage.upper_exclusive;
@@ -41,7 +43,7 @@ async function observe(f){return f.evaluate(()=>{
  return {k:Object.fromEntries(['net','gross','refunds','refund_ratio','yoy'].map(k=>[k,one(`[data-kpi="${k}"]`)])),controls,rows,
  months:map('[data-month]','data-month'),trend:map('[data-trend-value]','data-trend-value'),labels:map('[data-chart-label]','data-chart-label'),values:map('[data-chart-value]','data-chart-value'),
  breadcrumb:one('[data-breadcrumb]'),period:one('[data-period]'),up:up&&visible(up)?up.disabled:null,
- drills:[...document.querySelectorAll('[data-drill]')].map(e=>({key:e.getAttribute('data-drill'),ok:visible(e)&&!e.disabled})),
+ drills:[...document.querySelectorAll('[data-chart="breakdown"] [data-drill]')].map(e=>({key:e.getAttribute('data-drill'),ok:visible(e)&&!e.disabled})),
  empty:!!one('[data-empty]'),error:!!one('[data-error]'),synthetic:/synthetic/i.test(document.body.innerText),
  warnings:[...(small?['small_text']:[]),...(document.documentElement.scrollWidth>innerWidth+1?['horizontal_overflow']:[])]};});}
 export function matchesBreadcrumb(value,state){
@@ -58,15 +60,16 @@ export function compare(o,e,s,a){const fails=[];
  if(![s.lower,s.upper,'UTC','inclusive','exclusive'].every(x=>o.period?.includes(x))||!o.synthetic)fails.push('scope');
  if(o.empty!==e.empty||o.error!==(a==='invalid-lower'))fails.push('empty_error');
  if(o.up!==(s.parent===null)||(s.parent===null?(o.drills.length!==e.groups.length||!e.groups.every(g=>o.drills.some(x=>x.key===g.label&&x.ok))):o.drills.length!==0))fails.push('drill_controls');
+ if(!matchesChartNavigation(o.chart_navigation,s.parent===null?e.groups.map(g=>g.label):[]))fails.push('chart_navigation');
  return fails;}
-async function act(f,{action:a,value:v}){if(a==='initial')return;if(a==='reset'||a==='roll-up')await f.locator(`[data-action="${a}"]`).click();else if(a==='drill')await f.locator(`[data-drill=${JSON.stringify(v)}]`).click();else if(['lower','upper','invalid-lower'].includes(a)){const e=f.locator(`[data-control="${a==='invalid-lower'?'lower':a}"]`);await e.fill(v);await e.press('Tab');}else await f.locator(`[data-control="${a}"]`).selectOption(v);await f.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));}
+async function act(f,{action:a,value:v}){if(a==='initial')return;if(a==='reset'||a==='roll-up')await f.locator(`[data-action="${a}"]`).click();else if(a.startsWith('drill'))await activateChartGroup(f,v,{'drill':'label','drill-mark':'mark','drill-enter':'Enter','drill-space':'Space'}[a]);else if(['lower','upper','invalid-lower'].includes(a)){const e=f.locator(`[data-control="${a==='invalid-lower'?'lower':a}"]`);await e.fill(v);await commitMonthInput(e);}else await f.locator(`[data-control="${a}"]`).selectOption(v);await f.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));}
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
 const [input,out]=process.argv.slice(2);
 try {const {spec,bundle,analysis_plan}=JSON.parse(await readFile(input,'utf8'));admittedPlan=analysis_plan??null;validateCode(spec,bundle);await mkdir(out,{recursive:true});const b=await isolatedBrowser();const records=[],warnings=new Set();
  const changed=structuredClone(bundle.payload);changed.rows=changed.rows.map((r,i)=>[r[0],r[1]+' X','Alt '+r[2],r[3]+(i+1)*100000000,r[4]+100000000]);
  try {for(const [kind,p] of [['original',bundle.payload],['changed',changed]])for(const width of [1280,390]){const v=await loadPreview(b.browser,spec,p,{width,height:900});
   try{for(const [i,step]of journey(p).entries()){let o=null,failures=[];const start=performance.now();
-   try{await act(v.frame,step);await resetHorizontalScroll(v.frame);o=await observe(v.frame);o.drill_reachability=await probeDrillReachability(v.frame,o.drills);if(o.drill_reachability.some(x=>x.reachable))warnings.add('horizontal_scroll_for_drill');const e=expected(p,step.state);failures=compare(o,e,step.state,step.action);o.analysis=await inspectInsights(v.frame,p,step.state,admittedPlan);if(o.analysis.failures.length)failures.push('insight_data');o.warnings.forEach(x=>warnings.add(x));
+   try{await act(v.frame,step);await resetHorizontalScroll(v.frame);o=await observe(v.frame);o.chart_navigation=await inspectChartNavigation(v.frame);o.drill_reachability=await probeDrillReachability(v.frame,o.drills,'[data-chart="breakdown"] ');if(o.drill_reachability.some(x=>x.reachable))warnings.add('horizontal_scroll_for_drill');const e=expected(p,step.state);failures=compare(o,e,step.state,step.action);o.analysis=await inspectInsights(v.frame,p,step.state,admittedPlan);if(o.analysis.failures.length)failures.push('insight_data');o.warnings.forEach(x=>warnings.add(x));
     for(const [marker,rows]of [['trend',e.months],['breakdown',e.groups]])if(rows.some(r=>r.net!==0)){const chart=await inspectChart(v.frame,{datasets:[{}, {rows}]},{marker,contract:'revenue-chart/1',recover:false});if(!chart.present)failures.push('chart_rendering');}
    }catch{failures.push('interaction');}
    if(v.errors.length||v.consoleErrors.length)failures.push('runtime_error');if(v.network.length||v.consoleErrors.some(x=>/connect-src|Connecting to|Refused to connect/i.test(x)))failures.push('network_attempt');
@@ -76,7 +79,7 @@ try {const {spec,bundle,analysis_plan}=JSON.parse(await readFile(input,'utf8'));
   }}finally{await v.context.close();}
  }}finally{await b.close();}
  const failures=records.flatMap(r=>r.failures),pass=!failures.length&&records.length===journey(bundle.payload).length*4;
- const qa={version:'revenue-browser/1',pass,warnings:[...warnings],records,repair_codes:pass||failures.includes('network_attempt')?[]:[...new Set(failures.map(f=>['interaction','runtime_error','controls','breadcrumb','empty_error','drill_controls'].includes(f)?'interaction':f==='chart_rendering'?f:'data_binding'))]};
+ const qa={version:'revenue-browser/2',pass,warnings:[...warnings],records,repair_codes:pass||failures.includes('network_attempt')?[]:[...new Set(failures.map(f=>['interaction','runtime_error','controls','breadcrumb','empty_error','drill_controls','chart_navigation'].includes(f)?'interaction':f==='chart_rendering'?f:'data_binding'))]};
  await writeFile(join(out,'qa.json'),JSON.stringify(qa,null,2));
 }catch(e){await writeFile(join(out,'qa-error.txt'),String(e));process.exitCode=1;}
 

@@ -106,13 +106,18 @@ loopback transport, export projection and SSE limits. Isolated-browser tests cov
 immutable direct payload access, the wrong-envelope regression, real scrollable
 control reachability, hidden/disabled controls and counterfactual insight checks.
 
-The live browser evaluator drives 17 states over desktop/mobile and original/
-changed aggregates (68 observations). KPI, trend, detail, filters, dimension,
+The `revenue-browser/2` evaluator drives 23 states over desktop/mobile and original/
+changed aggregates (92 observations). KPI, trend, detail, filters, dimension,
 drill, roll-up, reset and invalid interval behavior are checked independently.
 Missing insight summaries reduce quality coverage; incorrect visible values fail
 admission. Ordinary JS errors may use the bounded repair; network attempts do not.
 A scrollable drill button must pass a real trial-click reachability probe, then the
-journey exercises actual clicks. It retains a horizontal-scroll quality warning.
+journey exercises actual chart-label/mark clicks and Enter/Space activation. The
+breakdown chart owns one accessible `data-drill` control per root group, containing
+both `data-chart-label` and `data-drill-mark`. Its `data-chart-section="breakdown"`
+also contains the roll-up button, next to the chart heading or breadcrumb. Tables
+alone cannot satisfy drill navigation. Touch activation is covered by an offline
+browser regression. It retains a horizontal-scroll quality warning.
 Visual/contrast warnings stay separate from data and interaction failures.
 
 Historical comparison requires an explicit scope alignment. A different model-

@@ -4,6 +4,37 @@ import { isolatedBrowser, loadPreview } from '../../design/browser.mjs';
 import { probeDrillReachability } from '../reachability.mjs';
 import { insightOracle, compareInsights, inspectInsights } from '../insights.mjs';
 import { payload } from './fixture.mjs';
+import { activateChartGroup, inspectChartNavigation, matchesChartNavigation, commitMonthInput } from '../chart-interaction.mjs';
+
+test('chart label, mark, touch and keyboard share drill behavior; roll-up is chart-local', async () => {
+  const browser = await isolatedBrowser();
+  const spec = { html: '<label>Month<input type="month"></label><section data-chart-section="breakdown"><h2>Revenue</h2><button data-action="roll-up" disabled>Roll up</button><div data-chart="breakdown"><button data-drill="North"><span data-chart-label="North">North</span><span data-drill-mark></span></button></div><output>All</output></section>',
+    css: 'button{min-height:44px} [data-drill-mark]{display:inline-block;width:100px;height:24px;background:blue;margin:8px}',
+    javascript: `const group=document.querySelector('[data-drill]'),up=document.querySelector('[data-action]'),out=document.querySelector('output');
+group.addEventListener('click',()=>{out.textContent='North detail';up.disabled=false});
+up.addEventListener('click',()=>{out.textContent='All';up.disabled=true});` };
+  try {
+    const view = await loadPreview(browser.browser, spec, {}, { width: 390, height: 900 }, { hasTouch: true });
+    assert(matchesChartNavigation(await inspectChartNavigation(view.frame), ['North']));
+    const month = view.frame.locator('input'); await month.fill('2024-04'); await commitMonthInput(month);
+    assert.equal(await month.evaluate(el => el === document.activeElement), false);
+    for (const mode of ['label', 'mark', 'Enter', 'Space', 'tap']) {
+      await activateChartGroup(view.frame, 'North', mode);
+      assert.equal(await view.frame.locator('output').innerText(), 'North detail', mode);
+      await view.frame.locator('[data-action="roll-up"]').click();
+      assert.equal(await view.frame.locator('output').innerText(), 'All');
+    }
+    assert.deepEqual(view.errors, []); assert.deepEqual(view.network, []);
+    // Reproduce the old table-only contract: a working button elsewhere cannot
+    // substitute for clicking the chart. Moving only roll-up also fails.
+    await view.frame.evaluate(() => document.body.append(document.querySelector('[data-drill]')));
+    assert.equal(matchesChartNavigation(await inspectChartNavigation(view.frame), ['North']), false);
+    await assert.rejects(activateChartGroup(view.frame, 'North'));
+    await view.frame.evaluate(() => { document.querySelector('[data-chart]').append(document.querySelector('[data-drill]')); document.body.append(document.querySelector('[data-action]')); });
+    assert.equal(matchesChartNavigation(await inspectChartNavigation(view.frame), ['North']), false);
+    await view.context.close();
+  } finally { await browser.close(); }
+});
 
 test('real isolated browser exposes immutable payload directly, not the generation envelope or private brief', async () => {
   const b = await isolatedBrowser();

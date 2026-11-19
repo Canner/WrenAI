@@ -13,7 +13,7 @@ import { createPlannerContract, admitPlan, periodOptions, cloudBrief } from './c
 import { artifact } from './behaviors/index.mjs';
 import { openReplay } from './replay.mjs';
 
-export const protocol = Object.freeze({ version: 'revenue-replay-run/1', planner_max_tokens: 4096,
+export const protocol = Object.freeze({ version: 'revenue-replay-run/2', planner_max_tokens: 4096,
   planner_timeout_ms: 120000, planner_attempts: 1, cloud_max_output_tokens: 12288,
   cloud_max_repairs: 1, cloud_cli_budget_usd: 0.50, max_sse_bytes: maxSseBytes,
   data_worker: 'verified_aggregate_replay', sample_policy: 'Preserve all failures; no replacement samples.' });
@@ -76,7 +76,7 @@ export async function runReplay(config, directory, { planner, makeDesigner, insp
         const input = join(folder, 'candidate.json'); await writeFile(input, JSON.stringify({ ...generated, analysis_plan: plan }, null, 2), { mode: 0o600 });
         const qa = inspect ? await inspect(generated, plan) : await runQA(input, folder, {
           entrypoint: new URL('./qa.mjs', import.meta.url), timeoutMs: Math.min(60000, control.timeoutMs), signal: control.signal });
-        return inspect || (qa.process_exit === 0 && qa.version === 'revenue-browser/1') ? qa
+        return inspect || (qa.process_exit === 0 && qa.version === 'revenue-browser/2') ? qa
           : { pass: false, repair_codes: [], reason: 'qa_unavailable' };
       },
       save: async record => { const file = join(out, `attempt-${saveIndex++}.json`);
