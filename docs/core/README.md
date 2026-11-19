@@ -12,20 +12,20 @@ Changes merged to `main` are automatically synced to the doc website via GitHub 
 
 - [Installation](get_started/installation.md) — agent-driven or manual CLI install
 - [Quickstart](get_started/quickstart.md) — try the bundled `jaffle_shop` demo
-- [Connect Your Database](get_started/connect.md)
+- [Connect Your Database](guides/connect.md)
 
 ## Concepts
 
 - [What is Context?](concepts/what_is_context.md)
 - [What is MDL?](concepts/what_is_mdl.md)
 - [Benefits for LLMs](concepts/benefits_llm.md)
-- [Architecture](concepts/architecture.md)
+- [Architecture](reference/architecture.md)
 
 ## Guides
 
 - [Data Modeling Overview](guides/modeling/overview.md)
 - [Wren Project Structure](guides/modeling/wren_project.md)
-- [Models](guides/modeling/model.md)
+- [Models](guides/model.md)
 - [Relations](guides/modeling/relation.md)
 - [Views](guides/modeling/view.md)
 - [Memory](guides/memory.md)
