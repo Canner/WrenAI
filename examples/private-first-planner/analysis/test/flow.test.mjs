@@ -98,3 +98,10 @@ test('cancel while waiting removes the question; a closed host cannot resume or 
   await assert.rejects(h.answer(waiting.question_id, 'Answer'));
   h.close(); await assert.rejects(h.submit('Another question')); assert(!p.calls.includes('execute_query'));
 });
+
+test('clarification can include a reason without granting an executable request', async () => {
+  const c = clarify(false); c.args.reason = 'The metric and period have not been selected.';
+  const p = ports(model(c)), h = new ReportSession(p), s = await h.submit('Compare performance');
+  assert.equal(s.state, 'waiting_for_user'); assert(!p.calls.includes('execute_query'));
+  c.args.request = query(); assert.throws(() => admitDecision(c));
+});

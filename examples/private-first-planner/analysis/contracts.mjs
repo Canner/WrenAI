@@ -70,7 +70,7 @@ export function admitDecision(proposed, worker = false) {
   requireThat(['ready', 'clarify', 'unsupported'].includes(a.status));
   if (a.status !== 'ready') {
     requireThat(a[worker ? 'source_id' : 'cube_id'] === null && a[worker ? 'query' : 'request'] === null && (worker || a.route === 'none'));
-    requireThat(a.status === 'clarify' ? text(a.question) && a.reason === null : text(a.reason) && a.question === null);
+    requireThat(a.status === 'clarify' ? text(a.question) && (a.reason === null || text(a.reason)) : text(a.reason) && a.question === null);
   } else {
     requireThat(a.question === null && a.reason === null); request(a[worker ? 'query' : 'request']);
     requireThat(worker ? id(a.source_id) : ['cube', 'semantic_query'].includes(a.route) && (a.route === 'cube' ? id(a.cube_id) : a.cube_id === null));
