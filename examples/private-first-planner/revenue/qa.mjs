@@ -2,6 +2,7 @@ import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
+import {createCapabilities,validateCapabilities,reportBootstrap} from './report/contract.mjs';
 import {inspectInsights} from './insights.mjs';
 import {resetHorizontalScroll,probeDrillReachability} from './reachability.mjs';
 import {inspectChartNavigation,activateChartGroup,matchesChartNavigation,commitMonthInput} from './chart-interaction.mjs';
@@ -65,9 +66,9 @@ export function compare(o,e,s,a){const fails=[];
 async function act(f,{action:a,value:v}){if(a==='initial')return;if(a==='reset'||a==='roll-up')await f.locator(`[data-action="${a}"]`).click();else if(a.startsWith('drill'))await activateChartGroup(f,v,{'drill':'label','drill-mark':'mark','drill-enter':'Enter','drill-space':'Space'}[a]);else if(['lower','upper','invalid-lower'].includes(a)){const e=f.locator(`[data-control="${a==='invalid-lower'?'lower':a}"]`);await e.fill(v);await commitMonthInput(e);}else await f.locator(`[data-control="${a}"]`).selectOption(v);await f.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));}
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
 const [input,out]=process.argv.slice(2);
-try {const {spec,bundle,analysis_plan}=JSON.parse(await readFile(input,'utf8'));admittedPlan=analysis_plan??null;validateCode(spec,bundle);await mkdir(out,{recursive:true});const b=await isolatedBrowser();const records=[],warnings=new Set();
+try {const {spec,bundle,analysis_plan,report_capabilities}=JSON.parse(await readFile(input,'utf8'));admittedPlan=analysis_plan??null;validateCode(spec,bundle);if(report_capabilities)validateCapabilities(report_capabilities,bundle.payload);await mkdir(out,{recursive:true});const b=await isolatedBrowser();const records=[],warnings=new Set();
  const changed=structuredClone(bundle.payload);changed.rows=changed.rows.map((r,i)=>[r[0],r[1]+' X','Alt '+r[2],r[3]+(i+1)*100000000,r[4]+100000000]);
- try {for(const [kind,p] of [['original',bundle.payload],['changed',changed]])for(const width of [1280,390]){const v=await loadPreview(b.browser,spec,p,{width,height:900});
+ try {for(const [kind,p] of [['original',bundle.payload],['changed',changed]])for(const width of [1280,390]){const cap=report_capabilities&&(kind==='original'?report_capabilities:createCapabilities(p,{cube_id:report_capabilities.cube.id,cube_revision:report_capabilities.cube.revision}));const v=await loadPreview(b.browser,spec,p,{width,height:900},cap?{bootstrap:reportBootstrap(cap,p)}:{});
   try{for(const [i,step]of journey(p).entries()){let o=null,failures=[];const start=performance.now();
    try{await act(v.frame,step);await resetHorizontalScroll(v.frame);o=await observe(v.frame);o.chart_navigation=await inspectChartNavigation(v.frame);o.drill_reachability=await probeDrillReachability(v.frame,o.drills,'[data-chart="breakdown"] ');if(o.drill_reachability.some(x=>x.reachable))warnings.add('horizontal_scroll_for_drill');const e=expected(p,step.state);failures=compare(o,e,step.state,step.action);o.analysis=await inspectInsights(v.frame,p,step.state,admittedPlan);if(o.analysis.failures.length)failures.push('insight_data');o.warnings.forEach(x=>warnings.add(x));
     for(const [marker,rows]of [['trend',e.months],['breakdown',e.groups]])if(rows.some(r=>r.net!==0)){const chart=await inspectChart(v.frame,{datasets:[{}, {rows}]},{marker,contract:'revenue-chart/1',recover:false});if(!chart.present)failures.push('chart_rendering');}

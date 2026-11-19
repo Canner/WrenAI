@@ -158,3 +158,15 @@ tests do not establish live correctness or private endpoint residency. Known
 live investigation topics include intermittent invalid evidence and choosing
 the wrong business definition; preserved historic traces are maintained outside
 this public source package and must be shared through an approved private channel.
+
+## Optional cube-backed report handoff
+
+The [revenue report binding](../revenue/report/README.md) needs a privately verified
+cube revision plus complete authorized month/country/channel aggregates. The
+worker's deliverable is semantic/reconciliation evidence, not another public MCP
+server. The host retains Wren access, authorization, capability projection and
+export. Verify additive integer units, transaction-date FX/refund scope, missing
+rates and ratio-of-sums before admission. Country/channel breakdowns do not imply
+hierarchies. Keep source SQL, model mappings and database details private. The
+current report runs from an offline snapshot; its injected transport interface
+reserves future host queries without putting credentials in generated frontend code.

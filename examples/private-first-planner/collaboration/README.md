@@ -124,3 +124,9 @@ pi/Wren route or reclassify previous model results. Run `interactive` alongside
 The [monthly revenue replay workflow](../revenue/README.md) is included in the
 `offline`, `browser` and `behaviors` gates. It reuses shared pi, export and designer
 boundaries without changing the durable Wren controller or worker protocol.
+
+The optional [cube-backed report adapter](../revenue/report/README.md) projects a
+privately reconciled revenue snapshot into a capability contract and standalone
+HTML query runtime. Its host transport seam is tested with scripted responses;
+real host query execution remains a separate integration. It preserves free
+frontend generation and chart-driven interactions.

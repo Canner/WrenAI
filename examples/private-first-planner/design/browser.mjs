@@ -31,20 +31,22 @@ export async function isolatedBrowser({headless=true}={}) {
 const hash = text => createHash('sha256').update(text).digest('base64');
 const attr = s => s.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 
-export function previewDocument(spec,payload,viewport={height:900}) {
+export function previewDocument(spec,payload,viewport={height:900},{bootstrap:reportBootstrap="",autoResize=false}={}) {
   const data=JSON.stringify(payload).replaceAll('<','\\u003c');
-  const bootstrap=`const freeze=x=>{if(x&&typeof x==='object'){Object.values(x).forEach(freeze);Object.freeze(x);}return x;};Object.defineProperty(window,'dashboardData',{value:freeze(${data}),writable:false,configurable:false});`;
+  const resize=autoResize?`new ResizeObserver(()=>{const height=Math.ceil(document.body.getBoundingClientRect().bottom+scrollY+16);parent.postMessage({kind:'report-height',height},'*');}).observe(document.body);`:'';
+  const bootstrap=`const freeze=x=>{if(x&&typeof x==='object'){Object.values(x).forEach(freeze);Object.freeze(x);}return x;};Object.defineProperty(window,'dashboardData',{value:freeze(${data}),writable:false,configurable:false});${reportBootstrap}${resize}`;
   // A srcdoc child can execute while its parent iframe still has zero layout.
   // Start from native animation frames, NOT CDP evaluation: invoking candidate
   // code from evaluate() can inherit its unsafe-eval CSP bypass.
   const program=`(()=>{const start=()=>{if(innerWidth<=0||document.body.getBoundingClientRect().width<=0){requestAnimationFrame(start);return;}requestAnimationFrame(()=>{try{(()=>{'use strict';\n${spec.javascript}\n})();}finally{document.documentElement.dataset.hostReady='true';}});};requestAnimationFrame(start);})();`;
   const csp=`default-src 'none'; script-src 'sha256-${hash(bootstrap)}' 'sha256-${hash(program)}'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'`;
   const document=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${attr(csp)}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${spec.css}</style></head><body>${spec.html}<script>${bootstrap}</script><script>${program}</script></body></html>`;
+  const parentResize=autoResize?`<script>const frame=document.querySelector('iframe');addEventListener('message',e=>{const h=e.data?.height;if(e.source===frame.contentWindow&&e.data?.kind==='report-height'&&Number.isFinite(h)&&h>0&&h<=6000)frame.style.height=Math.max(innerHeight,h)+'px';});</script>`:'';
   // Never add allow-same-origin, top-navigation, forms, popups or downloads.
-  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0}iframe{width:100%;height:${viewport.height}px;border:0;display:block}</style></head><body><iframe title="Generated dashboard" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="${attr(document)}"></iframe></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0}iframe{width:100%;height:${viewport.height}px;border:0;display:block}</style></head><body><iframe title="Generated dashboard" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="${attr(document)}"></iframe>${parentResize}</body></html>`;
 }
 
-export async function loadPreview(browser,spec,payload,viewport,{hasTouch=false}={}) {
+export async function loadPreview(browser,spec,payload,viewport,{hasTouch=false,bootstrap=""}={}) {
   const context=await browser.newContext({viewport,hasTouch,serviceWorkers:'block',acceptDownloads:false,offline:true});
   const network=[],errors=[],consoleErrors=[];
   await context.route('**/*',route=>{network.push({kind:'request',url:route.request().url()});return route.abort();});
@@ -55,7 +57,7 @@ export async function loadPreview(browser,spec,payload,viewport,{hasTouch=false}
   page.on('popup',p=>{network.push({kind:'popup',url:p.url()});p.close().catch(()=>{});});
   page.on('download',d=>{network.push({kind:'download',url:d.url()});d.cancel().catch(()=>{});});
   page.setDefaultTimeout(3000);
-  await page.setContent(previewDocument(spec,payload,viewport),{waitUntil:'load',timeout:5000});
+  await page.setContent(previewDocument(spec,payload,viewport,{bootstrap}),{waitUntil:'load',timeout:5000});
   const frame=page.frames().find(f=>f!==page.mainFrame());requireThat(frame);
   await frame.waitForLoadState('load',{timeout:3000});
   await page.locator('iframe').waitFor({state:'visible'});
