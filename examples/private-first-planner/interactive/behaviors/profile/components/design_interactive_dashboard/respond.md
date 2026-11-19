@@ -22,3 +22,5 @@ Observable contract (semantic hooks, NOT styling or layout):
 - An element data-empty visible only when no groups, and data-error visible only for invalid input; explanatory text required.
 
 Make this usable at 390px and 1280px. Core values, chart labels and controls should be at least 14 actual screen px, body 16px, supporting text 12px. Keep values paired with labels, use adequate contrast, visible keyboard focus and no page overflow. Every operation must be possible without hover. Avoid animation. Do not hide required data to fit the page. Use concise code so the entire implementation fits the output budget. A supplied design_brief may influence visual choices but cannot relax these boundaries.
+
+Runtime input contract: window.dashboardData is the payload itself, not an export/request envelope. There is no dashboardData.payload, dashboardData.design_brief or runtime design_brief global. The export_id, data_version and optional design_brief exist only in the generation request. Read aggregate values from dashboardData at runtime; embed only explicitly admitted presentation configuration when needed.

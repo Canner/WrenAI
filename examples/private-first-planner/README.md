@@ -12,6 +12,10 @@ An opt-in [interactive dashboard laboratory](interactive/README.md) adds KPI car
 filters, dimension switching, drill-down/roll-up and reset over synthetic aggregates.
 It preserves free frontend generation and has an independent offline browser gate.
 
+A [monthly revenue replay workflow](revenue/README.md) connects the same pi and host
+boundaries to coverage-based planning, verified aggregate replay and free Claude
+design. Its prompts, contracts and offline tests are checked-in source.
+
 ## Quick contract check
 
 From this example directory, with Node 22 or newer:
@@ -49,6 +53,7 @@ current host delivers an inert table, not a Nemotron-generated frontend.
 
 | Directory | Responsibility |
 | --- | --- |
+| `revenue/` | Supported-period planning, verified replay coordinator and browser evaluation |
 | `planner/` | Intent admission and the isolated planner transport |
 | `worker/` | Query constraints, private profile and fixture setup |
 | `design/` | Claude transport, free frontend contracts and isolated browser QA |

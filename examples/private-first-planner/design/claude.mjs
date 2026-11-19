@@ -8,6 +8,7 @@ import { requireThat, immutable, digest } from '../contracts.mjs';
 import { codeSchema } from './contracts.mjs';
 import { behaviors } from '../behaviors/index.mjs';
 export const designPrompt = behaviors.design_free_dashboard.prompt;
+export const maxSseBytes = 2 * 1024 * 1024; // SSE framing is larger than the separately bounded decoded spec.
 export class CloudFailure extends Error {
   constructor(code) { super(code); this.code=code; }
 }
@@ -21,7 +22,7 @@ export class ClaudeCode {
       && (url.protocol==='https:' || ['localhost','127.0.0.1'].includes(url.hostname))
       && typeof apiKey==='string' && apiKey.length>0);
     requireThat(typeof contract.systemPrompt==='string' && contract.systemPrompt.length>0 && contract.schema?.type==='object'
-      && (contract.maxOutputTokens===undefined || contract.maxOutputTokens===4096)
+      && (contract.maxOutputTokens===undefined || [4096,8192,12288].includes(contract.maxOutputTokens))
       && (contract.brief===undefined || typeof contract.brief==='string'));
     this.#config=immutable(config);this.#key=apiKey;this.#observe=observeRequest;
     this.#contract=immutable(contract);this.#observeResult=observeResult;
@@ -73,7 +74,7 @@ export class ClaudeCode {
             ...(req.headers['anthropic-beta']?{'anthropic-beta':String(req.headers['anthropic-beta'])}:{})},body});
         res.writeHead(upstream.status,{'content-type':upstream.headers.get('content-type')??'application/json'});
         let received=0;
-        for await(const chunk of upstream.body){received+=chunk.length;requireThat(received<=256*1024);res.write(chunk);}
+        for await(const chunk of upstream.body){received+=chunk.length;requireThat(received<=maxSseBytes);res.write(chunk);}
         res.end();
       } catch {
         if(!res.headersSent) res.writeHead(403,{'content-type':'application/json'});

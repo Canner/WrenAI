@@ -32,7 +32,7 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund --prefix host/adapters
           npm ci --ignore-scripts --no-audit --no-fund --prefix host
           npm ci --no-audit --no-fund --prefix collaboration/runtime
-      - name: Offline regressions and independent units
+      - name: Offline regressions, revenue contracts and SSE limits
         run: node collaboration/check.mjs offline "$RUNNER_TEMP/offline"
       - name: Verify generated Warble behavior
         env:
@@ -58,7 +58,7 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund --prefix design
           npm ci --ignore-scripts --no-audit --no-fund --prefix host
           design/node_modules/.bin/playwright install chromium
-      - name: Actual isolated browser, host repair and cloud unit
+      - name: Isolated browser payload contract, host repair and cloud unit
         run: node collaboration/check.mjs browser "$RUNNER_TEMP/browser"
 
       - name: Interactive aggregate dashboard journeys and failure probes

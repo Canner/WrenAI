@@ -120,3 +120,7 @@ The opt-in [interactive dashboard laboratory](../interactive/README.md) has a se
 aggregate/interaction contract and scripted gate. It does not replace the existing
 pi/Wren route or reclassify previous model results. Run `interactive` alongside
 `browser`, `offline` and `behaviors` when changing interactive design/QA.
+
+The [monthly revenue replay workflow](../revenue/README.md) is included in the
+`offline`, `browser` and `behaviors` gates. It reuses shared pi, export and designer
+boundaries without changing the durable Wren controller or worker protocol.

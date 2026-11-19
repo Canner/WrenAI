@@ -24,7 +24,7 @@ export async function stepsFor(gate, out, configPath) {
     node('eval/data-validation.mjs', join(out, 'data-verification'))];
   if (gate === 'worker-contracts') return workerContracts();
   if (gate === 'offline') return [
-    node('--test', ...(await Promise.all(['planner/test', 'worker/test', 'behaviors/test', 'host/test', 'host/adapters/test', 'eval/test', 'collaboration/test'].map(testFiles))).flat(), 'design/test/contracts.test.mjs', 'design/test/claude.test.mjs', 'interactive/test/contracts.test.mjs'),
+    node('--test', ...(await Promise.all(['planner/test', 'worker/test', 'behaviors/test', 'host/test', 'host/adapters/test', 'eval/test', 'collaboration/test'].map(testFiles))).flat(), 'design/test/contracts.test.mjs', 'design/test/claude.test.mjs', 'design/test/stream.test.mjs', 'interactive/test/contracts.test.mjs', 'revenue/test/contracts.test.mjs'),
     node('eval/data-validation.mjs', join(out, 'data-verification')),
     node('eval/run.mjs', 'private-planner', join(out, 'planner')),
     node('eval/run.mjs', 'cloud-planner', join(out, 'cloud')),
@@ -32,9 +32,9 @@ export async function stepsFor(gate, out, configPath) {
   if (gate === 'worker-service') return [node('eval/run.mjs', 'data-worker', join(out, 'worker'), resolve(configPath))];
   if (gate === 'host-service') return [node('host/verify.mjs', join(out, 'host'), resolve(configPath))];
   if (gate === 'interactive') return [node('--test', 'interactive/test/browser.test.mjs'), node('interactive/run.mjs', join(out, 'suite'))];
-  if (gate === 'browser') return [node('--test', 'design/test/browser.test.mjs', 'host/browser.test.mjs'),
+  if (gate === 'browser') return [node('--test', 'design/test/browser.test.mjs', 'host/browser.test.mjs', 'revenue/test/browser.test.mjs'),
     node('eval/run.mjs', 'cloud-planner', join(out, 'cloud-browser'), '--browser')];
-  if (gate === 'behaviors') return [node('behaviors/compile.mjs', '--check'),node('interactive/behaviors/compile.mjs', '--check')];
+  if (gate === 'behaviors') return [node('behaviors/compile.mjs', '--check'),node('interactive/behaviors/compile.mjs', '--check'),node('revenue/behaviors/compile.mjs', '--check')];
   const config = JSON.parse(await readFile(configPath, 'utf8'));
   if (typeof config.python !== 'string' || !config.python.startsWith('/')) throw Error('absolute_python_required');
   return [[config.python, ['worker/test/release_compat.py']], [config.python, ['-c',

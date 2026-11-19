@@ -1,0 +1,5 @@
+profile: revenue-dashboard
+components:
+  - use: plan_revenue_dashboard
+  - use: design_revenue_dashboard
+  - use: repair_revenue_dashboard

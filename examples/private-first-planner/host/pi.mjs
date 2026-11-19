@@ -6,9 +6,9 @@ import { immutable, requireThat } from '../contracts.mjs';
 // pi IS the private planner executor. No second planner agent, shell tools,
 // extensions, implicit credentials, model-switch command or cloud transcript.
 export class PiPlanner {
-  #model; #stream; #key; #options; #timeout; #observeRequest; #observeResult; calls = [];
+  #model; #stream; #key; #options; #timeout; #observeRequest; #observeResult; #contract; calls = [];
   constructor({ model, apiKey, streamFn = streamSimple, maxTokens = 1536, timeoutMs = 45_000,
-    observeRequest = async () => {}, observeResult = async () => {} }) {
+    observeRequest = async () => {}, observeResult = async () => {}, decisionContract = plannerContract }) {
     const url = new URL(model.baseUrl);
     requireThat(model.api === 'openai-completions' && model.id.includes('nemotron')
       && !url.username && !url.password && !url.search && !url.hash
@@ -17,14 +17,16 @@ export class PiPlanner {
       && Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 120_000);
     this.#model = immutable(model); this.#key = apiKey; this.#stream = streamFn;
     this.#options = { maxTokens, temperature: 0, maxRetries: 0 };
+    requireThat(decisionContract.tools?.length === 1 && typeof decisionContract.systemPrompt === 'string');
+    this.#contract = immutable({ tools: decisionContract.tools, systemPrompt: decisionContract.systemPrompt });
     this.#timeout = timeoutMs; this.#observeRequest = observeRequest; this.#observeResult = observeResult;
   }
   async decide({ conversation, capabilities, metadata, signal, timeoutMs = 120_000 }) {
-    const definition = plannerContract.tools[0].function;
+    const definition = this.#contract.tools[0].function;
     let proposed, executed = 0, requests = 0, succeeded = false;
     const started = performance.now();
     const agent = new Agent({ initialState: { model: this.#model, thinkingLevel: 'off',
-      systemPrompt: `${plannerContract.systemPrompt}\nAuthorized private context:\n${JSON.stringify({ capabilities, metadata })}`,
+      systemPrompt: `${this.#contract.systemPrompt}\nAuthorized private context:\n${JSON.stringify({ capabilities, metadata })}`,
       tools: [{ name: definition.name, description: definition.description, parameters: definition.parameters, label: 'Resolve intent',
         execute: async (_id, args) => {
           requireThat(++executed === 1); proposed = { name: definition.name, args };
