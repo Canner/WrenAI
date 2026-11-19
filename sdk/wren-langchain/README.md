@@ -130,8 +130,21 @@ one drives what avoids surprises:
 | Source | Holds | Resolved by |
 |---|---|---|
 | `path/wren_project.yml` + `target/mdl.json` | MDL models, schema, `data_source` | `from_project(path)` |
-| `path/.env` | Secret values (`MYSQL_HOST`, `MYSQL_PASSWORD`, …) | `from_project(path)` auto-loads it |
+| `path/.env` | Secret values (`MYSQL_HOST`, `MYSQL_PASSWORD`, …) | `from_project(path)` resolves `${VAR}` from it |
 | `~/.wren/profiles.yml` | Connection template (`host: ${MYSQL_HOST}`, …) | `profile=` kwarg or fallback chain |
+
+`from_project(path)` resolves `${VAR}` placeholders in the profile from, in
+order of precedence: variables exported in your shell, then `path/.env`, then
+`~/.wren/.env`. A `.env` in the current working directory is also used when
+the working directory is inside `path`. These values are used **only** to
+expand the profile — they are not exported into `os.environ`, so toolkits for
+different projects in the same process each get their own secrets.
+
+If other code relies on variables in the project's `.env` (for example
+`OPENAI_API_KEY` for your LangChain chat model), export them in your shell or
+load the file yourself with `python-dotenv`. Likewise, a `.env` in an unrelated working
+directory is not consulted; move those keys into the project's `.env` or
+`~/.wren/.env`.
 
 **`profile=` resolution chain** (highest priority first):
 
@@ -166,8 +179,8 @@ profiles:
     database: ${MYSQL_DATABASE}
 ```
 
-Because `from_project("/path/to/test-project3")` loads `test-project3/.env`
-into the environment, **both profiles resolve to the same connection** —
+Because `from_project("/path/to/test-project3")` resolves placeholders from
+`test-project3/.env`, **both profiles resolve to the same connection** —
 `${MYSQL_HOST}` reads from project3's `.env` regardless of which profile
 name you picked. Profile selection is cosmetic in this layout.
 
