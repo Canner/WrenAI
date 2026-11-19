@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.5.1...wren-semantic-core-v0.5.2) (2026-11-19)
+
+
+### Bug Fixes
+
+* **wren-core:** require every primary-key column in TO_MANY partial models ([#2860](https://github.com/Canner/WrenAI/issues/2860)) ([9f19fe0](https://github.com/Canner/WrenAI/commit/9f19fe08dc3c8039506cadabcbd30c293bb85967))
+
 ## [0.5.1](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.5.0...wren-semantic-core-v0.5.1) (2026-10-23)
 
 
