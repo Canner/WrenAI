@@ -212,3 +212,5 @@ The service worker receives the admitted source binding metadata privately to
 resolve canonical definitions; the outer planner and dashboard do not. Explicit
 source and period instructions also survive paginated context indexes. This does
 not add SQL access to the caller, bypass service policy or publish private metadata.
+
+Partitioned runtime requests use independent Wren sessions so earlier result labels do not become implicit context for the next partition. A pending clarification retains its session, revision and continuation until answered; completed evidence is fetched before the session is replaced.

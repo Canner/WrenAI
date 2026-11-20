@@ -8,7 +8,7 @@ function wrenPort(q, { clarification = false, mismatch = false } = {}) {
   const calls = []; let revision = 0;
   return { calls, async call(name, args, options) {
     calls.push({ name, args, options });
-    if (name === 'open_session') return { session_id: 'session', revision: 0 };
+    if (name === 'open_session') { revision = 0; return { session_id: 'session', revision: 0 }; }
     if (name === 'close_session') return { status: 'closed' };
     if (name === 'get_evidence') return { result: mismatch ? { ...result(q), rows: [] } : result(q), evidence: { private_sql: 'PRIVATE_SQL', complete: true } };
     assert(['ask_data', 'continue_task'].includes(name));
@@ -25,7 +25,7 @@ test('host report flow executes via existing Wren tool envelope and validates fe
     const state = await new ReportSession(p).submit('Revenue by channel'); assert.equal(state.state, 'completed');
     assert.deepEqual(port.calls.map(x => x.name), ['open_session', 'ask_data', 'get_evidence']);
     const request = port.calls[1].args.request; assert.equal(request.capability, 'analytics');
-    assert(request.question.includes('sales_semantics')); assert(request.question.includes('Private source binding:')); assert(request.question.includes('PRIVATE_MODEL'));
+    assert(request.question.includes('sales_semantics')); assert(request.question.includes('Private source binding:')); assert(request.question.includes('PRIVATE_MODEL')); assert(request.question.includes('host keys c1, c2')); assert(request.question.includes('Return only the successful evidence token'));
     assert(!JSON.stringify(state.report).includes('PRIVATE_'));
   } finally { await executor.close(); }
   assert.equal(port.calls.at(-1).name, 'close_session');
@@ -46,4 +46,21 @@ test('evidence result substitution cannot issue a report', async () => {
   const p = ports(); p.execute = x => executor.execute(x);
   try { assert.equal((await new ReportSession(p).submit('Revenue')).state, 'failed'); }
   finally { await executor.close(); }
+});
+
+test('independent report requests isolate previous tables while clarification retains its session', async () => {
+  const q = query(['channel']), port = wrenPort(q, { clarification: true });
+  const executor = new WrenReportExecutor(port, { isolateReports: true });
+  try {
+    for (let i = 0; i < 2; i++) {
+      const p = ports(model(choose(q)), model(plan(q))); p.execute = x => executor.execute(x); p.continueExecution = x => executor.continueExecution(x);
+      const host = new ReportSession(p), waiting = await host.submit('Revenue');
+      assert.equal(waiting.state, 'waiting_for_user');
+      assert.equal((await host.answer(waiting.question_id, 'Use declared defaults')).state, 'completed');
+      host.close();
+    }
+    assert.deepEqual(port.calls.map(x => x.name), ['open_session', 'ask_data', 'continue_task', 'get_evidence',
+      'close_session', 'open_session', 'ask_data', 'continue_task', 'get_evidence']);
+    assert.deepEqual(port.calls.filter(x => x.name === 'ask_data').map(x => x.args.request.expected_revision), [0, 0]);
+  } finally { await executor.close(); }
 });

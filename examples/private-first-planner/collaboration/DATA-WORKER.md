@@ -179,3 +179,32 @@ repeats the host-admitted aggregate request; it neither executes a connection no
 creates a permanent cube. The host owns the existing Wren client, evidence checks
 and `aggregate-report/1` projection. Deployment members supply the authorized
 registry and domain verifier; no model-produced verification grant is accepted.
+
+## Multidimensional reports through the same service
+
+`host/report-wren.mjs` sends an admitted cube or semantic plan to `ask_data`.
+The worker selects period, dimensions and measures in the requested order and
+returns the successful evidence token. Service keys such as `c1` and derived
+labels are not SQL aliases: do not rerun a correct query to rename them. Preserve
+native date buckets; the trusted host projection may normalize supported date
+representations only after independently checking their meaning and values.
+
+For results exceeding the service row limit, `PartitionedReportExecutor` uses a
+deployment-owned period policy. Each independent partition gets a fresh Wren
+session in `createReportRuntime`; a clarification keeps its original session and
+continuation. The host fetches evidence before closing a completed session,
+verifies every part, rejects duplicate cells or incomplete coverage, and publishes
+only the complete report. Workers must not add LIMIT, omit dimensions or weaken
+FX/row-preservation rules to fit the limit. Partition sizing and the shared total
+deadline belong to the host and must be evaluated together.
+
+A project-defined rule guarantee is recorded as `satisfied_by_definition`, not as
+proof derived from each SQL query. Such guarantees need explicit project-owner
+review; they do not replace the report verifier's source, period, completeness
+and result checks. Carry unverified semantics in the private evidence. Live model
+runs and domain-oracle comparisons remain separate from the scripted CI gates.
+
+The coordinator delegates a short instruction instead of copying the question and
+context into another JSON string. The runtime already carries the full original
+`parent_request`. Preserve this binding when tuning prompts: duplicating or
+summarizing the envelope adds latency and can distort measure definitions.

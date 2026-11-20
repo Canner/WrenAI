@@ -6,14 +6,20 @@ import { requestWorker, readWorkerEvidence } from '../harnesses/worker.mjs';
 // bounded ask_data request; Wren owns SQL generation/execution under its policy.
 // There is no arbitrary run_sql entry and no worker-owned MCP server.
 export class WrenReportExecutor {
-  #port; #session; #pending; #busy = false; #closed = false;
-  constructor(port) { this.#port = port; }
+  #port; #isolateReports; #session; #pending; #busy = false; #closed = false;
+  constructor(port, { isolateReports = false } = {}) { this.#port = port; this.#isolateReports = isolateReports; }
   async execute({ plan, source, signal, timeoutMs = 180000, answer, pending }) {
     requireThat(!this.#busy && !this.#closed); this.#busy = true;
     const deadline = Date.now() + timeoutMs;
     const call = async (name, args) => { signal?.throwIfAborted(); requireThat(Date.now() < deadline);
       const result = await this.#port.call(name, args, { timeoutMs: deadline - Date.now() }); signal?.throwIfAborted(); return result; };
     try {
+      // A partition is an independent query, not a follow-up to the last table.
+      // Keep a pending clarification in its original session and revision.
+      if (this.#isolateReports && answer === undefined && this.#session && !this.#pending) {
+        const closed = await call('close_session', { session_id: this.#session.session_id });
+        requireThat(closed.status === 'closed'); this.#session = null;
+      }
       if (!this.#session) {
         this.#session = await call('open_session', {});
         requireThat(typeof this.#session.session_id === 'string' && this.#session.revision === 0);
@@ -32,7 +38,8 @@ export class WrenReportExecutor {
           + `Period: ${plan.query.period.lower} inclusive to ${plan.query.period.upper} exclusive, UTC ${plan.query.period.grain}.\n`
           + `Private source binding: ${JSON.stringify(source.metadata)}\n`
           + `Admitted plan: ${JSON.stringify(plan)}\n`
-          + 'Return one table: period (UTC bucket-start date YYYY-MM-DD), then exactly the requested dimension and measure IDs as columns. '
+          + 'Select period first (UTC bucket start), then requested dimensions and measures in their listed order. Use those IDs as SQL aliases. '
+          + 'Wren intentionally returns host keys c1, c2, etc. and derived labels instead of SQL aliases; do not retry to rename those response keys. Midnight ISO date/timestamp values are valid. Return only the successful evidence token; the host maps and verifies the result. '
           + 'Filter source timestamps before bucketing, including partial weeks. Apply all requested filters and project rules. '
           + 'Return all groups with no hidden top-N or truncation; do not add raw records or extra columns. '
           + 'For a selected cube, read that exact cube ID and its base view/model using read_context even if it is absent from the first context-index page. Do not substitute another cube. '

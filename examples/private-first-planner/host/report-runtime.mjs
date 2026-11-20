@@ -14,7 +14,7 @@ export async function createReportRuntime(config, policy, { connect = connectWre
   const models = [false, true].map(worker => new PiPlanner({ model: privateModel(config.planner), apiKey: key,
     decisionContract: decisionContract(worker), maxTokens: 4096, timeoutMs: 120000, ...(streamFn ? { streamFn } : {}),
     ...(worker ? observeWorker : observePlanner) }));
-  const port = await connect(config.wren), single = new WrenReportExecutor(port);
+  const port = await connect(config.wren), single = new WrenReportExecutor(port, { isolateReports: Boolean(partitionPolicy) });
   const executor = partitionPolicy ? new PartitionedReportExecutor(single, partitionPolicy) : single;
   const session = new ReportSession({ ...policy, planner: models[0], worker: models[1], execute: x => executor.execute(x), continueExecution: x => executor.continueExecution(x) });
   return { session, planner: models[0], worker: models[1], async close() { session.close(); try { await executor.close(); } finally { await port.close(); } } };
