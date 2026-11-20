@@ -26,6 +26,7 @@ test('host report flow executes via existing Wren tool envelope and validates fe
     assert.deepEqual(port.calls.map(x => x.name), ['open_session', 'ask_data', 'get_evidence']);
     const request = port.calls[1].args.request; assert.equal(request.capability, 'analytics');
     assert(request.question.includes('sales_semantics')); assert(request.question.includes('Private source binding:')); assert(request.question.includes('PRIVATE_MODEL')); assert(request.question.includes('host keys c1, c2')); assert(request.question.includes('Return only the successful evidence token'));
+    assert(request.question.includes('GROUP BY the exact date bucket expression'));
     assert(!JSON.stringify(state.report).includes('PRIVATE_'));
   } finally { await executor.close(); }
   assert.equal(port.calls.at(-1).name, 'close_session');

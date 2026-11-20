@@ -38,7 +38,7 @@ export class WrenReportExecutor {
           + `Period: ${plan.query.period.lower} inclusive to ${plan.query.period.upper} exclusive, UTC ${plan.query.period.grain}.\n`
           + `Private source binding: ${JSON.stringify(source.metadata)}\n`
           + `Admitted plan: ${JSON.stringify(plan)}\n`
-          + 'Select period first (UTC bucket start), then requested dimensions and measures in their listed order. Use those IDs as SQL aliases. '
+          + 'Select period first (UTC bucket start), then requested dimensions and measures in their listed order. Use those IDs as SQL aliases. GROUP BY the exact date bucket expression, not a potentially colliding source-column alias. '
           + 'Wren intentionally returns host keys c1, c2, etc. and derived labels instead of SQL aliases; do not retry to rename those response keys. Midnight ISO date/timestamp values are valid. Return only the successful evidence token; the host maps and verifies the result. '
           + 'Filter source timestamps before bucketing, including partial weeks. Apply all requested filters and project rules. '
           + 'Return all groups with no hidden top-N or truncation; do not add raw records or extra columns. '
