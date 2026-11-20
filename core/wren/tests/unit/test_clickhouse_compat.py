@@ -188,6 +188,24 @@ class TestWindowFunctions:
         name = "lagInFrame" if fn == "LAG" else "leadInFrame"
         assert f"{name}({column}) OVER (ORDER BY id {_WHOLE}) AS v" in out
 
+    @pytest.mark.parametrize("fn", ["LAG", "LEAD"])
+    def test_lag_lead_offset_and_default_over_an_array(self, fn):
+        out = _rewrite(
+            f"SELECT id, {fn}(tags, 1, []) OVER (ORDER BY id) AS v FROM events",
+            manifest=_COMPOSITE_MANIFEST,
+        )
+        name = "lagInFrame" if fn == "LAG" else "leadInFrame"
+        assert f"{name}(tags, 1, []) OVER (ORDER BY id {_WHOLE}) AS v" in out
+
+    def test_lag_value_that_fails_to_type_renders_untyped(self):
+        # Typing ``1.e`` raises ValueError here (decimal.InvalidOperation for other
+        # column types), not a SqlglotError; the query must render as on main.
+        out = _rewrite(
+            "SELECT id, LAG(price * 1.e) OVER (ORDER BY id) AS v FROM events",
+            manifest=_COMPOSITE_MANIFEST,
+        )
+        assert f"lagInFrame(toNullable(price * 1.e)) OVER (ORDER BY id {_WHOLE})" in out
+
     @pytest.mark.parametrize(
         ("sql", "value"),
         [

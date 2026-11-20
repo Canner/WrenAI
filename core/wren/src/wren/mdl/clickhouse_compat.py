@@ -34,7 +34,6 @@ Every rewrite targets a construct that fails on ClickHouse today, or (``LAG`` /
 from __future__ import annotations
 
 from sqlglot import exp
-from sqlglot.errors import SqlglotError
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.qualify_columns import qualify_columns
 from sqlglot.schema import Schema
@@ -91,13 +90,19 @@ def type_window_values(ast: exp.Expression, schema: Schema) -> None:
         fn.meta[_VALUE_TAG] = i
     try:
         typed = _annotate(ast.copy(), schema)
-    except (SqlglotError, _Unmodeled):
+        types = {
+            t.meta[_VALUE_TAG]: t.this.type for t in typed.find_all(exp.Lag, exp.Lead)
+        }
+    except Exception:
+        # Typing is best-effort, and sqlglot raises more than SqlglotError here
+        # (the literal ``1.e`` raises ValueError or decimal.InvalidOperation). Any failure
+        # leaves every value untyped, so the query renders as it does without it.
         return
     finally:
         for fn in fns:
             del fn.meta[_VALUE_TAG]
-    for typed_fn in typed.find_all(exp.Lag, exp.Lead):
-        fns[typed_fn.meta[_VALUE_TAG]].this.type = typed_fn.this.type
+    for i, type_ in types.items():
+        fns[i].this.type = type_
 
 
 class _Unmodeled(Exception):
