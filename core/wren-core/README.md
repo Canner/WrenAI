@@ -1,8 +1,8 @@
 # Wren Core Module
 
-The Wren Core module serves as the semantic core of the Wren engine. To understand the concept of the Wren engine, refer to the [Wren engine documentation](https://docs.getwren.ai/oss/engine/concept/what_is_semantics). 
+The Wren Core module serves as the semantic core of the Wren engine. To understand the concepts behind it, refer to [What is MDL?](https://docs.getwren.ai/oss/concepts/what_is_mdl) in the Wren AI Core documentation.
 
-This module is utilized by the API v3 of the ibis-server for SQL planning. Additionally, there is another module for Python bindings, [wren-core-py](../wren-core-py/), which is also used by the [ibis-server](../ibis-server/).
+This module handles SQL planning for the [`wren` CLI and SDK](../wren/) through its Python bindings, [wren-core-py](../wren-core-py/), and is also compiled to WebAssembly in [wren-core-wasm](../wren-core-wasm/).
 
 ## How to Test / Build
 

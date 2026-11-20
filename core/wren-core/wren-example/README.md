@@ -16,4 +16,4 @@ cargo run --example datafusion-apply
 
 ## Single Process
 - [`datafusion-apply.rs`](examples/datafusion-apply.rs): Apply an Modeling Definition Language(MDL) to a DataFusion to query local CSV files
-- [`plan_to_sql.rs`](examples/plan_to-sql.rs): Apply an Modeling Definition Language(MDL) to generate SQL from Datafusion `Expr` and `LogicalPlan`
+- [`plan-sql.rs`](examples/plan-sql.rs): Apply an Modeling Definition Language(MDL) to generate SQL from Datafusion `Expr` and `LogicalPlan`
