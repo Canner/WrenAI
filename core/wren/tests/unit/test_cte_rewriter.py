@@ -315,6 +315,76 @@ class TestUnresolvedModelColumns:
         assert exc.value.phase == ErrorPhase.SQL_PLANNING
         assert "missing" in exc.value.message
 
+    @pytest.mark.parametrize(
+        ("unpivot", "expected"),
+        [
+            (
+                "UNPIVOT (v FOR k IN (o_orderkey, o_custkey))",
+                [("F", "1_10", "o_custkey", 10), ("F", "1_10", "o_orderkey", 1)],
+            ),
+            (
+                "UNPIVOT ((v1, v2) FOR k IN ((o_orderkey, o_custkey) AS pair))",
+                [("F", "1_10", "pair", 1, 10)],
+            ),
+        ],
+    )
+    def test_unpivot_generated_columns_execute(self, manifest, unpivot, expected):
+        """UNPIVOT output declarations do not need to exist in the MDL."""
+        with WrenEngine(_b64(manifest), DataSource.duckdb, {}) as engine:
+            planned_sql = engine.dry_plan(f"SELECT * FROM orders {unpivot} ORDER BY k")
+        with duckdb.connect() as connection:
+            connection.execute(
+                "CREATE TABLE raw_orders (o_orderkey INTEGER, o_custkey INTEGER, "
+                "o_orderstatus VARCHAR, secret INTEGER); "
+                "INSERT INTO raw_orders VALUES (1, 10, 'F', 99)"
+            )
+            assert connection.execute(planned_sql).fetchall() == expected
+
+    @pytest.mark.parametrize("column", ["definitely_missing", "secret", "v", "k"])
+    def test_unpivot_unresolved_inputs_still_fail_during_planning(
+        self, manifest, column
+    ):
+        """A source column is checked even if it shares an output declaration's name."""
+        with WrenEngine(_b64(manifest), DataSource.duckdb, {}) as engine:
+            with pytest.raises(WrenError) as exc:
+                engine.dry_plan(
+                    f"SELECT * FROM orders UNPIVOT (v FOR k IN (o_orderkey, {column}))"
+                )
+        assert exc.value.error_code == ErrorCode.INVALID_SQL
+        assert exc.value.phase == ErrorPhase.SQL_PLANNING
+        assert f"Column '{column}' could not be resolved" in exc.value.message
+
+    @pytest.mark.parametrize("column", ["USER", "orders"])
+    def test_redshift_unpivot_still_checks_keyword_and_table_names(
+        self, manifest, column
+    ):
+        """Neither a built-in nor a table alias can stand in for a missing input."""
+        with WrenEngine(_b64(manifest), DataSource.redshift, {}) as engine:
+            with pytest.raises(WrenError) as exc:
+                engine.dry_plan(
+                    f"SELECT * FROM orders UNPIVOT (v FOR k IN (o_orderkey, {column}))"
+                )
+        assert exc.value.error_code == ErrorCode.INVALID_SQL
+        assert exc.value.phase == ErrorPhase.SQL_PLANNING
+        assert f"'{column}'" in exc.value.message
+
+    @pytest.mark.parametrize("data_source", [DataSource.bigquery, DataSource.redshift])
+    @pytest.mark.parametrize(("value", "name"), [("orders", "k"), ("v", "orders")])
+    def test_unpivot_output_can_match_model_name(
+        self, manifest, data_source, value, name
+    ):
+        """A declaration that matches its source alias is still an output name."""
+        with WrenEngine(_b64(manifest), data_source, {}) as engine:
+            planned_sql = engine.dry_plan(
+                f"SELECT * FROM orders UNPIVOT ({value} FOR {name} "
+                "IN (o_orderkey, o_custkey))"
+            )
+        pivot = sqlglot.parse_one(planned_sql, dialect=data_source.name).find(
+            sqlglot.exp.Pivot
+        )
+        assert pivot.expressions[0].name == value
+        assert pivot.fields[0].this.name == name
+
     def test_case_sensitive_collection_checks_model_scope(self):
         """The case-sensitive collector applies the same unresolved-column check."""
         rw = _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.postgres)
@@ -628,17 +698,27 @@ class TestUnresolvedModelColumns:
         (DataSource.oracle, "ROWNUM"),
         (DataSource.postgres, "user"),
         (DataSource.postgres, "current_role"),
+        (DataSource.redshift, "USER"),
         (DataSource.trino, "current_schema"),
     ],
 )
 class TestColumnKeywords:
+    @staticmethod
+    def _assert_unquoted_keyword(projection, keyword, dialect):
+        """Check the emitted quoting without re-rendering a parsed identifier."""
+        if isinstance(projection, sqlglot.exp.Column):
+            assert projection.name == keyword
+            assert not projection.table
+            assert not projection.this.quoted
+        else:
+            assert projection.sql(dialect=dialect) == keyword
+
     def test_unquoted_keyword_is_preserved(self, data_source, keyword):
         """Dialect keywords survive planning without becoming quoted identifiers."""
-        rewritten = _make_rewriter(_SINGLE_MODEL_MANIFEST, data_source).rewrite(
-            f"SELECT {keyword}, o_orderkey FROM orders"
-        )
+        with WrenEngine(_b64(_SINGLE_MODEL_MANIFEST), data_source, {}) as engine:
+            rewritten = engine.dry_plan(f"SELECT {keyword}, o_orderkey FROM orders")
         ast = sqlglot.parse_one(rewritten, dialect=data_source.name)
-        assert ast.selects[0].sql(dialect=data_source.name) == keyword
+        self._assert_unquoted_keyword(ast.selects[0], keyword, data_source.name)
         assert "o_orderkey" in _cte_body_sql(rewritten, "orders", data_source.name)
 
     @pytest.mark.parametrize("reference", ['"{keyword}"', "orders.{keyword}"])
@@ -698,7 +778,15 @@ class TestColumnKeywords:
         )
         ast = sqlglot.parse_one(rewritten, dialect=data_source.name)
         subquery = ast.args["order"].find(sqlglot.exp.Select)
-        assert subquery.selects[0].sql(dialect=data_source.name) == keyword
+        self._assert_unquoted_keyword(subquery.selects[0], keyword, data_source.name)
+
+
+def test_postgres_session_user_still_plans():
+    """Postgres SESSION_USER is already parsed as a built-in by sqlglot."""
+    with WrenEngine(_b64(_SINGLE_MODEL_MANIFEST), DataSource.postgres, {}) as engine:
+        planned_sql = engine.dry_plan("SELECT SESSION_USER, o_orderkey FROM orders")
+    ast = sqlglot.parse_one(planned_sql, dialect="postgres")
+    assert ast.selects[0].sql(dialect="postgres") == "SESSION_USER"
 
 
 class TestScopedAliases:

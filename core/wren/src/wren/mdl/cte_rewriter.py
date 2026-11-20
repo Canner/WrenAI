@@ -70,6 +70,7 @@ _CASE_SENSITIVE_COLUMN_DIALECTS: frozenset[str] = frozenset(
 _COLUMN_KEYWORDS: dict[str, frozenset[str]] = {
     "oracle": frozenset({"USER", "UID", "DBTIMEZONE", "SESSIONTIMEZONE"}),
     "postgres": frozenset({"USER", "CURRENT_ROLE"}),
+    "redshift": frozenset({"USER"}),
     "trino": frozenset({"CURRENT_SCHEMA"}),
 }
 _ORACLE_HIERARCHICAL_COLUMNS = frozenset(
@@ -403,9 +404,16 @@ class CTERewriter:
                 ):
                     continue
                 name = column.name.upper()
+                if name not in keywords and name not in pseudocolumns:
+                    continue
+                # Inside UNPIVOT, these names declare output columns or refer
+                # to input columns. They are not standalone built-in values.
+                pivot = column.find_ancestor(exp.Pivot)
+                if pivot is not None and pivot.unpivot:
+                    continue
                 if name in keywords:
                     column.replace(exp.Var(this=column.name))
-                elif name in pseudocolumns and (
+                elif (
                     name not in _ORACLE_HIERARCHICAL_COLUMNS
                     or scope.expression.args.get("connect")
                 ):
@@ -624,14 +632,37 @@ class CTERewriter:
         for scope in traverse_scope(ast):
             if not isinstance(scope.expression, exp.Select):
                 continue
+            # UNPIVOT declares its output values and FOR name as Column nodes.
+            # Qualification can turn them into TableColumn if they match a source alias.
+            # Use node identity so an input in IN (...) with the same spelling
+            # as an output declaration is still checked.
+            unpivot_outputs: set[int] = set()
+            for pivot in scope.pivots:
+                if not pivot.unpivot:
+                    continue
+                unpivot_outputs.update(
+                    id(column)
+                    for value in pivot.expressions
+                    for column in value.find_all(exp.Column, exp.TableColumn)
+                )
+                unpivot_outputs.update(
+                    id(field.this)
+                    for field in pivot.fields
+                    if isinstance(field, exp.In)
+                )
             # scope.columns includes external references inherited from children.
             # A raw-table subquery must not be validated as part of its MDL parent.
             columns = [
                 column
                 for column in scope.unqualified_columns
-                if column.find_ancestor(exp.Select) is scope.expression
+                if id(column) not in unpivot_outputs
+                and column.find_ancestor(exp.Select) is scope.expression
             ]
-            columns.extend(scope.find_all(exp.TableColumn))
+            columns.extend(
+                column
+                for column in scope.find_all(exp.TableColumn)
+                if id(column) not in unpivot_outputs
+            )
             if not columns:
                 continue
 
