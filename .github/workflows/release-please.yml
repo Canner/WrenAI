@@ -38,7 +38,7 @@ jobs:
       wren-context-loader--tag_name: ${{ steps.release.outputs['core/wren-context-loader--tag_name'] }}
       wren-context-loader--version: ${{ steps.release.outputs['core/wren-context-loader--version'] }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
           config-file: release-please-config.json
