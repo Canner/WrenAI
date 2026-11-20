@@ -4951,3 +4951,37 @@ def test_follow_up_clarification_restores_prior_context_only_after_reauthorizati
         assert context["original_question"] == original.question
         assert context["user_answer"] == continuation.answer
         assert seen[0]["question"] == follow_up.question
+
+
+def test_engine_retry_cannot_change_date_window_or_expose_driver_error(
+    service, monkeypatch
+):
+    s = service(profile="adhoc")
+    original = (
+        DEFAULT_SET
+        + " AND order_date >= DATE '2026-01-01' AND order_date < DATE '2026-02-01'"
+    )
+    changed = original.replace("2026-02-01", "2026-01-02")
+    actual = s.sql.execute
+    executed, replies = [], []
+
+    def once(prepared):
+        executed.append(prepared.sql)
+        if len(executed) == 1:
+            raise ValueError("PRIVATE_DATABASE_PATH must appear in the GROUP BY clause")
+        return actual(prepared)
+
+    monkeypatch.setattr(s.sql, "execute", once)
+
+    def invoke(callback):
+        replies.append(callback("run_sql", {"sql": original}))
+        replies.append(callback("run_sql", {"sql": changed}))
+        return {"evidence": callback("run_sql", {"sql": original})["evidence"]}
+
+    worker_sees(monkeypatch, s, invoke)
+    done = s.execute(asking(s, s.open()["session_id"], 0, "repair-window"))
+    assert done["status"] == "completed"
+    assert len(executed) == 2  # The narrowed candidate never reached the engine.
+    assert replies[0]["code"] == "grouping_expression"
+    assert "PRIVATE_DATABASE_PATH" not in json.dumps(replies)
+    assert replies[1]["code"] == "repair_changed_scope"

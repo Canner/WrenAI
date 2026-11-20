@@ -245,15 +245,18 @@ def test_alias_cannot_leak_sql_and_evidence_is_host_owned(adhoc):
 @pytest.mark.parametrize(
     "action,kind", [("execute_query", "query"), ("receive_answer", "answer.sql_result")]
 )
+@pytest.mark.parametrize("missing_alias", [False, True])
 @needs_policy_runtime
-def test_cedar_column_boundary_before_execution(adhoc, action, kind):
+def test_cedar_column_boundary_before_execution(adhoc, action, kind, missing_alias):
     s = adhoc(
         f'\nforbid(principal, action == Service::Action::"{action}", resource) when {{ resource.kind == "{kind}" && resource.columns.contains("amount") }};'
     )
     with pytest.raises(PermissionError):
         ask(
             s,
-            "SELECT SUM(amount) FROM orders WHERE NOT is_test AND status IN ('paid', 'shipped')",
+            "SELECT SUM(o.amount) FROM orders WHERE NOT o.is_test AND o.status IN ('paid', 'shipped')"
+            if missing_alias
+            else "SELECT SUM(amount) FROM orders WHERE NOT is_test AND status IN ('paid', 'shipped')",
         )
     assert not any(a.get("event") == "private_sql" for a in s.audit)
 
@@ -3120,3 +3123,21 @@ def test_governed_nested_views_remain_refused_before_execution(query):
     with pytest.raises(QueryFormError) as caught:
         gate.prepare(query)
     assert caught.value.code == "unsupported_source"
+
+
+def test_missing_alias_repair_still_uses_the_real_query_and_default_gate(adhoc):
+    s = adhoc()
+    sql = "SELECT SUM(o.amount) FROM orders WHERE NOT o.is_test AND o.status IN ('paid','shipped')"
+    result = ask(s, sql)
+    assert result["status"] == "completed"
+    assert result["result"]["rows"] == [{"c1": 780.0}]
+    assert any(
+        e.get("event") == "private_sql_syntax_repaired"
+        and e["repairs"] == ["missing_table_alias"]
+        for e in s.audit
+    )
+    # This fixture returns the rejected tool reply instead of valid final evidence.
+    with pytest.raises(ValueError, match="invalid_evidence"):
+        ask(s, "SELECT SUM(o.amount) FROM orders", request_id="without-defaults")
+    assert events(s, "private_sql_rejected")[-1]["code"] == "declared_default_missing"
+    assert len([e for e in s.audit if e.get("event") == "private_sql"]) == 1

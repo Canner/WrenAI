@@ -40,6 +40,12 @@ from wren.agent_sql import (
     QueryFormError,
     QueryShapeError,
 )
+from wren.agent_sql_repair import (
+    RepairScope,
+    execution_diagnostic,
+    repair_syntax,
+    temporal_join_hint,
+)
 from wren.context_adapter import (
     ContextChanged,
     ContextReader,
@@ -415,6 +421,8 @@ HINTS = {
     "declared_default_undetermined": "This SQL was NOT executed: the host could not check it against the project's declared default rules. Use plain references to bound models and columns and rewrite it; you get one such retry.",
 }
 SHAPE_HINTS = {
+    "invalid_sql": "This SQL was NOT executed: it could not be parsed as DuckDB SQL. Declare aliases after table names. A temporal left join has exactly this structure: FROM base AS b ASOF LEFT JOIN rates AS r ON b.key = r.key AND b.time >= r.time. ASOF goes before LEFT JOIN, never after the table or alias; all matching predicates go after ON. Keep your actual bound names, date window, metric, conversion and joins. Do not replace it with an inner join or remove conversion.",
+    "repair_changed_scope": "This SQL was NOT executed: a repair removed or changed an ASOF LEFT JOIN or explicit date window from the failed query. Preserve those conditions while correcting syntax or aliases. Do not drop currency conversion or narrow the requested scope.",
     "unsupported_function": "This SQL was NOT executed: it uses a function or form the host does not allow (for example now(), random(), list or string aggregates, UNNEST, ANY over a list, a parenthesised query). Use standard SQL aggregates, CASE, CAST and date functions over bound columns and rewrite it.",
     "unsupported": "This SQL was NOT executed: the host could not plan it. Rewrite it with plain SELECT, JOIN, WHERE, GROUP BY and standard aggregates over bound models.",
     "cube_not_a_table": "This SQL was NOT executed: a cube is not a table and a cube measure is not a column. Compute the figure from the models and views listed in the context index, using their own columns.",
@@ -1112,6 +1120,7 @@ class Service:
                 for rule_id, scope in scopes.items()
             }
         as_of = as_of or today_utc()
+        repair_scope = RepairScope()
         ledger = {}
         usage = {}
         policy_denied = False
@@ -1222,8 +1231,8 @@ class Service:
                 )
                 return BudgetExhausted(kind, attempts)
 
-            def reject(exc):
-                # Nothing ran and nothing was authorized; the codes name the worker's own
+            def reject(exc, sql=None):
+                # Nothing ran; the codes name the worker's own
                 # mistake, never a model, column or rule text.
                 entry = {
                     "event": "private_sql_rejected",
@@ -1244,6 +1253,8 @@ class Service:
                 if exc.rules:
                     answer["rules"] = list(exc.rules)
                 answer["hint"] = SHAPE_HINTS.get(exc.code) or HINTS[exc.error]
+                if sql is not None and (hint := temporal_join_hint(sql)):
+                    answer["hint"] += " " + hint
                 if exc.error == "declared_default_missing":
                     broken = [e.split(":")[0] for e in exc.rules]
                     broken = [r for r in broken if r in self.status_rules]
@@ -1265,10 +1276,21 @@ class Service:
                         "request_id": request.request_id,
                     }
                 )
+                sql, repairs = repair_syntax(sql, self.sql.schema)
+                if repairs:
+                    self.record(
+                        {
+                            "event": "private_sql_syntax_repaired",
+                            "request_id": request.request_id,
+                            "repairs": repairs,
+                        }
+                    )
                 try:
                     prepared = self.sql.prepare(sql, scopes)
                 except (QueryFormError, QueryShapeError) as exc:
-                    return reject(exc)
+                    if exc.error == "unsupported_query":
+                        repair_scope.failed(sql)
+                    return reject(exc, sql)
                 for model, columns in prepared.sources.items():
                     self.require(
                         s, "execute_query", "query", model, role, columns=columns
@@ -1277,6 +1299,8 @@ class Service:
                     self.require(
                         s, "receive_answer", "answer.sql_result", model, columns=columns
                     )
+                if repair_scope.changed(sql):
+                    return reject(QueryFormError("repair_changed_scope"))
                 try:
                     result, internal = self.sql.execute(prepared)
                 except (QueryCancelled, DatabaseTimeoutError, ContextChanged):
@@ -1295,7 +1319,14 @@ class Service:
                     over = budget.failed_in_engine()
                     if over:
                         raise stop(*over) from None
-                    return {"error": "query_unavailable", "hint": UNAVAILABLE_HINT}
+                    repair_scope.failed(sql)
+                    code, hint = execution_diagnostic(exc)
+                    return {
+                        "error": "query_unavailable",
+                        "hint": hint,
+                        **({"code": code} if code else {}),
+                    }
+                repair_scope.succeeded()
                 lifetime.check()
                 internal["as_of"] = as_of
                 caller_scopes = {}
