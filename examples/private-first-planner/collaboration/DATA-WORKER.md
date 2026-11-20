@@ -1,9 +1,21 @@
 # Data worker handoff
 
 You can develop and verify this unit without running a conversation planner,
-Claude, dashboard browser or paid model. The reference implementation stays on
-Wren 0.18.0; replacing that service/runtime is a separate compatibility change.
+Claude, dashboard browser or paid model. Dependencies remain pinned to
+Wren 0.18.0, with an optional source-level serve-agent repair candidate in this
+branch. That candidate is not an unmodified release; record its source revision
+and module hashes separately from the reported package version.
 This document describes the adapter already used by the host, not a new API.
+
+The repair candidate lives in `core/wren/src/wren/agent_sql_repair.py` and the
+service callback. It handles two unambiguous syntax errors, supplies fixed
+grouping/ASOF diagnostics and preserves recognizable temporal joins/date bounds
+across failed-query retries. Every candidate still passes the existing rules,
+Cedar policy and result checks. It does not prove metric selection or replace
+the host's independent oracle. The standalone collaboration archive does not
+bundle these service modules: use the matching full source checkout or a
+separately identified service build when evaluating the candidate. Keep release
+and patched-service results in separate output directories.
 
 ## Your boundary
 
@@ -189,6 +201,14 @@ labels are not SQL aliases: do not rerun a correct query to rename them. Preserv
 native date buckets; the trusted host projection may normalize supported date
 representations only after independently checking their meaning and values.
 
+If the service returns dimensions in a different order, a deployment may call
+`reportColumnKeys(columns, query, dimensionLabels)` with its own explicit label
+bindings. Each requested dimension must match exactly one column in the dimension
+segment; ambiguous, missing and duplicate matches fail. Period and measure order
+remain unchanged. Labels are not evidence of metric semantics: the projection
+still needs independent value/period/completeness verification before admission.
+Never learn the mapping by trying permutations against expected result values.
+
 For results exceeding the service row limit, `PartitionedReportExecutor` uses a
 deployment-owned period policy. Each independent partition gets a fresh Wren
 session in `createReportRuntime`; a clarification keeps its original session and
@@ -208,3 +228,7 @@ The coordinator delegates a short instruction instead of copying the question an
 context into another JSON string. The runtime already carries the full original
 `parent_request`. Preserve this binding when tuning prompts: duplicating or
 summarizing the envelope adds latency and can distort measure definitions.
+The worker batches the model IDs already supplied by the plan in one context
+read, retaining room for repair within the runtime request-size limit. A new
+dependency may require another read; already available definitions should not
+be fetched repeatedly.

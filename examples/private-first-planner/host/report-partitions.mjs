@@ -1,6 +1,26 @@
 import { digest, immutable, requireThat } from '../contracts.mjs';
 import { request } from '../analysis/contracts.mjs';
 
+// Optional deployment-owned label binding for dimension columns only. This is
+// projection, not semantic verification: callers must still verify every value,
+// metric, period and group against their independent admission policy.
+export function reportColumnKeys(columns, query, dimensionLabels) {
+  const count = 1 + query.dimensions.length + query.measures.length;
+  requireThat(Array.isArray(columns) && columns.length === count);
+  const keys = columns.map(c => c.key);
+  requireThat(keys.every(k => typeof k === 'string' && k.length > 0) && new Set(keys).size === count);
+  const dimensions = columns.slice(1, 1 + query.dimensions.length);
+  const selected = query.dimensions.map(id => {
+    const labels = dimensionLabels[id];
+    requireThat(Array.isArray(labels) && labels.length > 0 && labels.every(l => typeof l === 'string' && l.length > 0));
+    const matches = dimensions.filter(c => labels.includes(c.label));
+    requireThat(matches.length === 1);
+    return matches[0].key;
+  });
+  requireThat(new Set(selected).size === query.dimensions.length);
+  return [keys[0], ...selected, ...keys.slice(1 + query.dimensions.length)];
+}
+
 // Deployment chooses a bounded period partition and verifies each raw Wren table
 // before mapping host-labelled columns or decimal text to report fields. Neither
 // the model nor this concatenator can attest semantics/completeness by itself.
