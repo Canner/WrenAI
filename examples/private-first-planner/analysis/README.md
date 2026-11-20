@@ -180,3 +180,35 @@ the browser gate exercises actual file HTML, sandbox execution and disabled
 network. Existing fixed revenue exports and their baselines remain unchanged.
 Planner/worker clarification may include an explanatory text `reason`, but must
 still contain no executable request or source selection.
+
+## Bounded serve-agent report partitions
+
+The released serve-agent capability limits each result to 100 rows. A larger
+report therefore needs deployment-owned partitioning; requesting an arbitrarily
+large table or adding LIMIT cannot establish complete coverage.
+
+`createReportRuntime` accepts an optional `partitionPolicy` in its third argument:
+`periods({plan, source})` returns at most 24 contiguous, non-overlapping periods of
+the original grain that exactly cover the request. The host preserves every other
+query field. Choose the width from known dimension cardinality; an oversized
+partition must fail rather than silently truncate. Week splits must align to week
+boundaries. This first implementation partitions time only.
+
+`project({plan, source, execution})` must independently verify each raw service
+result and return `{verified, complete, source_revision, query_digest,
+raw_result_digest, result}`. `result` is its canonical report table. Serve agent
+uses host-labelled `c1`, `c2`, ... columns and can represent decimals as strings;
+these must be mapped under a verified binding, never by guessing from model aliases.
+There is no permissive default projector. Final report verification still runs.
+
+The executor preserves individual raw results, evidence and source plans in a
+private `partitioned-report-evidence/1` ledger. Synthetic aggregate references are
+host-local and must not be passed to Wren get_evidence. Each child fetches real
+service evidence first. A service clarification pauses at the current partition;
+its continuation resumes without replaying completed partitions. Any failed,
+unverified or overlapping part prevents publication of the whole report.
+
+The service worker receives the admitted source binding metadata privately to
+resolve canonical definitions; the outer planner and dashboard do not. Explicit
+source and period instructions also survive paginated context indexes. This does
+not add SQL access to the caller, bypass service policy or publish private metadata.

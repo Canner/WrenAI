@@ -27,10 +27,15 @@ export class WrenReportExecutor {
       } else {
         requireThat(!this.#pending && source.id === plan.source_id && source.revision === plan.source_revision);
         req.capability = source.capability;
-        req.question = `Execute this admitted semantic aggregate plan using the confirmed project definitions.\n${JSON.stringify(plan)}\n`
+        req.question = `Execute one admitted aggregate report. Selected ${source.kind}: ${source.id}.\n`
+          + `Measures in output order: ${plan.query.measures.join(', ')}. Dimensions in output order: ${plan.query.dimensions.join(', ')}.\n`
+          + `Period: ${plan.query.period.lower} inclusive to ${plan.query.period.upper} exclusive, UTC ${plan.query.period.grain}.\n`
+          + `Private source binding: ${JSON.stringify(source.metadata)}\n`
+          + `Admitted plan: ${JSON.stringify(plan)}\n`
           + 'Return one table: period (UTC bucket-start date YYYY-MM-DD), then exactly the requested dimension and measure IDs as columns. '
           + 'Filter source timestamps before bucketing, including partial weeks. Apply all requested filters and project rules. '
           + 'Return all groups with no hidden top-N or truncation; do not add raw records or extra columns. '
+          + 'For a selected cube, read that exact cube ID and its base view/model using read_context even if it is absent from the first context-index page. Do not substitute another cube. '
           + 'Do not treat a cube name as a SQL table. Reuse its confirmed definitions or supported cube query surface. '
           + 'If definitions are ambiguous, request clarification. Do not create or persist a cube.';
       }
