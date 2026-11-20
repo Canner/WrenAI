@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.5.0](https://github.com/Canner/WrenAI/compare/wren-core-wasm-v0.4.1...wren-core-wasm-v0.5.0) (2026-10-14)
+## [0.5.0](https://github.com/Canner/WrenAI/compare/wren-core-wasm-v0.4.1...wren-core-wasm-v0.5.0) (2026-10-15)
 
 
 ### Features
