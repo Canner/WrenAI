@@ -282,6 +282,7 @@ class MinioFileConnectionInfo(BaseConnectionInfo):
     ssl_enabled: bool = Field(default=False)
     endpoint: str = Field(examples=["localhost:9000"])
     bucket: str = Field(examples=["my-bucket"])
+    region: str = Field(default="ap-northeast-1", examples=["us-east-1"])
     access_key: SecretStr = Field(examples=["my-account"])
     secret_key: SecretStr = Field(examples=["my-password"])
 
