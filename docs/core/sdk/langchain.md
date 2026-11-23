@@ -75,6 +75,8 @@ Build a toolkit from a CLI-prepared Wren project directory.
 | `path` | `str \| Path` | Project root (the directory containing `wren_project.yml`) |
 | `profile` | `str \| None` | Optional profile name. Resolution order: this kwarg → `profile:` field in `wren_project.yml` → globally active profile |
 
+Profile placeholders (`${VAR}`) resolve from shell variables first, then `<path>/.env`, then `~/.wren/.env`. These values are not exported into `os.environ`, so keys other code needs (such as your LLM provider's API key) must be exported separately.
+
 Memory tools are auto-detected: present `<path>/.wren/memory/` exposes 3 memory tools alongside 3 runtime tools; absent → only runtime tools.
 
 ### `toolkit.get_tools(*, include_memory_write=True, raise_on_error=False)`
