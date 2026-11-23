@@ -46,5 +46,5 @@ The plugin installs `wrenai[mcp]` only. If your data source needs an extra
 | `.antigravity-plugin/plugin.json` | Plugin manifest |
 | `mcp_config.json` | Starts the server with `uv run` and declares the two settings |
 | `server/wren_apps.py` | `wren serve mcp` plus `show_html` and its `ui://` resource |
-| `server/view.html` | The `ui://` view: MCP Apps handshake, then the agent's HTML with the rows as `window.wren` |
+| `server/view.html` | The `ui://` view: MCP Apps handshake, then the agent's HTML rendered in place with the rows as `window.wren` |
 | `skills/wren-semantic-analytics/` | Agent skill: how to use the Wren tools |

@@ -20,5 +20,8 @@ description: Answer data questions through the Wren MCP server (semantic layer, 
    SQL and an HTML fragment you design (SVG, canvas or DOM with inline
    `<script>`). Read the rows from `window.wren.rows` at run time instead of
    copying numbers into the HTML, and label axes and units. External scripts
-   and network requests are blocked. The view renders inline; keep the text
+   and network requests are blocked. For interaction, `wren.query(sql)`
+   re-queries Wren from the view (filters, drill-downs) and `wren.ask(text)`
+   turns a click into the user's next question; catch their errors, since
+   not every host supports them. The view renders inline; keep the text
    answer short and refer to it.

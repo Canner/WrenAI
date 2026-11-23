@@ -50,6 +50,13 @@ def _add_apps(mcp, ctx) -> None:
         time from `window.wren`, which holds `columns` (names), `rows` (objects
         keyed by column) and `theme` ("light" or "dark"). Use colors that read
         in both themes. `limit` caps the rows (default 500, max 5000).
+
+        For interaction, `window.wren` also has two async functions:
+        `wren.ask(text)` sends `text` to the chat as the user's next question
+        (for example on a click), and `wren.query(sql, limit)` runs SQL through
+        Wren and resolves to `{columns, rows}` without involving the model (for
+        filters and drill-downs). Each rejects if the host does not support it;
+        `wren.host.capabilities` lists what the host supports.
         """
         limit = max(1, min(int(limit), MAX_ROWS))
         table = ctx.engine.query(sql, limit)
