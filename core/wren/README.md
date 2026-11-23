@@ -31,7 +31,7 @@ pip install 'wrenai[main]'         # memory + interactive prompts + ui
 pip install 'wrenai[all]'          # All connectors + main
 ```
 
-Requires Python 3.11+.
+Requires Python 3.11.5+.
 
 ## Quick start
 

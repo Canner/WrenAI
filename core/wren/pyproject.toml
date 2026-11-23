@@ -7,7 +7,7 @@ name = "wrenai"
 version = "0.18.0"
 description = "Wren AI CLI and Python SDK — semantic SQL layer for 20+ data sources"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11.5"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Wren AI", email = "contact@getwren.ai" }]
 keywords = ["wrenai", "wren", "sql", "semantic", "semantic-layer", "mdl", "datafusion", "data-modeling", "analytics", "database", "cli", "sdk", "python"]
