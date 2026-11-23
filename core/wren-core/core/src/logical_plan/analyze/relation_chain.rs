@@ -397,13 +397,16 @@ impl RelationChain {
                     *counts.entry(name.clone()).or_insert(0) += 1;
                     reserved.insert(name.clone());
                 }
+                // Field names only need to be unique within this projection, so a
+                // local counter keeps the shared `__relation_` numbering unchanged.
+                let column_alias_generator = AliasGenerator::new();
                 let mut columns = ColumnAliases::new();
                 let mut required_field = Vec::new();
                 for (owner, expr) in fields {
                     let mut name = owner.1.clone();
                     if counts[&name] > 1 {
                         loop {
-                            name = alias_generator.next("__column_");
+                            name = column_alias_generator.next("__column_");
                             if reserved.insert(name.clone()) {
                                 break;
                             }
