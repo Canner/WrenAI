@@ -94,7 +94,7 @@ per turn, never ask for credentials in chat).
 User says "install wren" / "set up wren"
   │
   ├── Preflight (read-only)
-  │     Python 3.11+, virtualenv, wren CLI, working dir
+  │     Python 3.11.5+, virtualenv, wren CLI, working dir
   │
   ├── Branch: bundled demo or own database?
   │     demo → quickstart guide, stop

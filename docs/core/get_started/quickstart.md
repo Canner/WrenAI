@@ -28,7 +28,7 @@ This guide drops three things on you in the first few steps. Skim before you sta
 ## Prerequisites
 
 - **Claude Code**: installed and authenticated ([install guide](https://docs.anthropic.com/en/docs/claude-code/overview))
-- **Python 3.11+**
+- **Python 3.11.5+**
 - **Node.js / npm**: required if using `npx` to install skills (see Step 3)
 - **Git**
 
