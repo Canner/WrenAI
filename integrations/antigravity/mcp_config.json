@@ -1,19 +1,19 @@
 {
   "mcpServers": {
     "wren": {
-      "command": "uvx",
+      "command": "uv",
       "args": [
+        "run",
+        "--no-project",
+        "--quiet",
         "--python",
         "3.12",
-        "--quiet",
-        "--from",
+        "--with",
         "wrenai[mcp]==0.18.0",
-        "wren",
-        "serve",
-        "mcp",
+        "python",
+        "${PLUGIN_ROOT}/server/wren_apps.py",
         "--project",
-        "${WREN_PROJECT_DIR}",
-        "--quiet"
+        "${WREN_PROJECT_DIR}"
       ],
       "env": {
         "WREN_HOME": "${WREN_HOME_DIR}"

@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: transparent; }
+  iframe { display: block; width: 100%; border: 0; }
+  #msg { font: 13px system-ui, sans-serif; padding: 12px; opacity: .7; }
+</style>
+</head>
+<body>
+<div id="msg">Waiting for data…</div>
+<script>
+// Minimal MCP Apps view: handshake with the host, then render the agent's
+// HTML in a same-origin iframe with the Wren rows as window.wren.
+const PROTOCOL = "2026-01-26";
+let nextId = 1, theme = "light", frame = null;
+const pending = new Map();
+
+function send(msg) { window.parent.postMessage({ jsonrpc: "2.0", ...msg }, "*"); }
+function request(method, params) {
+  const id = nextId++;
+  send({ id, method, params });
+  return new Promise((resolve) => pending.set(id, resolve));
+}
+function reportSize() {
+  const h = frame ? frame.contentDocument.documentElement.scrollHeight
+                  : document.documentElement.scrollHeight;
+  if (frame) frame.style.height = h + "px";
+  send({ method: "ui/notifications/size-changed", params: { height: h } });
+}
+
+function render(result) {
+  const data = result && result.structuredContent;
+  if (!data || typeof data.html !== "string") return;
+  const wren = { columns: data.columns, rows: data.rows, title: data.title, theme };
+  const boot = "<script>window.wren=" +
+    JSON.stringify(wren).replace(/</g, "\\u003c") + "<\/script>";
+  const base = "<style>body{margin:0;font:13px system-ui,sans-serif;color-scheme:" +
+    theme + "}</style>";
+  document.getElementById("msg").remove();
+  frame = document.createElement("iframe");
+  frame.srcdoc = "<!doctype html><meta charset=utf-8>" + base + boot + data.html;
+  frame.onload = () => {
+    new ResizeObserver(reportSize).observe(frame.contentDocument.documentElement);
+    reportSize();
+  };
+  document.body.appendChild(frame);
+}
+
+window.addEventListener("message", (e) => {
+  const m = e.data;
+  if (!m || m.jsonrpc !== "2.0") return;
+  if (m.id !== undefined && !m.method) {          // response to our request
+    const r = pending.get(m.id); pending.delete(m.id); if (r) r(m.result);
+    return;
+  }
+  if (m.method === "ui/notifications/tool-result") render(m.params);
+  else if (m.method === "ui/notifications/host-context-changed" && m.params.theme) theme = m.params.theme;
+  else if (m.id !== undefined) send({ id: m.id, result: {} });   // e.g. ui/resource-teardown
+});
+
+request("ui/initialize", {
+  appInfo: { name: "Wren view", version: "0.1.0" },
+  appCapabilities: {},
+  protocolVersion: PROTOCOL,
+}).then((res) => {
+  theme = (res && res.hostContext && res.hostContext.theme) || theme;
+  send({ method: "ui/notifications/initialized", params: {} });
+  reportSize();
+});
+</script>
+</body>
+</html>

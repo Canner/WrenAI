@@ -16,3 +16,9 @@ description: Answer data questions through the Wren MCP server (semantic layer, 
 4. Prefer cube measures for rates; never average rates.
 5. In the answer, give the sample size and date window behind every number,
    and say "not enough data" when a sample is below the rules' minimum.
+6. When a chart or visual table would help, call `show_html` with the final
+   SQL and an HTML fragment you design (SVG, canvas or DOM with inline
+   `<script>`). Read the rows from `window.wren.rows` at run time instead of
+   copying numbers into the HTML, and label axes and units. External scripts
+   and network requests are blocked. The view renders inline; keep the text
+   answer short and refer to it.
