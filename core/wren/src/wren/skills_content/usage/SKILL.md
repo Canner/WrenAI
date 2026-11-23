@@ -214,7 +214,7 @@ wren dry-plan --sql "<failed SQL>"
 | dry-plan result | Failure layer | Next step |
 |-----------------|---------------|-----------|
 | dry-plan fails | MDL / semantic | → Layer 2A |
-| dry-plan succeeds, execution fails | DB / dialect | → Layer 2B |
+| dry-plan succeeds, execution fails | Unresolved reference, DB state, or dialect | Use `dry-run` for database validation, then → Layer 2B |
 
 #### Layer 2A: MDL-level diagnosis (dry-plan failed)
 
