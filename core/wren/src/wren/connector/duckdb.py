@@ -34,7 +34,7 @@ def _init_duckdb_minio(connection, info: MinioFileConnectionInfo):
         TYPE S3,
         KEY_ID '{_escape_sql(info.access_key.get_secret_value())}',
         SECRET '{_escape_sql(info.secret_key.get_secret_value())}',
-        REGION 'ap-northeast-1'
+        REGION '{_escape_sql(info.region)}'
     )""")
     connection.execute("SET s3_endpoint=?", [info.endpoint])
     connection.execute("SET s3_url_style='path'")
