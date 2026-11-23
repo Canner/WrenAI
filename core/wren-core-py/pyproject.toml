@@ -26,6 +26,7 @@ Issues = "https://github.com/Canner/WrenAI/issues"
 
 [dependency-groups]
 dev = [
+  "duckdb==2.0.0",
   "maturin==1.9.4",
   "pyarrow==25.0.0",
   "pytest==9.1.1",

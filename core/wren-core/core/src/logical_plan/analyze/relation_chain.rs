@@ -3,9 +3,7 @@ use crate::logical_plan::analyze::plan::{
     CalculationPlanNode, ModelPlanNode, ModelSourceNode, OrdExpr, PartialModelPlanNode,
 };
 use crate::logical_plan::analyze::relation_chain::RelationChain::Start;
-use crate::logical_plan::utils::{
-    create_schema, eliminate_ambiguous_columns, rebase_column,
-};
+use crate::logical_plan::utils::create_schema;
 use crate::mdl::context::SessionPropertiesRef;
 use crate::mdl::lineage::DatasetLink;
 use crate::mdl::manifest::JoinType;
@@ -15,6 +13,7 @@ use crate::mdl::{AnalyzedWrenMDL, SessionStateRef};
 use crate::DataFusionError;
 use crate::{AccessControlProvider, AccessScope, WrenAccessControlProvider};
 use datafusion::common::alias::AliasGenerator;
+use datafusion::common::tree_node::{Transformed, TransformedResult, TreeNode};
 use datafusion::common::{internal_err, plan_err, DFSchema, DFSchemaRef, Result};
 use datafusion::common::{plan_datafusion_err, TableReference};
 use datafusion::logical_expr::{
@@ -23,10 +22,50 @@ use datafusion::logical_expr::{
 };
 use petgraph::graph::NodeIndex;
 use petgraph::Graph;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 const ALIAS: &str = "__relation_";
+
+/// Original (model, column) identity -> field exposed by a relation subquery.
+/// A SubqueryAlias replaces qualifiers, so collisions must be carried explicitly.
+pub(crate) type ColumnAliases = BTreeMap<(String, String), String>;
+
+fn column_key(column: &datafusion::common::Column) -> (String, String) {
+    (
+        column
+            .relation
+            .as_ref()
+            .map(|r| r.table())
+            .unwrap_or("")
+            .to_owned(),
+        column.name.clone(),
+    )
+}
+
+pub(crate) fn rebase_relation_column(
+    expr: &Expr,
+    alias: &str,
+    columns: &ColumnAliases,
+) -> Result<Expr> {
+    expr.clone()
+        .transform_down(|expr| {
+            if let Expr::Column(column) = expr {
+                let name = columns.get(&column_key(&column)).ok_or_else(|| {
+                    plan_datafusion_err!(
+                        "Relation projection has no original column {}",
+                        column
+                    )
+                })?;
+                Ok(Transformed::yes(Expr::Column(
+                    datafusion::common::Column::new(Some(alias), name.clone()),
+                )))
+            } else {
+                Ok(Transformed::no(expr))
+            }
+        })
+        .data()
+}
 
 /// RelationChain is a chain of models that are connected by the relationship.
 /// The chain is used to generate the join plan for the model.
@@ -172,7 +211,7 @@ impl RelationChain {
         &mut self,
         rule: ModelGenerationRule,
         alias_generator: &AliasGenerator,
-    ) -> Result<(Option<LogicalPlan>, Option<String>)> {
+    ) -> Result<(Option<LogicalPlan>, Option<String>, ColumnAliases)> {
         match self {
             RelationChain::Chain(plan, _, condition, ref mut next) => {
                 let left = rule.generate_model_internal(plan.clone())?.data;
@@ -188,7 +227,9 @@ impl RelationChain {
                     );
                 };
 
-                let (Some(right), right_alias) = next.plan(rule, alias_generator)? else {
+                let (Some(right), right_alias, right_columns) =
+                    next.plan(rule, alias_generator)?
+                else {
                     return plan_err!("Nil relation chain");
                 };
 
@@ -208,7 +249,11 @@ impl RelationChain {
                             .unwrap_or(false);
                         if needs_rebase {
                             if let Some(right_alias) = right_alias_ref {
-                                return rebase_column(&expr, right_alias);
+                                return rebase_relation_column(
+                                    &expr,
+                                    right_alias,
+                                    &right_columns,
+                                );
                             }
                         }
                     }
@@ -322,11 +367,51 @@ impl RelationChain {
                     required_exprs.insert(OrdExpr::new(col(qualified_name)));
                 }
 
-                let required_field: Vec<Expr> = required_exprs
-                    .iter()
-                    .map(|expr| expr.expr.clone())
-                    .collect();
-                let required_field = eliminate_ambiguous_columns(required_field);
+                // Keep identity while flattening a joined schema. Deduplicating by
+                // bare name silently substituted the other model's id. A previous
+                // chain has already replaced its qualifiers; recover those owners
+                // from its explicit projection mapping before assigning new fields.
+                let previous: BTreeMap<_, _> = right_alias
+                    .as_ref()
+                    .map(|alias| {
+                        right_columns
+                            .iter()
+                            .map(|(owner, name)| {
+                                ((alias.clone(), name.clone()), owner.clone())
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let mut fields = BTreeMap::new();
+                for required in required_exprs {
+                    let Expr::Column(column) = &required.expr else {
+                        return internal_err!("Relation field must be a column");
+                    };
+                    let key = column_key(column);
+                    let original = previous.get(&key).cloned().unwrap_or(key);
+                    fields.insert(original, required.expr);
+                }
+                let mut counts = BTreeMap::new();
+                let mut reserved = BTreeSet::new();
+                for (_, name) in fields.keys() {
+                    *counts.entry(name.clone()).or_insert(0) += 1;
+                    reserved.insert(name.clone());
+                }
+                let mut columns = ColumnAliases::new();
+                let mut required_field = Vec::new();
+                for (owner, expr) in fields {
+                    let mut name = owner.1.clone();
+                    if counts[&name] > 1 {
+                        loop {
+                            name = alias_generator.next("__column_");
+                            if reserved.insert(name.clone()) {
+                                break;
+                            }
+                        }
+                    }
+                    columns.insert(owner, name.clone());
+                    required_field.push(expr.alias(name));
+                }
                 let alias = alias_generator.next(ALIAS);
                 Ok((
                     Some(
@@ -341,10 +426,23 @@ impl RelationChain {
                             .build()?,
                     ),
                     Some(alias),
+                    columns,
                 ))
             }
             Start(plan) => {
-                Ok((Some(rule.generate_model_internal(plan.clone())?.data), None))
+                let generated = rule.generate_model_internal(plan.clone())?.data;
+                let mut columns = ColumnAliases::new();
+                for index in 0..generated.schema().fields().len() {
+                    let (relation, field) = generated.schema().qualified_field(index);
+                    columns.insert(
+                        (
+                            relation.map(|r| r.table()).unwrap_or("").to_owned(),
+                            field.name().clone(),
+                        ),
+                        field.name().clone(),
+                    );
+                }
+                Ok((Some(generated), None, columns))
             }
         }
     }
