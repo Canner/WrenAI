@@ -429,7 +429,8 @@ class AdHocSQL:
         ``SEMI``/``ANTI`` join target never repeats a row, but it proves nothing about another
         source's cardinality. A CTE or derived table is bounded only when its projected
         ``GROUP BY`` columns or all its ``DISTINCT`` outputs are equated to bounded sources.
-        Key comparisons need the same known type: coercion can merge distinct keys.
+        Derived keys need the same known type: coercion can merge distinct keys.
+        Model primary keys also allow INT/BIGINT width changes, which preserve equality.
         Text comparisons remain unproven because the schema omits collation.
         Key names compare case-insensitively, as qualification folds them."""
         annotated = False
@@ -481,17 +482,28 @@ class AdHocSQL:
                         isinstance(a, exp.Column) and isinstance(b, exp.Column)
                     ) or (a.table == b.table):
                         continue
-                    if (
-                        a.type is None
-                        or a.type.this == exp.DataType.Type.UNKNOWN
-                        or a.type.this in exp.DataType.TEXT_TYPES
-                        or a.type != b.type
-                    ):
+                    if a.type is None or b.type is None:
                         continue
+                    same_type = (
+                        a.type == b.type
+                        and a.type.this != exp.DataType.Type.UNKNOWN
+                        and a.type.this not in exp.DataType.TEXT_TYPES
+                    )
+                    integer_widths = {exp.DataType.Type.INT, exp.DataType.Type.BIGINT}
+                    model_integer = (
+                        a.type.this in integer_widths and b.type.this in integer_widths
+                    )
                     edges += [
                         (mine.table, mine.name.lower(), other.table)
                         for mine, other in ((a, b), (b, a))
-                        if through is None or mine.table in through
+                        if (through is None or mine.table in through)
+                        and (
+                            same_type
+                            or (
+                                model_integer
+                                and isinstance(scope.sources.get(mine.table), exp.Table)
+                            )
+                        )
                     ]
             keys_of = {
                 model.lower(): frozenset(k.lower() for k in keys)

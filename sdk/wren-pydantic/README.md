@@ -124,6 +124,19 @@ toolkit.toolset(
 toolkit.instructions(toolset=toolset)  # pass same toolset for prompt sync
 ```
 
+`from_project(path)` resolves `${VAR}` placeholders in the profile from, in
+order of precedence: variables exported in your shell, then `path/.env`, then
+`~/.wren/.env`. A `.env` in the current working directory is also used when
+the working directory is inside `path`. These values are used **only** to
+expand the profile — they are not exported into `os.environ`, so toolkits for
+different projects in the same process each get their own secrets.
+
+If other code relies on variables in the project's `.env` (for example
+`OPENAI_API_KEY` for your pydantic-ai model), export them in your shell or
+load the file yourself with `python-dotenv`. Likewise, a `.env` in an unrelated working
+directory is not consulted; move those keys into the project's `.env` or
+`~/.wren/.env`.
+
 Memory is **auto-detected** from the project: present `<path>/.wren/memory/`
 exposes the 3 memory tools alongside the 3 runtime tools; absent → only the
 runtime tools. To enable, run `wren memory index` from the project root; to

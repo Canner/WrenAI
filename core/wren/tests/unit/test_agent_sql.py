@@ -1605,6 +1605,93 @@ def test_key_comparisons_preserve_uniqueness(source, view_type, key_type, duplic
 
 
 @pytest.mark.parametrize(
+    ("view_type", "key_type"),
+    [("INT", "BIGINT"), ("BIGINT", "INT"), ("int4", "int8"), ("int8", "int4")],
+)
+@pytest.mark.parametrize(
+    ("source", "keys", "on", "duplicated"),
+    [
+        ("dimensions", ("id",), "v.id=x.id", False),
+        ("dimensions", ("id",), "x.id=v.id", False),
+        ("dimensions", (), "v.id=x.id", True),
+        ("dimensions", ("tenant_id", "id"), "v.id=x.id", True),
+        (
+            "dimensions",
+            ("tenant_id", "id"),
+            "v.id=x.id AND v.tenant_id=x.tenant_id",
+            False,
+        ),
+        ("(SELECT DISTINCT id FROM dimensions)", ("id",), "v.id=x.id", True),
+        ("(SELECT id FROM dimensions GROUP BY id)", ("id",), "v.id=x.id", True),
+        ("deduplicated", ("id",), "v.id=x.id", True),
+    ],
+)
+def test_integer_width_comparisons_bound_only_model_primary_keys(
+    source, keys, on, duplicated, view_type, key_type
+):
+    schema = {
+        "invoice": {"tenant_id": view_type, "id": view_type, "value": "INT"},
+        "dimensions": {"tenant_id": key_type, "id": key_type},
+    }
+    query = AdHocSQL.__new__(AdHocSQL)
+    query.schema = schema
+    query.primary_keys = {"dimensions": frozenset(keys)}
+    sql = (
+        "SELECT SUM(v.value) FROM (SELECT tenant_id, id, value FROM invoice) v "
+        f"JOIN {source} x ON {on}"
+    )
+    if source == "deduplicated":
+        sql = f"WITH deduplicated AS (SELECT DISTINCT id FROM dimensions) {sql}"
+    tree = sqlglot.parse_one(sql, dialect="duckdb")
+    tree.find(exp.Subquery).meta[VIEW_MARK] = "invoice_value"
+    qualified = qualify(tree, dialect="duckdb", schema=schema, identify=True)
+    assert query._duplicate_aggregation(list(traverse_scope(qualified))) is duplicated
+
+
+@pytest.mark.parametrize(
+    ("view_type", "key_type"), [("INTEGER", "BIGINT"), ("BIGINT", "INTEGER")]
+)
+def test_integer_model_key_preserves_aggregation_evidence(adhoc, view_type, key_type):
+    s = adhoc(
+        files={
+            "models/integer_customers/metadata.yml": yaml.safe_dump(
+                {
+                    "name": "integer_customers",
+                    "primary_key": "id",
+                    "columns": [{"name": "id", "type": key_type}],
+                }
+            ),
+            "models/integer_customers/ref_sql.sql": (
+                f"SELECT CAST(id AS {key_type}) AS id FROM synthetic.main.raw_customers"
+            ),
+            "views/integer_customer_value/metadata.yml": "name: integer_customer_value\n",
+            "views/integer_customer_value/sql.yml": yaml.safe_dump(
+                {
+                    "statement": (
+                        f"SELECT CAST(id AS {view_type}) AS id, id AS value "
+                        "FROM customers"
+                    )
+                }
+            ),
+        }
+    )
+    _, baseline = run(s, "SELECT SUM(value) FROM integer_customer_value")
+    assert baseline["result"]["rows"] == [{"c1": 6}]
+    answers, result = run(
+        s,
+        "SELECT SUM(v.value) FROM integer_customer_value v "
+        "JOIN integer_customers x ON v.id=x.id",
+    )
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == baseline["result"]["rows"]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert "duplicate_aggregation" not in internal["observed"]
+    assert "duplicate_aggregation" not in internal["unverified"]
+
+
+@pytest.mark.parametrize(
     ("source_sql", "join", "total"),
     [
         ("SELECT id FROM customers", "CROSS JOIN x", 4650.0),
@@ -1726,6 +1813,55 @@ def test_text_key_collation_caveat_reaches_result_evidence(
         "internal"
     ]
     # The MDL schema does not expose collation, even for a binary text control.
+    assert internal["observed"]["duplicate_aggregation"] is True
+    assert "duplicate_aggregation" in internal["unverified"]
+    assert result["evidence"]["has_unverified_semantics"] is True
+
+
+@pytest.mark.parametrize("collated", [False, True], ids=["binary", "nocase"])
+def test_text_model_primary_keys_are_unverified_without_collation(adhoc, collated):
+    import duckdb  # noqa: PLC0415
+
+    s = adhoc(
+        files={
+            "views/customer_keys/metadata.yml": "name: customer_keys\n",
+            "views/customer_keys/sql.yml": "statement: SELECT id, region FROM customers\n",
+            "models/currency_codes/metadata.yml": yaml.safe_dump(
+                {
+                    "name": "currency_codes",
+                    "primary_key": "code",
+                    "columns": [{"name": "code", "type": "VARCHAR"}],
+                }
+            ),
+            "models/currency_codes/ref_sql.sql": (
+                "SELECT code FROM synthetic.main.raw_currency_codes"
+            ),
+        }
+    )
+    with duckdb.connect(str(s.project.root.parent / "data/synthetic.duckdb")) as db:
+        db.execute("DROP TABLE raw_customers")
+        collation = " COLLATE NOCASE" if collated else ""
+        db.execute(
+            f"CREATE TABLE raw_customers(id INTEGER, region VARCHAR{collation}, email VARCHAR)"
+        )
+        db.execute("INSERT INTO raw_customers VALUES (1, 'a', 'one@example.invalid')")
+        db.execute("CREATE TABLE raw_currency_codes(code VARCHAR PRIMARY KEY)")
+        db.execute("INSERT INTO raw_currency_codes VALUES ('a'), ('A'), ('b')")
+        assert db.execute(
+            "SELECT COUNT(*), COUNT(DISTINCT code) FROM raw_currency_codes"
+        ).fetchone() == (3, 3)
+    answers, result = run(
+        s,
+        "SELECT SUM(v.id) FROM customer_keys v "
+        "JOIN currency_codes c ON v.region=c.code",
+    )
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": 2 if collated else 1}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    # A full model PK used to suppress the caveat. The MDL omits collation, so
+    # distinct text keys can compare equal; even the binary control is unproven.
     assert internal["observed"]["duplicate_aggregation"] is True
     assert "duplicate_aggregation" in internal["unverified"]
     assert result["evidence"]["has_unverified_semantics"] is True
