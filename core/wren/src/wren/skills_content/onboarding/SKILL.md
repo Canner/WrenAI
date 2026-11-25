@@ -30,7 +30,7 @@ Reference docs (the skill points to these — never duplicate their content):
 
 Read-only checks. Report findings, do **not** ask about project / credentials / datasource yet.
 
-1. `python3 --version` — requires Python 3.11+. If older, ask the user to upgrade and stop.
+1. `python3 --version` — requires Python 3.11.5+. If older, ask the user to upgrade and stop.
 2. Check virtualenv: `python3 -c "import sys; print(sys.prefix != sys.base_prefix)"`. If `False`, offer to create one (`python3 -m venv .venv && source .venv/bin/activate`). PEP 668 systems will need this.
 3. `wren --version` — if already installed, confirm before reinstalling.
 4. `pwd` — record it. Don't ask where the project should live yet.
