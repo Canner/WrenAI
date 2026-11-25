@@ -1,0 +1,4 @@
+profile: dashboard-design
+components:
+  - use: plan_dashboard
+  - use: generate_dashboard_frontend

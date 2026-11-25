@@ -172,6 +172,13 @@ their own runs. Previously recorded artifacts remain outside this source package
 
 For worker evidence classification, historical regression and isolated live worker runs, see [data verification](../host/DATA-VALIDATION.md). The worker v2 contract carries an explicit requested period and returns verification independently of execution completion.
 
+## Dashboard planning versus frontend generation
+
+The cloud-planner command above is the legacy code-generation suite. For separate
+chart-selection planning and fixed-plan frontend evaluation, use the
+[dashboard units](../dashboard/README.md). Their offline CLI, explicit live replay,
+Warble prompts and host contracts are separate; existing benchmarks remain intact.
+
 ## Interactive dashboard cases
 
 The [interactive laboratory](../interactive/README.md) is an independent synthetic

@@ -1,0 +1,11 @@
+{
+  "compiler": "warble 0.21.1",
+  "ir_sha256": "36a90039aad46d1a08cd341033bb3d344653030c1af3724ca6123db876bdb74c",
+  "sources": {
+    "components/generate_dashboard_frontend/component.yml": "d514d11340d14d3c71c4ff77d0c281c4623f361b22ab903f62410ceba04e4451",
+    "components/generate_dashboard_frontend/respond.md": "f51ed4d5b8cd083d046087aaaea385fed1c53a419337a0af2a6bdf46f023c393",
+    "components/plan_dashboard/component.yml": "833a309d5e4e5cebcecf185b766a4b16ccec72cfbfc43f043697d5c398407ac2",
+    "components/plan_dashboard/respond.md": "a7c31191117d72456c955d5536a97e42075dfc125de412c6c62c001153ca05c3",
+    "profile.yml": "cd2a711a497d43c0a5f5f46044433e82983504a89d4eb86fff4f0f02e506dfbb"
+  }
+}

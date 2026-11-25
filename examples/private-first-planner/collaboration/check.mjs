@@ -24,18 +24,19 @@ export async function stepsFor(gate, out, configPath) {
     node('eval/data-validation.mjs', join(out, 'data-verification'))];
   if (gate === 'worker-contracts') return workerContracts();
   if (gate === 'offline') return [
-    node('--test', ...(await Promise.all(['planner/test', 'worker/test', 'behaviors/test', 'host/test', 'host/adapters/test', 'eval/test', 'collaboration/test', 'analysis/test'].map(testFiles))).flat(), 'design/test/contracts.test.mjs', 'design/test/claude.test.mjs', 'design/test/stream.test.mjs', 'interactive/test/contracts.test.mjs', 'revenue/test/contracts.test.mjs', 'revenue/report/contract.test.mjs'),
+    node('--test', ...(await Promise.all(['planner/test', 'worker/test', 'behaviors/test', 'host/test', 'host/adapters/test', 'eval/test', 'collaboration/test', 'analysis/test'].map(testFiles))).flat(), 'design/test/contracts.test.mjs', 'design/test/claude.test.mjs', 'design/test/stream.test.mjs', 'design/test/budget-low.test.mjs', 'dashboard/test/contracts.test.mjs', 'interactive/test/contracts.test.mjs', 'revenue/test/contracts.test.mjs', 'revenue/report/contract.test.mjs'),
     node('eval/data-validation.mjs', join(out, 'data-verification')),
     node('eval/run.mjs', 'private-planner', join(out, 'planner')),
     node('eval/run.mjs', 'cloud-planner', join(out, 'cloud')),
+    ...['dashboard-plan','dashboard-frontend'].map(unit=>node('dashboard/eval.mjs',unit,join(out,unit))),
     ...['planner', 'worker', 'host'].map(unit => node('analysis/eval.mjs', unit, join(out, `report-${unit}`))),
   ];
   if (gate === 'worker-service') return [node('eval/run.mjs', 'data-worker', join(out, 'worker'), resolve(configPath))];
   if (gate === 'host-service') return [node('host/verify.mjs', join(out, 'host'), resolve(configPath))];
   if (gate === 'interactive') return [node('--test', 'interactive/test/browser.test.mjs'), node('interactive/run.mjs', join(out, 'suite'))];
-  if (gate === 'browser') return [node('--test', 'design/test/browser.test.mjs', 'host/browser.test.mjs', 'revenue/test/browser.test.mjs', 'revenue/report/browser.test.mjs', 'analysis/browser/browser.test.mjs'),
+  if (gate === 'browser') return [node('--test', 'design/test/browser.test.mjs', 'host/browser.test.mjs', 'revenue/test/browser.test.mjs', 'revenue/report/browser.test.mjs', 'analysis/browser/browser.test.mjs', 'dashboard/test/browser.test.mjs'),
     node('eval/run.mjs', 'cloud-planner', join(out, 'cloud-browser'), '--browser')];
-  if (gate === 'behaviors') return [node('behaviors/compile.mjs', '--check'),node('interactive/behaviors/compile.mjs', '--check'),node('revenue/behaviors/compile.mjs', '--check'),node('analysis/behaviors/compile.mjs', '--check')];
+  if (gate === 'behaviors') return [node('behaviors/compile.mjs', '--check'),node('interactive/behaviors/compile.mjs', '--check'),node('revenue/behaviors/compile.mjs', '--check'),node('analysis/behaviors/compile.mjs', '--check'),node('dashboard/behaviors/compile.mjs', '--check')];
   const config = JSON.parse(await readFile(configPath, 'utf8'));
   if (typeof config.python !== 'string' || !config.python.startsWith('/')) throw Error('absolute_python_required');
   return [[config.python, ['worker/test/release_compat.py']], [config.python, ['-c',
