@@ -1,0 +1,26 @@
+apiVersion: v2
+name: wren
+description: A Helm chart for Wren AI Service
+type: application
+version: 1.0.0
+appVersion: "0.22.2"
+keywords:
+  - ai
+  - analytics
+  - data
+home: https://github.com/Canner/WrenAI
+sources:
+  - https://github.com/Canner/WrenAI
+maintainers:
+  - name: Wren AI Team
+    email: support@getwren.ai
+
+dependencies:
+  - name: qdrant
+    version: "1.14.0"
+    repository: "https://qdrant.github.io/qdrant-helm"
+    condition: qdrant.enabled
+  - name: postgresql
+    version: "15.5.30"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled

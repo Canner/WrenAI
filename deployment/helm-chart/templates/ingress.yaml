@@ -1,0 +1,27 @@
+{{ if .Values.ui.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "wren-ai.fullname" . }}
+  labels:
+    {{- include "wren-ai.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.ui.ingress.ingressAnnotations | nindent 4}}
+spec:
+  ingressClassName: {{ .Values.ui.ingress.ingressClassName }}
+  tls:
+  - hosts:
+    - {{ .Values.ui.ingress.host }}
+    secretName: {{ .Values.ui.ingress.tlsSecretName }}
+  rules:
+    - host: {{ .Values.ui.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: {{ .Values.ui.ingress.ingressPathType }}
+            backend:
+              service:
+                name: {{ include "wren-ai.fullname" . }}-ui-svc
+                port:
+                  number: {{ .Values.ui.ingress.port }}
+{{- end }}
