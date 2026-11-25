@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.18.1](https://github.com/Canner/WrenAI/compare/wren-v0.18.0...wren-v0.18.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **wren:** accept ClickHouse ARRAY JOIN aliases in MDL column validation ([#2886](https://github.com/Canner/WrenAI/issues/2886)) ([8051ce4](https://github.com/Canner/WrenAI/commit/8051ce48b423df9e8598e43fa36ba7a218e79f5e))
+* **wren:** keep toNullable off LAG/LEAD values ClickHouse can't make nullable ([#2871](https://github.com/Canner/WrenAI/issues/2871)) ([7edd5fe](https://github.com/Canner/WrenAI/commit/7edd5fec14586175fae8c5e73f9c0a4a76aa5482))
+* **wren:** reject unresolved columns in MDL-only scopes ([#2851](https://github.com/Canner/WrenAI/issues/2851)) ([48de0b6](https://github.com/Canner/WrenAI/commit/48de0b6cbd02cbbe3753f29e37f4be24e8a9a7fd))
+
+
+### Dependencies
+
+* patch high and moderate security advisories in lockfiles ([#2857](https://github.com/Canner/WrenAI/issues/2857)) ([c9dfe00](https://github.com/Canner/WrenAI/commit/c9dfe005541e1cef8245af75797b8135c85a07dd))
+
+
+### Documentation
+
+* fix broken links in the core docs index and wren READMEs ([#2866](https://github.com/Canner/WrenAI/issues/2866)) ([a1aca3d](https://github.com/Canner/WrenAI/commit/a1aca3d474a4fbdc9b7d2a1dca0a7988213c56ee))
+
 ## [0.18.0](https://github.com/Canner/WrenAI/compare/wren-v0.17.1...wren-v0.18.0) (2026-11-10)
 
 
