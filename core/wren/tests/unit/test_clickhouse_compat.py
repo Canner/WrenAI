@@ -20,6 +20,7 @@ from wren.mdl import get_session_context
 from wren.mdl.clickhouse_compat import translate
 from wren.mdl.cte_rewriter import CTERewriter
 from wren.model.data_source import DataSource
+from wren.model.error import ErrorCode, WrenError
 
 pytestmark = pytest.mark.unit
 
@@ -349,6 +350,26 @@ class TestWindowFunctions:
     def test_array_join_only_retypes_the_column_it_unwraps(self, sql, value):
         out = _rewrite(sql, manifest=_COMPOSITE_MANIFEST)
         assert f"lagInFrame({value}) OVER (" in out
+
+    @pytest.mark.parametrize(
+        ("sql", "column"),
+        [
+            ("SELECT missing FROM events ARRAY JOIN tags AS t", "missing"),
+            ("SELECT t FROM events ARRAY JOIN missing AS t", "missing"),
+            # The alias is visible only in the SELECT whose ARRAY JOIN declares it.
+            (
+                "SELECT id FROM events"
+                " WHERE id IN (SELECT t FROM events) AND id IN"
+                " (SELECT id FROM events ARRAY JOIN tags AS t)",
+                "t",
+            ),
+        ],
+    )
+    def test_array_join_alias_does_not_hide_unresolved_columns(self, sql, column):
+        with pytest.raises(WrenError) as exc:
+            _rewrite(sql, manifest=_COMPOSITE_MANIFEST)
+        assert exc.value.error_code == ErrorCode.INVALID_SQL
+        assert f"Column '{column}' could not be resolved" in exc.value.message
 
     @pytest.mark.parametrize(
         "sql",

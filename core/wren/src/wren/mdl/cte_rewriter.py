@@ -652,12 +652,22 @@ class CTERewriter:
                     for field in pivot.fields
                     if isinstance(field, exp.In)
                 )
+            # ClickHouse ``ARRAY JOIN expr AS name`` declares ``name`` as a
+            # column of this SELECT, not of any model source.
+            array_join_outputs = {
+                item.alias
+                for join in scope.expression.args.get("joins") or []
+                if join.args.get("kind") == "ARRAY"
+                for item in (join.this, *join.expressions)
+                if isinstance(item, exp.Alias)
+            }
             # scope.columns includes external references inherited from children.
             # A raw-table subquery must not be validated as part of its MDL parent.
             columns = [
                 column
                 for column in scope.unqualified_columns
                 if id(column) not in unpivot_outputs
+                and column.name not in array_join_outputs
                 and column.find_ancestor(exp.Select) is scope.expression
             ]
             columns.extend(
