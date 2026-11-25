@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.3](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.8.2...wren-core-py-v0.8.3) (2026-11-25)
+
+
+### Bug Fixes
+
+* **core:** preserve model-qualified identity across relationship projections ([#2863](https://github.com/Canner/WrenAI/issues/2863)) ([af6c320](https://github.com/Canner/WrenAI/commit/af6c320e17dbd76f5d8462bb6c102bf2f10ecf78))
+
 ## [0.8.2](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.8.1...wren-core-py-v0.8.2) (2026-10-23)
 
 
