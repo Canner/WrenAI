@@ -660,13 +660,14 @@ class CTERewriter:
                 for join in scope.expression.args.get("joins") or []
                 if join.args.get("kind") == "ARRAY"
                 for item in (join.this, *join.expressions)
-                if isinstance(item, exp.Alias)
             ]
-            array_join_outputs = {item.alias for item in array_join_items}
+            array_join_outputs = {
+                item.alias for item in array_join_items if isinstance(item, exp.Alias)
+            }
             array_join_inputs = {
                 id(column)
                 for item in array_join_items
-                for column in item.this.find_all(exp.Column)
+                for column in item.find_all(exp.Column)
             }
             # scope.columns includes external references inherited from children.
             # A raw-table subquery must not be validated as part of its MDL parent.
