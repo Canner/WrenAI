@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.4](https://github.com/Canner/WrenAI/compare/wren-langchain-v0.2.3...wren-langchain-v0.2.4) (2026-11-25)
+
+
+### Bug Fixes
+
+* **langchain:** keep tool envelopes JSON-serializable for date and decimal rows ([#2816](https://github.com/Canner/WrenAI/issues/2816)) ([0612c3e](https://github.com/Canner/WrenAI/commit/0612c3e737f738458acf2a90bad4b3a8ceb3879f))
+* **sdk:** include v5 business rules in agent prompts ([#2835](https://github.com/Canner/WrenAI/issues/2835)) ([5476670](https://github.com/Canner/WrenAI/commit/54766705472b5bcd3380d705bd88dff2659aefaf))
+* **sdk:** resolve each project's .env secrets per toolkit ([#2840](https://github.com/Canner/WrenAI/issues/2840)) ([75035ad](https://github.com/Canner/WrenAI/commit/75035ad1588e7d9170e7939c61dfbac4e069a9a9))
+* **sdk:** synchronize cold connector initialization ([#2820](https://github.com/Canner/WrenAI/issues/2820)) ([548eee3](https://github.com/Canner/WrenAI/commit/548eee3e864b11e7f11eee15ae82be178a295f22))
+
+
+### Documentation
+
+* **sdk:** document per-project .env resolution and tighten its test ([#2865](https://github.com/Canner/WrenAI/issues/2865)) ([68254e4](https://github.com/Canner/WrenAI/commit/68254e4eeb51c0c2d3a01b2e7e29afd92d64ddff))
+
 ## [0.2.3](https://github.com/Canner/WrenAI/compare/wren-langchain-v0.2.2...wren-langchain-v0.2.3) (2026-10-19)
 
 
