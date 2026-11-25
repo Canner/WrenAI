@@ -13,12 +13,15 @@ Every rewrite targets a construct that fails on ClickHouse today, or (``LAG`` /
   As emitted, ClickHouse evaluates them over a frame ending at the current row and
   fills a missing neighbour with the type's default: ``LEAD`` returns ``0`` for
   every row and ``LAG`` returns ``0`` instead of ``NULL`` at the first. The
-  explicit frame and ``toNullable`` restore the SQL meaning.
+  explicit frame and ``toNullable`` restore the SQL meaning. A column whose
+  model type ClickHouse cannot wrap in ``Nullable`` (``Array``, ``Map``, ...) gets
+  the frame only, and the missing neighbour is that type's default.
 * ``CUME_DIST()`` -> ``count(*) OVER (same window) / count(*) OVER (partition)``.
   An ordered window's default frame includes peers, which is CUME_DIST's numerator.
 * ``EXTRACT(DOW FROM d)`` -> ``toDayOfWeek(d) % 7`` (Sunday = 0);
   ``EXTRACT(ISODOW FROM d)`` -> ``toDayOfWeek(d)`` (Monday = 1 .. Sunday = 7).
-* ``CAST(NULL AS T)`` -> ``CAST(NULL AS Nullable(T))``.
+* ``CAST(NULL AS T)`` -> ``CAST(NULL AS Nullable(T))``, and
+  ``LowCardinality(T)`` -> ``LowCardinality(Nullable(T))``.
 * A correlated ``EXISTS`` over one table, correlated only by equalities, becomes a
   NULL-safe ``IN``. Any other shape is left as written.
 * ``SUM(c) AS c ... HAVING SUM(c) > 0``: ClickHouse resolves the alias ``c``
@@ -31,13 +34,141 @@ Every rewrite targets a construct that fails on ClickHouse today, or (``LAG`` /
 from __future__ import annotations
 
 from sqlglot import exp
+from sqlglot.optimizer.annotate_types import annotate_types
+from sqlglot.optimizer.qualify_columns import qualify_columns
+from sqlglot.schema import Schema
 
 _DOW_UNITS = frozenset({"DOW", "DAYOFWEEK", "ISODOW"})
+
+# Types ``toNullable`` rejects (ILLEGAL_TYPE_OF_ARGUMENT) on every ClickHouse version
+# checked: 24.3 (WrenAI's connector tests), 25.3 and 26.10. Dropping ``toNullable``
+# for a type that some version accepts would return a default instead of NULL
+# there, so Geometry stays out (24.3 and 25.3 accept it), as do Tuple and Point
+# (26.10 accepts them). JSON, LowCardinality and SimpleAggregateFunction are accepted.
+_NOT_NULLABLE = frozenset(
+    {
+        exp.DataType.Type.ARRAY,
+        exp.DataType.Type.MAP,
+        exp.DataType.Type.NESTED,
+        exp.DataType.Type.AGGREGATEFUNCTION,
+        exp.DataType.Type.VARIANT,
+        exp.DataType.Type.DYNAMIC,
+        exp.DataType.Type.RING,
+        exp.DataType.Type.LINESTRING,
+        exp.DataType.Type.MULTILINESTRING,
+        exp.DataType.Type.POLYGON,
+        exp.DataType.Type.MULTIPOLYGON,
+    }
+)
+
+_VALUE_TAG = "wren_window_value"
 
 # The only parts of an EXISTS subquery the IN rewrite carries over. Anything else
 # (aggregates aside) changes which rows exist: HAVING, QUALIFY, OFFSET, WITH,
 # ClickHouse's PREWHERE, ... A subquery using one is left as written.
 _EXISTS_KEEPS = frozenset({"expressions", "from_", "where", "distinct"})
+
+
+def type_window_values(ast: exp.Expression, schema: Schema) -> None:
+    """Type each ``LAG`` / ``LEAD`` value of the user's *ast* against *schema*.
+
+    Call it before model CTEs are injected: column types resolve through the
+    model schema here, and are lost once a reference points at a generated CTE.
+    ``translate`` reads the type to keep ``toNullable`` off a value ClickHouse
+    can't make nullable. A value that doesn't type (an unknown column) stays
+    untyped, as does every value when a referenced column's type string doesn't
+    parse; an untyped value keeps ``toNullable``.
+    """
+    fns = list(ast.find_all(exp.Lag, exp.Lead))
+    if not fns:
+        return
+    # Paired by tag, not position: qualify_columns expands alias and positional
+    # references (``QUALIFY v ...``, ``GROUP BY 1``), which copies LAG nodes.
+    # The tag sits on the LAG itself because qualify_columns may replace its
+    # value (``JOIN ... USING (id)`` turns ``id`` into a COALESCE).
+    for i, fn in enumerate(fns):
+        fn.meta[_VALUE_TAG] = i
+    try:
+        typed = _annotate(ast.copy(), schema)
+        types = {
+            t.meta[_VALUE_TAG]: t.this.type for t in typed.find_all(exp.Lag, exp.Lead)
+        }
+    except Exception:
+        # Typing is best-effort, and sqlglot raises more than SqlglotError here
+        # (the literal ``1.e`` raises ValueError or decimal.InvalidOperation). Any failure
+        # leaves every value untyped, so the query renders as it does without it.
+        return
+    finally:
+        for fn in fns:
+            del fn.meta[_VALUE_TAG]
+    for i, type_ in types.items():
+        fns[i].this.type = type_
+
+
+class _Unmodeled(Exception):
+    """A ClickHouse construct whose types the LAG / LEAD typing doesn't follow."""
+
+
+def _annotate(ast: exp.Expression, schema: Schema) -> exp.Expression:
+    """Qualify and type *ast*, following ClickHouse's ``ARRAY JOIN``.
+
+    sqlglot doesn't model ``ARRAY JOIN``: in its SELECT, ``ARRAY JOIN tags`` makes
+    ``tags`` one element per row, and ``ARRAY JOIN grid AS cell`` makes ``cell``
+    one, but sqlglot keeps ``tags`` an array and doesn't type ``cell``. So each
+    such reference is cast to the element type before typing; aliases,
+    expressions and derived tables built on it then type correctly. SELECTs are
+    handled innermost first, since one may ARRAY JOIN a column an inner one
+    already unwrapped. An ``ARRAY JOIN`` this can't follow (over a Map, or over
+    something not typed as an Array) raises ``_Unmodeled``, so the whole query
+    stays untyped and keeps ``toNullable``.
+    """
+    qualified = qualify_columns(
+        ast, schema=schema, dialect="clickhouse", allow_partial_qualification=True
+    )
+    selects = [s for s in qualified.find_all(exp.Select) if _array_joins(s)]
+    for select in sorted(selects, key=_depth, reverse=True):
+        _retype(qualified, schema)
+        for join in _array_joins(select):
+            for item in (join.this, *join.expressions):
+                _unwrap(select, join, item)
+    return _retype(qualified, schema)
+
+
+def _array_joins(select: exp.Select) -> list[exp.Join]:
+    return [j for j in select.args.get("joins") or [] if j.args.get("kind") == "ARRAY"]
+
+
+def _depth(node: exp.Expression) -> int:
+    depth = 0
+    while node.parent is not None:
+        node, depth = node.parent, depth + 1
+    return depth
+
+
+def _retype(ast: exp.Expression, schema: Schema) -> exp.Expression:
+    for node in ast.walk():
+        node.type = None
+    return annotate_types(ast, schema=schema, dialect="clickhouse")
+
+
+def _unwrap(select: exp.Select, join: exp.Join, item: exp.Expression) -> None:
+    """Cast what *item* of *join* names in *select* to the array's element type."""
+    if isinstance(item, exp.Alias):
+        array, name = item.this.type, ("", item.alias)
+    elif isinstance(item, exp.Column):
+        array, name = item.type, (item.table, item.name)
+    else:
+        raise _Unmodeled
+    if array is None or array.this != exp.DataType.Type.ARRAY or not array.expressions:
+        raise _Unmodeled
+    element = array.expressions[0]
+    for column in list(select.find_all(exp.Column)):
+        if (
+            column.find_ancestor(exp.Select) is select
+            and column.find_ancestor(exp.Join) is not join
+            and (column.table, column.name) == name
+        ):
+            column.replace(exp.Cast(this=column.copy(), to=element.copy()))
 
 
 def translate(ast: exp.Expression) -> exp.Expression:
@@ -73,9 +204,11 @@ def _lag_lead(ast: exp.Expression) -> None:
             continue
         partition, order = resolved
         name = "lagInFrame" if isinstance(fn, exp.Lag) else "leadInFrame"
-        args: list[exp.Expression] = [
-            exp.Anonymous(this="toNullable", expressions=[fn.this.copy()])
-        ]
+        value = fn.this.copy()
+        # ``type`` comes from ``type_window_values``; unset means unknown.
+        if fn.this.type is None or fn.this.type.this not in _NOT_NULLABLE:
+            value = exp.Anonymous(this="toNullable", expressions=[value])
+        args: list[exp.Expression] = [value]
         offset, default = fn.args.get("offset"), fn.args.get("default")
         if offset is not None or default is not None:
             args.append(offset.copy() if offset is not None else exp.Literal.number(1))
@@ -167,7 +300,13 @@ def _null_cast(ast: exp.Expression) -> None:
         if to.args.get("nullable"):
             continue
         nullable = to.copy()
-        nullable.set("nullable", True)
+        # ClickHouse only accepts the nullable inside: LowCardinality(Nullable(T)).
+        target = (
+            nullable.expressions[0]
+            if to.this == exp.DataType.Type.LOWCARDINALITY
+            else nullable
+        )
+        target.set("nullable", True)
         cast.set("to", nullable)
 
 

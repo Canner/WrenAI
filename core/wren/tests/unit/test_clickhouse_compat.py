@@ -51,8 +51,54 @@ _MANIFEST = {
 }
 
 
-def _rewrite(sql: str, data_source: DataSource = DataSource.clickhouse) -> str:
-    manifest_str = base64.b64encode(orjson.dumps(_MANIFEST)).decode()
+_COMPOSITE_MANIFEST = {
+    "catalog": "wren",
+    "schema": "public",
+    "models": [
+        {
+            "name": "events",
+            "tableReference": {"schema": "main", "table": "events"},
+            "columns": [
+                {"name": "id", "type": "integer"},
+                {"name": "price", "type": "double"},
+                {"name": "tags", "type": "array<varchar>"},
+                {"name": "grid", "type": "Array(Array(String))"},
+                {"name": "attrs", "type": "map<varchar, integer>"},
+                {"name": "totals", "type": "AggregateFunction(sum, Int32)"},
+                {"name": "sums", "type": "SimpleAggregateFunction(sum, Int64)"},
+            ],
+            "primaryKey": "id",
+        },
+        {
+            "name": "posts",
+            "tableReference": {"schema": "main", "table": "posts"},
+            "columns": [
+                {"name": "id", "type": "integer"},
+                {"name": "tags", "type": "varchar"},
+            ],
+            "primaryKey": "id",
+        },
+        {
+            # Its physical table shares the name of the ``events`` model.
+            "name": "archive",
+            "tableReference": {"schema": "old", "table": "events"},
+            "columns": [
+                {"name": "id", "type": "integer"},
+                {"name": "tags", "type": "varchar"},
+                {"name": "kind", "type": "Enum8('a)"},
+            ],
+            "primaryKey": "id",
+        },
+    ],
+}
+
+
+def _rewrite(
+    sql: str,
+    data_source: DataSource = DataSource.clickhouse,
+    manifest: dict = _MANIFEST,
+) -> str:
+    manifest_str = base64.b64encode(orjson.dumps(manifest)).decode()
     session = get_session_context(manifest_str, None, None, data_source.name)
     rewriter = CTERewriter(manifest_str, session, data_source, fallback=False)
     return " ".join(rewriter.rewrite(sql).split())
@@ -128,6 +174,251 @@ class TestWindowFunctions:
     def test_cume_dist_over_an_unresolved_window_is_left_alone(self, sql):
         assert "CUME_DIST" in _clickhouse(sql)
 
+    @pytest.mark.parametrize(
+        ("fn", "column"),
+        [("LAG", "tags"), ("LEAD", "tags"), ("LAG", "attrs"), ("LAG", "totals")],
+    )
+    def test_lag_lead_over_a_column_clickhouse_cannot_make_nullable(self, fn, column):
+        # ClickHouse rejects toNullable(Array/Map/AggregateFunction ...) with
+        # ILLEGAL_TYPE_OF_ARGUMENT; the edge row gets the type's default instead.
+        out = _rewrite(
+            f"SELECT id, {fn}({column}) OVER (ORDER BY id) AS v FROM events",
+            manifest=_COMPOSITE_MANIFEST,
+        )
+        name = "lagInFrame" if fn == "LAG" else "leadInFrame"
+        assert f"{name}({column}) OVER (ORDER BY id {_WHOLE}) AS v" in out
+
+    @pytest.mark.parametrize("fn", ["LAG", "LEAD"])
+    def test_lag_lead_offset_and_default_over_an_array(self, fn):
+        out = _rewrite(
+            f"SELECT id, {fn}(tags, 1, []) OVER (ORDER BY id) AS v FROM events",
+            manifest=_COMPOSITE_MANIFEST,
+        )
+        name = "lagInFrame" if fn == "LAG" else "leadInFrame"
+        assert f"{name}(tags, 1, []) OVER (ORDER BY id {_WHOLE}) AS v" in out
+
+    def test_lag_value_that_fails_to_type_renders_untyped(self):
+        # Typing ``1.e`` raises ValueError here (decimal.InvalidOperation for other
+        # column types), not a SqlglotError; the query must render as on main.
+        out = _rewrite(
+            "SELECT id, LAG(price * 1.e) OVER (ORDER BY id) AS v FROM events",
+            manifest=_COMPOSITE_MANIFEST,
+        )
+        assert f"lagInFrame(toNullable(price * 1.e)) OVER (ORDER BY id {_WHOLE})" in out
+
+    @pytest.mark.parametrize(
+        ("sql", "value"),
+        [
+            (
+                "WITH t AS (SELECT id, tags AS t2 FROM events)"
+                " SELECT LAG(t2) OVER (ORDER BY id) AS v FROM t",
+                "t2",
+            ),
+            (
+                "SELECT LAG(arrayConcat(tags, tags)) OVER (ORDER BY id) AS v FROM events",
+                "arrayConcat(tags, tags)",
+            ),
+            (
+                "SELECT LAG(e.tags) OVER (ORDER BY p.id) AS v"
+                " FROM posts AS p JOIN events AS e ON p.id = e.id",
+                "e.tags",
+            ),
+        ],
+    )
+    def test_lag_types_the_value_through_aliases_and_expressions(self, sql, value):
+        out = _rewrite(sql, manifest=_COMPOSITE_MANIFEST)
+        assert f"lagInFrame({value}) OVER (" in out
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT id, LAG(price) OVER (ORDER BY id) AS v FROM events",
+            # SimpleAggregateFunction accepts Nullable on ClickHouse.
+            "SELECT id, LAG(sums) OVER (ORDER BY id) AS v FROM events",
+            # ``events.tags`` is an Array; these read a scalar ``tags``.
+            "SELECT id, LAG(tags) OVER (ORDER BY id) AS v FROM posts",
+            "SELECT id, LAG(tags) OVER (ORDER BY id) AS v FROM archive",
+            # USING makes qualify_columns replace ``id`` with a COALESCE.
+            "SELECT LAG(id) OVER (ORDER BY events.id) AS v"
+            " FROM events JOIN posts USING (id)",
+            # ARRAY JOIN turns ``tags`` into one String element per row.
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events ARRAY JOIN tags",
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events LEFT ARRAY JOIN tags",
+            # A derived table or CTE passes the unwrapped column up to the LAG.
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v"
+            " FROM (SELECT id, tags FROM events ARRAY JOIN tags) AS s",
+            "WITH s AS (SELECT id, tags FROM events ARRAY JOIN tags)"
+            " SELECT LAG(tags) OVER (ORDER BY id) AS v FROM s",
+            # ... also under an alias, or an alias of an alias.
+            "SELECT LAG(t) OVER (ORDER BY id) AS v"
+            " FROM (SELECT id, tags AS t FROM events ARRAY JOIN tags) AS s",
+            "SELECT LAG(u) OVER (ORDER BY id) AS v FROM (SELECT id, t AS u FROM"
+            " (SELECT id, tags AS t FROM events ARRAY JOIN tags) AS a) AS b",
+            # ... and through a function whose type follows the element's.
+            "SELECT LAG(u) OVER (ORDER BY id) AS v FROM"
+            " (SELECT id, coalesce(tags, tags) AS u FROM events ARRAY JOIN tags) AS s",
+            # An aliased ARRAY JOIN names the element by its alias.
+            "SELECT LAG(t) OVER (ORDER BY id) AS v FROM events ARRAY JOIN tags AS t",
+            # An ARRAY JOIN over a column an inner one already unwrapped: String.
+            "SELECT LAG(grid) OVER (ORDER BY id) AS v"
+            " FROM (SELECT id, grid FROM events ARRAY JOIN grid) AS s ARRAY JOIN grid",
+            # The LAG itself sits in the filter subquery that ARRAY JOINs.
+            "SELECT id FROM events WHERE id IN (SELECT LAG(tags) OVER (ORDER BY id)"
+            " FROM events ARRAY JOIN tags)",
+            "SELECT p.id, LAG(p.tags) OVER (ORDER BY p.id) AS v"
+            " FROM posts AS p JOIN events AS e ON p.id = e.id",
+        ],
+    )
+    def test_lag_over_a_nullable_scalar_keeps_to_nullable(self, sql):
+        assert "lagInFrame(toNullable(" in _rewrite(sql, manifest=_COMPOSITE_MANIFEST)
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events"
+            " WHERE id IN (SELECT id FROM events ARRAY JOIN tags)",
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events"
+            " WHERE EXISTS (SELECT 1 FROM events AS e ARRAY JOIN tags WHERE e.id = 1)",
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events"
+            " WHERE id NOT IN (SELECT id FROM events ARRAY JOIN tags)",
+            # The window is the left operand of the IN whose subquery ARRAY JOINs.
+            "SELECT LAG(tags) OVER (ORDER BY id) IN (SELECT id FROM events"
+            " ARRAY JOIN tags) AS v FROM events",
+        ],
+    )
+    def test_array_join_in_a_filter_subquery_does_not_untype_the_outer_lag(self, sql):
+        # The subquery's ARRAY JOIN feeds nothing outside it: the outer ``tags``
+        # is still the Array, which ClickHouse can't wrap in toNullable.
+        out = _rewrite(sql, manifest=_COMPOSITE_MANIFEST)
+        assert f"lagInFrame(tags) OVER (ORDER BY id {_WHOLE})" in out
+
+    @pytest.mark.parametrize(
+        ("sql", "value"),
+        [
+            # An alias in a filter subquery is not the outer ``attrs`` Map.
+            (
+                "SELECT LAG(e.attrs) OVER (ORDER BY e.id) AS v FROM events AS e"
+                " ARRAY JOIN tags WHERE EXISTS (SELECT tags AS attrs FROM events)",
+                "e.attrs",
+            ),
+            # Another column of the ARRAY JOINed model is still its own type.
+            (
+                "SELECT LAG(attrs) OVER (ORDER BY id) AS v FROM events ARRAY JOIN tags",
+                "attrs",
+            ),
+            # An expression that builds an array from the element is an Array.
+            (
+                "SELECT LAG(t) OVER (ORDER BY id) AS v FROM"
+                " (SELECT id, [tags] AS t FROM events ARRAY JOIN tags) AS s",
+                "t",
+            ),
+            # A nested SELECT over the same table is not the one that ARRAY JOINs.
+            (
+                "SELECT id FROM events ARRAY JOIN tags WHERE id IN"
+                " (SELECT LAG(tags) OVER (ORDER BY id) FROM events)",
+                "tags",
+            ),
+            # Only ``e.tags`` is unwrapped, not ``e2.tags`` of the same model.
+            (
+                "SELECT LAG(e2.tags) OVER (ORDER BY e.id) AS v FROM events AS e"
+                " JOIN events AS e2 ON e.id = e2.id ARRAY JOIN e.tags",
+                "e2.tags",
+            ),
+            # The element of an Array(Array(...)) is itself an Array, also when a
+            # derived table passes it up under the name it had.
+            (
+                "SELECT LAG(grid) OVER (ORDER BY id) AS v FROM events ARRAY JOIN grid",
+                "grid",
+            ),
+            (
+                "SELECT LAG(grid) OVER (ORDER BY id) AS v"
+                " FROM (SELECT id, grid FROM events ARRAY JOIN grid) AS s",
+                "grid",
+            ),
+            # Under an alias, the alias is the element and the column stays an Array.
+            (
+                "SELECT LAG(cell) OVER (ORDER BY id) AS v FROM events ARRAY JOIN grid AS cell",
+                "cell",
+            ),
+            (
+                "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events ARRAY JOIN tags AS t",
+                "tags",
+            ),
+        ],
+    )
+    def test_array_join_only_retypes_the_column_it_unwraps(self, sql, value):
+        out = _rewrite(sql, manifest=_COMPOSITE_MANIFEST)
+        assert f"lagInFrame({value}) OVER (" in out
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT id, LAG(tags) OVER (ORDER BY id) AS v, LAG(price) OVER (ORDER BY id)"
+            " AS p FROM events QUALIFY p IS NULL OR p > 0",
+            "SELECT id, LAG(tags) OVER (ORDER BY id) AS v, LAG(price) OVER (ORDER BY id)"
+            " AS p FROM events GROUP BY 1, tags, price",
+        ],
+    )
+    def test_lag_referenced_again_by_alias_or_position(self, sql):
+        # qualify_columns expands ``p`` / ``1`` into copies of the LAG nodes.
+        out = _rewrite(sql, manifest=_COMPOSITE_MANIFEST)
+        assert f"lagInFrame(tags) OVER (ORDER BY id {_WHOLE}) AS v" in out
+        assert f"lagInFrame(toNullable(price)) OVER (ORDER BY id {_WHOLE}) AS p" in out
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            # Over a Map (its element is a Tuple), and over an untyped expression.
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v FROM events ARRAY JOIN attrs",
+            "SELECT LAG(tags) OVER (ORDER BY id) AS v"
+            " FROM events ARRAY JOIN arrayEnumerate(tags) AS i",
+        ],
+    )
+    def test_an_array_join_it_cannot_follow_leaves_the_query_untyped(self, sql):
+        # Untyped keeps toNullable, as on main: a loud error, never a wrong NULL.
+        out = _rewrite(sql, manifest=_COMPOSITE_MANIFEST)
+        assert f"lagInFrame(toNullable(tags)) OVER (ORDER BY id {_WHOLE})" in out
+
+    @pytest.mark.parametrize(
+        ("type_", "nullable"),
+        [
+            ("Array(String)", False),
+            ("Map(String, Int32)", False),
+            ("Nested(a Int32)", False),
+            ("AggregateFunction(sum, Int32)", False),
+            ("Variant(String, UInt64)", False),
+            ("Dynamic", False),
+            ("Ring", False),
+            ("LineString", False),
+            ("MultiLineString", False),
+            ("Polygon", False),
+            ("MultiPolygon", False),
+            ("Geometry", True),  # 24.3 and 25.3 accept it
+            ("Float64", True),
+            ("Tuple(a Int32)", True),
+            ("JSON", True),
+            ("Point", True),
+            ("LowCardinality(String)", True),
+            ("SimpleAggregateFunction(sum, Int64)", True),
+        ],
+    )
+    def test_lag_wraps_only_types_clickhouse_can_make_nullable(self, type_, nullable):
+        ast = sqlglot.parse_one(
+            "SELECT LAG(x) OVER (ORDER BY y) FROM t", dialect="clickhouse"
+        )
+        ast.find(sqlglot.exp.Lag).this.type = sqlglot.exp.DataType.build(
+            type_, dialect="clickhouse"
+        )
+        assert ("toNullable(x)" in translate(ast).sql("clickhouse")) is nullable
+
+    def test_an_unparsable_manifest_type_keeps_to_nullable(self):
+        # ``archive.kind`` is ``Enum8('a)``, which sqlglot can't tokenize.
+        out = _rewrite(
+            "SELECT LAG(kind) OVER (ORDER BY id) AS v FROM archive",
+            manifest=_COMPOSITE_MANIFEST,
+        )
+        assert "lagInFrame(toNullable(kind)) OVER (" in out
+
     def test_lag_over_a_named_window_is_inlined(self):
         out = _clickhouse(
             "SELECT LAG(x) OVER w FROM t WINDOW w AS (PARTITION BY a ORDER BY b)"
@@ -168,6 +459,12 @@ class TestNullCast:
     def test_non_null_cast_is_left_alone(self):
         assert _clickhouse("SELECT CAST(x AS DOUBLE) FROM t") == (
             "SELECT CAST(x AS Float64) FROM t"
+        )
+
+    def test_null_cast_to_low_cardinality_nests_nullable_inside(self):
+        # Nullable(LowCardinality(T)) is ILLEGAL_TYPE_OF_ARGUMENT on ClickHouse.
+        assert _clickhouse("SELECT CAST(NULL AS LowCardinality(String)) AS x") == (
+            "SELECT CAST(NULL AS LowCardinality(Nullable(String))) AS x"
         )
 
 
