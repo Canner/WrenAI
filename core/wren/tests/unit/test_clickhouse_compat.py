@@ -356,6 +356,7 @@ class TestWindowFunctions:
         [
             ("SELECT missing FROM events ARRAY JOIN tags AS t", "missing"),
             ("SELECT t FROM events ARRAY JOIN missing AS t", "missing"),
+            ("SELECT id FROM events ARRAY JOIN missing AS missing", "missing"),
             # The alias is visible only in the SELECT whose ARRAY JOIN declares it.
             (
                 "SELECT id FROM events"
