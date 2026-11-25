@@ -1075,7 +1075,7 @@ dependencies = [
 
 [[package]]
 name = "wren-core-base"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -1086,7 +1086,7 @@ dependencies = [
 
 [[package]]
 name = "wren-manifest-macro"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "quote",
  "syn 2.0.119",
