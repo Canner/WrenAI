@@ -7,5 +7,5 @@
   "core/wren-core-base/manifest-macro": "0.5.1",
   "core/wren-core-base": "0.5.1",
   "core/wren-core": "0.5.1",
-  "core/wren-context-loader": "0.1.0"
+  "core/wren-context-loader": "0.2.0"
 }
