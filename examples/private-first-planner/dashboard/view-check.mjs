@@ -24,9 +24,10 @@ export async function checkPlanView(frame,plan,oracle,warnings,context){
     const v=view.sections[i];assert(v.visible&&v.chart===s.chart,'plan_section_content');
     // Country is the plan's initial dimension, not a permanent chart title.
     // A drill/dimension change may update copy to describe the current scope.
+    // Lexical differences are a review signal, not evidence of changed metrics.
     const contextual=['breakdown','details'].includes(s.id)&&context.dimension&&context.dimension!==s.dimension;
-    if(!contextual)assert(v.text.includes(s.title)&&v.text.includes(s.question),'plan_section_content');
-    else assert(v.text.trim().length>0,'plan_section_content');
+    assert(v.text.trim().length>0,'plan_section_content');
+    if(!contextual&&(!v.text.includes(s.title)||!v.text.includes(s.question)))warnings.push({...context,code:'plan_copy_review',section:s.id});
   }
   const b=plan.sections.find(s=>s.id==='breakdown'),t=plan.sections.find(s=>s.id==='trend');
   assert.equal(view.breakdown.length,oracle.groups.length);assert(view.breakdown.every(m=>m.mark),'visible_chart_marks');

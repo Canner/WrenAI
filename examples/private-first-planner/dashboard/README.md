@@ -94,9 +94,9 @@ chooses chart types; the frontend implements them without a fixed renderer.
 Browser checks compare original and changed data on desktop/mobile across
 filters, dimension switches, label/mark/keyboard/touch drill, roll-up, reset,
 period changes and invalid ranges. Visible semantic markers bind sections and
-real graphical marks to the plan. Initial titles/questions match the plan;
-breakdown/detail copy may follow the active dimension after navigation. Copy
-quality in those contextual states remains a review item. Failure records name
+real graphical marks to the plan. Initial title/question differences produce `plan_copy_review` warnings;
+exact wording is not a hard gate for semantic fidelity. Breakdown/detail copy
+may follow the active dimension after navigation. Copy quality needs review. Failure records name
 the failed action and distinguish visible report API errors from missing marks. Bar scales tolerate 2 pixels or 5% rounding;
 dot/trend point positions use a 2-pixel tolerance. These checks are useful
 regressions, not proof of every pixel: line-path fidelity, semantics of prose,

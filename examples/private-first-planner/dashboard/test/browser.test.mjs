@@ -17,8 +17,8 @@ test('browser rejects stale KPI, plan chart substitution and distorted visible g
  finally{await rm(dir,{recursive:true,force:true});}
 });
 
-test('contextual titles can follow drill and dimension changes without changing the plan or chart',async()=>{
+test('paraphrased and contextual titles do not reject correct data, interactions or chart choices',async()=>{
  const report=fixtureReport(),bundle={export_id:'00000000-0000-0000-0000-000000000001',data_version:digest(report.payload),payload:report.payload},plan=fixturePlan(bundle,report),spec=specimen(bundle,plan);
- spec.javascript=spec.javascript.replace("sync();$('[data-error]').hidden=true;", "sync();for(const id of ['breakdown','details']){const sec=document.querySelector('[data-plan-section='+id+']'),p=P.sections.find(s=>s.id===id);sec.querySelector('h2').textContent=S.dimension===p.dimension?p.title:'Revenue by '+S.dimension;sec.querySelector('p').textContent=S.dimension===p.dimension?p.question:'Current '+S.dimension+' breakdown';}$('[data-error]').hidden=true;");
- const dir=await mkdtemp(join(tmpdir(),'dashboard-contextual-title-'));try{const input=join(dir,'candidate.json');await writeFile(input,JSON.stringify({report,bundle,plan,spec}));const q=await inspectDashboard(input,join(dir,'qa'));assert.equal(q.pass,true,JSON.stringify(q.failures));assert.equal(q.records.length,76);}finally{await rm(dir,{recursive:true,force:true});}
+ spec.javascript=spec.javascript.replace("sync();$('[data-error]').hidden=true;", "sync();for(const id of ['breakdown','details']){const sec=document.querySelector('[data-plan-section='+id+']'),p=P.sections.find(s=>s.id===id);sec.querySelector('h2').textContent=S.dimension===p.dimension?'Revenue overview':'Revenue by '+S.dimension;sec.querySelector('p').textContent=S.dimension===p.dimension?p.question:'Current '+S.dimension+' breakdown';}$('[data-error]').hidden=true;");
+ const dir=await mkdtemp(join(tmpdir(),'dashboard-contextual-title-'));try{const input=join(dir,'candidate.json');await writeFile(input,JSON.stringify({report,bundle,plan,spec}));const q=await inspectDashboard(input,join(dir,'qa'));assert.equal(q.pass,true,JSON.stringify(q.failures));assert.equal(q.records.length,76);assert(q.warnings.some(w=>w.code==='plan_copy_review'));}finally{await rm(dir,{recursive:true,force:true});}
 });
