@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: transparent; font: 13px system-ui, sans-serif; }
+  #msg { padding: 12px; opacity: .7; }
+</style>
+</head>
+<body>
+<div id="msg">Waiting for data…</div>
+<script>
+// Minimal MCP Apps view: handshake with the host, then render the agent's
+// HTML into this document with the Wren rows as window.wren. No nested
+// iframe: hosts may sandbox this frame without allow-same-origin, which
+// would block any access between nested frames.
+const PROTOCOL = "2026-01-26";
+let nextId = 1, theme = "light", rendered = false, host = { info: null, capabilities: {} };
+const pending = new Map();
+
+function send(msg) { window.parent.postMessage({ jsonrpc: "2.0", ...msg }, "*"); }
+function request(method, params) {
+  const id = nextId++;
+  send({ id, method, params });
+  return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+}
+let lastHeight = 0;
+function reportSize() {
+  const h = Math.ceil(document.documentElement.getBoundingClientRect().height);
+  if (h === lastHeight) return;
+  lastHeight = h;
+  send({ method: "ui/notifications/size-changed", params: { height: h } });
+}
+new ResizeObserver(reportSize).observe(document.documentElement);
+
+// Exposed to the agent's HTML as window.wren.
+const api = {
+  host,
+  async ask(text) {
+    if (!host.capabilities.message) throw new Error("This host does not accept follow-up messages (ui/message).");
+    const r = await request("ui/message", { role: "user", content: [{ type: "text", text: String(text) }] });
+    if (r && r.isError) throw new Error("The host rejected the message.");
+  },
+  async query(sql, limit) {
+    if (!host.capabilities.serverTools) throw new Error("This host does not proxy tool calls (tools/call).");
+    const args = { sql: String(sql) };
+    if (limit != null) args.limit = limit;
+    const r = await request("tools/call", { name: "run_sql", arguments: args });
+    const text = (r.content || []).map((c) => c.text || "").join("");
+    if (r.isError) throw new Error(text || "run_sql failed");
+    return r.structuredContent || JSON.parse(text);
+  },
+};
+
+function render(result) {
+  const data = result && result.structuredContent;
+  if (rendered || !data || typeof data.html !== "string") return;
+  rendered = true;
+  window.wren = { columns: data.columns, rows: data.rows, title: data.title, theme, ...api };
+  document.documentElement.style.colorScheme = theme;
+  document.body.innerHTML = data.html;
+  // Scripts inserted with innerHTML do not run; re-create them in order.
+  for (const old of document.body.querySelectorAll("script")) {
+    const s = document.createElement("script");
+    for (const a of old.attributes) s.setAttribute(a.name, a.value);
+    s.textContent = old.textContent;
+    old.replaceWith(s);
+  }
+  // The page has already loaded; replay the events agent code may wait for.
+  document.dispatchEvent(new Event("DOMContentLoaded"));
+  window.dispatchEvent(new Event("load"));
+  reportSize();
+}
+
+window.addEventListener("message", (e) => {
+  const m = e.data;
+  if (!m || m.jsonrpc !== "2.0") return;
+  if (m.id !== undefined && !m.method) {          // response to our request
+    const p = pending.get(m.id); pending.delete(m.id);
+    if (p) m.error ? p.reject(new Error(m.error.message || "host error")) : p.resolve(m.result);
+    return;
+  }
+  if (m.method === "ui/notifications/tool-result") render(m.params);
+  else if (m.method === "ui/notifications/host-context-changed" && m.params.theme) theme = m.params.theme;
+  else if (m.id !== undefined) send({ id: m.id, result: {} });   // e.g. ui/resource-teardown
+});
+
+request("ui/initialize", {
+  appInfo: { name: "Wren view", version: "0.1.0" },
+  appCapabilities: {},
+  protocolVersion: PROTOCOL,
+}).then((res) => {
+  host.info = (res && res.hostInfo) || null;
+  host.capabilities = (res && res.hostCapabilities) || {};
+  theme = (res && res.hostContext && res.hostContext.theme) || theme;
+  send({ method: "ui/notifications/initialized", params: {} });
+  reportSize();
+});
+</script>
+</body>
+</html>

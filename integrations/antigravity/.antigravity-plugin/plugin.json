@@ -1,0 +1,19 @@
+{
+  "name": "wren-ai",
+  "displayName": "OSS Wren",
+  "version": "0.1.0",
+  "description": "Query a local Wren project from Antigravity over MCP: governed semantic SQL, business rules and knowledge, run by the open-source Wren engine on your machine.",
+  "author": {
+    "name": "Canner, Inc.",
+    "url": "https://getwren.ai"
+  },
+  "homepage": "https://getwren.ai",
+  "repository": "https://github.com/Canner/WrenAI",
+  "license": "Apache-2.0",
+  "logo": "assets/logo.png",
+  "suggestedPrompts": [
+    "What models and metrics does my Wren project cover?",
+    "What are the key metrics in my project, and how are they doing lately?",
+    "Break down one of my key metrics by its most useful dimension"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "mcpServers": {
+    "wren": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--no-project",
+        "--quiet",
+        "--python",
+        "3.12",
+        "--with",
+        "wrenai[mcp]==0.18.0",
+        "python",
+        "${PLUGIN_ROOT}/server/wren_apps.py",
+        "--project",
+        "${WREN_PROJECT_DIR}"
+      ],
+      "env": {
+        "WREN_HOME": "${WREN_HOME_DIR}"
+      },
+      "variables": [
+        {
+          "name": "WREN_PROJECT_DIR",
+          "title": "Wren project folder",
+          "description": "Absolute path to a Wren project (the folder with wren_project.yml)."
+        },
+        {
+          "name": "WREN_HOME_DIR",
+          "title": "Wren home folder",
+          "description": "Absolute path to the folder holding profiles.yml (default ~/.wren)."
+        }
+      ]
+    }
+  }
+}
