@@ -10,24 +10,27 @@ import { behaviors } from '../behaviors/index.mjs';
 export const designPrompt = behaviors.design_free_dashboard.prompt;
 export const maxSseBytes = 2 * 1024 * 1024; // SSE framing is larger than the separately bounded decoded spec.
 export class CloudFailure extends Error {
-  constructor(code) { super(code); this.code=code; }
+  constructor(code,diagnostic={}) { super(code); this.code=code; this.diagnostic=immutable(diagnostic); }
 }
 export class ClaudeCode {
-  #config; #key; #observe; #contract; #observeResult;
+  #config; #key; #observe; #contract; #observeResult; #observeDiagnostic;
+  get timeoutMs() { return this.#config.timeoutMs ?? 90_000; }
   get recipient() { return `claude-code:${this.#config.model}:${digest(this.#config.baseUrl)}`; }
-  constructor(config,{apiKey,observeRequest=async()=>{},observeResult=async()=>{},contract={systemPrompt:designPrompt,schema:codeSchema,maxOutputTokens:4096}}={}) {
+  constructor(config,{apiKey,observeRequest=async()=>{},observeResult=async()=>{},observeDiagnostic=async()=>{},contract={systemPrompt:designPrompt,schema:codeSchema,maxOutputTokens:4096}}={}) {
     const url=new URL(config.baseUrl);
+    requireThat(config.timeoutMs===undefined || Number.isInteger(config.timeoutMs) && config.timeoutMs>0 && config.timeoutMs<=240_000);
     requireThat(isAbsolute(config.command) && typeof config.model==='string' && config.model.length>0
       && ['https:','http:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash
       && (url.protocol==='https:' || ['localhost','127.0.0.1'].includes(url.hostname))
       && typeof apiKey==='string' && apiKey.length>0);
     requireThat(typeof contract.systemPrompt==='string' && contract.systemPrompt.length>0 && contract.schema?.type==='object'
-      && (contract.maxOutputTokens===undefined || [4096,8192,12288].includes(contract.maxOutputTokens))
+      && (contract.maxOutputTokens===undefined || [4096,8192,12288,24576].includes(contract.maxOutputTokens))
+      && (contract.effort===undefined || ['medium','low'].includes(contract.effort))
       && (contract.brief===undefined || typeof contract.brief==='string'));
     this.#config=immutable(config);this.#key=apiKey;this.#observe=observeRequest;
-    this.#contract=immutable(contract);this.#observeResult=observeResult;
+    this.#contract=immutable(contract);this.#observeResult=observeResult;this.#observeDiagnostic=observeDiagnostic;
   }
-  async design(bundle,{signal,timeoutMs=90_000,beforeSend}={}) {
+  async design(bundle,{signal,timeoutMs=this.timeoutMs,beforeSend}={}) {
     signal?.throwIfAborted();
     requireThat(bundle.recipient === this.recipient);
     const version = await promisify(execFile)(this.#config.command,['--version'],{timeout:5000,maxBuffer:4096,
@@ -40,14 +43,14 @@ export class ClaudeCode {
       '--setting-sources','','--settings','{"disableAllHooks":true}',
       '--no-session-persistence','--permission-mode','dontAsk','--output-format','json',
       '--model',this.#config.model,'--max-budget-usd','0.50',
-      ...(this.#contract.maxOutputTokens?['--effort','medium']:[]),
+      ...(this.#contract.maxOutputTokens?['--effort',this.#contract.effort??'medium']:[]),
       '--system-prompt',this.#contract.systemPrompt,'--json-schema',JSON.stringify(this.#contract.schema)];
     const prompt=JSON.stringify({export_id:bundle.export_id,data_version:bundle.data_version,payload:bundle.payload,...(this.#contract.brief===undefined?{}:{design_brief:this.#contract.brief})});
     // Reauthorize every HTTP attempt, including retries internal to the CLI.
     // The child sees only this per-invocation gateway and a disposable local key.
     const transportControl=new AbortController();
-    const transportSignal=AbortSignal.any([transportControl.signal,...(signal?[signal]:[]),AbortSignal.timeout(Math.max(1,Math.min(timeoutMs,90_000)))]);
-    let requests=0;
+    const transportSignal=AbortSignal.any([transportControl.signal,...(signal?[signal]:[]),AbortSignal.timeout(Math.max(1,Math.min(timeoutMs,this.timeoutMs)))]);
+    let requests=0;const diagnostic={exit_code:null,subtype:null,usage:null,cost_usd:null,transport:[]};
     const gateway=createServer(async(req,res)=>{
       try {
         requireThat(req.method==='POST' && req.url?.split('?')[0]==='/v1/messages' && ++requests<=3);
@@ -64,7 +67,7 @@ export class ClaudeCode {
           && value.system[2].text===this.#contract.systemPrompt);
         requireThat(typeof beforeSend==='function');
         if(this.#contract.maxOutputTokens) requireThat(value.max_tokens===this.#contract.maxOutputTokens
-          && value.thinking?.type==='adaptive' && value.output_config?.effort==='medium');
+          && value.thinking?.type==='adaptive' && value.output_config?.effort===(this.#contract.effort??'medium'));
         await this.#observe(immutable(value));transportSignal.throwIfAborted();
         await beforeSend();transportSignal.throwIfAborted();
         const upstream=await fetch(`${this.#config.baseUrl.replace(/\/$/,'')}${req.url}`,{
@@ -72,9 +75,21 @@ export class ClaudeCode {
           headers:{'content-type':'application/json','x-api-key':this.#key,
             'anthropic-version':String(req.headers['anthropic-version']??'2023-06-01'),
             ...(req.headers['anthropic-beta']?{'anthropic-beta':String(req.headers['anthropic-beta'])}:{})},body});
+        const trace={status:upstream.status,model:null,usage:null,stop_reason:null,bytes:0,complete:false};diagnostic.transport.push(trace);
+        let pending='';const decoder=new TextDecoder();
         res.writeHead(upstream.status,{'content-type':upstream.headers.get('content-type')??'application/json'});
         let received=0;
-        for await(const chunk of upstream.body){received+=chunk.length;requireThat(received<=maxSseBytes);res.write(chunk);}
+        for await(const chunk of upstream.body){received+=chunk.length;trace.bytes=received;
+          if(received>maxSseBytes){trace.error='cloud_stream_limit';throw new CloudFailure('cloud_stream_limit');}
+          pending+=decoder.decode(chunk,{stream:true});let newline;
+          while((newline=pending.indexOf('\n'))>=0){const line=pending.slice(0,newline);pending=pending.slice(newline+1);
+            if(line.startsWith('data: '))try{const event=JSON.parse(line.slice(6));
+              if(event.type==='message_start'){trace.model=event.message?.model;trace.usage=event.message?.usage??null;}
+              if(event.type==='message_delta'){trace.stop_reason=event.delta?.stop_reason??null;trace.usage={...trace.usage,...event.usage};}
+              if(event.type==='message_stop')trace.complete=true;
+            }catch{}
+          }res.write(chunk);
+        }
         res.end();
       } catch {
         if(!res.headersSent) res.writeHead(403,{'content-type':'application/json'});
@@ -96,7 +111,7 @@ export class ClaudeCode {
           try { if(process.platform==='win32') child.kill('SIGKILL');else process.kill(-child.pid,'SIGKILL'); } catch {}
         };
         const onAbort=()=>stop('cloud_cancelled');
-        const timer=setTimeout(()=>stop('cloud_timeout'),Math.max(1,Math.min(timeoutMs,90_000)));
+        const timer=setTimeout(()=>stop('cloud_timeout'),Math.max(1,Math.min(timeoutMs,this.timeoutMs)));
         signal?.addEventListener('abort',onAbort,{once:true});
         if(signal?.aborted) onAbort();
         child.stdin.on('error',()=>{});
@@ -104,17 +119,24 @@ export class ClaudeCode {
         child.stderr.on('data',chunk=>{stderrBytes+=chunk.length;if(stderrBytes>128*1024) stop('cloud_output_limit');});
         const cleanup=()=>{clearTimeout(timer);signal?.removeEventListener('abort',onAbort);};
         child.on('error',()=>{cleanup();reject(new CloudFailure('cloud_unavailable'));});
-        child.on('close',code=>{cleanup();if(failure) reject(failure);else if(code!==0) reject(new CloudFailure('cloud_unavailable'));else resolve(output);});
+        child.on('close',code=>{cleanup();diagnostic.exit_code=code;resolve({output,failure});});
         child.stdin.end(prompt);
       });
-      let envelope;try {envelope=JSON.parse(result);} catch {throw new CloudFailure('cloud_invalid_output');}
-      await this.#observeResult(immutable(envelope));
+      let envelope;try {envelope=JSON.parse(result.output);} catch {}
+      if(envelope){diagnostic.subtype=typeof envelope.subtype==='string'?envelope.subtype:null;diagnostic.usage=envelope.usage??null;diagnostic.cost_usd=envelope.total_cost_usd??null;await this.#observeResult(immutable(envelope));}
+      if(result.failure)throw result.failure;
+      if(diagnostic.transport.some(t=>t.error==='cloud_stream_limit'))throw new CloudFailure('cloud_stream_limit');
+      if(envelope?.subtype==='error_max_budget_usd')throw new CloudFailure('cloud_budget_exceeded');
+      if(diagnostic.transport.some(t=>t.stop_reason==='max_tokens'))throw new CloudFailure('cloud_token_limit');
+      if(diagnostic.exit_code!==0)throw new CloudFailure('cloud_unavailable');
+      if(!envelope)throw new CloudFailure('cloud_invalid_output');
       if(envelope.type!=='result' || envelope.is_error || envelope.subtype!=='success') throw new CloudFailure('cloud_invalid_output');
       // Structured output is authoritative; never fall back to executing markdown/code.
       requireThat(envelope.structured_output && typeof envelope.structured_output==='object');
       return { spec:envelope.structured_output, usage:envelope.usage ?? null,
         model_usage:envelope.modelUsage ?? null, cost_usd:envelope.total_cost_usd ?? null,
-        duration_ms:envelope.duration_ms ?? null };
-    } finally {transportControl.abort();gateway.closeAllConnections();await new Promise(resolve=>gateway.close(resolve));await rm(dir,{recursive:true,force:true});}
+        duration_ms:envelope.duration_ms ?? null, diagnostic:immutable(diagnostic) };
+    } catch(error){throw new CloudFailure(error instanceof CloudFailure?error.code:'cloud_unavailable',diagnostic);}
+    finally {try{await this.#observeDiagnostic(immutable(diagnostic));}finally{transportControl.abort();gateway.closeAllConnections();await new Promise(resolve=>gateway.close(resolve));await rm(dir,{recursive:true,force:true});}}
   }
 }

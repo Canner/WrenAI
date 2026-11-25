@@ -8,12 +8,12 @@ import { ClaudeCode, designPrompt, maxSseBytes } from '../claude.mjs';
 import { codeSchema } from '../contracts.mjs';
 
 test('wire budget admits a valid SSE stream above 256 KiB, caps larger streams and preserves send authorization', async () => {
-  for (const bytes of [334000, maxSseBytes + 10000]) {
+  for (const bytes of [334000, maxSseBytes + 10000, 1000]) {
     let sent = 0, auth = 0;
     const server = createServer(async (req, res) => { let body = ''; for await (const b of req) body += b;
       const value = JSON.parse(body); assert.equal(value.max_tokens, 12288); sent++;
       res.writeHead(200, { 'content-type': 'text/event-stream' });
-      res.end('event: ping\ndata: {"type":"ping"}' + ' '.repeat(bytes) + '\n\ndata: [DONE]\n\n');
+      res.end((bytes===1000?'data: '+JSON.stringify({type:'message_delta',delta:{stop_reason:'max_tokens'},usage:{output_tokens:12288}})+'\n\n':'')+'event: ping\ndata: {"type":"ping"}' + ' '.repeat(bytes) + '\n\ndata: [DONE]\n\n');
     });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
     const dir = await mkdtemp(join(tmpdir(), 'sse-budget-')), command = join(dir, 'cli');
@@ -31,7 +31,8 @@ console.log(JSON.stringify({type:'result',subtype:'success',structured_output:{h
       const model = new ClaudeCode({ command, model: 'offline', baseUrl: `http://127.0.0.1:${server.address().port}` }, {
         apiKey: 'offline', contract: { systemPrompt: designPrompt, schema: codeSchema, maxOutputTokens: 12288 } });
       const run = () => model.design({ recipient: model.recipient, payload: { synthetic: true } }, { beforeSend: async () => { auth++; } });
-      if (bytes < maxSseBytes) assert.equal((await run()).spec.html, 'complete'); else await assert.rejects(run(), /cloud_unavailable/);
+      if(bytes===1000)await assert.rejects(run(),error=>error.code==='cloud_token_limit'&&error.diagnostic.transport[0].usage.output_tokens===12288);
+      else if (bytes < maxSseBytes) assert.equal((await run()).spec.html, 'complete'); else await assert.rejects(run(), /cloud_stream_limit/);
       assert.equal(sent, 1); assert.equal(auth, 1);
     } finally { server.closeAllConnections(); await new Promise(r => server.close(r)); await rm(dir, { recursive: true, force: true }); }
   }

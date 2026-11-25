@@ -17,12 +17,12 @@ export async function generateCode({broker,designer,deadline=Date.now()+100_000,
     control.signal.throwIfAborted();const bundle=await bounded(broker.prepare());
     requireThat(bundle.recipient===designer.recipient);
     await bounded(broker.authorize(bundle,'send'));control.signal.throwIfAborted();
-    output=await bounded(designer.design(bundle,{signal:control.signal,timeoutMs:Math.min(90_000,deadline-Date.now()),beforeSend:()=>broker.authorize(bundle,'send')}));
+    output=await bounded(designer.design(bundle,{signal:control.signal,timeoutMs:Math.min(designer.timeoutMs??90_000,deadline-Date.now()),beforeSend:()=>broker.authorize(bundle,'send')}));
     control.signal.throwIfAborted();const spec=validateCode(output.spec,bundle);
     await bounded(broker.authorize(bundle,'use'));control.signal.throwIfAborted();
     return {state:'generated',bundle,spec,usage:output.usage,model_usage:output.model_usage,cost_usd:output.cost_usd,duration_ms:output.duration_ms};
   } catch(error) {return {state:'generation_failed',reason:control.signal.aborted?'cancelled_or_deadline':
-    ['cloud_timeout','cloud_unavailable','cloud_invalid_output','disclosure_denied','planner_failed'].includes(error.message)?error.message:'code_rejected',
-    usage:output?.usage,model_usage:output?.model_usage,cost_usd:output?.cost_usd};}
+    ['cloud_output_limit','cloud_cancelled','cloud_budget_exceeded','cloud_token_limit','cloud_stream_limit','cloud_timeout','cloud_unavailable','cloud_invalid_output','disclosure_denied','planner_failed'].includes(error.message)?error.message:'code_rejected',
+    diagnostic:error.diagnostic??null,usage:output?.usage??error.diagnostic?.usage,model_usage:output?.model_usage,cost_usd:output?.cost_usd??error.diagnostic?.cost_usd};}
   finally {clearTimeout(timer);signal?.removeEventListener('abort',abort);}
 }

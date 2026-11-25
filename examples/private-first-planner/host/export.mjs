@@ -5,10 +5,11 @@ import { digest, immutable, requireThat, DisclosureDenied } from '../contracts.m
 // must verify domain semantics/evidence and return only disclosable aggregates.
 // This broker owns the user grant, freshness and audit, not semantic inference.
 export class ExportBroker {
-  #policy; #current; #audit; #clock; #epoch; #bundle; #approved = false; #revoked = false;
-  constructor({ policy, current, audit, epoch, now = Date.now }) {
+  #policy; #current; #audit; #clock; #epoch; #ttl; #bundle; #approved = false; #revoked = false;
+  constructor({ policy, current, audit, epoch, now = Date.now, ttlMs = 120_000 }) {
     requireThat(typeof policy.project === 'function' && typeof policy.id === 'string'
       && typeof policy.version === 'string' && typeof current === 'function');
+    requireThat(Number.isInteger(ttlMs)&&ttlMs>0&&ttlMs<=900_000);this.#ttl=ttlMs;
     this.#policy = policy; this.#current = current; this.#audit = audit; this.#epoch = epoch; this.#clock = now;
   }
   async propose({ recipient, brief_id }) {
@@ -17,7 +18,7 @@ export class ExportBroker {
     requireThat(payload && typeof payload === 'object' && Buffer.byteLength(JSON.stringify(payload)) <= 64 * 1024);
     this.#bundle = immutable({ version: 1, export_id: randomUUID(), recipient, purpose: 'dashboard_design',
       policy_id: this.#policy.id, policy_version: this.#policy.version, epoch: this.#epoch,
-      expires_at: this.#clock() + 120_000, data_version: digest(payload), payload,
+      expires_at: this.#clock() + this.#ttl, data_version: digest(payload), payload,
       brief_id, design_brief: this.#policy.briefs[brief_id], max_repairs: 1 });
     return this.#bundle;
   }

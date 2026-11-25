@@ -6,11 +6,11 @@ import { join } from 'node:path';
 import { fixturePayload } from '../../host/fixture.mjs';
 import { ClaudeCode } from '../claude.mjs';
 import { digest } from '../../contracts.mjs';
-async function withCLI(body,fn) {
+async function withCLI(body,fn,options={}) {
   const dir=await mkdtemp(join(tmpdir(),'cloud-test-'));const command=join(dir,'cli');
   const script=`#!${process.execPath}\nif(process.argv.includes('--version')){console.log('2.1.309 (Claude Code)');process.exit(0);}\n${body}`;
   await writeFile(command,script,{mode:0o700});
-  const cloud=new ClaudeCode({command,model:'fixed-test',baseUrl:'http://127.0.0.1:1'},{apiKey:'cloud-only-key'});
+  const cloud=new ClaudeCode({command,model:'fixed-test',baseUrl:'http://127.0.0.1:1'},{apiKey:'cloud-only-key',...options});
   try{await fn(cloud,dir);}finally{await rm(dir,{recursive:true,force:true});}
 }
 test('Claude launcher gives child only bundle + schema; disables tools, settings, persistence, other keys',async()=>{
@@ -62,4 +62,11 @@ console.log(JSON.stringify({type:'result',subtype:'success',structured_output:{}
       if(item.mode==='retry')assert.equal(auth,2);
     }finally{await rm(dir,{recursive:true,force:true});}
   }}finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+});
+
+test('nonzero budget envelope preserves usage and a classified diagnostic, not stderr',async()=>{
+ const results=[],diagnostics=[];await withCLI(`console.error('PRIVATE_SECRET');console.log(JSON.stringify({type:'result',subtype:'error_max_budget_usd',is_error:true,usage:{input_tokens:4,output_tokens:19051},total_cost_usd:0.5265}));process.exitCode=1;`,async cloud=>{
+  await assert.rejects(cloud.design({recipient:cloud.recipient,payload:fixturePayload}),e=>e.code==='cloud_budget_exceeded'&&e.diagnostic.cost_usd===0.5265&&e.diagnostic.usage.output_tokens===19051);
+ },{observeResult:async r=>results.push(r),observeDiagnostic:async d=>diagnostics.push(d)});
+ assert.equal(results.length,1);assert.equal(diagnostics[0].exit_code,1);assert.equal(diagnostics[0].subtype,'error_max_budget_usd');assert(!JSON.stringify(diagnostics).includes('PRIVATE_SECRET'));
 });
