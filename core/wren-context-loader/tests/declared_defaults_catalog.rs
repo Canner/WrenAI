@@ -288,6 +288,39 @@ fn only_a_leading_fence_declares() {
 }
 
 #[test]
+fn every_line_boundary_the_cli_splits_on_ends_a_front_matter_line() {
+    // The CLI splits rule files with Python's `str.splitlines()`, so a block whose lines end in
+    // a bare `\r` or another Unicode line boundary declares the same ids as one ending in `\n`.
+    for boundary in [
+        "\r", "\u{0b}", "\u{0c}", "\u{1c}", "\u{1d}", "\u{1e}", "\u{85}", "\u{2028}", "\u{2029}",
+    ] {
+        let text = [
+            "---",
+            "defaults:",
+            "  - {id: one-line-boundary, kind: exclude_rows}",
+            "---",
+            "Body",
+            "",
+        ]
+        .join(boundary);
+        let (ids, warnings) = declared_default_ids(&[rule_file("knowledge/rules/a.md", &text)]);
+        assert_eq!(ids, ["one-line-boundary"], "boundary {boundary:?}");
+        assert!(warnings.is_empty(), "boundary {boundary:?}: {warnings:?}");
+
+        let unclosed = [
+            "---",
+            "defaults:",
+            "  - {id: never-closed, kind: exclude_rows}",
+            "",
+        ]
+        .join(boundary);
+        let (ids, warnings) = declared_default_ids(&[rule_file("knowledge/rules/a.md", &unclosed)]);
+        assert!(ids.is_empty(), "boundary {boundary:?}");
+        assert_eq!(warnings.len(), 1, "boundary {boundary:?}: {warnings:?}");
+    }
+}
+
+#[test]
 fn any_malformed_entry_voids_the_whole_set() {
     let valid = "---\ndefaults:\n  - {id: ok, kind: exclude_rows}\n---\n";
     let long = "a".repeat(65);
