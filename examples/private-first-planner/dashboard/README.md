@@ -97,7 +97,9 @@ period changes and invalid ranges. Visible semantic markers bind sections and
 real graphical marks to the plan. Initial title/question differences produce `plan_copy_review` warnings;
 exact wording is not a hard gate for semantic fidelity. Breakdown/detail copy
 may follow the active dimension after navigation. Copy quality needs review. Failure records name
-the failed action and distinguish visible report API errors from missing marks. Bar scales tolerate 2 pixels or 5% rounding;
+the failed action and distinguish visible report API errors from missing marks. Trend bars may be horizontal or vertical; the verifier checks the corresponding
+length axis, a common zero edge, and chronological order. Bar scales tolerate
+2 pixels or 5% rounding;
 dot/trend point positions use a 2-pixel tolerance. These checks are useful
 regressions, not proof of every pixel: line-path fidelity, semantics of prose,
 negative-value designs and subjective layout still need review. The current

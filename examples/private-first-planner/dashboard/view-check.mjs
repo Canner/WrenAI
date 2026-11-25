@@ -42,7 +42,17 @@ export async function checkPlanView(frame,plan,oracle,warnings,context){
   }
   assert.deepEqual(view.trend.map(x=>x.period),oracle.trend.map(x=>x.period),'trend_plan_marks');
   assert(view.trend.every(x=>x.visible),'visible_trend_marks');
-  if(t.chart==='bar')proportional(oracle.trend.map(x=>x.value),view.trend.map(x=>x.height));
+  if(t.chart==='bar'){
+    const values=oracle.trend.map(x=>x.value),marks=view.trend;
+    const near=xs=>!xs.length||Math.max(...xs)-Math.min(...xs)<=2;
+    const ordered=xs=>xs.every((v,i)=>i===0||v>xs[i-1]);
+    const hasScale=lengths=>{try{proportional(values,lengths);return true;}catch{return false;}};
+    // A bar chart may encode value in width or height. Require a common
+    // zero edge and ordered periods, not an assumed vertical orientation.
+    const horizontal=near(marks.map(m=>m.x-m.width/2))&&ordered(marks.map(m=>m.y))&&hasScale(marks.map(m=>m.width));
+    const vertical=near(marks.map(m=>m.bottom))&&ordered(marks.map(m=>m.x))&&hasScale(marks.map(m=>m.height));
+    assert(horizontal||vertical,'chart_scale_mismatch');
+  }
   else{
     assert(view.trendPaths>0,'missing_trend_path');
     const vs=oracle.trend.map(x=>x.value),ys=view.trend.map(x=>x.y),max=vs.indexOf(Math.max(...vs)),min=vs.indexOf(Math.min(...vs)),span=vs[max]-vs[min];

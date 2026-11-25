@@ -18,7 +18,7 @@ export async function releaseFor(unit){
 export async function evaluateScripted(unit,out,{browser=false}={}){
   requireThat(['dashboard-plan','dashboard-frontend'].includes(unit));await mkdir(out,{mode:0o700});
   const report=fixtureReport(),manifest={version:'dashboard-unit-eval/1',mode:'scripted',unit,release:await releaseFor(unit),browser,
-    cases:unit==='dashboard-plan'?['valid-bar','valid-line','unsupported-metric','unsupported-dimension','wrong-period','expired-grant']:['valid-bar','valid-line','valid-area','valid-dot','wrong-plan','revoked-grant']};
+    cases:unit==='dashboard-plan'?['valid-bar','valid-line','unsupported-metric','unsupported-dimension','wrong-period','expired-grant']:['valid-bar','valid-line','valid-area','valid-dot','valid-horizontal-trend','wrong-plan','revoked-grant']};
   const write=(name,value)=>writeFile(join(out,name),JSON.stringify(value,null,2),{flag:'wx',mode:0o600});await write('manifest.json',manifest);const records=[];
   for(const id of manifest.cases){
     let now=1000;const broker=new ExportBroker({policy:{id:'synthetic',version:'1',briefs:{default:'Synthetic revenue'},project:async()=>report.payload},current:async()=>null,audit:async()=>{},epoch:'fixture',now:()=>now});
@@ -29,7 +29,7 @@ export async function evaluateScripted(unit,out,{browser=false}={}){
     if(id==='wrong-period')plan.period={lower:'1999-01-01',upper:'1999-03-01'};
     if(id==='wrong-plan')plan.data_version='0'.repeat(64);
     if(id==='expired-grant')now=bundle.expires_at;if(id==='revoked-grant')broker.revoke();
-    const designer={recipient:'scripted',design:async(_,{beforeSend})=>{await beforeSend();calls++;return{spec:unit==='dashboard-plan'?plan:specimen(bundle,plan),usage:null,cost_usd:null};}};
+    const designer={recipient:'scripted',design:async(_,{beforeSend})=>{await beforeSend();calls++;return{spec:unit==='dashboard-plan'?plan:specimen(bundle,plan,{horizontalTrend:id==='valid-horizontal-trend'}),usage:null,cost_usd:null};}};
     let result;
     try{result=unit==='dashboard-plan'?await planDashboard({broker,planner:designer,report,scope,signal:new AbortController().signal}):await frontendUnit({broker,designer,plan,report,scope,signal:new AbortController().signal,
       inspect:browser?async generated=>{const input=join(out,id+'-candidate.json');await writeFile(input,JSON.stringify(generated),{flag:'wx',mode:0o600});const {inspectDashboard}=await import('./browser-qa.mjs');return inspectDashboard(input,join(out,id+'-browser'));}:undefined});}
