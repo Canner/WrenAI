@@ -1,0 +1,528 @@
+{
+  "version": "cloud-model-planner-cohort/1",
+  "baseline_cohort": "latest-service-baseline-53-001",
+  "candidate_cohort": "cloud-model-output-contracts-53-001",
+  "service_worker_revision": "413af5475a8ed8250b7dffb78ef803d09b979c8f",
+  "warble_revision": "c9b52b58a87946ed2264ed3be4f008f8bbf5b8a7",
+  "cloud_model": "gpt-5.4-2026-03-05",
+  "worker_model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+  "cloud_model_settings": {
+    "model": "gpt-5.4-2026-03-05",
+    "api": "responses",
+    "reasoning_effort": "low",
+    "max_output_tokens": 4096,
+    "max_turns": 6,
+    "max_worker_requests": 3,
+    "timeout_ms": 60000,
+    "provider_retries": 0,
+    "metadata_preset": "full"
+  },
+  "worker_settings": {
+    "temperature": null,
+    "thinking": "on",
+    "max_tokens": 8192,
+    "max_turns": 12,
+    "max_tool_calls": 24,
+    "deadline_ms": 120000,
+    "provider_max_retries": 0,
+    "as_of": "2026-06-30"
+  },
+  "concurrency": 2,
+  "repeat": 1,
+  "evaluated_source_sha256": "cc4cc85fe61a1ab753290a7fa82279ad4c398c2946b8325b5e52fba31799956a",
+  "published_source_sha256": "89bb807baf2ea41ec1d490aa2b4a0a624999e9b90211b85968b32d441d94a3be",
+  "publication_changes": "Formatting and transport export rename only; live cohort predates these publication-only changes. Offline tests rerun on published sources.",
+  "comparator_source_sha256": "7ec6e5575c931b5d6f78d14a31f569bddb09416aebc677b6ce0db07cfcc68c19",
+  "baseline": {
+    "correct": 29,
+    "total": 53,
+    "first_delegation_correct": 27,
+    "resources": {
+      "planner_calls": 124,
+      "planner_input_tokens_observed": 764123,
+      "planner_output_tokens_observed": 23172,
+      "planner_returned_models": [
+        "gpt-5.4-2026-03-05"
+      ],
+      "worker_requests_reported": 74,
+      "worker_model_calls_observed": 370,
+      "worker_input_tokens_observed": 961149,
+      "worker_output_tokens_observed": 186494,
+      "billed_cost_usd": null
+    }
+  },
+  "candidate": {
+    "correct": 38,
+    "total": 53,
+    "first_delegation_correct": 36,
+    "resources": {
+      "planner_calls": 132,
+      "planner_input_tokens_observed": 859611,
+      "planner_output_tokens_observed": 26391,
+      "planner_returned_models": [
+        "gpt-5.4-2026-03-05"
+      ],
+      "worker_requests_reported": 79,
+      "worker_model_calls_observed": 356,
+      "worker_input_tokens_observed": 936234,
+      "worker_output_tokens_observed": 213941,
+      "billed_cost_usd": null
+    }
+  },
+  "controls": {
+    "same_model_service_worker_fixture_project_budgets": true,
+    "source_unchanged": true,
+    "service_source_unchanged": true,
+    "project_unchanged": true,
+    "no_replacement_samples": true,
+    "original_comparator_and_tolerances": true,
+    "no_posthoc_projection_or_date_normalization": true
+  },
+  "observations": {
+    "mismatched_worker_tables": 1,
+    "rejected_finish_or_contract_change_attempts": 0,
+    "helpful_corrections": [
+      "g23_refunded_2025_usd",
+      "g33_busiest_fy2024_quarter",
+      "g34_legacy_orders_utc_day"
+    ],
+    "harmful_corrections": [
+      "g18_orders_2020"
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "g01_active_products",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g02_orders_2025",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g15_camping_products",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g16_canceled_subscriptions",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g17_top3_products_by_units",
+      "baseline_passed": false,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "improved",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g42_top3_categories_2025",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g44_fast_churn_2024",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g03_total_orders_all_time",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g18_orders_2020",
+      "baseline_passed": false,
+      "first_delegation_passed": true,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g19_migrated_copies",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g20_all_time_order_value_usd",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g04_legacy_revenue_2019_2022",
+      "baseline_passed": true,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "regressed",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g21_avg_legacy_order_value",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g07_gross_captured_usd_2025",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g22_processor_fees_2025",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g23_refunded_2025_usd",
+      "baseline_passed": true,
+      "first_delegation_passed": false,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g24_net_revenue_2025_usd",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "planner_clarification"
+    },
+    {
+      "case_id": "g05_active_customers",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g25_real_accounts_2024",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g26_soft_deleted_accounts",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g43_active_buyers_2025",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g06_facebook_customers",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g27_customers_by_channel",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "planner_clarification"
+    },
+    {
+      "case_id": "g28_paid_orders",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g08_mrr_end_2025",
+      "baseline_passed": false,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "improved",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g09_avg_mrr_2025",
+      "baseline_passed": false,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "improved",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g29_mrr_june_2026",
+      "baseline_passed": false,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "improved",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g30_active_subs_end_2024",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g31_inventory_march_2026",
+      "baseline_passed": false,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "improved",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g10_orders_fy2024_q3",
+      "baseline_passed": false,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "improved",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g32_gross_fy2025_q1",
+      "baseline_passed": false,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "improved",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g33_busiest_fy2024_quarter",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": true,
+      "transition": "improved",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g34_legacy_orders_utc_day",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": true,
+      "transition": "improved",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g11_legacy_never_shipped",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g36_legacy_shipped",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g12_unique_customers_ever",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g37_returning_humans",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g38_xref_gap",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g13_merch_value_2026_items_grain",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g39_unreconciled_2025",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g14_rma_items_2025",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g40_restocked_rmas",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g41_return_rate_2025",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g45_orders_by_year",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "planner_worker_budget"
+    },
+    {
+      "case_id": "g46_legacy_value_by_year",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g47_mrr_by_month_2025",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g48_orders_by_fy2024_quarter",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g49_legacy_orders_by_utc_week",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g50_unreconciled_by_month_2025",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g51_buyers_by_channel_2025",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g52_legacy_shipped_by_year",
+      "baseline_passed": false,
+      "first_delegation_passed": false,
+      "candidate_passed": false,
+      "transition": "unchanged_fail",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g53_returned_units_by_disposition_2025",
+      "baseline_passed": true,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "unchanged_pass",
+      "candidate_state": "completed"
+    },
+    {
+      "case_id": "g54_top5_products_by_units_2025",
+      "baseline_passed": false,
+      "first_delegation_passed": true,
+      "candidate_passed": true,
+      "transition": "improved",
+      "candidate_state": "completed"
+    }
+  ],
+  "limitations": [
+    "Historical comparison; one sample per question.",
+    "Questions used for failure analysis; no independent held-out evaluation.",
+    "Prompt and host check were evaluated together, without ablation.",
+    "Width validation does not establish semantic or numerical correctness.",
+    "Raw traces and external live-suite runner are not included.",
+    "Possible metric-definition conflicts remain official failures."
+  ],
+  "dataset_sha256": "3adbf0d7d7cb82331667a2cb2c37d66bc1a46f8f3bb4f5658df70a1449a277dd"
+}
