@@ -425,42 +425,69 @@ class AdHocSQL:
         join, ``ON TRUE``, a non-key or ``OR``-ed key match), and the aggregate counts it every
         time. A model is bounded when its whole primary key is equated, in top-level ``AND``s
         of the join conditions and ``WHERE``, to columns of sources already bounded, starting
-        from the views; so two models keyed only to each other still multiply the view. A
+        from each aggregate-input view separately; sources keyed only to each other can
+        still multiply that view. Plain column projections retain the originating view and
+        every consuming edge, so joins inside a CTE or subquery are checked too. A
         ``SEMI``/``ANTI`` join target never repeats a row, but it proves nothing about another
         source's cardinality. A CTE or derived table is bounded only when its projected
         ``GROUP BY`` columns or all its ``DISTINCT`` outputs are equated to bounded sources.
-        Derived keys need the same known type: coercion can merge distinct keys.
+        Derived keys need the same known, equality-preserving type. Decimal and unsigned or
+        wide-integer annotations can hide FLOAT/DOUBLE coercions that merge distinct keys.
         Model primary keys also allow INT/BIGINT width changes, which preserve equality.
         Text comparisons remain unproven because the schema omits collation.
         Key names compare case-insensitively, as qualification folds them."""
-        annotated = False
+        projected, aggregated = {}, {}
         for scope in scopes:
             select = scope.expression
             if not isinstance(select, exp.Select):
                 continue
-            views = {
-                alias
-                for alias, source in scope.sources.items()
-                if isinstance(source, Scope)
-                and isinstance(source.expression.parent, exp.Subquery)
-                and source.expression.parent.meta.get(VIEW_MARK)
+            inputs = {}
+            for alias, (_, source) in scope.selected_sources.items():
+                if not isinstance(source, Scope):
+                    continue
+                if isinstance(source.expression.parent, exp.Subquery) and (
+                    source.expression.parent.meta.get(VIEW_MARK)
+                ):
+                    inputs[alias] = {
+                        p.alias_or_name: {(scope, alias)}
+                        for p in source.expression.selects
+                    }
+                else:
+                    inputs[alias] = {
+                        name: origins | {(scope, alias)}
+                        for name, origins in projected.get(source, {}).items()
+                        if origins
+                    }
+            # Scopes arrive child first. Only an unchanged column (possibly renamed)
+            # carries a view value through a projection; unrelated columns do not.
+            projected[scope] = {
+                p.alias_or_name: inputs.get(column.table, {}).get(column.name, set())
+                for p in select.expressions
+                if isinstance(column := p.unalias(), exp.Column)
             }
-            if not views:
-                continue
-            aggregated = {
-                column.table
-                for aggregate in select.find_all(exp.AggFunc)
-                if aggregate.find_ancestor(exp.Select) is select
-                for column in aggregate.find_all(exp.Column)
-                if column.table in views
-            }
-            if not aggregated:
-                continue
-            if not annotated:
-                annotate_types(
-                    scopes[-1].expression, schema=self.schema, dialect="duckdb"
-                )
-                annotated = True
+            for aggregate in select.find_all(exp.AggFunc):
+                if aggregate.find_ancestor(exp.Select) is not select:
+                    continue
+                for column in aggregate.find_all(exp.Column):
+                    if column.find_ancestor(exp.Select) is not select:
+                        continue
+                    for origin, alias in inputs.get(column.table, {}).get(
+                        column.name, ()
+                    ):
+                        aggregated.setdefault(origin, set()).add(alias)
+        if not aggregated:
+            return False
+        annotate_types(scopes[-1].expression, schema=self.schema, dialect="duckdb")
+        imprecise_types = (exp.DataType.REAL_TYPES - exp.DataType.FLOAT_TYPES) | {
+            exp.DataType.Type.UINT,
+            exp.DataType.Type.UBIGINT,
+            exp.DataType.Type.INT128,
+            exp.DataType.Type.UINT128,
+            exp.DataType.Type.INT256,
+            exp.DataType.Type.UINT256,
+        }
+        for scope, roots in aggregated.items():
+            select = scope.expression
             joins = select.args.get("joins") or []
             never_repeat = {
                 j.this.alias_or_name
@@ -488,6 +515,7 @@ class AdHocSQL:
                         a.type == b.type
                         and a.type.this != exp.DataType.Type.UNKNOWN
                         and a.type.this not in exp.DataType.TEXT_TYPES
+                        and a.type.this not in imprecise_types
                     )
                     integer_widths = {exp.DataType.Type.INT, exp.DataType.Type.BIGINT}
                     model_integer = (
@@ -514,26 +542,29 @@ class AdHocSQL:
                 for alias, (_, source) in scope.selected_sources.items()
                 if alias not in never_repeat
             }
-            bounded = set(views) - never_repeat
-            grew = True
-            while grew:
-                grew = False
-                for alias, source in sources.items():
-                    if alias in bounded:
-                        continue
-                    reached = {
-                        c for a, c, other in edges if a == alias and other in bounded
-                    }
-                    if isinstance(source, exp.Table):
-                        keys = keys_of.get(source.name.lower(), frozenset())
-                        unique = bool(keys) and keys <= reached
-                    else:
-                        unique = self._derived_unique_on(source, reached)
-                    if unique:
-                        bounded.add(alias)
-                        grew = True
-            if any(alias not in bounded for alias in sources):
-                return True
+            for root in roots - never_repeat:
+                bounded = {root}
+                grew = True
+                while grew:
+                    grew = False
+                    for alias, source in sources.items():
+                        if alias in bounded:
+                            continue
+                        reached = {
+                            c
+                            for a, c, other in edges
+                            if a == alias and other in bounded
+                        }
+                        if isinstance(source, exp.Table):
+                            keys = keys_of.get(source.name.lower(), frozenset())
+                            unique = bool(keys) and keys <= reached
+                        else:
+                            unique = self._derived_unique_on(source, reached)
+                        if unique:
+                            bounded.add(alias)
+                            grew = True
+                if any(alias not in bounded for alias in sources):
+                    return True
         return False
 
     @staticmethod

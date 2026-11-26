@@ -1762,6 +1762,160 @@ def test_coerced_derived_key_caveat_reaches_result_evidence(adhoc, cte, grouped)
     assert "duplicate_aggregation" in internal["unverified"]
 
 
+@pytest.mark.parametrize(
+    ("value", "other_view", "bound", "total", "duplicated"),
+    [
+        ("v.usd_value", "", "v", 1550.0, False),
+        ("v.usd_value", "CROSS JOIN usd_line_value w", "w", 7750.0, True),
+        ("w.usd_value", "CROSS JOIN usd_line_value w", "v", 7750.0, True),
+        (
+            "v.usd_value + w.usd_value",
+            "CROSS JOIN usd_line_value w",
+            "v",
+            15500.0,
+            True,
+        ),
+    ],
+)
+def test_each_aggregated_view_alias_needs_its_own_bound(
+    adhoc, value, other_view, bound, total, duplicated
+):
+    s = adhoc()
+    answers, result = run(
+        s,
+        f"SELECT SUM({value}) FROM usd_line_value v {other_view} "
+        "JOIN (SELECT id FROM customers GROUP BY id) x "
+        f"ON {bound}.customer_id=x.id",
+    )
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": total}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"].get("duplicate_aggregation", False) is duplicated
+    assert ("duplicate_aggregation" in internal["unverified"]) is duplicated
+
+
+@pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
+@pytest.mark.parametrize("bounded", [False, True], ids=["cross", "grouped-key"])
+@pytest.mark.parametrize("inside", [False, True], ids=["outer-join", "inner-join"])
+def test_projected_view_value_retains_aggregation_provenance(
+    adhoc, cte, bounded, inside
+):
+    s = adhoc()
+    projection = "SELECT v.usd_value AS value, v.customer_id FROM usd_line_value v"
+    join = (
+        "JOIN (SELECT id FROM customers GROUP BY id) x ON v.customer_id=x.id"
+        if bounded
+        else "CROSS JOIN (SELECT id FROM customers) x"
+    )
+    if inside:
+        projection += f" {join}"
+        join = ""
+    source = "v" if cte else f"({projection}) v"
+    sql = f"SELECT SUM(v.value) FROM {source} {join}"
+    if cte:
+        sql = f"WITH v AS ({projection}) {sql}"
+    answers, result = run(s, sql)
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": 1550.0 if bounded else 4650.0}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"].get("duplicate_aggregation", False) is (not bounded)
+    assert ("duplicate_aggregation" in internal["unverified"]) is (not bounded)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "numeric_keys",
+        "(SELECT DISTINCT id FROM numeric_keys)",
+        "(SELECT id FROM numeric_keys GROUP BY id)",
+    ],
+    ids=["model-pk", "distinct", "grouped"],
+)
+@pytest.mark.parametrize(
+    ("kind", "float_type", "key"),
+    [("DECIMAL(18,0)", "DOUBLE", 2**53), ("UINTEGER", "FLOAT", 2**24)],
+)
+def test_numeric_key_widening_cannot_prove_aggregation_unique(
+    adhoc, source, kind, float_type, key
+):
+    s = adhoc(
+        files={
+            "models/numeric_keys/metadata.yml": yaml.safe_dump(
+                {
+                    "name": "numeric_keys",
+                    "primary_key": "id",
+                    "columns": [{"name": "id", "type": kind}],
+                }
+            ),
+            "models/numeric_keys/ref_sql.sql": (
+                f"SELECT CAST({key - 1} + CAST(id AS BIGINT) AS {kind}) "
+                "AS id FROM synthetic.main.raw_customers WHERE id <= 2"
+            ),
+            "views/numeric_value/metadata.yml": "name: numeric_value\n",
+            "views/numeric_value/sql.yml": yaml.safe_dump(
+                {
+                    "statement": (
+                        f"SELECT COALESCE(id, CAST(0 AS {float_type})) AS id, 10 AS value "
+                        f"FROM numeric_keys WHERE id={key}"
+                    )
+                }
+            ),
+        }
+    )
+    _, baseline = run(s, "SELECT SUM(value) FROM numeric_value")
+    assert baseline["result"]["rows"] == [{"c1": 10}]
+    answers, result = run(
+        s, f"SELECT SUM(v.value) FROM numeric_value v JOIN {source} x ON v.id=x.id"
+    )
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": 20}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"].get("duplicate_aggregation") is True
+    assert "duplicate_aggregation" in internal["unverified"]
+    assert result["evidence"]["has_unverified_semantics"] is True
+
+
+@pytest.mark.parametrize(
+    ("kind", "float_type", "key"),
+    [
+        ("DECIMAL(18,0)", "DOUBLE", 2**53),
+        ("UBIGINT", "DOUBLE", 2**53),
+        ("HUGEINT", "DOUBLE", 2**53),
+        ("UINTEGER", "FLOAT", 2**24),
+    ],
+)
+def test_widened_numeric_annotations_do_not_establish_unique_keys(
+    kind, float_type, key
+):
+    import duckdb  # noqa: PLC0415
+
+    schema = {"keys": {"id": kind}}
+    query = AdHocSQL.__new__(AdHocSQL)
+    query.schema = schema
+    query.primary_keys = {}
+    sql = (
+        "SELECT SUM(v.value) FROM "
+        f"(SELECT COALESCE(id, CAST(0 AS {float_type})) AS id, 10 AS value "
+        f"FROM keys WHERE id={key}) v "
+        "JOIN (SELECT DISTINCT id FROM keys) x ON v.id=x.id"
+    )
+    with duckdb.connect() as db:
+        db.execute(f"CREATE TABLE keys(id {kind})")
+        db.execute(f"INSERT INTO keys VALUES ({key}), ({key + 1})")
+        assert db.execute("SELECT COUNT(DISTINCT id) FROM keys").fetchone() == (2,)
+        assert db.execute(sql).fetchone() == (20,)
+    tree = sqlglot.parse_one(sql, dialect="duckdb")
+    tree.find(exp.Subquery).meta[VIEW_MARK] = "key_value"
+    qualified = qualify(tree, dialect="duckdb", schema=schema, identify=True)
+    assert query._duplicate_aggregation(list(traverse_scope(qualified))) is True
+
+
 @pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
 @pytest.mark.parametrize("grouped", [False, True], ids=["distinct", "grouped"])
 @pytest.mark.parametrize("collated", [False, True], ids=["binary", "nocase"])
