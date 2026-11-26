@@ -427,7 +427,9 @@ class AdHocSQL:
         of the join conditions and ``WHERE``, to columns of sources already bounded, starting
         from each aggregate-input view separately; sources keyed only to each other can
         still multiply that view. Plain column projections retain the originating view and
-        every consuming edge, so joins inside a CTE or subquery are checked too. A
+        every consuming edge, so joins inside a CTE or subquery are checked too. Union
+        branches contribute origins by output position. Duplicate output names bind to
+        the first projection, as in the query engine. A
         ``SEMI``/``ANTI`` join target never repeats a row, but it proves nothing about another
         source's cardinality. A CTE or derived table is bounded only when its projected
         ``GROUP BY`` columns or all its ``DISTINCT`` outputs are equated to bounded sources.
@@ -439,6 +441,29 @@ class AdHocSQL:
         projected, aggregated = {}, {}
         for scope in scopes:
             select = scope.expression
+            if isinstance(select, exp.SetOperation):
+                # UNION can return either branch's values. INTERSECT/EXCEPT filter
+                # the left branch; their right-hand values are not projected.
+                branches = (
+                    scope.union_scopes
+                    if isinstance(select, exp.Union)
+                    else scope.union_scopes[:1]
+                )
+                outputs = [projected[b] for b in branches]
+                if select.args.get("by_name"):
+                    outputs = []
+                    for branch in branches:
+                        names = branch.expression.named_selects
+                        outputs.append(
+                            [
+                                projected[branch][names.index(name)]
+                                if name in names
+                                else set()
+                                for name in select.named_selects
+                            ]
+                        )
+                projected[scope] = [set().union(*origins) for origins in zip(*outputs)]
+                continue
             if not isinstance(select, exp.Select):
                 continue
             inputs = {}
@@ -453,18 +478,22 @@ class AdHocSQL:
                         for p in source.expression.selects
                     }
                 else:
-                    inputs[alias] = {
-                        name: origins | {(scope, alias)}
-                        for name, origins in projected.get(source, {}).items()
-                        if origins
-                    }
+                    inputs[alias] = {}
+                    for projection, origins in zip(
+                        source.expression.selects, projected.get(source, ())
+                    ):
+                        inputs[alias].setdefault(
+                            projection.alias_or_name,
+                            origins | {(scope, alias)} if origins else set(),
+                        )
             # Scopes arrive child first. Only an unchanged column (possibly renamed)
             # carries a view value through a projection; unrelated columns do not.
-            projected[scope] = {
-                p.alias_or_name: inputs.get(column.table, {}).get(column.name, set())
+            projected[scope] = [
+                inputs.get(column.table, {}).get(column.name, set())
+                if isinstance(column := p.unalias().unnest(), exp.Column)
+                else set()
                 for p in select.expressions
-                if isinstance(column := p.unalias(), exp.Column)
-            }
+            ]
             for aggregate in select.find_all(exp.AggFunc):
                 if aggregate.find_ancestor(exp.Select) is not select:
                     continue

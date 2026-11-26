@@ -1826,6 +1826,106 @@ def test_projected_view_value_retains_aggregation_provenance(
     assert ("duplicate_aggregation" in internal["unverified"]) is (not bounded)
 
 
+@pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
+@pytest.mark.parametrize(
+    ("projection", "total", "duplicated"),
+    [
+        pytest.param(
+            "SELECT ((v.usd_value)) AS amount FROM usd_line_value v",
+            4650.0,
+            True,
+            id="parenthesized-view-value",
+        ),
+        pytest.param(
+            "SELECT v.usd_value AS amount FROM usd_line_value v WHERE customer_id=1 "
+            "UNION ALL SELECT v.usd_value AS renamed FROM usd_line_value v WHERE customer_id<>1",
+            4650.0,
+            True,
+            id="union-positional-aliases",
+        ),
+        pytest.param(
+            "SELECT v.usd_value AS amount, c.id AS amount "
+            "FROM usd_line_value v CROSS JOIN customers c",
+            13950.0,
+            True,
+            id="duplicate-name-view-first",
+        ),
+        pytest.param(
+            "SELECT c.id AS amount, v.usd_value AS amount "
+            "FROM usd_line_value v CROSS JOIN customers c",
+            90,
+            False,
+            id="duplicate-name-model-first",
+        ),
+        pytest.param(
+            "SELECT id AS amount FROM customers UNION ALL "
+            "SELECT usd_value AS other FROM usd_line_value",
+            4668.0,
+            True,
+            id="union-right-view-value",
+        ),
+        pytest.param(
+            "SELECT usd_value AS amount FROM usd_line_value UNION ALL "
+            "SELECT id AS other FROM customers UNION ALL SELECT id FROM customers",
+            4686.0,
+            True,
+            id="nested-union-left-view-value",
+        ),
+        pytest.param(
+            "SELECT c.id AS amount, c.id AS other FROM customers c UNION ALL "
+            "SELECT c.id AS renamed, v.usd_value AS amount "
+            "FROM customers c CROSS JOIN usd_line_value v",
+            108,
+            False,
+            id="union-unrelated-output",
+        ),
+        pytest.param(
+            "SELECT c.id AS amount, c.id AS other FROM customers c UNION ALL BY NAME "
+            "SELECT v.usd_value AS other, c.id AS amount "
+            "FROM customers c CROSS JOIN usd_line_value v",
+            108,
+            False,
+            id="union-by-name-unrelated-output",
+        ),
+        pytest.param(
+            "SELECT ((c.id)) AS amount FROM customers c",
+            18,
+            False,
+            id="parenthesized-model-value",
+        ),
+        pytest.param(
+            "SELECT (v.usd_value + 1) AS amount FROM usd_line_value v",
+            4665.0,
+            False,
+            id="computed-projection-unchanged",
+        ),
+        pytest.param(
+            "SELECT c.id + 0 AS amount, v.usd_value AS amount "
+            "FROM customers c CROSS JOIN usd_line_value v",
+            90,
+            False,
+            id="duplicate-name-computed-first",
+        ),
+    ],
+)
+def test_derived_output_binding_retains_view_provenance(
+    adhoc, cte, projection, total, duplicated
+):
+    s = adhoc()
+    source = "t" if cte else f"({projection}) t"
+    sql = f"SELECT SUM(t.amount) FROM {source} CROSS JOIN customers x"
+    if cte:
+        sql = f"WITH t AS ({projection}) {sql}"
+    answers, result = run(s, sql)
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": total}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"].get("duplicate_aggregation", False) is duplicated
+    assert ("duplicate_aggregation" in internal["unverified"]) is duplicated
+
+
 @pytest.mark.parametrize(
     "source",
     [
