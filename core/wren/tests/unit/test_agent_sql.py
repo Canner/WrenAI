@@ -2016,6 +2016,138 @@ def test_widened_numeric_annotations_do_not_establish_unique_keys(
     assert query._duplicate_aggregation(list(traverse_scope(qualified))) is True
 
 
+@pytest.mark.parametrize("wrapped", [False, True], ids=["direct", "passthrough"])
+@pytest.mark.parametrize(
+    ("other_type", "shape", "total", "duplicated"),
+    [
+        ("DOUBLE", "short", 20, True),
+        ("DOUBLE", "wide", 20, True),
+        ("DOUBLE", "wide-double-key", 10, False),
+        ("BIGINT", "short", 10, False),
+        ("BIGINT", "left-positional", 20, True),
+        ("BIGINT", "left-by-name", 20, True),
+        ("DOUBLE", "right", 20, True),
+        ("DOUBLE", "right-after-by-name", 20, True),
+        ("BIGINT", "right", 10, False),
+        ("BIGINT", "right-after-by-name", 10, False),
+        ("DOUBLE", "duplicate", 20, True),
+        ("DOUBLE", "duplicate-reversed", 20, True),
+        ("BIGINT", "duplicate", 10, True),
+        ("DOUBLE", "duplicate-unused", 10, False),
+    ],
+)
+def test_derived_key_types_reach_result_evidence(
+    adhoc, wrapped, other_type, shape, total, duplicated
+):
+    key = 2**53
+    s = adhoc(
+        files={
+            "models/numeric_keys/metadata.yml": yaml.safe_dump(
+                {
+                    "name": "numeric_keys",
+                    "primary_key": "id",
+                    "columns": [{"name": "id", "type": "BIGINT"}],
+                }
+            ),
+            "models/numeric_keys/ref_sql.sql": (
+                f"SELECT {key - 1} + CAST(id AS BIGINT) AS id "
+                "FROM synthetic.main.raw_customers WHERE id <= 2"
+            ),
+            "views/numeric_value/metadata.yml": "name: numeric_value\n",
+            "views/numeric_value/sql.yml": yaml.safe_dump(
+                {
+                    "statement": (
+                        f"SELECT id, 10 AS value FROM numeric_keys WHERE id={key}"
+                    )
+                }
+            ),
+        }
+    )
+    source = "SELECT CAST(id AS BIGINT) AS k, value FROM numeric_value "
+    if shape.startswith("duplicate"):
+        source = (
+            f"SELECT CAST(id AS {other_type}) AS k, CAST(id AS BIGINT) AS k, value "
+            "FROM numeric_value"
+        )
+        if shape == "duplicate-unused":
+            source = (
+                "SELECT id AS k, CAST(id AS DOUBLE) AS other, "
+                "CAST(id AS BIGINT) AS other, value FROM numeric_value"
+            )
+    elif shape.startswith("right"):
+        if shape == "right-after-by-name":
+            source += "UNION ALL BY NAME SELECT id AS k FROM numeric_keys WHERE FALSE "
+        source += (
+            "UNION ALL (SELECT id AS inner_key, id AS inner_value "
+            "FROM numeric_keys WHERE FALSE UNION ALL BY NAME "
+            f"SELECT CAST(id AS {other_type}) AS inner_key, id AS inner_value "
+            "FROM numeric_keys WHERE FALSE)"
+        )
+    else:
+        if shape.startswith("left"):
+            inner_union = (
+                "UNION ALL BY NAME" if shape == "left-by-name" else "UNION ALL"
+            )
+            source += (
+                f"{inner_union} SELECT CAST(id AS DOUBLE) AS k, id AS value "
+                "FROM numeric_keys WHERE FALSE "
+            )
+        extra = ", id AS value" if shape.startswith("wide") else ""
+        source += (
+            f"UNION ALL BY NAME SELECT CAST(id AS {other_type}) AS k{extra} "
+            "FROM numeric_keys WHERE FALSE"
+        )
+    join_key = "CAST(id AS DOUBLE)" if shape == "wide-double-key" else "id"
+    condition = "x.id=t.k" if shape == "duplicate-reversed" else "t.k=x.id"
+    sql = (
+        f"WITH t AS ({source}) SELECT SUM(t.value) FROM "
+        f"{'(SELECT k, value FROM t) t' if wrapped else 't'} "
+        f"JOIN (SELECT DISTINCT {join_key} AS id FROM numeric_keys) x ON {condition}"
+    )
+    answers, result = run(s, sql)
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": total}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"].get("duplicate_aggregation", False) is duplicated
+    assert ("duplicate_aggregation" in internal["unverified"]) is duplicated
+
+
+@pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
+@pytest.mark.parametrize(
+    ("projection", "grouping", "duplicated"),
+    [
+        ("c.id", "(c.id)", False),
+        ("((c.id))", "c.id", False),
+        ("((c.id))", "((c.id))", False),
+        ("(c.id + 0)", "(c.id + 0)", True),
+        ("c.id", "GROUPING SETS ((c.id), (c.id))", True),
+    ],
+)
+def test_parenthesized_grouping_key_reaches_result_evidence(
+    adhoc, cte, projection, grouping, duplicated
+):
+    s = adhoc()
+    source = f"SELECT {projection} AS key FROM customers c GROUP BY {grouping}"
+    sql = (
+        "SELECT SUM(v.usd_value) FROM usd_line_value v "
+        f"JOIN {'x' if cte else f'({source}) x'} ON v.customer_id=x.key"
+    )
+    if cte:
+        sql = f"WITH x AS ({source}) {sql}"
+    answers, result = run(s, sql)
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [
+        {"c1": 3100.0 if "GROUPING SETS" in grouping else 1550.0}
+    ]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"].get("duplicate_aggregation", False) is duplicated
+    assert ("duplicate_aggregation" in internal["unverified"]) is duplicated
+
+
 @pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
 @pytest.mark.parametrize("grouped", [False, True], ids=["distinct", "grouped"])
 @pytest.mark.parametrize("collated", [False, True], ids=["binary", "nocase"])

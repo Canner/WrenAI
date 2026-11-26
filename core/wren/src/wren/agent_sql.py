@@ -507,6 +507,7 @@ class AdHocSQL:
         if not aggregated:
             return False
         annotate_types(scopes[-1].expression, schema=self.schema, dialect="duckdb")
+        unproven_types = self._unproven_key_types(scopes)
         imprecise_types = (exp.DataType.REAL_TYPES - exp.DataType.FLOAT_TYPES) | {
             exp.DataType.Type.UINT,
             exp.DataType.Type.UBIGINT,
@@ -539,6 +540,12 @@ class AdHocSQL:
                     ) or (a.table == b.table):
                         continue
                     if a.type is None or b.type is None:
+                        continue
+                    if any(
+                        c.name.lower()
+                        in unproven_types.get(scope.sources.get(c.table), ())
+                        for c in (a, b)
+                    ):
                         continue
                     same_type = (
                         a.type == b.type
@@ -597,6 +604,62 @@ class AdHocSQL:
         return False
 
     @staticmethod
+    def _unproven_key_types(scopes):
+        """Track output types that cannot justify an equality-preserving join.
+
+        SQLGlot can lose coercion for unequal-width UNION BY NAME and nested set
+        operations with different output names. Trust those only when every branch
+        supplying the column has the same type, and propagate uncertainty to consumers.
+        Repeated output names also differ: DuckDB binds the first, SQLGlot the last.
+        """
+        unproven, contributed = {}, {}
+        for scope in scopes:
+            select = scope.expression
+            unknown = unproven[scope] = set()
+            contributed[scope] = {}
+            if isinstance(select, exp.SetOperation):
+                by_name = select.args.get("by_name")
+                unequal_width = len(select.left.selects) != len(select.right.selects)
+                nested = any(
+                    isinstance(branch.expression, exp.SetOperation)
+                    for branch in scope.union_scopes
+                )
+                for index, name in enumerate(select.named_selects):
+                    types = set()
+                    for branch in scope.union_scopes:
+                        projections = branch.expression.selects
+                        if by_name:
+                            matches = [
+                                p
+                                for p in projections
+                                if p.alias_or_name.lower() == name.lower()
+                            ]
+                        else:
+                            matches = projections[index : index + 1]
+                        for p in matches:
+                            # A nested set operation's selects are its leftmost
+                            # projections, not its coerced output types.
+                            types.update(contributed[branch][p.alias_or_name.lower()])
+                            if p.alias_or_name.lower() in unproven.get(branch, ()):
+                                unknown.add(name.lower())
+                    contributed[scope][name.lower()] = types
+                    if len(types) > 1 and ((by_name and unequal_width) or nested):
+                        unknown.add(name.lower())
+            else:
+                for p in select.selects:
+                    name = p.alias_or_name.lower()
+                    if name in contributed[scope]:
+                        unknown.add(name)
+                    else:
+                        contributed[scope][name] = {p.type}
+                    if any(
+                        c.name.lower() in unproven.get(scope.sources.get(c.table), ())
+                        for c in p.find_all(exp.Column)
+                    ):
+                        unknown.add(name)
+        return unproven
+
+    @staticmethod
     def _derived_unique_on(source, columns):
         """Whether joined output ``columns`` include a proven key of a derived source.
 
@@ -622,13 +685,13 @@ class AdHocSQL:
         ):
             return False
         projected = [
-            p.unalias()
+            p.unalias().unnest()
             for p in select.expressions
             if p.alias_or_name.lower() in columns
         ]
         return all(
             isinstance(key, exp.Column) and key in projected
-            for key in group.expressions
+            for key in (expression.unnest() for expression in group.expressions)
         )
 
     @staticmethod
