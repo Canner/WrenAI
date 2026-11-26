@@ -37,6 +37,7 @@ from typing import NamedTuple
 import sqlglot
 from pydantic import BaseModel, ConfigDict, Field
 from sqlglot import exp
+from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.scope import Scope, ScopeType, traverse_scope
 
@@ -419,38 +420,104 @@ class AdHocSQL:
         return None
 
     def _duplicate_aggregation(self, scopes):
-        """An aggregate over a view's value in a select that also reads a model not bounded to
-        one row per view row: each view row can repeat once per matching model row (a cross
+        """An aggregate over a view's value in a select that also reads a source not bounded to
+        one row per view row: each view row can repeat once per matching source row (a cross
         join, ``ON TRUE``, a non-key or ``OR``-ed key match), and the aggregate counts it every
         time. A model is bounded when its whole primary key is equated, in top-level ``AND``s
         of the join conditions and ``WHERE``, to columns of sources already bounded, starting
-        from the views; so two models keyed only to each other still multiply the view. A
+        from each aggregate-input view separately; sources keyed only to each other can
+        still multiply that view. Plain column projections retain the originating view and
+        every consuming edge, so joins inside a CTE or subquery are checked too. Union
+        branches contribute origins by output position. Duplicate output names bind to
+        the first projection, as in the query engine. A
         ``SEMI``/``ANTI`` join target never repeats a row, but it proves nothing about another
-        source's cardinality, and neither does a CTE or derived table (its rows are not known
-        to be unique on anything); those sources themselves are not checked here. Key names
-        compare case-insensitively, as qualification folds them."""
+        source's cardinality. A CTE or derived table is bounded only when its projected
+        ``GROUP BY`` columns or all its ``DISTINCT`` outputs are equated to bounded sources.
+        Derived keys need the same known, equality-preserving type. Decimal and unsigned or
+        wide-integer annotations can hide FLOAT/DOUBLE coercions that merge distinct keys.
+        Model primary keys also allow INT/BIGINT width changes, which preserve equality.
+        Text comparisons remain unproven because the schema omits collation.
+        Key names compare case-insensitively, as qualification folds them."""
+        projected, aggregated = {}, {}
         for scope in scopes:
             select = scope.expression
+            if isinstance(select, exp.SetOperation):
+                # UNION can return either branch's values. INTERSECT/EXCEPT filter
+                # the left branch; their right-hand values are not projected.
+                branches = (
+                    scope.union_scopes
+                    if isinstance(select, exp.Union)
+                    else scope.union_scopes[:1]
+                )
+                outputs = [projected[b] for b in branches]
+                if select.args.get("by_name"):
+                    outputs = []
+                    for branch in branches:
+                        names = branch.expression.named_selects
+                        outputs.append(
+                            [
+                                projected[branch][names.index(name)]
+                                if name in names
+                                else set()
+                                for name in select.named_selects
+                            ]
+                        )
+                projected[scope] = [set().union(*origins) for origins in zip(*outputs)]
+                continue
             if not isinstance(select, exp.Select):
                 continue
-            views = {
-                alias
-                for alias, source in scope.sources.items()
-                if isinstance(source, Scope)
-                and isinstance(source.expression.parent, exp.Subquery)
-                and source.expression.parent.meta.get(VIEW_MARK)
-            }
-            if not views:
-                continue
-            aggregated = {
-                column.table
-                for aggregate in select.find_all(exp.AggFunc)
-                if aggregate.find_ancestor(exp.Select) is select
-                for column in aggregate.find_all(exp.Column)
-                if column.table in views
-            }
-            if not aggregated:
-                continue
+            inputs = {}
+            for alias, (_, source) in scope.selected_sources.items():
+                if not isinstance(source, Scope):
+                    continue
+                if isinstance(source.expression.parent, exp.Subquery) and (
+                    source.expression.parent.meta.get(VIEW_MARK)
+                ):
+                    inputs[alias] = {
+                        p.alias_or_name: {(scope, alias)}
+                        for p in source.expression.selects
+                    }
+                else:
+                    inputs[alias] = {}
+                    for projection, origins in zip(
+                        source.expression.selects, projected.get(source, ())
+                    ):
+                        inputs[alias].setdefault(
+                            projection.alias_or_name,
+                            origins | {(scope, alias)} if origins else set(),
+                        )
+            # Scopes arrive child first. Only an unchanged column (possibly renamed)
+            # carries a view value through a projection; unrelated columns do not.
+            projected[scope] = [
+                inputs.get(column.table, {}).get(column.name, set())
+                if isinstance(column := p.unalias().unnest(), exp.Column)
+                else set()
+                for p in select.expressions
+            ]
+            for aggregate in select.find_all(exp.AggFunc):
+                if aggregate.find_ancestor(exp.Select) is not select:
+                    continue
+                for column in aggregate.find_all(exp.Column):
+                    if column.find_ancestor(exp.Select) is not select:
+                        continue
+                    for origin, alias in inputs.get(column.table, {}).get(
+                        column.name, ()
+                    ):
+                        aggregated.setdefault(origin, set()).add(alias)
+        if not aggregated:
+            return False
+        annotate_types(scopes[-1].expression, schema=self.schema, dialect="duckdb")
+        unproven_types = self._unproven_key_types(scopes)
+        imprecise_types = (exp.DataType.REAL_TYPES - exp.DataType.FLOAT_TYPES) | {
+            exp.DataType.Type.UINT,
+            exp.DataType.Type.UBIGINT,
+            exp.DataType.Type.INT128,
+            exp.DataType.Type.UINT128,
+            exp.DataType.Type.INT256,
+            exp.DataType.Type.UINT256,
+        }
+        for scope, roots in aggregated.items():
+            select = scope.expression
             joins = select.args.get("joins") or []
             never_repeat = {
                 j.this.alias_or_name
@@ -472,36 +539,160 @@ class AdHocSQL:
                         isinstance(a, exp.Column) and isinstance(b, exp.Column)
                     ) or (a.table == b.table):
                         continue
+                    if a.type is None or b.type is None:
+                        continue
+                    if any(
+                        c.name.lower()
+                        in unproven_types.get(scope.sources.get(c.table), ())
+                        for c in (a, b)
+                    ):
+                        continue
+                    same_type = (
+                        a.type == b.type
+                        and a.type.this != exp.DataType.Type.UNKNOWN
+                        and a.type.this not in exp.DataType.TEXT_TYPES
+                        and a.type.this not in imprecise_types
+                    )
+                    integer_widths = {exp.DataType.Type.INT, exp.DataType.Type.BIGINT}
+                    model_integer = (
+                        a.type.this in integer_widths and b.type.this in integer_widths
+                    )
                     edges += [
                         (mine.table, mine.name.lower(), other.table)
                         for mine, other in ((a, b), (b, a))
-                        if through is None or mine.table in through
+                        if (through is None or mine.table in through)
+                        and (
+                            same_type
+                            or (
+                                model_integer
+                                and isinstance(scope.sources.get(mine.table), exp.Table)
+                            )
+                        )
                     ]
             keys_of = {
                 model.lower(): frozenset(k.lower() for k in keys)
                 for model, keys in self.primary_keys.items()
             }
-            models = {
-                alias: keys_of.get(source.name.lower(), frozenset())
-                for alias, source in scope.sources.items()
-                if isinstance(source, exp.Table) and alias not in never_repeat
+            sources = {
+                alias: source
+                for alias, (_, source) in scope.selected_sources.items()
+                if alias not in never_repeat
             }
-            bounded = set(views) - never_repeat
-            grew = True
-            while grew:
-                grew = False
-                for alias, keys in models.items():
-                    if alias in bounded or not keys:
-                        continue
-                    reached = {
-                        c for a, c, other in edges if a == alias and other in bounded
-                    }
-                    if keys <= reached:
-                        bounded.add(alias)
-                        grew = True
-            if any(alias not in bounded for alias in models):
-                return True
+            for root in roots - never_repeat:
+                bounded = {root}
+                grew = True
+                while grew:
+                    grew = False
+                    for alias, source in sources.items():
+                        if alias in bounded:
+                            continue
+                        reached = {
+                            c
+                            for a, c, other in edges
+                            if a == alias and other in bounded
+                        }
+                        if isinstance(source, exp.Table):
+                            keys = keys_of.get(source.name.lower(), frozenset())
+                            unique = bool(keys) and keys <= reached
+                        else:
+                            unique = self._derived_unique_on(source, reached)
+                        if unique:
+                            bounded.add(alias)
+                            grew = True
+                if any(alias not in bounded for alias in sources):
+                    return True
         return False
+
+    @staticmethod
+    def _unproven_key_types(scopes):
+        """Track output types that cannot justify an equality-preserving join.
+
+        SQLGlot can lose coercion for unequal-width UNION BY NAME and nested set
+        operations with different output names. Trust those only when every branch
+        supplying the column has the same type, and propagate uncertainty to consumers.
+        Repeated output names also differ: DuckDB binds the first, SQLGlot the last.
+        """
+        unproven, contributed = {}, {}
+        for scope in scopes:
+            select = scope.expression
+            unknown = unproven[scope] = set()
+            contributed[scope] = {}
+            if isinstance(select, exp.SetOperation):
+                by_name = select.args.get("by_name")
+                unequal_width = len(select.left.selects) != len(select.right.selects)
+                nested = any(
+                    isinstance(branch.expression, exp.SetOperation)
+                    for branch in scope.union_scopes
+                )
+                for index, name in enumerate(select.named_selects):
+                    types = set()
+                    for branch in scope.union_scopes:
+                        projections = branch.expression.selects
+                        if by_name:
+                            matches = [
+                                p
+                                for p in projections
+                                if p.alias_or_name.lower() == name.lower()
+                            ]
+                        else:
+                            matches = projections[index : index + 1]
+                        for p in matches:
+                            # A nested set operation's selects are its leftmost
+                            # projections, not its coerced output types.
+                            types.update(contributed[branch][p.alias_or_name.lower()])
+                            if p.alias_or_name.lower() in unproven.get(branch, ()):
+                                unknown.add(name.lower())
+                    contributed[scope][name.lower()] = types
+                    if len(types) > 1 and ((by_name and unequal_width) or nested):
+                        unknown.add(name.lower())
+            else:
+                for p in select.selects:
+                    name = p.alias_or_name.lower()
+                    if name in contributed[scope]:
+                        unknown.add(name)
+                    else:
+                        contributed[scope][name] = {p.type}
+                    if any(
+                        c.name.lower() in unproven.get(scope.sources.get(c.table), ())
+                        for c in p.find_all(exp.Column)
+                    ):
+                        unknown.add(name)
+        return unproven
+
+    @staticmethod
+    def _derived_unique_on(source, columns):
+        """Whether joined output ``columns`` include a proven key of a derived source.
+
+        Plain grouping columns must be projected unchanged (possibly under aliases).
+        Grouping sets can repeat a group, and ``DISTINCT ON`` can hide its key, so neither
+        proves output uniqueness here.
+        """
+        select = source.expression
+        if not isinstance(select, exp.Select):
+            return False
+        outputs = [p.alias_or_name.lower() for p in select.expressions]
+        if len(set(outputs)) != len(outputs):
+            return False
+        distinct = select.args.get("distinct")
+        if distinct is not None and distinct.args.get("on") is None:
+            if set(outputs) <= columns:
+                return True
+        group = select.args.get("group")
+        if (
+            group is None
+            or not group.expressions
+            or any(value for key, value in group.args.items() if key != "expressions")
+        ):
+            return False
+        projected = [
+            p.unalias().unnest()
+            for p in select.expressions
+            if p.alias_or_name.lower() in columns
+        ]
+        return all(
+            isinstance(key, exp.Column) and key in projected
+            for key in (expression.unnest() for expression in group.expressions)
+        )
 
     @staticmethod
     def _bounds_through(join):

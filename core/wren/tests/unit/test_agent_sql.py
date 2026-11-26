@@ -1453,12 +1453,813 @@ def test_a_view_value_joined_to_a_many_side_model_is_marked_duplicated(adhoc):
     ]
 
 
+@pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
+@pytest.mark.parametrize(
+    ("source_sql", "join", "duplicated"),
+    [
+        ("SELECT tenant_id, id FROM dimensions", "CROSS JOIN x", True),
+        ("SELECT tenant_id, id FROM dimensions", "JOIN x ON TRUE", True),
+        ("SELECT tenant_id, id FROM dimensions", "JOIN x ON v.id=x.id", True),
+        ("SELECT id FROM dimensions GROUP BY id", "JOIN x ON v.id=x.id", False),
+        (
+            "SELECT tenant_id, id FROM dimensions GROUP BY tenant_id, id",
+            "JOIN x ON v.id=x.id",
+            True,
+        ),
+        (
+            "SELECT tenant_id, id FROM dimensions GROUP BY tenant_id, id",
+            "JOIN x ON v.id=x.id AND v.tenant_id=x.tenant_id",
+            False,
+        ),
+        ("SELECT id AS key FROM dimensions GROUP BY id", "JOIN x ON v.id=x.key", False),
+        (
+            "SELECT id AS first_id, id AS second_id FROM dimensions GROUP BY id",
+            "JOIN x ON v.id=x.second_id",
+            False,
+        ),
+        (
+            "SELECT id FROM dimensions GROUP BY tenant_id, id",
+            "JOIN x ON v.id=x.id",
+            True,
+        ),
+        (
+            "SELECT ABS(id) AS key FROM dimensions GROUP BY id",
+            "JOIN x ON v.id=x.key",
+            True,
+        ),
+        (
+            "SELECT id FROM dimensions GROUP BY GROUPING SETS ((id), (id))",
+            "JOIN x ON v.id=x.id",
+            True,
+        ),
+        ("SELECT DISTINCT id FROM dimensions", "JOIN x ON v.id=x.id", False),
+        (
+            "SELECT DISTINCT ABS(id) AS key FROM dimensions",
+            "JOIN x ON v.id=x.key",
+            False,
+        ),
+        (
+            "SELECT DISTINCT tenant_id, id FROM dimensions",
+            "JOIN x ON v.id=x.id",
+            True,
+        ),
+        (
+            "SELECT DISTINCT tenant_id, id FROM dimensions",
+            "JOIN x ON v.id=x.id AND v.tenant_id=x.tenant_id",
+            False,
+        ),
+        (
+            "SELECT DISTINCT tenant_id AS key, id AS key FROM dimensions",
+            "JOIN x ON v.id=x.key",
+            True,
+        ),
+        (
+            "SELECT tenant_id AS key, id AS key FROM dimensions GROUP BY tenant_id, id",
+            "JOIN x ON v.id=x.key",
+            True,
+        ),
+        (
+            "SELECT DISTINCT ON (tenant_id) id FROM dimensions",
+            "JOIN x ON v.id=x.id",
+            True,
+        ),
+        (
+            "SELECT id FROM dimensions UNION ALL SELECT id FROM dimensions",
+            "JOIN x ON v.id=x.id",
+            True,
+        ),
+        ("SELECT id FROM dimensions", "SEMI JOIN x ON v.id=x.id", False),
+        ("SELECT id FROM dimensions", "ANTI JOIN x ON v.id=x.id", False),
+        ("SELECT id FROM dimensions", "LEFT JOIN x ON v.id=x.id", True),
+        ("SELECT id FROM dimensions GROUP BY id", "LEFT JOIN x ON v.id=x.id", False),
+        ("SELECT id FROM dimensions GROUP BY id", "RIGHT JOIN x ON v.id=x.id", False),
+        ("SELECT id FROM dimensions GROUP BY id", "FULL JOIN x ON v.id=x.id", False),
+        (
+            "SELECT id FROM dimensions GROUP BY id",
+            "JOIN x ON v.id=x.id OR v.id=1",
+            True,
+        ),
+        # An unused CTE must not affect the selected sources' cardinality.
+        ("SELECT id FROM dimensions", "", False),
+    ],
+)
+def test_derived_sources_bound_view_aggregation(cte, source_sql, join, duplicated):
+    schema = {
+        "invoice": {"tenant_id": "INT", "id": "INT", "value": "INT"},
+        "dimensions": {"tenant_id": "INT", "id": "INT"},
+    }
+    query = AdHocSQL.__new__(AdHocSQL)
+    query.schema = schema
+    query.primary_keys = {"dimensions": frozenset(("tenant_id", "id"))}
+    sql = (
+        "SELECT SUM(v.value) FROM (SELECT tenant_id, id, value FROM invoice) v "
+        f"{join if cte else join.replace('JOIN x', f'JOIN ({source_sql}) x')}"
+    )
+    if cte:
+        sql = f"WITH x AS ({source_sql}) {sql}"
+    tree = sqlglot.parse_one(sql, dialect="duckdb")
+    tree.find(exp.Subquery).meta[VIEW_MARK] = "invoice_value"
+    qualified = qualify(tree, dialect="duckdb", schema=schema, identify=True)
+    assert query._duplicate_aggregation(list(traverse_scope(qualified))) is duplicated
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "dimensions",
+        "(SELECT DISTINCT id FROM dimensions)",
+        "(SELECT id FROM dimensions GROUP BY id)",
+    ],
+)
+@pytest.mark.parametrize(
+    ("view_type", "key_type", "duplicated"),
+    [
+        ("INT", "INT", False),
+        ("INTEGER", "INT", False),
+        ("VARCHAR", "TEXT", True),
+        ("CHAR", "CHAR", True),
+        ("BLOB", "BLOB", False),
+        ("INT", "VARCHAR", True),
+        ("VARCHAR", "INT", True),
+        ("BIGINT", "DOUBLE", True),
+        ("DECIMAL(18,2)", "DECIMAL(18,1)", True),
+        ("UNKNOWN", "UNKNOWN", True),
+    ],
+)
+def test_key_comparisons_preserve_uniqueness(source, view_type, key_type, duplicated):
+    schema = {
+        "invoice": {"id": view_type, "value": "INT"},
+        "dimensions": {"id": key_type},
+    }
+    query = AdHocSQL.__new__(AdHocSQL)
+    query.schema = schema
+    query.primary_keys = {"dimensions": frozenset(("id",))}
+    tree = sqlglot.parse_one(
+        "SELECT SUM(v.value) FROM (SELECT id, value FROM invoice) v "
+        f"JOIN {source} x ON v.id=x.id",
+        dialect="duckdb",
+    )
+    tree.find(exp.Subquery).meta[VIEW_MARK] = "invoice_value"
+    qualified = qualify(tree, dialect="duckdb", schema=schema, identify=True)
+    assert query._duplicate_aggregation(list(traverse_scope(qualified))) is duplicated
+
+
+@pytest.mark.parametrize(
+    ("view_type", "key_type"),
+    [("INT", "BIGINT"), ("BIGINT", "INT"), ("int4", "int8"), ("int8", "int4")],
+)
+@pytest.mark.parametrize(
+    ("source", "keys", "on", "duplicated"),
+    [
+        ("dimensions", ("id",), "v.id=x.id", False),
+        ("dimensions", ("id",), "x.id=v.id", False),
+        ("dimensions", (), "v.id=x.id", True),
+        ("dimensions", ("tenant_id", "id"), "v.id=x.id", True),
+        (
+            "dimensions",
+            ("tenant_id", "id"),
+            "v.id=x.id AND v.tenant_id=x.tenant_id",
+            False,
+        ),
+        ("(SELECT DISTINCT id FROM dimensions)", ("id",), "v.id=x.id", True),
+        ("(SELECT id FROM dimensions GROUP BY id)", ("id",), "v.id=x.id", True),
+        ("deduplicated", ("id",), "v.id=x.id", True),
+    ],
+)
+def test_integer_width_comparisons_bound_only_model_primary_keys(
+    source, keys, on, duplicated, view_type, key_type
+):
+    schema = {
+        "invoice": {"tenant_id": view_type, "id": view_type, "value": "INT"},
+        "dimensions": {"tenant_id": key_type, "id": key_type},
+    }
+    query = AdHocSQL.__new__(AdHocSQL)
+    query.schema = schema
+    query.primary_keys = {"dimensions": frozenset(keys)}
+    sql = (
+        "SELECT SUM(v.value) FROM (SELECT tenant_id, id, value FROM invoice) v "
+        f"JOIN {source} x ON {on}"
+    )
+    if source == "deduplicated":
+        sql = f"WITH deduplicated AS (SELECT DISTINCT id FROM dimensions) {sql}"
+    tree = sqlglot.parse_one(sql, dialect="duckdb")
+    tree.find(exp.Subquery).meta[VIEW_MARK] = "invoice_value"
+    qualified = qualify(tree, dialect="duckdb", schema=schema, identify=True)
+    assert query._duplicate_aggregation(list(traverse_scope(qualified))) is duplicated
+
+
+@pytest.mark.parametrize(
+    ("view_type", "key_type"), [("INTEGER", "BIGINT"), ("BIGINT", "INTEGER")]
+)
+def test_integer_model_key_preserves_aggregation_evidence(adhoc, view_type, key_type):
+    s = adhoc(
+        files={
+            "models/integer_customers/metadata.yml": yaml.safe_dump(
+                {
+                    "name": "integer_customers",
+                    "primary_key": "id",
+                    "columns": [{"name": "id", "type": key_type}],
+                }
+            ),
+            "models/integer_customers/ref_sql.sql": (
+                f"SELECT CAST(id AS {key_type}) AS id FROM synthetic.main.raw_customers"
+            ),
+            "views/integer_customer_value/metadata.yml": "name: integer_customer_value\n",
+            "views/integer_customer_value/sql.yml": yaml.safe_dump(
+                {
+                    "statement": (
+                        f"SELECT CAST(id AS {view_type}) AS id, id AS value "
+                        "FROM customers"
+                    )
+                }
+            ),
+        }
+    )
+    _, baseline = run(s, "SELECT SUM(value) FROM integer_customer_value")
+    assert baseline["result"]["rows"] == [{"c1": 6}]
+    answers, result = run(
+        s,
+        "SELECT SUM(v.value) FROM integer_customer_value v "
+        "JOIN integer_customers x ON v.id=x.id",
+    )
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == baseline["result"]["rows"]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert "duplicate_aggregation" not in internal["observed"]
+    assert "duplicate_aggregation" not in internal["unverified"]
+
+
+@pytest.mark.parametrize(
+    ("source_sql", "join", "total"),
+    [
+        ("SELECT id FROM customers", "CROSS JOIN x", 4650.0),
+        (
+            "SELECT DISTINCT customer_id AS key, id AS key FROM invoices",
+            "JOIN x ON v.customer_id=x.key",
+            2500.0,
+        ),
+        (
+            "SELECT customer_id AS key, id AS key FROM invoices GROUP BY customer_id, id",
+            "JOIN x ON v.customer_id=x.key",
+            2500.0,
+        ),
+    ],
+)
+@pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
+def test_derived_join_caveat_reaches_result_evidence(
+    adhoc, source_sql, join, total, cte
+):
+    s = adhoc()
+    sql = f"SELECT SUM(v.usd_value) FROM usd_line_value v {join if cte else join.replace('JOIN x', f'JOIN ({source_sql}) x')}"
+    if cte:
+        sql = f"WITH x AS ({source_sql}) {sql}"
+    answers, result = run(s, sql)
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": total}]
+    assert result["evidence"]["has_unverified_semantics"] is True
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"]["duplicate_aggregation"] is True
+    assert "duplicate_aggregation" in internal["unverified"]
+
+
+@pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
+@pytest.mark.parametrize("grouped", [False, True], ids=["distinct", "grouped"])
+def test_coerced_derived_key_caveat_reaches_result_evidence(adhoc, cte, grouped):
+    import duckdb  # noqa: PLC0415
+
+    s = adhoc()
+    with duckdb.connect(str(s.project.root.parent / "data/synthetic.duckdb")) as db:
+        db.execute(
+            "UPDATE raw_customers SET region = CASE WHEN id=1 THEN '01' ELSE '1' END"
+        )
+    _, baseline = run(
+        s,
+        "SELECT SUM(v.usd_value) FROM usd_line_value v WHERE v.customer_id=1",
+    )
+    source = "SELECT region AS key FROM customers"
+    source = (
+        source + " GROUP BY region"
+        if grouped
+        else source.replace("SELECT ", "SELECT DISTINCT ", 1)
+    )
+    sql = (
+        "SELECT SUM(v.usd_value) FROM usd_line_value v "
+        f"JOIN {'x' if cte else f'({source}) x'} ON v.customer_id=x.key"
+    )
+    if cte:
+        sql = f"WITH x AS ({source}) {sql}"
+    answers, result = run(s, sql)
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": 2 * baseline["result"]["rows"][0]["c1"]}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"]["duplicate_aggregation"] is True
+    assert "duplicate_aggregation" in internal["unverified"]
+
+
+@pytest.mark.parametrize(
+    ("value", "other_view", "bound", "total", "duplicated"),
+    [
+        ("v.usd_value", "", "v", 1550.0, False),
+        ("v.usd_value", "CROSS JOIN usd_line_value w", "w", 7750.0, True),
+        ("w.usd_value", "CROSS JOIN usd_line_value w", "v", 7750.0, True),
+        (
+            "v.usd_value + w.usd_value",
+            "CROSS JOIN usd_line_value w",
+            "v",
+            15500.0,
+            True,
+        ),
+    ],
+)
+def test_each_aggregated_view_alias_needs_its_own_bound(
+    adhoc, value, other_view, bound, total, duplicated
+):
+    s = adhoc()
+    answers, result = run(
+        s,
+        f"SELECT SUM({value}) FROM usd_line_value v {other_view} "
+        "JOIN (SELECT id FROM customers GROUP BY id) x "
+        f"ON {bound}.customer_id=x.id",
+    )
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": total}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"].get("duplicate_aggregation", False) is duplicated
+    assert ("duplicate_aggregation" in internal["unverified"]) is duplicated
+
+
+@pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
+@pytest.mark.parametrize("bounded", [False, True], ids=["cross", "grouped-key"])
+@pytest.mark.parametrize("inside", [False, True], ids=["outer-join", "inner-join"])
+def test_projected_view_value_retains_aggregation_provenance(
+    adhoc, cte, bounded, inside
+):
+    s = adhoc()
+    projection = "SELECT v.usd_value AS value, v.customer_id FROM usd_line_value v"
+    join = (
+        "JOIN (SELECT id FROM customers GROUP BY id) x ON v.customer_id=x.id"
+        if bounded
+        else "CROSS JOIN (SELECT id FROM customers) x"
+    )
+    if inside:
+        projection += f" {join}"
+        join = ""
+    source = "v" if cte else f"({projection}) v"
+    sql = f"SELECT SUM(v.value) FROM {source} {join}"
+    if cte:
+        sql = f"WITH v AS ({projection}) {sql}"
+    answers, result = run(s, sql)
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": 1550.0 if bounded else 4650.0}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"].get("duplicate_aggregation", False) is (not bounded)
+    assert ("duplicate_aggregation" in internal["unverified"]) is (not bounded)
+
+
+@pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
+@pytest.mark.parametrize(
+    ("projection", "total", "duplicated"),
+    [
+        pytest.param(
+            "SELECT ((v.usd_value)) AS amount FROM usd_line_value v",
+            4650.0,
+            True,
+            id="parenthesized-view-value",
+        ),
+        pytest.param(
+            "SELECT v.usd_value AS amount FROM usd_line_value v WHERE customer_id=1 "
+            "UNION ALL SELECT v.usd_value AS renamed FROM usd_line_value v WHERE customer_id<>1",
+            4650.0,
+            True,
+            id="union-positional-aliases",
+        ),
+        pytest.param(
+            "SELECT v.usd_value AS amount, c.id AS amount "
+            "FROM usd_line_value v CROSS JOIN customers c",
+            13950.0,
+            True,
+            id="duplicate-name-view-first",
+        ),
+        pytest.param(
+            "SELECT c.id AS amount, v.usd_value AS amount "
+            "FROM usd_line_value v CROSS JOIN customers c",
+            90,
+            False,
+            id="duplicate-name-model-first",
+        ),
+        pytest.param(
+            "SELECT id AS amount FROM customers UNION ALL "
+            "SELECT usd_value AS other FROM usd_line_value",
+            4668.0,
+            True,
+            id="union-right-view-value",
+        ),
+        pytest.param(
+            "SELECT usd_value AS amount FROM usd_line_value UNION ALL "
+            "SELECT id AS other FROM customers UNION ALL SELECT id FROM customers",
+            4686.0,
+            True,
+            id="nested-union-left-view-value",
+        ),
+        pytest.param(
+            "SELECT c.id AS amount, c.id AS other FROM customers c UNION ALL "
+            "SELECT c.id AS renamed, v.usd_value AS amount "
+            "FROM customers c CROSS JOIN usd_line_value v",
+            108,
+            False,
+            id="union-unrelated-output",
+        ),
+        pytest.param(
+            "SELECT c.id AS amount, c.id AS other FROM customers c UNION ALL BY NAME "
+            "SELECT v.usd_value AS other, c.id AS amount "
+            "FROM customers c CROSS JOIN usd_line_value v",
+            108,
+            False,
+            id="union-by-name-unrelated-output",
+        ),
+        pytest.param(
+            "SELECT ((c.id)) AS amount FROM customers c",
+            18,
+            False,
+            id="parenthesized-model-value",
+        ),
+        pytest.param(
+            "SELECT (v.usd_value + 1) AS amount FROM usd_line_value v",
+            4665.0,
+            False,
+            id="computed-projection-unchanged",
+        ),
+        pytest.param(
+            "SELECT c.id + 0 AS amount, v.usd_value AS amount "
+            "FROM customers c CROSS JOIN usd_line_value v",
+            90,
+            False,
+            id="duplicate-name-computed-first",
+        ),
+    ],
+)
+def test_derived_output_binding_retains_view_provenance(
+    adhoc, cte, projection, total, duplicated
+):
+    s = adhoc()
+    source = "t" if cte else f"({projection}) t"
+    sql = f"SELECT SUM(t.amount) FROM {source} CROSS JOIN customers x"
+    if cte:
+        sql = f"WITH t AS ({projection}) {sql}"
+    answers, result = run(s, sql)
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": total}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"].get("duplicate_aggregation", False) is duplicated
+    assert ("duplicate_aggregation" in internal["unverified"]) is duplicated
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "numeric_keys",
+        "(SELECT DISTINCT id FROM numeric_keys)",
+        "(SELECT id FROM numeric_keys GROUP BY id)",
+    ],
+    ids=["model-pk", "distinct", "grouped"],
+)
+@pytest.mark.parametrize(
+    ("kind", "float_type", "key"),
+    [("DECIMAL(18,0)", "DOUBLE", 2**53), ("UINTEGER", "FLOAT", 2**24)],
+)
+def test_numeric_key_widening_cannot_prove_aggregation_unique(
+    adhoc, source, kind, float_type, key
+):
+    s = adhoc(
+        files={
+            "models/numeric_keys/metadata.yml": yaml.safe_dump(
+                {
+                    "name": "numeric_keys",
+                    "primary_key": "id",
+                    "columns": [{"name": "id", "type": kind}],
+                }
+            ),
+            "models/numeric_keys/ref_sql.sql": (
+                f"SELECT CAST({key - 1} + CAST(id AS BIGINT) AS {kind}) "
+                "AS id FROM synthetic.main.raw_customers WHERE id <= 2"
+            ),
+            "views/numeric_value/metadata.yml": "name: numeric_value\n",
+            "views/numeric_value/sql.yml": yaml.safe_dump(
+                {
+                    "statement": (
+                        f"SELECT COALESCE(id, CAST(0 AS {float_type})) AS id, 10 AS value "
+                        f"FROM numeric_keys WHERE id={key}"
+                    )
+                }
+            ),
+        }
+    )
+    _, baseline = run(s, "SELECT SUM(value) FROM numeric_value")
+    assert baseline["result"]["rows"] == [{"c1": 10}]
+    answers, result = run(
+        s, f"SELECT SUM(v.value) FROM numeric_value v JOIN {source} x ON v.id=x.id"
+    )
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": 20}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"].get("duplicate_aggregation") is True
+    assert "duplicate_aggregation" in internal["unverified"]
+    assert result["evidence"]["has_unverified_semantics"] is True
+
+
+@pytest.mark.parametrize(
+    ("kind", "float_type", "key"),
+    [
+        ("DECIMAL(18,0)", "DOUBLE", 2**53),
+        ("UBIGINT", "DOUBLE", 2**53),
+        ("HUGEINT", "DOUBLE", 2**53),
+        ("UINTEGER", "FLOAT", 2**24),
+    ],
+)
+def test_widened_numeric_annotations_do_not_establish_unique_keys(
+    kind, float_type, key
+):
+    import duckdb  # noqa: PLC0415
+
+    schema = {"keys": {"id": kind}}
+    query = AdHocSQL.__new__(AdHocSQL)
+    query.schema = schema
+    query.primary_keys = {}
+    sql = (
+        "SELECT SUM(v.value) FROM "
+        f"(SELECT COALESCE(id, CAST(0 AS {float_type})) AS id, 10 AS value "
+        f"FROM keys WHERE id={key}) v "
+        "JOIN (SELECT DISTINCT id FROM keys) x ON v.id=x.id"
+    )
+    with duckdb.connect() as db:
+        db.execute(f"CREATE TABLE keys(id {kind})")
+        db.execute(f"INSERT INTO keys VALUES ({key}), ({key + 1})")
+        assert db.execute("SELECT COUNT(DISTINCT id) FROM keys").fetchone() == (2,)
+        assert db.execute(sql).fetchone() == (20,)
+    tree = sqlglot.parse_one(sql, dialect="duckdb")
+    tree.find(exp.Subquery).meta[VIEW_MARK] = "key_value"
+    qualified = qualify(tree, dialect="duckdb", schema=schema, identify=True)
+    assert query._duplicate_aggregation(list(traverse_scope(qualified))) is True
+
+
+@pytest.mark.parametrize("wrapped", [False, True], ids=["direct", "passthrough"])
+@pytest.mark.parametrize(
+    ("other_type", "shape", "total", "duplicated"),
+    [
+        ("DOUBLE", "short", 20, True),
+        ("DOUBLE", "wide", 20, True),
+        ("DOUBLE", "wide-double-key", 10, False),
+        ("BIGINT", "short", 10, False),
+        ("BIGINT", "left-positional", 20, True),
+        ("BIGINT", "left-by-name", 20, True),
+        ("DOUBLE", "right", 20, True),
+        ("DOUBLE", "right-after-by-name", 20, True),
+        ("BIGINT", "right", 10, False),
+        ("BIGINT", "right-after-by-name", 10, False),
+        ("DOUBLE", "duplicate", 20, True),
+        ("DOUBLE", "duplicate-reversed", 20, True),
+        ("BIGINT", "duplicate", 10, True),
+        ("DOUBLE", "duplicate-unused", 10, False),
+    ],
+)
+def test_derived_key_types_reach_result_evidence(
+    adhoc, wrapped, other_type, shape, total, duplicated
+):
+    key = 2**53
+    s = adhoc(
+        files={
+            "models/numeric_keys/metadata.yml": yaml.safe_dump(
+                {
+                    "name": "numeric_keys",
+                    "primary_key": "id",
+                    "columns": [{"name": "id", "type": "BIGINT"}],
+                }
+            ),
+            "models/numeric_keys/ref_sql.sql": (
+                f"SELECT {key - 1} + CAST(id AS BIGINT) AS id "
+                "FROM synthetic.main.raw_customers WHERE id <= 2"
+            ),
+            "views/numeric_value/metadata.yml": "name: numeric_value\n",
+            "views/numeric_value/sql.yml": yaml.safe_dump(
+                {
+                    "statement": (
+                        f"SELECT id, 10 AS value FROM numeric_keys WHERE id={key}"
+                    )
+                }
+            ),
+        }
+    )
+    source = "SELECT CAST(id AS BIGINT) AS k, value FROM numeric_value "
+    if shape.startswith("duplicate"):
+        source = (
+            f"SELECT CAST(id AS {other_type}) AS k, CAST(id AS BIGINT) AS k, value "
+            "FROM numeric_value"
+        )
+        if shape == "duplicate-unused":
+            source = (
+                "SELECT id AS k, CAST(id AS DOUBLE) AS other, "
+                "CAST(id AS BIGINT) AS other, value FROM numeric_value"
+            )
+    elif shape.startswith("right"):
+        if shape == "right-after-by-name":
+            source += "UNION ALL BY NAME SELECT id AS k FROM numeric_keys WHERE FALSE "
+        source += (
+            "UNION ALL (SELECT id AS inner_key, id AS inner_value "
+            "FROM numeric_keys WHERE FALSE UNION ALL BY NAME "
+            f"SELECT CAST(id AS {other_type}) AS inner_key, id AS inner_value "
+            "FROM numeric_keys WHERE FALSE)"
+        )
+    else:
+        if shape.startswith("left"):
+            inner_union = (
+                "UNION ALL BY NAME" if shape == "left-by-name" else "UNION ALL"
+            )
+            source += (
+                f"{inner_union} SELECT CAST(id AS DOUBLE) AS k, id AS value "
+                "FROM numeric_keys WHERE FALSE "
+            )
+        extra = ", id AS value" if shape.startswith("wide") else ""
+        source += (
+            f"UNION ALL BY NAME SELECT CAST(id AS {other_type}) AS k{extra} "
+            "FROM numeric_keys WHERE FALSE"
+        )
+    join_key = "CAST(id AS DOUBLE)" if shape == "wide-double-key" else "id"
+    condition = "x.id=t.k" if shape == "duplicate-reversed" else "t.k=x.id"
+    sql = (
+        f"WITH t AS ({source}) SELECT SUM(t.value) FROM "
+        f"{'(SELECT k, value FROM t) t' if wrapped else 't'} "
+        f"JOIN (SELECT DISTINCT {join_key} AS id FROM numeric_keys) x ON {condition}"
+    )
+    answers, result = run(s, sql)
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": total}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"].get("duplicate_aggregation", False) is duplicated
+    assert ("duplicate_aggregation" in internal["unverified"]) is duplicated
+
+
+@pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
+@pytest.mark.parametrize(
+    ("projection", "grouping", "duplicated"),
+    [
+        ("c.id", "(c.id)", False),
+        ("((c.id))", "c.id", False),
+        ("((c.id))", "((c.id))", False),
+        ("(c.id + 0)", "(c.id + 0)", True),
+        ("c.id", "GROUPING SETS ((c.id), (c.id))", True),
+    ],
+)
+def test_parenthesized_grouping_key_reaches_result_evidence(
+    adhoc, cte, projection, grouping, duplicated
+):
+    s = adhoc()
+    source = f"SELECT {projection} AS key FROM customers c GROUP BY {grouping}"
+    sql = (
+        "SELECT SUM(v.usd_value) FROM usd_line_value v "
+        f"JOIN {'x' if cte else f'({source}) x'} ON v.customer_id=x.key"
+    )
+    if cte:
+        sql = f"WITH x AS ({source}) {sql}"
+    answers, result = run(s, sql)
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [
+        {"c1": 3100.0 if "GROUPING SETS" in grouping else 1550.0}
+    ]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    assert internal["observed"].get("duplicate_aggregation", False) is duplicated
+    assert ("duplicate_aggregation" in internal["unverified"]) is duplicated
+
+
+@pytest.mark.parametrize("cte", [False, True], ids=["derived", "cte"])
+@pytest.mark.parametrize("grouped", [False, True], ids=["distinct", "grouped"])
+@pytest.mark.parametrize("collated", [False, True], ids=["binary", "nocase"])
+def test_text_key_collation_caveat_reaches_result_evidence(
+    adhoc, cte, grouped, collated
+):
+    import duckdb  # noqa: PLC0415
+
+    s = adhoc(
+        files={
+            "views/customer_keys/metadata.yml": "name: customer_keys\n",
+            "views/customer_keys/sql.yml": "statement: SELECT id, region FROM customers\n",
+        }
+    )
+    with duckdb.connect(str(s.project.root.parent / "data/synthetic.duckdb")) as db:
+        db.execute("DROP TABLE raw_customers")
+        collation = " COLLATE NOCASE" if collated else ""
+        db.execute(
+            f"CREATE TABLE raw_customers(id INTEGER, region VARCHAR{collation}, email VARCHAR)"
+        )
+        db.execute("INSERT INTO raw_customers VALUES (1, 'a', 'one@example.invalid')")
+        db.execute(
+            "UPDATE raw_invoices SET currency = CASE id WHEN 1 THEN 'a' WHEN 2 THEN 'A' ELSE 'b' END"
+        )
+        expected = db.execute(
+            "SELECT SUM(v.id) FROM raw_customers v "
+            "JOIN (SELECT DISTINCT currency AS key FROM raw_invoices) x "
+            "ON v.region=x.key"
+        ).fetchone()[0]
+    assert expected == (2 if collated else 1)
+    _, baseline = run(s, "SELECT SUM(id) FROM customer_keys")
+    assert baseline["result"]["rows"] == [{"c1": 1}]
+    source = "SELECT currency AS key FROM invoices"
+    source = (
+        source + " GROUP BY currency"
+        if grouped
+        else source.replace("SELECT ", "SELECT DISTINCT ", 1)
+    )
+    sql = (
+        "SELECT SUM(v.id) FROM customer_keys v "
+        f"JOIN {'x' if cte else f'({source}) x'} ON v.region=x.key"
+    )
+    if cte:
+        sql = f"WITH x AS ({source}) {sql}"
+    answers, result = run(s, sql)
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": expected}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    # The MDL schema does not expose collation, even for a binary text control.
+    assert internal["observed"]["duplicate_aggregation"] is True
+    assert "duplicate_aggregation" in internal["unverified"]
+    assert result["evidence"]["has_unverified_semantics"] is True
+
+
+@pytest.mark.parametrize("collated", [False, True], ids=["binary", "nocase"])
+def test_text_model_primary_keys_are_unverified_without_collation(adhoc, collated):
+    import duckdb  # noqa: PLC0415
+
+    s = adhoc(
+        files={
+            "views/customer_keys/metadata.yml": "name: customer_keys\n",
+            "views/customer_keys/sql.yml": "statement: SELECT id, region FROM customers\n",
+            "models/currency_codes/metadata.yml": yaml.safe_dump(
+                {
+                    "name": "currency_codes",
+                    "primary_key": "code",
+                    "columns": [{"name": "code", "type": "VARCHAR"}],
+                }
+            ),
+            "models/currency_codes/ref_sql.sql": (
+                "SELECT code FROM synthetic.main.raw_currency_codes"
+            ),
+        }
+    )
+    with duckdb.connect(str(s.project.root.parent / "data/synthetic.duckdb")) as db:
+        db.execute("DROP TABLE raw_customers")
+        collation = " COLLATE NOCASE" if collated else ""
+        db.execute(
+            f"CREATE TABLE raw_customers(id INTEGER, region VARCHAR{collation}, email VARCHAR)"
+        )
+        db.execute("INSERT INTO raw_customers VALUES (1, 'a', 'one@example.invalid')")
+        db.execute("CREATE TABLE raw_currency_codes(code VARCHAR PRIMARY KEY)")
+        db.execute("INSERT INTO raw_currency_codes VALUES ('a'), ('A'), ('b')")
+        assert db.execute(
+            "SELECT COUNT(*), COUNT(DISTINCT code) FROM raw_currency_codes"
+        ).fetchone() == (3, 3)
+    answers, result = run(
+        s,
+        "SELECT SUM(v.id) FROM customer_keys v "
+        "JOIN currency_codes c ON v.region=c.code",
+    )
+    assert answers[0].get("evidence")
+    assert result["result"]["rows"] == [{"c1": 2 if collated else 1}]
+    internal = s.sessions[result["session_id"]]["evidence"][result["evidence_ref"]][
+        "internal"
+    ]
+    # A full model PK used to suppress the caveat. The MDL omits collation, so
+    # distinct text keys can compare equal; even the binary control is unproven.
+    assert internal["observed"]["duplicate_aggregation"] is True
+    assert "duplicate_aggregation" in internal["unverified"]
+    assert result["evidence"]["has_unverified_semantics"] is True
+
+
 def test_a_composite_key_requires_every_joined_key_for_view_aggregation():
     schema = {
         "invoice": {"tenant_id": "INT", "id": "INT", "value": "INT"},
         "dimensions": {"tenant_id": "INT", "id": "INT"},
     }
     query = AdHocSQL.__new__(AdHocSQL)
+    query.schema = schema
     query.primary_keys = {"dimensions": frozenset(("tenant_id", "id"))}
 
     def duplicated(on):
@@ -1481,6 +2282,7 @@ def test_a_composite_key_requires_every_joined_key_for_view_aggregation():
 def test_a_semi_joined_view_is_no_evidence_for_another_models_key():
     schema = {"invoice": {"id": "INT", "value": "INT"}, "extras": {"id": "INT"}}
     query = AdHocSQL.__new__(AdHocSQL)
+    query.schema = schema
     query.primary_keys = {"extras": frozenset(("id",))}
     tree = sqlglot.parse_one(
         "SELECT SUM(v.value) FROM (SELECT id, value FROM invoice) v "
@@ -1502,6 +2304,7 @@ def test_models_keyed_only_to_each_other_still_multiply_the_view():
         "extras": {"id": "INT"},
     }
     query = AdHocSQL.__new__(AdHocSQL)
+    query.schema = schema
     query.primary_keys = {
         "dimensions": frozenset(("ID",)),
         "extras": frozenset(("id",)),
@@ -1548,6 +2351,28 @@ def test_models_keyed_only_to_each_other_still_multiply_the_view():
     assert (
         duplicated(
             "CROSS JOIN (SELECT id FROM extras) x JOIN dimensions d ON x.id = d.id"
+        )
+        is True
+    )
+    # A derived key can bound another source only after it is bounded from the view.
+    assert (
+        duplicated(
+            "JOIN (SELECT id FROM extras GROUP BY id) x ON v.id=x.id "
+            "JOIN dimensions d ON x.id=d.id"
+        )
+        is False
+    )
+    assert (
+        duplicated(
+            "CROSS JOIN (SELECT id FROM extras GROUP BY id) x "
+            "JOIN dimensions d ON x.id=d.id"
+        )
+        is True
+    )
+    assert (
+        duplicated(
+            "CROSS JOIN extras a LEFT JOIN (SELECT DISTINCT id FROM extras) x "
+            "ON v.id=a.id AND x.id=v.id"
         )
         is True
     )
