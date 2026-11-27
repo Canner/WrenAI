@@ -27,3 +27,10 @@ def test_falsy_secure_spellings_disable_tls(value):
 def test_unrecognised_secure_spelling_is_rejected(value):
     with pytest.raises(WrenError):
         _info(f"clickhouse://user:pw@localhost:8443/db?secure={value}")
+
+
+def test_empty_secure_on_https_scheme_keeps_tls():
+    info = DataSource.clickhouse._build_connection_info(
+        {"connectionUrl": "clickhouse+https://user:pw@localhost:8443/db?secure="}
+    )
+    assert info.secure is True
