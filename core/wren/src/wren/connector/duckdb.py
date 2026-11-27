@@ -13,6 +13,10 @@ from wren.model import (
 )
 from wren.model.error import ErrorCode, WrenError
 
+# DuckDB pre-registers these catalogs on every connection, so
+# ATTACH ... AS <one of them> fails with a BinderException.
+_RESERVED_ALIASES = frozenset({"main", "memory", "system", "temp"})
+
 
 def _escape_sql(value: str) -> str:
     return value.replace("'", "''")
@@ -129,7 +133,7 @@ class DuckDBConnector(ConnectorABC):
         # Sort for deterministic alias assignment: OpenDAL listing order is not
         # guaranteed, so without this the bare alias could attach to a different
         # file across runs when case-colliding names are present.
-        used_aliases: set[str] = set()
+        used_aliases: set[str] = set(_RESERVED_ALIASES)
         for file in sorted(db_files):
             try:
                 escaped_file = file.replace("'", "''")
