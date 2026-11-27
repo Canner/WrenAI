@@ -35,9 +35,9 @@ datafusion = { workspace = true, features = [
 ] }
 
 datafusion-session = { workspace = true }
-itertools = "0.14.0"
+itertools = "0.15.0"
 log = { workspace = true }
-parking_lot = "0.12.3"
+parking_lot = "0.13.0"
 petgraph = "0.8.2"
 regex = "1.10.5"
 serde = { workspace = true }
