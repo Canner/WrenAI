@@ -417,5 +417,9 @@ def _aggregate_alias_shadowing(ast: exp.Expression) -> None:
             if agg.find_ancestor(exp.Select) is not select:
                 continue
             for column in agg.find_all(exp.Column):
-                if not column.table and column.name in aliases:
+                if (
+                    column.find_ancestor(exp.Select) is select
+                    and not column.table
+                    and column.name in aliases
+                ):
                     column.set("table", qualifier.copy())
